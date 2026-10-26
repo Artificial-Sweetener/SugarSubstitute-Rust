@@ -11,7 +11,7 @@ use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
 use sugarsubstitute_image_ops::ImageError;
 
-pub(super) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+pub(crate) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 struct FixedClock;
 impl Clock for FixedClock {
     fn now(&self) -> Moment {
@@ -50,7 +50,7 @@ where
 }
 
 /// Real execution admission; the condition wait is a bounded external completion boundary.
-pub(super) fn run<T: Send + 'static>(
+pub(crate) fn run<T: Send + 'static>(
     bytes: u64,
     action: impl FnOnce(&JobContext) -> Result<T, ImageError> + Send + 'static,
 ) -> TestResult<T> {

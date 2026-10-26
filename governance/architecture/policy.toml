@@ -17,7 +17,7 @@ concern = "Explicit Vulkan/Metal devices, execution-admitted batched image DAG e
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
 layer = "domain"
-concern = "Canvas document snapshots, reversible layer commands, viewport transforms and device-pixel damage planning"
+concern = "Canvas document snapshots, reversible layer and gesture commands, semantic navigation, typed tool lifecycles, viewport transforms and device-pixel damage planning"
 
 [[owners]]
 package = "sugarsubstitute-canvas-render"

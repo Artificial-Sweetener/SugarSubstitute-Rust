@@ -5,15 +5,22 @@ mod compile;
 mod damage;
 mod document;
 mod error;
+mod navigation;
 mod presentation;
+mod tools;
 mod viewport;
 pub use compile::CompiledView;
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};
 pub use document::{
-    Document, DocumentEdit, DocumentSnapshot, Layer, LayerContent, LayerId, LayerMask,
+    Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession, EditSessionId, Layer,
+    LayerContent, LayerId, LayerMask,
 };
 pub use error::CanvasError;
+pub use navigation::{CursorIntent, Navigation, NavigationInput, ScrollPhase, ZoomMode};
 pub use presentation::{FrameStamp, RenderRequest};
+pub use tools::{
+    CanvasTool, ToolButton, ToolCancelReason, ToolContext, ToolId, ToolInput, ToolManager, ToolView,
+};
 pub use viewport::Viewport;
 #[cfg(test)]
 mod tests;

@@ -95,6 +95,23 @@ impl Viewport {
         }
         self.set_zoom((self.zoom * factor).clamp(MIN_ZOOM, MAX_ZOOM), anchor)
     }
+    /// Set an exact document-space camera without changing authored content.
+    /// `origin` is the top-left document coordinate; `zoom` is physical pixels per document pixel.
+    /// An unchanged camera preserves its integer sampling phase.
+    /// # Errors
+    /// Rejects nonfinite coordinates or unsupported scale without mutation.
+    pub fn reframe(&mut self, origin: [f64; 2], zoom: f64) -> Result<(), CanvasError> {
+        finite(origin)?;
+        if !zoom.is_finite() || !(MIN_ZOOM..=MAX_ZOOM).contains(&zoom) {
+            return Err(CanvasError::Invalid("Invalid camera scale"));
+        }
+        if self.zoom != zoom || self.origin() != origin {
+            self.origin = origin;
+            self.zoom = zoom;
+            self.translation = [0; 2];
+        }
+        Ok(())
+    }
     /// Display one document pixel per physical device pixel, preserving the anchor point.
     /// # Errors
     /// Rejects invalid anchor coordinates without changing the view.

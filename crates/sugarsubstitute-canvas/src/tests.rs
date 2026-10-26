@@ -4,7 +4,7 @@
 use super::*;
 use sugarsubstitute_image_ops::{Extent, Region};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
-mod harness;
+pub(crate) mod harness;
 mod phase;
 
 #[test]

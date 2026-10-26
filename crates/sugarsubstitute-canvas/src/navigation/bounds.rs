@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Share availability and clamping rules across dragging and animated camera updates.
+use super::*;
+
+impl Navigation {
+    /// Whether the current semantic view has any permitted pan displacement.
+    pub fn can_pan(&self) -> bool {
+        let Some(content) = self.content else {
+            return false;
+        };
+        if self.locked || self.mode == ZoomMode::Fit {
+            return false;
+        }
+        let image = [content.width(), content.height()];
+        let panel = [self.view.surface().width(), self.view.surface().height()];
+        (0..2).any(|axis| {
+            let scaled = f64::from(image[axis]) * self.view.zoom();
+            let panel = f64::from(panel[axis]);
+            scaled > panel || (self.mode == ZoomMode::OneToOne && scaled < panel)
+        })
+    }
+    /// Clamp content-centered physical displacement without rounding a valid sampling lattice.
+    pub(super) fn clamp(&self, mut view: Viewport) -> Result<Viewport, CanvasError> {
+        let Some(content) = self.content else {
+            return Ok(view);
+        };
+        let image = [content.width(), content.height()];
+        let panel = [view.surface().width(), view.surface().height()];
+        let mut delta = [0.0; 2];
+        for axis in 0..2 {
+            let scaled = f64::from(image[axis]) * view.zoom();
+            let panel = f64::from(panel[axis]);
+            let pan = (scaled - panel) * 0.5 - view.origin()[axis] * view.zoom();
+            let bound = if scaled <= panel {
+                if self.mode == ZoomMode::OneToOne { (panel - scaled) * 0.5 } else { 0.0 }
+            } else {
+                (scaled - panel) * 0.5 + panel * 0.2
+            };
+            delta[axis] = pan.clamp(-bound, bound) - pan;
+        }
+        if delta != [0.0; 2] {
+            view.pan_by(delta)?;
+        }
+        Ok(view)
+    }
+    /// The UI navigation ceiling is distinct from the camera's larger numerical safety bounds.
+    pub(super) fn wheel_scale(&self, requested: f64) -> f64 {
+        let minimum = self.content.map_or(0.001, |extent| {
+            (128.0 / f64::from(extent.width().max(extent.height()))).max(0.001)
+        });
+        requested.max(minimum).min(10.0)
+    }
+}

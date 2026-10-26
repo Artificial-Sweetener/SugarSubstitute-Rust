@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Revisioned document metadata and reversible commands sharing original image assets.
+mod edit;
 use crate::CanvasError;
+pub use edit::{EditPreview, EditSession, EditSessionId};
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::{AssetId, Extent, VectorRectangle};
@@ -235,37 +237,13 @@ impl Document {
         let revision = self.next_revision()?;
         let mut content =
             Content::copy(self.current.extent(), self.current.layers(), &self.memory)?;
-        match edit {
-            DocumentEdit::Insert { index, layer } => {
-                if content.layers.len() == MAX_LAYERS
-                    || index > content.layers.len()
-                    || content.layers.iter().any(|old| old.id == layer.id)
-                {
-                    return Err(CanvasError::Invalid("Invalid layer insertion"));
-                }
-                validate_layer(layer, content.extent)?;
-                content.layers.insert(index, layer);
-            }
-            DocumentEdit::Remove(id) => {
-                let index = find(&content.layers, id)?;
-                content.layers.remove(index);
-            }
-            DocumentEdit::Replace(layer) => {
-                let index = find(&content.layers, layer.id)?;
-                validate_layer(layer, content.extent)?;
-                content.layers[index] = layer;
-            }
-            DocumentEdit::Reorder { layer, index } => {
-                if index >= content.layers.len() {
-                    return Err(CanvasError::Invalid("Invalid layer destination"));
-                }
-                let original = find(&content.layers, layer)?;
-                let layer = content.layers.remove(original);
-                content.layers.insert(index, layer);
-            }
-        }
+        content.apply(edit)?;
+        Ok(self.publish_content(content, revision))
+    }
+    /// Publish one validated metadata branch through the sole history owner.
+    fn publish_content(&mut self, content: Content, revision: u64) -> bool {
         if content.layers == self.current.content.layers {
-            return Ok(false);
+            return false;
         }
         push_history(&mut self.undo, Arc::clone(&self.current.content));
         self.redo.clear();
@@ -274,7 +252,7 @@ impl Document {
             revision,
             content: Arc::new(content),
         };
-        Ok(true)
+        true
     }
     /// Restore preceding authored content and publish a fresh revision, without raster copies.
     /// # Errors

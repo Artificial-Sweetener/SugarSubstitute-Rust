@@ -10,8 +10,8 @@ minimum_tests = 11
 [[owners]]
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
-concern = "Camera coordinate invariants, exact exposed-edge damage, retained source geometry and reversible document revision publication"
-minimum_tests = 10
+concern = "Physical camera and exact damage invariants; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history"
+minimum_tests = 33
 
 [[owners]]
 package = "sugarsubstitute-canvas-render"
