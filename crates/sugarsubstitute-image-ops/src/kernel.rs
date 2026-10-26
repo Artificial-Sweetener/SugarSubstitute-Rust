@@ -125,6 +125,21 @@ impl Sampling {
             return Err(ImageError::Invalid("Image sampling coordinate overflow"));
         }
         match self.filter() {
+            Filter::Bilinear => {
+                let center =
+                    (self.center(axis, output) - 0.5).clamp(0.0, f64::from(source_length - 1));
+                let first = center.floor() as u32;
+                let fraction = (center - f64::from(first)) as f32;
+                let mut taps = [SampleTap::default(); MAX_SAMPLING_TAPS];
+                taps[0] = SampleTap { coordinate: first, weight: 1.0 - fraction };
+                let length = if fraction > 0.0 && first < source_length - 1 {
+                    taps[1] = SampleTap { coordinate: first + 1, weight: fraction };
+                    2
+                } else {
+                    1
+                };
+                Ok(AxisKernel { taps, length })
+            }
             Filter::Lanczos3 => {
                 AxisKernel::new(self.unshifted_index(axis, output), source_length, ratio, offset)
             }

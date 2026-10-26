@@ -19,6 +19,8 @@ const FALLBACK_INTERIOR_MAX_EDGE: u32 = FALLBACK_MAX_EDGE - 2;
 pub(super) enum BackingTier {
     /// Bounded whole-document coverage used when detail cannot cover the target.
     Fallback,
+    /// Canonical pyramid-backed navigation coverage, sampled bilinearly before fine settling.
+    Navigation,
     /// Full-quality overscanned coverage near the current camera.
     Detail,
 }

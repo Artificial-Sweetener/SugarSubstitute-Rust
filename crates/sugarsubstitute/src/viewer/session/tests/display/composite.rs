@@ -81,6 +81,7 @@ fn partial_detail_selects_shared_composite_contract_before_cpu_or_gpu_projection
 
     let selected = backing::choose_backing(
         Some((shown(BackingTier::Detail, detail), detail_stamp)),
+        None,
         Some((shown(BackingTier::Fallback, fallback), fallback_stamp)),
         target,
         document,

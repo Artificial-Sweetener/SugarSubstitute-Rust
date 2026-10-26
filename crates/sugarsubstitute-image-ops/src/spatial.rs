@@ -105,7 +105,11 @@ fn required_axis(
     if source == 1 {
         return (0, 1);
     }
-    let radius = 3.0 * ratio.max(1.0);
+    let radius = match filter {
+        Filter::Lanczos3 => 3.0 * ratio.max(1.0),
+        Filter::Bilinear => 1.0,
+        Filter::Nearest => 0.5,
+    };
     let start = i64::from(start) - i64::from(translation);
     let first_center = crate::kernel::pixel_center(start, ratio, offset);
     let last_center = crate::kernel::pixel_center(start + i64::from(length) - 1, ratio, offset);
@@ -139,6 +143,7 @@ fn invalidated_axis(
     let radius = match filter {
         Filter::Lanczos3 => 3.0 * ratio.max(1.0),
         Filter::Nearest => 0.5,
+        Filter::Bilinear => 1.0,
     };
     let left = if start == 0 {
         0

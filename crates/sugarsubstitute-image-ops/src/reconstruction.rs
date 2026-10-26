@@ -47,4 +47,16 @@ impl Reconstruction {
         }
         Ok(Self::Finished(if zoom > 2.0 { Filter::Nearest } else { Filter::Lanczos3 }))
     }
+    /// Reuse canonical Lanczos pyramid levels with inexpensive bilinear navigation sampling.
+    /// Physical zooms strictly above two retain nearest-neighbor pixel inspection.
+    /// # Errors
+    /// Rejects nonfinite or nonpositive physical zoom values.
+    pub fn navigation_for_display_zoom(zoom: f64) -> Result<Self, ImageError> {
+        let finished = Self::finished_for_display_zoom(zoom)?;
+        Ok(if finished.filter() == Filter::Nearest {
+            finished
+        } else {
+            Self::Finished(Filter::Bilinear)
+        })
+    }
 }

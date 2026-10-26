@@ -10,6 +10,8 @@ pub enum Filter {
     Lanczos3,
     /// Closest pixel center, with positive ties selecting the next pixel and edges clamped.
     Nearest,
+    /// Two clamped linear taps per axis, for navigation over canonical pyramid pixels.
+    Bilinear,
 }
 
 /// Axis-aligned inverse mapping from output pixel corners to input pixel corners.

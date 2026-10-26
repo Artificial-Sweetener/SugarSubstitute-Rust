@@ -378,6 +378,7 @@ impl Graph {
                 hash.update([match sampling.filter() {
                     crate::Filter::Lanczos3 => 0,
                     crate::Filter::Nearest => 1,
+                    crate::Filter::Bilinear => 2,
                 }]);
                 for value in sampling.scale().into_iter().chain(sampling.offset()) {
                     hash.update(value.to_le_bytes());

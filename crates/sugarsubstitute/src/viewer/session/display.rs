@@ -89,10 +89,12 @@ impl Session {
         let source = if self.options.gpu.is_some() {
             let surface = match shown.tier {
                 BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
+                BackingTier::Navigation => self.navigation_gpu_front.as_ref(),
                 BackingTier::Detail => self.gpu_front.as_ref(),
             };
             let reference = match shown.tier {
                 BackingTier::Fallback => self.fallback_front.clone(),
+                BackingTier::Navigation => self.navigation_front.clone(),
                 BackingTier::Detail => self.front.clone(),
             };
             let underlay = selection
@@ -100,10 +102,12 @@ impl Session {
                 .map(|layer| {
                     let surface = match layer.shown.tier {
                         BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
+                        BackingTier::Navigation => self.navigation_gpu_front.as_ref(),
                         BackingTier::Detail => self.gpu_front.as_ref(),
                     };
                     let reference = match layer.shown.tier {
                         BackingTier::Fallback => self.fallback_front.clone(),
+                        BackingTier::Navigation => self.navigation_front.clone(),
                         BackingTier::Detail => self.front.clone(),
                     };
                     Ok::<_, Box<dyn Error>>(work::GpuUnderlay {
@@ -129,6 +133,7 @@ impl Session {
         } else {
             let surface = match shown.tier {
                 BackingTier::Fallback => self.fallback_front.as_ref(),
+                BackingTier::Navigation => self.navigation_front.as_ref(),
                 BackingTier::Detail => self.front.as_ref(),
             }
             .ok_or("CPU display source is unavailable")?
@@ -141,6 +146,7 @@ impl Session {
                 .map(|layer| {
                     let surface = match layer.shown.tier {
                         BackingTier::Fallback => self.fallback_front.as_ref(),
+                        BackingTier::Navigation => self.navigation_front.as_ref(),
                         BackingTier::Detail => self.front.as_ref(),
                     }
                     .filter(|surface| surface.current() == Some(layer.source))

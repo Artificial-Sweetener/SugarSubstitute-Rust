@@ -70,16 +70,13 @@ impl Lifetime for Session {
         if self.runtime.is_some() {
             return Err("Canvas execution is already started".into());
         }
-        let owner = if self.options.gpu.is_some() {
-            ExecutionOwner::with_memory_capacity(
-                self.clock.clone(),
-                wake,
-                std::num::NonZeroU64::new(512 * 1024 * 1024)
-                    .ok_or("Invalid GPU execution capacity")?,
-            )?
-        } else {
-            ExecutionOwner::new(self.clock.clone(), wake)?
-        };
+        let capacity = if self.options.gpu.is_some() { 512 } else { 384 };
+        let owner = ExecutionOwner::with_memory_capacity(
+            self.clock.clone(),
+            wake,
+            std::num::NonZeroU64::new(capacity * 1024 * 1024)
+                .ok_or("Invalid canvas execution capacity")?,
+        )?;
         let client = owner.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -334,12 +331,26 @@ impl Session {
                 .checked_add(1)
                 .ok_or("Canvas fallback acceptance count exhausted")?;
         }
+        if evidence.tier == BackingTier::Navigation {
+            self.navigation_projection_acceptances = self
+                .navigation_projection_acceptances
+                .checked_add(1)
+                .ok_or("Canvas navigation acceptance count exhausted")?;
+        }
         Ok(())
     }
 
     /// Retain one observed terminal outcome while newer tool intent replaces expensive refinement.
     pub(super) fn cancel_obsolete_refinement(&mut self) -> Result<(), Box<dyn Error>> {
-        let desired = self.reconstruction()?;
+        let desired = if self
+            .rendering
+            .as_ref()
+            .is_some_and(|rendering| rendering.tier == BackingTier::Navigation)
+        {
+            Reconstruction::navigation_for_display_zoom(self.navigation_view().zoom())?
+        } else {
+            self.reconstruction()?
+        };
         let Some(rendering) = &mut self.rendering else {
             return Ok(());
         };

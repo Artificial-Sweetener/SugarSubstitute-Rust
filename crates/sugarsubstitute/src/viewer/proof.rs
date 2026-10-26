@@ -75,6 +75,8 @@ pub(super) struct Input {
     pub(super) coverage_acceptances: u64,
     /// Native-accepted displays backed by the bounded whole-document fallback.
     pub(super) fallback_projection_acceptances: u64,
+    /// Native-accepted displays whose primary pixels come from canonical navigation pyramids.
+    pub(super) navigation_projection_acceptances: u64,
     /// Whether the phase-six zoom-out accepted fallback output before settling.
     pub(super) zoom_out_fallback_exercised: bool,
     /// Archive work used by the first completed current-source fallback preview preparation.
@@ -102,6 +104,7 @@ struct Metrics<'a> {
     initial_settle_presentations: Option<PresentationEvidence>,
     coverage_validated_presentations: u64,
     fallback_projection_acceptances: u64,
+    navigation_projection_acceptances: u64,
     zoom_out_fallback_exercised: bool,
     initial_fallback_preparation_io: Option<SourceIoEvidence>,
     /// First source intent through native queue acceptance; excludes display scanout.
@@ -134,6 +137,11 @@ impl From<ArchiveStats> for SourceIoEvidence {
 /// Reconstruct through the same DAG with no retained-frame repair, compare every display pixel,
 /// and stream PNG/JSON on the original admitted storage worker. Originals are never modified.
 pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkError> {
+    tracing::info!(
+        operation = "canvas_proof_comparison",
+        stage = "reference",
+        "Preparing complete reconstruction for retained-frame comparison"
+    );
     let Input {
         resources,
         document,
@@ -153,6 +161,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         native_gpu_display_verification_readback,
         coverage_acceptances,
         fallback_projection_acceptances,
+        navigation_projection_acceptances,
         zoom_out_fallback_exercised,
         first_fallback_preparation_io,
         first_image_queue_latency,
@@ -184,12 +193,27 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         || projection.target() != view
         || backing.extent() != backing_view.surface()
     {
+        tracing::error!(
+            operation = "canvas_proof_projection_mismatch",
+            source_matches = projection.source() == backing_view,
+            target_matches = projection.target() == view,
+            extent_matches = backing.extent() == backing_view.surface(),
+            "Proof projection differs from retained coverage"
+        );
         return Err(WorkError::invalid("Proof backing projection differs from retained coverage"));
     }
     let rgba = sugarsubstitute_image_ops::SrgbEncoder::encode_constant(Pixel::linear(
         0.018, 0.018, 0.018, 1.0,
     )?)?;
     let matte = u32::from_be_bytes([255, rgba[0], rgba[1], rgba[2]]);
+    tracing::info!(
+        operation = "canvas_proof_comparison",
+        stage = "pixels",
+        width = reference.extent().width(),
+        height = reference.extent().height(),
+        navigation_acceptances = navigation_projection_acceptances,
+        "Complete reconstruction prepared for retained-frame comparison"
+    );
     match &backing {
         ProofBacking::Cpu(front) => compare_cpu(&reference, front, projection, matte)?,
         ProofBacking::Gpu(front) => compare_gpu(&reference, front, projection, matte, context)?,
@@ -266,6 +290,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         initial_settle_presentations: warmup.map(PresentationEvidence::new),
         coverage_validated_presentations: coverage_acceptances,
         fallback_projection_acceptances,
+        navigation_projection_acceptances,
         zoom_out_fallback_exercised,
         initial_fallback_preparation_io: first_fallback_preparation_io.map(Into::into),
         initial_image_input_to_native_queue_nanoseconds: first_image_queue_latency
@@ -311,6 +336,14 @@ fn compare_cpu(
             _ => matte,
         };
         if *actual != expected {
+            tracing::error!(
+                operation = "canvas_proof_pixel_mismatch",
+                backend = "cpu",
+                x,
+                y,
+                maximum_channel_difference = maximum_channel_difference(*actual, expected),
+                "Retained crop differs from complete reconstruction"
+            );
             return Err(WorkError::invalid(
                 "Retained CPU backing crop differs from complete DAG reconstruction",
             ));
@@ -349,6 +382,14 @@ fn compare_gpu(
                 };
                 let actual = reference.pixels()[y as usize * target_stride + x as usize];
                 if actual != expected {
+                    tracing::error!(
+                        operation = "canvas_proof_pixel_mismatch",
+                        backend = "gpu",
+                        x,
+                        y,
+                        maximum_channel_difference = maximum_channel_difference(actual, expected),
+                        "Retained crop differs from complete reconstruction"
+                    );
                     return Err(WorkError::invalid(
                         "Retained GPU backing crop differs from complete DAG reconstruction",
                     ));
@@ -374,6 +415,15 @@ fn mapped_bounds(
         }
     }
     bounds
+}
+
+/// Describe numerical disagreement without recording image pixels or source content.
+fn maximum_channel_difference(left: u32, right: u32) -> u8 {
+    left.to_be_bytes()
+        .into_iter()
+        .zip(right.to_be_bytes())
+        .map(|(left, right)| left.abs_diff(right))
+        .fold(0, u8::max)
 }
 
 /// Difference cumulative source/operation counters without attributing earlier work to a new frame.

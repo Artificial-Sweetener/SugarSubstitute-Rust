@@ -295,6 +295,7 @@ impl Proof {
                     && session.native_target.is_some(),
                 coverage_acceptances: session.coverage_acceptances,
                 fallback_projection_acceptances: session.fallback_projection_acceptances,
+                navigation_projection_acceptances: session.navigation_projection_acceptances,
                 zoom_out_fallback_exercised: self.zoom_out_fallback_exercised,
                 first_fallback_preparation_io: session.first_fallback_preparation_io,
                 first_image_queue_latency: session.first_image_queue_latency,

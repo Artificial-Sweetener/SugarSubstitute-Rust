@@ -26,28 +26,33 @@ fn compile_policy(
     let mut view = Viewport::new(Extent::new(8, 8)?)?;
     view.zoom_at(0.125, [0.0; 2])?;
     let snapshot = document.snapshot();
-    let compile = |reconstruction| -> Result<[u32; 2], CanvasError> {
+    let compile = |reconstruction| -> Result<[u32; 3], CanvasError> {
         let compiled = snapshot.compile_view(
             view,
             Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
             reconstruction,
             context.memory(),
         )?;
-        let mut filters = [0_u32; 2];
+        let mut filters = [0_u32; 3];
         collect_filters(compiled.graph(), compiled.output(), &mut filters)?;
         Ok(filters)
     };
-    assert_eq!(compile(Reconstruction::Preview)?, [0, 2]);
-    assert_eq!(compile(Reconstruction::Finished(Filter::Nearest))?, [6, 2]);
-    assert_eq!(compile(Reconstruction::Finished(Filter::Lanczos3))?, [8, 0]);
+    assert_eq!(compile(Reconstruction::Preview)?, [0, 2, 0]);
+    assert_eq!(compile(Reconstruction::Finished(Filter::Nearest))?, [6, 2, 0]);
+    assert_eq!(compile(Reconstruction::Finished(Filter::Lanczos3))?, [8, 0, 0]);
+    assert_eq!(compile(Reconstruction::Finished(Filter::Bilinear))?, [6, 0, 2]);
     Ok(())
 }
 
-fn collect_filters(graph: &Graph, node: NodeId, filters: &mut [u32; 2]) -> Result<(), ImageError> {
+fn collect_filters(graph: &Graph, node: NodeId, filters: &mut [u32; 3]) -> Result<(), ImageError> {
     match graph.operation(node)? {
         Operation::Raster { .. } | Operation::Solid { .. } | Operation::Rectangle { .. } => {}
         Operation::Resample { input, sampling, .. } => {
-            filters[usize::from(sampling.filter() == Filter::Nearest)] += 1;
+            filters[match sampling.filter() {
+                Filter::Lanczos3 => 0,
+                Filter::Nearest => 1,
+                Filter::Bilinear => 2,
+            }] += 1;
             collect_filters(graph, input, filters)?;
         }
         Operation::Exposure { input, .. } => collect_filters(graph, input, filters)?,

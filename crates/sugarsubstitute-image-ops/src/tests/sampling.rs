@@ -62,7 +62,7 @@ fn shared_axis_kernels_reject_unbounded_steps_and_preserve_a_single_pixel_axis()
     assert_eq!(kernel.taps()[0].coordinate(), 0);
     assert_eq!(kernel.taps()[0].weight(), 1.0);
     let extreme = Sampling::new([f64::MAX; 2], [f64::MAX; 2])?;
-    for filter in [Filter::Nearest, Filter::Lanczos3] {
+    for filter in [Filter::Nearest, Filter::Lanczos3, Filter::Bilinear] {
         assert!(
             extreme.with_filter(filter).axis_kernel(SamplingAxis::Vertical, u32::MAX, 1).is_err()
         );

@@ -7,7 +7,7 @@ use crate::{RasterSamples, SamplingAxis};
 #[test]
 fn translated_reconstruction_keeps_every_sampling_tap_bit_identical() -> TestResult {
     run(MEMORY, |_context| {
-        for filter in [Filter::Nearest, Filter::Lanczos3] {
+        for filter in [Filter::Nearest, Filter::Lanczos3, Filter::Bilinear] {
             for scale in [0.37, 1.0, 1.21, 1.37, 2.0] {
                 let original = Sampling::new([scale, scale], [-3.25, 19.75])?.with_filter(filter);
                 for translation in [[13, -7], [-31, 17]] {
@@ -68,7 +68,7 @@ fn translated_required_regions_and_invalidations_include_every_nonzero_sampling_
     run(MEMORY, |context| {
         let extent = Extent::new(257, 131)?;
         let target = Extent::new(256, 128)?;
-        for filter in [Filter::Nearest, Filter::Lanczos3] {
+        for filter in [Filter::Nearest, Filter::Lanczos3, Filter::Bilinear] {
             let sampling = Sampling::new([1.37, 0.91], [-3.25, 19.75])?
                 .with_filter(filter)
                 .with_output_translation([13, -7]);

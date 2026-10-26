@@ -4,6 +4,7 @@
 use super::*;
 mod display;
 mod latency;
+mod navigation_backing;
 mod refinement;
 mod source_io;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -235,6 +236,8 @@ fn empty_viewer_releases_picker_before_any_frame_or_gpu_completion() -> Result<(
     assert!(session.fallback_front.is_none());
     assert!(session.gpu_front.is_none());
     assert!(session.fallback_gpu_front.is_none());
+    assert!(session.navigation_front.is_none());
+    assert!(session.navigation_gpu_front.is_none());
     assert!(session.device_job.is_none());
     assert!(session.device_pending);
     assert!(session.take_picker_request());

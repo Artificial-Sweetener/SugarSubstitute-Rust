@@ -51,25 +51,38 @@ impl DisplayEvidence {
 /// Prefer retained detail whenever it covers any visible document pixels.
 pub(super) fn choose_backing(
     detail: Option<(Presented, FrameStamp)>,
+    navigation: Option<(Presented, FrameStamp)>,
     fallback: Option<(Presented, FrameStamp)>,
     target: Viewport,
     document: sugarsubstitute_image_ops::Extent,
 ) -> Result<Option<BackingSelection>, Box<dyn Error>> {
-    let fallback = fallback
-        .map(|(shown, source)| {
-            Ok::<_, Box<dyn Error>>(
-                shown.coverage.crop(target, document)?.map(|projection| SelectedLayer {
-                    shown,
-                    source,
-                    projection,
-                }),
-            )
-        })
-        .transpose()?
-        .flatten();
+    let complete =
+        |layer: Option<(Presented, FrameStamp)>| -> Result<Option<SelectedLayer>, Box<dyn Error>> {
+            Ok(layer
+                .map(|(shown, source)| {
+                    Ok::<_, Box<dyn Error>>(
+                        shown.coverage.crop(target, document)?.map(|projection| SelectedLayer {
+                            shown,
+                            source,
+                            projection,
+                        }),
+                    )
+                })
+                .transpose()?
+                .flatten())
+        };
+    let fallback = complete(navigation)?.or(complete(fallback)?);
     let Some((detail, source)) = detail else {
         return Ok(fallback.map(|primary| BackingSelection { primary, underlay: None }));
     };
+    if fallback.is_some_and(|layer| {
+        layer.shown.tier == BackingTier::Navigation
+            && (detail.reconstruction.is_preview()
+                || detail.view.zoom() < layer.shown.view.zoom()
+                || detail.view.zoom() > target.zoom() * 2.0)
+    }) {
+        return Ok(fallback.map(|primary| BackingSelection { primary, underlay: None }));
+    }
     if let Some(projection) = detail.coverage.crop(target, document)? {
         return Ok(Some(BackingSelection {
             primary: SelectedLayer { shown: detail, source, projection },
@@ -119,22 +132,25 @@ impl Session {
         };
         choose_backing(
             self.presented.as_ref().and_then(layer),
+            self.navigation_presented.as_ref().and_then(layer),
             self.fallback_presented.as_ref().and_then(layer),
             target,
             extent,
         )
     }
 
-    fn backing_stamp(&self, tier: BackingTier) -> Option<FrameStamp> {
+    pub(super) fn backing_stamp(&self, tier: BackingTier) -> Option<FrameStamp> {
         if self.options.gpu.is_some() {
             match tier {
                 BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
+                BackingTier::Navigation => self.navigation_gpu_front.as_ref(),
                 BackingTier::Detail => self.gpu_front.as_ref(),
             }
             .and_then(GpuSurface::current)
         } else {
             match tier {
                 BackingTier::Fallback => self.fallback_front.as_ref(),
+                BackingTier::Navigation => self.navigation_front.as_ref(),
                 BackingTier::Detail => self.front.as_ref(),
             }
             .and_then(|surface| surface.current())

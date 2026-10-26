@@ -227,3 +227,26 @@ fn completed_detail_is_current_for_partial_overlap_but_not_disjoint_motion()
     )?);
     Ok(())
 }
+
+#[test]
+fn canonical_navigation_reaches_publication_before_finished_settling_replaces_it()
+-> Result<(), Box<dyn Error>> {
+    let Fixture { mut session, wake, _directory, .. } =
+        preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Bilinear))?;
+    session.rendering.as_mut().ok_or("Missing navigation job")?.tier = BackingTier::Navigation;
+    session.input(Input::Tool(ToolInput::Wheel {
+        steps: -1.0,
+        phase: sugarsubstitute_canvas::ScrollPhase::Unphased,
+    }))?;
+    assert!(!session.rendering.as_ref().ok_or("Navigation job was lost")?.superseded);
+    session.tools.advance(Duration::from_secs(1))?;
+    session.cancel_obsolete_refinement()?;
+    assert!(!session.rendering.as_ref().ok_or("Navigation job was lost")?.superseded);
+    assert_eq!(session.reconstruction()?.filter(), sugarsubstitute_image_ops::Filter::Lanczos3);
+    let rendering = session.rendering.as_mut().ok_or("Missing navigation job")?;
+    rendering.superseded = true;
+    rendering.job.cancel();
+    observe_terminal(&mut session, &wake)?;
+    assert!(session.failed.is_none());
+    Ok(())
+}

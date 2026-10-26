@@ -19,6 +19,61 @@ struct ReadCounts {
     batches: AtomicU64,
 }
 
+#[test]
+fn bilinear_navigation_reuses_ready_canonical_pyramid_tiles_without_reading_source_again()
+-> harness::TestResult {
+    execute(|context| {
+        let extent = Extent::new(512, 512)?;
+        let target = Extent::new(256, 256)?;
+        let snapshot = image_document(extent, context)?.snapshot();
+        let mut view = Viewport::new(target)?;
+        view.fit(extent)?;
+        let counts = Arc::new(ReadCounts::default());
+        let mut renderer = CpuRenderer::new(
+            CountedSource {
+                extent,
+                color: Pixel::linear(0.2, 0.4, 0.6, 1.0)?,
+                counts: counts.clone(),
+            },
+            256,
+            context.memory(),
+        )?;
+        let prepare = |renderer: &mut CpuRenderer<CountedSource>, view, reconstruction, target| {
+            renderer.prepare(
+                RenderRequest {
+                    document: &snapshot,
+                    view,
+                    reconstruction,
+                    matte: black()?,
+                    target,
+                    base: None,
+                    damage: DamagePlan::full(view.surface()),
+                },
+                context,
+            )
+        };
+        let warm =
+            prepare(&mut renderer, view, Reconstruction::Finished(Filter::Lanczos3), stamp(1)?)?;
+        drop(warm);
+        let before = renderer.stats();
+        let reads = counts.broad_pixels.load(Ordering::Relaxed);
+        view.zoom_at(0.8, [128.0, 128.0])?;
+        let navigation = prepare(
+            &mut renderer,
+            view,
+            Reconstruction::navigation_for_display_zoom(view.zoom())?,
+            stamp(2)?,
+        )?;
+        assert_eq!(renderer.stats().source_pixels, before.source_pixels);
+        assert_eq!(counts.broad_pixels.load(Ordering::Relaxed), reads);
+        assert_eq!(counts.sparse_pixels.load(Ordering::Relaxed), 0);
+        assert!(renderer.stats().reused_tiles > before.reused_tiles);
+        let surface = CpuSurface::from_prepared(navigation)?;
+        assert_eq!(surface.extent(), target);
+        Ok(())
+    })
+}
+
 struct CountedSource {
     extent: Extent,
     color: Pixel,

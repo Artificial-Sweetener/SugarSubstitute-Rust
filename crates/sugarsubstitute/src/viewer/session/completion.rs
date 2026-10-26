@@ -95,6 +95,9 @@ impl Session {
                 BackingTier::Detail => {
                     self.front.as_ref().is_some_and(|front| Arc::strong_count(front) > 1)
                 }
+                BackingTier::Navigation => {
+                    self.navigation_front.as_ref().is_some_and(|front| Arc::strong_count(front) > 1)
+                }
             });
         if self.options.gpu.is_none()
             && !self.closing
@@ -197,6 +200,10 @@ impl Session {
                             BackingTier::Detail => {
                                 retired._front = self.front.replace(Arc::new(surface));
                             }
+                            BackingTier::Navigation => {
+                                retired._navigation_front =
+                                    self.navigation_front.replace(Arc::new(surface));
+                            }
                         }
                         Ok(work)
                     }
@@ -204,6 +211,7 @@ impl Session {
                         let retained = match packet.tier {
                             BackingTier::Fallback => &mut self.fallback_front,
                             BackingTier::Detail => &mut self.front,
+                            BackingTier::Navigation => &mut self.navigation_front,
                         };
                         let result = retained
                             .as_mut()
@@ -233,6 +241,14 @@ impl Session {
                                     retired._front = self.front.replace(Arc::new(snapshot));
                                 }
                             }
+                            BackingTier::Navigation => {
+                                retired._navigation_gpu_front =
+                                    self.navigation_gpu_front.replace(pixels.surface);
+                                if let Some(snapshot) = pixels.snapshot {
+                                    retired._navigation_front =
+                                        self.navigation_front.replace(Arc::new(snapshot));
+                                }
+                            }
                         }
                         self.native_verified = false;
                         self.expose_pending = true;
@@ -243,6 +259,8 @@ impl Session {
                     || retired._gpu_front.is_some()
                     || retired._fallback_front.is_some()
                     || retired._fallback_gpu_front.is_some()
+                    || retired._navigation_front.is_some()
+                    || retired._navigation_gpu_front.is_some()
                     || retired._update.is_some()
                     || retired._projection.is_some()
                     || retired._buffers.iter().any(Option::is_some)
@@ -264,6 +282,7 @@ impl Session {
                 match packet.tier {
                     BackingTier::Fallback => self.fallback_presented = Some(shown),
                     BackingTier::Detail => self.presented = Some(shown),
+                    BackingTier::Navigation => self.navigation_presented = Some(shown),
                 }
                 self.last_prepare = packet.elapsed;
                 self.last_stats = packet.stats;

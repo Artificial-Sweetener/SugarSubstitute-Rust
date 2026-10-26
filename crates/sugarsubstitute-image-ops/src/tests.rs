@@ -5,6 +5,7 @@ use super::*;
 use harness::{TestResult, run};
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
+mod bilinear;
 mod display_sampling;
 mod harness;
 mod phase;

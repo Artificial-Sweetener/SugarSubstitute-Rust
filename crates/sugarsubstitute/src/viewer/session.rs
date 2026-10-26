@@ -7,6 +7,7 @@ mod completion;
 mod display;
 mod gpu;
 mod native;
+mod preparation;
 mod presentation;
 mod proof;
 mod startup;
@@ -66,6 +67,8 @@ struct Retired {
     _front: Option<Arc<CpuSurface>>,
     _fallback_front: Option<Arc<CpuSurface>>,
     _fallback_gpu_front: Option<GpuSurface>,
+    _navigation_front: Option<Arc<CpuSurface>>,
+    _navigation_gpu_front: Option<GpuSurface>,
     _proof_gpu: Option<sugarsubstitute_canvas_render::GpuFrame>,
     _update: Option<Box<sugarsubstitute_canvas_render::PreparedUpdate>>,
 }
@@ -126,8 +129,10 @@ pub(super) struct Session {
     initial_preview: bool,
     front: Option<Arc<CpuSurface>>,
     fallback_front: Option<Arc<CpuSurface>>,
+    navigation_front: Option<Arc<CpuSurface>>,
     gpu_front: Option<GpuSurface>,
     fallback_gpu_front: Option<GpuSurface>,
+    navigation_gpu_front: Option<GpuSurface>,
     gpu_presentation: Option<GpuPresentation>,
     pending_gpu_presentation: Option<presentation::PendingPresentation>,
     presenting: Option<presentation::Presenting>,
@@ -139,6 +144,7 @@ pub(super) struct Session {
     display_evidence: Option<DisplayEvidence>,
     coverage_acceptances: u64,
     fallback_projection_acceptances: u64,
+    navigation_projection_acceptances: u64,
     first_fallback_preparation_io: Option<ArchiveStats>,
     pending_cpu_evidence: Option<DisplayEvidence>,
     pending_gpu_evidence: Option<DisplayEvidence>,
@@ -154,6 +160,7 @@ pub(super) struct Session {
     drawable: bool,
     presented: Option<Presented>,
     fallback_presented: Option<Presented>,
+    navigation_presented: Option<Presented>,
     frame_revision: u64,
     picker: bool,
     failed: Option<Box<dyn Error>>,
@@ -206,8 +213,10 @@ impl Session {
             initial_preview: false,
             front: None,
             fallback_front: None,
+            navigation_front: None,
             gpu_front: None,
             fallback_gpu_front: None,
+            navigation_gpu_front: None,
             gpu_presentation: None,
             pending_gpu_presentation: None,
             presenting: None,
@@ -219,6 +228,7 @@ impl Session {
             display_evidence: None,
             coverage_acceptances: 0,
             fallback_projection_acceptances: 0,
+            navigation_projection_acceptances: 0,
             first_fallback_preparation_io: None,
             pending_cpu_evidence: None,
             pending_gpu_evidence: None,
@@ -234,6 +244,7 @@ impl Session {
             drawable: true,
             presented: None,
             fallback_presented: None,
+            navigation_presented: None,
             frame_revision: 0,
             picker: false,
             failed: None,
