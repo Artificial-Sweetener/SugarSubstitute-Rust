@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve hardware wheel units and native interaction lifetimes before Tao's scroll scaling.
+use super::super::feedback::FeedbackTarget;
 use super::cursor::{CursorResource, Cursors, OwnedCursor};
 use super::*;
 use crate::windows_subclass::{self, Registration};
@@ -25,6 +26,7 @@ use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
+use sugarsubstitute_canvas::CursorIntent;
 #[cfg(test)]
 mod lifecycle_tests;
 
@@ -142,11 +144,7 @@ impl State {
             && client.y < bounds.bottom)
     }
     fn select_cursor(&self, cursor: &CursorResource) {
-        // SAFETY: The resource remains retained through SetCursor and selected_cursor replacement.
-        unsafe {
-            SetCursor(Some(cursor.handle()));
-        }
-        *self.selected_cursor.borrow_mut() = cursor.owned();
+        *self.selected_cursor.borrow_mut() = cursor.select();
     }
     fn publish_cursor(
         &self,
@@ -256,6 +254,15 @@ impl NativeInput {
         }
         self.state.retire_cursors();
         self.check().map_err(Box::<dyn Error>::from)
+    }
+}
+
+impl FeedbackTarget for NativeInput {
+    fn publish_cursor(&self, cursor: CursorIntent) -> Result<(), Box<dyn Error>> {
+        self.cursor(cursor)
+    }
+    fn reconcile_capture(&self, capture: bool) -> Result<bool, Box<dyn Error>> {
+        self.capture(capture).map_err(Box::<dyn Error>::from)
     }
 }
 

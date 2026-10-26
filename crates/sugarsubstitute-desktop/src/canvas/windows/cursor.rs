@@ -6,8 +6,8 @@ use super::*;
 use ::windows::Win32::UI::{
     HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
     WindowsAndMessaging::{
-        CreateIconFromResourceEx, DestroyCursor, HCURSOR, IDC_ARROW, LR_DEFAULTCOLOR, LoadCursorW,
-        SM_CXCURSOR, SM_CYCURSOR,
+        CreateIconFromResourceEx, DestroyCursor, GetCursor, HCURSOR, IDC_ARROW, LR_DEFAULTCOLOR,
+        LoadCursorW, SM_CXCURSOR, SM_CYCURSOR, SetCursor,
     },
 };
 use std::{cell::RefCell, rc::Rc};
@@ -62,6 +62,33 @@ impl CursorResource {
             Self::Shared(_) => None,
             Self::Owned(cursor) => Some(cursor.clone()),
         }
+    }
+    /// Reassert this resource only after an actual native override, retaining private custody.
+    pub(super) fn select(&self) -> Option<Rc<OwnedCursor>> {
+        let desired = self.handle();
+        // SAFETY: Read and selection are synchronous on the native window's owning UI thread.
+        select_when_changed(
+            desired,
+            // SAFETY: This read only observes the current cursor on the window's UI thread.
+            || unsafe { GetCursor() },
+            // SAFETY: The retained resource remains live through native selection.
+            |cursor| unsafe {
+                SetCursor(Some(cursor));
+            },
+        );
+        self.owned()
+    }
+}
+
+/// Select a desired cursor only when the actual native cursor differs.
+/// The caller retains resource custody independently of whether selection was necessary.
+pub(super) fn select_when_changed<T: Copy + Eq>(
+    desired: T,
+    current: impl FnOnce() -> T,
+    select: impl FnOnce(T),
+) {
+    if current() != desired {
+        select(desired);
     }
 }
 

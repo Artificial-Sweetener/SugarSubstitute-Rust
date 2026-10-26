@@ -13,6 +13,8 @@ pub enum ZoomMode {
     Custom,
 }
 /// Native cursor appearance requested by the interaction owner.
+/// This changes appearance only: physical pointer position remains owned by the operating system.
+/// Hosts publish this feedback after input without waiting for image work or presentation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CursorIntent {
     /// Navigation cannot capture a pan gesture.

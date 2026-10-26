@@ -4,6 +4,7 @@
 mod cursor;
 mod display;
 mod input;
+use super::feedback;
 use super::*;
 use crate::{
     SelectionKind,
@@ -97,7 +98,11 @@ fn run_with_picker(
             .err();
     }
     if failure.is_none() {
-        failure = lifetime.attach_window(WindowTarget(window.clone())).err();
+        let target = WindowTarget(window.clone());
+        failure = lifetime.attach_window(target).err();
+    }
+    if failure.is_none() {
+        failure = feedback::synchronize(lifetime, native.as_ref()).err();
     }
     let mut closing = failure.is_some();
     let mut close_started = false;
@@ -116,25 +121,25 @@ fn run_with_picker(
         let result = (|| -> Result<(), Box<dyn Error>> {
             match event {
                 Event::UserEvent(NativeEvent::Wheel { point, steps }) if !closing => {
-                    lifetime.input(Input::Tool(ToolInput::Pointer(point)))?;
-                    lifetime.input(Input::Tool(ToolInput::Wheel { steps, phase: ScrollPhase::Unphased }))?;
+                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Pointer(point)))?;
+                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Wheel { steps, phase: ScrollPhase::Unphased }))?;
                 }
-                Event::UserEvent(NativeEvent::DoubleClick(point)) if !closing => lifetime.input(Input::Tool(ToolInput::DoubleClick(point)))?,
-                Event::UserEvent(NativeEvent::CaptureLost) if !closing => lifetime.input(Input::Unfocused)?,
+                Event::UserEvent(NativeEvent::DoubleClick(point)) if !closing => feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::DoubleClick(point)))?,
+                Event::UserEvent(NativeEvent::CaptureLost) if !closing => feedback::dispatch_input(lifetime, native.as_ref(), Input::Unfocused)?,
                 Event::UserEvent(NativeEvent::DisplayChanged) if !closing => display_dirty = true,
                 Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => closing = true,
                 Event::WindowEvent { event: WindowEvent::ModifiersChanged(modifiers), .. } => control_down = modifiers.control_key(),
-                Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } if !closing => lifetime.input(Input::Tool(ToolInput::Pointer([position.x, position.y])))?,
+                Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } if !closing => feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Pointer([position.x, position.y])))?,
                 Event::WindowEvent { event: WindowEvent::MouseInput { state, button: button @ (MouseButton::Left | MouseButton::Middle), .. }, .. } if !closing => {
                     let button = if button == MouseButton::Left { ToolButton::Primary } else { ToolButton::Middle };
-                    lifetime.input(Input::Tool(ToolInput::Button { button, pressed: state == ElementState::Pressed }))?;
+                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Button { button, pressed: state == ElementState::Pressed }))?;
                 }
                 Event::WindowEvent { event: WindowEvent::Focused(false), .. } if !closing => {
-                    control_down = false; lifetime.input(Input::Unfocused)?;
+                    control_down = false; feedback::dispatch_input(lifetime, native.as_ref(), Input::Unfocused)?;
                 }
                 Event::WindowEvent { event: WindowEvent::KeyboardInput { event, .. }, .. } if !closing && !event.repeat => {
                     if event.logical_key == Key::Space {
-                        lifetime.input(Input::TemporaryNavigation(event.state == ElementState::Pressed))?;
+                        feedback::dispatch_input(lifetime, native.as_ref(), Input::TemporaryNavigation(event.state == ElementState::Pressed))?;
                     } else if event.state == ElementState::Pressed {
                         let command = match event.logical_key {
                             Key::Character(value) if control_down && value.eq_ignore_ascii_case("o") => Some(Input::Open),
@@ -142,7 +147,7 @@ fn run_with_picker(
                             Key::Character("1") => Some(Input::Tool(ToolInput::OneToOne)),
                             _ => None,
                         };
-                        if let Some(command) = command { lifetime.input(command)?; }
+                        if let Some(command) = command { feedback::dispatch_input(lifetime, native.as_ref(), command)?; }
                     }
                 }
                 Event::RedrawRequested(_) if !closing => {
@@ -153,7 +158,7 @@ fn run_with_picker(
                         if record_cpu_upload(&mut displayed, target, pending, |target| {
                             lifetime.did_present_cpu(target)
                         })? {
-                            lifetime.poll(started.elapsed())?;
+                            feedback::poll(lifetime, native.as_ref(), started.elapsed())?;
                         }
                     }
                     lifetime.expose();
@@ -162,7 +167,7 @@ fn run_with_picker(
                     if let Some(native) = &native { native.check()?; }
                     closing |= lifetime.is_closing();
                     if closing && !close_started {
-                        lifetime.close()?;
+                        feedback::close(lifetime, native.as_ref())?;
                         close_started = true;
                     }
                     if !closing {
@@ -177,7 +182,7 @@ fn run_with_picker(
                                     None
                                 }
                             };
-                            lifetime.input(Input::DisplayRefresh(rate))?;
+                            feedback::dispatch_input(lifetime, native.as_ref(), Input::DisplayRefresh(rate))?;
                             tracing::info!(operation="canvas_display_timing", hertz=rate.unwrap_or(60.0),
                                 "Native canvas display timing updated");
                             display_id = identity;
@@ -186,10 +191,13 @@ fn run_with_picker(
                         let size = window.inner_size();
                         if size.width > 0 && size.height > 0 {
                             let next = Extent::new(size.width, size.height)?;
-                            if extent != Some(next) { lifetime.resize(next)?; extent = Some(next); }
+                            if extent != Some(next) {
+                                feedback::resize(lifetime, native.as_ref(), next)?;
+                                extent = Some(next);
+                            }
                         }
                     }
-                    let advanced = lifetime.poll(started.elapsed());
+                    let advanced = feedback::poll(lifetime, native.as_ref(), started.elapsed());
                     if closing {
                         let settled = lifetime.settled();
                         if matches!(settled, Ok(true)) { stopped = true; *control = ControlFlow::Exit; }
@@ -199,11 +207,6 @@ fn run_with_picker(
                         if lifetime.is_closing() {
                             closing = true;
                             return Ok(());
-                        }
-                        if let Some(native) = &native {
-                            let feedback = lifetime.feedback();
-                            native.cursor(feedback.cursor)?;
-                            if !native.capture(feedback.capture)? { lifetime.input(Input::Unfocused)?; }
                         }
                         if title != lifetime.title() {
                             title = lifetime.title().to_owned();
@@ -216,7 +219,7 @@ fn run_with_picker(
                             if record_cpu_upload(&mut displayed, target, pending, |target| {
                                 lifetime.did_present_cpu(target)
                             })? {
-                                lifetime.poll(started.elapsed())?;
+                                feedback::poll(lifetime, native.as_ref(), started.elapsed())?;
                             }
                         }
                         if let Some(frame) = lifetime.take_gpu_presentation() {
@@ -227,13 +230,12 @@ fn run_with_picker(
                             if presentation.needs_follow_up {
                                 lifetime.expose();
                             }
-                            lifetime.poll(started.elapsed())?;
+                            feedback::poll(lifetime, native.as_ref(), started.elapsed())?;
                         }
                         if lifetime.take_picker_request() {
-                            lifetime.input(Input::Unfocused)?;
-                            if let Some(native) = &native { native.capture(false)?; }
-                            lifetime.selected(choose(&window))?;
-                            lifetime.poll(started.elapsed())?;
+                            feedback::dispatch_input(lifetime, native.as_ref(), Input::Unfocused)?;
+                            feedback::selected(lifetime, native.as_ref(), choose(&window))?;
+                            feedback::poll(lifetime, native.as_ref(), started.elapsed())?;
                         }
                     }
                 }

@@ -11,6 +11,7 @@ use ::windows::Win32::{
     },
     UI::WindowsAndMessaging::{GetIconInfo, HICON, ICONINFO},
 };
+use std::cell::{Cell, RefCell};
 
 struct DeviceContext(HDC);
 impl Drop for DeviceContext {
@@ -90,6 +91,32 @@ fn qt_hand_resources_decode_to_distinct_native_cursors_at_authored_and_scaled_si
         assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] != 0));
     }
     Ok(())
+}
+
+#[test]
+fn repeated_selection_skips_native_work_but_reasserts_external_and_tool_changes() {
+    let actual = Cell::new(0_u8);
+    let selected = RefCell::new(Vec::new());
+    let publish = |desired| {
+        select_when_changed(
+            desired,
+            || actual.get(),
+            |handle| {
+                actual.set(handle);
+                selected.borrow_mut().push(handle);
+            },
+        );
+    };
+
+    publish(1);
+    publish(1);
+    actual.set(2);
+    publish(1);
+    publish(3);
+    publish(3);
+
+    assert_eq!(&*selected.borrow(), &[1, 1, 3]);
+    assert_eq!(actual.get(), 3);
 }
 
 fn assert_native_cursor(

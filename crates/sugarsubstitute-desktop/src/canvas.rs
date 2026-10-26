@@ -27,6 +27,8 @@ pub struct GpuPresentation {
     pub frame: WindowFrame,
 }
 
+#[cfg(any(windows, test))]
+mod feedback;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod paint;
