@@ -2,12 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve hardware wheel units and native interaction lifetimes before Tao's scroll scaling.
 use super::super::feedback::FeedbackTarget;
+use super::super::latency::InputDelay;
 use super::cursor::{CursorResource, Cursors, OwnedCursor};
 use super::*;
 use crate::windows_subclass::{self, Registration};
 use ::windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::Gdi::ScreenToClient,
+    System::SystemInformation::GetTickCount,
     UI::{
         HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
         Input::KeyboardAndMouse::{GetCapture, GetDoubleClickTime, ReleaseCapture, SetCapture},
@@ -16,9 +18,9 @@ use ::windows::Win32::{
             GetClientRect, GetCursor, GetCursorPos, GetMessageTime, HTCLIENT, IsWindowVisible,
             SM_CXDOUBLECLK, SM_CYDOUBLECLK, SetCursor, WM_CANCELMODE, WM_CAPTURECHANGED,
             WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_KILLFOCUS,
-            WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONUP, WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONUP,
-            WM_SETCURSOR, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCOLORCHANGE, WM_THEMECHANGED,
-            WM_XBUTTONUP, WindowFromPoint,
+            WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY,
+            WM_RBUTTONUP, WM_SETCURSOR, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCOLORCHANGE,
+            WM_THEMECHANGED, WM_XBUTTONUP, WindowFromPoint,
         },
     },
 };
@@ -45,6 +47,7 @@ struct Click {
     point: [i32; 2],
 }
 struct State {
+    input_delay: Cell<InputDelay>,
     send: Box<dyn Fn(NativeEvent) -> Result<(), DesktopError>>,
     cursors: Cursors,
     failure: RefCell<Option<DesktopError>>,
@@ -58,6 +61,13 @@ struct State {
     selected_cursor: RefCell<Option<Rc<OwnedCursor>>>,
 }
 impl State {
+    fn observe_input_age(&self) {
+        // SAFETY: Both calls copy clocks on this message's owning thread without retaining handles.
+        let (now, sent) = unsafe { (GetTickCount(), GetMessageTime()) };
+        let mut delay = self.input_delay.get();
+        delay.observe(now, sent);
+        self.input_delay.set(delay);
+    }
     fn send(&self, event: NativeEvent) {
         if let Err(cause) = (self.send)(event) {
             self.fail(cause);
@@ -204,6 +214,7 @@ impl NativeInput {
     ) -> Result<Self, Box<dyn Error>> {
         let cursors = Cursors::new(window)?;
         let state = Rc::new(State {
+            input_delay: Cell::new(InputDelay::default()),
             send: Box::new(send),
             cursors,
             failure: RefCell::new(None),
@@ -227,6 +238,10 @@ impl NativeInput {
     }
     pub(super) fn check(&self) -> Result<(), DesktopError> {
         self.state.failure.borrow_mut().take().map_or(Ok(()), Err)
+    }
+    /// Drain primitive input-age observations without logging or allocating in native callbacks.
+    pub(super) fn take_input_delay(&self) -> InputDelay {
+        self.state.input_delay.replace(InputDelay::default())
     }
     pub(super) fn retired(&self) -> bool {
         self.registration.destroyed()
@@ -301,6 +316,9 @@ unsafe extern "system" fn procedure(
         | WM_THEMECHANGED => Some(true),
         _ => None,
     };
+    if matches!(message, WM_MOUSEMOVE | WM_MOUSEWHEEL) {
+        state.observe_input_age();
+    }
     match message {
         WM_MOUSEWHEEL => {
             let position = point(lparam);

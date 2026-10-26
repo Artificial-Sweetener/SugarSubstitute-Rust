@@ -5,6 +5,7 @@ mod cursor;
 mod display;
 mod input;
 use super::feedback;
+use super::latency::Timing;
 use super::*;
 use crate::{
     SelectionKind,
@@ -114,9 +115,12 @@ fn run_with_picker(
     let mut display_id = None;
     let mut display_dirty = true;
     let started = Instant::now();
+    let mut timing = Timing::default();
     let mut stopped = false;
     while !stopped {
         let status = events.run_return(|event, _, control| {
+        let turn_started = Instant::now();
+        let input_turn = matches!(&event, Event::UserEvent(NativeEvent::Wheel { .. } | NativeEvent::DoubleClick(_)) | Event::WindowEvent { event: WindowEvent::CursorMoved { .. } | WindowEvent::MouseInput { .. } | WindowEvent::KeyboardInput { .. }, .. });
         *control = ControlFlow::Wait;
         let result = (|| -> Result<(), Box<dyn Error>> {
             match event {
@@ -158,7 +162,7 @@ fn run_with_picker(
                         if record_cpu_upload(&mut displayed, target, pending, |target| {
                             lifetime.did_present_cpu(target)
                         })? {
-                            feedback::poll(lifetime, native.as_ref(), started.elapsed())?;
+                            timing.poll(|| feedback::poll(lifetime, native.as_ref(), started.elapsed()))?;
                         }
                     }
                     lifetime.expose();
@@ -197,7 +201,7 @@ fn run_with_picker(
                             }
                         }
                     }
-                    let advanced = feedback::poll(lifetime, native.as_ref(), started.elapsed());
+                    let advanced = timing.poll(|| feedback::poll(lifetime, native.as_ref(), started.elapsed()));
                     if closing {
                         let settled = lifetime.settled();
                         if matches!(settled, Ok(true)) { stopped = true; *control = ControlFlow::Exit; }
@@ -219,7 +223,7 @@ fn run_with_picker(
                             if record_cpu_upload(&mut displayed, target, pending, |target| {
                                 lifetime.did_present_cpu(target)
                             })? {
-                                feedback::poll(lifetime, native.as_ref(), started.elapsed())?;
+                                timing.poll(|| feedback::poll(lifetime, native.as_ref(), started.elapsed()))?;
                             }
                         }
                         if let Some(frame) = lifetime.take_gpu_presentation() {
@@ -230,12 +234,12 @@ fn run_with_picker(
                             if presentation.needs_follow_up {
                                 lifetime.expose();
                             }
-                            feedback::poll(lifetime, native.as_ref(), started.elapsed())?;
+                            timing.poll(|| feedback::poll(lifetime, native.as_ref(), started.elapsed()))?;
                         }
                         if lifetime.take_picker_request() {
                             feedback::dispatch_input(lifetime, native.as_ref(), Input::Unfocused)?;
                             feedback::selected(lifetime, native.as_ref(), choose(&window))?;
-                            feedback::poll(lifetime, native.as_ref(), started.elapsed())?;
+                            timing.poll(|| feedback::poll(lifetime, native.as_ref(), started.elapsed()))?;
                         }
                     }
                 }
@@ -253,6 +257,8 @@ fn run_with_picker(
         } else if !closing && let Some(deadline) = lifetime.next_deadline() {
             *control = ControlFlow::WaitUntil(deadline);
         }
+        timing.turn(input_turn, turn_started.elapsed());
+        timing.report(started.elapsed(), native.as_ref().map(NativeInput::take_input_delay).unwrap_or_default(), false);
         });
         if !stopped {
             if failure.is_none() {
@@ -269,6 +275,11 @@ fn run_with_picker(
             closing = true;
         }
     }
+    timing.report(
+        started.elapsed(),
+        native.as_ref().map(NativeInput::take_input_delay).unwrap_or_default(),
+        true,
+    );
     wake.disconnect();
     let original = window.id();
     drop(window);

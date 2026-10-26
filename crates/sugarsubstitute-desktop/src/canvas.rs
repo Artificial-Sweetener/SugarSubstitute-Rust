@@ -30,6 +30,8 @@ pub struct GpuPresentation {
 
 #[cfg(any(windows, test))]
 mod feedback;
+#[cfg(any(windows, test))]
+mod latency;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod paint;
