@@ -15,8 +15,13 @@ pub struct PreparedGpuUpdate {
     pub(crate) update: UpdatePlan,
     regions: DisplayRegions,
     _memory: MemoryClaim,
+    sampling_scale: f64,
 }
 impl PreparedGpuUpdate {
+    /// Conservative samples per document pixel represented by the selected source pyramids.
+    pub const fn sampling_scale(&self) -> f64 {
+        self.sampling_scale
+    }
     /// Exact application-assigned destination generation.
     pub const fn target(&self) -> FrameStamp {
         self.update.target
@@ -101,6 +106,25 @@ impl<S: RasterSource> GpuRenderer<S> {
         request: RenderRequest<'_>,
         context: &JobContext,
     ) -> Result<PreparedGpuUpdate, RenderError> {
+        self.prepare_request(request, context, false)
+    }
+    /// Prepare navigation from the nearest ready canonical source level covering the viewport.
+    /// Selection inspects shared retention metadata and performs no native calls or source I/O.
+    /// # Errors
+    /// Preserves ordinary graph, native, control and admission errors through the owning job.
+    pub fn prepare_navigation(
+        &mut self,
+        request: RenderRequest<'_>,
+        context: &JobContext,
+    ) -> Result<PreparedGpuUpdate, RenderError> {
+        self.prepare_request(request, context, true)
+    }
+    fn prepare_request(
+        &mut self,
+        request: RenderRequest<'_>,
+        context: &JobContext,
+        navigation: bool,
+    ) -> Result<PreparedGpuUpdate, RenderError> {
         let RenderRequest { document, view, reconstruction, matte, target, base, damage } = request;
         if damage.dirty().surface() != view.surface() {
             return Err(RenderError::Invalid("Canvas damage and viewport dimensions differ"));
@@ -111,13 +135,24 @@ impl<S: RasterSource> GpuRenderer<S> {
             .memory()
             .claim(size_of::<PreparedGpuUpdate>() as u64 + 128)
             .map_err(ImageError::from)?;
-        let compiled = document
-            .compile_view(view, matte, reconstruction, &self.memory)
-            .map_err(RenderError::Canvas)?;
+        let compiled = if navigation {
+            document.compile_navigation_view(
+                view,
+                matte,
+                reconstruction,
+                &self.memory,
+                |graph, node, region| {
+                    Ok(self.evaluator.has_cached_region(graph.fingerprint(node)?, region))
+                },
+            )?
+        } else {
+            document.compile_view(view, matte, reconstruction, &self.memory)?
+        };
+        let sampling_scale = compiled.sampling_scale();
         let (graph, output) = compiled.into_parts();
         self.evaluator.replace_graph(graph);
         let regions = self.evaluator.display_regions(output, &inventory.regions, context)?;
-        Ok(PreparedGpuUpdate { update, regions, _memory: metadata })
+        Ok(PreparedGpuUpdate { update, regions, _memory: metadata, sampling_scale })
     }
 }
 struct RepairInventory {

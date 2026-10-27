@@ -31,6 +31,11 @@ pub struct GpuEvaluator<S> {
     pub(crate) work: GpuWork,
 }
 impl<S: RasterSource> GpuEvaluator<S> {
+    /// Inspect ready structural tile coverage without native calls, transfers or cache promotion.
+    /// This metadata snapshot retains no native handle and grants no allocation or queue admission.
+    pub fn has_cached_region(&self, content: [u8; 32], region: Region) -> bool {
+        self.batch.is_none() && self.cache.contains_region(content, region)
+    }
     /// Compile kernels and reserve bounded reuse metadata inside an admitted worker.
     /// # Errors
     /// Preserves original image, execution and driver causes; rejects incompatible storage limits.

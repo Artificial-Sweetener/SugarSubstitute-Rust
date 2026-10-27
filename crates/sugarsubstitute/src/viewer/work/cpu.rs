@@ -15,18 +15,20 @@ pub(super) fn step(
         return Ok(CpuStep::Yield);
     }
     if input.cpu.is_none() {
-        input.cpu = Some(renderer.begin(
-            RenderRequest {
-                document: &input.document,
-                view: input.view,
-                reconstruction: input.reconstruction,
-                matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
-                target: input.target,
-                base: input.base,
-                damage: input.damage,
-            },
-            context,
-        )?);
+        let request = RenderRequest {
+            document: &input.document,
+            view: input.view,
+            reconstruction: input.reconstruction,
+            matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
+            target: input.target,
+            base: input.base,
+            damage: input.damage,
+        };
+        input.cpu = Some(if input.tier == BackingTier::Navigation {
+            renderer.begin_navigation(request, context)?
+        } else {
+            renderer.begin(request, context)?
+        });
         return Ok(CpuStep::Yield);
     }
     let preparation = input
@@ -36,6 +38,7 @@ pub(super) fn step(
     let Some(update) = renderer.step(preparation, context)? else {
         return Ok(CpuStep::Yield);
     };
+    let sampling_scale = preparation.sampling_scale();
     input.finished = true;
     drop(input.cpu.take());
     if started.elapsed() >= std::time::Duration::from_secs(1) {
@@ -48,6 +51,7 @@ pub(super) fn step(
         CpuPacket::Repair(Box::new(update))
     };
     Ok(CpuStep::Complete(Packet {
+        sampling_scale,
         tier: input.tier,
         reconstruction: input.reconstruction,
         display_buffers: input.display_buffers.take(),

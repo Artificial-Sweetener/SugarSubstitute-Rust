@@ -4,6 +4,41 @@
 use super::*;
 
 #[test]
+fn ready_coverage_requires_matching_content_and_complete_tile_fragments() -> TestResult {
+    run(MEMORY, |context| {
+        let mut cache = TileRetention::new(4, context.memory())?;
+        let left = Region::new(0, 0, 128, 128)?;
+        let right = Region::new(128, 0, 128, 128)?;
+        let crossing = Region::new(64, 20, 128, 80)?;
+        cache.insert([1; 32], left, Some(1), Arc::new(1));
+        assert!(!cache.contains_region([1; 32], crossing));
+        cache.insert([2; 32], right, Some(1), Arc::new(2));
+        assert!(!cache.contains_region([1; 32], crossing));
+        cache.insert([1; 32], right, Some(1), Arc::new(3));
+        assert!(cache.contains_region([1; 32], crossing));
+        assert!(!cache.contains_region([1; 32], Region::new(64, 20, 193, 80)?));
+        assert!(cache.contains_region([1; 32], Region::new(127, 127, 2, 1)?));
+        Ok(())
+    })
+}
+
+#[test]
+fn readiness_inspection_does_not_promote_or_pin_a_retained_entry() -> TestResult {
+    run(MEMORY, |context| {
+        let mut cache = TileRetention::new(2, context.memory())?;
+        let region = Region::new(0, 0, 1, 1)?;
+        cache.insert([1; 32], region, Some(0), Arc::new(1));
+        drop(cache.find([1; 32], region, Some(0)));
+        cache.insert([2; 32], region, Some(0), Arc::new(2));
+        assert!(cache.contains_region([1; 32], region));
+        assert!(cache.evict_unpinned(|_| true));
+        assert!(!cache.contains_region([1; 32], region));
+        assert!(cache.contains_region([2; 32], region));
+        Ok(())
+    })
+}
+
+#[test]
 fn shared_tile_retention_releases_only_unpinned_entries_under_memory_pressure() -> TestResult {
     run(MEMORY, |context| {
         let mut cache = TileRetention::new(2, context.memory())?;

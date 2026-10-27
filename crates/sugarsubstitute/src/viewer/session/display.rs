@@ -82,6 +82,7 @@ impl Session {
         let document = shown.document;
         let source_revision = shown.source_revision;
         let underlay_evidence = selection.underlay.map(|layer| work::UnderlayEvidence {
+            tier: layer.shown.tier,
             source: layer.source,
             coverage: layer.shown.coverage,
             projection: layer.projection,

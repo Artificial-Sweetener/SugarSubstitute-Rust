@@ -19,6 +19,7 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
         tier: BackingTier::Detail,
         coverage,
         view,
+        sampling_scale: view.zoom(),
         reconstruction: Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3),
         document: (1, 1),
         source_revision: 1,
@@ -30,7 +31,12 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
     session.display_view = Some(view);
     session.expose_pending = false;
     session.display_evidence = Some(DisplayEvidence {
-        underlay: Some(work::UnderlayEvidence { source: old_underlay, coverage, projection }),
+        underlay: Some(work::UnderlayEvidence {
+            tier: BackingTier::Fallback,
+            source: old_underlay,
+            coverage,
+            projection,
+        }),
         tier: BackingTier::Detail,
         target,
         source: primary,
@@ -74,6 +80,7 @@ fn partial_detail_selects_shared_composite_contract_before_cpu_or_gpu_projection
         tier,
         coverage,
         view: coverage.viewport(),
+        sampling_scale: coverage.viewport().zoom(),
         reconstruction,
         document: (1, 1),
         source_revision: 7,
@@ -112,6 +119,7 @@ fn composite_evidence_requires_complete_underlay_and_matching_output_camera()
     let underlay_source = FrameStamp { generation: Generation::new(1)?, ..source };
     let primary = ViewProjection::new(detail.viewport(), target_view)?;
     let underlay = work::UnderlayEvidence {
+        tier: BackingTier::Fallback,
         source: underlay_source,
         coverage: fallback,
         projection: fallback

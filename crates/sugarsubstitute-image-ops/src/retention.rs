@@ -52,6 +52,22 @@ impl<T> TileRetention<T> {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+    /// Inspect ready content without promoting, pinning or computing any tile.
+    /// Every intersected canonical tile fragment must be contained by one matching entry.
+    /// This is an availability snapshot; later memory-pressure eviction remains a cache miss.
+    pub fn contains_region(&self, key: [u8; 32], region: Region) -> bool {
+        let pixels = self
+            .entries
+            .iter()
+            .filter(|entry| entry.key == key)
+            .fold(0_u64, |pixels, entry| pixels.saturating_add(entry.region.pixels()));
+        pixels >= region.pixels()
+            && region.tiles().all(|fragment| {
+                self.entries.iter().any(|entry| {
+                    entry.key == key && entry.region.intersection(fragment) == Some(fragment)
+                })
+            })
+    }
     /// Release all evaluator references; outside owners remain charged.
     pub fn clear(&mut self) {
         self.entries.clear();

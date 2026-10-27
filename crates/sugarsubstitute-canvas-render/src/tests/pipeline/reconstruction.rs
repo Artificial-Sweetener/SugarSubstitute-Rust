@@ -20,6 +20,65 @@ struct ReadCounts {
 }
 
 #[test]
+fn navigation_uses_the_nearest_ready_coarser_pyramid_before_required_fine_reconstruction()
+-> harness::TestResult {
+    execute(|context| {
+        let extent = Extent::new(1024, 1024)?;
+        let target = Extent::new(128, 128)?;
+        let snapshot = image_document(extent, context)?.snapshot();
+        let mut view = Viewport::new(target)?;
+        view.fit(extent)?;
+        let counts = Arc::new(ReadCounts::default());
+        let mut renderer = CpuRenderer::new(
+            CountedSource {
+                extent,
+                color: Pixel::linear(0.2, 0.4, 0.6, 1.0)?,
+                counts: counts.clone(),
+            },
+            16,
+            context.memory(),
+        )?;
+        let matte = black()?;
+        let request = |view, reconstruction, target| RenderRequest {
+            document: &snapshot,
+            view,
+            reconstruction,
+            matte,
+            target,
+            base: None,
+            damage: DamagePlan::full(view.surface()),
+        };
+        drop(renderer.prepare(
+            request(view, Reconstruction::Finished(Filter::Lanczos3), stamp(1)?),
+            context,
+        )?);
+        while renderer.stats().resident_tiles > 1 {
+            assert!(renderer.evict_one());
+        }
+        let reads = counts.broad_pixels.load(Ordering::Relaxed);
+        view.zoom_at(2.0, [64.0, 64.0])?;
+        let mut navigation = renderer.begin_navigation(
+            request(view, Reconstruction::navigation_for_display_zoom(view.zoom())?, stamp(2)?),
+            context,
+        )?;
+        assert_eq!(navigation.sampling_scale(), 0.125);
+        loop {
+            if let Some(update) = renderer.step(&mut navigation, context)? {
+                drop(update);
+                break;
+            }
+        }
+        assert_eq!(counts.broad_pixels.load(Ordering::Relaxed), reads);
+        drop(renderer.prepare(
+            request(view, Reconstruction::Finished(Filter::Lanczos3), stamp(3)?),
+            context,
+        )?);
+        assert!(counts.broad_pixels.load(Ordering::Relaxed) > reads);
+        Ok(())
+    })
+}
+
+#[test]
 fn bilinear_navigation_reuses_ready_canonical_pyramid_tiles_without_reading_source_again()
 -> harness::TestResult {
     execute(|context| {

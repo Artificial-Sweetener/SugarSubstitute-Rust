@@ -113,6 +113,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         tier: BackingTier::Detail,
         coverage,
         view: session.tools.navigation().viewport(),
+        sampling_scale: session.tools.navigation().viewport().zoom(),
         reconstruction: Reconstruction::Preview,
         document: identity,
         source_revision: 0,
@@ -131,6 +132,29 @@ fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Er
         }
         wake.wait_after(observed)?;
     }
+    Ok(())
+}
+
+#[test]
+fn reversing_zoom_retires_an_unreached_coarser_destination_and_keeps_finer_ready_pixels()
+-> Result<(), Box<dyn Error>> {
+    let Fixture { mut session, wake, _directory, .. } =
+        preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
+    session.input(Input::Tool(ToolInput::Wheel {
+        steps: -1.0,
+        phase: sugarsubstitute_canvas::ScrollPhase::Unphased,
+    }))?;
+    let future = session.tools.navigation().target_viewport();
+    assert!(session.has_finer_ready_detail(future));
+    session.rendering.as_mut().ok_or("Missing refinement")?.coverage = coverage::detail(future)?;
+    session.input(Input::Tool(ToolInput::Wheel {
+        steps: 1.0,
+        phase: sugarsubstitute_canvas::ScrollPhase::Unphased,
+    }))?;
+    assert!(session.rendering.as_ref().is_some_and(|rendering| rendering.superseded));
+    observe_terminal(&mut session, &wake)?;
+    assert!(session.failed.is_none());
+    assert_eq!(session.presented.ok_or("Lost finer ready pixels")?.sampling_scale, 1.0);
     Ok(())
 }
 

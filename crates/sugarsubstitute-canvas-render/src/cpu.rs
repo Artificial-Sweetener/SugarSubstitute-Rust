@@ -28,6 +28,13 @@ pub struct CpuPreparation {
     context: JobContext,
     pending: Option<Preparation>,
     batch_remaining: usize,
+    sampling_scale: f64,
+}
+impl CpuPreparation {
+    /// Conservative samples per document pixel represented by the compiled raster/mask pyramids.
+    pub const fn sampling_scale(&self) -> f64 {
+        self.sampling_scale
+    }
 }
 impl<S: RasterSource> CpuRenderer<S> {
     /// Prepare canonical display conversion and retain the application's source/memory boundary.
@@ -99,6 +106,25 @@ impl<S: RasterSource> CpuRenderer<S> {
         request: RenderRequest<'_>,
         context: &JobContext,
     ) -> Result<CpuPreparation, RenderError> {
+        self.begin_request(request, context, false)
+    }
+    /// Begin navigation with the nearest ready canonical pyramid covering its source footprint.
+    /// Missing ready levels retain normal DAG preparation; no source I/O occurs during selection.
+    /// # Errors
+    /// Preserves compilation, control and allocation errors under the original job's custody.
+    pub fn begin_navigation(
+        &mut self,
+        request: RenderRequest<'_>,
+        context: &JobContext,
+    ) -> Result<CpuPreparation, RenderError> {
+        self.begin_request(request, context, true)
+    }
+    fn begin_request(
+        &mut self,
+        request: RenderRequest<'_>,
+        context: &JobContext,
+        navigation: bool,
+    ) -> Result<CpuPreparation, RenderError> {
         self.evaluator.release_sparse_batch();
         check(context)?;
         let RenderRequest { document, view, reconstruction, matte, target, base, damage } = request;
@@ -106,11 +132,30 @@ impl<S: RasterSource> CpuRenderer<S> {
             return Err(RenderError::Invalid("Canvas damage and viewport dimensions differ"));
         }
         let update = UpdatePlan::new(target, base, damage)?;
-        let compiled = document.compile_view(view, matte, reconstruction, &self.memory)?;
+        let compiled = if navigation {
+            document.compile_navigation_view(
+                view,
+                matte,
+                reconstruction,
+                &self.memory,
+                |graph, node, region| {
+                    Ok(self.evaluator.has_cached_region(graph.fingerprint(node)?, region))
+                },
+            )?
+        } else {
+            document.compile_view(view, matte, reconstruction, &self.memory)?
+        };
+        let sampling_scale = compiled.sampling_scale();
         let (graph, output) = compiled.into_parts();
         let pending = Some(Preparation::new(update, context.memory())?);
         self.evaluator.replace_graph(graph);
-        Ok(CpuPreparation { output, pending, context: context.clone(), batch_remaining: 0 })
+        Ok(CpuPreparation {
+            output,
+            pending,
+            context: context.clone(),
+            batch_remaining: 0,
+            sampling_scale,
+        })
     }
     /// Evaluate at most one aligned viewport tile and return only a complete immutable update.
     /// A bounded same-row group may stage its mandatory sparse source leaf before that tile;

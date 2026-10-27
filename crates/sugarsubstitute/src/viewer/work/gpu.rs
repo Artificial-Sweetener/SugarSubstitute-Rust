@@ -20,18 +20,21 @@ pub(super) fn prepare(
     let Some(Renderer::Gpu(renderer)) = engine.renderer.as_mut() else {
         return Err(WorkError::invalid("GPU renderer is unavailable"));
     };
-    let update = renderer.prepare(
-        RenderRequest {
-            document: &input.document,
-            view: input.view,
-            reconstruction: input.reconstruction,
-            matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
-            target: input.target,
-            base: input.base,
-            damage: input.damage,
-        },
-        context,
-    )?;
+    let request = RenderRequest {
+        document: &input.document,
+        view: input.view,
+        reconstruction: input.reconstruction,
+        matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
+        target: input.target,
+        base: input.base,
+        damage: input.damage,
+    };
+    let update = if input.tier == BackingTier::Navigation {
+        renderer.prepare_navigation(request, context)?
+    } else {
+        renderer.prepare(request, context)?
+    };
+    let sampling_scale = update.sampling_scale();
     let work = renderer.retain(&mut surface, &update, context)?;
     drop(update);
     let frame = surface.frame().ok_or_else(|| WorkError::invalid("GPU viewport is unavailable"))?;
@@ -67,6 +70,7 @@ pub(super) fn prepare(
         None
     };
     Ok(Packet {
+        sampling_scale,
         tier: input.tier,
         reconstruction: input.reconstruction,
         display_buffers: None,

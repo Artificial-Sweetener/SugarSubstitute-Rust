@@ -87,6 +87,21 @@ impl Session {
     /// A current accepted camera request may finish while later camera intent is coalesced.
     /// Its pixels are always labelled with their actual camera and current authored revision.
     pub(super) fn consume_frame(&mut self) -> Result<(), Box<dyn Error>> {
+        if !self.closing
+            && self.drawable
+            && self.pending_open.is_none()
+            && self.loading.is_none()
+            && self.tools.navigation().resampling()
+            && self.rendering.as_ref().is_some_and(|rendering| {
+                rendering.tier == BackingTier::Detail
+                    && !rendering.superseded
+                    && rendering.coverage.viewport().zoom()
+                        < self.tools.navigation().viewport().zoom()
+                    && self.has_finer_ready_detail(rendering.coverage.viewport())
+            })
+        {
+            return Ok(());
+        }
         let backing_borrowed =
             self.rendering.as_ref().is_some_and(|rendering| match rendering.tier {
                 BackingTier::Fallback => {
@@ -137,6 +152,9 @@ impl Session {
                 if packet.tier != rendering.tier
                     || packet.reconstruction != rendering.reconstruction
                     || packet.view != rendering.coverage.viewport()
+                    || !packet.sampling_scale.is_finite()
+                    || packet.sampling_scale <= 0.0
+                    || packet.sampling_scale > packet.view.zoom()
                 {
                     self.retire(Retired { _packet: Some(packet), ..Default::default() })?;
                     return Err("Canvas received foreign backing coverage".into());
@@ -272,6 +290,7 @@ impl Session {
                     self.initial_preview = false;
                 }
                 let shown = Presented {
+                    sampling_scale: packet.sampling_scale,
                     tier: packet.tier,
                     coverage: rendering.coverage,
                     view: packet.view,

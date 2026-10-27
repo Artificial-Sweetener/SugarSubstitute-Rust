@@ -197,6 +197,7 @@ pub(super) fn load(
 }
 /// One immutable prepared request plus optional newly admitted UI backing for physical resize.
 pub(super) struct Packet {
+    pub(super) sampling_scale: f64,
     pub(super) tier: BackingTier,
     pub(super) reconstruction: Reconstruction,
     pub(super) display_buffers: Option<ProjectionBuffers>,

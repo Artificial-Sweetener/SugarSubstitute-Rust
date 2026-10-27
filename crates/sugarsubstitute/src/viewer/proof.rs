@@ -73,10 +73,12 @@ pub(super) struct Input {
     pub(super) canonical_gpu_snapshot_readback: bool,
     pub(super) native_gpu_display_verification_readback: bool,
     pub(super) coverage_acceptances: u64,
-    /// Native-accepted displays backed by the bounded whole-document fallback.
+    /// Native-accepted displays using complete fallback coverage or a retained underlay.
     pub(super) fallback_projection_acceptances: u64,
     /// Native-accepted displays whose primary pixels come from canonical navigation pyramids.
     pub(super) navigation_projection_acceptances: u64,
+    /// Native-accepted presentations that still sampled the small direct-source bootstrap.
+    pub(super) bootstrap_projection_acceptances: u64,
     /// Whether the phase-six zoom-out accepted fallback output before settling.
     pub(super) zoom_out_fallback_exercised: bool,
     /// Archive work used by the first completed current-source fallback preview preparation.
@@ -105,6 +107,7 @@ struct Metrics<'a> {
     coverage_validated_presentations: u64,
     fallback_projection_acceptances: u64,
     navigation_projection_acceptances: u64,
+    bootstrap_projection_acceptances: u64,
     zoom_out_fallback_exercised: bool,
     initial_fallback_preparation_io: Option<SourceIoEvidence>,
     /// First source intent through native queue acceptance; excludes display scanout.
@@ -162,6 +165,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         coverage_acceptances,
         fallback_projection_acceptances,
         navigation_projection_acceptances,
+        bootstrap_projection_acceptances,
         zoom_out_fallback_exercised,
         first_fallback_preparation_io,
         first_image_queue_latency,
@@ -291,6 +295,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         coverage_validated_presentations: coverage_acceptances,
         fallback_projection_acceptances,
         navigation_projection_acceptances,
+        bootstrap_projection_acceptances,
         zoom_out_fallback_exercised,
         initial_fallback_preparation_io: first_fallback_preparation_io.map(Into::into),
         initial_image_input_to_native_queue_nanoseconds: first_image_queue_latency

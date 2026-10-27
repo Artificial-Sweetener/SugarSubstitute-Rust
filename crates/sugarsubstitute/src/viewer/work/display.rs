@@ -76,6 +76,7 @@ pub(in crate::viewer) struct GpuUnderlay {
 /// Immutable identity and mapping of the complete backing filling missing primary samples.
 #[derive(Clone, Copy)]
 pub(in crate::viewer) struct UnderlayEvidence {
+    pub(in crate::viewer) tier: BackingTier,
     pub(in crate::viewer) source: FrameStamp,
     pub(in crate::viewer) coverage: BackingCoverage,
     pub(in crate::viewer) projection: ViewProjection,

@@ -4,6 +4,24 @@
 use super::*;
 use sugarsubstitute_image_ops::Filter;
 
+#[test]
+fn a_larger_navigation_grid_cannot_displace_finer_retained_source_samples()
+-> Result<(), Box<dyn Error>> {
+    let document = Extent::new(4096, 4096)?;
+    let mut old_view = Viewport::new(Extent::new(320, 240)?)?;
+    old_view.reframe([1000.0, 1000.0], 0.75)?;
+    let mut detail = shown(BackingTier::Detail, old_view, 2)?;
+    detail.0.sampling_scale = 0.5;
+    let mut target = old_view;
+    target.zoom_at(1.0 / 0.75, [160.0, 120.0])?;
+    let mut navigation = shown(BackingTier::Navigation, target, 3)?;
+    navigation.0.sampling_scale = 0.125;
+    let selected = backing::choose_backing(Some(detail), Some(navigation), None, target, document)?
+        .ok_or("Missing detailed selection")?;
+    assert_eq!(selected.primary.source, detail.1);
+    Ok(())
+}
+
 fn shown(
     tier: BackingTier,
     view: Viewport,
@@ -12,6 +30,7 @@ fn shown(
     Ok((
         Presented {
             tier,
+            sampling_scale: view.zoom(),
             coverage: coverage::detail(view)?,
             view: coverage::detail(view)?.viewport(),
             reconstruction: Reconstruction::Finished(if tier == BackingTier::Navigation {

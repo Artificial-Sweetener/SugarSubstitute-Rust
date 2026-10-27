@@ -38,6 +38,7 @@ impl DisplayEvidence {
             return Ok(primary_crop == Some(self.projection));
         };
         Ok(self.tier == BackingTier::Detail
+            && matches!(underlay.tier, BackingTier::Fallback | BackingTier::Navigation)
             && underlay.source.surface == self.source.surface
             && underlay.source != self.source
             && self.target.generation > underlay.source.generation
@@ -78,7 +79,9 @@ pub(super) fn choose_backing(
     if fallback.is_some_and(|layer| {
         layer.shown.tier == BackingTier::Navigation
             && (detail.reconstruction.is_preview()
-                || detail.view.zoom() < layer.shown.view.zoom()
+                || detail.sampling_scale < layer.shown.sampling_scale
+                || (detail.sampling_scale == layer.shown.sampling_scale
+                    && detail.view.zoom() < layer.shown.view.zoom())
                 || detail.view.zoom() > target.zoom() * 2.0)
     }) {
         return Ok(fallback.map(|primary| BackingSelection { primary, underlay: None }));

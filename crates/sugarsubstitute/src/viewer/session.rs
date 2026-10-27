@@ -88,6 +88,7 @@ struct Loading {
 }
 #[derive(Clone, Copy)]
 struct Presented {
+    sampling_scale: f64,
     tier: BackingTier,
     coverage: BackingCoverage,
     view: Viewport,
@@ -145,6 +146,7 @@ pub(super) struct Session {
     coverage_acceptances: u64,
     fallback_projection_acceptances: u64,
     navigation_projection_acceptances: u64,
+    bootstrap_projection_acceptances: u64,
     first_fallback_preparation_io: Option<ArchiveStats>,
     pending_cpu_evidence: Option<DisplayEvidence>,
     pending_gpu_evidence: Option<DisplayEvidence>,
@@ -229,6 +231,7 @@ impl Session {
             coverage_acceptances: 0,
             fallback_projection_acceptances: 0,
             navigation_projection_acceptances: 0,
+            bootstrap_projection_acceptances: 0,
             first_fallback_preparation_io: None,
             pending_cpu_evidence: None,
             pending_gpu_evidence: None,

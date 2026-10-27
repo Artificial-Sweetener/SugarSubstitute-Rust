@@ -331,17 +331,34 @@ impl Session {
                 .checked_add(1)
                 .ok_or("Canvas fallback acceptance count exhausted")?;
         }
-        if evidence.tier == BackingTier::Navigation {
+        if evidence.tier == BackingTier::Navigation
+            || evidence.underlay.is_some_and(|underlay| underlay.tier == BackingTier::Navigation)
+        {
             self.navigation_projection_acceptances = self
                 .navigation_projection_acceptances
                 .checked_add(1)
                 .ok_or("Canvas navigation acceptance count exhausted")?;
+        }
+        if evidence.tier == BackingTier::Fallback
+            || evidence.underlay.is_some_and(|underlay| underlay.tier == BackingTier::Fallback)
+        {
+            self.bootstrap_projection_acceptances = self
+                .bootstrap_projection_acceptances
+                .checked_add(1)
+                .ok_or("Canvas bootstrap acceptance count exhausted")?;
         }
         Ok(())
     }
 
     /// Retain one observed terminal outcome while newer tool intent replaces expensive refinement.
     pub(super) fn cancel_obsolete_refinement(&mut self) -> Result<(), Box<dyn Error>> {
+        let obsolete_coarser = self.rendering.as_ref().is_some_and(|rendering| {
+            let prepared = rendering.coverage.viewport();
+            rendering.tier == BackingTier::Detail
+                && prepared.zoom() < self.tools.navigation().viewport().zoom()
+                && prepared.zoom() < self.tools.navigation().target_viewport().zoom()
+                && self.has_finer_ready_detail(prepared)
+        });
         let desired = if self
             .rendering
             .as_ref()
@@ -370,7 +387,7 @@ impl Session {
         } else {
             false
         };
-        if !current || !compatible {
+        if !current || !compatible || obsolete_coarser {
             rendering.superseded = true;
             rendering.job.cancel();
         }

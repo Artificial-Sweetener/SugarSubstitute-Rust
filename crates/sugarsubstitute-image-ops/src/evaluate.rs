@@ -45,6 +45,11 @@ struct StagedSparseTile {
 }
 
 impl<S: RasterSource> Evaluator<S> {
+    /// Query a structural content footprint without decoding, allocation, recency updates or I/O.
+    /// The caller retains graph semantics and uses the result only as an admission-time hint.
+    pub fn has_cached_region(&self, content: [u8; 32], region: Region) -> bool {
+        self.cache.contains_region(content, region)
+    }
     /// Retain a graph/source and bounded tile inventory under the original execution reservation.
     /// # Errors
     /// Rejects excessive/zero tile retention, allocator failure and insufficient admitted memory.

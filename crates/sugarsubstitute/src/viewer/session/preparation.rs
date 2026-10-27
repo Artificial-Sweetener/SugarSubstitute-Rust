@@ -3,6 +3,20 @@
 //! Select canonical navigation/fine backings and admit one immutable image-operation request.
 use super::*;
 impl Session {
+    /// Preserve an already sharper document/source product while a coarser destination is pending.
+    /// Exact preparation cannot exceed its device grid or the original raster sampling density.
+    pub(super) fn has_finer_ready_detail(&self, prepared: Viewport) -> bool {
+        let Some(scene) = &self.scene else {
+            return false;
+        };
+        let snapshot = scene.document.snapshot();
+        self.presented.as_ref().is_some_and(|shown| {
+            shown.document == (snapshot.identity(), snapshot.revision())
+                && shown.source_revision == scene.source_revision
+                && shown.view.zoom() > prepared.zoom()
+                && shown.sampling_scale >= prepared.zoom().min(1.0)
+        })
+    }
     /// Anticipate a zoom-out destination without changing the displayed camera or authored graph.
     /// Fine pixel inspection retains the current physical scale until it crosses twofold zoom.
     pub(super) fn navigation_view(&self) -> Viewport {
@@ -25,6 +39,15 @@ impl Session {
     ) -> Result<Option<(BackingCoverage, Reconstruction)>, Box<dyn Error>> {
         let view = self.navigation_view();
         let reconstruction = Reconstruction::navigation_for_display_zoom(view.zoom())?;
+        if let Some(shown) = self.presented.as_ref()
+            && shown.document == document
+            && shown.source_revision == source_revision
+            && !shown.reconstruction.is_preview()
+            && shown.view.shares_sampling_grid(view)
+            && !coverage::detail_needs_refresh(shown.coverage, view, extent)?
+        {
+            return Ok(None);
+        }
         let ready = self.navigation_presented.as_ref().is_some_and(|shown| {
             shown.document == document
                 && shown.source_revision == source_revision
@@ -84,29 +107,39 @@ impl Session {
         let fallback_current = self.fallback_presented.as_ref().is_some_and(|shown| {
             shown.document == identity && shown.source_revision == scene.source_revision
         });
+        let navigating = self.tools.navigation().resampling();
+        let navigation_request = if fallback_current && !needs_display_buffers && navigating {
+            self.navigation_request(identity, scene.source_revision, document_extent)?
+        } else {
+            None
+        };
         let (tier, coverage, reconstruction) = if !fallback_current {
             (BackingTier::Fallback, coverage::fallback(document_extent)?, Reconstruction::Preview)
         } else if needs_display_buffers {
             let shown =
                 self.fallback_presented.as_ref().ok_or("Canvas fallback identity was lost")?;
             (BackingTier::Fallback, shown.coverage, shown.reconstruction)
-        } else if self.tools.navigation().resampling() {
-            let Some((coverage, reconstruction)) =
-                self.navigation_request(identity, scene.source_revision, document_extent)?
-            else {
-                return Ok(());
-            };
+        } else if let Some((coverage, reconstruction)) = navigation_request {
             (BackingTier::Navigation, coverage, reconstruction)
         } else {
-            let reconstruction = self.reconstruction()?;
-            let detail_view =
-                self.detail_view(target_view, identity, scene.source_revision, reconstruction)?;
+            let preparation_view = if navigating { self.navigation_view() } else { target_view };
+            let reconstruction = if navigating {
+                Reconstruction::finished_for_display_zoom(preparation_view.zoom())?
+            } else {
+                self.reconstruction()?
+            };
+            let detail_view = self.detail_view(
+                preparation_view,
+                identity,
+                scene.source_revision,
+                reconstruction,
+            )?;
             let desired = coverage::detail(detail_view)?;
             let current = if let Some(shown) = self.presented.as_ref() {
                 shown.document == identity
                     && shown.source_revision == scene.source_revision
                     && shown.reconstruction == reconstruction
-                    && shown.view.zoom() == target_view.zoom()
+                    && shown.view.zoom() == detail_view.zoom()
                     && !coverage::detail_needs_refresh(
                         shown.coverage,
                         detail_view,

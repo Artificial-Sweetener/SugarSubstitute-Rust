@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Spatial contracts shared by evaluation, dirty-region propagation and backend planning.
-use crate::{Filter, Graph, ImageError, NodeId, Operation, Region};
+use crate::{Extent, Filter, Graph, ImageError, NodeId, Operation, Region, Sampling};
 
 impl Graph {
     /// Required input regions for an exact output region, including Lanczos filter halos.
@@ -19,26 +19,7 @@ impl Graph {
         }
         let inputs = match entry.operation {
             Operation::Resample { input, sampling, .. } => {
-                let source = self.extent(input)?;
-                let (left, right) = required_axis(
-                    output.x(),
-                    output.width(),
-                    source.width(),
-                    sampling.scale()[0],
-                    sampling.offset()[0],
-                    sampling.filter(),
-                    sampling.output_translation()[0],
-                );
-                let (top, bottom) = required_axis(
-                    output.y(),
-                    output.height(),
-                    source.height(),
-                    sampling.scale()[1],
-                    sampling.offset()[1],
-                    sampling.filter(),
-                    sampling.output_translation()[1],
-                );
-                [Some((input, Region::new(left, top, right - left, bottom - top)?)), None, None]
+                [Some((input, sampling.required_input(self.extent(input)?, output)?)), None, None]
             }
             operation => operation.inputs().map(|id| id.map(|id| (id, output))),
         };
@@ -89,6 +70,41 @@ impl Graph {
             }
             _ => Ok(changed.intersection(entry.extent.region())),
         }
+    }
+}
+
+impl Sampling {
+    /// Source footprint for global output pixels, including the selected reconstruction support.
+    /// Source edges clamp independently on each axis. This computes geometry without reading pixels.
+    /// # Errors
+    /// Rejects overflowing mapped coordinates and preserves checked region-construction failures.
+    pub fn required_input(self, source: Extent, output: Region) -> Result<Region, ImageError> {
+        for (axis, first, last) in
+            [(0, output.x(), output.right() - 1), (1, output.y(), output.bottom() - 1)]
+        {
+            if !self.center(axis, first).is_finite() || !self.center(axis, last).is_finite() {
+                return Err(ImageError::Invalid("Image sampling coordinate overflow"));
+            }
+        }
+        let (left, right) = required_axis(
+            output.x(),
+            output.width(),
+            source.width(),
+            self.scale()[0],
+            self.offset()[0],
+            self.filter(),
+            self.output_translation()[0],
+        );
+        let (top, bottom) = required_axis(
+            output.y(),
+            output.height(),
+            source.height(),
+            self.scale()[1],
+            self.offset()[1],
+            self.filter(),
+            self.output_translation()[1],
+        );
+        Region::new(left, top, right - left, bottom - top)
     }
 }
 
