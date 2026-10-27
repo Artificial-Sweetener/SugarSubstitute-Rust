@@ -20,17 +20,21 @@ import type {
   CanvasMaskCommand,
   CanvasMaskResult,
   CanvasMaskChanged,
+  CanvasMaskQuery,
 } from '../contracts/CanvasMasksProtocol.generated.js';
 import { isCanvasMaskMessage } from './CanvasMasksValidation.generated.js';
+import { CanvasRemoteChanges } from './CanvasRemoteChanges.js';
 
 /** Inject transport and deadlines from the owning runtime. */
 export interface CanvasMaskClientPort {
   send(message: CanvasMaskMessage): void;
   later(milliseconds: number, callback: () => void): () => void;
+  report(error: unknown): void;
 }
 
 /** Keep request failures explicit and never retry a native mask mutation. */
 export class CanvasMaskClient implements CanvasMaskHost {
+  readonly changes: CanvasRemoteChanges<CanvasMaskChanged>;
   readonly #pending = new Map<number, { resolve(result: CanvasMaskResult): void; stop(): void }>();
   readonly #listeners = new Set<(change: CanvasMaskChanged) => void>();
   #next = 0;
@@ -40,13 +44,39 @@ export class CanvasMaskClient implements CanvasMaskHost {
     private readonly session: string,
     private readonly port: CanvasMaskClientPort,
     private readonly identity: () => string = () => '',
-  ) {}
+  ) {
+    this.changes = new CanvasRemoteChanges({
+      listen: (listener) => {
+        this.#listeners.add(listener);
+        return () => {
+          this.#listeners.delete(listener);
+        };
+      },
+      watch: async (enabled) => {
+        const result = await this.#request({ type: 'watch', enabled });
+        if (result.kind !== 'watching')
+          throw new Error(
+            result.kind === 'failure'
+              ? result.message
+              : 'Invalid mask observation acknowledgement.',
+          );
+        return result.supported;
+      },
+      report: (error) => {
+        this.port.report(error);
+      },
+    });
+  }
   /** Read the negotiated canvas identity without guessing from transport or editor names. */
   get canvasId(): string {
     return this.identity();
   }
   /** Submit one capability operation and retire it on timeout or connection loss. */
-  execute(command: CanvasMaskCommand): Promise<CanvasMaskResult> {
+  execute(command: CanvasMaskQuery): Promise<CanvasMaskResult> {
+    return this.#request(command);
+  }
+  /** Keep observation requests in the same correlated sequence as native mask operations. */
+  #request(command: CanvasMaskCommand): Promise<CanvasMaskResult> {
     if (this.#disposed)
       return Promise.resolve({
         kind: 'failure',
@@ -67,7 +97,7 @@ export class CanvasMaskClient implements CanvasMaskHost {
       try {
         this.port.send({
           protocol: 'sugarcubes.canvas.masks',
-          version: 1,
+          version: 2,
           session: this.session,
           requestId,
           command,
@@ -83,13 +113,6 @@ export class CanvasMaskClient implements CanvasMaskHost {
         });
       }
     });
-  }
-  /** Receive committed changes independently of in-flight replies. */
-  subscribe(listener: (change: CanvasMaskChanged) => void): () => void {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
   }
   /** Validate the complete bounded envelope before exposing any native value. */
   receive(value: unknown): boolean {
@@ -109,6 +132,7 @@ export class CanvasMaskClient implements CanvasMaskHost {
   }
   /** Settle outstanding operations before releasing native-change consumers. */
   dispose(): void {
+    this.changes.dispose();
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();

@@ -48,6 +48,45 @@ function fixture() {
   };
 }
 
+test.each(['ready', 'disposed'])(
+  'prepares current source choices through the retained native field: %s',
+  async (outcome) => {
+    const f = fixture();
+    const root = document.createElement('article');
+    root.className = 'lg-node';
+    const row = document.createElement('div');
+    row.dataset.scStyleRow = '';
+    const trigger = document.createElement('button');
+    trigger.setAttribute('role', 'combobox');
+    trigger.setAttribute('aria-label', '__sugarcubes_presentation:feature:Source');
+    trigger.setAttribute('aria-expanded', 'false');
+    row.append(trigger);
+    root.append(row);
+    document.body.append(root);
+    let finish: ((ready: boolean) => void) | undefined;
+    const prepare = jest.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const opened = jest.fn();
+    trigger.addEventListener('click', opened);
+    const mount = f.fields.mountChoice(root, 'Source', jest.fn(), 'Source', prepare);
+    mount.update('composition', [{ value: 'composition', label: 'Composition', blockers: [] }]);
+    trigger.click();
+    await Promise.resolve();
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(opened).not.toHaveBeenCalled();
+    if (outcome === 'disposed') mount.dispose();
+    finish?.(true);
+    for (let index = 0; index < 12; index++) await Promise.resolve();
+    expect(opened).toHaveBeenCalledTimes(outcome === 'ready' ? 1 : 0);
+    mount.dispose();
+    root.remove();
+  },
+);
+
 test.each([undefined, 'spinner-slider'] as const)(
   'numeric display %s uses the native lifecycle and remains outside graph serialization',
   (presentation) => {

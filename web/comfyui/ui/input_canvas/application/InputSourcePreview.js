@@ -30,7 +30,7 @@ export class InputSourcePreview {
         ]);
     }
     /** Read canvas or file data through the same source path used by the loader's own preview. */
-    constructor(binding, previews, entry, maximumSize, publish, report) {
+    constructor(binding, previews, entry, maximumSize, publish, report, cohort = null, captureMaximum = null) {
         this.binding = binding;
         this.entry = entry;
         this.maximumSize = maximumSize;
@@ -56,7 +56,7 @@ export class InputSourcePreview {
                             kind: 'error',
                             message: value.unavailable ? value.message : 'Preview unavailable',
                         });
-            }, binding.preview.captureSize(maximumSize), binding.loader.kind === 'image' ? 'image' : 'raw');
+            }, captureMaximum ?? binding.preview.captureSize(maximumSize), binding.loader.kind === 'image' ? 'image' : 'raw', cohort);
         }
         else if (entry.source.file) {
             publish({ kind: 'loading' });

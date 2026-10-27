@@ -137,30 +137,33 @@ test('adapts ordinary and nested finals while rejecting invalid payloads and unq
   f.adapter.dispose();
 });
 
-test('registers once, preserves unrelated listeners, and stops deliveries after disposal and reinstall', () => {
-  const f = fixture();
-  let unrelated = 0;
-  f.api.addEventListener('reconnected', () => {
-    unrelated++;
-  });
-  f.adapter.install();
-  f.adapter.install();
-  f.api.emit('disconnected', null);
-  f.api.emit('reconnected', null);
-  expect(f.connections).toEqual([false, true]);
-  expect(f.reconnects()).toBe(1);
-  f.adapter.dispose();
-  f.api.emit('reconnected', null);
-  expect(f.reconnects()).toBe(1);
-  expect(unrelated).toBe(2);
-  f.adapter.install();
-  f.api.emit('reconnected', null);
-  expect(f.reconnects()).toBe(2);
-  f.adapter.dispose();
-  expect(
-    [...f.api.listeners.values()].reduce((count, listeners) => count + listeners.size, 0),
-  ).toBe(1);
-});
+test.each(['disconnected', 'reconnecting'])(
+  'tracks host connection loss and preserves exact listener lifetime: %s',
+  (connectionLost) => {
+    const f = fixture();
+    let unrelated = 0;
+    f.api.addEventListener('reconnected', () => {
+      unrelated++;
+    });
+    f.adapter.install();
+    f.adapter.install();
+    f.api.emit(connectionLost, null);
+    f.api.emit('reconnected', null);
+    expect(f.connections).toEqual([false, true]);
+    expect(f.reconnects()).toBe(1);
+    f.adapter.dispose();
+    f.api.emit('reconnected', null);
+    expect(f.reconnects()).toBe(1);
+    expect(unrelated).toBe(2);
+    f.adapter.install();
+    f.api.emit('reconnected', null);
+    expect(f.reconnects()).toBe(2);
+    f.adapter.dispose();
+    expect(
+      [...f.api.listeners.values()].reduce((count, listeners) => count + listeners.size, 0),
+    ).toBe(1);
+  },
+);
 
 test('rolls back registration that throws after the host retained a listener', () => {
   const f = fixture();

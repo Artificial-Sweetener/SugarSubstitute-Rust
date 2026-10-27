@@ -53,6 +53,7 @@ export class InputBindingController {
     private readonly report: (error: unknown) => void,
     readonly maskEditing: MaskEditingPort,
     private readonly editableCanvas: (canvasId: string) => boolean,
+    private readonly refreshPreviews: (sources: readonly CanvasInputSource[]) => void,
   ) {
     this.preview = new InputPreviewInterpretation(loader, files, () => port.settings());
     this.#stopWidgets = port.subscribe((intent) => {
@@ -106,10 +107,12 @@ export class InputBindingController {
           this.#stopCanvas?.();
           this.#stopCanvas = null;
           this.#canvas = canvas;
-          if (canvas)
-            this.#stopCanvas = canvas.subscribe(() => {
+          if (canvas) {
+            const lease = canvas.changes?.subscribe(() => {
               void this.#refreshContext().catch(this.report);
             });
+            this.#stopCanvas = lease ? () => lease.stop() : null;
+          }
         }
         await this.#refreshContext();
         const saved = await this.port.load();
@@ -152,6 +155,20 @@ export class InputBindingController {
       });
     this.#notify();
     return this.#loading;
+  }
+  /** Read current document and layer choices without changing authored source bindings. */
+  async refreshSources(): Promise<void> {
+    if (this.#disposed) return;
+    const canvas = this.#canvas;
+    await this.#refreshContext();
+    if (!this.#acceptsCanvas(canvas)) return;
+    this.#error = null;
+    if (canvas) this.refreshPreviews(this.state.entries.map((entry) => entry.source));
+    this.#notify();
+  }
+  /** Re-read ownership after an asynchronous context request can outlive its canvas connection. */
+  #acceptsCanvas(canvas: CanvasSourceHost | null): boolean {
+    return !this.#disposed && this.#canvas === canvas;
   }
   /** Change a portable source without modifying Photoshop selection or layers. */
   changeSource(source: CanvasInputSource): void {

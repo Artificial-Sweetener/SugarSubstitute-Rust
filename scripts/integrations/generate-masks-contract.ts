@@ -34,7 +34,7 @@ export function masksBindings(
     types: 'integrations/contracts/CanvasMasksProtocol.generated.ts',
     validation: 'integrations/shared/CanvasMasksValidation.generated.ts',
     importPath: '../contracts/CanvasMasksProtocol.generated.js',
-    description: 'every version-one mask message',
+    description: 'every version-two mask message',
   });
 }
 

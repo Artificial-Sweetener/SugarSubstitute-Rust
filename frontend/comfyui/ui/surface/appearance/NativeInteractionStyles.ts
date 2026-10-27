@@ -112,7 +112,7 @@ export function nativeInteractionCss(): string {
     [data-sc-style-edit-frame] textarea:focus {
       background:var(--sc-surface); outline:none;
     }
-    [data-sc-style-edit-frame]:has([data-sc-editor-field="fluent"], [data-sc-editor-field="spectrum"]) {
+    [data-sc-style-edit-frame]:has([data-sc-editor-field="fluent"], [data-sc-editor-field="spectrum"], [data-sc-editor-field="gimp"]) {
       --tw-ring-shadow:0 0 transparent; --tw-ring-color:transparent;
       background:none; border:none; outline:none; box-shadow:none;
     }

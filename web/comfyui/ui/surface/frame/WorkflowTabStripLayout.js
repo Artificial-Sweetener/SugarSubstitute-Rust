@@ -39,6 +39,7 @@ export class WorkflowTabStripLayout {
     #key = '';
     #available = 0;
     #animationFrame = null;
+    #settleFrame = null;
     #disposed = false;
     #leadingInset = FRAME_TAB_START;
     /** Observe the enclosing frame so container resizing and tab-count changes share one policy. */
@@ -92,6 +93,9 @@ export class WorkflowTabStripLayout {
         if (this.#animationFrame !== null)
             this.#window.cancelAnimationFrame(this.#animationFrame);
         this.#animationFrame = null;
+        if (this.#settleFrame !== null)
+            this.#window.cancelAnimationFrame(this.#settleFrame);
+        this.#settleFrame = null;
     }
     /** Coalesce browser resize deliveries without measuring on scroll or presentation refresh. */
     #request = () => {
@@ -151,8 +155,17 @@ export class WorkflowTabStripLayout {
             if (hidden)
                 this.closeOverflow();
         }
-        this.resized(this.#widths);
-        this.#updateArrows();
+        this.#settleResize();
+    }
+    /** Coalesce selection and arrow updates after the browser commits the allocated widths. */
+    #settleResize() {
+        if (this.#settleFrame !== null)
+            return;
+        this.#settleFrame = this.#window.requestAnimationFrame(() => {
+            this.#settleFrame = null;
+            this.resized(this.#widths);
+            this.#updateArrows();
+        });
     }
     /** Reflect actual scroll endpoints after wheel input, selection reveal or dragging. */
     #updateArrows = () => {

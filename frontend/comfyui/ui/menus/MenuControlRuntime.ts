@@ -28,7 +28,11 @@ if (!customElements.get('fluent-menu-item')) await MenuItem.define(MenuItemDefin
 export function createMenuList(document: Document): HTMLElement {
   const style = readOwnedVisualStyle(document);
   const menu = document.createElement(
-    style === 'spectrum' ? 'sp-menu' : style === 'photopro' ? 'div' : 'fluent-menu-list',
+    style === 'spectrum'
+      ? 'sp-menu'
+      : style === 'photopro' || style === 'gimp'
+        ? 'div'
+        : 'fluent-menu-list',
   );
   if (menu.localName === 'sp-menu') menu.setAttribute('ignore', '');
   return menu;
@@ -40,7 +44,7 @@ export function createMenuItem(document: Document): HTMLElement {
   return document.createElement(
     style === 'spectrum'
       ? 'sc-spectrum-menu-item'
-      : style === 'photopro'
+      : style === 'photopro' || style === 'gimp'
         ? 'div'
         : 'fluent-menu-item',
   );
@@ -58,7 +62,7 @@ export function setMenuItemChecked(row: HTMLElement, checked: boolean): void {
 
 /** Route shared icons and accessories into each library's documented slots. */
 export function menuItemSlot(document: Document, position: 'start' | 'end'): string {
-  return readOwnedVisualStyle(document) === 'photopro'
+  return ['photopro', 'gimp'].includes(readOwnedVisualStyle(document))
     ? ''
     : readOwnedVisualStyle(document) === 'spectrum'
       ? position === 'start'

@@ -66,77 +66,105 @@ test('captures image selections and mask selections coherently with distinct con
   f.previews.dispose();
 });
 
-test('defaults an image loader to composition, displays actual image colors and preserves native mixed outputs', async () => {
-  const f = sourceMaskFixture();
-  f.loaders.define({ LoadImage: {} });
-  const loader = f.loaders.read('LoadImage')!;
-  const node: ComfyNode = {
-    id: 7,
-    type: 'LoadImage',
-    properties: {},
-    widgets: [
-      { name: 'image', value: 'unrelated.png' },
-      { name: 'upload', type: 'button' },
-    ],
-  };
-  const binding = createComfyInputBinding(node, loader, f.ports);
-  await binding.initialize();
-  expect(binding.state.entries[0]?.source).toMatchObject({ target: { kind: 'composition' } });
-  expect(node.widgets?.[0]?.value).toBe('');
-  const paint = jest.fn();
-  jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-    createImageData: (width: number, height: number) => ({
-      data: new Uint8ClampedArray(width * height * 4),
-    }),
-    putImageData: paint,
-  } as unknown as CanvasRenderingContext2D);
-  const view = new MasonryInputEditor(
-    document,
-    binding,
-    f.previews,
-    async () => 'actual.png',
-    f.report,
-    nativeInputFields(node),
-    document.createElement('article'),
-    null,
-  );
-  document.body.append(view.element);
-  await settled();
-  expect(nativeSourceField(node).value).toBe('composition');
-  expect(paint).toHaveBeenLastCalledWith(
-    expect.objectContaining({ data: Uint8ClampedArray.from(decodeCanvasRaster(sourceRgba)) }),
-    0,
-    0,
-  );
-  const payload = {
-    workflow: {
-      nodes: [
-        {
-          id: 7,
-          type: 'LoadImage',
-          properties: node.properties,
-          sugarcubes_widget_values: { image: '' },
-        },
+test.each([true, false])(
+  'captures fresh image inputs and preserves native mixed outputs with observation=%s',
+  async (observesChanges) => {
+    const f = sourceMaskFixture(observesChanges);
+    f.loaders.define({ LoadImage: {} });
+    const loader = f.loaders.read('LoadImage')!;
+    const node: ComfyNode = {
+      id: 7,
+      type: 'LoadImage',
+      properties: {},
+      widgets: [
+        { name: 'image', value: 'unrelated.png' },
+        { name: 'upload', type: 'button' },
       ],
-    },
-    output: {
-      '7': { class_type: 'LoadImage', inputs: { image: '' } },
-      '8': { class_type: 'MaskConsumer', inputs: { mask: ['7', 1] } },
-    },
-  };
-  const prepared = (await f.preparation.prepare(payload)).payload;
-  expect(prepared).toMatchObject({
-    output: {
-      '7': { class_type: 'LoadImage', inputs: { image: 'immutable-1.png' } },
-      '8': payload.output['8'],
-    },
-  });
-  expect(payload.output['7'].inputs.image).toBe('');
-  expect(f.report).not.toHaveBeenCalled();
-  view.dispose();
-  binding.dispose();
-  f.previews.dispose();
-});
+    };
+    const binding = createComfyInputBinding(node, loader, f.ports);
+    await binding.initialize();
+    expect(binding.state.entries[0]?.source).toMatchObject({ target: { kind: 'composition' } });
+    expect(node.widgets?.[0]?.value).toBe('');
+    const paint = jest.fn();
+    jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      createImageData: (width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
+      putImageData: paint,
+    } as unknown as CanvasRenderingContext2D);
+    const view = new MasonryInputEditor(
+      document,
+      binding,
+      f.previews,
+      async () => 'actual.png',
+      f.report,
+      nativeInputFields(node),
+      document.createElement('article'),
+      null,
+    );
+    document.body.append(view.element);
+    await settled();
+    expect(nativeSourceField(node).value).toBe('composition');
+    expect(paint).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: Uint8ClampedArray.from(decodeCanvasRaster(sourceRgba)) }),
+      0,
+      0,
+    );
+    if (!observesChanges) {
+      expect(view.element.textContent).not.toContain('Refresh previews after editing.');
+      const authored = JSON.stringify(binding.state);
+      const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+      const refresh = [
+        ...view.controlsElement.querySelectorAll<HTMLElement>('button, fluent-button, sp-button'),
+      ].find((button) => button.textContent === 'Refresh canvas sources');
+      expect(refresh).toBeUndefined();
+      await binding.refreshSources();
+      await settled();
+      expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(
+        captures + 1,
+      );
+      expect(JSON.stringify(binding.state)).toBe(authored);
+      expect(f.changes.size).toBe(0);
+    }
+    const payload = {
+      workflow: {
+        nodes: [
+          {
+            id: 7,
+            type: 'LoadImage',
+            properties: node.properties,
+            sugarcubes_widget_values: { image: '' },
+          },
+        ],
+      },
+      output: {
+        '7': { class_type: 'LoadImage', inputs: { image: '' } },
+        '8': { class_type: 'MaskConsumer', inputs: { mask: ['7', 1] } },
+      },
+    };
+    const prepared = (await f.preparation.prepare(payload)).payload;
+    expect(prepared).toMatchObject({
+      output: {
+        '7': { class_type: 'LoadImage', inputs: { image: 'immutable-1.png' } },
+        '8': payload.output['8'],
+      },
+    });
+    expect(payload.output['7'].inputs.image).toBe('');
+    if (!observesChanges) {
+      const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+      expect((await f.preparation.prepare(payload)).payload).toMatchObject({
+        output: { '7': { inputs: { image: 'immutable-2.png' } } },
+      });
+      expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(
+        captures + 1,
+      );
+    }
+    expect(f.report).not.toHaveBeenCalled();
+    view.dispose();
+    binding.dispose();
+    f.previews.dispose();
+  },
+);
 
 test('owns multiple upload fields on a node with one native callback lifetime and one coherent queue snapshot', async () => {
   const f = sourceMaskFixture();
@@ -254,6 +282,38 @@ test('preserves ordered image sources through Cube execution using the same prep
   );
   binding.dispose();
   f.previews.dispose();
+});
+
+test('a context refresh completing after binding disposal cannot restart preview capture', async () => {
+  const f = sourceMaskFixture(false);
+  f.loaders.define({ LoadImage: {} });
+  const loader = f.loaders.read('LoadImage');
+  if (!loader) throw new Error('Missing image loader fixture.');
+  const node: ComfyNode = {
+    id: 9,
+    type: 'LoadImage',
+    properties: {},
+    widgets: [{ name: 'image', value: '' }],
+  };
+  const binding = createComfyInputBinding(node, loader, f.ports);
+  await binding.initialize();
+  const source = binding.state.entries[0]?.source;
+  if (!source || source.kind !== 'canvas') throw new Error('Missing selected canvas source.');
+  const stop = f.previews.observe(source, () => {});
+  await settled();
+  const context = await f.host.execute({ type: 'context' });
+  const releases: ((value: typeof context) => void)[] = [];
+  f.execute.mockImplementationOnce(() => new Promise((resolve) => releases.push(resolve)));
+  const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+  const refreshing = binding.refreshSources();
+  binding.dispose();
+  releases[0]!(context);
+  await refreshing;
+  await settled();
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(captures);
+  stop();
+  f.previews.dispose();
+  expect(f.report).not.toHaveBeenCalled();
 });
 
 test('preserves connected file inputs without silently replacing a graph-owned source', async () => {

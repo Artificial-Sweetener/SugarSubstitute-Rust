@@ -50,7 +50,7 @@ const result = {
   width: 768,
   height: 512,
 } as const;
-/** Compose a synchronous, native-independent host with controllable async mutation. */
+/** Compose a native-independent host with asynchronous context and controllable mutation. */
 function application(supported = true, positioned = false) {
   const sent: CanvasMessage[] = [],
     replies: CanvasMessage[] = [],
@@ -71,7 +71,7 @@ function application(supported = true, positioned = false) {
   };
   const insert = jest.fn(async (_image: CanvasInsertImage, _cancel: CanvasCancellation) => result);
   const host = new CanvasServer(session, {
-    context: () => context,
+    context: () => Promise.resolve(context),
     insert,
     send: (value) => {
       replies.push(value);
@@ -123,7 +123,7 @@ test('does not repeat a mutation for duplicate, reordered or evicted requests', 
     type: 'image.insert',
     requestId: 1,
     session,
-    version: 2,
+    version: 3,
     protocol: 'sugarcubes.canvas',
   });
   expect(app.insert).toHaveBeenCalledTimes(1);
@@ -132,7 +132,7 @@ test('does not repeat a mutation for duplicate, reordered or evicted requests', 
   for (let requestId = 2; requestId < 40; requestId++)
     app.host.receive({
       protocol: 'sugarcubes.canvas',
-      version: 2,
+      version: 3,
       session,
       requestId,
       type: 'context.request',
@@ -169,10 +169,10 @@ test('rejects hostile envelopes before touching an editor', () => {
   for (const value of [
     null,
     {},
-    { protocol: 'sugarcubes.canvas', version: 2, session, requestId: 0, type: 'context.request' },
+    { protocol: 'sugarcubes.canvas', version: 3, session, requestId: 0, type: 'context.request' },
     {
       protocol: 'sugarcubes.canvas',
-      version: 2,
+      version: 3,
       session: 'wrong-session-0000',
       requestId: 1,
       type: 'image.insert',
@@ -180,7 +180,7 @@ test('rejects hostile envelopes before touching an editor', () => {
     },
     {
       protocol: 'sugarcubes.canvas',
-      version: 2,
+      version: 3,
       session,
       requestId: 1,
       type: 'image.insert',
@@ -204,6 +204,8 @@ test('cancels owned work on caller cancellation and refuses late replies after d
   });
   const cancellation = new CanvasCancellation();
   const pending = app.client.insertImage(image, cancellation);
+  await Promise.resolve();
+  expect(app.insert).toHaveBeenCalledTimes(1);
   cancellation.cancel();
   expect(await pending).toMatchObject({ status: 'cancelled' });
   app.host.dispose();

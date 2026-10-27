@@ -54,7 +54,7 @@ test('migrates saved coverage into a real source image while preserving order an
           }
         : { kind: 'failure', status: 'unsupported', message: 'Read only.' },
   );
-  const host: CanvasMaskHost = { canvasId: 'editor', execute, subscribe: () => () => {} };
+  const host: CanvasMaskHost = { canvasId: 'editor', execute, changes: null };
   const stage = jest.fn(async (_pixels: CanvasPixelRaster) => 'actual-region.png');
   const migration = new LegacyMaskMigration(() => host, { stage });
   const result = await migration.read(properties);

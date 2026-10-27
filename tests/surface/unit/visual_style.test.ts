@@ -17,7 +17,7 @@
 import { expect, test } from '@jest/globals';
 import { resolveVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyle.js';
 
-test.each(['comfy', 'fluent', 'spectrum', 'photopro'] as const)(
+test.each(['comfy', 'fluent', 'spectrum', 'photopro', 'gimp'] as const)(
   'prefers saved %s over either legacy toggle',
   (style) => {
     expect(resolveVisualStyle(style, false)).toBe(style);

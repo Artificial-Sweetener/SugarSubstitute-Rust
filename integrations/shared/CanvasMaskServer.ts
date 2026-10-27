@@ -16,16 +16,20 @@
 /** Serialize native mask operations and keep mutation replay protection inside one navigation. */
 import type {
   CanvasMaskMessage,
-  CanvasMaskCommand,
+  CanvasMaskQuery,
   CanvasMaskResult,
   CanvasMaskReply,
+  CanvasMaskChanged,
 } from '../contracts/CanvasMasksProtocol.generated.js';
 import { isCanvasMaskMessage } from './CanvasMasksValidation.generated.js';
 import { MAX_CANVAS_ENCODED_CHARACTERS } from './CanvasImageEncoding.js';
+import { CanvasChangeRelay } from './CanvasChangeRelay.js';
+import type { CanvasChangeObservation } from '../contracts/CanvasChangeObservation.js';
 
 /** Supply editor operations without importing native dependencies into the shared runtime. */
 export interface CanvasMaskServerPort {
-  execute(command: CanvasMaskCommand): Promise<CanvasMaskResult>;
+  readonly changes: CanvasChangeObservation<CanvasMaskChanged> | null;
+  execute(command: CanvasMaskQuery): Promise<CanvasMaskResult>;
   send(message: CanvasMaskMessage): void;
   report(error: unknown): void;
 }
@@ -37,11 +41,16 @@ export class CanvasMaskServer {
   #tail: Promise<void> = Promise.resolve();
   #disposed = false;
   #retained = 0;
+  readonly #changes: CanvasChangeRelay<CanvasMaskChanged>;
   /** Bind one authenticated session and one authoritative native mask owner. */
   constructor(
     private readonly session: string,
     private readonly port: CanvasMaskServerPort,
-  ) {}
+  ) {
+    this.#changes = new CanvasChangeRelay(port.changes, (change) => {
+      if (change.session === this.session) this.#send(change);
+    });
+  }
   /** Validate commands before placing them into the native operation sequence. */
   receive(value: unknown): boolean {
     if (
@@ -83,7 +92,13 @@ export class CanvasMaskServer {
       if (this.#disposed) return;
       let result: CanvasMaskResult;
       try {
-        result = await this.port.execute(value.command);
+        if (value.command.type === 'watch') {
+          const status = await this.#changes.watch(value.command.enabled);
+          result =
+            status === 'unavailable'
+              ? { kind: 'failure', status, message: 'Canvas mask observation is unavailable.' }
+              : { kind: 'watching', supported: status === 'observing' };
+        } else result = await this.port.execute(value.command);
       } catch (error: unknown) {
         this.port.report(error);
         result = { kind: 'failure', status: 'error', message: 'The canvas mask operation failed.' };
@@ -95,6 +110,7 @@ export class CanvasMaskServer {
   /** Prevent queued operations and replies from escaping a destroyed panel. */
   dispose(): void {
     this.#disposed = true;
+    this.#changes.dispose();
     this.#entries.clear();
     this.#retained = 0;
   }
@@ -103,7 +119,7 @@ export class CanvasMaskServer {
     if (this.#disposed) return;
     const reply: CanvasMaskReply = {
       protocol: 'sugarcubes.canvas.masks',
-      version: 1,
+      version: 2,
       session: this.session,
       requestId,
       result,

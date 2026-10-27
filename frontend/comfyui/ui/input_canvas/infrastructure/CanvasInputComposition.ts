@@ -70,6 +70,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
   const bindings = new ComfyInputBindings(loaders, {
     host,
     editable: options.editable,
+    refreshPreviews: (sources) => previews.refreshSources(sources),
     files: new BrowserInputPreviews((source) => assets.stage(source), rasters),
     maskEditing,
     legacy,

@@ -35,7 +35,7 @@ function binding(value: unknown): string {
     return node.enum.map((item: unknown) => JSON.stringify(item)).join(' | ');
   if (Array.isArray(node.oneOf)) return node.oneOf.map(binding).join(' | ');
   if (node.type === 'boolean' || node.type === 'string') return node.type;
-  if (node.type === 'integer') return 'number';
+  if (node.type === 'integer' || node.type === 'number') return 'number';
   if (node.type === 'array') return `readonly (${binding(node.items)})[]`;
   if (node.type === 'object') {
     const properties = record(node.properties);
@@ -72,10 +72,11 @@ function predicate(value: unknown, expression: string): string {
     if (typeof node.maxItems !== 'number') throw new Error('Contract arrays require a bound.');
     return `Array.isArray(${expression}) && ${expression}.length <= ${node.maxItems} && ${expression}.every((item: unknown) => (${predicate(node.items, 'item')}))`;
   }
-  if (node.type === 'integer') {
+  if (node.type === 'integer' || node.type === 'number') {
     if (typeof node.minimum !== 'number' || typeof node.maximum !== 'number')
-      throw new Error('Contract integers require lower and upper bounds.');
-    return `typeof ${expression} === 'number' && Number.isSafeInteger(${expression}) && ${expression} >= ${node.minimum} && ${expression} <= ${node.maximum}`;
+      throw new Error('Contract numbers require lower and upper bounds.');
+    const admission = node.type === 'integer' ? 'Number.isSafeInteger' : 'Number.isFinite';
+    return `typeof ${expression} === 'number' && ${admission}(${expression}) && ${expression} >= ${node.minimum} && ${expression} <= ${node.maximum}`;
   }
   if (node.type === 'string') {
     if (typeof node.maxLength !== 'number') throw new Error('Contract strings require a bound.');

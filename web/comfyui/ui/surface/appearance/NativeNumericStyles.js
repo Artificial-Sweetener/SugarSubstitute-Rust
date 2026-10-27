@@ -15,14 +15,17 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Arrange native number spinners and Substitute's slider pairs through themed styling. */
 import { CONTROL_HEIGHT, SPINNER_WIDTH } from './ControlGeometry.js';
+/** Share numeric frame geometry and materials across adapted and host-provided number controls. */
+const numberFrame = `height:${CONTROL_HEIGHT}; border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
+      border-radius:var(--sc-field-radius); background:var(--sc-control-fill);`;
 /** Keep number geometry scoped to positively identified native components in both views. */
 export function nativeNumericCss() {
     return `
     [data-sc-number-spinner] {
       position:relative; display:flex; box-sizing:border-box; padding-right:var(--sc-spinner-stepper-width,20px);
-      height:${CONTROL_HEIGHT}; border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
-      border-radius:var(--sc-field-radius); background:var(--sc-control-fill); overflow:hidden;
+      ${numberFrame} overflow:hidden;
     }
+    [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] :where([data-sc-style-layout] > :last-child > :first-child > :first-child) { ${numberFrame} }
     [data-sc-number-spinner] > div:has(> [data-sc-number-input]) { margin:0; padding:0; height:100%; min-width:0; }
     [data-sc-number-spinner]:not([data-sc-seed-box]) { width:${SPINNER_WIDTH}; max-width:100%; flex:none; font-variant-numeric:tabular-nums; }
     [data-sc-number-input] { box-sizing:border-box; min-width:0; width:100%; border:0; margin:0; height:100%; text-align:center; padding:0 8px; }

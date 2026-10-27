@@ -78,6 +78,11 @@ test('workflow persistence retains validated edits with the source and accepts e
   const edits = { ...DEFAULT_MASK_EDITS, feather: 8, crop_factor: 1.5 };
   const saved = withInputBinding(existing, 'mask', { ...binding, edits });
   expect(saved.unrelated).toBe(42);
+  const restored = readInputBinding(
+    withInputBinding(existing, 'mask', { ...binding, edits: { ...edits, mask_dilation: -58 } }),
+    'mask',
+  );
+  expect(restored?.edits).toEqual({ ...edits, mask_dilation: -58 });
   expect(readInputBinding(JSON.parse(JSON.stringify(saved)), 'mask')?.edits).toEqual(edits);
   expect(() =>
     readInputBinding(
@@ -177,7 +182,12 @@ test.each([-1, 0.5, Infinity, NaN, 101])('rejects unsupported crop factor %s', (
 });
 
 test('rejects invalid filter settings and out-of-frame paired geometry', () => {
-  for (const edits of [{ mask_dilation: 513 }, { post_dilation: 0.5 }, { feather: -1 }])
+  for (const edits of [
+    { mask_dilation: -513 },
+    { mask_dilation: 513 },
+    { post_dilation: 0.5 },
+    { feather: -1 },
+  ])
     expect(() => readMaskEditSettings({ ...DEFAULT_MASK_EDITS, ...edits })).toThrow('Invalid');
   expect(() => cropInputRaster(source(), { left: 7, top: 0, width: 2, height: 2 })).toThrow(
     'exceeds',

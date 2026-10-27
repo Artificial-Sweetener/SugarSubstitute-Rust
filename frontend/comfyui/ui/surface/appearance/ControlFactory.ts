@@ -44,7 +44,18 @@ import {
   createPhotoProTablist,
   createPhotoProWorkflowTab,
 } from './PhotoProControls.js';
+import {
+  createGimpButton,
+  createGimpCheckbox,
+  createGimpNumericSlider,
+  createGimpSegments,
+  createGimpFinderInput,
+  createGimpEditorField,
+  createGimpTablist,
+  createGimpWorkflowTab,
+} from './GimpThemeRuntime.js';
 import type { NumericSliderControl } from './NativeNumericControls.js';
+import type { NumericSliderSpec } from './NumericSliderPresentation.js';
 import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
 import type { FinderInputControl } from './FinderControls.js';
@@ -60,11 +71,13 @@ import {
 /** Select activation presentation without taking ownership of node state or history. */
 export function createActivationSwitch(document: Document): ActivationSwitchControl {
   const result =
-    readOwnedVisualStyle(document) === 'spectrum'
-      ? createSpectrumActivationSwitch(document)
-      : readOwnedVisualStyle(document) === 'photopro'
-        ? createCheckboxActivation(createPhotoProCheckbox(document))
-        : createNativeActivationSwitch(document);
+    readOwnedVisualStyle(document) === 'gimp'
+      ? createCheckboxActivation(createGimpCheckbox(document))
+      : readOwnedVisualStyle(document) === 'spectrum'
+        ? createSpectrumActivationSwitch(document)
+        : readOwnedVisualStyle(document) === 'photopro'
+          ? createCheckboxActivation(createPhotoProCheckbox(document))
+          : createNativeActivationSwitch(document);
   result.control.dataset.scActivationSwitch = '';
   return result;
 }
@@ -72,18 +85,24 @@ export function createActivationSwitch(document: Document): ActivationSwitchCont
 /** Create an owned command button with the selected system's real interaction implementation. */
 export function createButton(document: Document): HTMLElement {
   const button =
-    readOwnedVisualStyle(document) === 'spectrum'
-      ? createSpectrumButton(document)
-      : readOwnedVisualStyle(document) === 'photopro'
-        ? createPhotoProButton(document)
-        : document.createElement('fluent-button');
+    readOwnedVisualStyle(document) === 'gimp'
+      ? createGimpButton(document)
+      : readOwnedVisualStyle(document) === 'spectrum'
+        ? createSpectrumButton(document)
+        : readOwnedVisualStyle(document) === 'photopro'
+          ? createPhotoProButton(document)
+          : document.createElement('fluent-button');
   button.dataset.scButton = '';
   return button;
 }
 
 /** Normalize design-system numeric APIs before binding to a native Comfy field. */
-export function createNumericSlider(document: Document): NumericSliderControl {
+export function createNumericSlider(
+  document: Document,
+  field: NumericSliderSpec,
+): NumericSliderControl {
   const style = readOwnedVisualStyle(document);
+  if (style === 'gimp') return createGimpNumericSlider(document, field);
   return style === 'spectrum'
     ? createSpectrumSlider(document)
     : style === 'photopro'
@@ -94,6 +113,7 @@ export function createNumericSlider(document: Document): NumericSliderControl {
 /** Keep checked-state semantics independent of the selected component library. */
 export function createBooleanCheckbox(document: Document): BooleanCheckboxControl {
   const style = readOwnedVisualStyle(document);
+  if (style === 'gimp') return createGimpCheckbox(document);
   return style === 'spectrum'
     ? createSpectrumCheckbox(document)
     : style === 'photopro'
@@ -104,6 +124,7 @@ export function createBooleanCheckbox(document: Document): BooleanCheckboxContro
 /** Keep native boolean edits and undo history under the existing shared binding owner. */
 export function createBooleanSegments(document: Document): BooleanSegmentsControls {
   const style = readOwnedVisualStyle(document);
+  if (style === 'gimp') return createGimpSegments(document);
   return style === 'spectrum'
     ? createSpectrumSegments(document)
     : style === 'photopro'
@@ -114,6 +135,7 @@ export function createBooleanSegments(document: Document): BooleanSegmentsContro
 /** Create a real accessible search field in the selected visual system. */
 export function createFinderInput(document: Document): FinderInputControl {
   const style = readOwnedVisualStyle(document);
+  if (style === 'gimp') return createGimpFinderInput(document);
   return style === 'spectrum'
     ? createSpectrumFinderInput(document)
     : style === 'photopro'
@@ -124,13 +146,15 @@ export function createFinderInput(document: Document): FinderInputControl {
 /** Select the existing provider's input asset for an editor with its own canonical document. */
 export function createEditorField(document: Document, style: VisualStyle): EditorFieldControl {
   const field =
-    style === 'fluent'
-      ? createFluentEditorField(document)
-      : style === 'spectrum'
-        ? createSpectrumEditorField(document)
-        : style === 'photopro'
-          ? createPhotoProEditorField(document)
-          : createComfyEditorField(document);
+    style === 'gimp'
+      ? createGimpEditorField(document)
+      : style === 'fluent'
+        ? createFluentEditorField(document)
+        : style === 'spectrum'
+          ? createSpectrumEditorField(document)
+          : style === 'photopro'
+            ? createPhotoProEditorField(document)
+            : createComfyEditorField(document);
   field.root.dataset.scEditorField = style;
   field.root.style.cssText +=
     ';display:block;box-sizing:border-box;width:100%;height:100%;min-width:0;min-height:0';
@@ -160,11 +184,13 @@ function createComfyEditorField(document: Document): EditorFieldControl {
 export function createWorkflowTablist(document: Document): HTMLElement & { activeid: string } {
   const style = readOwnedVisualStyle(document);
   const group =
-    style === 'spectrum'
-      ? createSpectrumTablist(document)
-      : style === 'photopro'
-        ? createPhotoProTablist(document)
-        : createFluentWorkflowTablist();
+    style === 'gimp'
+      ? createGimpTablist(document)
+      : style === 'spectrum'
+        ? createSpectrumTablist(document)
+        : style === 'photopro'
+          ? createPhotoProTablist(document)
+          : createFluentWorkflowTablist();
   group.dataset.scWorkflowTabs = '';
   return group;
 }
@@ -173,11 +199,13 @@ export function createWorkflowTablist(document: Document): HTMLElement & { activ
 export function createWorkflowTab(document: Document): HTMLElement {
   const style = readOwnedVisualStyle(document);
   const tab =
-    style === 'spectrum'
-      ? document.createElement('sc-spectrum-workflow-tab')
-      : style === 'photopro'
-        ? createPhotoProWorkflowTab(document)
-        : createFluentWorkflowTab(document);
+    style === 'gimp'
+      ? createGimpWorkflowTab(document)
+      : style === 'spectrum'
+        ? document.createElement('sc-spectrum-workflow-tab')
+        : style === 'photopro'
+          ? createPhotoProWorkflowTab(document)
+          : createFluentWorkflowTab(document);
   tab.dataset.scWorkflowTab = '';
   return tab;
 }
@@ -189,6 +217,7 @@ export function workflowTabAccessorySlot(document: Document, position: 'start' |
 
 /** Name the already registered provider element for declarative Vue rendering. */
 export function buttonTag(style: VisualStyle): string {
+  if (style === 'gimp') return 'sc-gimp-button';
   return style === 'comfy' || style === 'photopro'
     ? 'button'
     : style === 'spectrum'
@@ -198,6 +227,7 @@ export function buttonTag(style: VisualStyle): string {
 
 /** Select a registered text-field adapter for declarative search views. */
 export function searchInputTag(style: VisualStyle): string {
+  if (style === 'gimp') return 'sc-gimp-search';
   return style === 'comfy'
     ? 'input'
     : style === 'spectrum'

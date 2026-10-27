@@ -24,8 +24,8 @@ export interface PanelFeedback {
   readonly visible: boolean;
 }
 
-/** Explain loading and recovery while the acknowledged frontend owns connected presentation. */
-export function panelFeedback(state: PanelState): PanelFeedback {
+/** Describe recovery for the endpoint chosen by the native adapter. */
+export function panelFeedback(state: PanelState, origin: string): PanelFeedback {
   if (state === 'connected') return { title: '', message: '', retry: false, visible: false };
   if (state === 'loading')
     return {
@@ -37,13 +37,13 @@ export function panelFeedback(state: PanelState): PanelFeedback {
   if (state === 'disconnected')
     return {
       title: 'ComfyUI disconnected',
-      message: 'Waiting for ComfyUI to reconnect. Retry reloads the panel.',
+      message: 'Check ComfyUI, then retry the connection.',
       retry: true,
       visible: true,
     };
   return {
     title: 'SugarCubes could not connect',
-    message: 'Start ComfyUI at http://127.0.0.1:8188 with SugarCubes enabled, then retry.',
+    message: `Check ComfyUI and SugarCubes at ${origin}, then retry.`,
     retry: true,
     visible: true,
   };

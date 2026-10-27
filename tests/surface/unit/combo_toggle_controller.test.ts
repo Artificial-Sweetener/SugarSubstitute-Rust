@@ -16,8 +16,97 @@
 /** Prove ordinary and enhanced comboboxes share click-to-close behavior. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { acquireComboToggle } from '../../../frontend/comfyui/ui/surface/appearance/ComboToggleController.js';
+import { NativeChoicePreparation } from '../../../frontend/comfyui/ui/surface/NativeChoicePreparation.js';
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  document.documentElement.removeAttribute('data-sc-visual-style');
+});
+
+test.each(['button', 'input'] as const)(
+  'opens and closes a GIMP field from its caption using its existing %s',
+  (kind) => {
+    const layout = document.createElement('div');
+    layout.dataset.scStyleComboLayout = '';
+    const caption = document.createElement('div');
+    caption.dataset.testid = 'widget-layout-field-label';
+    caption.textContent = 'Mode';
+    const frame = document.createElement('div');
+    frame.dataset.scStyleComboFrame = '';
+    const trigger = document.createElement(kind);
+    trigger.setAttribute('role', 'combobox');
+    trigger.setAttribute('aria-expanded', 'false');
+    const opened = jest.fn(() => trigger.setAttribute('aria-expanded', 'true'));
+    trigger.addEventListener('click', opened);
+    trigger.addEventListener('keydown', (event) => {
+      if (event instanceof KeyboardEvent && event.key === 'Escape')
+        trigger.setAttribute('aria-expanded', 'false');
+    });
+    frame.append(trigger);
+    layout.append(caption, frame);
+    document.body.append(layout);
+    const release = acquireComboToggle(document);
+    const dismiss = jest.fn(() => trigger.setAttribute('aria-expanded', 'false'));
+    document.addEventListener('pointerdown', dismiss, true);
+    try {
+      document.documentElement.dataset.scVisualStyle = 'fluent';
+      caption.click();
+      expect(opened).not.toHaveBeenCalled();
+      document.documentElement.dataset.scVisualStyle = 'gimp';
+      caption.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }),
+      );
+      caption.click();
+      expect(document.activeElement).toBe(trigger);
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      caption.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }),
+      );
+      caption.click();
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(opened).toHaveBeenCalledTimes(1);
+      expect(dismiss).not.toHaveBeenCalled();
+      trigger.disabled = true;
+      caption.click();
+      expect(opened).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener('pointerdown', dismiss, true);
+      release();
+    }
+  },
+);
+
+test('refreshes native choices before a GIMP caption opens their existing popup', async () => {
+  const layout = document.createElement('div');
+  layout.dataset.scStyleComboLayout = '';
+  const caption = document.createElement('div');
+  const frame = document.createElement('div');
+  frame.dataset.scStyleComboFrame = '';
+  const trigger = document.createElement('button');
+  trigger.setAttribute('role', 'combobox');
+  trigger.setAttribute('aria-expanded', 'false');
+  const order: string[] = [];
+  trigger.addEventListener('click', () => order.push('open'));
+  frame.append(trigger);
+  layout.append(caption, frame);
+  document.body.append(layout);
+  document.documentElement.dataset.scVisualStyle = 'gimp';
+  const release = acquireComboToggle(document);
+  const preparation = new NativeChoicePreparation(frame, async () => {
+    order.push('refresh');
+    return true;
+  });
+  try {
+    caption.click();
+    expect(order).toEqual([]);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(['refresh', 'open']);
+    expect(frame.querySelector('[role="combobox"]')).toBe(trigger);
+  } finally {
+    preparation.dispose();
+    release();
+  }
+});
 
 test('closes a host combobox when its projected search field is clicked again', () => {
   const frame = document.createElement('div');

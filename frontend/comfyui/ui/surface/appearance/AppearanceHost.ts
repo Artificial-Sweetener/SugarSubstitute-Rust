@@ -22,10 +22,9 @@ import {
   resolveComfyRendererMode,
 } from '../../core/ComfyRendererMode.js';
 import { NativeThemeScopes } from './NativeThemeScopes.js';
-import { identifyMenuSurface, releaseMenuSurface } from '../../menus/MenuSurface.js';
 import { nativeVisualStyleCss } from './ThemeService.js';
 import { NativeFieldAppearance } from './NativeFieldAppearance.js';
-import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
+import { NativeComboPopupAppearance } from './NativeComboPopupAppearance.js';
 import { acquireComboToggle } from './ComboToggleController.js';
 import type { NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
 import { readOwnedDarkTheme } from './OwnedColorScheme.js';
@@ -66,7 +65,7 @@ export class AppearanceHost {
   #nativeCards = false;
   readonly #graphGeometry: NativeCardGraphGeometry;
   readonly #themes = new NativeThemeScopes();
-  readonly #comboSearch: NativeInlineComboSearch;
+  readonly #comboPopups: NativeComboPopupAppearance;
   readonly #scrollbars: OverlayScrollbarHost;
   readonly #style: HTMLStyleElement;
   readonly #accent: AccentThemeHost;
@@ -74,7 +73,6 @@ export class AppearanceHost {
   #presence: HostSurfaceObserver | null = null;
   readonly #palette: MutationObserver;
   readonly #surfaces = new Set<HTMLElement>();
-  readonly #popups = new Set<HTMLElement>();
   readonly #dirty = new Set<HTMLElement>();
   #unsubscribe: (() => void) | null = null;
   #unsubscribePalette: (() => void) | null = null;
@@ -88,7 +86,6 @@ export class AppearanceHost {
   #frame: number | null = null;
   #disposed = false;
   #setup = false;
-  #popupOrigin: HTMLElement | null = null;
 
   /** Share the accepted palette while keeping frame mode independent of node rendering. */
   get palette(): AccentThemeHost {
@@ -113,7 +110,7 @@ export class AppearanceHost {
       ...(options.getSlotLayoutSync ? { getSynchronizer: options.getSlotLayoutSync } : {}),
       reportError: options.reportError,
     });
-    this.#comboSearch = new NativeInlineComboSearch(options.document);
+    this.#comboPopups = new NativeComboPopupAppearance(options.document, options.reportError);
     this.#style = options.document.createElement('style');
     this.#style.id = 'sugarcubes-native-appearance';
     this.#palette = new MutationObserver(() => this.#refreshPalette());
@@ -142,14 +139,11 @@ export class AppearanceHost {
     }
     this.#presence = new HostSurfaceObserver(
       this.#options.document.body,
-      `.lg-node, ${surfaceSelector}, [role="listbox"]`,
+      `.lg-node, ${surfaceSelector}`,
       (changes) => {
         if (!this.#active) return;
         for (const { element, kind, relocated } of changes)
-          if (
-            element.getAttribute('role') !== 'listbox' &&
-            !(relocated && kind === 'mounted' && this.#retainedCard(element))
-          )
+          if (!(relocated && kind === 'mounted' && this.#retainedCard(element)))
             this.#dirty.add(element);
         this.#schedule();
       },
@@ -170,8 +164,6 @@ export class AppearanceHost {
           attributeFilter: ['class', 'style', 'data-sc-visual-style', 'data-sc-photopro-palette'],
         });
     }
-    this.#options.document.addEventListener('pointerdown', this.#rememberPopupOrigin, true);
-    this.#options.document.addEventListener('keydown', this.#rememberPopupOrigin, true);
     this.#options.document.addEventListener(
       NATIVE_PRESENTATION_READY_EVENT,
       this.#onPresentationReady,
@@ -222,8 +214,6 @@ export class AppearanceHost {
     this.#releaseCompactMasonry?.();
     this.#releasePhotoProPalette?.();
     this.#releaseVisualStyle?.();
-    this.#options.document.removeEventListener('pointerdown', this.#rememberPopupOrigin, true);
-    this.#options.document.removeEventListener('keydown', this.#rememberPopupOrigin, true);
     this.#options.document.removeEventListener(
       NATIVE_PRESENTATION_READY_EVENT,
       this.#onPresentationReady,
@@ -247,7 +237,10 @@ export class AppearanceHost {
     if (themed && !this.#style.isConnected) this.#options.document.head.append(this.#style);
     this.#refreshPalette();
     ensureOwnedControlAppearanceStyles(this.#options.document);
-    if (themed) this.#scrollbars.enable();
+    if (themed) {
+      this.#scrollbars.enable();
+      this.#comboPopups.enable();
+    }
     this.#queue(this.#options.document.body);
     this.#schedule();
     refreshCubeTitleOpticalAlignment(this.#options.document);
@@ -269,19 +262,11 @@ export class AppearanceHost {
     this.#themes.clear();
     if (synchronizeRestored) this.#graphGeometry.stylesRemoved();
     else this.#graphGeometry.clear();
-    this.#comboSearch.clear();
+    this.#comboPopups.clear();
     for (const surface of this.#surfaces) {
       surface.removeAttribute('data-sc-style-surface');
-      surface.removeAttribute('data-sc-style-popup');
-      releaseMenuSurface(surface);
     }
     this.#surfaces.clear();
-    for (const popup of this.#popups) {
-      popup.removeAttribute('data-sc-style-popup');
-      releaseMenuSurface(popup);
-    }
-    this.#popups.clear();
-    this.#popupOrigin = null;
     this.#dirty.clear();
     this.#dark = null;
     if (this.#frame !== null) this.#options.document.defaultView?.cancelAnimationFrame(this.#frame);
@@ -334,13 +319,8 @@ export class AppearanceHost {
     try {
       for (const surface of this.#surfaces)
         if (!surface.isConnected) this.#surfaces.delete(surface);
-      for (const popup of this.#popups) if (!popup.isConnected) this.#popups.delete(popup);
       this.#themes.prune();
       const themed = this.#selectedStyle !== 'comfy';
-      if (themed) {
-        this.#comboSearch.reconcile();
-        this.#annotatePopup();
-      }
       if (this.#nativeCards && [...this.#dirty].some((element) => element.matches('.lg-node')))
         this.#nodes.beginBatch(
           this.#options.document,
@@ -363,6 +343,7 @@ export class AppearanceHost {
             element.setAttribute('data-sc-style-surface', '');
           this.#surfaces.add(element);
         }
+        if (themed) this.#comboPopups.reconcile(element);
       }
       this.#dirty.clear();
       this.#nodes.endBatch();
@@ -394,32 +375,6 @@ export class AppearanceHost {
     this.#frame = null;
     this.#flush();
   };
-
-  /** Associate portalled menus with their native source field rather than all host popups. */
-  readonly #rememberPopupOrigin = (event: Event): void => {
-    if (event.target instanceof HTMLElement && event.target.closest('[data-sc-style-popup]'))
-      return;
-    this.#popupOrigin =
-      event.target instanceof HTMLElement
-        ? event.target.closest<HTMLElement>('[data-sc-style-row],.sugarcubes-native-widget')
-        : null;
-  };
-
-  /** Follow the source control's accessibility relationship to its own portalled menu. */
-  #annotatePopup(): void {
-    if (!this.#popupOrigin?.isConnected) return;
-    for (const trigger of this.#popupOrigin.querySelectorAll('[aria-controls]')) {
-      const id = trigger.getAttribute('aria-controls');
-      const popup = id ? this.#options.document.getElementById(id) : null;
-      if (!popup || popup.getAttribute('role') !== 'listbox' || popup.closest('.sc-model-popup'))
-        continue;
-      popup.setAttribute('data-sc-style-popup', '');
-      identifyMenuSurface(popup, 'choices');
-      this.#themes.retain(popup);
-      this.#popups.add(popup);
-      if (trigger instanceof HTMLElement) this.#comboSearch.present(trigger, popup);
-    }
-  }
 
   /** Dispose before the host Vue application is released. */
   readonly #onPageHide = (): void => this.dispose();

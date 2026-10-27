@@ -19,6 +19,8 @@ import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } fr
 import path from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { buildPhotoshop } from '../../../scripts/photoshop/build.js';
+import { jest } from '@jest/globals';
+import { reportPhotoshopError } from '../../../integrations/photoshop/src/infrastructure/PhotoshopDiagnostics.js';
 import type { PanelMessage } from '../../../integrations/contracts/PanelProtocol.generated.js';
 
 type Listener = (event: unknown) => void;
@@ -100,7 +102,7 @@ test('packaged entrypoint filters messages, acknowledges presentation, preserves
   const nativeWindow = new NativeElement();
   const timers = new Map<number, () => void>();
   const lifecycles: Lifecycle[] = [];
-  const errors: unknown[] = [];
+  const errors: unknown[][] = [];
   const grippers: unknown[] = [];
   const themeListeners = new Set<() => void>();
   const storedValues = new Map<string, string>();
@@ -267,6 +269,9 @@ test('packaged entrypoint filters messages, acknowledges presentation, preserves
   expect(nodes.get('connection')?.style.display).toBe('block');
   expect(nodes.get('retry')?.style.display).toBe('block');
   expect(errors).toHaveLength(1);
+  const forwardedFailure = (errors[0] ?? []).map(String).join(' ');
+  expect(forwardedFailure).toContain('ComfyUI WebView navigation failed.');
+  expect(forwardedFailure).toMatch(/\bat /);
   nodes.get('retry')?.emit('click', {});
   expect(webview?.src).not.toBe(url.href);
   expect(timers.size).toBe(1);
@@ -276,4 +281,31 @@ test('packaged entrypoint filters messages, acknowledges presentation, preserves
   expect(webview?.listeners.get('loaderror')?.size).toBe(0);
   expect(webview?.src).toBe('about:blank');
   expect(themeListeners.size).toBe(0);
+});
+
+/** Preserve thrown values without serializing arbitrary object graphs into host diagnostics. */
+test('native diagnostics retain actionable errors and safely describe non-error throws', () => {
+  const write = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    const error = new Error('Native startup was rejected');
+    reportPhotoshopError('SugarCubes Photoshop panel failed', error);
+    expect(write).toHaveBeenLastCalledWith(
+      'SugarCubes Photoshop panel failed',
+      JSON.stringify({ name: 'Error', message: error.message, stack: error.stack }),
+    );
+    const circular: { self?: object } = {};
+    circular.self = circular;
+    reportPhotoshopError('SugarCubes Photoshop panel failed', circular);
+    expect(write).toHaveBeenLastCalledWith(
+      'SugarCubes Photoshop panel failed',
+      JSON.stringify({ name: 'ThrownValue', message: '[object Object]', stack: null }),
+    );
+    reportPhotoshopError('SugarCubes Photoshop panel failed', 'Host unavailable');
+    expect(write).toHaveBeenLastCalledWith(
+      'SugarCubes Photoshop panel failed',
+      JSON.stringify({ name: 'ThrownValue', message: 'Host unavailable', stack: null }),
+    );
+  } finally {
+    write.mockRestore();
+  }
 });

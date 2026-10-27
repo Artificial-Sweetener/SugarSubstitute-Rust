@@ -5,12 +5,18 @@ schema = 1
 name = "comfy"
 script = "check:comfy"
 areas = ["*"]
-exclude_areas = ["editor_integrations", "photoshop"]
+exclude_areas = ["editor_integrations", "photoshop", "gimp"]
 
 [[check]]
 name = "integrations"
 script = "check:integrations"
-areas = ["editor_integrations", "photoshop"]
+areas = ["editor_integrations", "photoshop", "gimp"]
+exclude_areas = []
+
+[[check]]
+name = "gimp"
+script = "check:gimp"
+areas = ["gimp", "editor_integrations"]
 exclude_areas = []
 
 [[check]]

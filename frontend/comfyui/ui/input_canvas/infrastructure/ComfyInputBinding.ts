@@ -22,6 +22,7 @@ import type { InputPreviewPort } from '../application/InputEditorPorts.js';
 import type { MaskEditingPort } from '../application/MaskEditingPort.js';
 import { InputBindingController } from '../application/InputBindingController.js';
 import type { CanvasSourceHost } from '../../core/embedded/CanvasRuntime.js';
+import type { CanvasInputSource } from '../../core/embedded/CanvasRuntime.js';
 import { type InputBinding } from '../domain/InputBinding.js';
 import { readInputBinding, withInputBinding } from './InputBindingMetadata.js';
 import { observeInputLoaderWidgets } from './ComfyInputWidgetObserver.js';
@@ -36,6 +37,7 @@ export interface ComfyInputBindingPorts {
   verifyFile(file: string): Promise<boolean>;
   verifiedFile(file: string): boolean;
   report(error: unknown): void;
+  refreshPreviews(sources: readonly CanvasInputSource[]): void;
 }
 /** Bind exact-node native history and serialization without taking ownership of editor pixel state. */
 export function createComfyInputBinding(
@@ -141,6 +143,7 @@ export function createComfyInputBinding(
     ports.report,
     ports.maskEditing,
     ports.editable,
+    (sources) => ports.refreshPreviews(sources),
   );
 }
 /** Validate dynamic native file values before they enter binding policy. */

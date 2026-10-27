@@ -54,8 +54,17 @@ export class PanelController {
     if (!this.#session) this.retry();
   }
 
-  /** Replace a failed navigation with a fresh identity and bounded handshake. */
+  /** Retain a responsive guest and replace only failed, stalled or uninitialized navigations. */
   retry(): void {
+    try {
+      if (this.#session?.retryConnection(this.port.now())) {
+        this.show();
+        return;
+      }
+    } catch (error: unknown) {
+      this.#failed(error);
+      return;
+    }
     this.dispose();
     this.#terminal = false;
     try {
@@ -113,7 +122,7 @@ export class PanelController {
     }
   }
 
-  /** Retire callbacks and session identity when the native panel is destroyed or retried. */
+  /** Retire callbacks and session identity when the native panel or its navigation is replaced. */
   dispose(): void {
     this.hide();
     this.#session = null;

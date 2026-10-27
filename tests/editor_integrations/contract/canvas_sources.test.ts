@@ -16,6 +16,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove reusable source capture, interpretation-neutral pixels and isolated capability negotiation. */
 import { CanvasSourceConnection } from '../../../integrations/shared/CanvasSourceConnection.js';
+import { nativeCanvasChanges } from '../../../integrations/shared/CanvasChangeRelay.js';
 import { jest } from '@jest/globals';
 import { CanvasClient } from '../../../integrations/shared/CanvasClient.js';
 import { CanvasServer } from '../../../integrations/shared/CanvasServer.js';
@@ -54,7 +55,7 @@ test('round-trips raw channels and selection coverage without a mask consumer', 
 test('validates explicit layer targeting and keeps file access outside native source requests', () => {
   const request = {
     protocol: 'sugarcubes.canvas',
-    version: 2,
+    version: 3,
     session,
     requestId: 1,
     type: 'source.request',
@@ -78,7 +79,7 @@ test('validates explicit layer targeting and keeps file access outside native so
   expect(
     isCanvasMessage({
       protocol: 'sugarcubes.canvas',
-      version: 2,
+      version: 3,
       session,
       requestId: 0,
       type: 'source.changed',
@@ -88,12 +89,13 @@ test('validates explicit layer targeting and keeps file access outside native so
 });
 
 /** Wire the real shared transport owners around a capable or deliberately limited native boundary. */
-function fixture(capable: boolean) {
+function fixture(capable: boolean, observesChanges = capable) {
   const changes = new Set<(change: CanvasSourceChange) => void>(),
     sent: CanvasMessage[] = [];
   const execute = jest.fn(async (command: CanvasSourceCommand): Promise<CanvasSourceResult> => {
     if (command.type === 'context')
       return {
+        observesChanges,
         kind: 'context',
         supported: true,
         document,
@@ -109,28 +111,35 @@ function fixture(capable: boolean) {
         kind: 'captured',
         snapshots: command.targets.map((target) => ({ target, document, revision: '1', pixels })),
       };
-    return { kind: 'watching' };
+    return { kind: 'watching', supported: true };
   });
   const sources: CanvasSourceHost = {
     canvasId: 'editor',
     execute,
-    subscribe: (listener) => {
-      changes.add(listener);
-      return () => {
-        changes.delete(listener);
-      };
-    },
+    changes: observesChanges
+      ? nativeCanvasChanges((listener) => {
+          changes.add(listener);
+          return () => {
+            changes.delete(listener);
+          };
+        })
+      : null,
   };
   const report = jest.fn();
   const server = new CanvasServer(session, {
-    context: () => ({
-      canvas: {
-        id: 'editor',
-        label: 'Editor',
-        capabilities: { displayOutput: false, insertImageLayer: false, positionImageLayer: false },
-      },
-      document,
-    }),
+    context: () =>
+      Promise.resolve({
+        canvas: {
+          id: 'editor',
+          label: 'Editor',
+          capabilities: {
+            displayOutput: false,
+            insertImageLayer: false,
+            positionImageLayer: false,
+          },
+        },
+        document,
+      }),
     insert: async () => ({ status: 'unsupported', message: 'Image insertion is unavailable.' }),
     ...(capable ? { sources } : {}),
     send: (message) => client.receive(message),
@@ -169,19 +178,45 @@ test('captures source targets and shares one request sequence and native observa
   ).toEqual([1, 2, 3]);
   const first = jest.fn(),
     second = jest.fn();
-  const stop = f.client.sources.subscribe(first),
-    stop2 = f.client.sources.subscribe(second);
+  const lease = f.client.sources.changes.subscribe(first),
+    lease2 = f.client.sources.changes.subscribe(second);
+  expect(await lease.ready).toBe('observing');
+  expect(await lease2.ready).toBe('observing');
   for (let n = 0; n < 8; n++) await Promise.resolve();
   expect(f.changes.size).toBe(1);
   const change = { documentId: document.id, revision: '2' };
   for (const notify of f.changes) notify(change);
   expect(first).toHaveBeenLastCalledWith(change);
   expect(second).toHaveBeenLastCalledWith(change);
-  stop();
+  lease.stop();
   expect(f.changes.size).toBe(1);
-  stop2();
+  lease2.stop();
   for (let n = 0; n < 8; n++) await Promise.resolve();
   expect(f.changes.size).toBe(0);
+  f.client.dispose();
+  f.server.dispose();
+  expect(f.report).not.toHaveBeenCalled();
+});
+
+test('captures normally when observation is explicitly unsupported', async () => {
+  const f = fixture(true, false);
+  const lease = f.client.sources.changes.subscribe(jest.fn());
+  expect(await lease.ready).toBe('unsupported');
+  expect(await f.client.sources.execute({ type: 'context' })).toMatchObject({
+    supported: true,
+    observesChanges: false,
+  });
+  expect(
+    await f.client.sources.execute({
+      type: 'capture',
+      document,
+      targets: [{ kind: 'composition' }],
+      maximumSize: 0,
+    }),
+  ).toMatchObject({ kind: 'captured' });
+  expect(f.changes.size).toBe(0);
+  expect(f.execute.mock.calls.map(([command]) => command.type)).toEqual(['context', 'capture']);
+  lease.stop();
   f.client.dispose();
   f.server.dispose();
   expect(f.report).not.toHaveBeenCalled();

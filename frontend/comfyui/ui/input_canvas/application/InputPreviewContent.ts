@@ -54,6 +54,7 @@ export class InputPreviewContent {
   #alive = true;
   #sourceSize = -1;
   readonly #edited: InputMaskPreview;
+  readonly #captureCohort: object | null;
 
   /** Keep the primary source lifetime independent of relationship and associated image value changes. */
   static reference(binding: InputEditorBinding, entry: InputEntry, maximumSize: number): string {
@@ -71,6 +72,7 @@ export class InputPreviewContent {
     private readonly association: InputImageAssociation | null,
     private readonly mode: () => MaskPreviewMode,
   ) {
+    this.#captureCohort = binding.context?.observesChanges === false ? {} : null;
     this.#edited = new InputMaskPreview(binding.maskEditing, publish, report);
     this.#stopAssociation =
       binding.loader.kind === 'mask'
@@ -134,6 +136,7 @@ export class InputPreviewContent {
       const reference = JSON.stringify([
         entry.id,
         InputSourcePreview.reference(image, entry, imageSize),
+        this.#captureCohort ? this.binding.preview.captureSize(this.#captureSize()) : null,
       ]);
       if (this.#imageReference !== reference) {
         this.#edited.invalidate();
@@ -152,6 +155,8 @@ export class InputPreviewContent {
             this.#publishPixels();
           },
           this.report,
+          this.#captureCohort,
+          this.#captureCohort ? this.binding.preview.captureSize(this.#captureSize()) : null,
         );
         previous?.dispose();
       } else this.#imageReader?.refresh();
@@ -180,6 +185,7 @@ export class InputPreviewContent {
         this.#publishPixels();
       },
       this.report,
+      this.binding.loader.kind === 'mask' ? this.#captureCohort : null,
     );
   }
 

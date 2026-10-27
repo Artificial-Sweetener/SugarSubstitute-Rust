@@ -94,11 +94,8 @@ export class ComfyWorkflowEventAdapter {
       progress: (event) => this.#progress(event),
       progress_state: (event) => this.#progressState(event),
       b_preview_with_metadata: (event) => this.#enhancedPreview(event),
-      disconnected: () => {
-        this.options.ingestor.disconnected();
-        this.options.progress.reset();
-        this.options.connection(false);
-      },
+      disconnected: () => this.#disconnect(),
+      reconnecting: () => this.#disconnect(),
       reconnected: () => {
         this.options.connection(true);
         this.options.reconnect();
@@ -144,6 +141,13 @@ export class ComfyWorkflowEventAdapter {
       }
     }
     this.#listeners.clear();
+  }
+
+  /** Translate supported host connection-loss events through the same execution and connectivity owners. */
+  #disconnect(): void {
+    this.options.ingestor.disconnected();
+    this.options.progress.reset();
+    this.options.connection(false);
   }
 
   /** Dispatch a validated job-qualified status without forwarding dynamic external values into application code. */

@@ -16,6 +16,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove Plugin Mode keeps its toolbar contiguous and generation segments intact under PhotoPro. */
 import { chromium, type Browser } from '@playwright/test';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import { pluginFrameCss } from '../../../frontend/comfyui/ui/surface/frame/PluginFrameStyles.js';
 import { generationStripCss } from '../../../frontend/comfyui/ui/surface/frame/GenerationStripStyles.js';
 import { photoProControlCss } from '../../../frontend/comfyui/ui/surface/appearance/PhotoProAppearanceStyles.js';
@@ -24,12 +25,12 @@ import { photoProTokenDeclarations } from '../../../frontend/comfyui/ui/surface/
 let browser: Browser;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchHeadlessBrowser(chromium);
 });
 
 afterAll(async () => {
   await browser.close();
-});
+}, 30_000);
 
 test.each(['dark-gray', 'medium-gray', 'light-gray'] as const)(
   'keeps one row and one segmented generation group in PhotoPro %s',

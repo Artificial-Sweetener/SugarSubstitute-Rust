@@ -33,6 +33,7 @@ export interface CanvasSourcePickerPort {
   readonly disabled: boolean;
   source(): CanvasInputSource;
   context(): CanvasSourceContext | null;
+  refresh(): Promise<void>;
   change(source: CanvasInputSource): void | Promise<void>;
   upload(file: File): Promise<string>;
   report(error: unknown): void;
@@ -61,12 +62,14 @@ export class CanvasSourcePicker {
       fieldLabel ? fieldLabel + ' Source' : 'Source',
       this.#choose,
       'Source',
+      this.#prepare,
     );
     this.#layer = fields.mountChoice(
       fieldRoot,
       fieldLabel ? fieldLabel + ' Layer' : 'Layer',
       this.#chooseLayer,
       'Layer',
+      this.#prepare,
     );
     this.#file = document.createElement('input');
     this.#file.type = 'file';
@@ -145,6 +148,19 @@ export class CanvasSourcePicker {
     this.#layer.dispose();
     this.element.remove();
   }
+  /** Discover current choices and preview pixels as part of using the source picker. */
+  readonly #prepare = async (): Promise<boolean> => {
+    if (this.#busy || this.port.disabled || !this.#alive) return false;
+    try {
+      await this.port.refresh();
+      if (!this.#alive) return false;
+      this.refresh();
+      return true;
+    } catch (error: unknown) {
+      if (this.#alive) this.port.report(error);
+      return false;
+    }
+  };
   /** Resolve the initial explicit layer only when the user chooses a layer-based target. */
   readonly #choose = (value: string): void => {
     const kind = CANVAS_INPUT_CHOICES.find((choice) => choice.kind === value)?.kind;

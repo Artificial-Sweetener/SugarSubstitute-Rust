@@ -104,7 +104,7 @@ function fixture(capable: boolean) {
   );
   const server = new CanvasServer('canvas-dimensions-session', {
     ...(capable ? { geometry: { canvasId: 'test-editor', execute } } : {}),
-    context: () => ({ canvas: WEB_CANVAS, document: null }),
+    context: async () => ({ canvas: WEB_CANVAS, document: null }),
     insert: async () => ({ status: 'unsupported', message: 'No insertion.' }),
     send: (reply) => client.receive(reply),
     report: (error) => errors.push(error),

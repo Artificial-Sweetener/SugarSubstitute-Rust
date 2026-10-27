@@ -21,6 +21,8 @@ import { freezePanelPresentation, samePanelPresentation } from './PanelPresentat
 /** Describe the visible connection lifetime independently of an application's UI. */
 export type PanelState = 'loading' | 'connected' | 'disconnected' | 'failed';
 
+const replyTimeoutMs = 15000;
+
 /** Supply native transport, presentation policy, and diagnostics explicitly. */
 export interface PanelHostPort {
   send(message: PanelMessage): void;
@@ -81,9 +83,17 @@ export class PanelHostSession {
       return;
     }
     if (this.#applied) {
-      if (now - this.#lastReply >= 15000) this.#present('disconnected');
+      if (now - this.#lastReply >= replyTimeoutMs) this.#present('disconnected');
       if (now - this.#lastPing >= 5000) this.#ping(now);
     }
+  }
+
+  /** Probe an applied responsive page so backend recovery retains its navigation and workflow. */
+  retryConnection(now: number): boolean {
+    if (!this.#applied || this.#state === 'failed' || now - this.#lastReply >= replyTimeoutMs)
+      return false;
+    this.#ping(now);
+    return true;
   }
 
   /** Expose a terminal load failure until the panel explicitly retries with a fresh session. */

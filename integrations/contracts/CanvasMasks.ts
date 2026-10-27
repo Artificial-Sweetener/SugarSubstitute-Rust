@@ -15,15 +15,16 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Expose optional mask editing independently of editor identity and output presentation. */
 import type {
-  CanvasMaskCommand,
+  CanvasMaskQuery,
   CanvasMaskResult,
   CanvasMaskChanged,
 } from './CanvasMasksProtocol.generated.js';
+import type { CanvasChangeObservation } from './CanvasChangeObservation.js';
 
 /** Supply committed coverage changes and coherent capture through one canvas capability. */
 export interface CanvasMaskHost {
   readonly canvasId: string;
   /** Capture all requested masks under one coherent document revision; return explicit unsupported failures. */
-  execute(command: CanvasMaskCommand): Promise<CanvasMaskResult>;
-  subscribe(listener: (change: CanvasMaskChanged) => void): () => void;
+  execute(command: CanvasMaskQuery): Promise<CanvasMaskResult>;
+  readonly changes: CanvasChangeObservation<CanvasMaskChanged> | null;
 }

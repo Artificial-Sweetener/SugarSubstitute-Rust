@@ -44,6 +44,8 @@ _RUNTIME_EXTENSIONS = frozenset(
         ".html",
         ".css",
         ".svg",
+        ".rs",
+        ".lock",
     }
 )
 
@@ -251,7 +253,7 @@ def _is_test_name(name: str) -> bool:
     """Return whether one filename follows a supported test convention."""
 
     return (name.startswith("test_") and name.endswith(".py")) or name.endswith(
-        (".test.ts", ".spec.ts")
+        (".test.ts", ".spec.ts", "_test.rs")
     )
 
 

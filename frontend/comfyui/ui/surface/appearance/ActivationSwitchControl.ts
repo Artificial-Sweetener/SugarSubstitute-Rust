@@ -24,7 +24,9 @@ export interface ActivationSwitchControl {
 }
 
 /** Present activation through the shared checkbox while retaining the card-state contract. */
-export function createCheckboxActivation(checkbox: HTMLInputElement): ActivationSwitchControl {
+export function createCheckboxActivation(
+  checkbox: HTMLElement & { checked: boolean; disabled: boolean },
+): ActivationSwitchControl {
   checkbox.dataset.scBooleanCheckbox = '';
   return {
     root: checkbox,

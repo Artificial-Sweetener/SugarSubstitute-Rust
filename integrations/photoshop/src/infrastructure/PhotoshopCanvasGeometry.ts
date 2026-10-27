@@ -14,7 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Translate portable geometry commands into guarded native canvas-bounds operations. */
-import { app, core, constants } from 'photoshop';
+import { app, constants } from 'photoshop';
+import { runPhotoshopModal, type PhotoshopModalExecution } from './PhotoshopModalExecution.js';
 import type { CanvasGeometryHost } from '../../../contracts/CanvasGeometry.js';
 import type { CanvasCancellationSource } from '../../../contracts/CanvasHost.js';
 import type {
@@ -23,7 +24,6 @@ import type {
   CanvasGeometryResult,
 } from '../../../contracts/CanvasProtocol.generated.js';
 import { canvasDocumentIdentity, findCanvasDocument } from './PhotoshopCanvasIdentity.js';
-type ModalExecution = Parameters<Parameters<typeof core.executeAsModal>[0]>[0];
 
 /** Own native document geometry reads and coherent undo without generation or scaling policy. */
 export class PhotoshopCanvasGeometry implements CanvasGeometryHost {
@@ -79,48 +79,45 @@ export class PhotoshopCanvasGeometry implements CanvasGeometryHost {
       status: 'cancelled',
       message: 'Canvas sizing cancelled.',
     };
-    await core.executeAsModal(
-      async (execution) => {
-        if (this.#cancelled(execution, cancellation)) return;
-        if (!this.#target(command.document)) {
-          result = {
-            kind: 'failure',
-            status: 'stale',
-            message: 'The canvas geometry changed before resizing.',
-          };
+    await runPhotoshopModal('Resize canvas', async (execution) => {
+      if (this.#cancelled(execution, cancellation)) return;
+      if (!this.#target(command.document)) {
+        result = {
+          kind: 'failure',
+          status: 'stale',
+          message: 'The canvas geometry changed before resizing.',
+        };
+        return;
+      }
+      const history = await execution.hostControl.suspendHistory({
+        documentID: target.id,
+        name: 'Resize canvas',
+      });
+      try {
+        await target.resizeCanvas(
+          command.size.width,
+          command.size.height,
+          constants.AnchorPosition.MIDDLECENTER,
+        );
+        if (this.#cancelled(execution, cancellation)) {
+          await execution.hostControl.resumeHistory(history, false);
           return;
         }
-        const history = await execution.hostControl.suspendHistory({
-          documentID: target.id,
-          name: 'Resize canvas',
-        });
-        try {
-          await target.resizeCanvas(
-            command.size.width,
-            command.size.height,
-            constants.AnchorPosition.MIDDLECENTER,
-          );
-          if (this.#cancelled(execution, cancellation)) {
+        if (target.width !== command.size.width || target.height !== command.size.height)
+          throw new Error('Photoshop did not apply the requested canvas dimensions.');
+        await execution.hostControl.resumeHistory(history, true);
+        result = { kind: 'resized', document: canvasDocumentIdentity(target) };
+      } catch (error: unknown) {
+        if (!this.#cancelled(execution)) {
+          try {
             await execution.hostControl.resumeHistory(history, false);
-            return;
+          } catch (rollback: unknown) {
+            throw new AggregateError([error, rollback], 'Canvas sizing and rollback failed.');
           }
-          if (target.width !== command.size.width || target.height !== command.size.height)
-            throw new Error('Photoshop did not apply the requested canvas dimensions.');
-          await execution.hostControl.resumeHistory(history, true);
-          result = { kind: 'resized', document: canvasDocumentIdentity(target) };
-        } catch (error: unknown) {
-          if (!this.#cancelled(execution)) {
-            try {
-              await execution.hostControl.resumeHistory(history, false);
-            } catch (rollback: unknown) {
-              throw new AggregateError([error, rollback], 'Canvas sizing and rollback failed.');
-            }
-          }
-          throw error;
         }
-      },
-      { commandName: 'Resize canvas', timeOut: 2000 },
-    );
+        throw error;
+      }
+    });
     return result;
   }
 
@@ -137,7 +134,7 @@ export class PhotoshopCanvasGeometry implements CanvasGeometryHost {
   }
 
   /** Re-read native cancellation after each awaited operation rather than retaining a narrowed snapshot. */
-  #cancelled(execution: ModalExecution, cancellation?: CanvasCancellationSource): boolean {
+  #cancelled(execution: PhotoshopModalExecution, cancellation?: CanvasCancellationSource): boolean {
     return execution.isCancelled || Boolean(cancellation?.cancelled());
   }
 }

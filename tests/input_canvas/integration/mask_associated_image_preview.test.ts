@@ -46,8 +46,8 @@ async function settled(): Promise<void> {
 }
 
 /** Keep canvas capture and field interpretation real, replacing only native pixels and the DOM raster boundary. */
-async function fixture(custom = false) {
-  const f = sourceMaskFixture(),
+async function fixture(custom = false, captureScopedRevisions = false) {
+  const f = sourceMaskFixture(!captureScopedRevisions),
     original = f.execute.getMockImplementation();
   if (!original) throw new Error('Missing native boundary.');
   const composition = encodeCanvasRaster(
@@ -63,14 +63,20 @@ async function fixture(custom = false) {
     Uint8Array.from(Array.from({ length: 6 }, () => [0, 255, 128, 64]).flat()),
   );
   let splitRevision = false;
+  let captureSerial = 0;
   f.execute.mockImplementation(async (query) => {
     const value = await original(query);
     if (value.kind !== 'captured' || query.type !== 'capture') return value;
+    const revision = captureScopedRevisions
+      ? 'snapshot-' + String(++captureSerial)
+      : splitRevision && query.maximumSize === 0
+        ? 'old'
+        : 'current';
     return {
       ...value,
       snapshots: value.snapshots.map((snapshot) => ({
         ...snapshot,
-        revision: splitRevision && query.maximumSize === 0 ? 'old' : 'current',
+        revision,
         pixels:
           snapshot.target.kind === 'composition'
             ? composition
@@ -162,6 +168,9 @@ test('shows one wash over the associated composition source and reinterprets cha
   expect([...f.painted.at(-1)!.slice(0, 8)]).toEqual([40, 60, 80, 255, 168, 188, 208, 255]);
   const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture');
   expect(captures).toHaveLength(1);
+  window.dispatchEvent(new Event('focus'));
+  await settled();
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(1);
   expect(captures[0]?.[0]).toMatchObject({
     targets: expect.arrayContaining([{ kind: 'composition' }, { kind: 'selection' }]),
     maximumSize: 256,
@@ -212,6 +221,9 @@ test('native mask fields default to no crop and switch between persistent contex
     frame = view.element.querySelector<HTMLElement>('.sc-input-editor__frame');
   const crop = nativePresentationWidgets(f.node).find((widget) => widget.label === 'Crop Factor');
   expect(crop).toMatchObject({ type: 'number', value: 0, serialize: false });
+  expect(
+    nativePresentationWidgets(f.node).find((widget) => widget.label === 'Mask Dilation'),
+  ).toMatchObject({ options: { min: -512, max: 512 } });
   for (const label of ['Mask Dilation', 'Crop Factor', 'Post Dilation', 'Feather'])
     expect(
       nativePresentationWidgets(f.node).find((widget) => widget.label === label),
@@ -411,5 +423,89 @@ test('clears to black for a competing image connection and restores the actual i
     'pixels',
   );
   expect([...f.painted.at(-1)!.slice(0, 4)]).toEqual([40, 60, 80, 255]);
+  f.dispose();
+});
+
+/** Match GIMP's frozen-batch identities when the standalone image preview was already captured. */
+test('pairs a GIMP selection with fresh image pixels instead of a cached capture from another batch', async () => {
+  const f = await fixture(false, true);
+  const stopStandalone = f.previews.observe(
+    { kind: 'canvas', canvasId: 'editor', documentId: null, target: { kind: 'composition' } },
+    () => undefined,
+    512,
+    'image',
+  );
+  await settled();
+  const view = await f.mount();
+  expect([...f.painted.at(-1)!.slice(0, 8)]).toEqual([40, 60, 80, 255, 168, 188, 208, 255]);
+  const frame = view.element.querySelector('.sc-input-editor__frame');
+  f.binding.changeSource({
+    kind: 'canvas',
+    canvasId: 'editor',
+    documentId: null,
+    target: { kind: 'current-layer' },
+  });
+  await settled();
+  f.binding.changeSource({
+    kind: 'canvas',
+    canvasId: 'editor',
+    documentId: null,
+    target: { kind: 'selection' },
+  });
+  await settled();
+  expect([...f.painted.at(-1)!.slice(0, 8)]).toEqual([40, 60, 80, 255, 168, 188, 208, 255]);
+  expect(view.element.querySelector('.sc-input-editor__frame')).toBe(frame);
+  expect(f.report).not.toHaveBeenCalled();
+  const capturesBeforeReturn = f.execute.mock.calls.filter(
+    ([query]) => query.type === 'capture',
+  ).length;
+  const popup = document.createElement('div');
+  document.body.append(popup);
+  document.documentElement.dispatchEvent(new MouseEvent('pointerenter', { relatedTarget: popup }));
+  await settled();
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(
+    capturesBeforeReturn,
+  );
+  popup.remove();
+  window.dispatchEvent(new Event('focus'));
+  document.documentElement.dispatchEvent(new Event('pointerenter'));
+  window.dispatchEvent(new Event('focus'));
+  await settled();
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(
+    capturesBeforeReturn + 1,
+  );
+  expect([...f.painted.at(-1)!.slice(0, 8)]).toEqual([40, 60, 80, 255, 168, 188, 208, 255]);
+  stopStandalone();
+  f.dispose();
+  const requestsAfterDispose = f.execute.mock.calls.length;
+  window.dispatchEvent(new Event('focus'));
+  document.documentElement.dispatchEvent(new Event('pointerenter'));
+  await settled();
+  expect(f.execute).toHaveBeenCalledTimes(requestsAfterDispose);
+});
+
+/** Keep GIMP image context coherent when pixel-radius edits require a full-resolution selection. */
+test.each([-1, 1])('renders a capture-only selection with mask dilation %s', async (dilation) => {
+  const f = await fixture(false, true);
+  const view = await f.mount();
+  expect(f.association.source.editable()).toBe(true);
+  const frame = view.element.querySelector('.sc-input-editor__frame');
+  f.binding.changeMaskEdits({
+    mask_dilation: dilation,
+    crop_factor: 0,
+    post_dilation: 0,
+    feather: 0,
+  });
+  await settled();
+  const expected =
+    dilation < 0 ? [40, 60, 80, 255, 40, 60, 80, 255] : [168, 188, 208, 255, 168, 188, 208, 255];
+  expect([...f.painted.at(-1)!.slice(0, 8)]).toEqual(expected);
+  const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture');
+  expect(captures.at(-1)?.[0]).toMatchObject({
+    maximumSize: 0,
+    targets: expect.arrayContaining([{ kind: 'selection' }, { kind: 'composition' }]),
+  });
+  expect(view.element.querySelector('.sc-input-editor__frame')).toBe(frame);
+  expect(f.report).not.toHaveBeenCalled();
   f.dispose();
 });

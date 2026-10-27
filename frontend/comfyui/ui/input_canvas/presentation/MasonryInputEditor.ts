@@ -87,6 +87,7 @@ export class MasonryInputEditor {
             file: null,
           },
         context: () => binding.context,
+        refresh: () => binding.refreshSources(),
         change: (source) => binding.changeSource(source),
         upload,
         report: (error) => {

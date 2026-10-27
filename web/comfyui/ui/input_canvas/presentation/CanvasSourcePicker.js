@@ -15,8 +15,8 @@ export class CanvasSourcePicker {
         this.port = port;
         this.element = document.createElement('div');
         this.element.className = 'sc-canvas-source';
-        this.#kind = fields.mountChoice(fieldRoot, fieldLabel ? fieldLabel + ' Source' : 'Source', this.#choose, 'Source');
-        this.#layer = fields.mountChoice(fieldRoot, fieldLabel ? fieldLabel + ' Layer' : 'Layer', this.#chooseLayer, 'Layer');
+        this.#kind = fields.mountChoice(fieldRoot, fieldLabel ? fieldLabel + ' Source' : 'Source', this.#choose, 'Source', this.#prepare);
+        this.#layer = fields.mountChoice(fieldRoot, fieldLabel ? fieldLabel + ' Layer' : 'Layer', this.#chooseLayer, 'Layer', this.#prepare);
         this.#file = document.createElement('input');
         this.#file.type = 'file';
         this.#file.accept = 'image/*';
@@ -71,6 +71,23 @@ export class CanvasSourcePicker {
         this.#layer.dispose();
         this.element.remove();
     }
+    /** Discover current choices and preview pixels as part of using the source picker. */
+    #prepare = async () => {
+        if (this.#busy || this.port.disabled || !this.#alive)
+            return false;
+        try {
+            await this.port.refresh();
+            if (!this.#alive)
+                return false;
+            this.refresh();
+            return true;
+        }
+        catch (error) {
+            if (this.#alive)
+                this.port.report(error);
+            return false;
+        }
+    };
     /** Resolve the initial explicit layer only when the user chooses a layer-based target. */
     #choose = (value) => {
         const kind = CANVAS_INPUT_CHOICES.find((choice) => choice.kind === value)?.kind;

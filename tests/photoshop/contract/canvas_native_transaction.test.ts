@@ -86,11 +86,18 @@ function fixture() {
     .fn<(history: unknown, commit: boolean) => Promise<void>>()
     .mockResolvedValue(undefined);
   const put = jest.fn<(options: unknown) => Promise<void>>().mockResolvedValue(undefined);
+  const enterModal = jest
+    .fn<
+      (
+        callback: (context: typeof execution) => Promise<void>,
+        options: { commandName: string; timeOut: number },
+      ) => Promise<void>
+    >()
+    .mockImplementation(async (callback) => callback(execution));
   const native = {
     app,
     core: {
-      executeAsModal: async (callback: (context: typeof execution) => Promise<void>) =>
-        callback(execution),
+      executeAsModal: enterModal,
     },
     imaging: { putPixels: put },
     constants: {
@@ -139,6 +146,7 @@ function fixture() {
     resume,
     imageData,
     execution,
+    enterModal,
   };
 }
 
@@ -249,3 +257,22 @@ test.each(['mode', 'artboards', 'quick-mask'])(
     expect(f.suspend).not.toHaveBeenCalled();
   },
 );
+
+test('bounds native modal admission to one second before inserting output', async () => {
+  const f = fixture();
+  await f.api.insert(f.request, material, f.cancel);
+  expect(f.enterModal).toHaveBeenCalledWith(expect.any(Function), {
+    commandName: 'Insert generated image',
+    timeOut: 1,
+  });
+});
+
+test('refuses a busy host before creating an output layer or history', async () => {
+  const f = fixture();
+  const busy = new Error('Photoshop modal admission expired');
+  f.enterModal.mockRejectedValue(busy);
+  await expect(f.api.insert(f.request, material, f.cancel)).rejects.toBe(busy);
+  expect(f.create).not.toHaveBeenCalled();
+  expect(f.put).not.toHaveBeenCalled();
+  expect(f.suspend).not.toHaveBeenCalled();
+});

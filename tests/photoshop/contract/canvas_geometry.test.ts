@@ -62,11 +62,19 @@ function fixture() {
   const resume = jest
     .fn<(id: number, commit: boolean) => Promise<void>>()
     .mockResolvedValue(undefined);
+  const enterModal = jest
+    .fn<
+      (
+        run: (scope: typeof execution) => Promise<void>,
+        options: { commandName: string; timeOut: number },
+      ) => Promise<void>
+    >()
+    .mockImplementation(async (run) => run(execution));
   const native = {
     app,
     constants: { AnchorPosition: { MIDDLECENTER: 'center' } },
     core: {
-      executeAsModal: async (run: (scope: typeof execution) => Promise<void>) => run(execution),
+      executeAsModal: enterModal,
     },
   };
   const execution = {
@@ -86,7 +94,7 @@ function fixture() {
   // The compiled UXP constructor deliberately has a separate module identity.
   const Constructor = ctor as new () => CanvasGeometryHost;
   const host = new Constructor();
-  return { host, app, target, other, resize, suspend, resume, execution };
+  return { host, app, target, other, resize, suspend, resume, execution, enterModal };
 }
 
 test('reads document and selection geometry without capturing or editing any pixels', async () => {
@@ -174,4 +182,36 @@ test('does not report success when the native resize silently leaves the frame u
   ).rejects.toThrow('did not apply');
   expect(f.resume).toHaveBeenCalledWith(1, false);
   expect(f.resume).not.toHaveBeenCalledWith(1, true);
+});
+
+test('bounds native modal admission to one second before resizing', async () => {
+  const f = fixture();
+  const context = await f.host.execute({ type: 'context' });
+  if (context.kind !== 'context' || !context.document) throw new Error('Missing context');
+  await f.host.execute({
+    type: 'resize',
+    document: context.document,
+    size: { width: 1024, height: 768 },
+  });
+  expect(f.enterModal).toHaveBeenCalledWith(expect.any(Function), {
+    commandName: 'Resize canvas',
+    timeOut: 1,
+  });
+});
+
+test('refuses a busy host before changing canvas or history', async () => {
+  const f = fixture();
+  const context = await f.host.execute({ type: 'context' });
+  if (context.kind !== 'context' || !context.document) throw new Error('Missing context');
+  const busy = new Error('Photoshop modal admission expired');
+  f.enterModal.mockRejectedValue(busy);
+  await expect(
+    f.host.execute({
+      type: 'resize',
+      document: context.document,
+      size: { width: 1024, height: 768 },
+    }),
+  ).rejects.toBe(busy);
+  expect(f.resize).not.toHaveBeenCalled();
+  expect(f.suspend).not.toHaveBeenCalled();
 });

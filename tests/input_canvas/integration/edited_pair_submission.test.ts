@@ -31,6 +31,7 @@ function fixture(crop_factor: number) {
       ? {
           kind: 'context',
           supported: true,
+          observesChanges: true,
           document: sourceDocument,
           revision: '1',
           targets: ['selection', 'composition'],

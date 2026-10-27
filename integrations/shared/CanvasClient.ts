@@ -61,6 +61,7 @@ export class CanvasClient implements CanvasLayerHost {
   readonly #sourceListeners = new Set<(change: CanvasSourceChange) => void>();
   #next = 0;
   #context: CanvasContext | null = null;
+  #contextReply = 0;
   #disposed = false;
   /** Bind an authenticated session and injected clock without claiming its transport lifetime. */
   constructor(
@@ -92,11 +93,15 @@ export class CanvasClient implements CanvasLayerHost {
   readCanvas(): CanvasDescriptor | null {
     return this.#context?.canvas ?? null;
   }
-  /** Read the current document before preparing an insertion against that exact identity. */
+  /** Read native context while keeping cached capabilities on the latest reply in this live session. */
   async readContext(): Promise<CanvasContext> {
     const reply = await this.#request({ type: 'context.request' }, 'context.reply');
     if (reply.type !== 'context.reply') throw new Error('Invalid canvas context reply.');
-    this.#context = reply.context;
+    if (this.#disposed) throw new Error('Canvas connection closed.');
+    if (reply.requestId > this.#contextReply) {
+      this.#contextReply = reply.requestId;
+      this.#context = reply.context;
+    }
     return reply.context;
   }
   /** Insert once using the caller's captured destination rather than a later active document. */
@@ -202,7 +207,7 @@ export class CanvasClient implements CanvasLayerHost {
           if (request.type === 'geometry.request') {
             resolve({
               protocol: 'sugarcubes.canvas',
-              version: 2,
+              version: 3,
               session: this.session,
               requestId,
               type: 'geometry.reply',
@@ -212,7 +217,7 @@ export class CanvasClient implements CanvasLayerHost {
           }
           resolve({
             protocol: 'sugarcubes.canvas',
-            version: 2,
+            version: 3,
             session: this.session,
             requestId,
             type: 'image.reply',
@@ -223,7 +228,7 @@ export class CanvasClient implements CanvasLayerHost {
       try {
         const envelope = {
           protocol: 'sugarcubes.canvas',
-          version: 2,
+          version: 3,
           session: this.session,
           requestId,
         } as const;
@@ -242,7 +247,7 @@ export class CanvasClient implements CanvasLayerHost {
     try {
       this.port.send({
         protocol: 'sugarcubes.canvas',
-        version: 2,
+        version: 3,
         session: this.session,
         requestId,
         type: 'cancel',

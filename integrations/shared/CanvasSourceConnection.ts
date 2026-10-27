@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own source observation through a shared canvas client's authenticated request lifetime. */
 import type { CanvasSourceHost } from '../contracts/CanvasSources.js';
+import { CanvasRemoteChanges } from './CanvasRemoteChanges.js';
 import type {
   CanvasSourceChange,
   CanvasSourceCommand,
@@ -32,12 +33,30 @@ export interface CanvasSourceConnectionPort {
 
 /** Retain native observation only while a consumer subscribes to committed source changes. */
 export class CanvasSourceConnection implements CanvasSourceHost {
-  readonly #listeners = new Set<(change: CanvasSourceChange) => void>();
-  #stop: (() => void) | null = null;
+  readonly changes: CanvasRemoteChanges<CanvasSourceChange>;
   #disposed = false;
   #context: Promise<CanvasSourceResult> | null = null;
   /** Borrow the session transport without creating a second request-ID sequence. */
-  constructor(private readonly port: CanvasSourceConnectionPort) {}
+  constructor(private readonly port: CanvasSourceConnectionPort) {
+    this.changes = new CanvasRemoteChanges({
+      listen: (listener) =>
+        this.port.listen((change) => {
+          this.#context = null;
+          listener(change);
+        }),
+      watch: async (enabled) => {
+        const result = await this.port.execute({ type: 'watch', enabled });
+        if (result.kind !== 'watching')
+          throw new Error(
+            result.kind === 'failure' ? result.message : 'Invalid observation acknowledgement.',
+          );
+        return result.supported;
+      },
+      report: (error) => {
+        this.port.report(error);
+      },
+    });
+  }
   /** Resolve identity from the actual connected canvas rather than an editor-specific name. */
   get canvasId(): string {
     return this.port.identity();
@@ -58,47 +77,11 @@ export class CanvasSourceConnection implements CanvasSourceHost {
     this.#context = pending;
     return pending;
   }
-  /** Share one native watch across all interested views and application collaborators. */
-  subscribe(listener: (change: CanvasSourceChange) => void): () => void {
-    if (this.#disposed) return () => {};
-    this.#listeners.add(listener);
-    if (!this.#stop) {
-      this.#stop = this.port.listen((change) => {
-        this.#context = null;
-        for (const notify of this.#listeners) notify(change);
-      });
-      this.#watch(true);
-    }
-    return () => {
-      this.#listeners.delete(listener);
-      if (!this.#listeners.size && this.#stop) {
-        this.#stop();
-        this.#stop = null;
-        this.#watch(false);
-      }
-    };
-  }
   /** Release observation before the shared request client tears down its pending work. */
   dispose(): void {
     if (this.#disposed) return;
-    const watching = this.#stop !== null;
+    this.changes.dispose();
     this.#disposed = true;
     this.#context = null;
-    this.#stop?.();
-    this.#stop = null;
-    this.#listeners.clear();
-    if (watching) this.#watch(false);
-  }
-  /** Report live transport failures while discarding obsolete teardown feedback. */
-  #watch(enabled: boolean): void {
-    void this.port
-      .execute({ type: 'watch', enabled })
-      .then((result) => {
-        if (!this.#disposed && result.kind === 'failure')
-          this.port.report(new Error(result.message));
-      })
-      .catch((error: unknown) => {
-        if (!this.#disposed) this.port.report(error);
-      });
   }
 }

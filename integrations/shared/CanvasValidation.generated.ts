@@ -170,7 +170,7 @@ export function isCanvasReadRequest(value: unknown): value is Contract.CanvasRea
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -192,7 +192,7 @@ export function isCanvasReadReply(value: unknown): value is Contract.CanvasReadR
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -216,7 +216,7 @@ export function isCanvasInsertRequest(value: unknown): value is Contract.CanvasI
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -240,7 +240,7 @@ export function isCanvasInsertReply(value: unknown): value is Contract.CanvasIns
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -264,7 +264,7 @@ export function isCanvasCancelRequest(value: unknown): value is Contract.CanvasC
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -286,7 +286,7 @@ export function isCanvasErrorReply(value: unknown): value is Contract.CanvasErro
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -409,7 +409,7 @@ export function isCanvasSourceLayer(value: unknown): value is Contract.CanvasSou
 export function isCanvasSourceContext(value: unknown): value is Contract.CanvasSourceContext {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 7 &&
+    Object.keys(value).length === 8 &&
     Object.hasOwn(value, 'kind') &&
     value['kind'] === 'context' &&
     Object.hasOwn(value, 'supported') &&
@@ -436,7 +436,9 @@ export function isCanvasSourceContext(value: unknown): value is Contract.CanvasS
     value['layers'].every((item: unknown) => isCanvasSourceLayer(item)) &&
     Object.hasOwn(value, 'currentLayerId') &&
     ((typeof value['currentLayerId'] === 'string' && value['currentLayerId'].length <= 128) ||
-      value['currentLayerId'] === null)
+      value['currentLayerId'] === null) &&
+    Object.hasOwn(value, 'observesChanges') &&
+    typeof value['observesChanges'] === 'boolean'
   );
 }
 /** Validate a bounded CanvasSourceSnapshot payload before dispatch. */
@@ -480,9 +482,11 @@ export function isCanvasSourceResult(value: unknown): value is Contract.CanvasSo
       value['snapshots'].length <= 64 &&
       value['snapshots'].every((item: unknown) => isCanvasSourceSnapshot(item))) ||
     (isRecord(value) &&
-      Object.keys(value).length === 1 &&
+      Object.keys(value).length === 2 &&
       Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'watching') ||
+      value['kind'] === 'watching' &&
+      Object.hasOwn(value, 'supported') &&
+      typeof value['supported'] === 'boolean') ||
     (isRecord(value) &&
       Object.keys(value).length === 3 &&
       Object.hasOwn(value, 'kind') &&
@@ -506,7 +510,7 @@ export function isCanvasSourceRequest(value: unknown): value is Contract.CanvasS
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -530,7 +534,7 @@ export function isCanvasSourceReply(value: unknown): value is Contract.CanvasSou
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -554,7 +558,7 @@ export function isCanvasSourceChanged(value: unknown): value is Contract.CanvasS
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -806,7 +810,7 @@ export function isCanvasGeometryRequest(value: unknown): value is Contract.Canva
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -830,7 +834,7 @@ export function isCanvasGeometryReply(value: unknown): value is Contract.CanvasG
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 2 &&
+    value['version'] === 3 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&

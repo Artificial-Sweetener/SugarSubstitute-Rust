@@ -19,6 +19,7 @@ import type {
   CanvasSourceQuery,
   CanvasSourceResult,
 } from './CanvasProtocol.generated.js';
+import type { CanvasChangeObservation } from './CanvasChangeObservation.js';
 
 /** Expose full-document source rasters independently of their consumers.
  *
@@ -30,6 +31,6 @@ export interface CanvasSourceHost {
   readonly canvasId: string;
   /** Capture requested targets at one document revision in full-canvas coordinates. */
   execute(query: CanvasSourceQuery): Promise<CanvasSourceResult>;
-  /** Publish committed document or active-layer changes without capturing pixels during drawing. */
-  subscribe(changed: (event: CanvasSourceChange) => void): () => void;
+  /** Negotiate metadata observation; a capture-only native implementation declares null. */
+  readonly changes: CanvasChangeObservation<CanvasSourceChange> | null;
 }

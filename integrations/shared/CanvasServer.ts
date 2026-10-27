@@ -21,6 +21,7 @@ import type {
   CanvasMessage,
   CanvasSourceRequest,
   CanvasSourceResult,
+  CanvasSourceChange,
 } from '../contracts/CanvasProtocol.generated.js';
 import type { CanvasSourceHost } from '../contracts/CanvasSources.js';
 import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
@@ -31,11 +32,13 @@ import type {
 import { CanvasCancellation } from './CanvasCancellation.js';
 import { isCanvasMessage } from './CanvasValidation.generated.js';
 import { MAX_CANVAS_ENCODED_CHARACTERS } from './CanvasImageEncoding.js';
+import { CanvasChangeRelay } from './CanvasChangeRelay.js';
 /** Supply editor capabilities through typed ports rather than importing native APIs. */
 export interface CanvasServerPort {
   readonly geometry?: CanvasGeometryHost;
   readonly sources?: CanvasSourceHost;
-  context(): CanvasContext;
+  /** Read fresh native document metadata through the host's process boundary. */
+  context(): Promise<CanvasContext>;
   insert(image: CanvasInsertImage, cancellation: CanvasCancellation): Promise<CanvasInsertResult>;
   send(message: CanvasMessage): void;
   report(error: unknown): void;
@@ -52,12 +55,23 @@ export class CanvasServer {
   #highest = 0;
   #disposed = false;
   #retainedCharacters = 0;
-  #stopSources: (() => void) | null = null;
+  readonly #sourceChanges: CanvasChangeRelay<CanvasSourceChange>;
   /** Bind one navigation's session and its capability implementation. */
   constructor(
     private readonly session: string,
     private readonly port: CanvasServerPort,
-  ) {}
+  ) {
+    this.#sourceChanges = new CanvasChangeRelay(this.port.sources?.changes ?? null, (change) => {
+      this.#send({
+        protocol: 'sugarcubes.canvas',
+        version: 3,
+        session: this.session,
+        requestId: 0,
+        type: 'source.changed',
+        change,
+      });
+    });
+  }
   /** Validate before dispatch, including duplicate payload identity and cancellation ownership. */
   receive(value: unknown): boolean {
     if (this.#disposed || !isCanvasMessage(value) || value.session !== this.session) return false;
@@ -117,22 +131,8 @@ export class CanvasServer {
     };
     this.#retainedCharacters += retained;
     this.#entries.set(value.requestId, entry);
-    if (value.type === 'context.request') {
-      try {
-        this.#reply(entry, {
-          ...this.#envelope(value.requestId),
-          type: 'context.reply',
-          context: this.port.context(),
-        });
-      } catch (error: unknown) {
-        this.port.report(error);
-        this.#reply(entry, {
-          ...this.#envelope(value.requestId),
-          type: 'error.reply',
-          failure: { status: 'error', message: 'The canvas context is unavailable.' },
-        });
-      }
-    } else if (value.type === 'geometry.request') void this.#geometry(value, entry);
+    if (value.type === 'context.request') void this.#context(value.requestId, entry);
+    else if (value.type === 'geometry.request') void this.#geometry(value, entry);
     else if (value.type === 'source.request') void this.#source(value, entry);
     else void this.#insert(value, entry);
     return true;
@@ -140,8 +140,7 @@ export class CanvasServer {
   /** Cancel owned operations and refuse responses after the native panel is destroyed. */
   dispose(): void {
     this.#disposed = true;
-    this.#stopSources?.();
-    this.#stopSources = null;
+    this.#sourceChanges.dispose();
     for (const entry of this.#entries.values()) entry.cancellation.cancel();
     this.#entries.clear();
     this.#retainedCharacters = 0;
@@ -167,18 +166,42 @@ export class CanvasServer {
     }
     this.#reply(entry, { ...this.#envelope(request.requestId), type: 'geometry.reply', result });
   }
+  /** Await native context without publishing into a disposed session or duplicating a pending read. */
+  async #context(requestId: number, entry: Entry): Promise<void> {
+    try {
+      this.#reply(entry, {
+        ...this.#envelope(requestId),
+        type: 'context.reply',
+        context: await this.port.context(),
+      });
+    } catch (error: unknown) {
+      this.port.report(error);
+      this.#reply(entry, {
+        ...this.#envelope(requestId),
+        type: 'error.reply',
+        failure: { status: 'error', message: 'The canvas context is unavailable.' },
+      });
+    }
+  }
   /** Dispatch optional read capabilities and scope native observation to this authenticated session. */
   async #source(request: CanvasSourceRequest, entry: Entry): Promise<void> {
     let result: CanvasSourceResult;
     const source = this.port.sources;
     try {
-      if (!source) {
+      if (request.command.type === 'watch') {
+        const status = await this.#sourceChanges.watch(request.command.enabled);
+        result =
+          status === 'unavailable'
+            ? { kind: 'failure', status, message: 'Canvas source observation is unavailable.' }
+            : { kind: 'watching', supported: status === 'observing' };
+      } else if (!source) {
         result =
           request.command.type === 'context'
             ? {
                 kind: 'context',
                 supported: false,
-                document: this.port.context().document,
+                observesChanges: false,
+                document: (await this.port.context()).document,
                 revision: 'unsupported',
                 targets: [],
                 layers: [],
@@ -189,24 +212,6 @@ export class CanvasServer {
                 status: 'unsupported',
                 message: 'This canvas does not support source capture.',
               };
-      } else if (request.command.type === 'watch') {
-        if (request.command.enabled && !this.#stopSources)
-          this.#stopSources = source.subscribe((change) => {
-            if (this.#disposed) return;
-            this.#send({
-              protocol: 'sugarcubes.canvas',
-              version: 2,
-              session: this.session,
-              requestId: 0,
-              type: 'source.changed',
-              change,
-            });
-          });
-        else if (!request.command.enabled) {
-          this.#stopSources?.();
-          this.#stopSources = null;
-        }
-        result = { kind: 'watching' };
       } else result = await source.execute(request.command);
     } catch (error: unknown) {
       this.port.report(error);
@@ -229,9 +234,10 @@ export class CanvasServer {
   ): Promise<void> {
     let result: CanvasInsertResult;
     try {
-      const capabilities = this.port.context().canvas.capabilities;
-      result =
-        request.image.position && !capabilities.positionImageLayer
+      const capabilities = (await this.port.context()).canvas.capabilities;
+      result = entry.cancellation.cancelled()
+        ? { status: 'cancelled', message: 'Canvas insertion cancelled.' }
+        : request.image.position && !capabilities.positionImageLayer
           ? {
               status: 'unsupported',
               message: 'This canvas does not support positioned image layers.',
@@ -287,10 +293,10 @@ export class CanvasServer {
   /** Attach the authoritative protocol and session to every response. */
   #envelope(requestId: number): {
     readonly protocol: 'sugarcubes.canvas';
-    readonly version: 2;
+    readonly version: 3;
     readonly session: string;
     readonly requestId: number;
   } {
-    return { protocol: 'sugarcubes.canvas', version: 2, session: this.session, requestId };
+    return { protocol: 'sugarcubes.canvas', version: 3, session: this.session, requestId };
   }
 }

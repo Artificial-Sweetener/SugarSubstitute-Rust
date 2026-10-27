@@ -66,6 +66,11 @@ export class NativeInlineComboSearch {
       binding.input.style.removeProperty(`--sc-search-${property}`);
   }
 
+  /** Restore only the search belonging to a retired native popup relationship. */
+  release(popup: HTMLElement): void {
+    if (this.#binding?.popup === popup) this.clear();
+  }
+
   /** Stop tracking a detached search input without retaining its host component tree. */
   reconcile(): void {
     if (this.#binding && (!this.#binding.input.isConnected || !this.#binding.trigger.isConnected))

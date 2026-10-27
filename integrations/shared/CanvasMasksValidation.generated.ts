@@ -95,13 +95,15 @@ export function isCanvasMaskSnapshot(value: unknown): value is Contract.CanvasMa
 export function isCanvasMaskContext(value: unknown): value is Contract.CanvasMaskContext {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 3 &&
+    Object.keys(value).length === 4 &&
     Object.hasOwn(value, 'kind') &&
     value['kind'] === 'context' &&
     Object.hasOwn(value, 'supported') &&
     typeof value['supported'] === 'boolean' &&
     Object.hasOwn(value, 'document') &&
-    (isCanvasDocument(value['document']) || value['document'] === null)
+    (isCanvasDocument(value['document']) || value['document'] === null) &&
+    Object.hasOwn(value, 'observesChanges') &&
+    typeof value['observesChanges'] === 'boolean'
   );
 }
 /** Validate a bounded CanvasMaskCreate payload before dispatch. */
@@ -156,19 +158,13 @@ export function isCanvasMaskCapture(value: unknown): value is Contract.CanvasMas
 /** Validate a bounded CanvasMaskCommand payload before dispatch. */
 export function isCanvasMaskCommand(value: unknown): value is Contract.CanvasMaskCommand {
   return (
-    (isRecord(value) &&
-      Object.keys(value).length === 1 &&
-      Object.hasOwn(value, 'type') &&
-      value['type'] === 'context') ||
-    isCanvasMaskCreate(value) ||
-    isCanvasMaskActivate(value) ||
-    isCanvasMaskCapture(value) ||
+    isCanvasMaskQuery(value) ||
     (isRecord(value) &&
       Object.keys(value).length === 2 &&
+      Object.hasOwn(value, 'enabled') &&
+      typeof value['enabled'] === 'boolean' &&
       Object.hasOwn(value, 'type') &&
-      value['type'] === 'release' &&
-      Object.hasOwn(value, 'mask') &&
-      (isCanvasMaskReference(value['mask']) || value['mask'] === null))
+      value['type'] === 'watch')
   );
 }
 /** Validate a bounded CanvasMaskResult payload before dispatch. */
@@ -205,7 +201,13 @@ export function isCanvasMaskResult(value: unknown): value is Contract.CanvasMask
         value['status'] === 'error') &&
       Object.hasOwn(value, 'message') &&
       typeof value['message'] === 'string' &&
-      value['message'].length <= 512)
+      value['message'].length <= 512) ||
+    (isRecord(value) &&
+      Object.keys(value).length === 2 &&
+      Object.hasOwn(value, 'supported') &&
+      typeof value['supported'] === 'boolean' &&
+      Object.hasOwn(value, 'kind') &&
+      value['kind'] === 'watching')
   );
 }
 /** Validate a bounded CanvasMaskRequest payload before dispatch. */
@@ -216,7 +218,7 @@ export function isCanvasMaskRequest(value: unknown): value is Contract.CanvasMas
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas.masks' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -238,7 +240,7 @@ export function isCanvasMaskReply(value: unknown): value is Contract.CanvasMaskR
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas.masks' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -260,7 +262,7 @@ export function isCanvasMaskChanged(value: unknown): value is Contract.CanvasMas
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas.masks' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -276,6 +278,24 @@ export function isCanvasMaskChanged(value: unknown): value is Contract.CanvasMas
     Object.hasOwn(value, 'maskId') &&
     typeof value['maskId'] === 'string' &&
     value['maskId'].length <= 128
+  );
+}
+/** Validate a bounded CanvasMaskQuery payload before dispatch. */
+export function isCanvasMaskQuery(value: unknown): value is Contract.CanvasMaskQuery {
+  return (
+    (isRecord(value) &&
+      Object.keys(value).length === 1 &&
+      Object.hasOwn(value, 'type') &&
+      value['type'] === 'context') ||
+    isCanvasMaskCreate(value) ||
+    isCanvasMaskActivate(value) ||
+    isCanvasMaskCapture(value) ||
+    (isRecord(value) &&
+      Object.keys(value).length === 2 &&
+      Object.hasOwn(value, 'type') &&
+      value['type'] === 'release' &&
+      Object.hasOwn(value, 'mask') &&
+      (isCanvasMaskReference(value['mask']) || value['mask'] === null))
   );
 }
 /** Validate a bounded CanvasMaskMessage payload before dispatch. */

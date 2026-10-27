@@ -82,6 +82,7 @@ test('carries a non-aligned real VAE input frame through preparation, attributio
       ? {
           kind: 'context',
           supported: true,
+          observesChanges: true,
           document: doc,
           revision: '1',
           targets: ['composition', 'selection'],

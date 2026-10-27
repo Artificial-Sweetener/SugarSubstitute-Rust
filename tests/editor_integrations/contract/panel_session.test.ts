@@ -246,3 +246,44 @@ test('generated language bindings and validators match the authoritative wire sc
   for (const [file, source] of Object.entries(bindings))
     expect(readFileSync(file, 'utf8').replaceAll('\r\n', '\n')).toBe(source);
 });
+
+test('accepts GIMP as an additive panel presentation style', () => {
+  expect(
+    isPanelMessage({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session,
+      type: 'configure',
+      presentation: { ...presentation, visualStyle: 'gimp' },
+    }),
+  ).toBe(true);
+});
+
+test('retains responsive applied sessions while refusing stale, failed and uninitialized recovery', () => {
+  const sent: PanelMessage[] = [];
+  const host = new PanelHostSession(
+    session,
+    presentation,
+    { send: (message) => sent.push(message), present: () => undefined },
+    0,
+  );
+  expect(host.retryConnection(0)).toBe(false);
+  host.receive({ protocol: 'sugarcubes.panel', version: 3, session, type: 'ready' }, 0);
+  host.receive({ protocol: 'sugarcubes.panel', version: 3, session, type: 'applied' }, 0);
+  host.receive(
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'pong', connected: false },
+    1,
+  );
+  expect(host.retryConnection(15000)).toBe(true);
+  expect(sent.at(-1)).toMatchObject({ type: 'ping', session });
+  const count = sent.length;
+  expect(host.retryConnection(15001)).toBe(false);
+  expect(sent).toHaveLength(count);
+  host.receive(
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'pong', connected: true },
+    15002,
+  );
+  expect(host.retryConnection(15003)).toBe(true);
+  host.fail();
+  expect(host.retryConnection(15004)).toBe(false);
+});

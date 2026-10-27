@@ -32,6 +32,7 @@ import { encodeCanvasRaster } from '../../../integrations/shared/CanvasRasterEnc
 
 const document = { id: 'doc', geometryRevision: 'size', width: 2, height: 1 };
 const context: CanvasSourceContext = {
+  observesChanges: false,
   kind: 'context',
   supported: true,
   document,
@@ -57,7 +58,7 @@ function fixture() {
             })),
           },
   );
-  const host: CanvasSourceHost = { canvasId: 'editor', execute, subscribe: () => () => {} };
+  const host: CanvasSourceHost = { canvasId: 'editor', execute, changes: null };
   return { execute, service: new CanvasSourceCapture((id) => (id === 'editor' ? host : null)) };
 }
 
