@@ -23,6 +23,7 @@ export class InputPreviewContent {
     #alive = true;
     #sourceSize = -1;
     #edited;
+    #captureCohort;
     /** Keep the primary source lifetime independent of relationship and associated image value changes. */
     static reference(binding, entry, maximumSize) {
         return InputSourcePreview.reference(binding, entry, maximumSize);
@@ -37,6 +38,7 @@ export class InputPreviewContent {
         this.report = report;
         this.association = association;
         this.mode = mode;
+        this.#captureCohort = binding.context?.observesChanges === false ? {} : null;
         this.#edited = new InputMaskPreview(binding.maskEditing, publish, report);
         this.#stopAssociation =
             binding.loader.kind === 'mask'
@@ -98,6 +100,7 @@ export class InputPreviewContent {
             const reference = JSON.stringify([
                 entry.id,
                 InputSourcePreview.reference(image, entry, imageSize),
+                this.#captureCohort ? this.binding.preview.captureSize(this.#captureSize()) : null,
             ]);
             if (this.#imageReference !== reference) {
                 this.#edited.invalidate();
@@ -110,7 +113,7 @@ export class InputPreviewContent {
                 this.#imageReader = new InputSourcePreview(image, this.previews, entry, imageSize, (value) => {
                     this.#image = value;
                     this.#publishPixels();
-                }, this.report);
+                }, this.report, this.#captureCohort, this.#captureCohort ? this.binding.preview.captureSize(this.#captureSize()) : null);
                 previous?.dispose();
             }
             else
@@ -134,7 +137,7 @@ export class InputPreviewContent {
         this.#sourceReader = new InputSourcePreview(this.binding, this.previews, this.entry, this.#sourceSize, (value) => {
             this.#source = value;
             this.#publishPixels();
-        }, this.report);
+        }, this.report, this.binding.loader.kind === 'mask' ? this.#captureCohort : null);
     }
     /** Release unnecessary capture work when no real image is selected and keep the preview solid black. */
     #black() {

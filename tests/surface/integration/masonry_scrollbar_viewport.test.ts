@@ -17,12 +17,13 @@
 /** Prove native scrolling cannot move masonry's track before JavaScript catches up. */
 import { build } from 'esbuild';
 import { chromium, type Browser, type Page } from '@playwright/test';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let browser: Browser;
 let fixture: string;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchHeadlessBrowser(chromium);
   const output = await build({
     stdin: {
       contents: `import {OverlayScrollbarHost} from './frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.ts';import {ensureWorkflowMasonryStyles} from './frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.ts';import {scrollbarCss} from './frontend/comfyui/ui/surface/appearance/ScrollbarStyles.ts';ensureWorkflowMasonryStyles(document);const style=document.createElement('style');style.textContent=scrollbarCss(true);document.head.append(style);const host=new OverlayScrollbarHost(document,error=>{throw error});host.enable();`,

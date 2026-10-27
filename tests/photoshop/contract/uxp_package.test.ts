@@ -47,6 +47,38 @@ test('the SugarCubes panel declares room for independent width and height resizi
   expect(maximum.height).toBeGreaterThanOrEqual(2160);
 });
 
+test('release manifest supplies plugin and panel PNG icons at both native densities', () => {
+  const authored = record(
+    JSON.parse(readFileSync('integrations/photoshop/manifest.json', 'utf8')),
+    'manifest',
+  );
+  if (!Array.isArray(authored.entrypoints)) throw new Error('Missing panel entrypoints.');
+  const iconSets: unknown[] = [
+    authored.icons,
+    ...authored.entrypoints.map((entry: unknown) => record(entry, 'panel').icons),
+  ];
+  for (const icons of iconSets) {
+    expect(Array.isArray(icons)).toBe(true);
+    if (!Array.isArray(icons) || !icons.length)
+      throw new Error('Release plugin and panel icons are required by the Adobe packager.');
+    for (const candidate of icons) {
+      const icon = record(candidate, 'icon');
+      expect(icon.width).toBe(23);
+      expect(icon.height).toBe(23);
+      expect(icon.scale).toEqual([1, 2]);
+      if (typeof icon.path !== 'string' || !icon.path.endsWith('.png'))
+        throw new Error('Photoshop toolbar icons require PNG resources.');
+      for (const scale of [1, 2]) {
+        const relative = scale === 1 ? icon.path : icon.path.replace(/\.png$/, '@2x.png');
+        const bytes = readFileSync(packagePath('integrations/photoshop/static', relative));
+        expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+        expect(bytes.readUInt32BE(16)).toBe(23 * scale);
+        expect(bytes.readUInt32BE(20)).toBe(23 * scale);
+      }
+    }
+  }
+});
+
 /** Return a minimal independent fixture identity, host and explicit WebView permission. */
 function manifest(): Record<string, unknown> {
   return {

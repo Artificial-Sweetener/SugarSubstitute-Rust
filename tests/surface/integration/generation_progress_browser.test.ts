@@ -18,6 +18,7 @@
 import { createServer, type Server } from 'node:http';
 import { build } from 'esbuild';
 import { chromium, type Browser } from '@playwright/test';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import type {} from '../support/GenerationProgressBrowser.js';
 import { closeBrowserFixture } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
@@ -48,7 +49,7 @@ beforeAll(async () => {
   if (!listening || typeof listening === 'string')
     throw new Error('Missing progress fixture address');
   address = `http://127.0.0.1:${String(listening.port)}`;
-  browser = await chromium.launch({ headless: true });
+  browser = await launchHeadlessBrowser(chromium);
 }, 30_000);
 
 afterAll(async () => {

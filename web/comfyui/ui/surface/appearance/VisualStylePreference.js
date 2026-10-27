@@ -55,15 +55,16 @@ export function registerVisualStylePreference(app, accept, report, embedded) {
             { value: 'fluent', text: 'Fluent' },
             { value: 'spectrum', text: 'Spectrum 2' },
             { value: 'photopro', text: 'PhotoPro' },
+            { value: 'gimp', text: 'GIMP' },
         ],
-        tooltip: 'Choose Comfy, Fluent, Spectrum 2, or PhotoPro for node cards, masonry, and SugarCubes surfaces.',
+        tooltip: 'Choose Comfy, Fluent, Spectrum 2, PhotoPro, or GIMP for node cards, masonry, and SugarCubes surfaces.',
         onChange: (value) => {
             if (isVisualStyle(value)) {
                 saved = value;
                 refresh();
             }
             else
-                report(new TypeError('The visual style must be Comfy, Fluent, Spectrum 2, or PhotoPro.'));
+                report(new TypeError('The visual style must be Comfy, Fluent, Spectrum 2, PhotoPro, or GIMP.'));
         },
     });
     refresh();

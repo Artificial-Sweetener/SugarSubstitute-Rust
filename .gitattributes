@@ -33,3 +33,11 @@ web/orb/*.svg binary
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+
+# Preserve the byte-level provenance used by the native extension package.
+integrations/gimp/companion/Cargo.toml text eol=lf
+integrations/gimp/companion/Cargo.lock text eol=lf
+third_party/licenses/gimp-companion/** -text
+third_party/licenses/gimp-companion-dependencies.txt -text
+web/third_party/licenses/gimp-companion/** -text
+web/third_party/licenses/gimp-companion-dependencies.txt -text

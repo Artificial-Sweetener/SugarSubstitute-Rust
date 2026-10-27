@@ -88,6 +88,7 @@ function harness(initialWidth = 803) {
   let width = initialWidth;
   Object.defineProperty(frame, 'clientWidth', { get: () => width });
   Object.defineProperty(viewport, 'clientWidth', {
+    configurable: true,
     get: () => Number.parseFloat(viewport.style.width),
   });
   Object.defineProperty(viewport, 'scrollWidth', {
@@ -113,17 +114,20 @@ function harness(initialWidth = 803) {
     resized,
     close,
     layout,
-    update: (count: number) =>
+    update: (count: number) => {
       layout.update(
         Array.from({ length: count }, (_, index) => ({
           id: String(index),
           title: `Workflow ${String(index)}`,
           modified: false,
         })),
-      ),
+      );
+      flush();
+    },
     resize: (next: number) => {
       width = next;
       observers[0]?.deliver();
+      flush();
       flush();
     },
   };
@@ -271,12 +275,14 @@ test('PhotoPro fits names independently and reallocates renamed tabs without rep
       { id: '0', title: 'A longer new name', modified: false },
       { id: '1', title: 'Workflow 1', modified: false },
     ]);
+    flush();
     expect(h.resized).toHaveBeenLastCalledWith([140, 220]);
     preferred[0] = 60;
     h.layout.update([
       { id: '0', title: 'A', modified: false },
       { id: '1', title: 'Workflow 1', modified: false },
     ]);
+    flush();
     expect(h.resized).toHaveBeenLastCalledWith([60, 220]);
     expect(Array.from(h.tabs.children)).toEqual(elements);
     h.resize(323);
@@ -288,4 +294,35 @@ test('PhotoPro fits names independently and reallocates renamed tabs without rep
     h.layout.dispose();
     releaseVisualStyle(document, 'photopro');
   }
+});
+
+test('selection geometry is published after the browser commits the allocated viewport width', () => {
+  const h = harness(562);
+  let committedWidth = 720;
+  Object.defineProperty(h.viewport, 'clientWidth', { get: () => committedWidth });
+  const observed: number[] = [];
+  h.resized.mockImplementation(() => observed.push(h.viewport.clientWidth));
+  h.layout.update(
+    Array.from({ length: 4 }, (_, index) => ({
+      id: String(index),
+      title: String(index),
+      modified: false,
+    })),
+  );
+  committedWidth = Number.parseFloat(h.viewport.style.width);
+  flush();
+  expect(observed).toEqual([415]);
+  h.layout.dispose();
+});
+
+test('pending layout publications coalesce and retire with their owning strip', () => {
+  const h = harness(562);
+  h.layout.update([{ id: 'a', title: 'A', modified: false }]);
+  h.layout.update([{ id: 'b', title: 'B', modified: false }]);
+  expect(frames.size).toBe(1);
+  expect(h.resized).not.toHaveBeenCalled();
+  h.layout.dispose();
+  flush();
+  expect(h.resized).not.toHaveBeenCalled();
+  expect(frames.size).toBe(0);
 });

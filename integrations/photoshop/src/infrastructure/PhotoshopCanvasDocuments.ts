@@ -14,9 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Translate portable image insertion into a single Photoshop transaction without changing canvas geometry. */
-import { app, core, constants, imaging } from 'photoshop';
+import { app, constants, imaging } from 'photoshop';
+import { runPhotoshopModal, type PhotoshopModalExecution } from './PhotoshopModalExecution.js';
 import { findCanvasDocument, canvasDocumentIdentity } from './PhotoshopCanvasIdentity.js';
-type ModalExecution = Parameters<Parameters<typeof core.executeAsModal>[0]>[0];
 import type { CanvasCancellationSource } from '../../../contracts/CanvasHost.js';
 import type {
   CanvasContext,
@@ -61,17 +61,14 @@ export class PhotoshopCanvasDocuments {
         status: 'error',
         message: 'Photoshop did not execute the canvas transaction.',
       };
-      await core.executeAsModal(
-        async (execution) => {
-          try {
-            result = await this.#commit(execution, request, image, cancellation);
-          } catch (error: unknown) {
-            state.modalCancelled = execution.isCancelled;
-            throw error;
-          }
-        },
-        { commandName: 'Insert generated image', timeOut: 2000 },
-      );
+      await runPhotoshopModal('Insert generated image', async (execution) => {
+        try {
+          result = await this.#commit(execution, request, image, cancellation);
+        } catch (error: unknown) {
+          state.modalCancelled = execution.isCancelled;
+          throw error;
+        }
+      });
       return result;
     } catch (error: unknown) {
       if (
@@ -85,7 +82,7 @@ export class PhotoshopCanvasDocuments {
   }
   /** Commit only inside Photoshop's exclusive scope and roll back the target on any partial failure. */
   async #commit(
-    execution: ModalExecution,
+    execution: PhotoshopModalExecution,
     request: CanvasInsertImage,
     image: PreparedCanvasImage,
     cancellation: CanvasCancellationSource,
@@ -169,7 +166,7 @@ export class PhotoshopCanvasDocuments {
     }
   }
   /** Re-read externally mutable host and caller cancellation after each awaited native operation. */
-  #cancelled(execution: ModalExecution, cancellation: CanvasCancellationSource): boolean {
+  #cancelled(execution: PhotoshopModalExecution, cancellation: CanvasCancellationSource): boolean {
     return execution.isCancelled || cancellation.cancelled();
   }
 }

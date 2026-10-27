@@ -21,6 +21,7 @@ import { modelPickerChoices } from '../../../frontend/comfyui/ui/model_library/M
 import type { ModelPickerBinding } from '../../../frontend/comfyui/ui/model_library/ModelPickerBinding.js';
 import { modelPickerCss } from '../../../frontend/comfyui/ui/model_library/ModelPickerStyles.js';
 import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
+import { gimpComboCss } from '../../../frontend/comfyui/ui/surface/appearance/GimpComboStyles.js';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 
 import { ModelFixtureResizeObserver } from '../support/resize_observer.js';
@@ -530,4 +531,50 @@ test('keeps the highlighted file through Tab when multiple folders contain the s
   await nextTick();
   expect(field.writes).toEqual(['Other\\beta.safetensors']);
   field.picker.dispose();
+});
+
+/** Retain model artwork and legible captions inside GIMP's compact combo treatment. */
+test('GIMP keeps the selected model thumbnail visible without changing its value or field identity', async () => {
+  const previous = document.documentElement.dataset.scVisualStyle;
+  document.documentElement.dataset.scVisualStyle = 'gimp';
+  const field = fixture();
+  field.container.dataset.scModelAppearance = 'gimp';
+  const style = document.createElement('style');
+  style.textContent = (modelPickerCss + gimpComboCss()).replaceAll(
+    'var(--sc-control-height,33px)',
+    '33px',
+  );
+  field.container.append(style);
+  try {
+    const model = field.container.querySelector('.sc-model-field');
+    if (!(model instanceof HTMLElement)) throw new Error('No model field mounted.');
+    expect(model.hasAttribute('data-sc-style-combo-frame')).toBe(true);
+    field.picker.update(
+      modelPickerChoices([], 'loras', field.binding.options).map((item) => ({
+        ...item,
+        thumbnails: [
+          { assetId: 'fixture', role: 'banner', width: 768, height: 160, url: '/banner' },
+        ],
+      })),
+    );
+    await nextTick();
+    const banner = model.querySelector('.sc-model-banner');
+    if (!(banner instanceof HTMLImageElement)) throw new Error('No model thumbnail mounted.');
+    expect(getComputedStyle(banner).display).not.toBe('none');
+    expect(getComputedStyle(banner).objectFit).toBe('cover');
+    expect(getComputedStyle(model).color).toBe('rgb(255, 255, 255)');
+    expect(field.container.querySelector('input')).toBe(field.input);
+    expect(field.binding.readValue()).toBe('Anima\\alpha.safetensors');
+    expect(field.writes).toEqual([]);
+    const height = getComputedStyle(model).height;
+    banner.dispatchEvent(new Event('error'));
+    await nextTick();
+    expect(model.querySelector('.sc-model-banner')).toBeNull();
+    expect(getComputedStyle(model).height).toBe(height);
+    expect(field.container.querySelector('.sc-model-field')).toBe(model);
+  } finally {
+    field.picker.dispose();
+    if (previous === undefined) delete document.documentElement.dataset.scVisualStyle;
+    else document.documentElement.dataset.scVisualStyle = previous;
+  }
 });

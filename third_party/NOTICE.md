@@ -1,5 +1,21 @@
 # Third-Party Notices
 
+The GIMP Tauri companion consumes the existing GIMP palette and SugarSubstitute
+application artwork. Its ICO container preserves the original PNG bytes. Their
+source revisions, hashes and generated paths are recorded in `manifest.toml`.
+The companion assets include the project AGPL terms, this notice and manifest,
+and the GIMP and SugarSubstitute GPL terms.
+
+## GIMP Default theme
+
+GIMP-theme card icons, action glyphs and numeric step buttons use unmodified GTK3-era [Adwaita](https://gitlab.gnome.org/GNOME/adwaita-icon-theme) 3.38.0 symbolic artwork, attributed to the [GNOME Project](https://www.gnome.org/). The artwork is distributed under its LGPL v3 option; the upstream notice and complete LGPL/GPL terms are included in `licenses/adwaita.LICENSE.txt`. Source paths, pinned revision and asset hashes are recorded in the manifest.
+
+The GIMP visual style adapts the Default theme's dark/light colors, GTK control
+paint, labelled comboboxes, notebook states and compact dock geometry under GPL-3.0-or-later.
+The source revision, exact paths and source hashes are recorded in `manifest.toml`;
+the license is included in `licenses/gimp.LICENSE.txt`. GIMP controls use the
+unmodified Vue 3.5.43 runtime under MIT (`licenses/vue.LICENSE.txt`).
+
 ## OpenPhoto PhotoPro interface
 
 PhotoPro adapts OpenPhoto's medium-gray panel colors and compact control paint
@@ -223,3 +239,10 @@ CodeMirror, Lezer, and their editing and style helpers are bundled with SugarPro
 ## Photoshop image decoding
 
 The Photoshop UXP package bundles UPNG.js 2.1.0 and pako 1.0.11 for image decoding. Their license texts are included under `third_party/licenses/` and their package identities are recorded in `manifest.toml`.
+The GIMP Tauri companion uses the locked Windows desktop Rust dependencies recorded in
+`gimp-companion-licenses.json`. Complete upstream license, copyright and notice texts
+are aggregated in `licenses/gimp-companion-dependencies.txt` and shipped in the GEX.
+Each entry identifies its exact source archive, including unmodified MPL-2.0 sources.
+The embedded Microsoft WebView2 loader matches SDK 1.0.3800.47 byte for byte; its
+BSD-3-Clause license and SDK notices are included in that aggregate. WebView2 Runtime
+is supplied by the user's system.

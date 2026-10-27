@@ -15,18 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt UXP WebView messaging into an explicitly identified browser transport. */
 import { isRecord } from '../../types/common.js';
+import { panelNavigation } from './BrowserPanelTransport.js';
 /** Retain the navigation identity while allowing UXP to inject its bridge after frontend startup. */
 export function createUxpPanelTransport(windowRef) {
-    const query = new URLSearchParams(windowRef.location.search);
-    const host = query.get('sc-panel-host');
-    const session = query.get('sc-panel-session');
-    if (!host ||
-        !session ||
-        !/^[a-zA-Z0-9._-]{1,128}$/.test(host) ||
-        !/^[a-zA-Z0-9-]{16,80}$/.test(session) ||
-        query.getAll('sc-panel-host').length !== 1 ||
-        query.getAll('sc-panel-session').length !== 1)
+    const identity = panelNavigation(windowRef.location.search);
+    if (!identity)
         return null;
+    const { host, session } = identity;
     return {
         session,
         send: (message) => {

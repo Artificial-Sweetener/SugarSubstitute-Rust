@@ -59,14 +59,29 @@ def test_unrelated_work_omits_editor_checks_and_shared_work_includes_consumers()
         "comfy",
         "integrations",
         "photoshop",
+        "gimp",
     }
     assert _checks("integrations/shared/PanelSession.ts") == {
         "comfy",
         "integrations",
         "photoshop",
+        "gimp",
     }
     assert _checks("scripts/photoshop/build.ts") == {"integrations", "photoshop"}
-    assert _checks("package-lock.json") == {"comfy", "integrations", "photoshop"}
+    assert _checks("package-lock.json") == {
+        "comfy",
+        "integrations",
+        "photoshop",
+        "gimp",
+    }
+    assert _checks("integrations/gimp/companion/src/connection.rs") == {
+        "integrations",
+        "gimp",
+    }
+    assert _checks("integrations/gimp/native/images.py") == {
+        "integrations",
+        "gimp",
+    }
 
 
 def test_check_selection_is_monotonic_and_common_config_selects_every_proof() -> None:
@@ -189,3 +204,14 @@ def test_staged_gate_executes_indexed_checks_and_tests(
     monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / ".git/index"))
     assert quality_main(("staged",), project_root=tmp_path) == 0
     assert (tmp_path / "value.py").read_text(encoding="utf-8") == "value: int = 2\n"
+
+
+def test_shared_headless_browser_fixture_selects_every_proof_and_quality_profile() -> (
+    None
+):
+    """Recheck every browser consumer when its shared launch or teardown policy changes."""
+    policy = load_test_policy(ROOT / "TEST_POLICY.toml")
+    path = "tests/frontend_core/support/BrowserFixtureLifetime.ts"
+    selection = select_paths(policy, (path,))
+    assert set(selection.groups) == set(policy.groups)
+    assert _checks(path) == {"comfy", "integrations", "photoshop", "gimp"}

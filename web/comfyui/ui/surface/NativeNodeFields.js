@@ -4,6 +4,7 @@ import { NativeChoiceRestrictions, } from './NativeChoiceRestrictions.js';
 import { registerNativePresentationWidget } from './NativePresentationWidgets.js';
 import { refreshNativeNodeCards } from './NativeNodeCardRefresh.js';
 import { NativeFieldActionMount } from './NativeFieldActionMount.js';
+import { NativeChoicePreparation } from './NativeChoicePreparation.js';
 /** Keep display-only widgets out of serialization while the native node owns their rendering and theme. */
 export class NativeNodeFields {
     node;
@@ -20,14 +21,14 @@ export class NativeNodeFields {
         this.beforeField = beforeField;
     }
     /** Share a native field across simultaneous projections without multiplying value commits. */
-    mountChoice(root, label, change, key = label) {
+    mountChoice(root, label, change, key = label, prepare) {
         const owner = this.#field(label, key, 'combo');
         const release = this.#retain(owner, (value) => {
             if (typeof value === 'string')
                 change(value);
         });
         const name = owner.widget.name;
-        let constraints = null, anchor = null, disposed = false;
+        let constraints = null, preparation = null, anchor = null, disposed = false;
         return {
             update: (value, choices, disabled = false, visible = true) => {
                 if (disposed)
@@ -47,8 +48,10 @@ export class NativeNodeFields {
                 const row = nativeNodeFieldRows(root).get(name) ?? null;
                 if (anchor !== row) {
                     constraints?.dispose();
+                    preparation?.dispose();
                     anchor = row;
                     constraints = row ? new NativeChoiceRestrictions(row) : null;
+                    preparation = row && prepare ? new NativeChoicePreparation(row, prepare) : null;
                 }
                 constraints?.update(choices.map((choice) => ({ value: choice.label, blockers: choice.blockers })));
             },
@@ -57,6 +60,7 @@ export class NativeNodeFields {
                     return;
                 disposed = true;
                 constraints?.dispose();
+                preparation?.dispose();
                 release();
             },
         };

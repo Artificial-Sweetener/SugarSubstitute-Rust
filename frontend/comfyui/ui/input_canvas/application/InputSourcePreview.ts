@@ -72,6 +72,8 @@ export class InputSourcePreview {
     private readonly maximumSize: number,
     private readonly publish: (value: InputSourcePreviewValue) => void,
     private readonly report: (error: unknown) => void,
+    cohort: object | null = null,
+    captureMaximum: number | null = null,
   ) {
     this.#stop = () => {};
     const reason = InputSourcePreview.unavailable(binding, entry);
@@ -97,8 +99,9 @@ export class InputSourcePreview {
                   },
             );
         },
-        binding.preview.captureSize(maximumSize),
+        captureMaximum ?? binding.preview.captureSize(maximumSize),
         binding.loader.kind === 'image' ? 'image' : 'raw',
+        cohort,
       );
     } else if (entry.source.file) {
       publish({ kind: 'loading' });

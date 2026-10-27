@@ -35,6 +35,7 @@ export class InputPreviewRows {
   readonly #empty: InputPreviewSurface;
   readonly #entries = new Map<string, Row>();
   #alive = true;
+  #refreshingNativeSource = false;
   #mode: MaskPreviewMode = 'context';
   /** Bind pixels and state through the existing source and interpretation owners. */
   constructor(
@@ -52,6 +53,8 @@ export class InputPreviewRows {
     if (binding.loader.kind === 'mask') this.#empty.black();
     else this.#empty.unavailable('Choose a source');
     this.element.append(this.#empty.element);
+    document.defaultView?.addEventListener('focus', this.#nativeReturned);
+    document.documentElement.addEventListener('pointerenter', this.#nativeReturned);
   }
   /** Reconcile only this loader's previews, retaining geometry and cached pixels during replacement. */
   refresh(): void {
@@ -127,6 +130,11 @@ export class InputPreviewRows {
   /** Release geometry and capture observations before accepting any late interpretation result. */
   dispose(): void {
     this.#alive = false;
+    this.element.ownerDocument.defaultView?.removeEventListener('focus', this.#nativeReturned);
+    this.element.ownerDocument.documentElement.removeEventListener(
+      'pointerenter',
+      this.#nativeReturned,
+    );
     for (const row of this.#entries.values()) {
       row.content?.dispose();
       row.resolution.dispose();
@@ -134,6 +142,30 @@ export class InputPreviewRows {
     this.#entries.clear();
     this.element.remove();
   }
+  /** Refresh mounted capture-only sources on return from native editing without claiming live observation. */
+  readonly #nativeReturned = (event: Event): void => {
+    if (
+      event.type === 'pointerenter' &&
+      'relatedTarget' in event &&
+      event.relatedTarget instanceof Node &&
+      event.relatedTarget.ownerDocument === this.element.ownerDocument
+    )
+      return;
+    if (
+      !this.#alive ||
+      this.#refreshingNativeSource ||
+      this.binding.context?.observesChanges !== false
+    )
+      return;
+    this.#refreshingNativeSource = true;
+    void this.binding
+      .refreshSources()
+      .catch(this.report)
+      .finally(() => {
+        this.#refreshingNativeSource = false;
+      });
+  };
+
   /** Create one literal, stable entry selection surface without native mask mutation intents. */
   #row(entry: InputEntry): Row {
     const surface = new InputPreviewSurface(

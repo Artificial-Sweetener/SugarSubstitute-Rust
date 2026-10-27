@@ -14,9 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own Photoshop mask identities, committed selection editing and coherent full-resolution captures. */
-import { app, core } from 'photoshop';
+import { app } from 'photoshop';
+import { runPhotoshopModal } from './PhotoshopModalExecution.js';
 import type {
-  CanvasMaskCommand,
+  CanvasMaskQuery,
   CanvasMaskReference,
   CanvasMaskResult,
   CanvasMaskSnapshot,
@@ -88,7 +89,7 @@ export class PhotoshopCanvasMasks {
     if (this.#active) this.#changes.start();
   }
   /** Keep all selection mutations and captures in one native operation sequence. */
-  execute(command: CanvasMaskCommand): Promise<CanvasMaskResult> {
+  execute(command: CanvasMaskQuery): Promise<CanvasMaskResult> {
     return this.#queue(() => this.#execute(command));
   }
   /** Release native observation without deleting authored channels from a user's document. */
@@ -108,11 +109,12 @@ export class PhotoshopCanvasMasks {
     return result;
   }
   /** Dispatch native capabilities while requiring exact document geometry for every bound mask. */
-  async #execute(command: CanvasMaskCommand): Promise<CanvasMaskResult> {
+  async #execute(command: CanvasMaskQuery): Promise<CanvasMaskResult> {
     if (command.type === 'context')
       return {
         kind: 'context',
         supported: true,
+        observesChanges: true,
         document: app.activeDocument ? canvasDocumentIdentity(app.activeDocument) : null,
       };
     if (command.type === 'release') {
@@ -250,24 +252,21 @@ export class PhotoshopCanvasMasks {
     };
     this.#busy = true;
     try {
-      await core.executeAsModal(
-        async (execution) => {
-          const document = app.activeDocument;
-          if (!document) throw new Error('No Photoshop document is active.');
-          const history = await execution.hostControl.suspendHistory({
-            documentID: document.id,
-            name,
-          });
-          let succeeded = false;
-          try {
-            result = await operation();
-            succeeded = true;
-          } finally {
-            await execution.hostControl.resumeHistory(history, succeeded && commit);
-          }
-        },
-        { commandName: name, timeOut: 1 },
-      );
+      await runPhotoshopModal(name, async (execution) => {
+        const document = app.activeDocument;
+        if (!document) throw new Error('No Photoshop document is active.');
+        const history = await execution.hostControl.suspendHistory({
+          documentID: document.id,
+          name,
+        });
+        let succeeded = false;
+        try {
+          result = await operation();
+          succeeded = true;
+        } finally {
+          await execution.hostControl.resumeHistory(history, succeeded && commit);
+        }
+      });
       return result;
     } finally {
       this.#busy = false;

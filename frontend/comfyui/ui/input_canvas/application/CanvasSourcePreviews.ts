@@ -39,6 +39,7 @@ export type CanvasSourcePreview =
   | { readonly kind: 'error'; readonly message: string; readonly unavailable?: boolean };
 
 interface PreviewEntry {
+  readonly cohort: number;
   readonly source: Exclude<CanvasInputSource, { kind: 'file' }>;
   readonly representation: 'raw' | 'image';
   maximumSize: number;
@@ -52,6 +53,8 @@ export class CanvasSourcePreviews {
   readonly #entries = new Map<string, PreviewEntry>();
   readonly #hosts = new Map<CanvasSourceHost, () => void>();
   readonly #dirty = new Set<string>();
+  readonly #cohorts = new WeakMap<object, number>();
+  #nextCohort = 0;
   #pending = false;
   #disposed = false;
 
@@ -68,9 +71,16 @@ export class CanvasSourcePreviews {
     listener: (value: CanvasSourcePreview) => void,
     maximumSize = 288,
     representation: 'raw' | 'image' = 'raw',
+    cohort: object | null = null,
   ): () => void {
     if (this.#disposed) return () => {};
+    let cohortId = 0;
+    if (cohort) {
+      cohortId = this.#cohorts.get(cohort) ?? ++this.#nextCohort;
+      this.#cohorts.set(cohort, cohortId);
+    }
     const key = JSON.stringify([
+      cohortId,
       canvasInputSourceKey(source),
       maximumSize === 0 ? 'full' : 'display',
       representation,
@@ -78,6 +88,7 @@ export class CanvasSourcePreviews {
     let entry = this.#entries.get(key);
     if (!entry) {
       entry = {
+        cohort: cohortId,
         source,
         maximumSize,
         representation,
@@ -95,11 +106,10 @@ export class CanvasSourcePreviews {
     entry.listeners.add(listener);
     listener(entry.value);
     const host = this.host(source.canvasId);
-    if (host && !this.#hosts.has(host))
-      this.#hosts.set(
-        host,
-        host.subscribe(() => this.refresh(host.canvasId)),
-      );
+    if (host && !this.#hosts.has(host)) {
+      const lease = host.changes?.subscribe(() => this.refresh(host.canvasId));
+      this.#hosts.set(host, lease ? () => lease.stop() : () => {});
+    }
     if (entry.value.kind === 'loading') this.#invalidate(key, entry);
     this.#schedule();
     return () => {
@@ -123,6 +133,16 @@ export class CanvasSourcePreviews {
     this.#schedule();
   }
 
+  /** Refresh sources used by one picker while unrelated mounted inputs retain their previews. */
+  refreshSources(sources: readonly CanvasInputSource[]): void {
+    const requested = new Set(
+      sources.filter((source) => source.kind === 'canvas').map(canvasInputSourceKey),
+    );
+    for (const [key, entry] of this.#entries)
+      if (requested.has(canvasInputSourceKey(entry.source))) this.#invalidate(key, entry);
+    this.#schedule();
+  }
+
   /** Stop accepting results before releasing every native metadata subscription. */
   dispose(): void {
     this.#disposed = true;
@@ -136,6 +156,12 @@ export class CanvasSourcePreviews {
   #invalidate(key: string, entry: PreviewEntry): void {
     entry.serial++;
     this.#dirty.add(key);
+    if (entry.cohort)
+      for (const [peerKey, peer] of this.#entries)
+        if (peer !== entry && peer.cohort === entry.cohort) {
+          peer.serial++;
+          this.#dirty.add(peerKey);
+        }
   }
 
   /** Admit one coalesced read at a time and keep changes arriving during capture queued. */
@@ -158,16 +184,18 @@ export class CanvasSourcePreviews {
     for (const key of requested) {
       const entry = this.#entries.get(key);
       if (!entry) continue;
-      const groupKey = JSON.stringify([entry.source.canvasId, entry.maximumSize]);
+      const groupKey = JSON.stringify([entry.source.canvasId, entry.maximumSize, entry.cohort]);
       const group = groups.get(groupKey) ?? [];
       group.push({ key, entry, serial: entry.serial });
       groups.set(groupKey, group);
     }
     for (const group of groups.values()) {
       const size = group[0]?.entry.maximumSize ?? 0;
-      const count = size
-        ? Math.max(1, Math.min(64, Math.floor(MAX_CANVAS_RASTER_BYTES / (size * size * 5))))
-        : 1;
+      const count = group[0]?.entry.cohort
+        ? group.length
+        : size
+          ? Math.max(1, Math.min(64, Math.floor(MAX_CANVAS_RASTER_BYTES / (size * size * 5))))
+          : 1;
       for (let offset = 0; offset < group.length; offset += count) {
         let pending = group.slice(offset, offset + count);
         while (pending.length) {

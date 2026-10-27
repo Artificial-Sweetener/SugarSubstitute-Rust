@@ -136,8 +136,13 @@ test('discovers mask operations by peer capability and refuses an ambiguous defa
   expect(f.web.adapter.capabilities.masks).toBeUndefined();
   const masks: CanvasMaskHost = {
     canvasId: 'editor',
-    execute: async () => ({ kind: 'context', supported: true, document: f.context.document }),
-    subscribe: () => () => {},
+    execute: async () => ({
+      observesChanges: false,
+      kind: 'context',
+      supported: true,
+      document: f.context.document,
+    }),
+    changes: null,
   };
   Object.defineProperty(f.canvas, 'masks', { get: () => masks });
   expect(f.delivery.maskHost()).toBe(masks);

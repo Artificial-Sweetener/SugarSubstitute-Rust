@@ -89,7 +89,7 @@ export function createComfyInputBinding(node, loader, ports) {
             ? [[widget.name, widget.value]]
             : []))),
         subscribe: (changed) => observeInputLoaderWidgets(node, loader, changed, ports.report),
-    }, state, ports.host, ports.files, () => crypto.randomUUID(), ports.report, ports.maskEditing, ports.editable);
+    }, state, ports.host, ports.files, () => crypto.randomUUID(), ports.report, ports.maskEditing, ports.editable, (sources) => ports.refreshPreviews(sources));
 }
 /** Validate dynamic native file values before they enter binding policy. */
 function sourceFiles(node, field) {

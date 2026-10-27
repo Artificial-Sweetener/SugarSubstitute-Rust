@@ -52,6 +52,7 @@ export interface InputEditorBinding {
   readonly context: CanvasSourceContext | null;
   subscribe(listener: () => void): () => void;
   initialize(): Promise<void>;
+  refreshSources(): Promise<void>;
   changeSource(source: CanvasInputSource): void;
   select(id: string): void;
   add(): void;

@@ -73,10 +73,12 @@ def test_current_repository_test_inventory_is_owned(policy: _TestPolicy) -> None
 def test_contention_sensitive_integration_proofs_are_process_isolated(
     policy: _TestPolicy,
 ) -> None:
-    """Keep resource-heavy browser and authoring suites out of shared workers."""
+    """Run contention-sensitive browser fixtures in fresh processes."""
 
     assert policy.area("authoring").isolated_proofs == frozenset({"integration"})
     assert policy.area("browser").isolated_proofs == frozenset({"integration"})
+    assert policy.area("surface").isolated_proofs == frozenset({"integration"})
+    assert policy.area("prompt_editor").isolated_proofs == frozenset({"integration"})
 
 
 def test_cube_execution_program_has_independently_runnable_areas(
@@ -315,6 +317,60 @@ def test_isolated_gate_runs_each_group_in_a_fresh_process(
     assert test_runner.run_isolated_groups(tmp_path, policy) == 0
     assert len(commands) == 2
     assert commands[0] != commands[1]
+
+
+def test_isolated_typescript_proofs_use_one_fresh_process_per_module(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep browser proofs out of Jest worker pools while preserving every module."""
+
+    area = _TestArea(
+        name="feature",
+        sources=("src/**",),
+        proofs=("integration",),
+        isolated_proofs=frozenset({"integration"}),
+    )
+    policy = _TestPolicy(
+        schema=1,
+        test_root="tests",
+        areas=(area,),
+        boundaries=(),
+        subscriptions=(),
+    )
+    proof_root = tmp_path / "tests" / "feature" / "integration"
+    proof_root.mkdir(parents=True)
+    files = tuple(proof_root / f"{name}.test.ts" for name in ("first", "second"))
+    for path in files:
+        path.write_text("", encoding="utf-8")
+    commands: list[tuple[str, ...]] = []
+
+    def capture(
+        _root: Path, command: list[str], *, environment: Mapping[str, str] | None = None
+    ) -> int:
+        """Capture subprocess admission without starting a browser."""
+
+        commands.append(tuple(command))
+        return 0
+
+    monkeypatch.setattr(test_runner, "_run", capture)
+
+    assert (
+        test_runner.run_selection(
+            tmp_path, policy, _TestSelection(groups=policy.groups, reasons=())
+        )
+        == 0
+    )
+    assert len(commands) == len(files)
+    for command, path in zip(commands, files, strict=True):
+        assert command == (
+            "node",
+            "--experimental-vm-modules",
+            "node_modules/jest/bin/jest.js",
+            "--runInBand",
+            "--runTestsByPath",
+            str(path.relative_to(tmp_path)),
+        )
 
 
 def test_large_selection_preserves_every_file_within_windows_command_limits(

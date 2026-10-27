@@ -16,6 +16,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove PhotoPro card geometry with actual browser layout and shared production styles. */
 import { chromium, type Browser } from '@playwright/test';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import { JSDOM } from 'jsdom';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 import { photoProAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/PhotoProAppearanceStyles.js';
@@ -23,12 +24,12 @@ import { photoProAppearanceCss } from '../../../frontend/comfyui/ui/surface/appe
 let browser: Browser;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchHeadlessBrowser(chromium);
 });
 
 afterAll(async () => {
   await browser.close();
-});
+}, 30_000);
 
 test('keeps the override pin at the top right across card widths with the activation footprint', async () => {
   const dom = new JSDOM();

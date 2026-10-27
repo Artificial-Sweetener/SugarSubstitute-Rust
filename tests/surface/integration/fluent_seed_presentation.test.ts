@@ -35,7 +35,7 @@ function vnode(
 }
 
 test.each(
-  (['fluent', 'spectrum', 'photopro'] as const).flatMap((style) =>
+  (['fluent', 'spectrum', 'photopro', 'gimp'] as const).flatMap((style) =>
     ['native', 'cube', 'masonry'].map((view) => ({ style, view })),
   ),
 )(

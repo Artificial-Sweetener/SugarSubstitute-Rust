@@ -26,6 +26,7 @@ import type {
   CanvasInputSource,
 } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 import { encodeCanvasRaster } from '../../../integrations/shared/CanvasRasterEncoding.js';
+import { nativeCanvasChanges } from '../../../integrations/shared/CanvasChangeRelay.js';
 
 /** Settle coalesced native request and publication microtasks. */
 async function settled(): Promise<void> {
@@ -33,7 +34,7 @@ async function settled(): Promise<void> {
 }
 
 /** Retain only the external canvas boundary while exercising real preview and capture owners. */
-function fixture() {
+function fixture(observesChanges = true) {
   const document = { id: 'doc', geometryRevision: 'geometry', width: 2, height: 1 };
   const changes = new Set<(change: CanvasSourceChange) => void>();
   let revision = 1;
@@ -41,6 +42,7 @@ function fixture() {
   const execute = jest.fn(async (query: CanvasSourceQuery): Promise<CanvasSourceResult> => {
     if (query.type === 'context')
       return {
+        observesChanges,
         kind: 'context',
         supported: true,
         document,
@@ -64,12 +66,14 @@ function fixture() {
   const host: CanvasSourceHost = {
     canvasId: 'editor',
     execute,
-    subscribe: (listener) => {
-      changes.add(listener);
-      return () => {
-        changes.delete(listener);
-      };
-    },
+    changes: observesChanges
+      ? nativeCanvasChanges((listener) => {
+          changes.add(listener);
+          return () => {
+            changes.delete(listener);
+          };
+        })
+      : null,
   };
   const report = jest.fn();
   const store = new CanvasSourcePreviews(new CanvasSourceCapture(() => host), () => host, report);
@@ -101,6 +105,47 @@ function fixture() {
     },
   };
 }
+
+test('refreshes capture-only previews explicitly and fences a superseded in-flight capture', async () => {
+  const f = fixture(false),
+    changed = jest.fn<(value: CanvasSourcePreview) => void>();
+  const release = f.hold();
+  const stop = f.store.observe(f.source, changed);
+  await settled();
+  f.changed();
+  f.store.refresh('editor');
+  release();
+  await settled();
+  expect(f.changes.size).toBe(0);
+  expect(changed.mock.calls.map(([value]) => value.kind)).toEqual(['loading', 'pixels']);
+  expect(changed.mock.calls[1]?.[0]).toMatchObject({ revision: '2' });
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(2);
+  await settled();
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(2);
+  stop();
+  f.store.dispose();
+});
+
+test('refreshes only the picker sources while unrelated mounted previews retain their state', async () => {
+  const f = fixture(false);
+  const first = jest.fn<(value: CanvasSourcePreview) => void>();
+  const other = jest.fn<(value: CanvasSourcePreview) => void>();
+  const stop = f.store.observe(f.source, first);
+  const stopOther = f.store.observe({ ...f.source, documentId: 'doc' }, other);
+  await settled();
+  first.mockClear();
+  other.mockClear();
+  f.execute.mockClear();
+  f.changed();
+  f.store.refreshSources([f.source]);
+  await settled();
+  expect(first).toHaveBeenCalledTimes(1);
+  expect(other).not.toHaveBeenCalled();
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(1);
+  stop();
+  stopOther();
+  f.store.dispose();
+});
 
 test('shares one native watch and capture and stops watching when the last consumer leaves', async () => {
   const f = fixture(),

@@ -30,7 +30,8 @@ export function isPanelPresentation(value: unknown): value is Contract.PanelPres
     (value['visualStyle'] === 'comfy' ||
       value['visualStyle'] === 'fluent' ||
       value['visualStyle'] === 'spectrum' ||
-      value['visualStyle'] === 'photopro') &&
+      value['visualStyle'] === 'photopro' ||
+      value['visualStyle'] === 'gimp') &&
     Object.hasOwn(value, 'photoProPalette') &&
     (value['photoProPalette'] === 'black' ||
       value['photoProPalette'] === 'dark-gray' ||

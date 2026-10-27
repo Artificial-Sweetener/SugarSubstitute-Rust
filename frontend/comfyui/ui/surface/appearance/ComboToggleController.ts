@@ -14,10 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Give ordinary and enhanced comboboxes one click-to-close policy. */
+import { readDocumentVisualStyle } from './VisualStyleBoundary.js';
 
 interface ComboToggleLease {
   users: number;
   onClick: (event: MouseEvent) => void;
+  onPointerDown: (event: PointerEvent) => void;
 }
 
 const leases = new WeakMap<Document, ComboToggleLease>();
@@ -26,9 +28,14 @@ const leases = new WeakMap<Document, ComboToggleLease>();
 export function acquireComboToggle(documentRef: Document): () => void {
   let lease = leases.get(documentRef);
   if (!lease) {
-    lease = { users: 0, onClick: (event) => closeOpenCombo(documentRef, event) };
+    lease = {
+      users: 0,
+      onClick: (event) => routeComboClick(documentRef, event),
+      onPointerDown: (event) => retainCaptionToggle(documentRef, event),
+    };
     leases.set(documentRef, lease);
     documentRef.addEventListener('click', lease.onClick, true);
+    documentRef.addEventListener('pointerdown', lease.onPointerDown, true);
   }
   lease.users += 1;
   let released = false;
@@ -37,13 +44,47 @@ export function acquireComboToggle(documentRef: Document): () => void {
     released = true;
     if (--lease.users !== 0) return;
     documentRef.removeEventListener('click', lease.onClick, true);
+    documentRef.removeEventListener('pointerdown', lease.onPointerDown, true);
     leases.delete(documentRef);
   };
 }
 
-/** Dismiss the active host or enhanced popup before its click handler reopens it. */
-function closeOpenCombo(documentRef: Document, event: MouseEvent): void {
+/** Resolve only enabled GTK captions and field padding, leaving existing interactive children alone. */
+function captionTrigger(document: Document, target: EventTarget | null): HTMLElement | null {
+  if (
+    readDocumentVisualStyle(document) !== 'gimp' ||
+    !(target instanceof Element) ||
+    target.closest('[data-sc-style-combo-frame],button,input,a,[role="button"]')
+  )
+    return null;
+  const trigger = target
+    .closest('[data-sc-style-combo-layout]')
+    ?.querySelector<HTMLElement>(
+      '[data-sc-style-combo-frame]:not([data-sc-model-native]) > [role="combobox"]',
+    );
+  return trigger && !trigger.matches(':disabled,[aria-disabled="true"]') ? trigger : null;
+}
+
+/** Keep a caption press inside its owning toggle before a popup's outside-press listener dismisses it. */
+function retainCaptionToggle(document: Document, event: PointerEvent): void {
+  const trigger = event.button === 0 ? captionTrigger(document, event.target) : null;
+  if (!trigger) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  trigger.focus({ preventScroll: true });
+}
+
+/** Activate a GIMP field's caption or dismiss its open popup through the existing native trigger. */
+function routeComboClick(documentRef: Document, event: MouseEvent): void {
   if (!(event.target instanceof Element)) return;
+  const trigger = captionTrigger(documentRef, event.target);
+  if (trigger) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    trigger.focus({ preventScroll: true });
+    trigger.click();
+    return;
+  }
   const inlineSearch = event.target.closest<HTMLInputElement>('[data-sc-inline-search]');
   const frame = event.target.closest<HTMLElement>(
     '[data-sc-style-combo-frame], [data-capture-wheel]',

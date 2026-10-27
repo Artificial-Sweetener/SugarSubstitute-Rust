@@ -13,7 +13,16 @@
       "minimumSize": { "width": 280, "height": 240 },
       "maximumSize": { "width": 8192, "height": 8192 },
       "preferredDockedSize": { "width": 420, "height": 700 },
-      "preferredFloatingSize": { "width": 520, "height": 800 }
+      "preferredFloatingSize": { "width": 520, "height": 800 },
+      "icons": [
+        {
+          "width": 23,
+          "height": 23,
+          "path": "icons/sugarcubes.png",
+          "scale": [1, 2],
+          "theme": ["all"]
+        }
+      ]
     }
   ],
   "requiredPermissions": {
@@ -22,5 +31,8 @@
       "domains": ["http://127.0.0.1:8188"],
       "enableMessageBridge": "localAndRemote"
     }
-  }
+  },
+  "icons": [
+    { "width": 23, "height": 23, "path": "icons/sugarcubes.png", "scale": [1, 2], "theme": ["all"] }
+  ]
 }

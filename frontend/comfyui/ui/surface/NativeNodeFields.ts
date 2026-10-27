@@ -24,6 +24,7 @@ import {
 import { registerNativePresentationWidget } from './NativePresentationWidgets.js';
 import { refreshNativeNodeCards } from './NativeNodeCardRefresh.js';
 import { NativeFieldActionMount } from './NativeFieldActionMount.js';
+import { NativeChoicePreparation } from './NativeChoicePreparation.js';
 export interface NativeNodeChoiceOption extends NativeChoiceRestriction {
   label: string;
 }
@@ -71,6 +72,7 @@ export class NativeNodeFields {
     label: string,
     change: (value: string) => void,
     key = label,
+    prepare?: () => Promise<boolean>,
   ): NativeNodeChoiceMount {
     const owner = this.#field(label, key, 'combo');
     const release = this.#retain(owner, (value) => {
@@ -78,6 +80,7 @@ export class NativeNodeFields {
     });
     const name = owner.widget.name;
     let constraints: NativeChoiceRestrictions | null = null,
+      preparation: NativeChoicePreparation | null = null,
       anchor: HTMLElement | null = null,
       disposed = false;
     return {
@@ -98,8 +101,10 @@ export class NativeNodeFields {
         const row = nativeNodeFieldRows(root).get(name) ?? null;
         if (anchor !== row) {
           constraints?.dispose();
+          preparation?.dispose();
           anchor = row;
           constraints = row ? new NativeChoiceRestrictions(row) : null;
+          preparation = row && prepare ? new NativeChoicePreparation(row, prepare) : null;
         }
         constraints?.update(
           choices.map((choice) => ({ value: choice.label, blockers: choice.blockers })),
@@ -109,6 +114,7 @@ export class NativeNodeFields {
         if (disposed) return;
         disposed = true;
         constraints?.dispose();
+        preparation?.dispose();
         release();
       },
     };

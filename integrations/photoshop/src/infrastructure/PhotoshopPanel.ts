@@ -16,6 +16,7 @@
 /** Own UXP lifecycle, trusted WebView transport, native status surfaces, and timer cleanup. */
 import { entrypoints } from 'uxp';
 import { core } from 'photoshop';
+import { reportPhotoshopError } from './PhotoshopDiagnostics.js';
 import { readPhotoshopPresentation, watchPhotoshopTheme } from './PhotoshopTheme.js';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { PanelController } from '../application/PanelController.js';
@@ -31,7 +32,6 @@ declare const window: {
 };
 declare const console: {
   info(message: string, context: unknown): void;
-  error(message: string, context: unknown): void;
 };
 declare function setInterval(tick: () => void, milliseconds: number): number;
 declare function clearInterval(timer: number): void;
@@ -108,10 +108,10 @@ export function registerPhotoshopPanel(): void {
         nativeWebView.postMessage(value, ORIGIN, undefined);
       },
       (error) => {
-        console.error('SugarCubes Photoshop canvas failed', { error });
+        reportPhotoshopError('SugarCubes Photoshop canvas failed', error);
       },
       new PhotoshopMaskSession((error) => {
-        console.error('SugarCubes Photoshop mask association failed', { error });
+        reportPhotoshopError('SugarCubes Photoshop mask association failed', error);
       }),
     );
     let expectedUrl = '';
@@ -128,7 +128,7 @@ export function registerPhotoshopPanel(): void {
           nativeWebView.postMessage(value, ORIGIN, undefined);
         },
         present: (state) => {
-          const feedback = panelFeedback(state);
+          const feedback = panelFeedback(state, ORIGIN);
           title.textContent = feedback.title;
           message.textContent = feedback.message;
           retry.setAttribute('style', `display:${feedback.retry ? 'block' : 'none'}`);
@@ -142,7 +142,7 @@ export function registerPhotoshopPanel(): void {
           };
         },
         report: (error) => {
-          console.error('SugarCubes Photoshop panel failed', { error });
+          reportPhotoshopError('SugarCubes Photoshop panel failed', error);
         },
       },
       readPhotoshopPresentation(),
@@ -190,13 +190,13 @@ export function registerPhotoshopPanel(): void {
         active.updatePresentation(value);
       },
       (error) => {
-        console.error('SugarCubes Photoshop theme failed', { error });
+        reportPhotoshopError('SugarCubes Photoshop theme failed', error);
       },
     );
     void core
       .suppressResizeGripper({ type: 'panel', target: 'sugarcubes', value: true })
       .catch((error: unknown) => {
-        console.error('SugarCubes could not hide the Photoshop panel resize gripper', { error });
+        reportPhotoshopError('SugarCubes could not hide the Photoshop panel resize gripper', error);
       });
     dispose = () => {
       stopTheme();

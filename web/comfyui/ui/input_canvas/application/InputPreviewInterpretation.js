@@ -1,5 +1,6 @@
 import { usesNativeMaskChannels } from '../domain/InputLoader.js';
 import { nativeMaskSource } from '../domain/MaskSourcePixels.js';
+import { imagePreviewRaster } from '../domain/ImagePreviewRaster.js';
 /** Apply mask semantics while image consumers retain actual source content and transparency. */
 export class InputPreviewInterpretation {
     loader;
@@ -43,7 +44,7 @@ export class InputPreviewInterpretation {
         if (this.loader.kind === 'image') {
             if (source.format !== 'rgba8')
                 throw new Error('The image source did not contain image pixels.');
-            return source;
+            return imagePreviewRaster(source, maximumSize);
         }
         const native = nativeMaskSource(source, this.loader, settings, false);
         if (native)

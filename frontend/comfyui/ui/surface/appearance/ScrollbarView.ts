@@ -14,15 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present accessible overlay handles that delegate every value change to native scrolling. */
-import {
-  scrollbarDragPosition,
-  scrollbarGeometry,
-  PHOTOPRO_SCROLLBAR_WIDTH,
-} from './ScrollbarGeometry.js';
+import { scrollbarDragPosition, scrollbarGeometry } from './ScrollbarGeometry.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 import type { ScrollbarGeometry } from './ScrollbarGeometry.js';
 import type { ScrollbarCoordinateSpace } from './ScrollbarLayers.js';
 import type { ScrollbarTrack } from './ScrollbarLayout.js';
+import { scrollbarPresentation } from './ScrollbarPresentation.js';
 
 export type ScrollbarAxis = 'vertical' | 'horizontal';
 
@@ -115,14 +112,20 @@ export class ScrollbarView {
       };
     }
     this.#rtl = track?.rtl ?? false;
-    const viewport = vertical ? this.#owner.clientHeight : this.#owner.clientWidth;
-    const content = vertical ? this.#owner.scrollHeight : this.#owner.scrollWidth;
+    const presentation = scrollbarPresentation(this.#owner.ownerDocument);
+    const crossOverflow = vertical
+      ? this.#owner.scrollWidth > this.#owner.clientWidth
+      : this.#owner.scrollHeight > this.#owner.clientHeight;
+    const corner = presentation.reserveCorner && crossOverflow ? presentation.width : 0;
+    const viewport = (vertical ? this.#owner.clientHeight : this.#owner.clientWidth) - corner;
+    const content = (vertical ? this.#owner.scrollHeight : this.#owner.scrollWidth) - corner;
     const position = this.#position();
-    const photoPro = this.#owner.ownerDocument.documentElement.dataset.scVisualStyle === 'photopro';
-    const arrowSpace = photoPro ? PHOTOPRO_SCROLLBAR_WIDTH * 2 : 0;
-    const edgeInset = photoPro ? 0 : 1;
-    const crossSize = photoPro ? PHOTOPRO_SCROLLBAR_WIDTH : 12;
-    const size = track ? (vertical ? track.height : track.width) - edgeInset * 2 - arrowSpace : 0;
+    const arrowSpace = presentation.arrows ? presentation.width * 2 : 0;
+    const edgeInset = presentation.preserveOwnerExtent ? 0 : 1;
+    const crossSize = presentation.width;
+    const size = track
+      ? (vertical ? track.height : track.width) - corner - edgeInset * 2 - arrowSpace
+      : 0;
     this.#geometry = scrollbarGeometry(size, viewport, content, position);
     const geometry = this.#geometry;
     if (!track || !geometry) {
@@ -146,14 +149,15 @@ export class ScrollbarView {
     const height = (vertical ? geometry.length : crossSize) / space.scaleY;
     const css = `left:${localLeft}px;top:${localTop}px;width:${width}px;height:${height}px;--sc-scrollbar-scale-x:${space.scaleX};--sc-scrollbar-scale-y:${space.scaleY}`;
     const trackCss = vertical
-      ? `left:0px;top:${(track.top - top) / space.scaleY}px;width:${crossSize / space.scaleX}px;height:${track.height / space.scaleY}px`
-      : `left:${(track.left - left) / space.scaleX}px;top:0px;width:${track.width / space.scaleX}px;height:${crossSize / space.scaleY}px`;
+      ? `left:0px;top:${(track.top - top) / space.scaleY}px;width:${crossSize / space.scaleX}px;height:${(track.height - corner) / space.scaleY}px`
+      : `left:${(track.left - left) / space.scaleX}px;top:0px;width:${(track.width - corner) / space.scaleX}px;height:${crossSize / space.scaleY}px`;
     return () => {
       this.element.hidden = false;
       if (this.element.getAttribute('style') !== css) this.element.setAttribute('style', css);
-      this.element.toggleAttribute('data-sc-photopro-scrollbar', photoPro);
-      this.#trackElement.hidden = !photoPro;
-      if (photoPro && this.#trackElement.getAttribute('style') !== trackCss)
+      if (this.element.getAttribute('data-sc-scrollbar-style') !== presentation.kind)
+        this.element.setAttribute('data-sc-scrollbar-style', presentation.kind);
+      this.#trackElement.hidden = !presentation.preserveOwnerExtent;
+      if (presentation.preserveOwnerExtent && this.#trackElement.getAttribute('style') !== trackCss)
         this.#trackElement.setAttribute('style', trackCss);
       this.element.setAttribute('aria-valuemax', String(Math.round(geometry.maximum)));
       this.element.setAttribute('aria-valuenow', String(Math.round(position)));

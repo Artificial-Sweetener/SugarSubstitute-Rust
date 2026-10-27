@@ -18,6 +18,7 @@ import { jest } from '@jest/globals';
 import type { CanvasSourceHost } from '../../../integrations/contracts/CanvasSources.js';
 import type {
   CanvasSourceChange,
+  CanvasInputSource,
   CanvasSourceQuery,
   CanvasSourceResult,
   CanvasPixelRaster,
@@ -28,6 +29,7 @@ import type { MaskEditingPort } from '../../../frontend/comfyui/ui/input_canvas/
 import { MaskInputPreparation } from '../../../frontend/comfyui/ui/input_canvas/application/MaskInputPreparation.js';
 import { ComfyMaskInputPreparation } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyMaskInputPreparation.js';
 import type { WorkflowPreparedInput } from '../../../frontend/comfyui/ui/execution/domain/WorkflowPreparation.js';
+import { nativeCanvasChanges } from '../../../integrations/shared/CanvasChangeRelay.js';
 import { CanvasSourceCapture } from '../../../frontend/comfyui/ui/input_canvas/application/CanvasSourceCapture.js';
 import { CanvasSourcePreviews } from '../../../frontend/comfyui/ui/input_canvas/application/CanvasSourcePreviews.js';
 import { InputSourcePreparation } from '../../../frontend/comfyui/ui/input_canvas/application/InputSourcePreparation.js';
@@ -56,12 +58,13 @@ export const sourceRgba = encodeCanvasRaster(
 );
 
 /** Keep capture and persistence real while replacing only external canvas and network boundaries. */
-export function sourceMaskFixture() {
+export function sourceMaskFixture(observesChanges = true) {
   const changes = new Set<(change: CanvasSourceChange) => void>();
   const execute = jest.fn(
     async (query: CanvasSourceQuery): Promise<CanvasSourceResult> =>
       query.type === 'context'
         ? {
+            observesChanges,
             kind: 'context',
             supported: true,
             document: sourceDocument,
@@ -92,12 +95,14 @@ export function sourceMaskFixture() {
   const host: CanvasSourceHost = {
     canvasId: 'editor',
     execute,
-    subscribe: (listener) => {
-      changes.add(listener);
-      return () => {
-        changes.delete(listener);
-      };
-    },
+    changes: observesChanges
+      ? nativeCanvasChanges((listener) => {
+          changes.add(listener);
+          return () => {
+            changes.delete(listener);
+          };
+        })
+      : null,
   };
   const stage = jest.fn(
     async (_pixels: CanvasPixelRaster) => `immutable-${String(stage.mock.calls.length)}.png`,
@@ -174,6 +179,7 @@ export function sourceMaskFixture() {
     ports: {
       host: () => host,
       editable: () => true,
+      refreshPreviews: (sources: readonly CanvasInputSource[]) => previews.refreshSources(sources),
       files,
       maskEditing,
       legacy,

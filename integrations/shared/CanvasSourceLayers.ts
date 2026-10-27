@@ -21,21 +21,8 @@ export function canvasLayersAboveTarget(
   layers: readonly CanvasSourceLayer[],
   targetId: string,
 ): readonly string[] {
-  const byId = new Map(layers.map((layer) => [layer.id, layer]));
-  if (byId.size !== layers.length)
-    throw new Error('The canvas layer catalog contains duplicate identities.');
-  const target = byId.get(targetId);
-  if (!target) throw new Error('The selected canvas layer is unavailable.');
-  const ancestors = new Set<string>();
-  let parentId = target.parentId;
-  while (parentId !== null) {
-    if (ancestors.has(parentId) || parentId === targetId)
-      throw new Error('The canvas layer hierarchy contains a cycle.');
-    const parent = byId.get(parentId);
-    if (!parent) throw new Error('The canvas layer hierarchy is incomplete.');
-    ancestors.add(parentId);
-    parentId = parent.parentId;
-  }
+  const byId = layerCatalog(layers);
+  const ancestors = layerAncestors(byId, targetId);
   const hidden = new Set<string>();
   const omitted = new Set<string>();
   for (const layer of layers) {
@@ -49,4 +36,48 @@ export function canvasLayersAboveTarget(
     omitted.add(layer.id);
   }
   return [...hidden];
+}
+
+/** Isolate one layer or group, enabling its ancestry while retaining native descendant visibility. */
+export function canvasLayerIsolation(
+  layers: readonly CanvasSourceLayer[],
+  targetId: string,
+): readonly { readonly id: string; readonly visible: boolean }[] {
+  const byId = layerCatalog(layers);
+  const path = layerAncestors(byId, targetId);
+  path.add(targetId);
+  return layers.map((layer) => ({
+    id: layer.id,
+    visible: path.has(layer.id) || (layer.visible && layerAncestors(byId, layer.id).has(targetId)),
+  }));
+}
+
+/** Refuse ambiguous native identities before applying any visibility operation. */
+function layerCatalog(
+  layers: readonly CanvasSourceLayer[],
+): ReadonlyMap<string, CanvasSourceLayer> {
+  const byId = new Map(layers.map((layer) => [layer.id, layer]));
+  if (byId.size !== layers.length)
+    throw new Error('The canvas layer catalog contains duplicate identities.');
+  return byId;
+}
+
+/** Give range and isolated captures the same validation of native hierarchy ownership. */
+function layerAncestors(
+  byId: ReadonlyMap<string, CanvasSourceLayer>,
+  targetId: string,
+): Set<string> {
+  const target = byId.get(targetId);
+  if (!target) throw new Error('The selected canvas layer is unavailable.');
+  const ancestors = new Set<string>();
+  let parentId = target.parentId;
+  while (parentId !== null) {
+    if (ancestors.has(parentId) || parentId === targetId)
+      throw new Error('The canvas layer hierarchy contains a cycle.');
+    const parent = byId.get(parentId);
+    if (!parent) throw new Error('The canvas layer hierarchy is incomplete.');
+    ancestors.add(parentId);
+    parentId = parent.parentId;
+  }
+  return ancestors;
 }

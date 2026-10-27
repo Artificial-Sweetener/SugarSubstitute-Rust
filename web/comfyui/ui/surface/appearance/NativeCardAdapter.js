@@ -240,8 +240,11 @@ function resolveFieldDescriptor(row, candidates, annotated, numericFields, label
                             : null;
             if (frame && control.contains(frame))
                 mark(frame, 'edit-frame', annotated);
-            if (name === 'WidgetSelect' && frame && control.contains(frame))
+            if (name === 'WidgetSelect' && frame && control.contains(frame)) {
                 mark(frame, 'combo-frame', annotated);
+                if (layout)
+                    mark(layout, 'combo-layout', annotated);
+            }
         }
         if (layout) {
             mark(layout, 'layout', annotated);

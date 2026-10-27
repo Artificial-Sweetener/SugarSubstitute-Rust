@@ -13,9 +13,29 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Retire a browser fixture and its private HTTP connections as one finite test lifetime. */
+/** Create and retire headless browser fixtures independently of desktop input and visibility. */
 import type { Server } from 'node:http';
-import type { Browser } from '@playwright/test';
+import type { Browser, LaunchOptions } from '@playwright/test';
+
+interface HeadlessBrowserEngine<Result> {
+  name(): string;
+  launch(options: LaunchOptions): Promise<Result>;
+}
+
+/** Keep display mode, desktop-key handling and hidden-window rendering under one fixture owner. */
+export async function launchHeadlessBrowser<Result>(
+  engine: HeadlessBrowserEngine<Result>,
+  options: Omit<LaunchOptions, 'headless' | 'env' | 'firefoxUserPrefs'> = {},
+): Promise<Result> {
+  return engine.launch({
+    ...options,
+    headless: true,
+    env: { ...process.env, MOZ_DISABLE_SAFE_MODE_KEY: '1' },
+    ...(engine.name() === 'firefox'
+      ? { firefoxUserPrefs: { 'widget.windows.window_occlusion_tracking.enabled': false } }
+      : {}),
+  });
+}
 
 /** Stop accepting fixture requests and release active or idle sockets after observations finish. */
 function closeFixtureServer(server: Server | undefined): Promise<void> {

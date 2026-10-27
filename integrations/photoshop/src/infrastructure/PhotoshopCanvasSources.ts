@@ -14,7 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own read-only Photoshop source targeting independently of image and mask consumers. */
-import { app, core } from 'photoshop';
+import { app } from 'photoshop';
+import { runPhotoshopModal } from './PhotoshopModalExecution.js';
 import type { CanvasSourceHost } from '../../../contracts/CanvasSources.js';
 import type {
   CanvasSourceChange,
@@ -34,6 +35,7 @@ import {
   type PhotoshopDocument,
 } from './PhotoshopCanvasIdentity.js';
 import { PhotoshopCommittedChanges } from './PhotoshopCommittedChanges.js';
+import { nativeCanvasChanges } from '../../../shared/CanvasChangeRelay.js';
 import { readSelectionPixels } from './PhotoshopSelectionPixels.js';
 import { photoshopSourcePixels } from './PhotoshopSourcePixels.js';
 import {
@@ -53,6 +55,9 @@ const targets: readonly CanvasSourceTarget['kind'][] = [
 /** Serialize coherent document reads and observe committed changes only while consumers subscribe. */
 export class PhotoshopCanvasSources implements CanvasSourceHost {
   readonly canvasId = 'photoshop';
+  readonly changes = nativeCanvasChanges<CanvasSourceChange>((listener) =>
+    this.#subscribe(listener),
+  );
   readonly #listeners = new Set<(change: CanvasSourceChange) => void>();
   readonly #changes: PhotoshopCommittedChanges;
   #tail: Promise<unknown> = Promise.resolve();
@@ -111,8 +116,8 @@ export class PhotoshopCanvasSources implements CanvasSourceHost {
     return pending;
   }
   /** Share one metadata observer across every consumer of this native canvas. */
-  subscribe(listener: (change: CanvasSourceChange) => void): () => void {
-    if (this.#disposed) return () => {};
+  #subscribe(listener: (change: CanvasSourceChange) => void): (() => void) | null {
+    if (this.#disposed) return null;
     this.#listeners.add(listener);
     this.#changes.start();
     return () => {
@@ -133,91 +138,83 @@ export class PhotoshopCanvasSources implements CanvasSourceHost {
       status: 'unavailable',
       message: 'Open a Photoshop document to capture a canvas source.',
     };
-    await core.executeAsModal(
-      async (execution) => {
-        if (this.#disposed) return;
-        const document = app.activeDocument;
-        if (query.type === 'context') {
-          const catalog = document
-            ? photoshopSourceLayers(document)
-            : { values: [], handles: new Map() };
-          result = {
-            kind: 'context',
-            supported: true,
-            document: document ? canvasDocumentIdentity(document) : null,
-            revision: this.#revision(),
-            targets,
-            layers: catalog.values,
-            currentLayerId: document ? await photoshopCurrentLayer(document) : null,
-          };
-          return;
+    await runPhotoshopModal('Read canvas sources', async (execution) => {
+      if (this.#disposed) return;
+      const document = app.activeDocument;
+      if (query.type === 'context') {
+        const catalog = document
+          ? photoshopSourceLayers(document)
+          : { values: [], handles: new Map() };
+        result = {
+          kind: 'context',
+          supported: true,
+          observesChanges: true,
+          document: document ? canvasDocumentIdentity(document) : null,
+          revision: this.#revision(),
+          targets,
+          layers: catalog.values,
+          currentLayerId: document ? await photoshopCurrentLayer(document) : null,
+        };
+        return;
+      }
+      if (
+        !document ||
+        findCanvasDocument(query.document.id)?.id !== document.id ||
+        canvasDocumentIdentity(document).geometryRevision !== query.document.geometryRevision
+      )
+        throw new Error('The Photoshop document changed before source capture.');
+      if (document.quickMaskMode || document.artboards.length) {
+        result = {
+          kind: 'failure',
+          status: 'unsupported',
+          message: 'Finish Quick Mask editing or use a Photoshop document without artboards.',
+        };
+        return;
+      }
+      const revision = this.#revision(),
+        primary = await photoshopCurrentLayer(document),
+        catalog = photoshopSourceLayers(document);
+      const scale = query.maximumSize
+        ? Math.min(1, query.maximumSize / Math.max(document.width, document.height))
+        : 1;
+      const width = Math.max(1, Math.round(document.width * scale)),
+        height = Math.max(1, Math.round(document.height * scale));
+      const budget = query.targets.reduce(
+        (sum, target) =>
+          sum +
+          canvasRasterByteLength(
+            width,
+            height,
+            target.kind === 'selection' ? 'coverage8' : 'rgba8',
+          ),
+        0,
+      );
+      if (budget > MAX_CANVAS_RASTER_BYTES)
+        throw new Error('The canvas source collection exceeds its transfer budget.');
+      const history = await execution.hostControl.suspendHistory({
+        documentID: document.id,
+        name: 'Read canvas sources',
+      });
+      try {
+        const snapshots: CanvasSourceSnapshot[] = [];
+        let transferred = 0;
+        for (const target of query.targets) {
+          const pixels = await this.#capture(document, target, query.maximumSize, primary, catalog);
+          transferred += canvasRasterByteLength(pixels.width, pixels.height, pixels.format);
+          if (transferred > MAX_CANVAS_RASTER_BYTES)
+            throw new Error('The canvas source collection exceeds its transfer budget.');
+          snapshots.push({
+            target,
+            document: canvasDocumentIdentity(document),
+            revision,
+            pixels,
+          });
         }
-        if (
-          !document ||
-          findCanvasDocument(query.document.id)?.id !== document.id ||
-          canvasDocumentIdentity(document).geometryRevision !== query.document.geometryRevision
-        )
-          throw new Error('The Photoshop document changed before source capture.');
-        if (document.quickMaskMode || document.artboards.length) {
-          result = {
-            kind: 'failure',
-            status: 'unsupported',
-            message: 'Finish Quick Mask editing or use a Photoshop document without artboards.',
-          };
-          return;
-        }
-        const revision = this.#revision(),
-          primary = await photoshopCurrentLayer(document),
-          catalog = photoshopSourceLayers(document);
-        const scale = query.maximumSize
-          ? Math.min(1, query.maximumSize / Math.max(document.width, document.height))
-          : 1;
-        const width = Math.max(1, Math.round(document.width * scale)),
-          height = Math.max(1, Math.round(document.height * scale));
-        const budget = query.targets.reduce(
-          (sum, target) =>
-            sum +
-            canvasRasterByteLength(
-              width,
-              height,
-              target.kind === 'selection' ? 'coverage8' : 'rgba8',
-            ),
-          0,
-        );
-        if (budget > MAX_CANVAS_RASTER_BYTES)
-          throw new Error('The canvas source collection exceeds its transfer budget.');
-        const history = await execution.hostControl.suspendHistory({
-          documentID: document.id,
-          name: 'Read canvas sources',
-        });
-        try {
-          const snapshots: CanvasSourceSnapshot[] = [];
-          let transferred = 0;
-          for (const target of query.targets) {
-            const pixels = await this.#capture(
-              document,
-              target,
-              query.maximumSize,
-              primary,
-              catalog,
-            );
-            transferred += canvasRasterByteLength(pixels.width, pixels.height, pixels.format);
-            if (transferred > MAX_CANVAS_RASTER_BYTES)
-              throw new Error('The canvas source collection exceeds its transfer budget.');
-            snapshots.push({
-              target,
-              document: canvasDocumentIdentity(document),
-              revision,
-              pixels,
-            });
-          }
-          result = { kind: 'captured', snapshots };
-        } finally {
-          await execution.hostControl.resumeHistory(history, false);
-        }
-      },
-      { commandName: 'Read canvas sources', timeOut: 1 },
-    );
+        result = { kind: 'captured', snapshots };
+      } finally {
+        await execution.hostControl.resumeHistory(history, false);
+      }
+    });
     return result;
   }
   /** Translate portable target semantics only at Photoshop's native pixel boundary. */
