@@ -3,6 +3,8 @@
 //! Bind the Windows child owner to the shared startup controller.
 use super::*;
 use crate::startup::{BackendResult, PreparedStartup, StartupBackend};
+#[cfg(feature = "native-composition")]
+use sugarsubstitute_application::startup::ConnectionBudgetKind;
 impl StartupBackend for ProductionChild {
     type Prepared = PreparedChildStartup;
     fn start(
@@ -35,6 +37,35 @@ impl StartupBackend for ProductionChild {
         prepared: Option<&Self::Prepared>,
     ) -> BackendResult<()> {
         ProductionChild::observe(self, observation, prepared)
+    }
+    #[cfg(feature = "native-composition")]
+    fn admits_canvas(&self, identity: MainIdentity, lease: &MemoryLease) -> bool {
+        !self.shutdown.closing()
+            && self.identity == identity
+            && self.panel.as_ref().is_some_and(|panel| panel.admits_canvas(identity, lease))
+    }
+    #[cfg(feature = "native-composition")]
+    fn canvas_backend(&self, identity: MainIdentity) -> Option<crate::startup::CanvasBackend> {
+        let backend = self.canvas_backend?;
+        if self.shutdown.closing()
+            || self.attempt.is_some()
+            || self.identity != identity
+            || backend.identity != identity
+            || self.phase != Some(sugarsubstitute_application::startup::StartupPhase::Running)
+            || self.lease != Some(backend.lease)
+        {
+            return None;
+        }
+        let current = match self.connection_budget?.kind() {
+            ConnectionBudgetKind::Attached => self.running_backend.is_none(),
+            ConnectionBudgetKind::Managed => {
+                self.running_backend
+                    .as_ref()
+                    .and_then(|running| running.reload_lease(identity).ok())
+                    == Some(backend.lease)
+            }
+        };
+        current.then_some(backend)
     }
     fn main_construction_pending(&self) -> bool {
         ProductionChild::main_construction_pending(self)
@@ -124,3 +155,7 @@ impl PreparedStartup for PreparedChildStartup {
         self.release_source();
     }
 }
+
+#[cfg(all(test, feature = "native-composition"))]
+#[path = "startup_adapter/tests.rs"]
+mod tests;

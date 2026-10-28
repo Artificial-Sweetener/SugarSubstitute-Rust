@@ -291,6 +291,12 @@ pub enum DesktopStartupCommand {
     RetireSplash(LaunchId),
     /// Reveal an already usable main host after actual splash retirement.
     RevealMain(MainIdentity),
+    /// Deliver a bounded host-direction panel message to the current top document.
+    SendPanel(crate::PanelCommand),
+    /// Deliver a correlated canvas context reply to the current top document.
+    SendCanvasContext(crate::CanvasContextReply),
+    /// Deliver a correlated canvas reply to the same current top document.
+    SendSurface(crate::SurfaceReply),
     /// Capture one current revealed renderer for an explicitly admitted native qualification.
     /// The inert cutoff grants no authentication or file authority and is never renewed.
     #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
@@ -393,6 +399,12 @@ pub enum DesktopStartupObservation {
     SplashRetired(LaunchId),
     /// Main cover retirement and native show/control/focus operations succeeded.
     MainRevealed(MainIdentity),
+    /// A bounded panel message from the current native top-document context.
+    PanelMessage(crate::PanelObservation),
+    /// A bounded canvas message from the current native top-document context.
+    SurfaceMessage(crate::SurfaceObservation),
+    /// A bounded canvas context request from the current native top-document context.
+    CanvasContextMessage(crate::CanvasContextObservation),
     /// A native callback requested replacement of the exact already revealed document.
     MainReloadRequested {
         /// Full current run, launch and navigation; stale callbacks cannot select another Main.
@@ -453,6 +465,62 @@ pub enum StartupPreparationStep {
 /// StartupSession; they do not construct another startup policy. Calls must be
 /// bounded/nonblocking. Native error observations never claim work stopped.
 pub trait StartupWindowContent: WindowContent {
+    /// Retain the exact main before its composition lifetime begins.
+    /// A false result defers native composition construction while an earlier lifetime settles.
+    ///
+    /// # Errors
+    /// Rejects foreign or overlapping native main lifetimes.
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn main_composition_started(
+        &mut self,
+        _identity: MainIdentity,
+    ) -> Result<bool, Box<dyn Error>> {
+        Ok(true)
+    }
+
+    /// Transfer one compositor wait only when application-owned admission can retain it.
+    /// A false result leaves the original input in the desktop owner.
+    ///
+    /// # Errors
+    /// Preserves invalid identity, deadline and execution admission failures.
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn main_composition_wait(
+        &mut self,
+        _identity: MainIdentity,
+        _input: &mut Option<crate::canvas::CompositionWait>,
+    ) -> Result<bool, Box<dyn Error>> {
+        Ok(false)
+    }
+
+    /// Select upload, qualified retention, or withdrawal without granting window authority.
+    /// Retention names the acknowledged frame and cannot acknowledge a pending replacement.
+    #[cfg(feature = "native-composition")]
+    fn main_canvas_presentation(&self) -> crate::canvas::MainCanvasPresentation<'_> {
+        crate::canvas::MainCanvasPresentation::Hide
+    }
+
+    /// Acknowledge a matching frame only after native upload and composition commit succeed.
+    ///
+    /// # Errors
+    /// Rejects duplicate, stale or foreign frame acknowledgements.
+    #[cfg(feature = "native-composition")]
+    fn main_canvas_presented(
+        &mut self,
+        _target: sugarsubstitute_canvas::FrameStamp,
+    ) -> Result<(), Box<dyn Error>> {
+        Err("Main canvas acknowledgement has no owner".into())
+    }
+
+    /// Observe that the compositor processed the exact main window's canvas hide.
+    /// This does not establish physical scanout.
+    ///
+    /// # Errors
+    /// Preserves invalid current attachment or reply-admission failures.
+    #[cfg(feature = "native-composition")]
+    fn main_canvas_hidden(&mut self, _identity: MainIdentity) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
     /// Route at most `min(maximum, 32)` shared completion notices before native UI admission.
     ///
     /// Called after the single start attempt on the creating main thread, before Tao, STA entry,

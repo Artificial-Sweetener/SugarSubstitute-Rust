@@ -31,15 +31,20 @@ mod headless;
 mod host_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_backend;
+mod main_canvas_context;
 #[cfg(any(target_os = "windows", test))]
 mod main_downloads;
 mod main_environment;
 mod main_navigation;
+mod main_panel_contract;
+#[cfg(any(target_os = "windows", test))]
+mod main_panel_ingress;
 mod main_readiness;
 mod main_readiness_storage;
 mod main_readiness_types;
 #[cfg(any(target_os = "windows", test))]
 mod main_reload;
+mod main_surface_contract;
 /// Bounded observational development trace records; feature-off builds expose none.
 #[cfg(feature = "k1-native-qualification")]
 pub mod qualification_trace;
@@ -157,7 +162,12 @@ pub use host_contract::{
     StartupPreparationStep, StartupWindowContent,
 };
 
+pub use main_canvas_context::{
+    CanvasContextObservation, CanvasContextReply, CanvasContextReplyError,
+};
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};
+pub use main_panel_contract::{PanelCommand, PanelObservation};
+pub use main_surface_contract::{SurfaceObservation, SurfaceReply, SurfaceReplyError};
 
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]

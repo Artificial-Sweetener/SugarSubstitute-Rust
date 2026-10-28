@@ -4,6 +4,7 @@
 
 pub mod incident;
 pub mod instance_conflict;
+pub mod panel;
 pub mod presentation;
 pub mod readiness;
 pub mod recovery_supervisor;

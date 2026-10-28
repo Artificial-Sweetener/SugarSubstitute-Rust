@@ -97,6 +97,11 @@ fn every_actual_stage_and_first_cause_has_closed_end_to_end_relay() -> Result {
         Progress::PreviewDispatched,
         Progress::DownloadsPrepared,
         Progress::DownloadsCompleted,
+        Progress::CanvasContextObserved,
+        Progress::CanvasContextRejected,
+        Progress::CanvasContextWaitingSession,
+        Progress::CanvasContextWaitingBackend,
+        Progress::CanvasContextReplyQueued,
     ];
     let bytes = formatted(|| {
         for stage in stages {

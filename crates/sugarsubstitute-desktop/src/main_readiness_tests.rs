@@ -93,6 +93,23 @@ fn renderer_snapshot_requires_actual_positive_barrier_and_retains_native_documen
 }
 
 #[test]
+fn panel_attribution_requires_positive_current_top_document_and_closes_on_context_loss() -> Result {
+    let mut owner = owner()?;
+    assert_eq!(owner.panel_context(), None);
+    let target = loaded(&mut owner)?;
+    owner.frame("child", "child-loader", Some("root"), "http://127.0.0.1:8188/child")?;
+    owner.context(8, "child", "http://127.0.0.1:8188", true)?;
+    assert_eq!(owner.panel_context(), None);
+    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    assert_eq!(owner.panel_context(), None);
+    owner.barrier_complete(target)?;
+    assert_eq!(owner.panel_context(), Some(7));
+    assert_eq!(owner.context_destroyed(7), Err(ReadinessFault::ContextLost));
+    assert_eq!(owner.panel_context(), None);
+    Ok(())
+}
+
+#[test]
 fn renderer_snapshot_does_not_survive_actual_current_document_health_failure() -> Result {
     let mut owner = owner()?;
     let target = loaded(&mut owner)?;

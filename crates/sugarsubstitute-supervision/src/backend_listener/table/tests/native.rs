@@ -45,6 +45,7 @@ fn actual_sdk_workspace_is_funded_once_retained_after_job_and_freed_before_final
             replacement: None,
         },
         |context| -> Result<_, RegistryError> {
+            assert!(TcpOwnerWorkspace::for_output(&context).is_err());
             let body = context
                 .memory()
                 .claim(8 * 1024 * 1024)

@@ -5,6 +5,7 @@
 pub(crate) mod construction;
 mod construction_admission;
 mod construction_adoption;
+mod construction_composition;
 mod construction_effects;
 mod construction_environment;
 mod construction_initialize;
@@ -380,34 +381,12 @@ impl InnerWebView {
       Legacy,
     }
     construction_admission::submit(
-      || unsafe {
+      || {
         if let Some(env10) =
           construction_admission::optional(env.cast::<ICoreWebView2Environment10>())?
         {
-          let controller_opts = env10.CreateCoreWebView2ControllerOptions()?;
-
-          if let Some((r, g, b, mut a)) = background_color {
-            if let Some(opts3) = construction_admission::optional(
-              controller_opts.cast::<ICoreWebView2ControllerOptions3>(),
-            )? {
-              if a != 0 {
-                a = 255;
-              }
-              opts3.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR {
-                R: r,
-                G: g,
-                B: b,
-                A: a,
-              })?;
-            }
-          }
-
-          controller_opts.SetIsInPrivateModeEnabled(incognito)?;
-
-          if let Some(name) = profile_name {
-            controller_opts.SetProfileName(&HSTRING::from(name))?;
-          }
-
+          let controller_opts =
+            Self::controller_options(&env10, incognito, background_color, profile_name)?;
           Ok(Prepared::Modern(env10, controller_opts))
         } else {
           Ok(Prepared::Legacy)
@@ -424,6 +403,39 @@ impl InnerWebView {
         Ok(())
       },
     )
+  }
+
+  /// Prepare the same profile and initial background for either native controller kind.
+  fn controller_options(
+    env: &ICoreWebView2Environment10,
+    incognito: bool,
+    background_color: Option<(u8, u8, u8, u8)>,
+    profile_name: Option<&str>,
+  ) -> Result<ICoreWebView2ControllerOptions> {
+    // SAFETY: The environment and every returned interface remain on the creating UI STA.
+    unsafe {
+      let options = env.CreateCoreWebView2ControllerOptions()?;
+      if let Some((r, g, b, mut a)) = background_color {
+        if let Some(opts3) =
+          construction_admission::optional(options.cast::<ICoreWebView2ControllerOptions3>())?
+        {
+          if a != 0 {
+            a = 255;
+          }
+          opts3.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR {
+            R: r,
+            G: g,
+            B: b,
+            A: a,
+          })?;
+        }
+      }
+      options.SetIsInPrivateModeEnabled(incognito)?;
+      if let Some(name) = profile_name {
+        options.SetProfileName(&HSTRING::from(name))?;
+      }
+      Ok(options)
+    }
   }
 
   #[allow(clippy::too_many_arguments)]

@@ -3,6 +3,8 @@
 //! Original image identity and derived generations stay separate under real native cache custody.
 use super::*;
 use std::io::Read;
+mod encoded;
+mod source;
 use sugarsubstitute_supervision::cache::{CachePolicy, Namespace, RuntimeCache, storage_key};
 
 fn encoded(data: &[u8]) -> Result<Vec<u8>, ImportError> {

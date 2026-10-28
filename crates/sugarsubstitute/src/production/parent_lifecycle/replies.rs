@@ -5,9 +5,21 @@ use super::types::WritePurpose;
 use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};
 use sugarsubstitute_contracts::lifecycle::LeaseKey;
 use sugarsubstitute_supervision::lifecycle_protocol::{
-    GrantedContext, LeaseReference, OutputDelivery, ReplyOutcome, VersionLabel, WireHeader,
-    WirePayload,
+    BackendPeer, GrantedContext, LeaseReference, OutputDelivery, ReplyOutcome, VersionLabel,
+    WireHeader, WirePayload,
 };
+
+/// Copy matching facts only from the parent's current verified readiness owner.
+fn peer(
+    readiness: &sugarsubstitute_comfy::readiness_transport::VerifiedReadiness,
+) -> Result<BackendPeer> {
+    Ok(BackendPeer {
+        process_id: std::num::NonZeroU32::new(readiness.process_id())
+            .ok_or(ParentError::WrongPhase)?,
+        creation_time_100ns: std::num::NonZeroU64::new(readiness.creation_time_100ns())
+            .ok_or(ParentError::WrongPhase)?,
+    })
+}
 
 pub(super) fn reference(lease: LeaseKey) -> LeaseReference {
     LeaseReference {
@@ -148,6 +160,7 @@ impl ParentLifecycle {
                         .ok_or(ParentError::WrongPhase)?,
                     frontend: VersionLabel::new(source.frontend_version())?,
                     sugarcubes: VersionLabel::new(source.cube_version())?,
+                    backend_peer: peer(readiness)?,
                 })
             }
             Reply::Released => ReplyOutcome::Released,
@@ -164,6 +177,7 @@ impl ParentLifecycle {
                         .ok_or(ParentError::WrongPhase)?,
                     frontend: VersionLabel::new(source.frontend_version())?,
                     sugarcubes: VersionLabel::new(source.cube_version())?,
+                    backend_peer: peer(proof)?,
                 })
             }
             Reply::Cancelled => ReplyOutcome::Cancelled,

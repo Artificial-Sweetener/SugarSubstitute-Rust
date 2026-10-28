@@ -1,0 +1,1470 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/v3",
+  "title": "SugarCubes canvas protocol version 3",
+  "$defs": {
+    "CanvasSurfaceAddress": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "maxLength": 256,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^canvas:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+        },
+        "viewId": {
+          "type": "string",
+          "maxLength": 128,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^view:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+        },
+        "windowId": {
+          "type": "string",
+          "maxLength": 128,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^window:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+        },
+        "attachmentId": {
+          "type": "string",
+          "maxLength": 128,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^attachment:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+        },
+        "generation": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      },
+      "required": ["sessionId", "viewId", "windowId", "attachmentId", "generation"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceFileReference": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "maxLength": 4096,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$"
+        },
+        "subfolder": {
+          "type": "string",
+          "maxLength": 4096,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$"
+        },
+        "type": { "enum": ["input", "output", "temp"] }
+      },
+      "required": ["filename", "subfolder", "type"],
+      "additionalProperties": false
+    },
+    "CanvasSurfacePoint": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+      },
+      "required": ["x", "y"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceSize": {
+      "type": "object",
+      "properties": {
+        "width": { "type": "number", "minimum": 0, "maximum": 1000000 },
+        "height": { "type": "number", "minimum": 0, "maximum": 1000000 }
+      },
+      "required": ["width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceClip": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "width": { "type": "number", "minimum": 0, "maximum": 1000000 },
+        "height": { "type": "number", "minimum": 0, "maximum": 1000000 }
+      },
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceGeometry": {
+      "type": "object",
+      "properties": {
+        "coordinateSpace": { "const": "client" },
+        "units": { "const": "css-pixels" },
+        "origin": { "$ref": "#/$defs/CanvasSurfacePoint" },
+        "viewport": { "$ref": "#/$defs/CanvasSurfaceSize" },
+        "clip": { "$ref": "#/$defs/CanvasSurfaceClip" },
+        "physicalPixelsPerCssPixel": { "type": "number", "exclusiveMinimum": 0, "maximum": 64 },
+        "visible": { "type": "boolean" },
+        "focused": { "type": "boolean" }
+      },
+      "required": [
+        "coordinateSpace",
+        "units",
+        "origin",
+        "viewport",
+        "clip",
+        "physicalPixelsPerCssPixel",
+        "visible",
+        "focused"
+      ],
+      "additionalProperties": false
+    },
+    "CanvasSurfacePrepareRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.prepare" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "address", "revision"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceGeometryRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.geometry" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "geometry": { "$ref": "#/$defs/CanvasSurfaceGeometry" }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "requestId",
+        "type",
+        "address",
+        "revision",
+        "geometry"
+      ],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceSelectRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.select" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "itemId": {
+          "type": "string",
+          "maxLength": 4096,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+        },
+        "file": { "$ref": "#/$defs/CanvasSurfaceFileReference" }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "requestId",
+        "type",
+        "address",
+        "revision",
+        "itemId",
+        "file"
+      ],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceCommitRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.commit" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "address", "revision"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceReleaseRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.release" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "address", "revision"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceCancelRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "cancel" }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceReply": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.reply" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "status": { "enum": ["ready", "applied", "stale", "cancelled", "unavailable", "error"] },
+        "message": {
+          "type": "string",
+          "maxLength": 512,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$"
+        }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "requestId",
+        "type",
+        "address",
+        "revision",
+        "status",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "CanvasCapabilities": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "displayOutput": {
+              "type": "boolean"
+            },
+            "insertImageLayer": {
+              "type": "boolean"
+            },
+            "positionImageLayer": {
+              "type": "boolean"
+            }
+          },
+          "required": ["displayOutput", "insertImageLayer", "positionImageLayer"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "displayOutput": {
+              "type": "boolean"
+            },
+            "insertImageLayer": {
+              "type": "boolean"
+            },
+            "positionImageLayer": {
+              "type": "boolean"
+            },
+            "geometry": {
+              "type": "boolean"
+            }
+          },
+          "required": ["displayOutput", "insertImageLayer", "positionImageLayer", "geometry"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "capabilities": {
+          "$ref": "#/$defs/CanvasCapabilities"
+        }
+      },
+      "required": ["id", "label", "capabilities"],
+      "additionalProperties": false
+    },
+    "CanvasDocument": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "geometryRevision": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": ["id", "geometryRevision", "width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasFailure": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": ["unavailable", "unsupported", "stale", "cancelled", "error"]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "required": ["status", "message"],
+      "additionalProperties": false
+    },
+    "CanvasInsertedLayer": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "const": "inserted"
+        },
+        "documentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "layerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "left": {
+          "type": "integer",
+          "minimum": -300000,
+          "maximum": 300000
+        },
+        "top": {
+          "type": "integer",
+          "minimum": -300000,
+          "maximum": 300000
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": ["status", "documentId", "layerId", "left", "top", "width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasInsertResult": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CanvasInsertedLayer"
+        },
+        {
+          "$ref": "#/$defs/CanvasFailure"
+        }
+      ]
+    },
+    "CanvasContext": {
+      "type": "object",
+      "properties": {
+        "canvas": {
+          "$ref": "#/$defs/CanvasDescriptor"
+        },
+        "document": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CanvasDocument"
+            },
+            {
+              "const": null
+            }
+          ]
+        }
+      },
+      "required": ["canvas", "document"],
+      "additionalProperties": false
+    },
+    "CanvasInsertImage": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/CanvasDocument"
+        },
+        "image": {
+          "$ref": "#/$defs/CanvasEncodedImage"
+        },
+        "layerName": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "position": {
+          "oneOf": [
+            {
+              "const": null
+            },
+            {
+              "$ref": "#/$defs/CanvasImagePosition"
+            }
+          ]
+        }
+      },
+      "required": ["document", "image", "layerName", "position"],
+      "additionalProperties": false
+    },
+    "CanvasReadRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "context.request"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type"],
+      "additionalProperties": false
+    },
+    "CanvasReadReply": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "context.reply"
+        },
+        "context": {
+          "$ref": "#/$defs/CanvasContext"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "context"],
+      "additionalProperties": false
+    },
+    "CanvasInsertRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "image.insert"
+        },
+        "image": {
+          "$ref": "#/$defs/CanvasInsertImage"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "image"],
+      "additionalProperties": false
+    },
+    "CanvasInsertReply": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "image.reply"
+        },
+        "result": {
+          "$ref": "#/$defs/CanvasInsertResult"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "result"],
+      "additionalProperties": false
+    },
+    "CanvasCancelRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "cancel"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type"],
+      "additionalProperties": false
+    },
+    "CanvasErrorReply": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "error.reply"
+        },
+        "failure": {
+          "$ref": "#/$defs/CanvasFailure"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "failure"],
+      "additionalProperties": false
+    },
+    "CanvasEncodedImage": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "const": "png"
+        },
+        "encoding": {
+          "const": "base64"
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 89478488
+        }
+      },
+      "required": ["format", "encoding", "data"],
+      "additionalProperties": false
+    },
+    "CanvasSourceTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "selection"
+            }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "current-layer"
+            }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "layer"
+            },
+            "layerId": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          "required": ["kind", "layerId"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "composition"
+            }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "composition-from-layer"
+            },
+            "layerId": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          "required": ["kind", "layerId"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasInputTarget": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CanvasSourceTarget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "file"
+            },
+            "file": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                {
+                  "const": null
+                }
+              ]
+            }
+          },
+          "required": ["kind", "file"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasPixelRaster": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "format": {
+          "enum": ["rgba8", "coverage8"]
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 89478488
+        }
+      },
+      "required": ["width", "height", "format", "data"],
+      "additionalProperties": false
+    },
+    "CanvasSourceLayer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "parentId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": ["id", "name", "parentId", "depth", "visible"],
+      "additionalProperties": false
+    },
+    "CanvasSourceContext": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "context"
+        },
+        "supported": {
+          "type": "boolean"
+        },
+        "document": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CanvasDocument"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "revision": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "enum": ["selection", "current-layer", "layer", "composition", "composition-from-layer"]
+          },
+          "maxItems": 5
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CanvasSourceLayer"
+          },
+          "maxItems": 4096
+        },
+        "currentLayerId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "observesChanges": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "supported",
+        "document",
+        "revision",
+        "targets",
+        "layers",
+        "currentLayerId",
+        "observesChanges"
+      ],
+      "additionalProperties": false
+    },
+    "CanvasSourceSnapshot": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/CanvasSourceTarget"
+        },
+        "document": {
+          "$ref": "#/$defs/CanvasDocument"
+        },
+        "revision": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "pixels": {
+          "$ref": "#/$defs/CanvasPixelRaster"
+        }
+      },
+      "required": ["target", "document", "revision", "pixels"],
+      "additionalProperties": false
+    },
+    "CanvasSourceCommand": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CanvasSourceQuery"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "watch"
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": ["type", "enabled"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasSourceResult": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CanvasSourceContext"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "captured"
+            },
+            "snapshots": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanvasSourceSnapshot"
+              },
+              "maxItems": 64
+            }
+          },
+          "required": ["kind", "snapshots"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "watching"
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": ["kind", "supported"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "failure"
+            },
+            "status": {
+              "enum": ["unavailable", "unsupported", "stale", "cancelled", "error"]
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          "required": ["kind", "status", "message"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasSourceRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "source.request"
+        },
+        "command": {
+          "$ref": "#/$defs/CanvasSourceCommand"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "command"],
+      "additionalProperties": false
+    },
+    "CanvasSourceReply": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "source.reply"
+        },
+        "result": {
+          "$ref": "#/$defs/CanvasSourceResult"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "result"],
+      "additionalProperties": false
+    },
+    "CanvasSourceChanged": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "const": 0
+        },
+        "type": {
+          "const": "source.changed"
+        },
+        "change": {
+          "$ref": "#/$defs/CanvasSourceChange"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "change"],
+      "additionalProperties": false
+    },
+    "CanvasSourceChange": {
+      "type": "object",
+      "properties": {
+        "documentId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "revision": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "required": ["documentId", "revision"],
+      "additionalProperties": false
+    },
+    "CanvasSourceQuery": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "context"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "capture"
+            },
+            "document": {
+              "$ref": "#/$defs/CanvasDocument"
+            },
+            "targets": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanvasSourceTarget"
+              },
+              "maxItems": 64
+            },
+            "maximumSize": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1024
+            }
+          },
+          "required": ["type", "document", "targets", "maximumSize"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasInputSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "file"
+            },
+            "file": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                {
+                  "const": null
+                }
+              ]
+            }
+          },
+          "required": ["kind", "file"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "canvas"
+            },
+            "canvasId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "documentId": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                {
+                  "const": null
+                }
+              ]
+            },
+            "target": {
+              "$ref": "#/$defs/CanvasSourceTarget"
+            }
+          },
+          "required": ["kind", "canvasId", "documentId", "target"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasImagePosition": {
+      "type": "object",
+      "properties": {
+        "left": {
+          "type": "integer",
+          "minimum": -300000,
+          "maximum": 300000
+        },
+        "top": {
+          "type": "integer",
+          "minimum": -300000,
+          "maximum": 300000
+        }
+      },
+      "required": ["left", "top"],
+      "additionalProperties": false
+    },
+    "CanvasDimensions": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": ["width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasDimensionFieldValues": {
+      "type": "object",
+      "description": "Carry current dimension field values, including zero-valued automatic settings.",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300000
+        }
+      },
+      "required": ["width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasSelectionBounds": {
+      "type": "object",
+      "properties": {
+        "left": {
+          "type": "integer",
+          "minimum": -300000,
+          "maximum": 300000
+        },
+        "top": {
+          "type": "integer",
+          "minimum": -300000,
+          "maximum": 300000
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": ["left", "top", "width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasDimensionLimits": {
+      "type": "object",
+      "properties": {
+        "minimum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "multiple": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": ["minimum", "maximum", "multiple"],
+      "additionalProperties": false
+    },
+    "CanvasScaleOutput": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "required": ["id", "label"],
+      "additionalProperties": false
+    },
+    "CanvasGeometryCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "context"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "resize"
+            },
+            "document": {
+              "$ref": "#/$defs/CanvasDocument"
+            },
+            "size": {
+              "$ref": "#/$defs/CanvasDimensions"
+            }
+          },
+          "required": ["type", "document", "size"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasGeometryResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "context"
+            },
+            "supported": {
+              "type": "boolean"
+            },
+            "resize": {
+              "type": "boolean"
+            },
+            "selectionSupported": {
+              "type": "boolean"
+            },
+            "document": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/CanvasDocument"
+                },
+                {
+                  "const": null
+                }
+              ]
+            },
+            "selection": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/CanvasSelectionBounds"
+                },
+                {
+                  "const": null
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "supported",
+            "resize",
+            "selectionSupported",
+            "document",
+            "selection"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "resized"
+            },
+            "document": {
+              "$ref": "#/$defs/CanvasDocument"
+            }
+          },
+          "required": ["kind", "document"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "failure"
+            },
+            "status": {
+              "enum": ["unavailable", "unsupported", "stale", "cancelled", "error"]
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          "required": ["kind", "status", "message"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasGeometryRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "geometry.request"
+        },
+        "command": {
+          "$ref": "#/$defs/CanvasGeometryCommand"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "command"],
+      "additionalProperties": false
+    },
+    "CanvasGeometryReply": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 3
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "geometry.reply"
+        },
+        "result": {
+          "$ref": "#/$defs/CanvasGeometryResult"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "result"],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CanvasReadRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasReadReply"
+    },
+    {
+      "$ref": "#/$defs/CanvasInsertRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasInsertReply"
+    },
+    {
+      "$ref": "#/$defs/CanvasCancelRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasErrorReply"
+    },
+    {
+      "$ref": "#/$defs/CanvasSourceRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasSourceReply"
+    },
+    {
+      "$ref": "#/$defs/CanvasSourceChanged"
+    },
+    {
+      "$ref": "#/$defs/CanvasGeometryRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasGeometryReply"
+    },
+    {
+      "$ref": "#/$defs/CanvasSurfacePrepareRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasSurfaceGeometryRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasSurfaceSelectRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasSurfaceCommitRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasSurfaceReleaseRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasSurfaceReply"
+    }
+  ]
+}

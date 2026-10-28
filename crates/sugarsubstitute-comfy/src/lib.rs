@@ -3,6 +3,8 @@
 //! Adapt validated ComfyUI startup inputs without acquiring native process authority.
 
 pub mod launch;
+/// Construct bounded Comfy output requests without accepting host-supplied destinations.
+pub mod output_media;
 pub mod readiness;
 #[cfg(windows)]
 pub mod readiness_campaign;

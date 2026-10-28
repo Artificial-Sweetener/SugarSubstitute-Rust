@@ -268,7 +268,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:f7737aab853a73ceacdd075d1c129abf69df31753324cb01d8cad4374041c093"
+source_sha256 = "sha256:5fe9c6fbf5c698c1ef932598be5ada9fe69d9f18656ce980443cb39145b7a0ab"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -401,9 +401,16 @@ rationale = "Crashpad owns native capture configuration; host startup settings d
 [[records]]
 path = "tools/xtask/src/catalog.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:540a2ad756e7aa7a0ae17ca1626a66bc9bd32ec5c1549ab1a2896e1e9a0d04ab"
+source_sha256 = "sha256:e2203fb1ca2aac3c278ecaba6299535c4d910e4c1332219fce5db52a60809d27"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
+
+[[records]]
+path = "tools/xtask/src/structure.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2a82500bc47bc2f3b972759dc55cddd3c4bbd26696794f57fb6b441b5c654a71"
+capabilities = ["codec"]
+rationale = "Structural governance tests parse an isolated third-party manifest to verify license and source ownership; this is not application configuration."
 
 [[records]]
 path = "tools/xtask/src/command.rs"
@@ -436,7 +443,7 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:f7e112236172eb7cce83e410d75116ca5fcdc86edb9de269b0bf565021c33186"
+source_sha256 = "sha256:9065ec009f74081b23bb9bd9f8fa0dc8a1d4317d05bd656991ab0b5bc05f1252"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -856,7 +863,7 @@ rationale = "Publication-recovery qualification reads the authoritative cache ca
 [[records]]
 path = "tools/xtask/src/ui/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:88b22ab227e8b0ef4c48eeae9acc859b22233d7d4c0c353177051ea46c815458"
+source_sha256 = "sha256:326f88f2a242dc64de1d00e4eaa74b0c26bc532a8bd1787c55ee3cee1f6865ee"
 capabilities = ["codec"]
 rationale = "Construct isolated malformed UI policy documents to verify unknown-schema, duplicate, stale-review and dependency-identity rejection through the real governance checker."
 
@@ -905,7 +912,7 @@ rationale = "The transport consumes inherited proxy and bypass variables solely 
 [[records]]
 path = "crates/sugarsubstitute/src/viewer.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:12b15d5d1a672a0bde4fb94c8f6b0a3d41319b8c94e1683900c4d3ebee5d9a04"
+source_sha256 = "sha256:2a5be1a5f4e05caa38771b808aebca74ca282811f30e6c3dd6c0c29cf356f73e"
 capabilities = ["arguments"]
 rationale = "Standalone viewer entry captures explicit CLI values once and passes typed bounded options to its application lifetime; storage and execution remain with their authoritative owners."
 

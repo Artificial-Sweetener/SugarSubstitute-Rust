@@ -1,6 +1,45 @@
 schema_version = 1
 
 [[formats]]
+id = "sugarcubes-panel-v3"
+owner = "sugarsubstitute-contracts"
+vendored_component = "sugarcubes-panel-contract"
+sources = ["crates/sugarsubstitute-contracts/src/panel.rs", "crates/sugarsubstitute-contracts/src/panel/decode.rs", "crates/sugarsubstitute-contracts/src/panel/encode.rs", "crates/sugarsubstitute-contracts/src/panel/presentation.rs", "third_party/sugarcubes-panel/panel.schema.json", "crates/sugarsubstitute-contracts/src/panel/wire.rs"]
+source_sha256 = "sha256:25ad12ace124ab4decbd7972e2a15e32dcdd2f1d1483fdc2ce514555cda0b66f"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 3
+accepted_versions = [3]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "sugarcubes-canvas-surface-v3"
+owner = "sugarsubstitute-contracts"
+vendored_component = "sugarcubes-canvas-surface-contract"
+sources = ["crates/sugarsubstitute-contracts/src/canvas_surface.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/address.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/file_reference.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/message.rs", "third_party/sugarcubes-canvas/canvas.schema.json", "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs"]
+source_sha256 = "sha256:8cb1e7d5b7cd9cf7dfde61e18259ae31f6986be390f55fce2d9b941d60ccbe72"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 3
+accepted_versions = [3]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "sugarcubes-canvas-context-v3"
+owner = "sugarsubstitute-contracts"
+vendored_component = "sugarcubes-canvas-surface-contract"
+sources = ["crates/sugarsubstitute-contracts/src/canvas_context.rs", "crates/sugarsubstitute-contracts/src/canvas_context/wire.rs", "third_party/sugarcubes-canvas/canvas.schema.json"]
+source_sha256 = "sha256:ef9734220b56a1a861080645cb183ea85702f38106f1bafb488b4f0da63cd7fa"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 3
+accepted_versions = [3]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
 id = "splash-qualification-rgba"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/capture.rs", "crates/sugarsubstitute/src/artifact_job/outputs.rs"]
@@ -191,11 +230,11 @@ migrations = []
 id = "windows-lifecycle-control"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/lifecycle_protocol.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/binary.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/decode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/encode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/errors.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/frame.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/payload.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/target.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/utf16.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_fields.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_types.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/output.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/raw_windows.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply_codec.rs"]
-source_sha256 = "sha256:5e3e73eb60cb45bede662f586e5867ab6f1a0e4aec9d8459dd464fe18a1040ec"
+source_sha256 = "sha256:7c3ed1363ff659bedd19193a2cb0eabc95c66ac6f6b5c863baa72d49af775ea6"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 10
-accepted_versions = [10]
+current_version = 11
+accepted_versions = [11]
 compatibility = "reject"
 migrations = []
 
@@ -544,7 +583,7 @@ migrations = []
 id = "child-native-qualification-diagnostic"
 owner = "sugarsubstitute-desktop"
 sources = ["crates/sugarsubstitute-desktop/src/qualification_trace.rs", "crates/sugarsubstitute-desktop/src/qualification_trace/native.rs"]
-source_sha256 = "sha256:4ff678bfa3610cc02e20d99c073427312a74447faf0795910105c23321f9fda2"
+source_sha256 = "sha256:db3402f4c7166176d69be2404ed3b71859fc8d78d6523a9648c9b05c98cd74f9"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -695,7 +734,7 @@ migrations = []
 id = "desktop-frame-presentation"
 owner = "sugarsubstitute-desktop"
 sources = ["crates/sugarsubstitute-desktop/src/main_actor/frame.rs", "crates/sugarsubstitute-desktop/src/main_actor/evidence/probe.rs", "crates/sugarsubstitute-desktop/src/main_readiness.rs"]
-source_sha256 = "sha256:32526becf1b5fe37d26b13a1b33f1f0cdd04fd97750d65ffd437398501bfb6bc"
+source_sha256 = "sha256:4ec5cef7d4196e8a9dafd793663de49b2bee180848adcca60a8a09ffa51a67d3"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1377,8 +1416,8 @@ migrations = []
 [[formats]]
 id = "canvas-viewer-proof-png"
 owner = "sugarsubstitute"
-sources = ["crates/sugarsubstitute/src/viewer/proof.rs"]
-source_sha256 = "sha256:b333735a06a3eed3ac1c65da1272b408a3207d22edc0958cb1c02dd7fb2bcb89"
+sources = ["crates/sugarsubstitute/src/native_canvas/proof.rs"]
+source_sha256 = "sha256:8b8c98e0ad1f55ac0008571cc0e90957c96ce52776d85adeb05cdf5b0ca378fb"
 classification = "authored_document"
 preservation = "must_preserve"
 current_version = 1
@@ -1389,8 +1428,8 @@ migrations = []
 [[formats]]
 id = "canvas-viewer-proof-metrics"
 owner = "sugarsubstitute"
-sources = ["crates/sugarsubstitute/src/viewer/proof.rs", "crates/sugarsubstitute/src/viewer/proof/presentation.rs"]
-source_sha256 = "sha256:4e42817bff306bdc06872749cb9980c264aa2d325da387b6265bcc67461ac7c5"
+sources = ["crates/sugarsubstitute/src/native_canvas/proof.rs", "crates/sugarsubstitute/src/native_canvas/proof/presentation.rs"]
+source_sha256 = "sha256:a21f39c75dd15fc510a9fb4e4d09347222d62878ec4935941b7006f63109de07"
 classification = "authored_document"
 preservation = "must_preserve"
 current_version = 5

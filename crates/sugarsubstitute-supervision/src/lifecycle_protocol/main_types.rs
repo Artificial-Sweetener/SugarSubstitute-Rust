@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Carry shape-only main context and bounded stage classifications.
 use super::{LeaseReference, ProtocolError};
-use std::fmt;
+use std::{
+    fmt,
+    num::{NonZeroU32, NonZeroU64},
+};
 use sugarsubstitute_contracts::{
     configuration::LoopbackOrigin,
     startup::{MainIdentity, validate_frontend_version},
@@ -30,6 +33,15 @@ impl fmt::Debug for VersionLabel<'_> {
         f.debug_struct("VersionLabel").field("bytes", &self.0.len()).finish_non_exhaustive()
     }
 }
+/// Copied listener-matching facts; a native connection must independently prove its peer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BackendPeer {
+    /// Claimed process identifier of the verified Comfy listener.
+    pub process_id: NonZeroU32,
+    /// Claimed process creation time in 100 ns units since January 1, 1601 UTC.
+    pub creation_time_100ns: NonZeroU64,
+}
+
 /// Borrow the shape of one lease grant and current main context.
 /// Constructors/decoding authenticate no origin, asset version, resource or native profile.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -44,6 +56,8 @@ pub struct GrantedContext<'a> {
     pub frontend: VersionLabel<'a>,
     /// Claimed current served SugarCubes version, awaiting retained source evidence.
     pub sugarcubes: VersionLabel<'a>,
+    /// Claimed verified backend peer; native connection qualification remains independent.
+    pub backend_peer: BackendPeer,
 }
 /// Identify the native stage without serializing its original cause.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

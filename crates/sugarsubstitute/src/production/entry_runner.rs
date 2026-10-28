@@ -15,17 +15,14 @@ mod post_exit;
 pub(super) mod presentation;
 #[path = "entry_runner/routing.rs"]
 mod routing;
-#[path = "entry_runner/scope_sequence.rs"]
-mod scope_sequence;
-#[path = "entry_runner/updates.rs"]
-mod updates;
-pub(crate) use scope_sequence::ScopeSequence;
 #[cfg(test)]
 #[path = "entry_runner/tests.rs"]
 pub(crate) mod tests;
+#[path = "entry_runner/updates.rs"]
+mod updates;
 use super::{
     coordinator_authority::CoordinatorAuthority, dispatch::ProductionCommand,
-    entry::ProductionEntryIntake, entry_bootstrap::EntryBootstrap,
+    entry::ProductionEntryIntake, entry_bootstrap::EntryBootstrap, scope_sequence::ScopeSequence,
 };
 use crate::job_sequence::JobSequence;
 use std::{

@@ -14,6 +14,7 @@ pub(crate) const PAYLOAD_BYTES: usize = 32768;
 /// Bound the native UTF-16 scan independently of decoded UTF-8 bytes, including NUL.
 pub(crate) const NATIVE_UNITS: usize = 16384;
 const SLOTS: usize = 32;
+const PANEL_SLOTS: usize = 4;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
@@ -22,6 +23,7 @@ pub(crate) enum Command {
     Probe(ProbeTarget),
     FrameConfiguration(ProbeTarget),
     Barrier(ProbeTarget),
+    PanelDelivery(i64),
     #[cfg(feature = "k1-native-qualification")]
     Downloads,
 }
@@ -33,6 +35,7 @@ pub(crate) enum Kind {
     Context,
     ContextDestroyed,
     ContextsCleared,
+    PanelBinding,
     Console,
     NavigationStarting,
     ReloadRequested,
@@ -74,10 +77,15 @@ pub(crate) struct Events {
     accepting: Cell<bool>,
     callback_depth: Cell<usize>,
     process_failed: Cell<Option<i32>>,
+    panel_rejected: Cell<bool>,
     wake: Box<dyn Fn()>,
 }
 
 impl Events {
+    /// Wake the native owner for a retained callback even after ordinary admission closes.
+    pub(crate) fn wake(&self) {
+        (self.wake)();
+    }
     pub(crate) fn new(
         lease: &MemoryLease,
         wake: impl Fn() + 'static,
@@ -128,6 +136,7 @@ impl Events {
             accepting: Cell::new(true),
             callback_depth: Cell::new(0),
             process_failed: Cell::new(None),
+            panel_rejected: Cell::new(false),
             wake: Box::new(wake),
         }))
     }
@@ -210,6 +219,18 @@ impl Events {
                     return Ok(false);
                 }
             }
+            if kind == Kind::PanelBinding
+                && (storage.count == SLOTS
+                    || storage
+                        .slots
+                        .iter()
+                        .filter(|slot| slot.kind == Some(Kind::PanelBinding))
+                        .count()
+                        >= PANEL_SLOTS)
+            {
+                self.reject_panel(None);
+                return Ok(false);
+            }
             if storage.count == SLOTS {
                 tracing::error!(operation="main_event_overflow", incoming=?kind,
                     queued_console=storage.slots.iter().filter(|slot| slot.kind==Some(Kind::Console)).count(),
@@ -238,9 +259,23 @@ impl Events {
             Ok(true)
         })();
         match result {
+            Err(cause) if kind == Kind::PanelBinding => self.reject_panel(Some(&cause)),
             Err(cause) => self.fail(cause),
-            Ok(true) => (self.wake)(),
+            Ok(true) => {
+                if kind == Kind::PanelBinding {
+                    self.panel_rejected.set(false);
+                }
+                (self.wake)();
+            }
             Ok(false) => {}
+        }
+    }
+
+    /// Reject an untrusted panel payload without consuming lifecycle receiver capacity.
+    fn reject_panel(&self, cause: Option<&DesktopError>) {
+        if !self.panel_rejected.replace(true) {
+            tracing::warn!(operation="panel_event_rejected", cause=?cause,
+                "Panel callback exceeded its bounded admission");
         }
     }
 

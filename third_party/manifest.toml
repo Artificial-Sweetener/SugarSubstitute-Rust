@@ -1,6 +1,35 @@
 schema_version = 1
 
 [[components]]
+id = "sugarcubes-canvas-surface-contract"
+source_url = "https://github.com/Artificial-Sweetener/SugarCubes/tree/main/integrations/contracts"
+license = "AGPL-3.0-or-later"
+license_file = "third_party/licenses/sugarcubes.AGPL-3.0.txt"
+license_header_files = ["crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs", "crates/sugarsubstitute-contracts/src/canvas_context/wire.rs"]
+files = [
+  "third_party/sugarcubes-canvas/canvas.schema.json",
+  "third_party/sugarcubes-canvas/address_vectors.json",
+  "third_party/sugarcubes-canvas/file_vectors.json",
+  "third_party/sugarcubes-canvas/geometry_vectors.json",
+  "third_party/sugarcubes-canvas/message_vectors.json",
+  "third_party/sugarcubes-canvas/context_vectors.json",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_context/wire.rs",
+]
+
+[[components]]
+id = "sugarcubes-panel-contract"
+source_url = "https://github.com/Artificial-Sweetener/SugarCubes/tree/main/integrations/contracts"
+license = "AGPL-3.0-or-later"
+license_file = "third_party/licenses/sugarcubes.AGPL-3.0.txt"
+license_header_files = ["crates/sugarsubstitute-contracts/src/panel/wire.rs"]
+files = [
+  "third_party/sugarcubes-panel/panel.schema.json",
+  "third_party/sugarcubes-panel/panel_vectors.json",
+  "crates/sugarsubstitute-contracts/src/panel/wire.rs",
+]
+
+[[components]]
 id = "qt-native-hand-cursors"
 source_url = "https://github.com/qt/qtbase/tree/8ba7ea4b77a4b8f1948760221e264917ddc9e1c8/src/plugins/platforms/windows/images"
 license = "GPL-3.0-only"
@@ -213,6 +242,7 @@ files = [
   "third_party/wry/src/webview2/construction.rs",
   "third_party/wry/src/webview2/construction_admission.rs",
   "third_party/wry/src/webview2/construction_adoption.rs",
+  "third_party/wry/src/webview2/construction_composition.rs",
   "third_party/wry/src/webview2/construction_effects.rs",
   "third_party/wry/src/webview2/construction_environment.rs",
   "third_party/wry/src/webview2/construction_initialize.rs",

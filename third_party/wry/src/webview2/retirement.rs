@@ -101,6 +101,19 @@ pub(super) fn step(shared: &Rc<Shared>) -> Result<bool> {
           webview.remove_NewWindowRequested(token)?;
         }
       }
+      RetireAction::ResolveComposition => {
+        construction_composition::resolve(shared)?;
+      }
+      RetireAction::DetachComposition => {
+        let composition = shared
+          .native
+          .borrow()
+          .composition
+          .clone()
+          .ok_or_else(|| owned_config::invalid("missing retained composition controller"))?;
+        // SAFETY: The retained UI-affine controller is open; null detaches its visual.
+        composition.SetRootVisualTarget(None::<&windows::core::IUnknown>)?;
+      }
       RetireAction::Close => {
         let controller = shared
           .native
@@ -180,6 +193,7 @@ pub(super) fn step_with(
       Some((
         state.webview.take(),
         state.controller.take(),
+        state.composition.take(),
         state.env.take(),
         state.drag_drop.take(),
       ))

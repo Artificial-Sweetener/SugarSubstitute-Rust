@@ -11,7 +11,7 @@ use std::{
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
 
-pub(super) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+pub(crate) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 struct FixedClock;
 impl Clock for FixedClock {
     fn now(&self) -> Moment {
@@ -107,11 +107,22 @@ pub(super) fn run_cancelled(
 
 /// Exercise native storage through the same execution-owned blocking boundary as production.
 #[cfg(windows)]
-pub(super) fn run_storage<T: Send + 'static>(
+pub(crate) fn run_storage<T: Send + 'static>(
     bytes: u64,
     action: impl FnOnce(&JobContext) -> Result<T, ImportError> + Send + 'static,
 ) -> TestResult<T> {
     run_admitted(bytes, action, true, None)
+}
+
+/// Cancel a storage worker while a bounded input read is in progress.
+#[cfg(windows)]
+pub(super) fn run_storage_cancelled(
+    bytes: u64,
+    action: impl FnOnce(&JobContext, &CancelPoint) -> Result<(), ImportError> + Send + 'static,
+) -> TestResult {
+    let point = Arc::new(CancelPoint::default());
+    let worker_point = point.clone();
+    run_admitted(bytes, move |context| action(context, &worker_point), true, Some((point, ())))
 }
 
 /// Share original admission and terminal observation without exporting a scheduler handle.

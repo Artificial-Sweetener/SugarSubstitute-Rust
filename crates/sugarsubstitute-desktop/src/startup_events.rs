@@ -162,7 +162,64 @@ pub(super) fn dispatch(
                     session.next_frame = advance_deadline(session.next_frame, now);
                 }
             }
-            progress_main(session, content, target, proxy.clone(), context.title)?;
+            #[cfg(all(windows, feature = "native-composition"))]
+            let composition_registered = if let Some(main) = &mut session.main {
+                if !session.closing {
+                    let registered = main.register_composition(content)?;
+                    if registered {
+                        main.progress_composition_wait(content)?;
+                    }
+                    registered
+                } else {
+                    main.progress_composition_wait(content)?;
+                    true
+                }
+            } else {
+                true
+            };
+            #[cfg(not(all(windows, feature = "native-composition")))]
+            let composition_registered = true;
+            if composition_registered {
+                progress_main(session, content, target, proxy.clone(), context.title)?;
+            }
+            #[cfg(feature = "native-composition")]
+            if !session.closing && composition_registered {
+                use crate::canvas::MainCanvasPresentation;
+                let mut hidden = None;
+                let presentation = match (&mut session.main, content.main_canvas_presentation()) {
+                    (Some(main), MainCanvasPresentation::Frame(frame)) => {
+                        main.present_canvas(&frame)
+                    }
+                    (Some(main), MainCanvasPresentation::Retain(retained)) => {
+                        main.retain_canvas(retained).map(|()| None)
+                    }
+                    (Some(main), MainCanvasPresentation::Hide) => {
+                        main.hide_canvas().map(|accepted| {
+                            if accepted {
+                                hidden = Some(main.identity());
+                            }
+                            None
+                        })
+                    }
+                    (None, _) => Ok(None),
+                };
+                match presentation {
+                    Ok(Some(stamp)) => content
+                        .main_canvas_presented(stamp)
+                        .map_err(|cause| DesktopError::boxed("acknowledge_main_canvas", cause))?,
+                    Ok(None) => {}
+                    Err(cause) => fail_main(session, content, cause)?,
+                }
+                if let Some(identity) = hidden {
+                    content.main_canvas_hidden(identity).map_err(|cause| {
+                        DesktopError::boxed("acknowledge_main_canvas_hide", cause)
+                    })?;
+                }
+            }
+            #[cfg(all(windows, feature = "native-composition"))]
+            if composition_registered && let Some(main) = &mut session.main {
+                main.progress_composition_wait(content)?;
+            }
             if session.splash.retiring && !session.splash.retired && session.splash.retire_step()? {
                 session.splash_retirement_reported = true;
                 session.observe(

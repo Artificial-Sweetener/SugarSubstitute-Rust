@@ -70,3 +70,18 @@ fn executor_cutoff_can_only_tighten_and_unsettled_children_cannot_close_admissio
     assert!(!execution.shutting_down);
     Ok(())
 }
+
+#[cfg(windows)]
+#[test]
+fn canvas_capacity_is_selected_before_the_single_execution_owner_starts()
+-> Result<(), Box<dyn Error>> {
+    let mut execution = StartupExecution::new(Arc::new(ClockBoundary));
+    execution.reserve_canvas_capacity()?;
+    execution.start(Arc::new(WakeBoundary))?;
+    assert_eq!(
+        execution.owner.as_ref().ok_or("Owner absent")?.limits().memory_bytes,
+        512 * 1024 * 1024
+    );
+    assert!(execution.reserve_canvas_capacity().is_err());
+    Ok(())
+}

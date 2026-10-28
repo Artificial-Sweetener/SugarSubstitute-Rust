@@ -48,7 +48,7 @@ recovery = "Resume the actual length under shared entry custody; restart ignored
 id = "setup-browser-profile"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache.rs"]
-source_sha256 = "sha256:29b303e0a0449a741508a91a2e24b11fdbbd6918e80459926f0bcfdd92e64575"
+source_sha256 = "sha256:131799bb38ac9af502ad1d52ca923ccc51f8f771e18c529dd341844d50ed77d8"
 namespace = "setup-webview-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -173,13 +173,13 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
     "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/readers.rs",
 ]
-source_sha256 = "sha256:10bfeb682fc8a646bb7954917e484448903cc8111d931acbd736f5012f161a98"
+source_sha256 = "sha256:aa0dfb4e1c5405f91cbfcdc56bd0654121194b4896f471e95bf6c67370091c11"
 namespace = "runtime-cache-v1"
 storage_schema = 1
 compatibility_epoch = 1
 compatibility_inputs = ["cache_scope_owner_marker", "entry_record_schema", "feature_namespace_epoch", "feature_semantic_key", "native_generation_identity", "feature_owned_native_recovery_descriptor"]
 freshness = "Feature owners authenticate cache content. Shared storage tracks UTC last use and independent replacement generations; native read pins exclude mutation and cleanup."
-retention = "Each scope admits at most 64 GiB of payload ceilings. Namespace limits are 64 MiB offers, 24 GiB each download namespace, 32 GiB each for extracted packages and reconstructed raster sources, 1 GiB installer browser data and 256 MiB each upstream metadata and private provisioning session data. Idle retention is seven days for offers, packages, raster sources and metadata, thirty days for downloads and one day for private browser/runtime data. Native pins and unfinished producers prevent reclamation. Control metadata is bounded separately."
+retention = "Each scope admits at most 64 GiB of payload ceilings. Namespace limits are 64 MiB offers, 24 GiB each download namespace, 32 GiB each for extracted packages, reconstructed raster sources and Comfy output copies, 1 GiB installer browser data and 256 MiB each upstream metadata and private provisioning session data. Idle retention is seven days for offers, packages, raster sources, Comfy output copies and metadata, thirty days for downloads and one day for private browser/runtime data. Native pins and unfinished producers prevent reclamation. Control metadata is bounded separately."
 recovery = "Damaged entry records are observable misses. New independent generations preserve their bytes. Feature owners recover unfinished native producers before finalizing their inventories. Cleanup validates exact inventories, journals intent, compares native identities and resumes after interruption; unknown files and authoritative siblings remain intact. Admission conservatively accounts for preserved content."
 
 [[caches]]
@@ -198,12 +198,25 @@ recovery = "Native containment object absence proves stopped writers after host 
 [[caches]]
 id = "image-sources"
 owner = "sugarsubstitute-image-io"
-sources = ["crates/sugarsubstitute-image-io/src/archive.rs", "crates/sugarsubstitute-image-io/src/archive/batch.rs", "crates/sugarsubstitute-image-io/src/archive/samples.rs", "crates/sugarsubstitute-image-io/src/cached.rs", "crates/sugarsubstitute-image-io/src/descriptor.rs", "crates/sugarsubstitute-image-io/src/layout.rs", "crates/sugarsubstitute-image-io/src/png_input.rs", "crates/sugarsubstitute-image-io/src/shared.rs", "crates/sugarsubstitute-image-io/src/write.rs"]
-source_sha256 = "sha256:fe6bb037e1290aaca6e7ef7c8334af960f3726989a960d447507782fb9a0e576"
+sources = ["crates/sugarsubstitute-image-io/src/archive.rs", "crates/sugarsubstitute-image-io/src/archive/batch.rs", "crates/sugarsubstitute-image-io/src/archive/samples.rs", "crates/sugarsubstitute-image-io/src/cached.rs", "crates/sugarsubstitute-image-io/src/cached_input.rs", "crates/sugarsubstitute-image-io/src/descriptor.rs", "crates/sugarsubstitute-image-io/src/layout.rs", "crates/sugarsubstitute-image-io/src/png_input.rs", "crates/sugarsubstitute-image-io/src/shared.rs", "crates/sugarsubstitute-image-io/src/source.rs", "crates/sugarsubstitute-image-io/src/write.rs"]
+source_sha256 = "sha256:37fa34073f0064c49765829a6452fbf4c1430abc497dd60ae4b3ada165df6d4c"
 namespace = "image-sources-v1"
 storage_schema = 1
 compatibility_epoch = 1
 compatibility_inputs = ["original_encoded_sha256", "source_interpretation_and_transfer", "sample_packing", "archive_format_epoch", "adaptive_chunk_layout"]
-freshness = "Import hashes the selected original read-only stream and validates PNG integrity before shared-cache publication. Metadata and exact length are checked on opening; requested chunks verify SHA-256 before canonical pixel conversion. Authoritative original paths never enter disposable storage."
+freshness = "Import hashes the selected original or pinned encoded read-only stream and validates PNG integrity and input custody before shared-cache publication. Metadata and exact length are checked on opening; requested chunks verify SHA-256 before canonical pixel conversion. Authoritative original paths never enter disposable storage."
 retention = "Shared runtime storage admits a 32 GiB namespace under its existing aggregate scope budget, with seven-day idle retention. Borrowed and transferred native entry pins exclude mutation and cleanup while a document or evaluation worker still uses a source."
 recovery = "Corrupt metadata is an observable miss and a fresh independent generation preserves the preceding bytes. Lazy chunk integrity errors request an explicit rebuild from the unchanged original. Interrupted imports remain unpublished; shared maintenance owns journaled retirement and preserves unknown content."
+
+[[caches]]
+id = "comfy-output-originals"
+owner = "sugarsubstitute-comfy"
+sources = ["crates/sugarsubstitute-comfy/src/output_media/transfer.rs", "crates/sugarsubstitute-comfy/src/output_media/transfer/native.rs", "crates/sugarsubstitute-comfy/src/readiness_transport/headers.rs"]
+source_sha256 = "sha256:2f2f65cca1443df1bc58bb21348a68a0101617fb71f94849ed5ba3853c5bab8f"
+namespace = "comfy-outputs-v1"
+storage_schema = 1
+compatibility_epoch = 1
+compatibility_inputs = ["backend_process_identity", "encoded_view_target", "png_original"]
+freshness = "Each selection downloads a fresh bounded PNG from the independently qualified current Comfy peer. The canvas image owner validates and hashes the retained original during import."
+retention = "The shared runtime cache admits up to 32 GiB of encoded Comfy output copies, with seven-day idle retention. A retained reader pins its generation during canvas import and reconstruction."
+recovery = "Interrupted or rejected downloads remain unpublished. A fresh generation preserves earlier pinned entries; shared maintenance removes only owned disposable entries and preserves unknown content."

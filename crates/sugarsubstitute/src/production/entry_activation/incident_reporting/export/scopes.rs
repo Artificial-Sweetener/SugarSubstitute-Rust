@@ -21,7 +21,7 @@ impl ExportJobs {
     /// Retain four scopes and the original cutoff without reserving future job IDs.
     pub(super) fn new(
         client: &ExecutionClient,
-        scopes: &crate::production::entry_runner::ScopeSequence,
+        scopes: &crate::production::scope_sequence::ScopeSequence,
         until: Moment,
     ) -> Result<Self> {
         let scope = || -> Result<Scope> {

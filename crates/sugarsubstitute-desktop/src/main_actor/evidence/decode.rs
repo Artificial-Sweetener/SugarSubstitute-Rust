@@ -93,6 +93,7 @@ pub(super) fn consume(
             let _: serde_json::Value = parse(payload)?;
             owner.contexts_cleared()
         }
+        Kind::PanelBinding => Err(ReadinessFault::MalformedObservation),
         Kind::Console => return console::consume(owner, payload).map(|()| Effect::None),
         Kind::ProcessFailed { .. } => {
             owner.invalidate(ReadinessFault::SetupFailed);
@@ -176,6 +177,20 @@ pub(super) fn consume(
                     return Err(readiness_error(ReadinessFault::MalformedObservation));
                 }
                 effect = Effect::Receipt(owner.barrier_complete(target).map_err(readiness_error)?);
+                Ok(())
+            }
+            Command::PanelDelivery(context) => {
+                if owner.panel_context() != Some(context) {
+                    return Ok(Effect::None);
+                }
+                let evaluation: Evaluation = parse(payload)?;
+                if evaluation.exception_details.is_some()
+                    || evaluation.result.kind != "boolean"
+                    || evaluation.result.value.as_ref().and_then(serde_json::Value::as_bool)
+                        != Some(true)
+                {
+                    return Err(DesktopError::message("send_panel", "panel delivery failed"));
+                }
                 Ok(())
             }
         },

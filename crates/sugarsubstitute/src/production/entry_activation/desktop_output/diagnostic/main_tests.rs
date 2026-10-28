@@ -8,6 +8,56 @@ use sugarsubstitute_contracts::transcript::OutputStream;
 const LINE: &str = "operation=\"main_failure_transition\" failed_operation=\"decode_main_observation\" launch=1 navigation=1 observation=Frame code=JsonData";
 
 #[test]
+fn native_canvas_and_composition_failures_accept_only_exact_operations_and_closed_codes() {
+    for (operation, code, expected) in [
+        ("commit_canvas_frame", "Hresult(-2147467259)", Code::Hresult(-2147467259)),
+        ("canvas_upload", "Io(Other)", Code::Io("Other")),
+        ("canvas_reply_queue", "Opaque", Code::Opaque),
+        ("commit_browser_visual", "Hresult(-2147023170)", Code::Hresult(-2147023170)),
+    ] {
+        let line = LINE.replace("decode_main_observation", operation).replace("JsonData", code);
+        let parsed = parse(line.as_bytes());
+        assert_eq!(parsed.map(|failure| failure.operation), Some(operation));
+        assert_eq!(parsed.map(|failure| failure.code), Some(expected));
+
+        let transcript =
+            format!("WARN sugarsubstitute_desktop::contract::failure_diagnostic: {line}\r\n");
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, transcript.as_bytes(), |value| {
+            seen.push(value)
+        });
+        assert_eq!(
+            seen,
+            vec![Observation::MainFailure(MainFailure {
+                launch: 1,
+                navigation: 1,
+                operation,
+                observation: "Frame",
+                code: expected,
+                timeout: None,
+            })]
+        );
+    }
+
+    for bad in [
+        LINE.replace("decode_main_observation", "commit_canvas_frame_retry"),
+        LINE.replace("decode_main_observation", "canvas_upload/private"),
+        LINE.replace("decode_main_observation", "canvas_reply_queue_retry"),
+        LINE.replace("decode_main_observation", "create_composition"),
+        LINE.replace("decode_main_observation", "commit_browser_visualized"),
+        format!(
+            "{} native_message=PRIVATE",
+            LINE.replace("decode_main_observation", "commit_canvas_frame")
+        ),
+        LINE.replace("decode_main_observation", "canvas_upload")
+            .replace("JsonData", "Io(Other(PRIVATE))"),
+    ] {
+        assert!(parse(bad.as_bytes()).is_none());
+    }
+}
+
+#[test]
 fn main_grammar_rejects_unknown_extensions_noncanonical_identities_and_native_codes() {
     for operation in OPERATIONS.iter().filter(|operation| **operation != "frontend_budget_expired")
     {

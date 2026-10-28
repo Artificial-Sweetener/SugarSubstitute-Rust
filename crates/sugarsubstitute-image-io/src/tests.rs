@@ -6,7 +6,7 @@ use std::io::{self, Cursor, Write};
 use sugarsubstitute_image_ops::{Extent, Pixel, RasterSource, Region};
 #[cfg(windows)]
 mod cached;
-mod harness;
+pub(crate) mod harness;
 mod png;
 mod samples;
 

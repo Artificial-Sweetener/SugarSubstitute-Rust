@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Fence a selected output when its authenticated backend grant disappears.
+
+use super::*;
+use sugarsubstitute_contracts::{
+    configuration::LoopbackOrigin,
+    lifecycle::{LeaseId, ResourceGeneration, ResourceId},
+};
+use sugarsubstitute_supervision::lifecycle_protocol::{BackendPeer, LeaseReference};
+
+#[test]
+fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
+-> Result<(), Box<dyn Error>> {
+    let directory = tempfile::tempdir()?;
+    let clock = Arc::new(ClockValue(AtomicU64::new(0)));
+    let wake = Arc::new(Wake::default());
+    let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let client = owner.client();
+    let mut canvas = EmbeddedCanvas::new(
+        directory.path().to_path_buf(),
+        DiagnosticHealth::fixture(),
+        clock,
+        JobSequence::new(),
+        ScopeSpec { id: ScopeId::new(1)?, deadline: None },
+    );
+    canvas.surface = crate::startup::canvas::surface::NativeSurface::new();
+    canvas.start(client.clone(), "en")?;
+    while !canvas.reported_ready {
+        let revision = wake.revision();
+        pump(&mut canvas, &client)?;
+        if !canvas.reported_ready {
+            wake.wait_after(revision)?;
+        }
+    }
+    let identity = identity()?;
+    let backend = crate::startup::CanvasBackend {
+        identity,
+        lease: LeaseReference {
+            resource: ResourceId::new(1)?,
+            generation: ResourceGeneration::new(1)?,
+            lease: LeaseId::new(1)?,
+        },
+        origin: LoopbackOrigin::parse("http://127.0.0.1:1", 1)?,
+        peer: BackendPeer {
+            process_id: std::num::NonZeroU32::new(47).ok_or("PID")?,
+            creation_time_100ns: std::num::NonZeroU64::new(53).ok_or("Birth")?,
+        },
+    };
+    canvas.backend(Some(backend))?;
+    let panel = PanelSession::for_main(identity)?;
+    let memory = MemoryLease::new(2 * 1024 * 1024, Box::new(Release));
+    canvas.surface(
+        identity,
+        request(&panel, 1, "surface.prepare", json!({}))?,
+        None,
+        memory.claim(64 * 1024)?,
+    )?;
+    reply(&mut canvas, 1, "ready")?;
+    assert!(canvas.matches_backend(backend));
+    canvas.surface(
+        identity,
+        request(&panel, 2, "surface.select", json!({
+            "itemId":"result:test", "file":{"filename":"image.png", "subfolder":"", "type":"output"}
+        }))?,
+        None,
+        memory.claim(64 * 1024)?,
+    )?;
+    canvas.backend(None)?;
+    reply(&mut canvas, 2, "unavailable")?;
+    assert!(!canvas.matches_backend(backend));
+    assert!(matches!(canvas.presentation(), MainCanvasPresentation::Hide));
+
+    canvas.close_until(Moment::from_nanos(10_000_000_000))?;
+    loop {
+        let revision = wake.revision();
+        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+        if canvas.settled()? {
+            break;
+        }
+        wake.wait_after(revision)?;
+    }
+    canvas.finish()?;
+    owner.request_shutdown(Moment::from_nanos(10_000_000_000));
+    let deadline =
+        Instant::now().checked_add(Duration::from_secs(10)).ok_or("Deadline overflow")?;
+    loop {
+        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+        if owner.poll_shutdown()?.settled {
+            break;
+        }
+        if Instant::now() >= deadline {
+            return Err("Execution did not settle".into());
+        }
+        std::hint::spin_loop();
+    }
+    owner.finish_shutdown()?;
+    Ok(())
+}

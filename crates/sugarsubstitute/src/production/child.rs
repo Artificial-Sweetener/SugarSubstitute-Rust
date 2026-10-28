@@ -25,6 +25,8 @@ mod handshake;
 mod main;
 #[path = "child/output.rs"]
 mod output;
+#[path = "child/panel.rs"]
+mod panel;
 #[cfg(feature = "k1-native-qualification")]
 #[path = "child/preview.rs"]
 mod preview;
@@ -98,7 +100,11 @@ pub(crate) struct ProductionChild {
     grant_header: Option<WireHeader>,
     main: main::MainPreparation,
     output: output::ChildOutput,
+    panel: Option<panel::PanelOwner>,
+    panel_owner_admission_warned: bool,
     running_backend: Option<backend::RunningBackendBinding>,
+    #[cfg(feature = "native-composition")]
+    canvas_backend: Option<crate::startup::CanvasBackend>,
     snapshot: Option<OutputSnapshot>,
     commands: [Option<DesktopStartupCommand>; 4],
     events: [Option<StartupEvent>; 2],
@@ -163,7 +169,11 @@ impl ProductionChild {
             grant_header: None,
             main: main::MainPreparation::new(settings),
             output: output::ChildOutput::new(),
+            panel: None,
+            panel_owner_admission_warned: false,
             running_backend: None,
+            #[cfg(feature = "native-composition")]
+            canvas_backend: None,
             snapshot: None,
             commands: std::array::from_fn(|_| None),
             events: std::array::from_fn(|_| None),
@@ -228,7 +238,8 @@ impl ProductionChild {
             }
             self.consume_main()?;
             self.consume_output()?;
-            self.activity(prepared)
+            self.activity(prepared)?;
+            self.advance_panel()
         })();
         self.failed |= result.is_err();
         self.bootstrap.report_preparation();
@@ -351,6 +362,17 @@ impl ProductionChild {
                 return Ok(Some(command));
             }
             if !self.shutdown.closing()
+                && let Some(command) = self.panel.as_mut().and_then(panel::PanelOwner::take_command)
+            {
+                return Ok(Some(DesktopStartupCommand::SendPanel(command)));
+            }
+            if !self.shutdown.closing()
+                && let Some(reply) =
+                    self.panel.as_mut().and_then(panel::PanelOwner::take_canvas_reply)
+            {
+                return Ok(Some(reply));
+            }
+            if !self.shutdown.closing()
                 && !self.probe_queued
                 && self.phase
                     == Some(sugarsubstitute_application::startup::StartupPhase::WebviewLoading)
@@ -396,6 +418,10 @@ impl ProductionChild {
                 .filter(|_| !self.shutdown.closing())
                 .and_then(|reload| reload.deadline()),
             self.attempt.as_ref().and_then(attempt::AttemptCleanup::deadline),
+            self.panel
+                .as_ref()
+                .filter(|_| !self.shutdown.closing())
+                .and_then(panel::PanelOwner::deadline),
         ]
         .into_iter()
         .flatten()

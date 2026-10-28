@@ -45,10 +45,11 @@ impl Transport {
     pub fn empty(&self) -> bool {
         self.session == 0 && self.connection == 0 && self.request == 0
     }
-    /// Open fixed IPv4 loopback readiness with proxy discovery disabled.
+    /// Open an IPv4 loopback connection with proxy discovery disabled.
+    /// The feature owner must independently authorize the selected service and its peer.
     /// # Errors
     /// Rejects zero ports, occupied custody, cancellation and native setup failures.
-    pub fn readiness(&mut self, port: u16, context: &JobContext) -> Result<(), Failure> {
+    pub fn connect_loopback(&mut self, port: u16, context: &JobContext) -> Result<(), Failure> {
         if port == 0 {
             return Err(Failure::invalid("http_loopback_port"));
         }
@@ -74,10 +75,10 @@ impl Transport {
         self.begin(request.host, request.port, request.secure, context, Some(idle))?;
         self.request(request.target, request.secure, context, Some(idle))
     }
-    /// Configure one readiness GET path from the independently pinned installed manifest.
+    /// Configure one feature-authorized origin-form GET target on the loopback connection.
     /// # Errors
     /// Rejects non-origin-form/control-bearing paths, unresolved requests and native failures.
-    pub fn readiness_request(&mut self, path: &str, context: &JobContext) -> Result<(), Failure> {
+    pub fn request_loopback(&mut self, path: &str, context: &JobContext) -> Result<(), Failure> {
         if self.idle.is_some() || path.starts_with("//") {
             return Err(Failure::invalid("http_wrong_route"));
         }
@@ -104,7 +105,7 @@ impl Transport {
         let agent = if idle.is_some() {
             w!("SugarSubstitute updater")
         } else {
-            w!("SugarSubstitute readiness")
+            w!("SugarSubstitute loopback")
         };
         // SAFETY: Static NUL strings and synchronous mode; no callbacks or borrowed native data.
         self.session = adopt(
@@ -191,10 +192,10 @@ impl Transport {
         option(self.request, WINHTTP_OPTION_DECOMPRESSION, 0, context)?;
         io::timeout(self.request, context, idle)
     }
-    /// Send the current readiness request without additional headers or body.
+    /// Send the current loopback request without additional headers or body.
     /// # Errors
     /// Preserves exact native errors after checking the original cancellation/deadline.
-    pub fn send_readiness(&mut self, context: &JobContext) -> Result<(), Failure> {
+    pub fn send_loopback(&mut self, context: &JobContext) -> Result<(), Failure> {
         if self.idle.is_some() {
             return Err(Failure::invalid("http_wrong_route"));
         }
@@ -236,7 +237,7 @@ impl Transport {
         io::check(context)?;
         result.map_err(|e| Failure::native("http_receive", e))
     }
-    /// Close this response before another readiness GET; unsuccessful custody is retained.
+    /// Close this response before another loopback GET; unsuccessful custody is retained.
     /// # Errors
     /// Returns the original close error without clearing the unsuccessful slot.
     pub fn close_request(&mut self) -> Result<(), Failure> {

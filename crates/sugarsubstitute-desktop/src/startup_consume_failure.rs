@@ -15,6 +15,8 @@ pub enum StartupConsumeStage {
     RenderDelivery,
     /// Actual child completion delivery failed.
     ChildDelivery,
+    /// The application-owned canvas could not advance its retained work.
+    CanvasDelivery,
     /// The actual child could not transfer its retained startup event.
     StartupEvent,
     /// Application policy rejected the actual startup event.

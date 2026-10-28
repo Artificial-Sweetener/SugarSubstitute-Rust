@@ -4,14 +4,12 @@
 use super::{
     child::{ChildInputs, ProductionChild},
     entry_activation::{ProductionActivation, desktop_role::DesktopRole},
+    scope_sequence::ScopeSequence,
 };
 use crate::job_sequence::JobSequence;
 use crate::startup::{StartupHost, StartupScopes};
 use std::{error::Error, ffi::OsString};
-use sugarsubstitute_contracts::{
-    execution::{ScopeId, ScopeSpec},
-    localization::messages,
-};
+use sugarsubstitute_contracts::{execution::ScopeSpec, localization::messages};
 use sugarsubstitute_desktop::{DesktopOptions, MainCaptionLabels, MainWindowSettings};
 use sugarsubstitute_execution::MonotonicClock;
 
@@ -112,13 +110,21 @@ fn run_desktop(
     diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Result<(), Box<dyn Error>> {
     let labels = messages("en").window;
+    let scopes = ScopeSequence::new();
+    let child_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
+    let render_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
+    let native_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
+    #[cfg(feature = "native-composition")]
+    let composition_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
+    let canvas_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
+    let canvas_health = diagnostics.clone();
     let child = ProductionChild::new(ChildInputs {
         diagnostics,
         qualification: role.qualification,
         input: role.bootstrap,
         original: role.original,
         run: role.run,
-        native_scope: ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+        native_scope,
         identity: (role.launch, role.navigation),
         settings: MainWindowSettings {
             recovery: sugarsubstitute_desktop::MainRecoveryLabels {
@@ -136,17 +142,19 @@ fn run_desktop(
             },
         },
     })?;
-    let content = StartupHost::new(
+    let mut content = StartupHost::new(
         role.run,
         role.launch,
         child,
         MonotonicClock::new(),
         JobSequence::new(),
-        StartupScopes {
-            child: ScopeSpec { id: ScopeId::new(1)?, deadline: None },
-            render: ScopeSpec { id: ScopeId::new(2)?, deadline: None },
-        },
+        StartupScopes { child: child_scope, render: render_scope },
     )?;
+    #[cfg(feature = "native-composition")]
+    content.configure_composition(composition_scope)?;
+    // The root-created desktop uses the installation working directory as its cache anchor.
+    // Cache ownership and path validation remain with the existing storage adapter.
+    content.configure_canvas(std::env::current_dir()?, canvas_health, canvas_scope)?;
     let receipt = sugarsubstitute_desktop::run_startup(
         DesktopOptions {
             title: sugarsubstitute::APPLICATION_NAME.into(),

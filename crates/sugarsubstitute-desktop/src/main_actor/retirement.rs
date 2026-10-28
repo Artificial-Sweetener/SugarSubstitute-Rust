@@ -14,7 +14,12 @@ impl MainActor {
             return Err(DesktopError::message("retire_main", "main identity is stale or foreign"));
         }
         self.admission.close();
+        self.canvas_replies.clear();
         self.recovery.close();
+        #[cfg(feature = "native-composition")]
+        if let Some(composition) = &self.composition {
+            composition.suspend_input();
+        }
         let retry_failure = self.present_recovery_control().err();
         #[cfg(feature = "k1-native-qualification")]
         if let Some(preview) = &mut self.preview {
@@ -39,6 +44,12 @@ impl MainActor {
     pub(super) fn retire_step(
         &mut self,
     ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+        if let Some(bridge) = &mut self.panel_bridge {
+            if bridge.retire_step()? {
+                self.panel_bridge = None;
+            }
+            return Ok(None);
+        }
         #[cfg(feature = "k1-native-qualification")]
         if let Some(preview) = &mut self.preview
             && !preview.retirement_ready()?
@@ -66,6 +77,13 @@ impl MainActor {
                 .map_err(|cause| DesktopError::new("retire_partial_main", cause))?
             {
                 self.partial = None;
+            }
+            return Ok(None);
+        }
+        #[cfg(feature = "native-composition")]
+        if let Some(composition) = &mut self.composition {
+            if composition.retire_step()? {
+                self.composition = None;
             }
             return Ok(None);
         }
@@ -128,6 +146,9 @@ impl Drop for MainActor {
             std::mem::forget(self.constructor.take());
             std::mem::forget(self.partial.take());
             std::mem::forget(self.view.take());
+            #[cfg(feature = "native-composition")]
+            std::mem::forget(self.composition.take());
+            std::mem::forget(self.panel_bridge.take());
             std::mem::forget(self.receivers.take());
             std::mem::forget(self.events.take());
             std::mem::forget(self.native_storage.take());

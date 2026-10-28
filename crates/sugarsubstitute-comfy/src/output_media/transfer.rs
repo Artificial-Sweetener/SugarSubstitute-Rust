@@ -1,0 +1,228 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Retain the exact HTTP and listener custody for one admitted Comfy output transfer.
+
+mod native;
+#[cfg(test)]
+mod tests;
+
+use super::ComfyViewTarget;
+use std::{
+    error::Error,
+    fmt,
+    sync::{Mutex, TryLockError},
+};
+use sugarsubstitute_contracts::{
+    configuration::LoopbackOrigin,
+    execution::{ExecutionId, JobClass, JobContext, MemoryClaim, Operation},
+};
+use sugarsubstitute_networking::Transport;
+use sugarsubstitute_supervision::{
+    backend_listener::{AttachedListenerLease, TcpOwnerWorkspace},
+    cache::{CacheReader, RuntimeCache},
+    lifecycle_protocol::BackendPeer,
+};
+
+/// Admission for native HTTP, TCP ownership, cache publication and bounded scratch.
+pub const OUTPUT_TRANSFER_BYTES: u64 = 24 * 1024 * 1024;
+const RETAINED_BYTES: u64 = 512 * 1024;
+
+/// One configured origin and one parent-verified peer; these facts grant no native handles.
+/// The caller retains this owner through the transfer and checked retirement.
+pub struct ComfyOutputTransfer {
+    origin: LoopbackOrigin,
+    target: ComfyViewTarget,
+    peer: BackendPeer,
+    maximum: u64,
+    state: Mutex<State>,
+}
+
+struct State {
+    http: Transport,
+    listener: AttachedListenerLease,
+    workspace: Option<TcpOwnerWorkspace>,
+    claim: Option<MemoryClaim>,
+    owner: Option<ExecutionId>,
+    started: bool,
+    closed: bool,
+}
+
+impl ComfyOutputTransfer {
+    /// Prepare an inert transfer to the caller's selected, independently authorized backend.
+    /// `maximum` is the caller's encoded-source byte limit and must include the PNG header.
+    ///
+    /// # Errors
+    /// Rejects a maximum too small to contain a PNG before any native operation.
+    pub fn new(
+        origin: LoopbackOrigin,
+        target: ComfyViewTarget,
+        peer: BackendPeer,
+        maximum: u64,
+    ) -> Result<Self, OutputTransferError> {
+        if maximum < 33 {
+            return Err(OutputTransferError::invalid("output_limit"));
+        }
+        Ok(Self {
+            origin,
+            target,
+            peer,
+            maximum,
+            state: Mutex::new(State {
+                http: Transport::default(),
+                listener: AttachedListenerLease::new(),
+                workspace: None,
+                claim: None,
+                owner: None,
+                started: false,
+                closed: false,
+            }),
+        })
+    }
+
+    /// Fetch and pin one complete PNG on an execution-owned ordinary storage worker.
+    /// The connected peer is checked against the parent-granted PID and creation time
+    /// before and after the bounded body. `now` is Unix UTC seconds for cache retention.
+    /// The returned reader and its final release remain storage-worker responsibilities.
+    /// The job must have a finite deadline, use `InfrastructureOrdinary`, and identify
+    /// its operation as `Infrastructure`; lifecycle capacity remains available for shutdown.
+    ///
+    /// # Errors
+    /// Preserves HTTP, peer, content, cache, admission and cleanup failures. After any
+    /// failure, retain this owner and call `retire` on an admitted cleanup worker until settled.
+    pub fn fetch(
+        &self,
+        cache: RuntimeCache,
+        now: u64,
+        context: &JobContext,
+    ) -> Result<CacheReader<'static>, OutputTransferError> {
+        if context.spec().class != JobClass::InfrastructureOrdinary
+            || context.spec().operation != Operation::Infrastructure
+            || context.cancellation_requested()
+            || context.deadline().is_none_or(|deadline| context.now() >= deadline)
+        {
+            return Err(OutputTransferError::invalid("output_context"));
+        }
+        let mut state =
+            self.state.lock().map_err(|_| OutputTransferError::invalid("output_owner_poisoned"))?;
+        if state.started || state.closed {
+            return Err(OutputTransferError::invalid("output_already_started"));
+        }
+        state.started = true;
+        state.owner = Some(context.owner_id());
+        let result = native::fetch(&mut state, self, cache, now, context);
+        let cleanup = state.retire(context);
+        match (result, cleanup) {
+            (Ok(reader), Ok(())) => Ok(reader),
+            (Err(cause), Ok(())) | (Ok(_), Err(cause)) => Err(cause),
+            (Err(original), Err(cleanup)) => Err(OutputTransferError::new(
+                "output_and_retirement",
+                CombinedFailure { original, cleanup },
+            )),
+        }
+    }
+
+    /// Retry native retirement on a finite ordinary or lifecycle worker from the same executor.
+    /// A fresh lifecycle job can retire a transfer whose original job was cancelled.
+    ///
+    /// # Errors
+    /// Preserves unsettled native handles and the original retained memory claim.
+    pub fn retire(&self, context: &JobContext) -> Result<(), OutputTransferError> {
+        let mut state = match self.state.lock() {
+            Ok(state) => state,
+            Err(poisoned) => {
+                tracing::warn!(
+                    operation = "comfy_output_retirement",
+                    "Recovering poisoned transfer custody"
+                );
+                poisoned.into_inner()
+            }
+        };
+        state.retire(context)
+    }
+
+    /// Observe retirement without blocking a native event loop.
+    pub fn settled(&self) -> bool {
+        match self.state.try_lock() {
+            Ok(state) => state.closed,
+            Err(TryLockError::WouldBlock) => false,
+            Err(TryLockError::Poisoned(state)) => state.into_inner().closed,
+        }
+    }
+}
+
+impl State {
+    fn retire(&mut self, context: &JobContext) -> Result<(), OutputTransferError> {
+        if self.closed {
+            return Ok(());
+        }
+        if self.owner.is_some_and(|owner| owner != context.owner_id()) {
+            return Err(OutputTransferError::invalid("output_retirement_owner"));
+        }
+        self.http.close().map_err(|cause| OutputTransferError::new("output_http_close", cause))?;
+        self.listener
+            .close(context)
+            .map_err(|cause| OutputTransferError::new("output_peer_close", cause))?;
+        self.workspace = None;
+        self.claim = None;
+        self.closed = true;
+        Ok(())
+    }
+}
+
+impl Drop for State {
+    fn drop(&mut self) {
+        if self.started && !self.closed {
+            if let Some(claim) = self.claim.take() {
+                std::mem::forget(claim);
+            }
+            tracing::error!(
+                operation = "comfy_output_owner_loss",
+                "Output transfer retains unresolved native custody"
+            );
+        }
+    }
+}
+
+/// Preserve the original transfer or retirement cause without disclosing the selected path.
+#[derive(Debug)]
+pub struct OutputTransferError {
+    stage: &'static str,
+    cause: Box<dyn Error + Send + Sync>,
+}
+impl OutputTransferError {
+    fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
+        Self { stage, cause: Box::new(cause) }
+    }
+    fn invalid(stage: &'static str) -> Self {
+        Self::new(
+            stage,
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Comfy output rejected"),
+        )
+    }
+}
+impl fmt::Display for OutputTransferError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "Comfy output transfer failed at {}", self.stage)
+    }
+}
+impl Error for OutputTransferError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.cause.as_ref())
+    }
+}
+
+#[derive(Debug)]
+struct CombinedFailure {
+    original: OutputTransferError,
+    cleanup: OutputTransferError,
+}
+impl fmt::Display for CombinedFailure {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}; retirement also failed: {}", self.original, self.cleanup)
+    }
+}
+impl Error for CombinedFailure {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.original)
+    }
+}

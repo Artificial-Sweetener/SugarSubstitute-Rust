@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+// Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
+// Schema SHA-256 (LF): 042745fee8355990f1d9944dccdc58cb77c94a3e58f83d275e4354338fabe87c
+
+/// Schema-defined untrusted CanvasReadRequest data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasReadRequest {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+}
+impl CanvasReadRequest {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && (1..=2147483647).contains(&self.request_id)
+            && self.r#type == "context.request"
+    }
+}
+
+/// Schema-defined untrusted CanvasNativeCapabilities data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasNativeCapabilities {
+    pub(super) display_output: bool,
+    pub(super) insert_image_layer: bool,
+    pub(super) position_image_layer: bool,
+}
+impl CanvasNativeCapabilities {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        true
+    }
+}
+
+/// Schema-defined untrusted CanvasNativeDescriptor data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasNativeDescriptor {
+    pub(super) id: String,
+    pub(super) label: String,
+    pub(super) capabilities: CanvasNativeCapabilities,
+}
+impl CanvasNativeDescriptor {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.id.encode_utf16().count() <= 128
+            && self.label.encode_utf16().count() <= 128
+            && self.capabilities.valid()
+    }
+}
+
+/// Schema-defined untrusted CanvasNativeContext data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasNativeContext {
+    pub(super) canvas: CanvasNativeDescriptor,
+    pub(super) document: (),
+}
+impl CanvasNativeContext {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.canvas.valid()
+    }
+}
+
+/// Schema-defined untrusted CanvasNativeReadReply data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasNativeReadReply {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+    pub(super) context: CanvasNativeContext,
+}
+impl CanvasNativeReadReply {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && (1..=2147483647).contains(&self.request_id)
+            && self.r#type == "context.reply"
+            && self.context.valid()
+    }
+}
+
+pub(super) fn valid_panel_session(value: &str) -> bool {
+    (16..=80).contains(&value.len())
+        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}

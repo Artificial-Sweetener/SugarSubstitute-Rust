@@ -47,18 +47,24 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     networking::check(root, &architecture, &workspace, &networking)?;
     let debt: Records<Debt> = policy::load(root, "governance/architecture/debt.toml")?;
     let waivers: Records<Waiver> = policy::load(root, "governance/architecture/waivers.toml")?;
-    structure::check(root, &architecture, &debt, &waivers, time::OffsetDateTime::now_utc().date())?;
+    let vendors: vendor::Manifest = policy::load(root, "third_party/manifest.toml")?;
+    structure::check(
+        root,
+        &architecture,
+        &debt,
+        &waivers,
+        time::OffsetDateTime::now_utc().date(),
+        &vendors,
+    )?;
     let testing: Testing = policy::load(root, "governance/testing/policy.toml")?;
     testing::check(root, &testing, &architecture)?;
     let persistence: catalog::Persistence =
         policy::load(root, "governance/persistence/catalog.toml")?;
-    catalog::check_persistence(root, &architecture, &persistence)?;
+    catalog::check_persistence(root, &architecture, &persistence, &vendors)?;
     let caches: catalog::Caches = policy::load(root, "governance/cache/catalog.toml")?;
     catalog::check_caches(root, &architecture, &caches)?;
     let storage: cache_storage::Storage = policy::load(root, "governance/cache/storage.toml")?;
     cache_storage::check(root, &architecture, &caches, &storage)?;
-    let vendors: vendor::Manifest = policy::load(root, "third_party/manifest.toml")?;
-    vendor::check(root, &vendors)?;
     eprintln!("SugarSubstitute governance passed");
     Ok(())
 }

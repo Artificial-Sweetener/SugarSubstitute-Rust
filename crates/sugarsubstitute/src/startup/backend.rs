@@ -13,6 +13,21 @@ use sugarsubstitute_execution::ExecutionClient;
 /// Preserve original platform errors across the shared controller.
 pub type BackendResult<T> = Result<T, Box<dyn Error>>;
 
+/// Current authenticated grant's matching facts for a selected Comfy connection.
+/// These copied values do not authorize a request until its native peer is checked.
+#[cfg(all(windows, feature = "native-composition"))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CanvasBackend {
+    /// Current main-window identity that received the grant.
+    pub identity: MainIdentity,
+    /// Current resource and lease generation, fenced during backend recovery.
+    pub lease: sugarsubstitute_supervision::lifecycle_protocol::LeaseReference,
+    /// Loopback origin established by the parent readiness owner.
+    pub origin: sugarsubstitute_contracts::configuration::LoopbackOrigin,
+    /// Parent-verified process matching facts, independently checked on each connection.
+    pub peer: sugarsubstitute_supervision::lifecycle_protocol::BackendPeer,
+}
+
 /// Keep policy together with its platform-owned authentication and allocation guards.
 pub trait PreparedStartup {
     /// Borrow shared startup policy without detaching native custody.
@@ -55,6 +70,12 @@ pub trait StartupBackend {
         observation: DesktopStartupObservation,
         prepared: Option<&Self::Prepared>,
     ) -> BackendResult<()>;
+    /// Check that a canvas message belongs to the current admitted panel and allocation.
+    #[cfg(feature = "native-composition")]
+    fn admits_canvas(&self, identity: MainIdentity, lease: &MemoryLease) -> bool;
+    /// Borrow the current authenticated grant; managed backend outages fence this capability.
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn canvas_backend(&self, identity: MainIdentity) -> Option<CanvasBackend>;
     /// Report whether main-window construction still owns native input or jobs.
     fn main_construction_pending(&self) -> bool;
     /// Borrow immutable text while the complete source guard remains alive.

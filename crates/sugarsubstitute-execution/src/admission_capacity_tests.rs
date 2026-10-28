@@ -110,6 +110,49 @@ fn final_original_context_release_wakes_native_retry_after_completion_transfer()
 }
 
 #[test]
+fn cancelled_scope_final_memory_release_wakes_its_composing_pump() -> TestResult {
+    let rig = Rig::new()?;
+    let first = retained_context(&rig, 1, 32)?;
+    let second = retained_context(&rig, 2, 16)?;
+    drain(&rig)?;
+    rig.scope.cancel();
+    let before = rig.wake.count();
+    drop(first);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, 16);
+    assert_eq!(rig.wake.count(), before);
+    drop(second);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
+    assert_eq!(rig.wake.count(), before + 1);
+    drain(&rig)?;
+    Ok(())
+}
+
+#[test]
+fn cancelled_scope_release_coalesces_with_an_unconsumed_foreign_terminal() -> TestResult {
+    let rig = Rig::new()?;
+    let other =
+        rig.client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+    let retained = retained_context(&rig, 1, 32)?;
+    drain(&rig)?;
+    rig.scope.cancel();
+    let before = rig.wake.count();
+    let mut job =
+        rig.client.submit_async(&other, spec(2, JobClass::IoLifecycle, 0)?, |_| async {
+            Ok::<_, ()>(())
+        })?;
+    rig.wake.wait_after(before)?;
+    let pending_wake = rig.wake.count();
+    drop(retained);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
+    assert_eq!(rig.wake.count(), pending_wake);
+    let batch = rig.client.drain_completions(NonZeroUsize::MIN)?;
+    assert_eq!(batch.notifications.len(), 1);
+    assert_eq!(batch.notifications[0].scope_id, other.id());
+    drop(job.try_take_completion().ok_or("Foreign terminal missing")?);
+    Ok(())
+}
+
+#[test]
 fn insufficient_or_unrequested_memory_releases_do_not_wake() -> TestResult {
     let rig = Rig::new()?;
     let large = retained_context(&rig, 1, LIMIT - 8)?;

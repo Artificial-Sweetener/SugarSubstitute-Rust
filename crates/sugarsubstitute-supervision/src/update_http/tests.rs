@@ -166,9 +166,9 @@ fn shared_readiness_transport_observes_the_connected_tuple_before_and_after_body
         let port = policy.asset("native")?.port()?;
         let mut transport = sugarsubstitute_networking::Transport::default();
         let outcome = (|| -> TestResult {
-            transport.readiness(port, context)?;
-            transport.readiness_request("/native", context)?;
-            transport.send_readiness(context)?;
+            transport.connect_loopback(port, context)?;
+            transport.request_loopback("/native", context)?;
+            transport.send_loopback(context)?;
             transport.receive(context)?;
             let before = transport.loopback_tuple(port, context)?;
             assert_ne!(before.0, 0);

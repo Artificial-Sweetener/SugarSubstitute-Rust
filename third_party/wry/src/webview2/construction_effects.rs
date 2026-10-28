@@ -103,6 +103,27 @@ pub(super) fn advance(driver: &mut Driver) -> Result<ConstructionProgress> {
             .ok_or_else(|| owned_config::invalid("missing environment"))?,
         )
       };
+      let attrs = driver
+        .config
+        .attrs
+        .as_ref()
+        .ok_or_else(|| owned_config::invalid("missing controller inputs"))?;
+      let background = if attrs.transparent {
+        Some((0, 0, 0, 0))
+      } else {
+        attrs.background_color
+      };
+      if driver.config.composition {
+        construction_composition::submit(
+          hwnd,
+          &env,
+          attrs.incognito,
+          background,
+          driver.config.platform.profile_name.as_deref(),
+          shared.clone(),
+        )?;
+        return Ok(ConstructionProgress::Pending);
+      }
       let callback_owner = shared.clone();
       let handler = CreateCoreWebView2ControllerCompletedHandler::create(Box::new(
         move |status, controller| {
@@ -125,16 +146,6 @@ pub(super) fn advance(driver: &mut Driver) -> Result<ConstructionProgress> {
           Ok(())
         },
       ));
-      let attrs = driver
-        .config
-        .attrs
-        .as_ref()
-        .ok_or_else(|| owned_config::invalid("missing controller inputs"))?;
-      let background = if attrs.transparent {
-        Some((0, 0, 0, 0))
-      } else {
-        attrs.background_color
-      };
       InnerWebView::submit_controller(
         hwnd,
         &env,
@@ -144,6 +155,20 @@ pub(super) fn advance(driver: &mut Driver) -> Result<ConstructionProgress> {
         &handler,
         || shared.arm_creation(Stage::AwaitController),
       )?;
+    }
+    Stage::ResolveComposition => {
+      let controller = construction_composition::resolve(&shared)?;
+      if shared.native.borrow().ledger.retiring {
+        return Ok(ConstructionProgress::Pending);
+      }
+      let observer = shared.native.borrow().private_profile.as_ref().map(PrivateProfileObserver::retained);
+      if let Some(observer) = observer {
+        observer.controller(&controller)?;
+      }
+      if shared.native.borrow().ledger.retiring || shared.native.borrow().failure.is_some() {
+        return Ok(ConstructionProgress::Pending);
+      }
+      shared.native.borrow_mut().ledger.stage = Stage::Initialize;
     }
     Stage::Initialize => {
       super::construction_initialize::initialize(driver)?;

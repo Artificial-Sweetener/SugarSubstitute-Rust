@@ -1,5 +1,11 @@
 # Bundled material
 
+The shared canvas surface and panel schemas, their validation vectors, and generated Rust
+decoders derive from [SugarCubes](https://github.com/Artificial-Sweetener/SugarCubes),
+Copyright (C) 2026 Artificial Sweetener and contributors, under
+AGPL-3.0-or-later. The retained schema snapshots and their generated decoders are
+recorded in the manifest; the full license is in `licenses/sugarcubes.AGPL-3.0.txt`.
+
 The native canvas open and closed hand cursors preserve the Qt Base 6.11.0
 artwork, Copyright (C) The Qt Company Ltd., from commit
 `8ba7ea4b77a4b8f1948760221e264917ddc9e1c8`. The PNG license annotation in

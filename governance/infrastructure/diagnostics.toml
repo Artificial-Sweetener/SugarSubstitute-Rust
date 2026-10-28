@@ -143,7 +143,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/desktop_output/qualification_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:71e96c8bc8d3391eed8c921d265cddb08265d81e093787976987dcf98781849a"
+source_sha256 = "sha256:c7bdf65c626ce00a65b4686155352d7293de9ee0dd44b3bac5c221698ad680f6"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -248,7 +248,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:f7e112236172eb7cce83e410d75116ca5fcdc86edb9de269b0bf565021c33186"
+source_sha256 = "sha256:9065ec009f74081b23bb9bd9f8fa0dc8a1d4317d05bd656991ab0b5bc05f1252"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -262,7 +262,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/structure.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:471bdd2d412c17f05d5cdf085213a560b326b9c178c0cb06f967be94bbbf5e79"
+source_sha256 = "sha256:2a82500bc47bc2f3b972759dc55cddd3c4bbd26696794f57fb6b441b5c654a71"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -948,7 +948,7 @@ rationale = "The isolated Node transport qualification captures bounded child st
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/tests/harness.rs"
 owner = "sugarsubstitute-image-io"
-source_sha256 = "sha256:423b070f5a55433c8209c2c062afe3e211bbf33ca34dcfcac411a7edbb8ce004"
+source_sha256 = "sha256:0a85e45e6b4b4765861886f88dca5b48168fdc0d929f2c03050a261207e25a48"
 disposition = "fixture"
 rationale = "Bounded external test wake reports retained terminal failure causes after real execution admission; no runtime sink is constructed."
 

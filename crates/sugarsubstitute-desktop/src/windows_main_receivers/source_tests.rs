@@ -35,7 +35,7 @@ fn native_subscription_inventory_cannot_route_unowned_runtime_exceptions_into_re
             "Unexpected unowned exception admission"
         )))?);
     }
-    assert_eq!(SOURCES.len(), 6);
+    assert_eq!(SOURCES.len(), 7);
     for (index, (method, kind)) in SOURCES.into_iter().enumerate() {
         assert!(!SOURCES[..index].iter().any(|(prior, _)| *prior == method));
         events.record(kind, |_| Ok(()));

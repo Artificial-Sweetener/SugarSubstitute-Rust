@@ -17,6 +17,21 @@ pub(crate) fn root_url(origin: LoopbackOrigin) -> String {
     format!("http://{host}:{}/", origin.port())
 }
 
+/// Bind only the public panel navigation label to the independently authorized loopback root.
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn panel_root_url(
+    origin: LoopbackOrigin,
+    identity: crate::MainIdentity,
+) -> Result<String, crate::DesktopError> {
+    let session = sugarsubstitute_contracts::panel::PanelSession::for_main(identity)
+        .map_err(|cause| crate::DesktopError::new("panel_navigation", cause))?;
+    Ok(format!(
+        "{}?sc-panel-host=ai.artificialsweetener.sugarsubstitute&sc-panel-session={}&sc-panel-transport=native",
+        root_url(origin),
+        session.as_str()
+    ))
+}
+
 /// Validate raw authority before URL parsing can normalize alternate host spelling.
 /// Frame and top-document paths remain with the unchanged served frontend.
 pub(crate) fn admits_url(origin: LoopbackOrigin, value: &str) -> bool {

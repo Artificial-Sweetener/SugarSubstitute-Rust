@@ -72,6 +72,8 @@ owner = "sugarsubstitute-desktop"
 concern = "Native event-loop presentation, accessible peers, platform dialogs and embedded ComfyUI browser surfaces"
 capabilities = ["raster", "text", "webview", "window"]
 sources = [
+    "crates/sugarsubstitute-desktop/src/canvas/composition_fence.rs",
+    "crates/sugarsubstitute-desktop/src/canvas/graphics.rs",
     "crates/sugarsubstitute-desktop/src/canvas/paint.rs",
     "crates/sugarsubstitute-desktop/src/canvas/windows.rs",
     "crates/sugarsubstitute-desktop/src/canvas/windows/input/lifecycle_tests.rs",
@@ -83,7 +85,16 @@ sources = [
     "crates/sugarsubstitute-desktop/src/linux.rs",
     "crates/sugarsubstitute-desktop/src/macos.rs",
     "crates/sugarsubstitute-desktop/src/main_actor.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/composition.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/device.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/tests.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/composition/input.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/composition/retirement.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/construction.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/evidence.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge/callback.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/frame.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/render_preview/actor.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/render_preview/capture.rs",
@@ -123,7 +134,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:d7ee19df0c77c6f9f6733ce20c8c58a369fc7a833ebecbd52b31ab0af0917517"
+source_sha256 = "sha256:cee9e7352a8f0090de93823d97ae237ae96b01e7563b9887b6cb44893de4fe91"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"

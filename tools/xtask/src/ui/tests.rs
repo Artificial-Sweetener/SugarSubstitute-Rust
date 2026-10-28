@@ -95,6 +95,10 @@ fn source_capabilities_cannot_hide_in_aliases_macros_or_platform_branches() -> R
         "macro_rules! palette { () => { SetBkColor(); SetDCBrushColor(); }; }",
         "#[cfg(target_os=\"macos\")] fn run(){ wgpu::Instance::new(options); }",
         "macro_rules! gpu { () => { use wgpu as rendering; rendering::Device }; }",
+        "use windows::Win32::Graphics::DirectComposition::IDCompositionDevice as Device;",
+        "macro_rules! composition { () => { DCompositionCreateDevice2() }; }",
+        "unsafe extern \"system\" { #[link_name=\"DCompositionCreateDevice2\"] fn build(); }",
+        "fn run(device: Device){ device.CreateTargetForHwnd(); }",
     ] {
         assert!(!ui_source::findings(source, &[])?.is_empty(), "accepted {source}");
     }
@@ -135,7 +139,13 @@ fn renamed_toolkit_dependency_and_its_source_are_rejected() -> Result<()> {
 /// New source cannot inherit arbitrary UI authority from an existing dependency or crate.
 #[test]
 fn unregistered_native_construction_is_rejected() -> Result<()> {
-    for source in ["fn run(){ CreateWindowExW(); }", "fn run(){ CreateCursor(); }"] {
+    for source in [
+        "fn run(){ CreateWindowExW(); }",
+        "fn run(){ CreateCursor(); }",
+        "fn run(){ DCompositionCreateDevice2(); }",
+        "unsafe extern \"system\" { #[link_name=\"DCompositionCreateDevice2\"] fn build(); }",
+        "macro_rules! create { () => { device.CreateTargetForHwnd() }; }",
+    ] {
         let (fixture, policy) = fixture()?;
         check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
         write(fixture.root(), "crates/consumer/src/adhoc.rs", source)?;

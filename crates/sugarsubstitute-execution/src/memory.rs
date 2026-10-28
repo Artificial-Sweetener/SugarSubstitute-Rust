@@ -5,7 +5,7 @@
 
 use crate::{admission::Core, scope::lock};
 use std::sync::Arc;
-use sugarsubstitute_contracts::execution::{JobId, MemoryRelease, ScopeId};
+use sugarsubstitute_contracts::execution::{CancelControl, JobId, MemoryRelease, ScopeId};
 
 pub(crate) struct Release {
     pub(crate) core: Arc<Core>,
@@ -35,11 +35,18 @@ impl MemoryRelease for Release {
             let core = &self.core;
             let mut state = lock(&core.state);
             state.bytes -= bytes;
-            if let Some(scope) = state.scopes.get_mut(&self.scope_id) {
+            let scope_released = if let Some(scope) = state.scopes.get_mut(&self.scope_id) {
                 scope.bytes -= bytes;
-            }
+                scope.bytes == 0 && scope.cancel.is_requested()
+            } else {
+                false
+            };
             Core::retire_scopes(&mut state);
             let wake = core.capacity_ready(&mut state);
+            // A canceled owner may be waiting for its final retained result guard, even
+            // when no later admission requested memory. Reuse the same coalesced mailbox.
+            let wake = wake
+                || (scope_released && !state.stopping && core.select_capacity_wake(&mut state));
             drop(state);
             core.deliver_capacity_wake(wake);
             core.changed();

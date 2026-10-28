@@ -43,6 +43,9 @@ pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> &'sta
         DesktopStartupObservation::FrontendReceipt { .. } => "FrontendReceipt",
         DesktopStartupObservation::SplashRetired(_) => "SplashRetired",
         DesktopStartupObservation::MainRevealed(_) => "MainRevealed",
+        DesktopStartupObservation::PanelMessage(_) => "PanelMessage",
+        DesktopStartupObservation::SurfaceMessage(_) => "SurfaceMessage",
+        DesktopStartupObservation::CanvasContextMessage(_) => "CanvasContextMessage",
         DesktopStartupObservation::MainReloadRequested { .. } => "MainReloadRequested",
         #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
         DesktopStartupObservation::MainPreviewCaptured(_) => "MainPreviewCaptured",

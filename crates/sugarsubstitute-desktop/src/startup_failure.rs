@@ -22,6 +22,8 @@ pub enum StartupCloseStage {
     PolicyApply,
     /// Governed render preparation rejected retirement.
     RenderRetirement,
+    /// The application canvas rejected its original retirement cutoff.
+    CanvasRetirement,
     /// The original deadline could not be projected for native waiting.
     DeadlineRefresh,
 }

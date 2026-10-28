@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded borrowed reply data without constructing native trust or output custody.
 use super::{
-    GrantedContext, MAX_PROFILE_FOLDER_UNITS, OutputDelivery, ProtocolError, ReplyOutcome,
-    VersionLabel,
+    BackendPeer, GrantedContext, MAX_PROFILE_FOLDER_UNITS, OutputDelivery, ProtocolError,
+    ReplyOutcome, VersionLabel,
     binary::{Reader, Writer},
     decode, encode, main_fields, reply,
 };
@@ -29,7 +29,9 @@ pub(super) fn write(
             main_fields::write_identity(context.identity, run, writer)?;
             main_fields::write_origin(context.origin, writer)?;
             write_version(context.frontend, writer)?;
-            write_version(context.sugarcubes, writer)
+            write_version(context.sugarcubes, writer)?;
+            writer.u32(context.backend_peer.process_id.get())?;
+            writer.u64(context.backend_peer.creation_time_100ns.get())
         }
         ReplyOutcome::Released => writer.u8(4),
         ReplyOutcome::Cancelled => writer.u8(6),
@@ -97,6 +99,7 @@ pub(super) fn read<'a>(
             origin: main_fields::read_origin(input)?,
             frontend: read_version(input)?,
             sugarcubes: read_version(input)?,
+            backend_peer: read_backend_peer(input)?,
         }),
         4 => ReplyOutcome::Released,
         5 => ReplyOutcome::Reloaded(GrantedContext {
@@ -105,6 +108,7 @@ pub(super) fn read<'a>(
             origin: main_fields::read_origin(input)?,
             frontend: read_version(input)?,
             sugarcubes: read_version(input)?,
+            backend_peer: read_backend_peer(input)?,
         }),
         6 => ReplyOutcome::Cancelled,
         7 => ReplyOutcome::Failed(reply::failure(input.u8()?)?),
@@ -144,6 +148,13 @@ pub(super) fn read<'a>(
     })
 }
 /// Validate the closed Main cohort count before any caller-owned output mutation.
+fn read_backend_peer(input: &mut Reader<'_>) -> Result<BackendPeer, ProtocolError> {
+    Ok(BackendPeer {
+        process_id: main_fields::read_pid(input)?,
+        creation_time_100ns: main_fields::read_positive(input)?,
+    })
+}
+
 fn check_affected_clients(count: u16) -> Result<(), ProtocolError> {
     if !(1..=64).contains(&count) {
         return Err(ProtocolError::Length);

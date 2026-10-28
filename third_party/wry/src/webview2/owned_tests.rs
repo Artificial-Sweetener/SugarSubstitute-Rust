@@ -72,6 +72,63 @@ fn owned_cancel_pending_adopts_late_output_without_initializing() {
 }
 
 #[test]
+fn composition_failed_or_late_output_requires_resolution_before_close() {
+  for failed in [false, true] {
+    let released = Rc::new(Cell::new(0));
+    let mut ledger = Ledger::new();
+    ledger.stage = Stage::AwaitController;
+    ledger.pending = 1;
+    ledger.retiring = true;
+    let mut slot = None;
+    let mut cause = None;
+    construction_composition::adopt(
+      &mut slot,
+      Some(Resource(released.clone())),
+      if failed { Err(windows::core::Error::from(E_ACCESSDENIED)) } else { Ok(()) },
+      &mut ledger,
+      &mut cause,
+    );
+    assert_eq!(ledger.pending, 0);
+    assert_eq!(ledger.action(false), RetireAction::ResolveComposition);
+    assert_eq!(released.get(), 0);
+    assert_eq!(cause.is_some(), failed);
+    ledger.commit(RetireAction::ResolveComposition);
+    assert_eq!(ledger.action(false), RetireAction::DetachComposition);
+    ledger.commit(RetireAction::DetachComposition);
+    assert_eq!(ledger.action(false), RetireAction::Close);
+    ledger.commit(RetireAction::Close);
+    assert_eq!(ledger.action(false), RetireAction::Release);
+    drop(slot);
+    assert_eq!(released.get(), 1);
+  }
+}
+
+#[test]
+fn composition_resolution_failure_keeps_the_cleanup_obligation() -> Result<()> {
+  let shared = shared();
+  shared.native.borrow_mut().ledger.composition_pending = true;
+  shared.native.borrow_mut().ledger.composition_detach_pending = true;
+  assert!(retirement::step_with(&shared, |action| {
+    assert_eq!(action, RetireAction::ResolveComposition);
+    Err(failed())
+  }).is_err());
+  assert_eq!(shared.native.borrow().ledger.action(false), RetireAction::ResolveComposition);
+  assert!(!shared.native.borrow().ledger.retired);
+  retirement::step_with(&shared, |action| {
+    assert_eq!(action, RetireAction::ResolveComposition);
+    Ok(())
+  })?;
+  assert_eq!(shared.native.borrow().ledger.action(false), RetireAction::DetachComposition);
+  assert!(retirement::step_with(&shared, |_| Err(failed())).is_err());
+  assert_eq!(shared.native.borrow().ledger.action(false), RetireAction::DetachComposition);
+  retirement::step_with(&shared, |_| Ok(()))?;
+  assert_eq!(shared.native.borrow().ledger.action(false), RetireAction::Close);
+  retirement::step_with(&shared, |_| Ok(()))?;
+  assert!(retirement::step_with(&shared, |_| Ok(()))?);
+  Ok(())
+}
+
+#[test]
 fn owned_callback_before_submission_returns_preserves_finished_original_failure() {
   let mut ledger = Ledger::new();
   ledger.stage = Stage::AwaitEnvironment;

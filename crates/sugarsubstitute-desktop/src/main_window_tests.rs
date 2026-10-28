@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Check bounded native-host input and exact origin admission without creating windows.
 use super::*;
-use crate::main_navigation::{admits_url, root_url};
+use crate::main_navigation::{admits_url, panel_root_url, root_url};
 use std::{
     error::Error,
     sync::{
@@ -203,6 +203,39 @@ fn exact_loopback_origin_preserves_served_paths_queries_and_fragments() -> Resul
             origin,
             &format!("{}assets/frontend.js?revision=1#part", root_url(origin))
         ));
+    }
+    Ok(())
+}
+
+#[test]
+fn normal_main_navigation_identifies_the_current_panel_without_changing_the_owned_origin() -> Result
+{
+    let request =
+        request(settings(), absolute(), MainWindowRequest::KNOWN_STORAGE_BYTES, Arc::default())??;
+    let identity = request.identity();
+    let expected = sugarsubstitute_contracts::panel::PanelSession::for_main(identity)?;
+    for (root, port) in
+        [("http://127.0.0.1:8188/", 8188), ("http://localhost/", 80), ("http://[::1]:8188/", 8188)]
+    {
+        let origin = LoopbackOrigin::parse(root, port)?;
+        let value = panel_root_url(origin, identity)?;
+        assert!(admits_url(origin, &value));
+        let parsed = url::Url::parse(&value)?;
+        assert_eq!(parsed.path(), "/");
+        let fields: Vec<_> = parsed.query_pairs().collect();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(
+            fields[0],
+            ("sc-panel-host".into(), "ai.artificialsweetener.sugarsubstitute".into())
+        );
+        assert_eq!(fields[1].0, "sc-panel-session");
+        assert_eq!(fields[1].1, expected.as_str());
+        assert_eq!(fields[2], ("sc-panel-transport".into(), "native".into()));
+        let next = MainIdentity {
+            navigation: Generation::new(identity.navigation.get() + 1)?,
+            ..identity
+        };
+        assert_ne!(panel_root_url(origin, next)?, value);
     }
     Ok(())
 }

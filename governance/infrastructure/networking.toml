@@ -10,7 +10,7 @@ rationale = "Execution owns authenticated IPC readiness and isolated native HTTP
 [[records]]
 path = "crates/sugarsubstitute-networking/src/native.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:1dbba00d108aac8f2010ec49d73511edc3f7046a89c0b15285a4ebecb4fd42f0"
+source_sha256 = "sha256:2549cb3e543c1f66b2cf417b77fbdd68fdddf54cb5107f3793b81f2285c3851d"
 boundary = "implementation"
 rationale = "Exclusive synchronous WinHTTP construction, fixed request controls and checked child-before-parent handle retirement."
 
@@ -94,7 +94,7 @@ rationale = "Worker connects only to the execution-owned authenticated loopback 
 [[records]]
 path = "crates/sugarsubstitute-networking/src/native/tests/qualification.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:998523791dd9a41a9f4f5224639e85206a71141eeeb239bedd255d110dc62eaa"
+source_sha256 = "sha256:e9112a64ac3bdbbd7fb36152c2d7148f9150f660dd903c3940788015291bed2f"
 boundary = "implementation"
 rationale = "Actual native policy queries qualify closed transport controls and cancellation retirement inside admitted execution lifetimes."
 

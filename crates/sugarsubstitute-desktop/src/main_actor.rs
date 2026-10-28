@@ -4,9 +4,12 @@
 
 mod admission;
 mod close_request;
+#[cfg(feature = "native-composition")]
+mod composition;
 mod construction;
 mod evidence;
 mod frame;
+mod panel;
 mod probe_diagnostics;
 mod recovery;
 #[cfg(any(feature = "k1-native-qualification", test))]
@@ -55,6 +58,13 @@ pub(crate) struct MainActor {
     constructor: Option<WebViewConstruction>,
     partial: Option<WebViewRetirement>,
     view: Option<WebView>,
+    #[cfg(feature = "native-composition")]
+    composition: Option<composition::Composition>,
+    #[cfg(feature = "native-composition")]
+    composition_registered: bool,
+    panel_bridge: Option<panel::bridge::Bridge>,
+    canvas_replies: panel::Replies,
+    panel_navigation_started: bool,
     receivers: Option<crate::windows_main_receivers::Receivers>,
     events: Option<Rc<Events>>,
     readiness: Option<MainReadiness>,
@@ -66,6 +76,7 @@ pub(crate) struct MainActor {
     native_storage: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
     failure_observation: &'static str,
     probe_diagnostics: probe_diagnostics::ProbeDiagnostics,
+    panel_ingress_overflow: bool,
     #[cfg(feature = "k1-native-qualification")]
     preview: Option<render_preview::Capture>,
     #[cfg(feature = "k1-native-qualification")]
@@ -108,6 +119,13 @@ impl MainActor {
             constructor: None,
             partial: None,
             view: None,
+            #[cfg(feature = "native-composition")]
+            composition: None,
+            #[cfg(feature = "native-composition")]
+            composition_registered: false,
+            panel_bridge: None,
+            canvas_replies: panel::Replies::new(),
+            panel_navigation_started: false,
             receivers: None,
             events: Some(events),
             readiness: Some(readiness),
@@ -119,6 +137,7 @@ impl MainActor {
             native_storage: Some(native_storage),
             failure_observation: "None",
             probe_diagnostics: probe_diagnostics::ProbeDiagnostics::default(),
+            panel_ingress_overflow: false,
             #[cfg(feature = "k1-native-qualification")]
             preview: None,
             #[cfg(feature = "k1-native-qualification")]
@@ -154,6 +173,8 @@ impl MainActor {
                 || (self.stage != ConstructionStage::Live
                     && self.stage != ConstructionStage::PausedEnvironment)
                 || self.events.as_ref().is_some_and(|events| events.remaining() != 0)
+                || self.panel_bridge_needs_progress()
+                || self.canvas_reply_needs_progress()
                 || self.preview_needs_progress())
     }
     fn request(&self) -> Result<&MainWindowRequest, DesktopError> {
@@ -171,6 +192,11 @@ impl MainActor {
         {
             false
         }
+    }
+    /// Preserve a real bridge callback wake without polling a pending native registration.
+    fn panel_bridge_needs_progress(&self) -> bool {
+        !self.panel_navigation_started
+            && self.panel_bridge.as_ref().is_some_and(panel::bridge::Bridge::needs_progress)
     }
     fn window(&self) -> Result<&Rc<Window>, DesktopError> {
         self.window
@@ -234,9 +260,27 @@ impl MainActor {
         if self.stage != ConstructionStage::Live {
             return self.construct_step(target, proxy, title);
         }
-        let observed = self.evidence_step()?;
+        let reply_was_due = self.canvas_replies.reply_due();
+        if reply_was_due && self.progress_canvas_reply()? {
+            return Ok(None);
+        }
+        let evidence = self.evidence_step()?;
+        if evidence.consumed {
+            self.canvas_replies.evidence_serviced();
+        }
+        let observed = evidence.observation;
         if observed.is_some() || self.events()?.remaining() != 0 {
             return Ok(observed);
+        }
+        if !reply_was_due && !self.canvas_replies.is_empty() && self.progress_canvas_reply()? {
+            return Ok(None);
+        }
+        if !self.panel_navigation_started
+            && let Some(bridge) = &mut self.panel_bridge
+            && bridge.install_step()?
+        {
+            self.panel_navigation_started = true;
+            return self.navigate_frontend();
         }
         #[cfg(feature = "k1-native-qualification")]
         {

@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain the one real execution owner independently of child/native retirement.
 
-use std::{error::Error, num::NonZeroUsize, sync::Arc};
+use std::{
+    error::Error,
+    num::{NonZeroU64, NonZeroUsize},
+    sync::Arc,
+};
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionBatch, CompletionWake, Moment, Scope, ScopeSpec,
 };
@@ -13,13 +17,34 @@ pub(super) struct StartupExecution {
     clock: Arc<dyn Clock>,
     owner: Option<ExecutionOwner>,
     started: bool,
+    memory_capacity: Option<NonZeroU64>,
     shutdown_until: Option<Moment>,
     shutting_down: bool,
 }
 impl StartupExecution {
     /// Retain the configured original clock without starting workers.
     pub(super) fn new(clock: Arc<dyn Clock>) -> Self {
-        Self { clock, owner: None, started: false, shutdown_until: None, shutting_down: false }
+        Self {
+            clock,
+            owner: None,
+            started: false,
+            memory_capacity: None,
+            shutdown_until: None,
+            shutting_down: false,
+        }
+    }
+    /// Fund the CPU canvas in addition to the existing startup working set.
+    /// This sets an admission ceiling; it does not allocate the entire amount.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    pub(super) fn reserve_canvas_capacity(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.started {
+            return Err("Canvas capacity must be selected before execution starts".into());
+        }
+        // The original 256 MiB startup ceiling, 160 MiB retained canvas and 48 MiB
+        // import job fit within this combined ceiling with room for retirement work.
+        self.memory_capacity =
+            Some(NonZeroU64::new(512 * 1024 * 1024).ok_or("Invalid canvas capacity")?);
+        Ok(())
     }
     /// Start at most once, even if construction or subsequent owner setup fails.
     /// # Errors
@@ -29,7 +54,12 @@ impl StartupExecution {
             return Err(std::io::Error::other("Startup execution already started").into());
         }
         self.started = true;
-        self.owner = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
+        self.owner = Some(match self.memory_capacity {
+            Some(capacity) => {
+                ExecutionOwner::with_memory_capacity(self.clock.clone(), wake, capacity)?
+            }
+            None => ExecutionOwner::new(self.clock.clone(), wake)?,
+        });
         Ok(())
     }
     /// Borrow the existing typed client; never create a replacement owner.

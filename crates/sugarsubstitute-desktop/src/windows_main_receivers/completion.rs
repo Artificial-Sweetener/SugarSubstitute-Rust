@@ -57,6 +57,11 @@ impl Operations {
     pub(super) fn pending(&self) -> usize {
         self.pending.borrow().len()
     }
+
+    /// Reserve two command slots for current-document panel and lifecycle traffic.
+    pub(super) fn admits_surface_delivery(&self) -> bool {
+        self.pending() < 2
+    }
 }
 
 #[implement(ICoreWebView2CallDevToolsProtocolMethodCompletedHandler)]
@@ -113,4 +118,37 @@ pub(super) fn call(
     // callback. A failed submission cannot fabricate callback quiescence: its slot stays owned.
     unsafe { core.CallDevToolsProtocolMethod(&method, &parameters, &handler) }
         .map_err(|cause| DesktopError::new("submit_main_command", cause))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sugarsubstitute_contracts::execution::{MemoryLease, MemoryRelease};
+
+    struct Release;
+    impl MemoryRelease for Release {
+        fn release(&self, _: u64) {}
+    }
+
+    #[test]
+    fn surface_delivery_keeps_capacity_for_panel_commands_until_callbacks_complete()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let lease = MemoryLease::new(4 * 1024 * 1024, Box::new(Release));
+        let events = Events::new(&lease, || {})?;
+        let operations = Operations::new(events)?;
+        assert!(operations.admits_surface_delivery());
+        let first = operations.arm()?;
+        let second = operations.arm()?;
+        assert!(!operations.admits_surface_delivery());
+        let third = operations.arm()?;
+        let fourth = operations.arm()?;
+        assert!(operations.arm().is_err());
+        operations.completed(first);
+        operations.completed(second);
+        assert!(!operations.admits_surface_delivery());
+        operations.completed(third);
+        assert!(operations.admits_surface_delivery());
+        operations.completed(fourth);
+        Ok(())
+    }
 }

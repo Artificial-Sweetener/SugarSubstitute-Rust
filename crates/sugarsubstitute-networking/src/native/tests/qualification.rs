@@ -43,8 +43,8 @@ fn actual_native_requests_preserve_redirect_header_tls_and_phase_timeout_control
                         context,
                     )?;
                 } else {
-                    transport.readiness(1, context)?;
-                    transport.readiness_request("/system_stats", context)?;
+                    transport.connect_loopback(1, context)?;
+                    transport.request_loopback("/system_stats", context)?;
                 }
                 assert_eq!(option_value(transport.session, WINHTTP_OPTION_CONNECT_RETRIES)?, 1);
                 assert_eq!(
@@ -117,16 +117,50 @@ fn invalid_idle_and_cross_route_requests_reject_before_native_transfer() -> Test
         }
         transport.update(&request, 100, context)?;
         transport.close_request()?;
-        assert!(transport.readiness_request("/system_stats", context).is_err());
-        assert!(transport.send_readiness(context).is_err());
+        assert!(transport.request_loopback("/system_stats", context).is_err());
+        assert!(transport.send_loopback(context).is_err());
         transport.close()?;
         assert!(transport.empty());
-        transport.readiness(1, context)?;
+        transport.connect_loopback(1, context)?;
         for path in ["http://example.invalid/", "//example.invalid/", "/x\r\nInjected: yes", ""] {
-            assert!(transport.readiness_request(path, context).is_err());
+            assert!(transport.request_loopback(path, context).is_err());
         }
         assert!(transport.send_update(None, context).is_err());
         transport.close()?;
+        assert!(transport.empty());
+        Ok(())
+    })
+}
+
+#[test]
+fn loopback_request_preserves_encoded_comfy_view_target_without_changing_the_origin() -> TestResult
+{
+    support::run(false, 1024 * 1024, |context, _| {
+        let mut transport = Transport::default();
+        let outcome = (|| -> TestResult {
+            transport.connect_loopback(12345, context)?;
+            let target = "/view?filename=image+one%26.png&subfolder=nested%2Ffolder&type=output";
+            transport.request_loopback(target, context)?;
+            let mut url = [0u16; 512];
+            let mut length = (url.len() * 2) as u32;
+            // SAFETY: The retained request owns this bounded query and the UTF-16 buffer is writable.
+            unsafe {
+                WinHttpQueryOption(
+                    raw(transport.request),
+                    WINHTTP_OPTION_URL,
+                    Some(url.as_mut_ptr().cast()),
+                    &mut length,
+                )
+            }
+            .map_err(|e| Failure::native("qualify_request_url", e))?;
+            assert!(length as usize <= url.len() * 2 && length.is_multiple_of(2));
+            let url = String::from_utf16(&url[..length as usize / 2])?;
+            assert_eq!(url, format!("http://127.0.0.1:12345{target}"));
+            Ok(())
+        })();
+        let retirement = transport.close();
+        outcome?;
+        retirement?;
         assert!(transport.empty());
         Ok(())
     })
@@ -135,10 +169,10 @@ fn invalid_idle_and_cross_route_requests_reject_before_native_transfer() -> Test
 fn cancellation_rejects_transfer_but_checked_native_retirement_remains_available() -> TestResult {
     support::run(true, 1024 * 1024, |context, scope| {
         let mut transport = Transport::default();
-        transport.readiness(1, context)?;
-        transport.readiness_request("/system_stats", context)?;
+        transport.connect_loopback(1, context)?;
+        transport.request_loopback("/system_stats", context)?;
         scope.cancel();
-        assert!(transport.send_readiness(context).is_err());
+        assert!(transport.send_loopback(context).is_err());
         assert!(!transport.empty());
         transport.close()?;
         assert!(transport.empty());
@@ -178,11 +212,11 @@ fn actual_inflight_cancellation_retains_custody_until_the_peer_observes_native_c
 fn active_native_requests_reject_foreign_admitted_jobs_but_allow_checked_cleanup() -> TestResult {
     support::run(false, 1024 * 1024, |context, _| {
         let mut transport = Transport::default();
-        transport.readiness(1, context)?;
-        transport.readiness_request("/system_stats", context)?;
+        transport.connect_loopback(1, context)?;
+        transport.request_loopback("/system_stats", context)?;
         support::run(false, 1024 * 1024, move |foreign, _| {
             let failure = transport
-                .send_readiness(foreign)
+                .send_loopback(foreign)
                 .err()
                 .ok_or("Foreign job borrowed native request")?;
             assert_eq!(failure.into_parts().0, "http_context");

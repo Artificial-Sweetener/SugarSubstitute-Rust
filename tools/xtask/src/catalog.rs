@@ -11,6 +11,7 @@ use crate::{
     error::{Result, require},
     policy::Architecture,
     source::{fingerprint, resolve},
+    vendor::Manifest,
 };
 
 /// Inventory implemented persisted formats and cross-version protocols.
@@ -40,6 +41,7 @@ impl Persistence {
 pub(crate) struct Format {
     id: String,
     owner: String,
+    vendored_component: Option<String>,
     sources: Vec<String>,
     source_sha256: String,
     classification: Classification,
@@ -132,15 +134,17 @@ pub(crate) fn check_persistence(
     root: &Path,
     policy: &Architecture,
     catalog: &Persistence,
+    vendors: &Manifest,
 ) -> Result<()> {
     require(catalog.schema_version == 1, "persistence catalog requires schema one")?;
+    crate::vendor::check(root, vendors)?;
     let mut ids = BTreeSet::new();
     for format in &catalog.formats {
         require(
             !format.id.trim().is_empty() && ids.insert(&format.id),
             "persisted format identifiers must be nonempty and unique",
         )?;
-        reviewed_sources(root, policy, &format.owner, &format.sources, &format.source_sha256)?;
+        reviewed_format_sources(root, policy, format, vendors)?;
         match (&format.classification, &format.preservation) {
             (
                 Classification::AuthoritativeState
@@ -157,6 +161,59 @@ pub(crate) fn check_persistence(
         )?;
     }
     Ok(())
+}
+
+/// Include only explicitly named, manifested vendor files in an owner's exact format review.
+fn reviewed_format_sources(
+    root: &Path,
+    policy: &Architecture,
+    format: &Format,
+    vendors: &Manifest,
+) -> Result<()> {
+    let Some(component) = &format.vendored_component else {
+        return reviewed_sources(
+            root,
+            policy,
+            &format.owner,
+            &format.sources,
+            &format.source_sha256,
+        );
+    };
+    let owner = policy
+        .owners
+        .iter()
+        .find(|entry| entry.package == format.owner && entry.layer != "tooling")
+        .ok_or_else(|| {
+            crate::error::Failure::Policy(format!(
+                "catalog: unknown runtime owner {}",
+                format.owner
+            ))
+        })?;
+    let files = vendors.component_files(component).ok_or_else(|| {
+        crate::error::Failure::Policy(format!("catalog: unknown vendored component {component}"))
+    })?;
+    let mut owned = false;
+    let mut vendored = false;
+    for relative in &format.sources {
+        resolve(root, relative)?;
+        if owner.roots().any(|directory| Path::new(relative).starts_with(directory)) {
+            owned = true;
+        } else {
+            require(
+                Path::new(relative).starts_with("third_party") && files.contains(relative),
+                format!("catalog: {relative} is not a file of vendored component {component}"),
+            )?;
+            vendored = true;
+        }
+    }
+    require(
+        owned && vendored,
+        "catalog: a vendored format review requires both owner and component sources",
+    )?;
+    require(
+        fingerprint(root, &format.sources)? == format.source_sha256,
+        format!("catalog: {} has stale reviewed source fingerprints", format.owner),
+    )
 }
 
 /// Enforce unique contiguous versions and exact forward migration chains.
@@ -296,6 +353,63 @@ mod tests {
         assert!(
             reviewed_sources(fixture.root(), &fixture.architecture, "host", &sources, &hash)
                 .is_err()
+        );
+        Ok(())
+    }
+
+    /// A format can review vendor bytes only when their exact manifested component is named.
+    #[test]
+    fn vendored_protocol_sources_require_provenance_owner_and_exact_fingerprint() -> Result<()> {
+        let fixture = crate::fixtures::Repository::new()?;
+        crate::fixtures::write(fixture.root(), "third_party/licenses/example.txt", "license")?;
+        crate::fixtures::write(fixture.root(), "third_party/NOTICE.md", "notice")?;
+        crate::fixtures::write(fixture.root(), "third_party/example/schema.json", "schema")?;
+        crate::fixtures::write(fixture.root(), "third_party/example/unlisted.json", "foreign")?;
+        let vendors: Manifest = toml::from_str(
+            "schema_version = 1\n[[components]]\nid = 'example'\nsource_url = 'https://example.test'\nlicense = 'MIT'\nlicense_file = 'third_party/licenses/example.txt'\nfiles = ['third_party/example/schema.json']",
+        ).map_err(|cause| crate::error::Failure::external("parse vendor fixture", cause))?;
+        let sources =
+            vec!["crates/host/src/lib.rs".into(), "third_party/example/schema.json".into()];
+        let mut catalog = Persistence {
+            schema_version: 1,
+            formats: vec![Format {
+                id: "protocol".into(),
+                owner: "host".into(),
+                vendored_component: Some("example".into()),
+                source_sha256: fingerprint(fixture.root(), &sources)?,
+                sources,
+                classification: Classification::Protocol,
+                preservation: Preservation::MustPreserve,
+                current_version: 1,
+                accepted_versions: vec![1],
+                compatibility: Compatibility::Reject,
+                migrations: vec![],
+            }],
+        };
+        check_persistence(fixture.root(), &fixture.architecture, &catalog, &vendors)?;
+        catalog.formats[0].vendored_component = Some("foreign".into());
+        assert!(
+            check_persistence(fixture.root(), &fixture.architecture, &catalog, &vendors).is_err()
+        );
+        catalog.formats[0].vendored_component = Some("example".into());
+        catalog.formats[0].sources.push("third_party/example/unlisted.json".into());
+        catalog.formats[0].source_sha256 =
+            fingerprint(fixture.root(), &catalog.formats[0].sources)?;
+        assert!(
+            check_persistence(fixture.root(), &fixture.architecture, &catalog, &vendors).is_err()
+        );
+        catalog.formats[0].sources = vec!["third_party/example/schema.json".into()];
+        catalog.formats[0].source_sha256 =
+            fingerprint(fixture.root(), &catalog.formats[0].sources)?;
+        assert!(
+            check_persistence(fixture.root(), &fixture.architecture, &catalog, &vendors).is_err()
+        );
+        catalog.formats[0].sources.insert(0, "crates/host/src/lib.rs".into());
+        catalog.formats[0].source_sha256 =
+            fingerprint(fixture.root(), &catalog.formats[0].sources)?;
+        crate::fixtures::write(fixture.root(), "third_party/example/schema.json", "changed")?;
+        assert!(
+            check_persistence(fixture.root(), &fixture.architecture, &catalog, &vendors).is_err()
         );
         Ok(())
     }

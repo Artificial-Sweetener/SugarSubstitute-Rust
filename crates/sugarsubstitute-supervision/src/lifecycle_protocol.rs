@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 10 uses little-endian integers and a fixed 104-byte header. Kind21
+//! Wire version 11 uses little-endian integers and a fixed 104-byte header. Kind21
 //! reports the policy-accepted native main reveal after frontend readiness. The parent
 //! rechecks its retained profile/browser authorization before accepting that observation.
 //! Earlier wire versions are rejected; all processes in a launch use the same distribution.
@@ -46,7 +46,8 @@
 //! 3 native-acknowledged suspension claim); OutputPull carries lease/u64 prior
 //! consumed delivery (0 absent). Decoding alone authenticates none of these facts.
 //! Reply tags 1..16 are documented on `ReplyOutcome`. Granted tag3 includes lease,
-//! main identity, u8 loopback host/u16 port and two u8-counted ASCII version labels.
+//! main identity, u8 loopback host/u16 port, two u8-counted ASCII version labels,
+//! and the verified listener's u32 PID and u64 creation time in 100 ns units.
 //! Reloaded tag5 carries the same context after fresh source inspection/HTTP verification.
 //! Version6 lease-only reload replies are rejected by all coordinated native peers.
 //! Labels satisfy the shared readiness grammar and contain at most64 bytes.
@@ -80,7 +81,7 @@
 //! a stale original lease gains no release or reload authority. Web reload remains with
 //! the frontend owner. These copied wire facts grant no retry, current readiness,
 //! native adoption or teardown proof.
-//! Only schema9 is accepted; parent and captured child deploy together.
+//! Only schema11 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
 mod decode;
@@ -99,7 +100,9 @@ mod utf16;
 
 pub use errors::ProtocolError;
 pub use frame::{DecodedFrame, FrameCodec, WireHeader, WireMessage};
-pub use main_types::{GrantedContext, MainFailureCode, MainStage, MainStageFailure, VersionLabel};
+pub use main_types::{
+    BackendPeer, GrantedContext, MainFailureCode, MainStage, MainStageFailure, VersionLabel,
+};
 pub use output::OutputDelivery;
 pub use payload::{CapabilityRef, DecodedPayload, LeaseReference, WirePayload};
 pub use raw_windows::{
@@ -110,7 +113,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 10;
+pub const WIRE_VERSION: u16 = 11;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

@@ -26,9 +26,11 @@ pub enum Namespace {
     SetupRuntime,
     /// Reconstructible original-precision raster tiles; authored images remain outside cache.
     ImageSources,
+    /// Encoded Comfy output copies from a qualified peer, validated by the image importer.
+    ComfyOutputs,
 }
 impl Namespace {
-    pub(super) const ALL: [Self; 8] = [
+    pub(super) const ALL: [Self; 9] = [
         Self::UpdateOffers,
         Self::UpdateDownloads,
         Self::PackedPayloads,
@@ -37,6 +39,7 @@ impl Namespace {
         Self::UpstreamMetadata,
         Self::SetupRuntime,
         Self::ImageSources,
+        Self::ComfyOutputs,
     ];
     /// Canonical schema/epoch-qualified directory component.
     pub const fn directory(self) -> &'static str {
@@ -49,6 +52,7 @@ impl Namespace {
             Self::UpstreamMetadata => "setup-upstream-metadata-v1",
             Self::SetupRuntime => "setup-runtime-v1",
             Self::ImageSources => "image-sources-v1",
+            Self::ComfyOutputs => "comfy-outputs-v1",
         }
     }
     /// Production byte budget for this namespace, including reserved active entries.
@@ -57,7 +61,7 @@ impl Namespace {
             Self::UpdateOffers => 64 * 1024 * 1024,
             Self::UpdateDownloads | Self::SetupDownloads => 24 * GIB,
             Self::PackedPayloads => 32 * GIB,
-            Self::ImageSources => 32 * GIB,
+            Self::ImageSources | Self::ComfyOutputs => 32 * GIB,
             Self::SetupBrowser => GIB,
             Self::UpstreamMetadata | Self::SetupRuntime => 256 * 1024 * 1024,
         }
@@ -68,7 +72,7 @@ impl Namespace {
             Self::UpdateOffers | Self::UpstreamMetadata => 7 * DAY,
             Self::UpdateDownloads | Self::SetupDownloads => 30 * DAY,
             Self::PackedPayloads => 7 * DAY,
-            Self::ImageSources => 7 * DAY,
+            Self::ImageSources | Self::ComfyOutputs => 7 * DAY,
             Self::SetupBrowser | Self::SetupRuntime => DAY,
         }
     }

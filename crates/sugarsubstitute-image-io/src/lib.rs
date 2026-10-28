@@ -5,20 +5,28 @@ mod archive;
 mod buffer;
 #[cfg(windows)]
 mod cached;
+#[cfg(windows)]
+mod cached_input;
 mod descriptor;
 mod error;
 mod layout;
 mod png_input;
 mod shared;
+#[cfg(windows)]
+mod source;
 mod write;
 pub use archive::{ArchiveStats, RasterArchive};
 #[cfg(windows)]
-pub use cached::{CacheReuse, CachedRaster, import_png};
+pub use cached::{
+    CacheReuse, CachedRaster, MAX_ENCODED_SOURCE_BYTES, import_cached_png, import_png,
+};
 pub use descriptor::{RasterDescriptor, Transfer};
 pub use error::ImportError;
 pub use layout::{ChunkLayout, Packing};
 pub use png_input::PngImport;
 pub use shared::SharedRaster;
+#[cfg(windows)]
+pub use source::ImageSource;
 pub use write::write_raster;
 
 /// Observe original worker controls without retaining its execution context.

@@ -12,6 +12,7 @@ use crate::{
     metrics::code_lines,
     policy::{Architecture, Debt, Records, Waiver, WaiverKind},
     source::{fingerprint, resolve, rust_files},
+    vendor::Manifest,
 };
 
 /// Reject expired review records using an explicit date for deterministic tests.
@@ -30,7 +31,9 @@ pub(crate) fn check(
     debt: &Records<Debt>,
     waivers: &Records<Waiver>,
     today: Date,
+    vendors: &Manifest,
 ) -> Result<()> {
+    crate::vendor::check(root, vendors)?;
     require(
         debt.schema_version == 1 && waivers.schema_version == 1,
         "structural registries require schema one",
@@ -83,14 +86,29 @@ pub(crate) fn check(
             .to_string_lossy()
             .replace('\\', "/");
         let source = read(&path)?;
-        require(
-            source.lines().next() == Some("// SPDX-License-Identifier: GPL-3.0-or-later")
-                && source.lines().nth(1).is_some_and(|line| {
-                    line.starts_with("// Copyright (C) ")
-                        && line.ends_with("Artificial Sweetener and contributors")
-                }),
-            format!("{relative}: add first-party SPDX and copyright headers"),
-        )?;
+        if let Some(license) = vendors.source_license(&relative) {
+            require(
+                source.lines().next()
+                    == Some(format!("// SPDX-License-Identifier: {license}").as_str())
+                    && source
+                        .lines()
+                        .nth(1)
+                        .and_then(|line| line.strip_prefix("// Copyright (C) "))
+                        .is_some_and(|copyright| !copyright.trim().is_empty()),
+                format!(
+                    "{relative}: preserve its manifested third-party license and copyright headers"
+                ),
+            )?;
+        } else {
+            require(
+                source.lines().next() == Some("// SPDX-License-Identifier: GPL-3.0-or-later")
+                    && source.lines().nth(1).is_some_and(|line| {
+                        line.starts_with("// Copyright (C) ")
+                            && line.ends_with("Artificial Sweetener and contributors")
+                    }),
+                format!("{relative}: add first-party SPDX and copyright headers"),
+            )?;
+        }
         let lines = code_lines(&source)?;
         if lines > policy.hard_lines {
             require(
@@ -189,7 +207,8 @@ mod tests {
             .map_err(|error| Failure::external("construct date", error))?;
         let debt = Records { schema_version: 1, records: Vec::<Debt>::new() };
         let waivers = Records { schema_version: 1, records: Vec::<Waiver>::new() };
-        check(fixture.root(), &fixture.architecture, &debt, &waivers, date)?;
+        let vendors = Manifest { schema_version: 1, components: vec![] };
+        check(fixture.root(), &fixture.architecture, &debt, &waivers, date, &vendors)?;
         let path = "crates/host/src/lib.rs";
         let original = read(&fixture.root().join(path))?;
         let oversized = format!(
@@ -199,7 +218,9 @@ mod tests {
                 .collect::<String>()
         );
         crate::fixtures::write(fixture.root(), path, &oversized)?;
-        assert!(check(fixture.root(), &fixture.architecture, &debt, &waivers, date).is_err());
+        assert!(
+            check(fixture.root(), &fixture.architecture, &debt, &waivers, date, &vendors).is_err()
+        );
         let record = Debt {
             id: "mixed".into(),
             path: path.into(),
@@ -211,7 +232,50 @@ mod tests {
             review_until: "2027-01-01".into(),
         };
         let debt = Records { schema_version: 1, records: vec![record] };
-        assert!(check(fixture.root(), &fixture.architecture, &debt, &waivers, date).is_err());
+        assert!(
+            check(fixture.root(), &fixture.architecture, &debt, &waivers, date, &vendors).is_err()
+        );
+        Ok(())
+    }
+
+    /// A copied Rust module retains its manifested license without escaping any source audit.
+    #[test]
+    fn vendor_headers_require_exact_manifest_and_license() -> Result<()> {
+        let fixture = crate::fixtures::Repository::new()?;
+        let date = Date::from_calendar_date(2026, time::Month::October, 10)
+            .map_err(|error| Failure::external("construct date", error))?;
+        let debt = Records { schema_version: 1, records: Vec::<Debt>::new() };
+        let waivers = Records { schema_version: 1, records: Vec::<Waiver>::new() };
+        let path = "crates/host/src/vendor.rs";
+        crate::fixtures::write(
+            fixture.root(),
+            path,
+            "// SPDX-License-Identifier: AGPL-3.0-or-later\n// Copyright (C) 2026 Example\npub struct Value;\n",
+        )?;
+        let empty = Manifest { schema_version: 1, components: vec![] };
+        assert!(
+            check(fixture.root(), &fixture.architecture, &debt, &waivers, date, &empty).is_err()
+        );
+        crate::fixtures::write(fixture.root(), "third_party/licenses/example.txt", "license")?;
+        crate::fixtures::write(fixture.root(), "third_party/NOTICE.md", "notice")?;
+        let unmarked: Manifest = toml::from_str(&format!(
+            "schema_version=1\n[[components]]\nid='example'\nsource_url='https://example.test'\nlicense='AGPL-3.0-or-later'\nlicense_file='third_party/licenses/example.txt'\nfiles=['{path}']"
+        )).map_err(|cause| Failure::external("parse vendor fixture", cause))?;
+        assert!(
+            check(fixture.root(), &fixture.architecture, &debt, &waivers, date, &unmarked).is_err()
+        );
+        let vendors: Manifest = toml::from_str(&format!(
+            "schema_version=1\n[[components]]\nid='example'\nsource_url='https://example.test'\nlicense='AGPL-3.0-or-later'\nlicense_file='third_party/licenses/example.txt'\nlicense_header_files=['{path}']\nfiles=['{path}']"
+        )).map_err(|cause| Failure::external("parse vendor fixture", cause))?;
+        check(fixture.root(), &fixture.architecture, &debt, &waivers, date, &vendors)?;
+        crate::fixtures::write(
+            fixture.root(),
+            path,
+            "// SPDX-License-Identifier: MIT\n// Copyright (C) 2026 Example\npub struct Value;\n",
+        )?;
+        assert!(
+            check(fixture.root(), &fixture.architecture, &debt, &waivers, date, &vendors).is_err()
+        );
         Ok(())
     }
 

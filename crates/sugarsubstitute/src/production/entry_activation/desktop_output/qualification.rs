@@ -39,6 +39,11 @@ pub(super) fn relay(run: RunKey, current: Option<MainIdentity>, observed: Qualif
                 Progress::PreviewRequested => "main_preview_requested",
                 Progress::DownloadsPrepared => "main_downloads_prepared",
                 Progress::DownloadsCompleted => "main_downloads_completed",
+                Progress::CanvasContextObserved
+                | Progress::CanvasContextRejected
+                | Progress::CanvasContextWaitingSession
+                | Progress::CanvasContextWaitingBackend
+                | Progress::CanvasContextReplyQueued => "main_canvas_context",
             };
             tracing::info!(operation, run=?run, identity=?identity, stage=?stage,
                 "Observed closed owned Desktop transition");

@@ -73,6 +73,14 @@ impl StartupBackend for Platform {
         }
         Ok(())
     }
+    #[cfg(feature = "native-composition")]
+    fn admits_canvas(&self, _: MainIdentity, _: &MemoryLease) -> bool {
+        false
+    }
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn canvas_backend(&self, _: MainIdentity) -> Option<crate::startup::CanvasBackend> {
+        None
+    }
     fn main_construction_pending(&self) -> bool {
         false
     }
@@ -202,6 +210,27 @@ fn host() -> BackendResult<StartupHost<Platform>> {
             render: ScopeSpec { id: ScopeId::new(2)?, deadline: None },
         },
     )
+}
+
+#[cfg(windows)]
+#[test]
+fn application_canvas_requires_a_new_scope_and_a_local_cache_anchor() -> BackendResult<()> {
+    let mut host = host()?;
+    let root = tempfile::tempdir()?;
+    let health = crate::diagnostics::DiagnosticHealth::fixture();
+    for scope in [
+        ScopeSpec { id: ScopeId::new(1)?, deadline: None },
+        ScopeSpec { id: ScopeId::new(2)?, deadline: None },
+        ScopeSpec { id: ScopeId::new(3)?, deadline: Some(Moment::from_nanos(1)) },
+    ] {
+        assert!(host.configure_canvas(root.path().to_path_buf(), health.clone(), scope).is_err());
+        assert!(host.canvas.is_none());
+    }
+    let valid = ScopeSpec { id: ScopeId::new(3)?, deadline: None };
+    assert!(host.configure_canvas("relative".into(), health.clone(), valid).is_err());
+    host.configure_canvas(root.path().to_path_buf(), health.clone(), valid)?;
+    assert!(host.configure_canvas(root.path().to_path_buf(), health, valid).is_err());
+    Ok(())
 }
 #[test]
 fn platform_neutral_host_preserves_source_guard_until_actual_native_retirement() -> BackendResult<()>

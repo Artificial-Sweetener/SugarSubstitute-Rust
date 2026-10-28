@@ -204,6 +204,7 @@ impl ProductionChild {
             self.bootstrap.close_initialization();
             self.main.close();
             self.output.close();
+            self.panel = None;
         }
         // The existing control owner freezes its own header before capture measurement
         // completes. Genuine capture custody and its independent budget remain unchanged.

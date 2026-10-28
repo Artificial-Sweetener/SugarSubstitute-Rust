@@ -98,7 +98,9 @@ impl ParentLifecycle {
                 return Ok(true);
             }
         }
-        let mut until = if matches!(decoded.payload, DecodedPayload::OutputPull { .. }) {
+        let mut until = if !self.registered && matches!(decoded.payload, DecodedPayload::Register) {
+            self.registration_deadline(header, resources)?
+        } else if matches!(decoded.payload, DecodedPayload::OutputPull { .. }) {
             self.output_deadline(header, resources)?
         } else if matches!(decoded.payload, DecodedPayload::UiResponse(_)) {
             resources.execution.client.decode_counter_deadline(

@@ -151,8 +151,8 @@ impl Core {
         ready && self.select_capacity_wake(state)
     }
 
-    /// Keep a selected callback owned through outside-lock delivery or shutdown suppression.
-    fn select_capacity_wake(&self, state: &mut State) -> bool {
+    /// Keep a selected resource-activity callback owned through delivery or shutdown suppression.
+    pub(crate) fn select_capacity_wake(&self, state: &mut State) -> bool {
         if !self.mailbox.signal_capacity() {
             return false;
         }

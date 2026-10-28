@@ -14,6 +14,28 @@ pub(crate) fn begin_builder(
   error: Result<()>,
   wake: impl Fn() + 'static,
 ) -> std::result::Result<WebViewConstruction, WebViewBuildFailure> {
+  begin_builder_mode(parent, attrs, platform, error, false, wake)
+}
+
+/// Select an owned windowless controller while preserving the same staged transaction.
+pub(crate) fn begin_composition_builder(
+  parent: &impl HasWindowHandle,
+  attrs: WebViewAttributes<'_>,
+  platform: super::super::PlatformSpecificWebViewAttributes,
+  error: Result<()>,
+  wake: impl Fn() + 'static,
+) -> std::result::Result<WebViewConstruction, WebViewBuildFailure> {
+  begin_builder_mode(parent, attrs, platform, error, true, wake)
+}
+
+fn begin_builder_mode(
+  parent: &impl HasWindowHandle,
+  attrs: WebViewAttributes<'_>,
+  platform: super::super::PlatformSpecificWebViewAttributes,
+  error: Result<()>,
+  composition: bool,
+  wake: impl Fn() + 'static,
+) -> std::result::Result<WebViewConstruction, WebViewBuildFailure> {
   if let Err(error) = error {
     let shared = Shared::new(HWND::default(), wake);
     shared.native.borrow_mut().ledger.retired = true;
@@ -22,7 +44,7 @@ pub(crate) fn begin_builder(
       retirement: retirement::WebViewRetirement::empty(shared),
     });
   }
-  WebViewConstruction::begin(parent, attrs, platform, wake)
+  WebViewConstruction::begin(parent, attrs, platform, composition, wake)
 }
 
 /// Progress of one constructor stage, without pumping or waiting for callbacks.
@@ -96,6 +118,7 @@ impl WebViewConstruction {
     parent: &impl HasWindowHandle,
     attrs: WebViewAttributes<'_>,
     platform: super::super::PlatformSpecificWebViewAttributes,
+    composition: bool,
     wake: impl Fn() + 'static,
   ) -> std::result::Result<Self, WebViewBuildFailure> {
     let prepared = (|| {
@@ -103,7 +126,8 @@ impl WebViewConstruction {
         RawWindowHandle::Win32(handle) => HWND(handle.hwnd.get() as _),
         _ => return Err(Error::UnsupportedWindowHandle),
       };
-      let config = owned_config::Config::new(attrs, platform, true, true)?;
+      let mut config = owned_config::Config::new(attrs, platform, true, true)?;
+      config.composition = composition;
       Ok((hwnd, config))
     })();
     match prepared {

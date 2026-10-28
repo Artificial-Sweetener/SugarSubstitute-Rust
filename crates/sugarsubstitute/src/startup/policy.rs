@@ -131,6 +131,9 @@ impl StartupPolicy {
             return Ok(match observation {
                 DesktopStartupObservation::CloseRequested => StartupRoute::Close,
                 DesktopStartupObservation::MainReloadRequested { .. }
+                | DesktopStartupObservation::PanelMessage(_)
+                | DesktopStartupObservation::SurfaceMessage(_)
+                | DesktopStartupObservation::CanvasContextMessage(_)
                 | DesktopStartupObservation::SplashPresented(_)
                 | DesktopStartupObservation::SplashRetired(_)
                 | DesktopStartupObservation::NavigationStarted(_)
@@ -178,6 +181,15 @@ impl StartupPolicy {
         observation: &DesktopStartupObservation,
     ) -> bool {
         match observation {
+            DesktopStartupObservation::PanelMessage(observed) => {
+                session.is_some_and(|session| observed.identity() == self.identity(session))
+            }
+            DesktopStartupObservation::SurfaceMessage(observed) => {
+                session.is_some_and(|session| observed.identity() == self.identity(session))
+            }
+            DesktopStartupObservation::CanvasContextMessage(observed) => {
+                session.is_some_and(|session| observed.identity() == self.identity(session))
+            }
             DesktopStartupObservation::NativeActivity { run, .. }
             | DesktopStartupObservation::NativeRetired(run) => *run == self.run,
             DesktopStartupObservation::UiChallengeProcessed(key) => key.run == self.run,

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Preserve both bounded recipient failures after delivering one immutable batch.
+//! Preserve bounded recipient failures after delivering one immutable batch.
 use std::{error::Error, fmt};
 
-/// Retain the first render failure and the independently observed child failure.
+/// Retain independently observed completion-recipient failures.
 struct DeliveryFailure {
-    render: Box<dyn Error>,
-    child: Box<dyn Error>,
+    primary: Box<dyn Error>,
+    secondary: Box<dyn Error>,
 }
 impl fmt::Debug for DeliveryFailure {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -15,22 +15,25 @@ impl fmt::Debug for DeliveryFailure {
 }
 impl fmt::Display for DeliveryFailure {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("Render and child completion delivery failed")
+        formatter.write_str("Multiple completion recipients failed")
     }
 }
 impl Error for DeliveryFailure {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(self.render.as_ref())
+        Some(self.primary.as_ref())
     }
 }
 impl Drop for DeliveryFailure {
     fn drop(&mut self) {
-        tracing::error!(operation="startup_delivery",cause=%self.child,"Additional owned child completion failure");
+        tracing::error!(operation="startup_delivery",cause=%self.secondary,"Additional owned completion failure");
     }
 }
 /// Borrow only the known aggregate's first unchanged cause; arbitrary sources are never walked.
-pub(super) fn first_cause<'a>(cause: &'a (dyn Error + 'static)) -> &'a (dyn Error + 'static) {
-    cause.downcast_ref::<DeliveryFailure>().map_or(cause, |failure| failure.render.as_ref())
+pub(super) fn first_cause<'a>(mut cause: &'a (dyn Error + 'static)) -> &'a (dyn Error + 'static) {
+    while let Some(failure) = cause.downcast_ref::<DeliveryFailure>() {
+        cause = failure.primary.as_ref();
+    }
+    cause
 }
 
 /// Resolve already-observed recipient outcomes without replacing their actual causes.
@@ -42,7 +45,7 @@ pub(super) fn resolve<T>(
     match (render, child) {
         (Ok(frame), Ok(())) => Ok(frame),
         (Err(cause), Ok(())) | (Ok(_), Err(cause)) => Err(cause),
-        (Err(render), Err(child)) => Err(Box::new(DeliveryFailure { render, child })),
+        (Err(primary), Err(secondary)) => Err(Box::new(DeliveryFailure { primary, secondary })),
     }
 }
 
@@ -69,7 +72,7 @@ mod tests {
         );
         assert_eq!(
             combined
-                .child
+                .secondary
                 .downcast_ref::<std::io::Error>()
                 .ok_or("Secondary cause lost")?
                 .to_string(),

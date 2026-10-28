@@ -33,6 +33,7 @@ mod parent_lifecycle;
 mod qualification;
 #[path = "production/runtime.rs"]
 mod runtime;
+mod scope_sequence;
 mod startup_readiness_diagnostic;
 
 pub(crate) use runtime::{execute, execute_inherited};

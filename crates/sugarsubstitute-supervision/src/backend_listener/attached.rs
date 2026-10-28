@@ -68,9 +68,10 @@ impl AttachedListenerLease {
         if !self.is_live() {
             return Err(RegistryError::invalid("attached_listener_retiring"));
         }
+        storage.check(context)?;
         let pid = table::connected_owner(connection, storage, context)?;
         let mut retained = crate::registry::lock(&self.retained);
-        native::qualify(&mut retained, pid, context)?;
+        native::qualify(&mut retained, pid, context, storage.purpose())?;
         if table::connected_owner(connection, storage, context)? != pid {
             return Err(RegistryError::invalid("attached_listener_changed"));
         }
@@ -94,15 +95,13 @@ mod native {
             WaitForSingleObject,
         },
     };
-    fn check(context: &JobContext) -> Result<(), RegistryError> {
-        super::super::table::check(context)
-    }
     pub(super) fn qualify(
         state: &mut AttachedState,
         pid: u32,
         context: &JobContext,
+        purpose: super::super::workspace::Purpose,
     ) -> Result<(), RegistryError> {
-        check(context)?;
+        purpose.check(context)?;
         if state.retired {
             return Err(RegistryError::invalid("attached_listener_retired"));
         }
@@ -123,7 +122,7 @@ mod native {
         } else if state.opened_pid != pid {
             return Err(RegistryError::invalid("attached_listener_pid_changed"));
         }
-        check(context)?;
+        purpose.check(context)?;
         let mut birth = FILETIME::default();
         let mut exit = FILETIME::default();
         let mut kernel = FILETIME::default();
@@ -139,7 +138,7 @@ mod native {
             )
         }
         .map_err(|e| RegistryError::new("attached_listener_birth", e))?;
-        check(context)?;
+        purpose.check(context)?;
         let identity = BackendPeerIdentity {
             process_id: pid,
             creation_time_100ns: (u64::from(birth.dwHighDateTime) << 32)
@@ -159,7 +158,7 @@ mod native {
         if status != WAIT_TIMEOUT {
             return Err(RegistryError::invalid("attached_listener_exited_or_wait_failed"));
         }
-        check(context)?;
+        purpose.check(context)?;
         state.identity = Some(identity);
         Ok(())
     }
@@ -167,7 +166,7 @@ mod native {
         state: &mut AttachedState,
         context: &JobContext,
     ) -> Result<(), RegistryError> {
-        check(context)?;
+        super::super::table::check_retirement(context)?;
         if state.handle != 0 {
             // SAFETY: This slot uniquely owns only the read-only process handle, cleared after real closure.
             unsafe { CloseHandle(HANDLE(state.handle as *mut _)) }

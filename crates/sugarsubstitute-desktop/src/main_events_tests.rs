@@ -109,6 +109,37 @@ fn console_bursts_cannot_exhaust_lifecycle_slots_or_hide_setup_failures()
     assert_eq!(events.remaining(), SLOTS);
     Ok(())
 }
+
+#[test]
+fn untrusted_panel_bursts_and_oversized_payloads_cannot_close_lifecycle_admission()
+-> Result<(), Box<dyn Error>> {
+    let released = Arc::new(AtomicUsize::new(0));
+    let events = Events::new(&lease(&released), || {})?;
+    events.record(Kind::PanelBinding, |_| {
+        Err(DesktopError::message("panel_fixture", "oversized native payload"))
+    });
+    for _ in 0..PANEL_SLOTS + 10 {
+        events.record(Kind::PanelBinding, |text| {
+            text.push_str("panel");
+            Ok(())
+        });
+    }
+    events.record(Kind::ContextsCleared, |_| Ok(()));
+    assert!(events.accepting());
+    assert!(events.take_failure().is_none());
+    assert_eq!(events.remaining(), PANEL_SLOTS + 1);
+    for _ in 0..PANEL_SLOTS {
+        assert!(events.consume(|event| {
+            assert_eq!(event.kind, Kind::PanelBinding);
+            Ok(())
+        })?);
+    }
+    assert!(events.consume(|event| {
+        assert_eq!(event.kind, Kind::ContextsCleared);
+        Ok(())
+    })?);
+    Ok(())
+}
 #[test]
 fn receiver_overflow_stickily_closes_admission_without_losing_prior_facts()
 -> Result<(), Box<dyn Error>> {

@@ -4,6 +4,8 @@
 use super::consume_diagnostic::observe as observed_consume;
 use super::*;
 use policy::StartupRoute;
+#[cfg(all(windows, feature = "native-composition"))]
+use sugarsubstitute_contracts::execution::Clock;
 use sugarsubstitute_contracts::startup::StartupEffect;
 use sugarsubstitute_desktop::StartupConsumeStage as ConsumeStage;
 
@@ -25,15 +27,29 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         let batch =
             observed_consume::<B, _>(ConsumeStage::ExecutionDrain, self.execution.drain(maximum))?;
+        #[cfg(all(windows, feature = "native-composition"))]
+        let composition = self
+            .composition
+            .as_mut()
+            .map_or(Ok(()), |composition| composition.advance(self.clock.now()));
+        #[cfg(not(all(windows, feature = "native-composition")))]
+        let composition = Ok(());
+        #[cfg(windows)]
+        let canvas = self.canvas.as_mut().map_or(Ok(()), canvas::EmbeddedCanvas::poll);
+        #[cfg(not(windows))]
+        let canvas = Ok(());
         let render = self.preparation.as_mut().map(|render| render.consume(&batch)).transpose();
         let cleanup_failed = self.child.cleanup_failed();
         let child = self.child.consume(&batch, self.startup.as_ref());
         self.invalidate(cleanup_failed != self.child.cleanup_failed());
-        let frame = super::consume_diagnostic::delivery::<B, _>(render, child)?;
+        let canvas = super::delivery::resolve(canvas, composition);
+        let frame = super::consume_diagnostic::delivery::<B, _>(render, child, canvas)?;
         if let Some(prepared) = &mut self.startup {
             self.child.advance_reload(prepared)?;
         }
         self.deliver_startup_events()?;
+        #[cfg(all(windows, feature = "native-composition"))]
+        self.refresh_canvas_backend()?;
         if let Some(view) = &mut self.view {
             if let Some(startup) = &self.startup {
                 view.phase(startup.session().phase());
@@ -100,6 +116,54 @@ impl<B: StartupBackend> StartupHost<B> {
     pub(super) fn route(&mut self, route: StartupRoute) -> Result<(), Box<dyn Error>> {
         match route {
             StartupRoute::Native(observation) => {
+                #[cfg(all(windows, feature = "native-composition"))]
+                if let DesktopStartupObservation::MainRetired(identity)
+                | DesktopStartupObservation::MainAbsent(identity) = &observation
+                    && let Some(composition) = &mut self.composition
+                {
+                    composition.main_retired(*identity)?;
+                }
+                #[cfg(all(windows, feature = "native-composition"))]
+                let observation = {
+                    let accepts = !self.policy.closing()
+                        && self.canvas.is_some()
+                        && self.startup.as_ref().is_some_and(|startup| {
+                            startup.session().phase()
+                                == sugarsubstitute_application::startup::StartupPhase::Running
+                        });
+                    match observation {
+                        DesktopStartupObservation::SurfaceMessage(observed) if accepts => {
+                            let allocation = observed.allocation();
+                            let (identity, message, lease, claim) = observed.into_parts();
+                            if self.child.admits_canvas(identity, &lease) {
+                                let backend = self.child.canvas_backend(identity);
+                                let canvas =
+                                    self.canvas.as_mut().ok_or("Application canvas disappeared")?;
+                                canvas.backend(backend)?;
+                                canvas.surface(identity, message, allocation, claim)?;
+                            }
+                            return Ok(());
+                        }
+                        DesktopStartupObservation::CanvasContextMessage(observed) if accepts => {
+                            let (identity, request, lease, claim) = observed.into_parts();
+                            if self.child.admits_canvas(identity, &lease) {
+                                let backend = self.child.canvas_backend(identity);
+                                let canvas =
+                                    self.canvas.as_mut().ok_or("Application canvas disappeared")?;
+                                canvas.backend(backend)?;
+                                canvas.context(identity, request, claim)?;
+                            } else {
+                                #[cfg(feature = "k1-native-qualification")]
+                                sugarsubstitute_desktop::qualification_trace::progress(
+                                    sugarsubstitute_desktop::qualification_trace::Progress::CanvasContextRejected,
+                                    identity,
+                                );
+                            }
+                            return Ok(());
+                        }
+                        other => other,
+                    }
+                };
                 if matches!(&observation, DesktopStartupObservation::NativeRetired(run) if *run == self.policy.run())
                     && let Some(startup) = &mut self.startup
                 {
@@ -131,10 +195,33 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         Ok(())
     }
+
+    /// Fence output work whenever the parent revokes or changes the mounted backend.
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn refresh_canvas_backend(&mut self) -> Result<(), Box<dyn Error>> {
+        let backend = self
+            .startup
+            .as_ref()
+            .and_then(|startup| self.child.canvas_backend(self.policy.identity(startup.session())));
+        if let Some(canvas) = &mut self.canvas {
+            canvas.backend(backend)?;
+        }
+        Ok(())
+    }
     /// Map the actual owner epoch; failed arithmetic is returned rather than hidden.
     pub(super) fn refresh_deadline(&mut self) -> Result<(), Box<dyn Error>> {
-        self.next_deadline =
-            self.child.next_deadline().map(|at| self.clock.instant_for(at)).transpose()?;
+        let child = self.child.next_deadline();
+        #[cfg(all(windows, feature = "native-composition"))]
+        let composition =
+            self.composition.as_ref().and_then(composition::CompositionWork::deadline);
+        #[cfg(not(all(windows, feature = "native-composition")))]
+        let composition = None;
+        self.next_deadline = child
+            .into_iter()
+            .chain(composition)
+            .min()
+            .map(|at| self.clock.instant_for(at))
+            .transpose()?;
         Ok(())
     }
 }

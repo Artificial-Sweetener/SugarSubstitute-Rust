@@ -3,7 +3,7 @@
 //! Inspect actual loopback HTTP bytes against independent pinned installed sources.
 //! One finite attempt owns its native transaction outside discardable job results.
 //! Fixed GET endpoints grant no arbitrary URL, proxy, redirect, authentication or cookie authority.
-mod headers;
+pub(crate) mod headers;
 mod memory;
 mod native;
 mod owner;

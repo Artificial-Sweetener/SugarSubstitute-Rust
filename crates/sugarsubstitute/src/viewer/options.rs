@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Parse standalone inputs and locate the portable viewer's cache without creating storage.
+use crate::native_canvas::{
+    config::{Config, InitialSource},
+    proof::ProofPaths,
+};
 use std::{error::Error, ffi::OsString, io, path::PathBuf};
 use sugarsubstitute_contracts::configuration::LocaleId;
 use sugarsubstitute_image_ops::Extent;
@@ -16,13 +20,31 @@ pub(super) struct Options {
     pub(super) proof: Option<ProofPaths>,
     pub(super) proof_window: bool,
 }
-/// Explicit caller-owned outputs for headless viewer qualification.
-pub(super) struct ProofPaths {
-    pub(super) image: PathBuf,
-    pub(super) metrics: PathBuf,
-    pub(super) motion_duration: std::time::Duration,
-}
 impl Options {
+    /// Transfer runtime inputs after the standalone host has retained its proof/window options.
+    pub(super) fn into_config(self) -> Config {
+        let Self {
+            gpu,
+            capture,
+            verify_native,
+            cache,
+            image,
+            locale,
+            extent,
+            proof: _,
+            proof_window: _,
+        } = self;
+        Config {
+            gpu,
+            capture,
+            verify_native,
+            cache,
+            initial: image.map_or(InitialSource::PickFile, InitialSource::File),
+            locale,
+            extent,
+        }
+    }
+
     /// Resolve ordinary portable launches beside the executable; qualification requires an
     /// explicit absolute cache anchor. Parsing never creates a directory or evaluates images.
     pub(super) fn parse(

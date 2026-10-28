@@ -20,6 +20,24 @@ pub(crate) struct Manifest {
     pub(crate) components: Vec<Component>,
 }
 
+impl Manifest {
+    /// Return only the exact runtime files of an identified, checked component.
+    pub(crate) fn component_files(&self, id: &str) -> Option<&[String]> {
+        self.components
+            .iter()
+            .find(|component| component.id == id)
+            .map(|component| component.files.as_slice())
+    }
+
+    /// Identify a copied Rust source whose original license header must remain intact.
+    pub(crate) fn source_license(&self, path: &str) -> Option<&str> {
+        self.components
+            .iter()
+            .find(|component| component.license_header_files.iter().any(|file| file == path))
+            .map(|component| component.license.as_str())
+    }
+}
+
 /// Bind one vendored component to its license and exact consumed files.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -28,6 +46,8 @@ pub(crate) struct Component {
     source_url: String,
     license: String,
     license_file: String,
+    #[serde(default)]
+    license_header_files: Vec<String>,
     files: Vec<String>,
 }
 
@@ -56,6 +76,19 @@ pub(crate) fn check(root: &Path, manifest: &Manifest) -> Result<()> {
                 format!("duplicate or missing vendored file: {file}"),
             )?;
         }
+        let mut header_files = BTreeSet::new();
+        for file in &component.license_header_files {
+            require(
+                header_files.insert(file)
+                    && component.files.contains(file)
+                    && file.ends_with(".rs")
+                    && (file.starts_with("crates/") || file.starts_with("tools/")),
+                format!(
+                    "{}: licensed Rust header requires one exact manifested authored-root file",
+                    component.id
+                ),
+            )?;
+        }
     }
     if !manifest.components.is_empty() {
         require(
@@ -80,6 +113,7 @@ mod tests {
             source_url: "https://example.test/source".into(),
             license: "MIT".into(),
             license_file: "third_party/licenses/component.txt".into(),
+            license_header_files: vec![],
             files: vec!["assets/vendor.txt".into()],
         };
         let mut manifest = Manifest { schema_version: 1, components: vec![component()] };
@@ -92,6 +126,16 @@ mod tests {
         assert!(check(fixture.root(), &manifest).is_err());
         crate::fixtures::write(fixture.root(), "third_party/NOTICE.md", "fixture notice")?;
         check(fixture.root(), &manifest)?;
+        manifest.components[0].license_header_files = vec!["assets/vendor.txt".into()];
+        assert!(check(fixture.root(), &manifest).is_err());
+        manifest.components[0].license_header_files.clear();
+        crate::fixtures::write(fixture.root(), "crates/host/src/vendor.rs", "source")?;
+        manifest.components[0].license_header_files = vec!["crates/host/src/vendor.rs".into()];
+        assert!(check(fixture.root(), &manifest).is_err());
+        manifest.components[0].files.push("crates/host/src/vendor.rs".into());
+        manifest.components[0].license_header_files.push("crates/host/src/vendor.rs".into());
+        assert!(check(fixture.root(), &manifest).is_err());
+        manifest.components[0].license_header_files.clear();
         let mut duplicate = component();
         duplicate.id = "other".into();
         manifest.components.push(duplicate);

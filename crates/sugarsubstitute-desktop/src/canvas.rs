@@ -8,6 +8,23 @@ use sugarsubstitute_contracts::execution::CompletionWake;
 use sugarsubstitute_image_gpu::{GpuDevice, GpuError, WindowPresentation, WindowSurface};
 use sugarsubstitute_image_ops::Extent;
 
+/// Convert validated web geometry into bounded native client coordinates.
+pub mod placement;
+
+#[cfg(all(windows, feature = "native-composition"))]
+#[allow(unsafe_code)]
+mod graphics;
+#[cfg(all(windows, feature = "native-composition"))]
+pub use graphics::{CanvasGraphics, CanvasGraphicsError};
+#[cfg(all(windows, feature = "native-composition"))]
+#[allow(unsafe_code)]
+mod composition_fence;
+#[cfg(all(windows, feature = "native-composition"))]
+pub use composition_fence::{CompositionFence, CompositionFenceError, CompositionWait};
+
+/// Maximum supported physical width or height for a native canvas viewport.
+pub const MAX_VIEWPORT_EDGE: u32 = 16_384;
+
 /// Desktop-owned peer custody, attached to GPU presentation only on the original window thread.
 #[derive(Clone)]
 pub struct WindowTarget(Arc<tao::window::Window>);
@@ -35,6 +52,8 @@ mod latency;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod paint;
+#[cfg(all(windows, test))]
+pub(crate) mod test_harness;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows;
@@ -69,6 +88,63 @@ pub struct CpuFrame<'a> {
     /// Complete immutable retained viewport, including valid pixels outside dirty rectangles.
     pub pixels: &'a [u32],
 }
+
+/// One prepared canvas frame for the exact current main-window composition.
+/// The viewport and clip must have been projected from the current native WebView allocation.
+#[cfg(feature = "native-composition")]
+pub struct MainCanvasFrame<'a> {
+    /// Current native main identity, including its navigation generation.
+    pub identity: crate::MainIdentity,
+    /// Complete canvas viewport and conservative visible clip in physical client pixels.
+    pub placement: placement::CanvasPlacement,
+    /// Native WebView allocation used to project the current geometry.
+    pub allocation: placement::WebViewAllocation,
+    /// Already admitted storage shared with the application-owned canvas lifetime.
+    pub memory: &'a sugarsubstitute_contracts::execution::MemoryLease,
+    /// Worker-prepared graphics device retained by the canvas and native surface.
+    #[cfg(windows)]
+    pub graphics: &'a Arc<CanvasGraphics>,
+    /// Complete immutable prepared pixels and their application frame identity.
+    pub frame: CpuFrame<'a>,
+}
+
+/// Keep only the exact native pixels already acknowledged at this allocation.
+/// This carries no image storage and cannot upload or acknowledge a replacement.
+#[cfg(feature = "native-composition")]
+#[derive(Clone, Copy)]
+pub struct MainCanvasRetention {
+    /// Authorized main window and navigation generation.
+    pub identity: crate::MainIdentity,
+    /// Previously acknowledged frame; never the incoming source's identity.
+    pub target: FrameStamp,
+    /// Previously acknowledged physical placement, unchanged during retention.
+    pub placement: placement::CanvasPlacement,
+    /// Current native allocation that originally qualified the placement.
+    pub allocation: placement::WebViewAllocation,
+}
+
+/// Application intent for the native surface on this event-loop turn.
+#[cfg(feature = "native-composition")]
+pub enum MainCanvasPresentation<'a> {
+    /// Withdraw native pixels, including on lost attachment or backend authority.
+    Hide,
+    /// Keep a qualified native surface while its replacement is being prepared.
+    Retain(MainCanvasRetention),
+    /// Upload the current prepared frame and observe its exact acknowledgement.
+    Frame(MainCanvasFrame<'a>),
+}
+
+#[cfg(feature = "native-composition")]
+impl MainCanvasPresentation<'_> {
+    /// Identify the native lifetime whose backend grant must still be current.
+    pub fn identity(&self) -> Option<crate::MainIdentity> {
+        match self {
+            Self::Hide => None,
+            Self::Retain(retained) => Some(retained.identity),
+            Self::Frame(frame) => Some(frame.identity),
+        }
+    }
+}
 impl CpuFrame<'_> {
     /// Validate complete source dimensions and dependency shape before any native pixel effect.
     /// Projections carry complete pixels for exposure; partial output repair requires an exact base.
@@ -81,8 +157,8 @@ impl CpuFrame<'_> {
             && (self.damage.blit().is_some()
                 || self.damage.dirty().regions().ne([extent.region()]));
         if self.pixels.len() as u64 != extent.pixels()
-            || extent.width() > 16384
-            || extent.height() > 16384
+            || extent.width() > MAX_VIEWPORT_EDGE
+            || extent.height() > MAX_VIEWPORT_EDGE
             || self.base.is_some_and(|base| {
                 base.surface != self.target.surface || base.generation >= self.target.generation
             })

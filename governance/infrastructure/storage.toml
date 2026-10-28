@@ -11,15 +11,23 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:837d424012791c85fe36e894056bbdb7b15c71d988979701a09dc8ffb8b797c2"
+source_sha256 = "sha256:c7e6312c04107435c348986d68c4434407acb5e0e6ee368bb3da71a1b8a75c59"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
+
+[[dependencies]]
+owner = "sugarsubstitute-comfy"
+identity = "tempfile"
+binding = "tempfile"
+kind = "dev"
+source_sha256 = "sha256:8ee0b7d92c3bdfc4a327e62deba6351982c8541d6c121efa1f7310685fd5bbc0"
+rationale = "An isolated temporary cache scope qualifies the actual bounded Comfy output transfer without accessing user data."
 
 [[dependencies]]
 owner = "sugarsubstitute-comfy"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:ecc25dacb591065b76a367a41dee678bb26acb59ae65ce9d66e1e916a129ca16"
+source_sha256 = "sha256:8ee0b7d92c3bdfc4a327e62deba6351982c8541d6c121efa1f7310685fd5bbc0"
 rationale = "Native OS adapter bindings for sugarsubstitute-comfy; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -27,7 +35,7 @@ owner = "sugarsubstitute-crash"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:3498e86e4ae32665cd2833ea333433144a7df08f60e68321773e34d8ef70adb1"
+source_sha256 = "sha256:ff02f2ce106a4338ffa68798eb97e8b49b74b26876e5ef8ececc0fab98882c78"
 rationale = "Native OS adapter bindings for sugarsubstitute-crash; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -35,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:cf19ba53a89def2ef442e5ac30276aff1a4b1c078d1fc6e500db461be5261e7a"
+source_sha256 = "sha256:b8eaae5caff6c4460a17d2b35d2faebe8f431757021e80ce169c39c34b79eeef"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -43,7 +51,7 @@ owner = "sugarsubstitute-execution"
 identity = "tokio"
 binding = "tokio"
 kind = "normal"
-source_sha256 = "sha256:fd1f312c4dd2e58329d3177cab2786a71ffb26b99928ef2cc7566e1c13d51827"
+source_sha256 = "sha256:fa69ef8cb7ac0506bc0ea08f7118978191fa20fafdade3c47631a0aa7f48f49e"
 rationale = "Execution-owned async runtime and network integration; filesystem APIs remain restricted by authored source reviews."
 
 [[dependencies]]
@@ -51,7 +59,7 @@ owner = "sugarsubstitute-execution"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:fd1f312c4dd2e58329d3177cab2786a71ffb26b99928ef2cc7566e1c13d51827"
+source_sha256 = "sha256:fa69ef8cb7ac0506bc0ea08f7118978191fa20fafdade3c47631a0aa7f48f49e"
 rationale = "Native OS adapter bindings for sugarsubstitute-execution; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -59,7 +67,7 @@ owner = "sugarsubstitute-networking"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:584eecf57e3b9ff24a0cc60b6569ec82b8e66ce3da2f8d8e6e4bb1e238d8baed"
+source_sha256 = "sha256:5981325e4659099b43187f898ab096f916566ee078e2f4640816f97850434111"
 rationale = "Native OS adapter bindings for sugarsubstitute-networking; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -67,7 +75,7 @@ owner = "sugarsubstitute-splash"
 identity = "tiny-skia"
 binding = "tiny-skia"
 kind = "normal"
-source_sha256 = "sha256:aded1af8491cf15f66ee01906c5f14de553a09f79444315d83b52692690b26d1"
+source_sha256 = "sha256:7e2bc8ceda86e8c90b07f995c21aea7b78955c67747c5db613f7b80d533238e2"
 rationale = "CPU raster composition and in-memory PNG encoding; public path-capable backing raster values must remain private."
 
 [[dependencies]]
@@ -75,7 +83,7 @@ owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:bfa08c104f24842fe0283abaea14014d53caed2ef11be707c56cdbe5eaa582d5"
+source_sha256 = "sha256:a5e560b5ada47260373d447150ace31d648c456999a360525ad3022f463d6110"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -83,7 +91,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:bfa08c104f24842fe0283abaea14014d53caed2ef11be707c56cdbe5eaa582d5"
+source_sha256 = "sha256:a5e560b5ada47260373d447150ace31d648c456999a360525ad3022f463d6110"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -91,7 +99,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:bfa08c104f24842fe0283abaea14014d53caed2ef11be707c56cdbe5eaa582d5"
+source_sha256 = "sha256:a5e560b5ada47260373d447150ace31d648c456999a360525ad3022f463d6110"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -99,7 +107,7 @@ owner = "sugarsubstitute-xtask"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:fc74f3ae8bbf1c666b6ebe1ed859bddb4a846914fc76d31b60caaf308648cdcf"
+source_sha256 = "sha256:22ef6cea925855875c223825824bd6f277a3fb4aff8b4ee6017fe4c9f235e33e"
 rationale = "Isolated test fixture directories for sugarsubstitute-xtask; each authored acquisition still requires an exact source review."
 
 [[records]]
@@ -1744,7 +1752,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Saf
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/retirement.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:9b984fc12daa0716979e90661443831bdabf3c3284e1d4073b2279eb4959b3a8"
+source_sha256 = "sha256:5434cf5acd8f650cd7ba7b9d9f9050ab3f5c88e8a8018394e61c316426cb5f4a"
 capabilities = ["std::fs::read", "std::fs::remove_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Feature retirement journals intent while native pins and exact inventories control deletion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2717,7 +2725,7 @@ consumer = "protocol_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_http/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:63c879d7a6519a8ac6c5ac2ee2ae8cfd5528e5cde8c15a5585d585656ec26637"
+source_sha256 = "sha256:f1875b87f308539256668fcfa1253cd63e84740ec6b1c9079c6a83024c457097"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Actual WinHTTP requests against isolated execution-owned loopback sockets. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -4122,7 +4130,7 @@ owner = "sugarsubstitute-ui"
 identity = "tiny-skia"
 binding = "tiny-skia"
 kind = "normal"
-source_sha256 = "sha256:d1e3a0483f39900a93709558082bb2c7976cf233a1f4ee954d9baf1757e9990c"
+source_sha256 = "sha256:848a210be01e29b77d50c7dbf3ff91242733bd8a17ca1a33d4014dee85aeeaa7"
 rationale = "Shared pixel preparation uses private raster backing and fixed system UI APIs; public bitmap and mask values expose only data and supported painting, while source-level construction remains independently checked."
 
 [[dependencies]]
@@ -4130,7 +4138,7 @@ owner = "sugarsubstitute-ui"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:d1e3a0483f39900a93709558082bb2c7976cf233a1f4ee954d9baf1757e9990c"
+source_sha256 = "sha256:848a210be01e29b77d50c7dbf3ff91242733bd8a17ca1a33d4014dee85aeeaa7"
 rationale = "Shared pixel preparation uses private raster backing and fixed system UI APIs; public bitmap and mask values expose only data and supported painting, while source-level construction remains independently checked."
 
 [[records]]
@@ -4202,37 +4210,125 @@ owner = "sugarsubstitute-image-io"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:34e11cdda3b688964bf87c3bf9dcec771e5e44b04e85dce8f3b649b6ed76e5b9"
+source_sha256 = "sha256:fa55cfcd72c6511244705065d2b42b8cafeec371ad39ea45b80514d284c3382b"
 rationale = "Owned temporary source/cache fixtures; production streams and publication use the existing durable storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/tests/cached.rs"
 owner = "sugarsubstitute-image-io"
-source_sha256 = "sha256:2cf50c866fd47e82dc88c90bbf51c1e15635911e968b584ef574a30dbaee3edb"
+source_sha256 = "sha256:fe040ffea7bf606b095d92ef629f373d0a3581478fa45dac17dfa2a8bae19c8b"
 capabilities = ["std::fs::read", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG/cache fixtures verify exact source identity, lazy integrity rejection, independent rebuilding and retained cleanup exclusion through the real execution/storage owners."
 
 [[records]]
-path = "crates/sugarsubstitute/src/viewer/session/tests.rs"
+path = "crates/sugarsubstitute-image-io/src/tests/cached/encoded.rs"
+owner = "sugarsubstitute-image-io"
+source_sha256 = "sha256:f2e8be2c2689f0a14e4a991798b7c0bcff453388d601d9bda855caac25aed812"
+capabilities = ["std::fs::read", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary PNG and cache fixtures verify retained encoded input, source bounds, cancellation and failure before publication through the real execution and storage owners."
+
+[[records]]
+path = "crates/sugarsubstitute/src/native_canvas/session/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b132709867f55039812644e541adadc368f51997e4812d5e76a06bee3484f13c"
+source_sha256 = "sha256:b69e5da3257b2e3bc29b6c031d793cab1b17a2e6e2c2a784cdc1eb9c467daae6"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary directories keep viewer document and refinement fixtures portable and isolated; test teardown retains the directory through its actual session lifetime."
 
 [[records]]
-path = "crates/sugarsubstitute/src/viewer/session/tests/refinement.rs"
+path = "crates/sugarsubstitute/src/native_canvas/session/tests/refinement.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:84687d0af764f039bc4bc5cbcbb281546ffe99a567c0a8177b99779aeb9d58d5"
+source_sha256 = "sha256:1dcc2deeb4b0724363f63ce58cb621d2c509456ddd666b52f95a7eaf26f3011a"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary directories keep viewer document and refinement fixtures portable and isolated; test teardown retains the directory through its actual session lifetime."
 
 [[records]]
-path = "crates/sugarsubstitute/src/viewer/session/tests/display.rs"
+path = "crates/sugarsubstitute/src/native_canvas/session/tests/display.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:dbc33bb7d57bec45271f46a4b145881b07b76635843148caa5bc7e3af3e517c9"
+source_sha256 = "sha256:8b2f9460b048f02b0232dc06c3e17c1991eb132184d19564eb2b853fa2dd5196"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "The admitted document and display publication fixture retains its isolated temporary directory through the actual session and execution lifetime. Temporary directory construction remains in the shared viewer test helper."
+
+[[records]]
+path = "tools/package_hand_cursors.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:3cf26928c5fd955bc43e002087a34b6378868556125df3908e3c759c8715694f"
+capabilities = ["open", "pathlib", "write_bytes"]
+disposition = "tooling"
+rationale = "The cursor packaging tool reads the registered Qt source PNGs and writes their native CUR derivatives in the repository asset directory. Runtime code consumes the generated assets without invoking this tool."
+
+[[records]]
+path = "crates/sugarsubstitute-image-io/src/tests/cached/source.rs"
+owner = "sugarsubstitute-image-io"
+source_sha256 = "sha256:f342360c4032275933aa2ceadf09e428fa74a17de78cfc2e1ce89ddcd6c25abc"
+capabilities = ["std::fs::OpenOptions::new", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary cache fixtures verify retained encoded originals, admission rejection and reconstruction through the real storage worker."
+
+[[records]]
+path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:66d3ef680bb6a424238c9c88cbf6345c005d552f2edc0afd8ce8cc3861e24ee0"
+capabilities = ["tempfile::TempDir"]
+disposition = "fixture"
+rationale = "Owned temporary cache fixtures exercise canvas source replacement, worker disposal and scoped shutdown without using user data."
+
+[[records]]
+path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained/acquisition.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:5ac5130c800e5a50ebe773b8e7cf0ef8858eb708dde049b3d8d3e1c21066df71"
+capabilities = ["std::fs::File::create"]
+disposition = "fixture"
+rationale = "An owned temporary PNG fixture exercises acquisition cancellation and retirement through the canvas worker."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:89d1a03de96398d855823ea7b402018f6812dc0a0988ab98f12910f47b6aac69"
+capabilities = ["tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime without accessing user storage."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:297dba36b0234ff23252363badfe91bccc5ebbac297be3a05f13601c536bd95a"
+capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:f674f4ac3d65efc2f031dc271272478605e221eff225d5aa4d646edcb5ac9778"
+capabilities = ["tempfile::tempdir"]
+disposition = "fixture"
+rationale = "An owned temporary cache anchor exercises backend revocation while the canvas session retains its worker lifetime."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:b20c25369edbce3fae0c09020283af1faadcad160e1f6276fe8594767b2539cb"
+capabilities = ["tempfile::tempdir"]
+disposition = "fixture"
+rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."
+
+[[records]]
+path = "crates/sugarsubstitute-image-io/src/source/tests.rs"
+owner = "sugarsubstitute-image-io"
+source_sha256 = "sha256:81779d04e74d3e859304696f74d60517fb95259403d961eb0e2868f322b2cf1c"
+capabilities = ["tempfile::tempdir"]
+disposition = "fixture"
+rationale = "An owned temporary cache fixture verifies nonblocking contention and subsequent use of a retained encoded original on the real storage worker."
+
+[[records]]
+path = "crates/sugarsubstitute-comfy/src/output_media/transfer/tests/native_http.rs"
+owner = "sugarsubstitute-comfy"
+source_sha256 = "sha256:ca50ff9fb5a4c2adb43e53ab64cfab8c3b25fbf3936b17c3c8eb539fcb81abc9"
+capabilities = ["tempfile::tempdir"]
+disposition = "fixture"
+rationale = "An owned temporary cache scope qualifies the real loopback output transfer, peer identity checks and worker retirement without accessing user data."

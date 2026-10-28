@@ -29,6 +29,10 @@ impl<B: StartupBackend> StartupHost<B> {
             .take()
             .ok_or_else(|| std::io::Error::other("Actual child scope absent"))?;
         self.child.start(&self.execution.client()?, child_scope, &self.jobs)?;
+        #[cfg(all(windows, feature = "native-composition"))]
+        if let Some(composition) = &mut self.composition {
+            composition.start(self.execution.client()?)?;
+        }
         self.refresh_deadline()
     }
     /// Fence UI/render admission and deliver one original shutdown transaction to the child.
@@ -41,6 +45,10 @@ impl<B: StartupBackend> StartupHost<B> {
         self.closing = true;
         self.visible = false;
         self.commands.close();
+        #[cfg(all(windows, feature = "native-composition"))]
+        if let Some(composition) = &mut self.composition {
+            composition.close();
+        }
         let mut failure = None;
         retain(&mut failure, self.advance_shutdown_budget());
         let policy = self.policy.close(self.startup.as_mut().map(PreparedStartup::session_mut));
@@ -118,6 +126,18 @@ impl<B: StartupBackend> StartupHost<B> {
         self.shutdown.tighten(self.child.shutdown_budget());
         if let Ok(budget) = self.shutdown.budget() {
             self.execution.retain_shutdown_cutoff(budget.settle_until);
+            #[cfg(all(windows, feature = "native-composition"))]
+            if let Some(composition) = &mut self.composition {
+                composition.tighten(budget.settle_until);
+            }
+            #[cfg(windows)]
+            if let Some(canvas) = &mut self.canvas {
+                let retirement = canvas.close_until(budget.settle_until);
+                retain(
+                    &mut failure,
+                    self.observed_close(StartupCloseStage::CanvasRetirement, retirement),
+                );
+            }
         }
         let deadline = self.refresh_deadline();
         retain(&mut failure, self.observed_close(StartupCloseStage::DeadlineRefresh, deadline));
@@ -139,6 +159,27 @@ impl<B: StartupBackend> StartupHost<B> {
         let child = self.child.poll_shutdown();
         let render = observe_settlement(&mut failure, render);
         let child = observe_settlement(&mut failure, child);
+        #[cfg(windows)]
+        let canvas = self.canvas.as_mut().map_or(Ok(true), canvas::EmbeddedCanvas::settled);
+        #[cfg(windows)]
+        let canvas = observe_settlement(&mut failure, canvas);
+        #[cfg(not(windows))]
+        let canvas = true;
+        #[cfg(all(windows, feature = "native-composition"))]
+        let composition = {
+            use sugarsubstitute_contracts::execution::Clock;
+            let now = if self.execution.has_owner() {
+                self.execution.now()
+            } else {
+                Ok(self.clock.now())
+            };
+            let settled = now.and_then(|now| {
+                self.composition.as_mut().map_or(Ok(true), |composition| composition.settled(now))
+            });
+            observe_settlement(&mut failure, settled)
+        };
+        #[cfg(not(all(windows, feature = "native-composition")))]
+        let composition = true;
         self.shutdown.tighten(self.child.shutdown_budget());
         let measured = match self.shutdown.budget() {
             Ok(budget) => {
@@ -151,9 +192,10 @@ impl<B: StartupBackend> StartupHost<B> {
                 false
             }
         };
-        let execution = self.execution.poll_shutdown(render && child && measured);
+        let execution =
+            self.execution.poll_shutdown(render && child && canvas && composition && measured);
         let execution = observe_settlement(&mut failure, execution);
-        failure.map_or(Ok(render && child && execution), Err)
+        failure.map_or(Ok(render && child && canvas && composition && execution), Err)
     }
     /// Called by Desktop only after its native controls/loop and wake lifetime disconnect.
     /// # Errors
@@ -170,6 +212,21 @@ impl<B: StartupBackend> StartupHost<B> {
             retain(&mut failure, render.finish_retirement());
         }
         retain(&mut failure, self.child.finish_shutdown());
+        #[cfg(windows)]
+        if let Some(canvas) = &mut self.canvas {
+            retain(&mut failure, canvas.finish());
+        }
+        #[cfg(all(windows, feature = "native-composition"))]
+        if let Some(composition) = &mut self.composition {
+            use sugarsubstitute_contracts::execution::Clock;
+            let now = if self.execution.has_owner() {
+                self.execution.now()
+            } else {
+                Ok(self.clock.now())
+            };
+            let finished = now.and_then(|now| composition.finish(now));
+            retain(&mut failure, finished);
+        }
         if failure.is_none() {
             retain(&mut failure, self.execution.finish());
         }

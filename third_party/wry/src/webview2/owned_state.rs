@@ -14,6 +14,7 @@ pub(super) enum Stage {
   EnvironmentPrepared,
   Controller,
   AwaitController,
+  ResolveComposition,
   Initialize,
   Bounds,
   Finished,
@@ -24,6 +25,8 @@ pub(super) enum RetireAction {
   Busy,
   RemoveClose,
   RemovePopup,
+  ResolveComposition,
+  DetachComposition,
   Close,
   RemoveParent,
   RemoveDispatcher,
@@ -38,6 +41,8 @@ pub(super) struct Ledger {
   pub retired: bool,
   pub pending: usize,
   pub controller: bool,
+  pub composition_pending: bool,
+  pub composition_detach_pending: bool,
   pub closed: bool,
   pub parent_subclass: bool,
   pub dispatcher: bool,
@@ -54,6 +59,8 @@ impl Ledger {
       retired: false,
       pending: 0,
       controller: false,
+      composition_pending: false,
+      composition_detach_pending: false,
       closed: false,
       parent_subclass: false,
       dispatcher: false,
@@ -71,6 +78,10 @@ impl Ledger {
       RetireAction::RemoveClose
     } else if self.popup_event {
       RetireAction::RemovePopup
+    } else if self.composition_pending {
+      RetireAction::ResolveComposition
+    } else if self.composition_detach_pending {
+      RetireAction::DetachComposition
     } else if self.controller && !self.closed {
       RetireAction::Close
     } else if self.parent_subclass {
@@ -86,6 +97,11 @@ impl Ledger {
   pub fn commit(&mut self, action: RetireAction) {
     match action {
       RetireAction::Close => self.closed = true,
+      RetireAction::ResolveComposition => {
+        self.composition_pending = false;
+        self.controller = true;
+      }
+      RetireAction::DetachComposition => self.composition_detach_pending = false,
       RetireAction::RemoveClose => self.close_event = false,
       RetireAction::RemovePopup => self.popup_event = false,
       RetireAction::RemoveParent => self.parent_subclass = false,
@@ -102,6 +118,7 @@ pub(super) struct NativeState {
   pub hwnd: Option<HWND>,
   pub env: Option<ICoreWebView2Environment>,
   pub controller: Option<ICoreWebView2Controller>,
+  pub composition: Option<ICoreWebView2CompositionController>,
   pub webview: Option<ICoreWebView2>,
   pub failure: Option<Error>,
   pub parent_ref: Option<usize>,
@@ -130,6 +147,7 @@ impl Shared {
         hwnd: None,
         env: None,
         controller: None,
+        composition: None,
         webview: None,
         failure: None,
         parent_ref: None,

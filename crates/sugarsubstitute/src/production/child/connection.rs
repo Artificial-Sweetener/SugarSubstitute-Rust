@@ -220,8 +220,19 @@ impl ProductionChild {
                     return Err("Startup event slots full before grant".into());
                 }
                 let (lease, origin) = (grant.lease, grant.origin);
+                #[cfg(feature = "native-composition")]
+                let backend_peer = grant.backend_peer;
                 self.adopt_output(lease, true)?;
                 self.lease = Some(lease);
+                #[cfg(feature = "native-composition")]
+                {
+                    self.canvas_backend = Some(crate::startup::CanvasBackend {
+                        identity: self.identity,
+                        lease,
+                        origin,
+                        peer: backend_peer,
+                    });
+                }
                 self.grant_header = Some(pending.header);
                 self.acquire = None;
                 self.push_event(StartupEvent::new(

@@ -36,7 +36,7 @@ impl HttpPort for SystemPort {
         checkpoint(context)?;
         state
             .http
-            .readiness(port, context)
+            .connect_loopback(port, context)
             .map_err(|e| retry::classify(e.into_parts(), state.peer.is_some(), context))
     }
     fn get(
@@ -50,11 +50,11 @@ impl HttpPort for SystemPort {
         checkpoint(context)?;
         state
             .http
-            .readiness_request(endpoint.path(), context)
+            .request_loopback(endpoint.path(), context)
             .map_err(|e| retry::classify(e.into_parts(), state.peer.is_some(), context))?;
         state
             .http
-            .send_readiness(context)
+            .send_loopback(context)
             .map_err(|e| retry::classify(e.into_parts(), state.peer.is_some(), context))?;
         state
             .http

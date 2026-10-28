@@ -12,7 +12,7 @@ use sugarsubstitute_contracts::{
     },
 };
 use sugarsubstitute_supervision::lifecycle_protocol::{
-    GrantedContext, LeaseReference, VersionLabel,
+    BackendPeer, GrantedContext, LeaseReference, VersionLabel,
 };
 
 /// Fake server messages exercise wire order only; no authenticated peer or native frame exists.
@@ -109,6 +109,11 @@ fn activity_ack_before_acquire_grant_keeps_original_owner_and_cutoffs()
                 origin: LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?,
                 frontend: VersionLabel::new("1.0")?,
                 sugarcubes: VersionLabel::new("1.0")?,
+                backend_peer: BackendPeer {
+                    process_id: std::num::NonZeroU32::new(47).ok_or("zero PID")?,
+                    creation_time_100ns: std::num::NonZeroU64::new(53)
+                        .ok_or("zero process birth")?,
+                },
             })),
         },
         &mut bytes,

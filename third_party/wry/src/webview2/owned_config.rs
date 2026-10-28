@@ -12,6 +12,7 @@ pub(super) struct Config {
   pub id: Option<String>,
   pub owned: bool,
   pub is_child: bool,
+  pub composition: bool,
   pub bounds: Rect,
 }
 
@@ -82,6 +83,7 @@ impl Config {
       id,
       owned,
       is_child,
+      composition: false,
       bounds,
     })
   }

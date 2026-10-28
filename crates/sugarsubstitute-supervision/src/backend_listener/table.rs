@@ -53,6 +53,7 @@ pub(super) fn listening(
     storage: &mut TcpOwnerWorkspace,
     context: &JobContext,
 ) -> Result<bool, RegistryError> {
+    storage.require_lifecycle(context)?;
     if port == 0 {
         return Err(RegistryError::invalid("listener_port"));
     }
@@ -92,6 +93,25 @@ pub(super) fn check(context: &JobContext) -> Result<(), RegistryError> {
         || context.deadline().is_none_or(|deadline| context.now() >= deadline)
     {
         return Err(RegistryError::invalid("listener_context"));
+    }
+    Ok(())
+}
+/// Output transfers use ordinary blocking capacity and cannot borrow readiness admission.
+pub(super) fn check_output(context: &JobContext) -> Result<(), RegistryError> {
+    use sugarsubstitute_contracts::execution::{JobClass, Operation};
+    if context.spec().class != JobClass::InfrastructureOrdinary
+        || context.spec().operation != Operation::Infrastructure
+        || context.cancellation_requested()
+        || context.deadline().is_none_or(|deadline| context.now() >= deadline)
+    {
+        return Err(RegistryError::invalid("listener_output_context"));
+    }
+    Ok(())
+}
+/// Retire a read-only attached peer on its output worker or a separate lifecycle worker.
+pub(super) fn check_retirement(context: &JobContext) -> Result<(), RegistryError> {
+    if check(context).is_err() && check_output(context).is_err() {
+        return Err(RegistryError::invalid("listener_retirement_context"));
     }
     Ok(())
 }

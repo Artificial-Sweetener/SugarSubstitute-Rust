@@ -10,6 +10,7 @@ use crate::main_events::{Kind, Observation};
 use crate::main_readiness_types::ProbeTarget;
 pub(super) use probe::probe_parameters;
 use sugarsubstitute_contracts::startup::ReadinessReceipt;
+use wry::WebViewExtWindows;
 
 enum Effect {
     None,
@@ -20,17 +21,61 @@ enum Effect {
     Barrier(Box<ProbeTarget>),
     Receipt(ReadinessReceipt),
     Reload(crate::MainReloadReason),
+    Panel(crate::PanelObservation),
+    Surface(crate::SurfaceObservation),
+    Context(crate::CanvasContextObservation),
+}
+
+/// Distinguish an empty queue from one consumed evidence item that produced no observation.
+pub(super) struct EvidenceProgress {
+    /// Whether one evidence item was removed from the queue.
+    pub(super) consumed: bool,
+    /// The application observation produced by the consumed item, when applicable.
+    pub(super) observation: Option<DesktopStartupObservation>,
 }
 
 impl MainActor {
-    pub(super) fn evidence_step(
-        &mut self,
-    ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+    pub(super) fn evidence_step(&mut self) -> Result<EvidenceProgress, DesktopError> {
         let events = self.events()?.clone();
         let mut effect = Effect::None;
         let mut completed_probe = None;
         // The pure decoder/readiness owner performs no native calls while queue storage is borrowed.
         let consumed = events.consume(|observation| {
+            if observation.kind == Kind::PanelBinding {
+                if !self.revealed {
+                    return Ok(());
+                }
+                let context = self.readiness.as_ref().and_then(MainReadiness::panel_context);
+                if context.is_none() {
+                    return Ok(());
+                }
+                let lease = self.request()?.storage_lease().clone();
+                let claim = match lease.claim(64 * 1024) {
+                    Ok(claim) => claim,
+                    Err(cause) => {
+                        if !self.panel_ingress_overflow {
+                            tracing::warn!(operation="panel_ingress_admission", cause=%cause,
+                                "Panel message rejected because its bounded storage is unavailable");
+                            self.panel_ingress_overflow = true;
+                        }
+                        return Ok(());
+                    }
+                };
+                self.panel_ingress_overflow = false;
+                let session = sugarsubstitute_contracts::panel::PanelSession::for_main(self.identity())
+                    .map_err(|cause| DesktopError::new("panel_session_identity", cause))?;
+                if let Some(message) = crate::main_panel_ingress::decode(observation.payload, context, &session) {
+                    effect = match message {
+                        crate::main_panel_ingress::ClientMessage::Panel(message) =>
+                            Effect::Panel(crate::PanelObservation::new(self.identity(), message, lease, claim)),
+                        crate::main_panel_ingress::ClientMessage::Surface(message) =>
+                            Effect::Surface(crate::SurfaceObservation::new(self.identity(), message, lease, claim)),
+                        crate::main_panel_ingress::ClientMessage::Context(request) =>
+                            Effect::Context(crate::CanvasContextObservation::new(self.identity(), request, lease, claim)),
+                    };
+                }
+                return Ok(());
+            }
             #[cfg(feature = "k1-native-qualification")]
             if observation.command == Some(Command::Downloads) {
                 self.preview
@@ -73,7 +118,7 @@ impl MainActor {
             Ok(())
         })?;
         if !consumed {
-            return Ok(None);
+            return Ok(EvidenceProgress { consumed: false, observation: None });
         }
         let result = match effect {
             Effect::None => None,
@@ -89,6 +134,36 @@ impl MainActor {
                 identity: self.identity(),
                 reason,
             }),
+            Effect::Panel(observation) => {
+                Some(DesktopStartupObservation::PanelMessage(observation))
+            }
+            Effect::Surface(observation) => {
+                #[cfg(feature = "native-composition")]
+                let mut observation = observation;
+                #[cfg(feature = "native-composition")]
+                if matches!(
+                    observation.message(),
+                    sugarsubstitute_contracts::canvas_surface::CanvasSurfaceMessage::Request(request)
+                        if matches!(request.operation(), sugarsubstitute_contracts::canvas_surface::CanvasSurfaceOperation::Geometry(_))
+                ) {
+                    match self.canvas_allocation() {
+                        Ok(allocation) => observation.set_allocation(allocation),
+                        Err(cause) => {
+                            tracing::warn!(operation="canvas_geometry_observation", cause=%cause,
+                            "Native WebView allocation is unavailable")
+                        }
+                    }
+                }
+                Some(DesktopStartupObservation::SurfaceMessage(observation))
+            }
+            Effect::Context(observation) => {
+                #[cfg(feature = "k1-native-qualification")]
+                crate::qualification_trace::progress(
+                    crate::qualification_trace::Progress::CanvasContextObserved,
+                    self.identity(),
+                );
+                Some(DesktopStartupObservation::CanvasContextMessage(observation))
+            }
             Effect::Incomplete(blocked) => {
                 if let Some(target) = completed_probe {
                     self.probe_diagnostics.completed(
@@ -100,23 +175,15 @@ impl MainActor {
             }
             Effect::Hook(runtime) => {
                 if self.admission.hook_completed(runtime)? {
-                    self.admission.navigation_admitted()?;
-                    self.readiness()?.navigation_started().map_err(readiness_error)?;
-                    self.receivers()?.begin_navigation()?;
-                    let url = crate::main_navigation::root_url(self.request()?.origin());
-                    self.view()?
-                        .load_url(&url)
-                        .map_err(|cause| DesktopError::new("navigate_main_frontend", cause))?;
-                    self.navigations += 1;
                     #[cfg(feature = "k1-native-qualification")]
-                    tracing::info!(operation="main_navigation_started", identity=?self.identity(),
-                        "Actual local frontend navigation dispatched after hooks");
-                    #[cfg(feature = "k1-native-qualification")]
-                    crate::qualification_trace::progress(
-                        crate::qualification_trace::Progress::NavigationStarted,
-                        self.identity(),
-                    );
-                    Some(DesktopStartupObservation::NavigationStarted(self.identity()))
+                    tracing::debug!(operation="main_hooks_ready", identity=?self.identity(),
+                        "Current native document observers are ready");
+                    self.panel_bridge = Some(super::panel::bridge::Bridge::new(
+                        self.view()?.webview(),
+                        self.events()?.clone(),
+                        self.request()?.storage_lease(),
+                    )?);
+                    None
                 } else {
                     None
                 }
@@ -143,7 +210,33 @@ impl MainActor {
             }),
         };
         events.rewake();
-        Ok(result)
+        Ok(EvidenceProgress { consumed: true, observation: result })
+    }
+}
+
+impl MainActor {
+    /// Navigate only after the current native hooks and requested panel registration complete.
+    pub(super) fn navigate_frontend(
+        &mut self,
+    ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+        self.admission.navigation_admitted()?;
+        self.readiness()?.navigation_started().map_err(readiness_error)?;
+        self.receivers()?.begin_navigation()?;
+        let url =
+            crate::main_navigation::panel_root_url(self.request()?.origin(), self.identity())?;
+        self.view()?
+            .load_url(&url)
+            .map_err(|cause| DesktopError::new("navigate_main_frontend", cause))?;
+        self.navigations += 1;
+        #[cfg(feature = "k1-native-qualification")]
+        tracing::info!(operation="main_navigation_started", identity=?self.identity(),
+            "Actual local frontend navigation dispatched after hooks");
+        #[cfg(feature = "k1-native-qualification")]
+        crate::qualification_trace::progress(
+            crate::qualification_trace::Progress::NavigationStarted,
+            self.identity(),
+        );
+        Ok(Some(DesktopStartupObservation::NavigationStarted(self.identity())))
     }
 }
 
@@ -165,6 +258,7 @@ fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
         Kind::Context => "Context",
         Kind::ContextDestroyed => "ContextDestroyed",
         Kind::ContextsCleared => "ContextsCleared",
+        Kind::PanelBinding => "PanelBinding",
         Kind::Console => "Console",
         Kind::NavigationStarting => "NavigationStarting",
         Kind::ReloadRequested => "NavigationStarting",
@@ -176,6 +270,7 @@ fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
             Some(Command::Probe(_)) => "Probe",
             Some(Command::FrameConfiguration(_)) => "FrameConfiguration",
             Some(Command::Barrier(_)) => "Barrier",
+            Some(Command::PanelDelivery(_)) => "PanelDelivery",
             #[cfg(feature = "k1-native-qualification")]
             Some(Command::Downloads) => "Downloads",
             None => "Command",

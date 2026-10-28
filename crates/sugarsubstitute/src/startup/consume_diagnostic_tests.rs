@@ -78,6 +78,7 @@ fn actual_delivery_first_error_projects_render_category_and_keeps_both_original_
     let error = delivery::<ProductionChild, ()>(
         Err(render),
         Err(Box::new(std::io::Error::from(std::io::ErrorKind::PermissionDenied))),
+        Ok(()),
     )
     .err()
     .ok_or("Combined error absent")?;
@@ -102,10 +103,10 @@ fn actual_delivery_first_error_projects_render_category_and_keeps_both_original_
 #[test]
 fn actual_delivery_success_and_single_child_failure_preserve_effects_and_direct_io_category()
 -> Result<(), Box<dyn Error>> {
-    assert_eq!(delivery::<ProductionChild, _>(Ok(42), Ok(()))?, 42);
+    assert_eq!(delivery::<ProductionChild, _>(Ok(42), Ok(()), Ok(()))?, 42);
     let original = Box::new(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
     let address = original.as_ref() as *const std::io::Error;
-    let error = delivery::<ProductionChild, _>(Ok(42), Err(original))
+    let error = delivery::<ProductionChild, _>(Ok(42), Err(original), Ok(()))
         .err()
         .ok_or("Actual child error absent")?;
     let actual = error.downcast_ref::<StartupConsumeFailure>().ok_or("Consumer facts absent")?;
@@ -128,7 +129,7 @@ fn actual_delivery_success_and_single_child_failure_preserve_effects_and_direct_
     ] {
         let original = Box::new(crate::production_output::OutputError::Transcript(transcript));
         let address = original.as_ref() as *const crate::production_output::OutputError;
-        let error = delivery::<ProductionChild, _>(Ok(42), Err(original))
+        let error = delivery::<ProductionChild, _>(Ok(42), Err(original), Ok(()))
             .err()
             .ok_or("Transcript child error absent")?;
         let retained =
@@ -143,6 +144,44 @@ fn actual_delivery_success_and_single_child_failure_preserve_effects_and_direct_
                 .ok_or("Original transcript Box lost")?
         ));
     }
+    Ok(())
+}
+
+#[test]
+fn canvas_failure_keeps_its_stage_and_simultaneous_failures_keep_the_original_first_cause()
+-> Result<(), Box<dyn Error>> {
+    let original = Box::new(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+    let address = original.as_ref() as *const std::io::Error;
+    let error = delivery::<ProductionChild, _>(Ok(42), Ok(()), Err(original))
+        .err()
+        .ok_or("Canvas error absent")?;
+    let retained = error.downcast_ref::<StartupConsumeFailure>().ok_or("Canvas facts absent")?;
+    assert_eq!(retained.stage(), StartupConsumeStage::CanvasDelivery);
+    assert_eq!(retained.code(), Code::Denied);
+    assert!(std::ptr::eq(
+        address,
+        retained.original().downcast_ref::<std::io::Error>().ok_or("Canvas cause absent")?
+    ));
+
+    let first = Box::new(std::io::Error::from(std::io::ErrorKind::TimedOut));
+    let address = first.as_ref() as *const std::io::Error;
+    let combined = delivery::<ProductionChild, ()>(
+        Err(first),
+        Err(Box::new(std::io::Error::other("child"))),
+        Err(Box::new(std::io::Error::other("canvas"))),
+    )
+    .err()
+    .ok_or("Combined errors absent")?;
+    let retained =
+        combined.downcast_ref::<StartupConsumeFailure>().ok_or("Combined facts absent")?;
+    assert_eq!(retained.stage(), StartupConsumeStage::RenderDelivery);
+    assert_eq!(retained.code(), Code::TimedOut);
+    assert!(std::ptr::eq(
+        address,
+        super::super::delivery::first_cause(retained.original())
+            .downcast_ref::<std::io::Error>()
+            .ok_or("First cause absent")?
+    ));
     Ok(())
 }
 

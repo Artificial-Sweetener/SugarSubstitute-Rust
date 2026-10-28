@@ -11,6 +11,10 @@ pub(super) fn context() -> Result<GrantedContext<'static>, Box<dyn Error>> {
         origin: LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?,
         frontend: VersionLabel::new("1.2.3")?,
         sugarcubes: VersionLabel::new("0.1+ok")?,
+        backend_peer: BackendPeer {
+            process_id: NonZeroU32::new(47).ok_or("zero PID")?,
+            creation_time_100ns: NonZeroU64::new(53).ok_or("zero process birth")?,
+        },
     })
 }
 pub(super) fn failure() -> Result<MainStageFailure, Box<dyn Error>> {
@@ -161,6 +165,8 @@ fn enriched_grant_has_independent_exact_golden_and_borrowed_labels() -> TestResu
         golden.push(label.len() as u8);
         golden.extend(label);
     }
+    golden.extend(47u32.to_le_bytes());
+    golden.extend(53u64.to_le_bytes());
     assert_eq!(&source[HEADER_BYTES..], golden);
     let DecodedPayload::Reply(ReplyOutcome::Granted(decoded)) =
         FrameCodec::decode(&source)?.payload
@@ -170,6 +176,12 @@ fn enriched_grant_has_independent_exact_golden_and_borrowed_labels() -> TestResu
     assert_eq!(decoded, value);
     assert_eq!(decoded.frontend.as_str().as_ptr(), source[149..].as_ptr());
     assert_rejected_tail_and_prefix(&source)?;
+    let peer_offset = source.len() - 12;
+    for range in [peer_offset..peer_offset + 4, peer_offset + 4..source.len()] {
+        let mut invalid = source.clone();
+        invalid[range].fill(0);
+        assert!(matches!(FrameCodec::decode(&invalid), Err(ProtocolError::Identity)));
+    }
     for host in ["127.0.0.1", "[::1]", "localhost"] {
         for port in [1, 80, 65535] {
             let origin = LoopbackOrigin::parse(&format!("http://{host}:{port}"), port)?;
@@ -298,7 +310,7 @@ fn settlement_wire_preserves_original_acquisition_and_rejects_zero_foreign_or_ch
     let acquisition = sugarsubstitute_contracts::lifecycle::RequestId::new(71)?;
     let source = encoded(WirePayload::SettleAttempt { identity, acquisition })?;
     assert_eq!(source.len(), HEADER_BYTES + 24);
-    assert_eq!(&source[4..6], &10u16.to_le_bytes());
+    assert_eq!(&source[4..6], &11u16.to_le_bytes());
     assert!(
         matches!(FrameCodec::decode(&source)?.payload, DecodedPayload::SettleAttempt { identity: actual, acquisition: original } if actual == identity && original == acquisition)
     );

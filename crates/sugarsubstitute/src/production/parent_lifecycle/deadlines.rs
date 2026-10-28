@@ -8,6 +8,22 @@ use sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError;
 use sugarsubstitute_supervision::lifecycle_protocol::WireHeader;
 
 impl ParentLifecycle {
+    /// Validate registration against the original authenticated handshake cutoff.
+    /// Registration precedes backend acquisition, so the later connection budget
+    /// must not shorten or replace this already admitted native deadline.
+    pub(super) fn registration_deadline(
+        &self,
+        header: WireHeader,
+        resources: &ParentResources<'_, '_>,
+    ) -> Result<Moment> {
+        registration_cutoff(
+            header.deadline_qpc,
+            self.original.ticks(),
+            resources.session.control.original_deadline(),
+            resources.execution.client.now()?,
+        )
+    }
+
     /// Decode an ordinary request against its connection admission interval.
     pub(super) fn deadline(
         &self,
@@ -63,6 +79,22 @@ impl ParentLifecycle {
     }
 }
 
+/// Accept only the exact admitted handshake deadline while it remains live.
+fn registration_cutoff(
+    supplied_ticks: i64,
+    original_ticks: i64,
+    original: Moment,
+    now: Moment,
+) -> Result<Moment> {
+    if supplied_ticks != original_ticks {
+        return Err(ParentError::WrongPhase.into());
+    }
+    if now >= original {
+        return Err(LifecyclePipeError::DeadlineExpired.into());
+    }
+    Ok(original)
+}
+
 /// Preserve the earlier original cutoff; validation never restarts frontend preparation.
 fn frontend_cutoff(supplied: Moment, now: Moment, issued: Moment) -> Result<Moment> {
     let maximum = FrontendBudget::new(now)?.until();
@@ -78,6 +110,28 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use sugarsubstitute_application::startup::{ConnectionBudget, ConnectionBudgetKind};
+
+    #[test]
+    fn registration_preserves_the_live_handshake_before_attached_connection_admission() -> Result<()>
+    {
+        let now = Moment::from_nanos(1_000_000_000);
+        let original = now.checked_add(Duration::from_secs(3600))?;
+        let connection = ConnectionBudget::new(ConnectionBudgetKind::Attached, now)?;
+        assert!(original > connection.until());
+        assert_eq!(registration_cutoff(3601, 3601, original, now)?, original);
+        assert!(registration_cutoff(3602, 3601, original, now).is_err());
+        assert!(registration_cutoff(3601, 3601, original, original).is_err());
+        assert!(
+            registration_cutoff(
+                3601,
+                3601,
+                original,
+                original.checked_add(Duration::from_nanos(1))?,
+            )
+            .is_err()
+        );
+        Ok(())
+    }
 
     #[test]
     fn attached_connection_does_not_shorten_the_separate_frontend_phase() -> Result<()> {

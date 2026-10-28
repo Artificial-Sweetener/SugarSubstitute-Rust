@@ -223,6 +223,15 @@ impl ProductionChild {
             return Err("Reload authorization changed identity, lease or origin".into());
         }
         let origin = context.origin;
+        #[cfg(feature = "native-composition")]
+        {
+            self.canvas_backend = Some(crate::startup::CanvasBackend {
+                identity: next,
+                lease,
+                origin,
+                peer: context.backend_peer,
+            });
+        }
         self.grant_header = Some(header);
         self.reload.as_mut().ok_or("Reload absent")?.stage = Stage::Granted;
         self.push_event(StartupEvent::new(next.launch, StartupObservation::ConnectionReady(origin)))

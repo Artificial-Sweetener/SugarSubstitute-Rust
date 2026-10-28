@@ -1,9 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reject hostile HTTP framing at the complete-header boundary without live networking.
-use super::{headers::parse_headers, probe::Endpoint};
+use super::{
+    headers::{parse_headers, parse_png_length},
+    probe::Endpoint,
+};
 mod verification;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+#[test]
+fn png_output_requires_one_bounded_exact_length_and_identity_encoding() -> TestResult {
+    let valid = "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: 42\r\n\r\n";
+    assert_eq!(parse_png_length(valid, 42)?, 42);
+    for invalid in [
+        valid.replace("42", "32"),
+        valid.replace("42", "43"),
+        valid.replace("image/png", "image/jpeg"),
+        valid.replace("Content-Length: 42\r\n", "Transfer-Encoding: chunked\r\n"),
+        valid.replace("Content-Length: 42", "Content-Length: 42\r\nContent-Length: 42"),
+        valid.replace("Content-Length: 42", "Content-Length: 42\r\nContent-Encoding: gzip"),
+    ] {
+        assert!(parse_png_length(&invalid, 42).is_err());
+    }
+    Ok(())
+}
 #[test]
 fn backend_script_binding_accepts_only_exact_dos_spelling_with_optional_verbatim_prefix() {
     use std::path::Path;

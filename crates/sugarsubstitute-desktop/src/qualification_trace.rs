@@ -36,6 +36,16 @@ pub enum Progress {
     DownloadsPrepared,
     /// Three production-admitted JSON/PNG downloads actually completed in the sealed Main.
     DownloadsCompleted,
+    /// The current web document sent a valid canvas context request.
+    CanvasContextObserved,
+    /// The current panel did not admit the canvas context request.
+    CanvasContextRejected,
+    /// The request is waiting for the canvas session to finish initialization.
+    CanvasContextWaitingSession,
+    /// The request is waiting for a current authenticated backend.
+    CanvasContextWaitingBackend,
+    /// The correlated canvas context reply entered the native command queue.
+    CanvasContextReplyQueued,
 }
 impl Progress {
     /// Decode only a known closed schema-one stage.
@@ -54,6 +64,11 @@ impl Progress {
             "PreviewDispatched" => Some(Self::PreviewDispatched),
             "DownloadsPrepared" => Some(Self::DownloadsPrepared),
             "DownloadsCompleted" => Some(Self::DownloadsCompleted),
+            "CanvasContextObserved" => Some(Self::CanvasContextObserved),
+            "CanvasContextRejected" => Some(Self::CanvasContextRejected),
+            "CanvasContextWaitingSession" => Some(Self::CanvasContextWaitingSession),
+            "CanvasContextWaitingBackend" => Some(Self::CanvasContextWaitingBackend),
+            "CanvasContextReplyQueued" => Some(Self::CanvasContextReplyQueued),
             _ => None,
         }
     }

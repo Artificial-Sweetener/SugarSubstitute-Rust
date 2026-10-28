@@ -7,6 +7,33 @@ impl ProductionChild {
         &mut self,
         prepared: Option<&PreparedChildStartup>,
     ) -> Result<()> {
+        if matches!(self.observation, Some(DesktopStartupObservation::PanelMessage(_))) {
+            let Some(DesktopStartupObservation::PanelMessage(observation)) =
+                self.observation.take()
+            else {
+                return Err("Panel observation disappeared".into());
+            };
+            self.observe_panel(observation, prepared)?;
+            return self.advance_control();
+        }
+        if matches!(self.observation, Some(DesktopStartupObservation::SurfaceMessage(_))) {
+            let Some(DesktopStartupObservation::SurfaceMessage(observation)) =
+                self.observation.take()
+            else {
+                return Err("Surface observation disappeared".into());
+            };
+            self.observe_surface(observation, prepared)?;
+            return self.advance_control();
+        }
+        if matches!(self.observation, Some(DesktopStartupObservation::CanvasContextMessage(_))) {
+            let Some(DesktopStartupObservation::CanvasContextMessage(observation)) =
+                self.observation.take()
+            else {
+                return Err("Canvas context observation disappeared".into());
+            };
+            self.observe_canvas_context(observation, prepared)?;
+            return self.advance_control();
+        }
         if let Some(profile) = self.main.profile_mut()
             && profile.observe(&mut self.observation)?
         {
@@ -17,6 +44,7 @@ impl ProductionChild {
                 self.report_main_revealed(*identity, prepared)?;
             }
             Some(DesktopStartupObservation::MainReloadRequested { identity, .. }) => {
+                self.panel = None;
                 self.request_reload(*identity)?;
             }
             Some(DesktopStartupObservation::BackendRetryRequested { identity, failed }) => {
@@ -50,6 +78,7 @@ impl ProductionChild {
             Some(DesktopStartupObservation::MainRetired(identity))
                 if *identity == self.identity =>
             {
+                self.panel = None;
                 self.shutdown.queue(Control::MainRetired(*identity))?;
                 self.shutdown.main_retired = true;
             }

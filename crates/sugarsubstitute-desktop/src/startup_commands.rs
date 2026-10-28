@@ -149,6 +149,19 @@ pub(super) fn drain(
                 );
                 main_operation(session, content, |owner| owner.reveal(identity).map(Some))?;
             }
+            DesktopStartupCommand::SendPanel(command) => {
+                main_operation(session, content, |owner| {
+                    owner.send_panel(&command).map(|()| None)
+                })?;
+            }
+            DesktopStartupCommand::SendCanvasContext(reply) => {
+                main_operation(session, content, |owner| {
+                    owner.send_canvas_context(reply).map(|()| None)
+                })?;
+            }
+            DesktopStartupCommand::SendSurface(reply) => {
+                main_operation(session, content, |owner| owner.send_surface(reply).map(|()| None))?;
+            }
             #[cfg(feature = "k1-native-qualification")]
             DesktopStartupCommand::CaptureMainPreview { identity, source_deadline, downloads } => {
                 tracing::info!(operation="main_command_dispatched", command="CaptureMainPreview", identity=?identity,

@@ -63,6 +63,13 @@ impl MainReadiness {
         self.completed && self.positive && self.fault.is_none()
     }
 
+    /// Borrow only the current verified top-document context for public panel attribution.
+    /// This correlation does not grant filesystem, network or native operation authority.
+    #[cfg(any(target_os = "windows", test))]
+    pub(crate) fn panel_context(&self) -> Option<i64> {
+        if self.ready() && self.loaded { self.default_context } else { None }
+    }
+
     /// Observe immutable current document facts after its genuine positive completion barrier.
     #[cfg(any(feature = "k1-native-qualification", test))]
     pub(crate) fn render_document(&self) -> Option<crate::main_readiness_types::RenderDocument> {

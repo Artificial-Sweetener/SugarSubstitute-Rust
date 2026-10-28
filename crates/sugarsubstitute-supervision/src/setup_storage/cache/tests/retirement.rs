@@ -73,13 +73,15 @@ fn retirement_rejects_unsettled_producers_and_unknown_files() -> TestResult {
 fn registered_namespace_is_created_when_opening_an_older_owned_scope() -> TestResult {
     worker::run_reserved(32 * 1024 * 1024, |context, _| {
         let root = tempfile::tempdir()?;
-        let cache = open(root.path(), 64, context)?;
-        let directory = cache.path().join(Namespace::SetupRuntime.directory());
-        drop(cache);
-        std::fs::remove_dir(&directory)?;
-        let cache = open(root.path(), 64, context)?;
-        assert!(directory.is_dir());
-        assert_eq!(cache.maintain(100, context)?.preserved_entries, 0);
+        for namespace in [Namespace::SetupRuntime, Namespace::ComfyOutputs] {
+            let cache = open(root.path(), 64, context)?;
+            let directory = cache.path().join(namespace.directory());
+            drop(cache);
+            std::fs::remove_dir(&directory)?;
+            let cache = open(root.path(), 64, context)?;
+            assert!(directory.is_dir());
+            assert_eq!(cache.maintain(100, context)?.preserved_entries, 0);
+        }
         Ok(())
     })
 }

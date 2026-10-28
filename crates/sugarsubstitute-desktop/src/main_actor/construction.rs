@@ -108,20 +108,24 @@ impl MainActor {
                 let mut context =
                     WebContext::new(Some(self.request()?.profile_directory().to_owned()));
                 let captured = proxy;
-                let begun = WebViewBuilder::new_with_web_context(&mut context)
+                let builder = WebViewBuilder::new_with_web_context(&mut context)
                     .with_url("about:blank")
                     .with_visible(false)
                     .with_focused(false)
                     .with_transparent(true)
                     .with_additional_browser_args("")
                     .without_download_handlers()
-                    .with_bounds(self.browser_bounds()?)
-                    .begin_owned_as_child(self.window()?.as_ref(), move || {
-                        if let Err(cause) = captured.send_event(NativeAction::Main) {
-                            tracing::error!(operation="wake_main_construction", cause=%cause,
+                    .with_bounds(self.browser_bounds()?);
+                let wake = move || {
+                    if let Err(cause) = captured.send_event(NativeAction::Main) {
+                        tracing::error!(operation="wake_main_construction", cause=%cause,
                                 "Native construction wake failed");
-                        }
-                    });
+                    }
+                };
+                #[cfg(feature = "native-composition")]
+                let begun = builder.begin_owned_as_composition_child(self.window()?.as_ref(), wake);
+                #[cfg(not(feature = "native-composition"))]
+                let begun = builder.begin_owned_as_child(self.window()?.as_ref(), wake);
                 match begun {
                     Ok(constructor) => self.constructor = Some(constructor),
                     Err(failure) => {
@@ -209,6 +213,10 @@ impl MainActor {
                 }
             }
             ConstructionStage::Browser => {
+                #[cfg(feature = "native-composition")]
+                if !self.prepare_composition()? {
+                    return Ok(None);
+                }
                 if self.receivers.is_none() {
                     self.receivers = Some(crate::windows_main_receivers::Receivers::new(
                         self.view()?.webview(),

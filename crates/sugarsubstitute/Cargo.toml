@@ -13,6 +13,8 @@ default-run = "sugarsubstitute"
 default = ["windows-native-host"]
 windows-native-host = []
 k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification", "sugarsubstitute-desktop/k1-native-qualification", "sugarsubstitute-supervision/k1-native-qualification"]
+native-composition = ["sugarsubstitute-desktop/native-composition"]
+composition-qualification = ["k1-native-qualification", "native-composition", "sugarsubstitute-desktop/composition-qualification"]
 
 [dependencies]
 sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }

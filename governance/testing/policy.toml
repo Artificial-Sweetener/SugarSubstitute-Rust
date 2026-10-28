@@ -28,19 +28,19 @@ minimum_tests = 58
 [[owners]]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
-concern = "Native installation selection, exact health-attempt correlation, interrupted trial reconciliation and failed-package suppression; Closed recovery correlation, physical generation identity, summary migration steps and localized capture degradation and unknown exit text; Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject; Shared diagnostic schema, identity grammar and privacy bounds"
+concern = "Native installation selection, exact health-attempt correlation, interrupted trial reconciliation and failed-package suppression; Closed recovery correlation, physical generation identity, summary migration steps and localized capture degradation and unknown exit text; Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject; Shared diagnostic schema, identity grammar and privacy bounds; shared SugarCubes canvas and panel contracts, bounded wire data and source synchronization"
 minimum_tests = 182
 
 [[owners]]
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
-concern = "Exact retiring predecessor profile exclusion advisory and independent backend settlement; Exact pre-ACK recovery admission, fresh operation allocation and independent failed-seed policy retirement; Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; finite preparation deadlines and cancellable readiness lifetimes; indexed actual-tail selection and shared immutable snapshot admission; bounded incident publication, report CAS, recovery and independent retirement policy"
+concern = "Exact retiring predecessor profile exclusion advisory and independent backend settlement; Exact pre-ACK recovery admission, fresh operation allocation and independent failed-seed policy retirement; Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; finite preparation deadlines and cancellable readiness lifetimes; indexed actual-tail selection and shared immutable snapshot admission; bounded incident publication, report CAS, recovery and independent retirement policy; navigation-bound panel handshake, connection observations and monotonic deadlines"
 minimum_tests = 222
 
 [[owners]]
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
-concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed requests through the network adapter, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; cancellable readiness campaigns, finite HTTP phases and typed native retry classification; Shared-transport native/I/O failure adaptation, original job cancellation and expiry precedence, peer-bound retry policy and retained native retirement causes"
+concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed requests through the network adapter, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; cancellable readiness campaigns, finite HTTP phases and typed native retry classification; Shared-transport native/I/O failure adaptation, original job cancellation and expiry precedence, peer-bound retry policy and retained native retirement causes; structured bounded Comfy output-view targets"
 minimum_tests = 116
 
 [[owners]]
@@ -76,7 +76,7 @@ minimum_tests = 64
 [[owners]]
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
-concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement; post-show native layout reconciliation and retained closed preview source mismatch; actual incomplete-probe conditions, coalesced creating-thread custody counters and bounded closed stderr observations"
+concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement; post-show native layout reconciliation and retained closed preview source mismatch; actual incomplete-probe conditions, coalesced creating-thread custody counters and bounded closed stderr observations; current-document panel ingress, bounded callback admission and checked bridge retirement; composed-browser mouse-message decoding and callback retirement"
 minimum_tests = 504
 
 [[owners]]

@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose a standalone canvas without workflow, browser or inference startup.
-mod coverage;
 mod options;
-mod proof;
-mod session;
-mod work;
-mod work_error;
+use crate::native_canvas::session::Session;
 use std::{error::Error, process::ExitCode};
 
 /// Enter the standalone native viewer, retaining ordinary host diagnostic ownership.
@@ -27,7 +23,12 @@ pub fn entry() -> ExitCode {
                 extent: options.extent,
                 visible: !proof_window,
             };
-            let mut session = session::Session::new(options, health)?;
+            let mut session = Session::new(
+                options.into_config(),
+                health,
+                sugarsubstitute_execution::MonotonicClock::new(),
+                crate::job_sequence::JobSequence::new(),
+            )?;
             match proof {
                 Some(paths) => session.run_proof(paths, proof_window.then_some(window)),
                 None => sugarsubstitute_desktop::canvas::run(window, &mut session),

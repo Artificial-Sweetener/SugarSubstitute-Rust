@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify real GDI crop origins, overlapping blits and exposure against independent source pixels.
 use super::*;
+use crate::canvas::test_harness as harness;
 use crate::native_storage::Dib;
 use ::windows::Win32::Graphics::Gdi::{GdiFlush, IntersectClipRect, SelectClipRgn};
 use std::num::NonZeroUsize;
@@ -10,7 +11,6 @@ use sugarsubstitute_contracts::{
     presentation::{FrameIdentity, FrameShape, FrameValidator, PreparedFrame},
 };
 use sugarsubstitute_image_ops::ImageError;
-mod harness;
 
 /// Real admission produces the original source/native allocation lease; no test mints a budget.
 fn admitted() -> Result<PreparedFrame, Box<dyn Error>> {

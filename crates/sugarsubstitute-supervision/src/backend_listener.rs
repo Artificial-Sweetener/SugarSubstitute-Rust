@@ -116,6 +116,7 @@ impl ManagedListenerLease {
         storage: &mut TcpOwnerWorkspace,
         context: &JobContext,
     ) -> Result<BackendPeerIdentity, RegistryError> {
+        storage.require_lifecycle(context)?;
         let pid = table::connected_owner(connection, storage, context)?;
         let identity = self.family.qualify_member(pid, context)?;
         if table::connected_owner(connection, storage, context)? != identity.pid {

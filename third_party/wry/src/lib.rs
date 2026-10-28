@@ -1617,6 +1617,26 @@ impl<'a> WebViewBuilder<'a> {
       wake,
     )
   }
+
+  /// Begin an owned windowless WebView2 composition controller on the same UI thread.
+  ///
+  /// This retains the construction, admission, callback and retirement requirements of
+  /// [`Self::begin_owned_as_child`]. The caller must attach a composition visual, forward
+  /// spatial input, and retire that visual before releasing the controller or parent.
+  #[cfg(target_os = "windows")]
+  pub fn begin_owned_as_composition_child(
+    self,
+    parent: &impl HasWindowHandle,
+    wake: impl Fn() + 'static,
+  ) -> std::result::Result<WebViewConstruction, WebViewBuildFailure> {
+    webview2::construction::begin_composition_builder(
+      parent,
+      self.attrs,
+      self.platform_specific,
+      self.error,
+      wake,
+    )
+  }
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]

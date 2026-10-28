@@ -196,6 +196,7 @@ fn reloaded_context_has_exact_new_identity_origin_versions_and_rejects_lease_onl
         origin: LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?,
         frontend: VersionLabel::new("1.47.11")?,
         sugarcubes: VersionLabel::new("0.15.3")?,
+        backend_peer: extensions::context()?.backend_peer,
     };
     let bytes = encoded(WirePayload::Reply(ReplyOutcome::Reloaded(context)))?;
     assert_eq!(bytes[HEADER_BYTES], 5);

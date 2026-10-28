@@ -2704,7 +2704,9 @@ dependencies = [
  "sugarsubstitute-execution",
  "sugarsubstitute-networking",
  "sugarsubstitute-supervision",
+ "tempfile",
  "tracing",
+ "url",
  "windows",
 ]
 

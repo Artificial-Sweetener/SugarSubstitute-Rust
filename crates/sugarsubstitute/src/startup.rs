@@ -6,10 +6,14 @@
 //! authenticated bootstrap, capture, readiness and profile custody. Matching data,
 //! prepared pixels or an execution terminal cannot substitute for those capabilities.
 
+#[cfg(windows)]
+mod canvas;
 #[path = "startup/close_diagnostic.rs"]
 mod close_diagnostic;
 #[path = "startup/commands.rs"]
 mod commands;
+#[cfg(all(windows, feature = "native-composition"))]
+mod composition;
 #[path = "startup/configuration.rs"]
 mod configuration;
 #[path = "startup/consume_diagnostic.rs"]
@@ -35,6 +39,8 @@ mod backend;
 pub(crate) mod budget_trace;
 mod shutdown_origin;
 use crate::{job_sequence::JobSequence, preparation::PreparationDriver};
+#[cfg(all(windows, feature = "native-composition"))]
+pub use backend::CanvasBackend;
 pub use backend::{BackendResult, PreparedStartup, StartupBackend};
 use execution::StartupExecution;
 use policy::StartupPolicy;
@@ -64,6 +70,10 @@ mod platform_tests;
 
 /// Retain one real native-thread process lifetime until actual native and worker joins.
 pub struct StartupHost<B: StartupBackend> {
+    #[cfg(windows)]
+    canvas: Option<canvas::EmbeddedCanvas>,
+    #[cfg(all(windows, feature = "native-composition"))]
+    composition: Option<composition::CompositionWork>,
     policy: StartupPolicy,
     startup: Option<B::Prepared>,
     child: B,
@@ -127,6 +137,10 @@ impl<B: StartupBackend> StartupHost<B> {
     ) -> Result<Self, Box<dyn Error>> {
         scopes.validate()?;
         Ok(Self {
+            #[cfg(windows)]
+            canvas: None,
+            #[cfg(all(windows, feature = "native-composition"))]
+            composition: None,
             policy: StartupPolicy::new(run, launch),
             startup: None,
             child,
@@ -155,6 +169,60 @@ impl<B: StartupBackend> StartupHost<B> {
             render.invalidate();
         }
         changed
+    }
+
+    /// Retain one empty application canvas before the native startup lifetime begins.
+    /// The root process selects the working directory; the cache owner validates it on a worker.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    pub(crate) fn configure_canvas(
+        &mut self,
+        anchor: std::path::PathBuf,
+        health: crate::diagnostics::DiagnosticHealth,
+        scope: sugarsubstitute_contracts::execution::ScopeSpec,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.started
+            || self.canvas.is_some()
+            || scope.deadline.is_some()
+            || scope.id <= self.scopes.child.id
+            || scope.id <= self.scopes.render.id
+        {
+            return Err("Application canvas has an invalid or already active scope".into());
+        }
+        #[cfg(feature = "native-composition")]
+        if self.composition.as_ref().is_some_and(|composition| scope.id <= composition.scope_id()) {
+            return Err("Application canvas scope precedes composition execution".into());
+        }
+        if !anchor.is_absolute() {
+            return Err("Application canvas cache anchor must be absolute".into());
+        }
+        self.execution.reserve_canvas_capacity()?;
+        self.canvas = Some(canvas::EmbeddedCanvas::new(
+            anchor,
+            health,
+            self.clock.clone(),
+            self.jobs.clone(),
+            scope,
+        ));
+        Ok(())
+    }
+
+    /// Reserve the composition-wait scope before native window construction begins.
+    #[cfg(all(windows, feature = "native-composition"))]
+    pub(crate) fn configure_composition(
+        &mut self,
+        scope: sugarsubstitute_contracts::execution::ScopeSpec,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.started
+            || self.composition.is_some()
+            || self.canvas.is_some()
+            || scope.deadline.is_some()
+            || scope.id <= self.scopes.child.id
+            || scope.id <= self.scopes.render.id
+        {
+            return Err("Composition wait scope is invalid or already active".into());
+        }
+        self.composition = Some(composition::CompositionWork::new(scope, self.jobs.clone()));
+        Ok(())
     }
 }
 impl<B: StartupBackend> WindowContent for StartupHost<B> {
@@ -262,6 +330,74 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
     }
 }
 impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn main_composition_started(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+    ) -> Result<bool, Box<dyn Error>> {
+        self.composition.as_mut().ok_or("Composition execution is unavailable")?.register(identity)
+    }
+
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn main_composition_wait(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+        input: &mut Option<sugarsubstitute_desktop::canvas::CompositionWait>,
+    ) -> Result<bool, Box<dyn Error>> {
+        let now = self.execution.now()?;
+        let cutoff = self.shutdown.budget().ok().map(|budget| budget.settle_until);
+        let accepted = self
+            .composition
+            .as_mut()
+            .ok_or("Composition execution is unavailable")?
+            .offer(identity, input, now, cutoff)?;
+        self.refresh_deadline()?;
+        Ok(accepted)
+    }
+
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn main_canvas_presentation(
+        &self,
+    ) -> sugarsubstitute_desktop::canvas::MainCanvasPresentation<'_> {
+        use sugarsubstitute_desktop::canvas::MainCanvasPresentation;
+        let Some(canvas) = self.canvas.as_ref() else { return MainCanvasPresentation::Hide };
+        let presentation = canvas.presentation();
+        if presentation
+            .identity()
+            .and_then(|identity| self.child.canvas_backend(identity))
+            .is_some_and(|backend| canvas.matches_backend(backend))
+        {
+            presentation
+        } else {
+            MainCanvasPresentation::Hide
+        }
+    }
+
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn main_canvas_presented(
+        &mut self,
+        target: sugarsubstitute_canvas::FrameStamp,
+    ) -> Result<(), Box<dyn Error>> {
+        if !matches!(
+            self.main_canvas_presentation(),
+            sugarsubstitute_desktop::canvas::MainCanvasPresentation::Frame(_)
+        ) {
+            return Ok(());
+        }
+        self.canvas.as_mut().ok_or("Application canvas disappeared")?.presented(target)
+    }
+
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn main_canvas_hidden(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+    ) -> Result<(), Box<dyn Error>> {
+        if let Some(canvas) = &mut self.canvas {
+            canvas.hidden(identity)?;
+        }
+        Ok(())
+    }
+
     fn prepare_native_ui(
         &mut self,
         maximum: NonZeroUsize,
@@ -318,6 +454,11 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
                 == sugarsubstitute_application::startup::StartupPhase::Running
         {
             self.child.observe(DesktopStartupObservation::MainRevealed(identity), Some(startup))?;
+            #[cfg(windows)]
+            if let Some(canvas) = &mut self.canvas {
+                let locale = startup.session().configuration().presentation().locale().as_str();
+                canvas.start(self.execution.client()?, locale)?;
+            }
             #[cfg(feature = "k1-native-qualification")]
             self.child.preview_after_main_revealed(identity, startup.session());
         }
@@ -328,11 +469,25 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         if let Some(command) = self.commands.take() {
             return Ok(Some(command));
         }
+        #[cfg(all(windows, feature = "native-composition"))]
+        if let Some(command) = self.canvas.as_mut().and_then(canvas::EmbeddedCanvas::take_command) {
+            return Ok(Some(command));
+        }
         self.child.take_command()
     }
     fn next_deadline(&self) -> Option<Instant> {
         self.next_deadline
             .into_iter()
+            .chain({
+                #[cfg(windows)]
+                {
+                    self.canvas.as_ref().and_then(canvas::EmbeddedCanvas::next_deadline)
+                }
+                #[cfg(not(windows))]
+                {
+                    None
+                }
+            })
             .chain(
                 self.view
                     .as_ref()

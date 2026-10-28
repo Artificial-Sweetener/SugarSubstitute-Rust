@@ -23,12 +23,13 @@ use windows::{
     core::{HSTRING, Interface, PWSTR},
 };
 
-const SOURCES: [(&str, Kind); 6] = [
+const SOURCES: [(&str, Kind); 7] = [
     ("Page.frameNavigated", Kind::Frame),
     ("Page.frameDetached", Kind::FrameDetached),
     ("Runtime.executionContextCreated", Kind::Context),
     ("Runtime.executionContextDestroyed", Kind::ContextDestroyed),
     ("Runtime.executionContextsCleared", Kind::ContextsCleared),
+    ("Runtime.bindingCalled", Kind::PanelBinding),
     ("Runtime.consoleAPICalled", Kind::Console),
 ];
 
@@ -172,6 +173,12 @@ impl Receivers {
     pub(crate) fn download_witness(&self) -> Result<Rc<DownloadWitness>, DesktopError> {
         self.require_outer_call()?;
         self.downloads.witness()
+    }
+
+    /// Keep browser command capacity available for panel and lifecycle traffic.
+    pub(crate) fn admits_surface_delivery(&self) -> Result<bool, DesktopError> {
+        self.require_outer_call()?;
+        Ok(self.operations.admits_surface_delivery())
     }
 
     /// Submit at most four retained same-session CDP operations; callbacks alone retire them.
