@@ -13,6 +13,7 @@ files = [
   "third_party/sugarcubes-canvas/geometry_vectors.json",
   "third_party/sugarcubes-canvas/message_vectors.json",
   "third_party/sugarcubes-canvas/context_vectors.json",
+  "third_party/sugarcubes-canvas/discovery_vectors.json",
   "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs",
   "crates/sugarsubstitute-contracts/src/canvas_context/wire.rs",
 ]

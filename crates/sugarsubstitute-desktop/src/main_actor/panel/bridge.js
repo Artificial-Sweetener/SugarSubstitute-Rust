@@ -15,7 +15,8 @@
     parameters.getAll('sc-panel-transport').length !== 1 ||
     parameters.get('sc-panel-transport') !== 'native'
   ) return;
-  const sendNative = globalThis.__sugarcubes_substitute_send_v3;
+  const binding = '__sugarcubes_substitute_send_v3';
+  const sendNative = globalThis[binding];
   if (typeof sendNative !== 'function') return;
   const listeners = new Set();
   const bridge = Object.freeze({
@@ -27,6 +28,11 @@
       const encoded = JSON.stringify(value);
       if (typeof encoded !== 'string' || encoded.length > 16384 ||
           new TextEncoder().encode(encoded).byteLength > 16384)
+        throw new TypeError('Panel message exceeds its transport bound.');
+      const envelope = JSON.stringify({ name: binding, payload: encoded, executionContextId: 0 });
+      // Reserve all 20 signed context-ID characters and the native UTF-16 terminator.
+      if (envelope.length + 19 + 1 > 16384 ||
+          new TextEncoder().encode(envelope).byteLength + 19 > 32768)
         throw new TypeError('Panel message exceeds its transport bound.');
       sendNative(encoded);
     },

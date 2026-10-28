@@ -41,6 +41,106 @@ fn context_request(session: &PanelSession) -> Result<CanvasContextRequest> {
 }
 
 #[test]
+fn limited_panel_discovery_is_explicit_and_keeps_native_custody() -> Result<()> {
+    let released = Arc::new(AtomicU64::new(0));
+    let reserved = OWNER_BYTES + SurfaceReply::STORAGE_BYTES;
+    let lease = MemoryLease::new(reserved, Box::new(Release(released.clone())));
+    let identity = identity()?;
+    let session = PanelSession::for_main(identity)?;
+    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0))?
+        .ok_or("Panel owner was not admitted")?;
+    let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&serde_json::json!({
+        "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
+        "requestId":17, "type":"surface.capabilities.request", "schema":1
+    }))?)?;
+    panel.receive_surface(
+        identity,
+        message.clone(),
+        &lease,
+        lease.claim(SurfaceReply::STORAGE_BYTES)?,
+    )?;
+    let Some(DesktopStartupCommand::SendSurface(reply)) = panel.take_canvas_reply() else {
+        return Err("Surface discovery response missing".into());
+    };
+    let value: serde_json::Value = serde_json::from_slice(reply.payload())?;
+    assert_eq!(value["type"], "surface.capabilities.reply");
+    assert_eq!(value["requestId"], 17);
+    assert_eq!(value["session"], session.as_str());
+    assert_eq!(value["status"], "unsupported");
+    assert_eq!(
+        value["capabilities"],
+        serde_json::json!({
+            "schema":1, "imageFormats":[], "viewportCommands":[], "viewportState":false,
+            "previewFormats":[], "comparison":false, "overview":false
+        })
+    );
+    let other = MemoryLease::new(reserved, Box::new(Release(Arc::default())));
+    assert!(
+        panel
+            .receive_surface(
+                identity,
+                message.clone(),
+                &other,
+                other.claim(SurfaceReply::STORAGE_BYTES)?
+            )
+            .is_err()
+    );
+    let foreign = MainIdentity { navigation: Generation::new(2)?, ..identity };
+    assert!(
+        panel
+            .receive_surface(foreign, message, &lease, other.claim(SurfaceReply::STORAGE_BYTES)?)
+            .is_err()
+    );
+    assert!(panel.take_canvas_reply().is_none());
+    drop(panel);
+    drop(lease);
+    assert_eq!(released.load(Ordering::SeqCst), 0);
+    drop(reply);
+    assert_eq!(released.load(Ordering::SeqCst), reserved);
+    Ok(())
+}
+
+#[test]
+fn discovery_replies_reject_foreign_sessions_and_inadequate_delivery_credit() -> Result<()> {
+    let identity = identity()?;
+    let foreign = MainIdentity { navigation: Generation::new(2)?, ..identity };
+    for (request_identity, bytes) in
+        [(foreign, SurfaceReply::STORAGE_BYTES), (identity, SurfaceReply::STORAGE_BYTES - 1)]
+    {
+        let released = Arc::new(AtomicU64::new(0));
+        let lease = MemoryLease::new(bytes, Box::new(Release(released.clone())));
+        let session = PanelSession::for_main(request_identity)?;
+        let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&serde_json::json!({
+            "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
+            "requestId":17, "type":"surface.capabilities.request", "schema":1
+        }))?)?;
+        let CanvasSurfaceMessage::Discovery(request) = message else {
+            return Err("Expected discovery request".into());
+        };
+        let result = SurfaceReply::discovery(
+            identity,
+            &request,
+            CanvasSurfaceDiscoveryStatus::Unsupported,
+            &CanvasSurfaceCapabilities::default(),
+            "",
+            lease.claim(bytes)?,
+        );
+        if request_identity == foreign {
+            assert!(matches!(
+                result,
+                Err(sugarsubstitute_desktop::SurfaceReplyError::ForeignNavigation)
+            ));
+        } else {
+            assert!(matches!(result, Err(sugarsubstitute_desktop::SurfaceReplyError::Storage)));
+        }
+        assert!(lease.claim(bytes).is_ok());
+        drop(lease);
+        assert_eq!(released.load(Ordering::SeqCst), bytes);
+    }
+    Ok(())
+}
+
+#[test]
 fn surface_negotiation_reports_unavailable_and_retains_the_ingress_claim() -> Result<()> {
     let released = Arc::new(AtomicU64::new(0));
     let reserved = OWNER_BYTES + SurfaceReply::STORAGE_BYTES;

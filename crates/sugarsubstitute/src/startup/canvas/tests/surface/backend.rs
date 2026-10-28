@@ -9,6 +9,39 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_supervision::lifecycle_protocol::{BackendPeer, LeaseReference};
 
+/// Inspect support through the actual surface route without acquiring an attachment.
+fn discovery(
+    canvas: &mut EmbeddedCanvas,
+    panel: &PanelSession,
+    memory: &MemoryLease,
+    request_id: u64,
+    expected: &str,
+) -> Result<(), Box<dyn Error>> {
+    let request = CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
+        "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
+        "requestId":request_id, "type":"surface.capabilities.request", "schema":1
+    }))?)?;
+    canvas.surface(identity()?, request, None, memory.claim(64 * 1024)?)?;
+    let Some(DesktopStartupCommand::SendSurface(reply)) = canvas.take_command() else {
+        return Err("Surface discovery response absent".into());
+    };
+    let value: Value = serde_json::from_slice(reply.payload())?;
+    assert_eq!(value["type"], "surface.capabilities.reply");
+    assert_eq!(value["requestId"], request_id);
+    assert_eq!(value["status"], expected);
+    assert_eq!(value["capabilities"]["schema"], 1);
+    assert_eq!(
+        value["capabilities"]["imageFormats"],
+        if expected == "available" { json!(["png"]) } else { json!([]) }
+    );
+    assert_eq!(value["capabilities"]["viewportCommands"], json!([]));
+    assert_eq!(value["capabilities"]["previewFormats"], json!([]));
+    for field in ["viewportState", "comparison", "overview"] {
+        assert_eq!(value["capabilities"][field], false);
+    }
+    Ok(())
+}
+
 #[test]
 fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
 -> Result<(), Box<dyn Error>> {
@@ -47,9 +80,11 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
             creation_time_100ns: std::num::NonZeroU64::new(53).ok_or("Birth")?,
         },
     };
-    canvas.backend(Some(backend))?;
     let panel = PanelSession::for_main(identity)?;
     let memory = MemoryLease::new(2 * 1024 * 1024, Box::new(Release));
+    discovery(&mut canvas, &panel, &memory, 90, "unavailable")?;
+    canvas.backend(Some(backend))?;
+    discovery(&mut canvas, &panel, &memory, 91, "available")?;
     canvas.surface(
         identity,
         request(&panel, 1, "surface.prepare", json!({}))?,
@@ -57,6 +92,8 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
         memory.claim(64 * 1024)?,
     )?;
     wait_reply(&mut canvas, &client, &wake, 1, "ready")?;
+    assert!(canvas.matches_backend(backend));
+    discovery(&mut canvas, &panel, &memory, 92, "available")?;
     assert!(canvas.matches_backend(backend));
     canvas.surface(
         identity,
@@ -70,6 +107,7 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
     reply(&mut canvas, 2, "unavailable")?;
     assert!(!canvas.matches_backend(backend));
     assert!(matches!(canvas.presentation(), MainCanvasPresentation::Hide));
+    discovery(&mut canvas, &panel, &memory, 93, "unavailable")?;
 
     canvas.close_until(Moment::from_nanos(10_000_000_000))?;
     loop {

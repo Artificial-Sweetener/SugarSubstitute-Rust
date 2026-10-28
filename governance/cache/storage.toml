@@ -119,3 +119,10 @@ owner = "sugarsubstitute"
 source_sha256 = "sha256:169a7ad569afe9fafe1fe6effb5a6166cdd29975670df49ca2937c8511ae9263"
 rationale = "The isolated localization contract tests read the owned TypeScript progress/failure module into a virtual compiler and reject invented copy and message codes; they perform no runtime cache acquisition."
 role = "fixture"
+
+[[script_boundaries]]
+path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:2ccf3ad1305db3c8bc08aba38b51b6025d602977bb9f29c84e70bf59ca6b0658"
+rationale = "Exercise the actual bounded panel transport in an isolated JavaScript VM with native and browser boundary fixtures."
+role = "fixture"

@@ -936,3 +936,10 @@ owner = "sugarsubstitute-image-gpu"
 source_sha256 = "sha256:a43be635d1ca11e51442603ac1a83ee6c50f6101c8be76d0a672199e7ecc66b7"
 capabilities = ["arguments"]
 rationale = "The developer composite check accepts one explicit Vulkan vendor/device selector and resolves it through the production adapter catalog."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:2ccf3ad1305db3c8bc08aba38b51b6025d602977bb9f29c84e70bf59ca6b0658"
+capabilities = ["arguments"]
+rationale = "Accept an optional source fixture path to prove regressions against the prior transport implementation."

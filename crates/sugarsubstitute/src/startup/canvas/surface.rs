@@ -3,6 +3,7 @@
 //! Coordinate the shared web surface with the current authorized canvas and backend.
 
 mod attachment;
+mod capabilities;
 mod presentation;
 #[cfg(test)]
 #[path = "surface/replies_tests.rs"]
@@ -206,6 +207,9 @@ impl NativeSurface {
             return Ok(());
         }
         let request = match message {
+            CanvasSurfaceMessage::Discovery(request) => {
+                return self.discover(identity, &request, claim, session);
+            }
             CanvasSurfaceMessage::Cancel { request_id, .. } => {
                 if self.pending.as_ref().is_some_and(|pending| {
                     pending.identity == identity && pending.request.request_id() == request_id

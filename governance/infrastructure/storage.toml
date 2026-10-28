@@ -4304,7 +4304,7 @@ rationale = "Owned temporary PNG fixtures exercise current output selection and 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:c42c96f92c6e0b2d69846b348440954aa8794c851bfbdc1992d97ca94afcbe14"
+source_sha256 = "sha256:1caa3fa7ff702eb953a959accb850b25b624788eef30c561e0b92be86b86188f"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor exercises backend revocation while the canvas session retains its worker lifetime."
@@ -4332,3 +4332,11 @@ source_sha256 = "sha256:ca50ff9fb5a4c2adb43e53ab64cfab8c3b25fbf3936b17c3c8eb539f
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache scope qualifies the real loopback output transfer, peer identity checks and worker retirement without accessing user data."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:2ccf3ad1305db3c8bc08aba38b51b6025d602977bb9f29c84e70bf59ca6b0658"
+capabilities = ["node:fs", "readFileSync"]
+disposition = "fixture"
+rationale = "Read only the injected transport source for executable envelope-boundary regression tests."

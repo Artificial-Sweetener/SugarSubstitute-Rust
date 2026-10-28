@@ -210,6 +210,72 @@ fn independent_utf16_and_utf8_limits_reject_before_growth_or_partial_decode()
 }
 
 #[test]
+fn native_utf16_admission_counts_the_terminator_without_growing_storage()
+-> Result<(), Box<dyn Error>> {
+    let mut output = String::new();
+    output.try_reserve_exact(PAYLOAD_BYTES)?;
+    let allocation = output.as_ptr();
+    let mut exact = vec![u16::from(b'x'); NATIVE_UNITS - 1];
+    exact.push(0);
+    copy_utf16(&mut output, |index| exact[index])?;
+    assert_eq!(output.len(), NATIVE_UNITS - 1);
+    assert_eq!(output.as_ptr(), allocation);
+    output.clear();
+    exact.insert(NATIVE_UNITS - 1, u16::from(b'x'));
+    assert!(copy_utf16(&mut output, |index| exact[index]).is_err());
+    assert!(output.is_empty());
+    assert_eq!(output.as_ptr(), allocation);
+    Ok(())
+}
+
+#[test]
+fn escaped_binding_envelopes_must_fit_before_current_context_ingress_can_decode()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::{canvas_surface::CanvasSurfaceMessage, panel::PanelSession};
+
+    let session = PanelSession::new("session-12345678".into())?;
+    let mut request = serde_json::json!({
+        "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
+        "requestId":1, "type":"surface.select", "revision":1, "itemId":"result:one",
+        "address":{"sessionId":"canvas:w", "viewId":"view:a", "windowId":"window:a",
+            "attachmentId":"attachment:a", "generation":1},
+        "file":{"filename":"\\".repeat(3800), "subfolder":"\\".repeat(3800), "type":"output"}
+    });
+    let payload = serde_json::to_string(&request)?;
+    assert!(payload.len() < 16384);
+    assert!(CanvasSurfaceMessage::decode(payload.as_bytes()).is_ok());
+    let oversized = serde_json::json!({
+        "name":crate::main_panel_ingress::BINDING_NAME,
+        "payload":payload, "executionContextId":i64::MIN,
+    })
+    .to_string();
+    assert!(oversized.len() < PAYLOAD_BYTES);
+    let oversized: Vec<_> = oversized.encode_utf16().chain([0]).collect();
+    assert!(oversized.len() > NATIVE_UNITS);
+    let mut output = String::new();
+    output.try_reserve_exact(PAYLOAD_BYTES)?;
+    let allocation = output.as_ptr();
+    assert!(copy_utf16(&mut output, |index| oversized[index]).is_err());
+    assert!(output.is_empty());
+    request["file"]["filename"] = serde_json::json!("résumé🙂.png");
+    request["file"]["subfolder"] = serde_json::json!("folder\\nested");
+    let admitted = serde_json::json!({
+        "name":crate::main_panel_ingress::BINDING_NAME,
+        "payload":serde_json::to_string(&request)?, "executionContextId":i64::MIN,
+    })
+    .to_string();
+    let admitted: Vec<_> = admitted.encode_utf16().chain([0]).collect();
+    copy_utf16(&mut output, |index| admitted[index])?;
+    assert!(matches!(
+        crate::main_panel_ingress::decode(&output, Some(i64::MIN), &session),
+        Some(crate::main_panel_ingress::ClientMessage::Surface(CanvasSurfaceMessage::Request(_)))
+    ));
+    assert!(crate::main_panel_ingress::decode(&output, Some(17), &session).is_none());
+    assert_eq!(output.as_ptr(), allocation);
+    Ok(())
+}
+
+#[test]
 fn existing_claim_exhaustion_prevents_receiver_retention() -> Result<(), Box<dyn Error>> {
     let released = Arc::new(AtomicUsize::new(0));
     let lease = lease(&released);

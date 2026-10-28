@@ -5,6 +5,7 @@
 use super::*;
 
 pub(super) mod bridge;
+mod delivery;
 mod replies;
 pub(super) use replies::Replies;
 
@@ -96,18 +97,7 @@ impl MainActor {
             .as_ref()
             .and_then(MainReadiness::panel_context)
             .ok_or_else(|| DesktopError::message("send_panel", "current top document is absent"))?;
-        let payload = std::str::from_utf8(payload)
-            .map_err(|cause| DesktopError::new("encode_panel_utf8", cause))?;
-        let quoted = serde_json::to_string(payload)
-            .map_err(|cause| DesktopError::new("encode_panel_delivery", cause))?;
-        let expression =
-            format!("globalThis.__sugarcubes_substitute_deliver_v3(JSON.parse({quoted}))");
-        let parameters = serde_json::to_string(&serde_json::json!({
-            "expression": expression,
-            "contextId": context,
-            "returnByValue": true,
-        }))
-        .map_err(|cause| DesktopError::new("encode_panel_delivery", cause))?;
+        let parameters = delivery::encode(context, payload)?;
         receivers.call(Command::PanelDelivery(context), "Runtime.evaluate", &parameters)
     }
 }

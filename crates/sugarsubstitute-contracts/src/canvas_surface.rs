@@ -3,6 +3,7 @@
 //! Validate untrusted shared canvas geometry independently of native surface authority.
 
 mod address;
+mod capabilities;
 mod file_reference;
 mod message;
 #[cfg(test)]
@@ -12,6 +13,10 @@ mod tests;
 mod wire;
 
 pub use address::{CanvasSurfaceAddress, CanvasSurfaceAddressError, MAX_SURFACE_ADDRESS_BYTES};
+pub use capabilities::{
+    CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryRequest, CanvasSurfaceDiscoveryStatus,
+    CanvasSurfaceImageFormat, CanvasSurfacePreviewFormat, CanvasSurfaceViewportCommand,
+};
 pub use file_reference::{
     CanvasFileError, CanvasFileReference, CanvasFileStorage, MAX_FILE_REFERENCE_BYTES,
 };

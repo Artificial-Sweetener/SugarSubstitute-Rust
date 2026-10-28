@@ -5,6 +5,7 @@
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::{
     canvas_surface::{
+        CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryRequest, CanvasSurfaceDiscoveryStatus,
         CanvasSurfaceMessage, CanvasSurfaceMessageError, CanvasSurfaceReplyStatus,
         CanvasSurfaceRequest,
     },
@@ -130,16 +131,43 @@ impl SurfaceReply {
         message: &str,
         claim: MemoryClaim,
     ) -> Result<Self, SurfaceReplyError> {
+        Self::validate_custody(identity, request.session(), &claim)?;
+        let payload = request.reply(status, message).map_err(SurfaceReplyError::Encode)?;
+        Ok(Self { identity, payload, _claim: claim })
+    }
+
+    /// Encode declared surface support through the same navigation-qualified delivery custody.
+    /// Discovery describes implemented operations; it grants no attachment or backend authority.
+    ///
+    /// # Errors
+    /// Rejects inadequate storage, a foreign navigation or an invalid capability response.
+    pub fn discovery(
+        identity: MainIdentity,
+        request: &CanvasSurfaceDiscoveryRequest,
+        status: CanvasSurfaceDiscoveryStatus,
+        capabilities: &CanvasSurfaceCapabilities,
+        message: &str,
+        claim: MemoryClaim,
+    ) -> Result<Self, SurfaceReplyError> {
+        Self::validate_custody(identity, request.session(), &claim)?;
+        let payload =
+            request.reply(status, capabilities, message).map_err(SurfaceReplyError::Encode)?;
+        Ok(Self { identity, payload, _claim: claim })
+    }
+
+    /// Apply identical native identity and retained-storage checks to every surface response.
+    fn validate_custody(
+        identity: MainIdentity,
+        session: &PanelSession,
+        claim: &MemoryClaim,
+    ) -> Result<(), SurfaceReplyError> {
         if claim.bytes() < Self::STORAGE_BYTES {
             return Err(SurfaceReplyError::Storage);
         }
-        if request.session()
-            != &PanelSession::for_main(identity).map_err(SurfaceReplyError::Identity)?
-        {
+        if session != &PanelSession::for_main(identity).map_err(SurfaceReplyError::Identity)? {
             return Err(SurfaceReplyError::ForeignNavigation);
         }
-        let payload = request.reply(status, message).map_err(SurfaceReplyError::Encode)?;
-        Ok(Self { identity, payload, _claim: claim })
+        Ok(())
     }
 
     /// Borrow the native navigation addressed by this reply.

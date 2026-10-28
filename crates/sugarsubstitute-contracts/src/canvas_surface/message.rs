@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode and correlate the shared surface operations without granting host authority.
 
-use super::{CanvasFileReference, CanvasSurfaceAddress, CanvasSurfaceGeometry, wire};
+use super::{
+    CanvasFileReference, CanvasSurfaceAddress, CanvasSurfaceDiscoveryRequest,
+    CanvasSurfaceGeometry, wire,
+};
 use crate::panel::PanelSession;
 use serde::Deserialize;
 use std::{error::Error, fmt};
@@ -13,6 +16,8 @@ pub const MAX_SURFACE_MESSAGE_BYTES: usize = 32 * 1024;
 /// A validated surface request or cancellation from the existing canvas session.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CanvasSurfaceMessage {
+    /// Discover the runtime's advertised surface contract without creating an attachment.
+    Discovery(CanvasSurfaceDiscoveryRequest),
     /// One attachment operation, still requiring native navigation and revision authority.
     Request(Box<CanvasSurfaceRequest>),
     /// Cancel a previously admitted request in the same panel session.
@@ -89,6 +94,10 @@ impl CanvasSurfaceMessage {
         }
         let kind: Kind = parse(bytes)?;
         let request = match kind.kind.as_str() {
+            "surface.capabilities.request" => {
+                return CanvasSurfaceDiscoveryRequest::from_wire(parse(bytes)?)
+                    .map(Self::Discovery);
+            }
             "surface.prepare" => {
                 let value: wire::CanvasSurfacePrepareRequest = parse(bytes)?;
                 if !value.valid() {
@@ -177,6 +186,7 @@ impl CanvasSurfaceMessage {
     /// Borrow the originating panel session for independent navigation checks.
     pub fn session(&self) -> &PanelSession {
         match self {
+            Self::Discovery(request) => request.session(),
             Self::Request(request) => &request.session,
             Self::Cancel { session, .. } => session,
         }

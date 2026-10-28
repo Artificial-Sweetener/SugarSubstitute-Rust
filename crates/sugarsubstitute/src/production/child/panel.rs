@@ -9,7 +9,10 @@ use sugarsubstitute_application::{
     startup::StartupPhase,
 };
 use sugarsubstitute_contracts::canvas_context::{CanvasContextRequest, CanvasDisplayCapability};
-use sugarsubstitute_contracts::canvas_surface::{CanvasSurfaceMessage, CanvasSurfaceReplyStatus};
+use sugarsubstitute_contracts::canvas_surface::{
+    CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryStatus, CanvasSurfaceMessage,
+    CanvasSurfaceReplyStatus,
+};
 use sugarsubstitute_contracts::panel::{
     PanelMessage, PanelPalette, PanelPresentation, PanelSession, PanelStyle,
 };
@@ -226,19 +229,33 @@ impl PanelOwner {
         if self.policy.state() == PanelState::Failed {
             return Ok(());
         }
-        let CanvasSurfaceMessage::Request(request) = message else { return Ok(()) };
+        if matches!(message, CanvasSurfaceMessage::Cancel { .. }) {
+            return Ok(());
+        }
         let Some(slot) = self.canvas_replies.iter_mut().find(|slot| slot.is_none()) else {
             tracing::warn!(operation="surface_reply_admission", identity=?identity,
                 "Surface request rejected because the response queue is full");
             return Ok(());
         };
-        *slot = Some(CanvasReply::Surface(SurfaceReply::new(
-            identity,
-            &request,
-            CanvasSurfaceReplyStatus::Unavailable,
-            "",
-            claim,
-        )?));
+        let reply = match message {
+            CanvasSurfaceMessage::Request(request) => SurfaceReply::new(
+                identity,
+                &request,
+                CanvasSurfaceReplyStatus::Unavailable,
+                "",
+                claim,
+            )?,
+            CanvasSurfaceMessage::Discovery(request) => SurfaceReply::discovery(
+                identity,
+                &request,
+                CanvasSurfaceDiscoveryStatus::Unsupported,
+                &CanvasSurfaceCapabilities::default(),
+                "",
+                claim,
+            )?,
+            CanvasSurfaceMessage::Cancel { .. } => return Ok(()),
+        };
+        *slot = Some(CanvasReply::Surface(reply));
         Ok(())
     }
 
