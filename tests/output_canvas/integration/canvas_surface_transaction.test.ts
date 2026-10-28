@@ -52,7 +52,7 @@ function fixture() {
     element: HTMLElement;
     accepts: () => boolean;
     acceptsPreparation: () => boolean;
-    dispose: ReturnType<typeof jest.fn>;
+    dispose: ReturnType<typeof jest.fn<() => void | Promise<void>>>;
   }[] = [];
   const report = jest.fn<(error: unknown) => void>();
   const primary = new CanvasPrimarySurface({
@@ -64,7 +64,7 @@ function fixture() {
     renderer: () => renderer,
     report,
     mount: (root, address, _catalog, accepts, acceptsPreparation) => {
-      const dispose = jest.fn();
+      const dispose = jest.fn<() => void | Promise<void>>();
       attachments.push({ address, element: root, accepts, acceptsPreparation, dispose });
       const attachment: PrimaryCanvasAttachment & { ready?: Promise<void> } = {
         ...(renderer === 'native' ? { ready } : {}),
@@ -231,14 +231,90 @@ test('retains the current surface when replacement readiness fails', async () =>
     f.renderer('native');
     const pending = f.attachments[1]!;
     const failure = new Error('native surface unavailable');
+    pending.dispose.mockReturnValue(Promise.resolve());
     f.reject(failure);
-    await Promise.resolve();
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(f.attachments).toHaveLength(2);
     expect(f.primary.diagnostics().address).toEqual(old.address);
     expect(f.views.accepts(old.address)).toBe(true);
     expect(f.views.accepts(pending.address)).toBe(false);
     expect(pending.acceptsPreparation()).toBe(false);
     expect(pending.dispose).toHaveBeenCalledTimes(1);
     expect(f.report).toHaveBeenCalledWith(failure);
+  } finally {
+    f.dispose();
+  }
+});
+
+test('waits for canceled candidate release before mounting its replacement', async () => {
+  const f = fixture();
+  try {
+    f.renderer('native');
+    const candidate = f.attachments[1]!;
+    let released!: () => void;
+    candidate.dispose.mockReturnValue(
+      new Promise<void>((resolve) => {
+        released = resolve;
+      }),
+    );
+    f.renderer('next');
+    expect(candidate.dispose).toHaveBeenCalledTimes(1);
+    expect(f.attachments).toHaveLength(2);
+    for (let index = 0; index < 100; index++) f.renderer(`replacement-${String(index)}`);
+    expect(f.attachments).toHaveLength(2);
+    expect(document.querySelectorAll('div[style*="pointer-events: none"]')).toHaveLength(1);
+    released();
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(f.attachments).toHaveLength(3);
+    expect(f.primary.diagnostics().address).toEqual(f.attachments[2]!.address);
+    expect(f.report).not.toHaveBeenCalled();
+  } finally {
+    f.dispose();
+  }
+});
+
+test('does not mount a canceled replacement after its release barrier settles', async () => {
+  const f = fixture();
+  try {
+    f.renderer('native');
+    let released!: () => void;
+    f.attachments[1]!.dispose.mockReturnValue(
+      new Promise<void>((resolve) => {
+        released = resolve;
+      }),
+    );
+    f.renderer('next');
+    f.deactivate();
+    released();
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(f.attachments).toHaveLength(2);
+    expect(f.primary.diagnostics().address).toBeNull();
+    expect(f.report).not.toHaveBeenCalled();
+  } finally {
+    f.dispose();
+  }
+});
+
+test('reports failed release and does not mount over uncertain native custody', async () => {
+  const f = fixture();
+  try {
+    f.renderer('native');
+    let failed!: (error: Error) => void;
+    f.attachments[1]!.dispose.mockReturnValue(
+      new Promise<void>((_resolve, reject) => {
+        failed = reject;
+      }),
+    );
+    f.renderer('next');
+    const error = new Error('native rollback failed');
+    failed(error);
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(f.attachments).toHaveLength(2);
+    expect(f.primary.diagnostics().address).toEqual(f.attachments[0]!.address);
+    expect(f.report).toHaveBeenCalledWith(error);
+    f.renderer('another');
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(f.attachments).toHaveLength(2);
   } finally {
     f.dispose();
   }

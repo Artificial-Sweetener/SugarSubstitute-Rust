@@ -19,6 +19,8 @@ import { jest } from '@jest/globals';
 import { nextTick } from 'vue';
 import { BrowserCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasAttachment.js';
 import { NativeCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasAttachment.js';
+import { CanvasPrimarySurface } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasPrimarySurface.js';
+import type { CanvasSessionCoordinator } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSessionCoordinator.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
 import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
 import { CanvasInspectionStore } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasInspectionStore.js';
@@ -31,6 +33,7 @@ import type { WorkflowOutputItem } from '../../../frontend/comfyui/ui/execution/
 import type {
   CanvasSurfaceCommand,
   CanvasSurfaceHost,
+  CanvasSurfaceResult,
 } from '../../../integrations/contracts/CanvasSurface.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
@@ -148,6 +151,192 @@ describe('composed browser canvas attachment', () => {
     jest.restoreAllMocks();
   });
 
+  test('waits for actual native attachment release before preparing the next mounted surface', async () => {
+    const f = fixture();
+    for (const key of ['offsetWidth', 'clientWidth'] as const)
+      jest.spyOn(HTMLElement.prototype, key, 'get').mockReturnValue(800);
+    for (const key of ['offsetHeight', 'clientHeight'] as const)
+      jest.spyOn(HTMLElement.prototype, key, 'get').mockReturnValue(600);
+    const calls: CanvasSurfaceCommand[] = [];
+    let visible = true;
+    let released!: (result: CanvasSurfaceResult) => void;
+    const host: CanvasSurfaceHost = {
+      execute: async (command) => {
+        calls.push(command);
+        if (command.type === 'surface.release')
+          return new Promise<CanvasSurfaceResult>((resolve) => {
+            released = resolve;
+          });
+        return { status: command.type === 'surface.prepare' ? 'ready' : 'applied', message: '' };
+      },
+    };
+    const primary = new CanvasPrimarySurface({
+      document,
+      views: f.views,
+      window: windowId('browser'),
+      coordinator: {
+        active: () => f.view,
+        catalog: () => f.options.catalog(),
+        subscribe: () => () => {},
+      } as unknown as CanvasSessionCoordinator,
+      element: () => (visible ? f.root : null),
+      renderer: () => 'native',
+      report: f.options.report,
+      mount: (element, address, _catalog, accepts, acceptsPreparation) =>
+        new NativeCanvasAttachment(element, {
+          ...f.options,
+          address,
+          accepts,
+          acceptsPreparation,
+          nativeSurface: () => host,
+        }),
+    });
+    try {
+      primary.setup();
+      for (let turn = 0; turn < 32; turn++) await Promise.resolve();
+      const previous = primary.diagnostics().address;
+      expect(previous).not.toBeNull();
+      expect(calls.at(-1)).toMatchObject({ type: 'surface.commit', address: previous });
+      visible = false;
+      primary.reconcile();
+      expect(calls.at(-1)).toMatchObject({ type: 'surface.release', address: previous });
+      visible = true;
+      primary.reconcile();
+      for (let turn = 0; turn < 32; turn++) await Promise.resolve();
+      expect(calls.filter((call) => call.type === 'surface.prepare')).toHaveLength(1);
+      expect(primary.diagnostics().address).toBeNull();
+      released({ status: 'applied', message: '' });
+      for (let turn = 0; turn < 32; turn++) await Promise.resolve();
+      expect(calls.filter((call) => call.type === 'surface.prepare')).toHaveLength(2);
+      expect(primary.diagnostics().address).not.toEqual(previous);
+      expect(primary.diagnostics().address).not.toBeNull();
+      expect(calls.at(-1)).toMatchObject({
+        type: 'surface.commit',
+        address: primary.diagnostics().address,
+      });
+      expect(f.loader.requests).toHaveLength(0);
+      expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+      expect(f.errors).toEqual([]);
+    } finally {
+      primary.dispose();
+      released({ status: 'applied', message: '' });
+      for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    }
+    expect(f.frames.pending).toBe(0);
+    expect(f.clock.pending).toBe(0);
+  });
+
+  test.each(['applied', 'error'] as const)(
+    'waits for real staged native selection and handles %s before registry activation',
+    async (outcome) => {
+      const f = fixture();
+      for (const key of ['offsetWidth', 'clientWidth'] as const)
+        jest.spyOn(HTMLElement.prototype, key, 'get').mockReturnValue(800);
+      for (const key of ['offsetHeight', 'clientHeight'] as const)
+        jest.spyOn(HTMLElement.prototype, key, 'get').mockReturnValue(600);
+      const candidate = f.views.prepareAttachment(f.view, windowId('browser'));
+      f.root.style.visibility = 'hidden';
+      const calls: CanvasSurfaceCommand[] = [];
+      let selected!: (result: CanvasSurfaceResult) => void;
+      const host: CanvasSurfaceHost = {
+        execute: async (command) => {
+          calls.push(command);
+          if (command.type === 'surface.select')
+            return new Promise<CanvasSurfaceResult>((resolve) => {
+              selected = resolve;
+            });
+          return { status: command.type === 'surface.prepare' ? 'ready' : 'applied', message: '' };
+        },
+      };
+      const surface = new NativeCanvasAttachment(f.root, {
+        ...f.options,
+        address: candidate,
+        accepts: () => f.views.accepts(candidate),
+        acceptsPreparation: () => f.views.acceptsPreparation(candidate),
+        nativeSurface: () => host,
+      });
+      let ready = false;
+      const preparation = surface.ready.then(() => {
+        ready = true;
+      });
+      void preparation.catch(() => {});
+      try {
+        for (let index = 0; index < 24; index++) await Promise.resolve();
+        expect(calls.map((call) => call.type)).toEqual([
+          'surface.prepare',
+          'surface.geometry',
+          'surface.select',
+        ]);
+        expect(calls[1]).toMatchObject({ geometry: { visible: false } });
+        expect(ready).toBe(false);
+        expect(f.views.accepts(f.address)).toBe(true);
+        expect(f.views.accepts(candidate)).toBe(false);
+        selected({ status: outcome, message: outcome === 'error' ? 'Candidate failed.' : '' });
+        if (outcome === 'error') {
+          await expect(preparation).rejects.toThrow('Candidate failed.');
+          f.views.cancelAttachment(candidate);
+          surface.dispose();
+          expect(f.views.accepts(f.address)).toBe(true);
+          expect(calls.at(-1)).toMatchObject({ type: 'surface.release', address: candidate });
+        } else {
+          await preparation;
+          expect(calls.some((call) => call.type === 'surface.commit')).toBe(false);
+          expect(f.views.accepts(f.address)).toBe(true);
+          f.views.commitAttachment(candidate);
+          f.root.style.visibility = '';
+          surface.refresh();
+          for (let index = 0; index < 24; index++) await Promise.resolve();
+          expect(calls.at(-1)).toMatchObject({ type: 'surface.commit', address: candidate });
+          expect(surface.viewport.classList.contains('sc-output-native')).toBe(true);
+        }
+        expect(f.loader.requests).toHaveLength(0);
+        expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+      } finally {
+        surface.dispose();
+      }
+    },
+  );
+
+  test.each(['timeout', 'release'] as const)(
+    'settles staged native readiness on %s and rejects a late host completion',
+    async (terminal) => {
+      const f = fixture();
+      const candidate = f.views.prepareAttachment(f.view, windowId('browser'));
+      const calls: CanvasSurfaceCommand[] = [];
+      let prepared!: (result: CanvasSurfaceResult) => void;
+      const surface = new NativeCanvasAttachment(f.root, {
+        ...f.options,
+        address: candidate,
+        accepts: () => f.views.accepts(candidate),
+        acceptsPreparation: () => f.views.acceptsPreparation(candidate),
+        nativeSurface: () => ({
+          execute: async (command) => {
+            calls.push(command);
+            if (command.type === 'surface.prepare')
+              return new Promise<CanvasSurfaceResult>((resolve) => {
+                prepared = resolve;
+              });
+            return { status: 'applied', message: '' };
+          },
+        }),
+      });
+      const outcome = expect(surface.ready).rejects.toThrow(
+        terminal === 'timeout' ? 'timed out' : 'released before preparation',
+      );
+      if (terminal === 'timeout') f.clock.advance(5000);
+      else surface.dispose();
+      await outcome;
+      f.views.cancelAttachment(candidate);
+      surface.dispose();
+      prepared({ status: 'ready', message: '' });
+      for (let index = 0; index < 24; index++) await Promise.resolve();
+      expect(f.views.accepts(f.address)).toBe(true);
+      expect(calls.some((call) => call.type === 'surface.commit')).toBe(false);
+      expect(calls.at(-1)).toMatchObject({ type: 'surface.release', address: candidate });
+      expect(f.clock.pending).toBe(0);
+    },
+  );
+
   test('presents native outputs and tabs without allocating browser image resources', async () => {
     const f = fixture();
     document.getElementById('sugarcubes-output-browser-styles')?.remove();
@@ -159,6 +348,7 @@ describe('composed browser canvas attachment', () => {
       },
     };
     const surface = new NativeCanvasAttachment(f.root, {
+      acceptsPreparation: () => false,
       ...f.options,
       nativeSurface: () => host,
     });
@@ -204,7 +394,11 @@ describe('composed browser canvas attachment', () => {
   test('keeps browser image resources absent while the native host connects or declines', async () => {
     const f = fixture(true);
     let host: CanvasSurfaceHost | null = null;
-    const surface = new NativeCanvasAttachment(f.root, { ...f.options, nativeSurface: () => host });
+    const surface = new NativeCanvasAttachment(f.root, {
+      acceptsPreparation: () => false,
+      ...f.options,
+      nativeSurface: () => host,
+    });
     f.drawable(surface);
     expect(surface.port.read().resource.state).toBe('unavailable');
     expect(surface.wants()).toBe(false);
@@ -254,7 +448,11 @@ describe('composed browser canvas attachment', () => {
         return { status: command.type === 'surface.prepare' ? 'ready' : 'applied', message: '' };
       },
     };
-    const surface = new NativeCanvasAttachment(f.root, { ...f.options, nativeSurface: () => host });
+    const surface = new NativeCanvasAttachment(f.root, {
+      acceptsPreparation: () => false,
+      ...f.options,
+      nativeSurface: () => host,
+    });
     f.drawable(surface);
     for (let index = 0; index < 24; index++) await Promise.resolve();
     expect((await f.command(surface, { type: 'batch', index: 1 })).status).toBe('applied');

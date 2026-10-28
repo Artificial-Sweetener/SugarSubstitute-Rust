@@ -203,6 +203,7 @@ export class ComfyCanvasHost {
         if (nativePresenter())
           return new NativeCanvasAttachment(element, {
             ...shared,
+            acceptsPreparation,
             nativeSurface: () => execution.canvases.surfaceHost('embedded-document'),
           });
         return import('./ComfyBrowserCanvasHost.js').then(({ ComfyBrowserCanvasHost }) => {

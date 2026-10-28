@@ -24,6 +24,7 @@ export class NativeCanvasPresentation {
     #dirty = false;
     #visible = false;
     #disposed = false;
+    #retirement = null;
     /** Bind native presentation to the existing qualified view address. */
     constructor(options) {
         this.options = options;
@@ -32,9 +33,10 @@ export class NativeCanvasPresentation {
     update(geometry, item) {
         if (this.#disposed)
             return;
-        const host = this.options.accepts() ? this.options.host() : null;
+        const preparing = this.options.acceptsPreparation();
+        const host = this.options.accepts() || preparing ? this.options.host() : null;
         if (host !== (this.#binding?.host ?? null)) {
-            this.#retire();
+            void this.#retire();
             if (host) {
                 this.#binding = {
                     host,
@@ -50,16 +52,21 @@ export class NativeCanvasPresentation {
             }
             this.#desired = null;
         }
-        const eligible = geometry?.visible &&
-            geometry.clip.width > 0 &&
-            geometry.clip.height > 0 &&
+        const eligible = geometry &&
+            geometry.viewport.width > 0 &&
+            geometry.viewport.height > 0 &&
+            (preparing || (geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0)) &&
             item?.mediaKind === 'image'
             ? item
             : null;
-        const key = JSON.stringify([geometry, eligible && [eligible.id, eligible.file]]);
+        const key = JSON.stringify([
+            geometry,
+            item && [item.id, item.file, item.mediaKind],
+            this.options.accepts(),
+        ]);
         if (this.#desired?.key === key)
             return;
-        this.#desired = { geometry, item: eligible, key };
+        this.#desired = { geometry, item: eligible, key, empty: item?.mediaKind !== 'image' };
         // A previous allocation can no longer be presented after the native window resizes.
         // Cancel its acknowledgement wait so the current geometry can reach the host.
         if (this.#binding?.active?.dependsOnView)
@@ -80,13 +87,13 @@ export class NativeCanvasPresentation {
     /** Revoke the exact surface before releasing its transport and late completions. */
     dispose() {
         if (this.#disposed)
-            return;
+            return this.#retirement ?? Promise.resolve();
         this.#disposed = true;
-        this.#retire();
         this.#desired = null;
+        return this.#retire();
     }
     #start() {
-        if (this.#running || !this.#binding || !this.#desired || this.#disposed)
+        if (this.#running || this.#retirement || !this.#binding || !this.#desired || this.#disposed)
             return;
         this.#running = true;
         void this.#run().finally(() => {
@@ -100,10 +107,12 @@ export class NativeCanvasPresentation {
             this.#dirty = false;
             const binding = this.#binding;
             const desired = this.#desired;
-            if (!binding || !desired || !this.options.accepts())
+            if (!binding || !desired || !this.#owns(binding))
                 return;
             try {
-                if (desired.item && desired.geometry && !binding.prepared) {
+                if ((desired.item || (this.options.acceptsPreparation() && desired.empty)) &&
+                    desired.geometry &&
+                    !binding.prepared) {
                     const result = await this.#send(binding, { type: 'surface.prepare' });
                     if (!this.#owns(binding))
                         return;
@@ -133,8 +142,13 @@ export class NativeCanvasPresentation {
                     binding.geometry = geometryKey;
                     binding.lastGeometry = geometry;
                 }
-                if (!this.#current(binding, desired) || !desired.item)
+                if (!this.#current(binding, desired))
                     continue;
+                if (!desired.item) {
+                    if (desired.empty)
+                        this.options.prepared();
+                    continue;
+                }
                 const selection = JSON.stringify([desired.item.id, desired.item.file]);
                 if (selection !== binding.selection) {
                     const result = await this.#send(binding, {
@@ -151,6 +165,9 @@ export class NativeCanvasPresentation {
                     binding.selection = selection;
                 }
                 if (!this.#current(binding, desired))
+                    continue;
+                this.options.prepared();
+                if (!this.options.accepts())
                     continue;
                 if (!binding.committed) {
                     const result = await this.#send(binding, { type: 'surface.commit' });
@@ -206,7 +223,9 @@ export class NativeCanvasPresentation {
         return ++binding.revision;
     }
     #owns(binding) {
-        return !this.#disposed && this.#binding === binding && this.options.accepts();
+        return (!this.#disposed &&
+            this.#binding === binding &&
+            (this.options.accepts() || this.options.acceptsPreparation()));
     }
     #current(binding, desired) {
         return this.#owns(binding) && this.#desired === desired;
@@ -214,6 +233,10 @@ export class NativeCanvasPresentation {
     #failed(desired, result) {
         if (this.#desired !== desired)
             return;
+        // A staged sibling temporarily owns native mutation. Its release explicitly refreshes
+        // the retained attachment; permit that refresh to reconcile previously rejected geometry.
+        if (result.status === 'stale')
+            this.#desired = null;
         const error = result.status === 'error';
         this.options.status({
             state: error ? 'error' : 'unavailable',
@@ -229,23 +252,40 @@ export class NativeCanvasPresentation {
         this.#visible = visible;
         this.options.visible(visible);
     }
+    /** Observe the host's release acknowledgement before allowing another binding to prepare. */
     #retire() {
         this.#show(false);
         const binding = this.#binding;
         this.#binding = null;
         if (!binding)
-            return;
+            return this.#retirement ?? Promise.resolve();
         binding.active?.cancellation.cancel();
         if (!binding.attempted)
-            return;
+            return this.#retirement ?? Promise.resolve();
+        let release;
         try {
             const revision = this.#revision(binding);
-            void binding.host
+            release = binding.host
                 .execute({ type: 'surface.release', address: this.options.address, revision })
-                .catch(this.options.report);
+                .then((result) => {
+                if (result.status !== 'applied' && result.status !== 'stale')
+                    throw new Error(result.message || 'Native canvas release failed.');
+            });
         }
         catch (error) {
-            this.options.report(error);
+            release = Promise.reject(error instanceof Error
+                ? error
+                : new Error('Native canvas release failed.', { cause: error }));
         }
+        const retirement = this.#retirement
+            ? Promise.all([this.#retirement, release]).then(() => { })
+            : release;
+        this.#retirement = retirement;
+        void retirement.then(() => {
+            if (this.#retirement === retirement)
+                this.#retirement = null;
+            this.#start();
+        }, this.options.report);
+        return retirement;
     }
 }

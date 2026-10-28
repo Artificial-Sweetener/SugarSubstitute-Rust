@@ -39,7 +39,8 @@ export interface PrimaryCanvasAttachment {
     source: WorkflowPreview['sourceId'],
   ): boolean;
   receive(preview: WorkflowPreview, blob: Blob): void;
-  dispose(): void;
+  /** Revoke immediately; settle asynchronous native release before another attachment mounts. */
+  dispose(): void | Promise<void>;
 }
 
 interface AttachmentRecord {
@@ -54,6 +55,7 @@ interface AttachmentRecord {
 
 interface PendingAttachment extends Omit<AttachmentRecord, 'attachment'> {
   attachment: PrimaryCanvasAttachment | null;
+  mounting: boolean;
 }
 
 export interface CanvasPrimarySurfaceOptions {
@@ -80,6 +82,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
   #pending: PendingAttachment | null = null;
   #stop: (() => void) | null = null;
   #disposed = false;
+  #retirement: Promise<void> | null = null;
 
   /** Inject attachment construction so lifecycle proofs exercise authority without borrowing platform decoders. */
   constructor(private readonly options: CanvasPrimarySurfaceOptions) {}
@@ -141,6 +144,8 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       this.#pending.element === element &&
       this.#pending.renderer === renderer
     ) {
+      if (!this.#pending.mounting && !this.#retirement) this.#mount(this.#pending, catalog);
+      else this.#pending.attachment?.refresh();
       this.#current?.attachment.refresh();
       return;
     }
@@ -179,8 +184,18 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       address,
       root,
       attachment: null,
+      mounting: false,
     };
     this.#pending = pending;
+    if (!this.#retirement) this.#mount(pending, catalog);
+  };
+
+  /** Construct only the candidate that still owns the staged registry lease. */
+  #mount(pending: PendingAttachment, catalog: CanvasCatalogSnapshot): void {
+    if (this.#pending !== pending || this.#disposed || pending.mounting) return;
+    pending.mounting = true;
+    const { views, coordinator } = this.options;
+    const { address, view, element, renderer, root } = pending;
     try {
       const accepts = (): boolean =>
         !this.#disposed &&
@@ -198,6 +213,10 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
         !this.options.document.hidden &&
         this.options.element() === element &&
         this.options.renderer() === renderer;
+      if (!acceptsPreparation()) {
+        this.#cancelPending();
+        return;
+      }
       const attachment = this.options.mount(root, address, catalog, accepts, acceptsPreparation);
       if (attachment instanceof Promise)
         void attachment.then(
@@ -208,7 +227,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     } catch (error: unknown) {
       this.#failPending(pending, error);
     }
-  };
+  }
 
   /** Refuse inactive preview bytes synchronously, before any object URL or decode is created. */
   wants(source: AttributedWorkflowSource): boolean {
@@ -249,7 +268,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     if (this.#pending !== pending) {
       void attachment.ready?.catch(() => {});
       try {
-        attachment.dispose();
+        this.#disposeAttachment(attachment);
       } catch (error: unknown) {
         this.options.report(error);
       } finally {
@@ -322,7 +341,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     this.#pending = null;
     this.options.views.cancelAttachment(pending.address);
     try {
-      pending.attachment?.dispose();
+      if (pending.attachment) this.#disposeAttachment(pending.attachment);
     } catch (error: unknown) {
       this.options.report(error);
     } finally {
@@ -340,10 +359,45 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
   /** Release only a surface's own DOM and lease, even after a replacement commits. */
   #retire(previous: AttachmentRecord): void {
     try {
-      previous.attachment.dispose();
+      this.#disposeAttachment(previous.attachment);
     } finally {
       previous.root.remove();
       this.options.views.releaseAttachment(previous.address);
     }
+  }
+
+  /** Retain failed release as a fence: uncertain native custody cannot authorize another mount. */
+  #disposeAttachment(attachment: PrimaryCanvasAttachment): void {
+    let release: void | Promise<void>;
+    try {
+      release = attachment.dispose();
+    } catch (error: unknown) {
+      release = Promise.reject(
+        error instanceof Error
+          ? error
+          : new Error('Canvas attachment release failed.', { cause: error }),
+      );
+    }
+    if (!release) return;
+    const retirement = this.#retirement
+      ? Promise.all([this.#retirement, release]).then(() => {})
+      : release;
+    this.#retirement = retirement;
+    void retirement.then(
+      () => {
+        if (this.#retirement !== retirement) return;
+        this.#retirement = null;
+        try {
+          if (this.#pending) this.reconcile();
+          else this.#current?.attachment.refresh();
+        } catch (error: unknown) {
+          this.options.report(error);
+        }
+      },
+      (error: unknown) => {
+        if (this.#pending) this.#failPending(this.#pending, error);
+        else this.options.report(error);
+      },
+    );
   }
 }

@@ -144,6 +144,8 @@ function fixture() {
   const visible: boolean[] = [];
   const errors: unknown[] = [];
   const surface = new NativeCanvasPresentation({
+    acceptsPreparation: () => false,
+    prepared: () => {},
     address,
     host: () => host,
     accepts: () => views.accepts(address),
@@ -317,6 +319,9 @@ test('releases a disconnected host before using a replacement connection', async
   expect(first.pending[0]!.cancelled()).toBe(true);
   expect(first.calls[1]).toMatchObject({ type: 'surface.release', address: f.address });
   await settle();
+  expect(second.calls).toHaveLength(0);
+  first.respond(1, 'applied');
+  await settle();
   expect(second.calls[0]).toMatchObject({ type: 'surface.prepare', address: f.address });
   first.respond(0, 'ready');
   await settle();
@@ -339,6 +344,31 @@ test('keeps the native presentation hidden when the host declines the attachment
   await settle();
   expect(native.calls).toHaveLength(1);
   f.surface.dispose();
+});
+
+test('reconciles stale geometry on an explicit refresh after a sibling attachment releases', async () => {
+  const f = fixture();
+  const native = hostFixture();
+  f.setHost(native.host);
+  f.surface.update(geometry, f.first);
+  for (const [index, status] of ['ready', 'applied', 'applied', 'applied'].entries()) {
+    native.respond(index, status as CanvasSurfaceResult['status']);
+    await settle();
+  }
+  const resized = { ...geometry, viewport: { width: 400, height: 600 } };
+  f.surface.update(resized, f.first);
+  native.respond(4, 'stale');
+  await settle();
+  expect(native.calls).toHaveLength(5);
+  expect(f.visible).toEqual([true, false]);
+  f.surface.update(resized, f.first);
+  expect(native.calls[5]).toMatchObject({ type: 'surface.geometry', geometry: resized });
+  native.respond(5, 'applied');
+  await settle();
+  expect(f.visible).toEqual([true, false, true]);
+  const released = f.surface.dispose();
+  native.respond(6, 'applied');
+  await released;
 });
 
 test('reveals native pixels only after the surface accepts the current geometry', async () => {
@@ -373,13 +403,37 @@ test('cancels a pending attachment and releases its exact address before late re
   const native = hostFixture();
   f.setHost(native.host);
   f.surface.update(geometry, f.first);
-  f.surface.dispose();
+  const released = f.surface.dispose();
+  let settled = false;
+  void released.then(() => {
+    settled = true;
+  });
+  expect(f.surface.dispose()).toBe(released);
   expect(native.pending[0]!.cancelled()).toBe(true);
   expect(native.calls[1]).toEqual({ type: 'surface.release', address: f.address, revision: 2 });
   native.respond(0, 'ready');
   await settle();
   expect(f.visible).toEqual([]);
   expect(native.calls).toHaveLength(2);
+  expect(settled).toBe(false);
+  native.respond(1, 'applied');
+  await released;
+  expect(settled).toBe(true);
+});
+
+test('rejects disposal when native release fails and fences replacement preparation', async () => {
+  const f = fixture();
+  const first = hostFixture();
+  const second = hostFixture();
+  f.setHost(first.host);
+  f.surface.update(geometry, f.first);
+  f.setHost(second.host);
+  f.surface.update(geometry, f.first);
+  first.respond(1, 'error');
+  await settle();
+  expect(second.calls).toHaveLength(0);
+  expect(f.errors).toHaveLength(1);
+  await expect(f.surface.dispose()).rejects.toThrow('Native canvas release failed.');
 });
 
 test('replaces pending geometry when another resize makes its presentation impossible', async () => {

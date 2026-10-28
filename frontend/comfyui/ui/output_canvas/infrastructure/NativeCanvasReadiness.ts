@@ -1,0 +1,67 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Bound one native attachment's preparation and settle disposal before its registry lease retires. */
+
+import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
+
+/** Observe real host readiness once, retaining failure for the attachment transaction owner. */
+export class NativeCanvasReadiness {
+  readonly ready: Promise<void>;
+  #complete: (() => void) | null = null;
+  #fail: ((error: Error) => void) | null = null;
+  #stop: (() => void) | null = null;
+
+  /** Use the existing injected clock and the native host's five-second preparation bound. */
+  constructor(clock: ExecutionClock) {
+    this.ready = new Promise<void>((resolve, reject) => {
+      this.#complete = resolve;
+      this.#fail = reject;
+    });
+    // Constructor failure may prevent the attachment owner from receiving this promise.
+    // Keep the original promise rejected for that owner's normal observation path.
+    void this.ready.catch(() => {});
+    this.#stop = clock.later(5000, () =>
+      this.fail(new Error('Native canvas preparation timed out.')),
+    );
+  }
+
+  /** Complete only after the native host acknowledges preparation of the requested content. */
+  complete(): void {
+    const complete = this.#complete;
+    this.#clear();
+    complete?.();
+  }
+
+  /** Preserve the first preparation failure; later callbacks cannot change the outcome. */
+  fail(error: Error): void {
+    const fail = this.#fail;
+    this.#clear();
+    fail?.(error);
+  }
+
+  /** Cancel a staged attachment even when the native host never answered. */
+  dispose(): void {
+    this.fail(new Error('Native canvas attachment was released before preparation completed.'));
+  }
+
+  /** Release the single deadline and both outcome callbacks at the terminal transition. */
+  #clear(): void {
+    this.#stop?.();
+    this.#stop = null;
+    this.#complete = null;
+    this.#fail = null;
+  }
+}
