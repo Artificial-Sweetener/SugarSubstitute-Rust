@@ -22,12 +22,19 @@ import { isCanvasMessage } from '../../../integrations/shared/CanvasValidation.g
 
 const vectors = JSON.parse(
   readFileSync('tests/editor_integrations/support/canvas_context_vectors.json', 'utf8'),
-) as { request: unknown; available: unknown; unavailable: unknown; invalidRequests: unknown[] };
+) as {
+  request: unknown;
+  available: unknown;
+  unavailable: unknown;
+  cancelled: unknown;
+  invalidRequests: unknown[];
+};
 
 test('the display-only context and refusal use the same shared schema as clients', () => {
   expect(isCanvasMessage(vectors.request)).toBe(true);
   expect(isCanvasMessage(vectors.available)).toBe(true);
   expect(isCanvasMessage(vectors.unavailable)).toBe(true);
+  expect(isCanvasMessage(vectors.cancelled)).toBe(true);
   for (const request of vectors.invalidRequests) expect(isCanvasMessage(request)).toBe(false);
 });
 
@@ -48,4 +55,20 @@ test('context generation rejects a schema that no longer permits a document-free
   };
   schema.$defs.CanvasContext.properties.document = { $ref: '#/$defs/CanvasDocument' };
   await expect(canvasBindings(JSON.stringify(schema))).rejects.toThrow('Canvas context schema');
+});
+
+test('native cancellation retains the existing error schema and its exact message bounds', async () => {
+  const schema = JSON.parse(readFileSync('integrations/contracts/canvas.schema.json', 'utf8')) as {
+    $defs: { CanvasFailure: { properties: { message: Record<string, unknown> } } };
+  };
+  schema.$defs.CanvasFailure.properties.message.maxLength = 21;
+  const generated = await canvasBindings(JSON.stringify(schema));
+  const rust = generated['integrations/contracts/CanvasNativeContext.generated.rs'];
+  expect(rust).toContain('pub(super) struct CanvasErrorReply');
+  expect(rust).toContain('pub(super) failure: CanvasFailure');
+  expect(rust).toContain('self.message.encode_utf16().count() <= 21');
+  schema.$defs.CanvasFailure.properties.message.minLength = 1;
+  await expect(canvasBindings(JSON.stringify(schema))).rejects.toThrow(
+    'Unsupported Rust contract schema keyword',
+  );
 });

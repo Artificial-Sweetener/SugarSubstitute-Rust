@@ -499,3 +499,39 @@ test('renegotiates once after reconnect during an unavailable discovery and rele
   reconnect(true);
   expect(f.messages).toHaveLength(4);
 });
+
+/** A live navigation retains its only request sequence across capability refreshes. */
+test('refreshes reuse the connected client and keep request identities increasing', async () => {
+  const f = discoveryFixture();
+  f.canvas.connect(f.transport, window, f.report);
+  for (const start of [0, 2, 4]) {
+    if (start > 0) f.canvas.refresh();
+    f.context(start);
+    await Promise.resolve();
+    f.capabilities(start + 1, true);
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(f.canvas.surface?.capabilities.imageFormats).toEqual(['png']);
+  }
+  f.canvas.connect(f.transport, window, f.report);
+  expect(f.messages.map(({ requestId }) => requestId)).toEqual([1, 2, 3, 4, 5, 6]);
+  expect(f.listeners.size).toBe(1);
+  expect(f.report).not.toHaveBeenCalled();
+  f.canvas.dispose();
+});
+
+/** Page teardown must not create a second client under the same public panel session. */
+test('a disposed embedded canvas refuses reconnection and cannot restart request identities', async () => {
+  const f = discoveryFixture();
+  f.canvas.connect(f.transport, window, f.report);
+  f.canvas.dispose();
+  f.canvas.dispose();
+  expect(() => f.canvas.connect(f.transport, window, f.report)).toThrow('connection is closed');
+  f.canvas.refresh();
+  await expect(f.canvas.readContext()).rejects.toThrow('unavailable');
+  expect(f.messages.map(({ type, requestId }) => ({ type, requestId }))).toEqual([
+    { type: 'context.request', requestId: 1 },
+    { type: 'cancel', requestId: 1 },
+  ]);
+  expect(f.listeners.size).toBe(0);
+  expect(f.report).not.toHaveBeenCalled();
+});

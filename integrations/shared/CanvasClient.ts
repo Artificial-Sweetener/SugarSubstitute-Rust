@@ -191,6 +191,7 @@ export class CanvasClient implements CanvasLayerHost {
     for (const pending of this.#pending.values()) {
       pending.stop();
       if (
+        pending.type === 'context.reply' ||
         pending.type === 'image.reply' ||
         pending.type === 'geometry.reply' ||
         pending.type === 'surface.reply' ||
@@ -265,6 +266,7 @@ export class CanvasClient implements CanvasLayerHost {
         this.#pending.delete(requestId);
         stop();
         if (
+          request.type === 'context.request' ||
           request.type === 'image.insert' ||
           request.type === 'geometry.request' ||
           request.type.startsWith('surface.')

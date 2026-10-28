@@ -545,7 +545,7 @@ var CanvasClient = class {
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();
-      if (pending.type === "image.reply" || pending.type === "geometry.reply" || pending.type === "surface.reply" || pending.type === "surface.capabilities.reply")
+      if (pending.type === "context.reply" || pending.type === "image.reply" || pending.type === "geometry.reply" || pending.type === "surface.reply" || pending.type === "surface.capabilities.reply")
         pending.cancel();
       pending.reject(new Error("Canvas connection closed."));
     }
@@ -608,7 +608,7 @@ var CanvasClient = class {
       stopDeadline = this.port.later(3e4, () => {
         this.#pending.delete(requestId);
         stop();
-        if (request.type === "image.insert" || request.type === "geometry.request" || request.type.startsWith("surface."))
+        if (request.type === "context.request" || request.type === "image.insert" || request.type === "geometry.request" || request.type.startsWith("surface."))
           cancel();
         reject(new Error("Canvas request timed out; it was not retried."));
       });

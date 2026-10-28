@@ -54,12 +54,14 @@ export class EmbeddedCanvasConnection implements CanvasLayerHost {
   #read: object = {};
   #refreshing: Promise<void> | null = null;
   #refreshAgain = false;
+  #disposed = false;
   /** Read context and optional surface capabilities before publishing panel readiness. */
   connect(
     transport: BrowserPanelTransport,
     window: Window,
     report: (error: unknown) => void,
   ): void {
+    if (this.#disposed) throw new Error('The native canvas connection is closed.');
     if (this.#client) return;
     const client = new CanvasClient(transport.session, {
       send: (message) => transport.send(message),
@@ -138,8 +140,10 @@ export class EmbeddedCanvasConnection implements CanvasLayerHost {
       return { status: 'unavailable', message: 'The native canvas is unavailable.' };
     return await this.#client.insertImage(image, cancellation);
   }
-  /** Stop accepting replies before releasing pending requests at page teardown. */
+  /** Retire this page's connection permanently before releasing pending requests. */
   dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
     this.#stop?.();
     this.#stop = null;
     this.#client?.dispose();
