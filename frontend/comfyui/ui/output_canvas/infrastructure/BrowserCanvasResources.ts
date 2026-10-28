@@ -35,13 +35,12 @@ import type {
 } from '../application/CanvasImageAllowances.js';
 import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
 import type { CanvasOverviewCell } from '../application/CanvasOverviewWindow.js';
-import {
-  CanvasImagePreparation,
-  type CanvasImagePreparationLease,
-} from '../application/CanvasImagePreparation.js';
+import { CanvasImagePreparation } from '../application/CanvasImagePreparation.js';
+import type { CanvasSourcePreparationLease } from '../application/CanvasSourceNavigation.js';
 import { canvasSelectedItem } from '../application/CanvasContentSelection.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasSelection } from '../domain/CanvasViewState.js';
+import type { CanvasCommandScope } from '../domain/CanvasViewPort.js';
 
 /** Keep ephemeral byte delivery separate from catalog updates and final-file loading. */
 export class BrowserCanvasResources {
@@ -70,7 +69,10 @@ export class BrowserCanvasResources {
     selection: CanvasSelection,
     catalog: CanvasCatalogSnapshot,
     cells: readonly CanvasOverviewCell[] | null,
-  ): CanvasImagePreparationLease | null {
+    scope: CanvasCommandScope,
+  ): CanvasSourcePreparationLease | null {
+    if (!scope.current()) return null;
+    this.cancelPreparation();
     const plan = this.#plan;
     if (!plan || cells?.some((cell) => cell.preview)) return null;
     // Poster generation must never hold a mixed-media source-tab handoff behind a model load.

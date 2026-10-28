@@ -39,7 +39,8 @@ export class EmbeddedPanelHost {
             send: (message) => this.transport.send(message),
             apply: (presentation) => {
                 this.#layout.apply(presentation.resizeCornerSize);
-                this.options.presentation.set(presentation);
+                if (this.transport.preferencePolicy !== 'saved')
+                    this.options.presentation.set(presentation);
                 this.options.canvas?.connect(this.transport, this.options.window, this.options.report);
                 return true;
             },
@@ -85,9 +86,8 @@ export function startEmbeddedPanel(options) {
     const kind = query.get('sc-panel-transport');
     if (query.getAll('sc-panel-transport').length > 1 || (kind !== null && kind !== 'native'))
         return null;
-    const transport = kind === 'native'
-        ? createNativePanelTransport(options.window)
-        : createUxpPanelTransport(options.window);
+    const native = createNativePanelTransport(options.window);
+    const transport = kind === 'native' ? native : (native ?? createUxpPanelTransport(options.window));
     if (!transport)
         return null;
     const host = new EmbeddedPanelHost(options, transport);

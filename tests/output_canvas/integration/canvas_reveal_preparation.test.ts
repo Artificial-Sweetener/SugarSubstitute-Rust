@@ -22,9 +22,10 @@ import { CanvasImageDecodeScheduler } from '../../../frontend/comfyui/ui/output_
 import { CanvasImageResources } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasImageResources.js';
 import { canvasDisplayPlan } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasDisplayPlan.js';
 import { BrowserCanvasResources } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasResources.js';
-import { BrowserCanvasSourceNavigation } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasSourceNavigation.js';
+import { CanvasSourceNavigation } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSourceNavigation.js';
 import { canvasRevealTarget } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasReveal.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
+import { canvasNavigationScope } from '../support/CanvasPortFixture.js';
 import { BrowserCanvasPlatformFixture } from '../support/BrowserCanvasPlatformFixture.js';
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 
@@ -55,7 +56,7 @@ function fixture() {
   const plan = () =>
     canvasDisplayPlan(views.read(view), catalog, selection.items(view, catalog), null);
   browser.reconcile(plan());
-  const navigation = new BrowserCanvasSourceNavigation({
+  const navigation = new CanvasSourceNavigation({
     resources: browser,
     selection,
     read: () => (active ? { plan: plan(), catalog } : null),
@@ -86,7 +87,7 @@ test('decodes the exact clicked final before leaving a grid and applies manual s
   try {
     f.selection.apply(f.view, f.catalog, { type: 'overview', enabled: true });
     const item = f.catalog.entries[0]!.items[0]!;
-    const pending = f.navigation.reveal(canvasRevealTarget(item));
+    const pending = f.navigation.reveal(canvasRevealTarget(item), canvasNavigationScope());
     expect(f.views.read(f.view).mode).toBe('overview');
     const index = f.platform.requests.findIndex((request) => request.input.key === item.id);
     expect(index).toBeGreaterThanOrEqual(0);
@@ -110,7 +111,7 @@ test.each(['run', 'workflow'] as const)(
     const f = fixture();
     try {
       const item = f.catalog.entries[0]!.items[0]!;
-      const pending = f.navigation.reveal(canvasRevealTarget(item));
+      const pending = f.navigation.reveal(canvasRevealTarget(item), canvasNavigationScope());
       const index = f.platform.requests.findIndex((request) => request.input.key === item.id);
       if (change === 'run') f.replace();
       else f.deactivate();
@@ -122,3 +123,26 @@ test.each(['run', 'workflow'] as const)(
     }
   },
 );
+
+test('retiring an unstaged replacement also cancels the previous browser source', async () => {
+  const f = fixture();
+  try {
+    const item = f.catalog.entries[0]!.items[0]!;
+    const pending = f.navigation.reveal(canvasRevealTarget(item), canvasNavigationScope());
+    const index = f.platform.requests.findIndex((request) => request.input.key === item.id);
+    expect(index).toBeGreaterThanOrEqual(0);
+    const selection = { sourceId: item.provenance.sourceId, batchIndex: item.batchIndex };
+    expect(
+      f.browser.prepareSource(
+        selection,
+        f.catalog,
+        [{ key: 'preview', selection, label: 'Preview', item: null, preview: true }],
+        canvasNavigationScope(),
+      ),
+    ).toBeNull();
+    expect(f.platform.requests[index]!.released).toBe(true);
+    expect(await pending).toBe(false);
+  } finally {
+    f.dispose();
+  }
+});

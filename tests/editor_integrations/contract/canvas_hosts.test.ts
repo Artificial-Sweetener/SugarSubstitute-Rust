@@ -268,6 +268,40 @@ test('keeps generated portable declarations and validators synchronized with the
     expect(readFileSync(path, 'utf8').replaceAll('\r\n', '\n')).toBe(source);
 });
 
+test('generates Rust validation from schema bounds and refuses unsupported schema keywords', async () => {
+  const schema = JSON.parse(readFileSync('integrations/contracts/canvas.schema.json', 'utf8')) as {
+    $defs: {
+      CanvasSurfaceGeometry: { properties: { physicalPixelsPerCssPixel: Record<string, unknown> } };
+    };
+  };
+  const density = schema.$defs.CanvasSurfaceGeometry.properties.physicalPixelsPerCssPixel;
+  density.maximum = 32;
+  const output = await canvasBindings(JSON.stringify(schema));
+  expect(output['integrations/contracts/CanvasSurfaceProtocol.generated.rs']).toContain(
+    '(0.0..=32.0).contains(&self.physical_pixels_per_css_pixel)',
+  );
+  density.multipleOf = 0.5;
+  await expect(canvasBindings(JSON.stringify(schema))).rejects.toThrow(
+    'Unsupported Rust contract schema keyword',
+  );
+});
+
+test('generates a bounded Unicode file reference with a valid Rust keyword field', async () => {
+  const schemaText = readFileSync('integrations/contracts/canvas.schema.json', 'utf8');
+  const outputs = await canvasBindings(schemaText);
+  const rust = outputs['integrations/contracts/CanvasSurfaceProtocol.generated.rs'];
+  expect(rust).toContain('pub(super) r#type: String');
+  expect(rust).toContain('self.filename.chars().count() <= 4096');
+  expect(rust).toContain('matches!(self.r#type.as_str(), "input" | "output" | "temp")');
+  const schema = JSON.parse(schemaText) as {
+    $defs: { CanvasSurfaceFileReference: { properties: { filename: { pattern: string } } } };
+  };
+  schema.$defs.CanvasSurfaceFileReference.properties.filename.pattern = '.*';
+  await expect(canvasBindings(JSON.stringify(schema))).rejects.toThrow(
+    'Rust contract strings require bounded, well-formed text',
+  );
+});
+
 test.each([33, 34, 35, 16385, 100000])(
   'transports exact PNG bytes through portable base64 without browser or editor globals: %i',
   (size) => {

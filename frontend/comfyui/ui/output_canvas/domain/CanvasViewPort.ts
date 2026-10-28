@@ -26,6 +26,9 @@ import type {
   OutputCopyFormat,
   OutputMediaProfile,
 } from '../../output_saving/domain/OutputMedia.js';
+import type { CanvasSurfaceGeometry } from '../../../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
+
+export type { CanvasSurfaceGeometry } from '../../../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
 
 export interface CanvasSourceSummary {
   readonly id: OutputSourceId;
@@ -112,6 +115,22 @@ export interface CanvasCommandRequest {
   readonly command: CanvasCommand;
 }
 
+/** Retain one operation's cancellation and current attachment admission across asynchronous work. */
+export interface CanvasOperationScope {
+  readonly signal: AbortSignal;
+  /** Recheck immediately before an asynchronous operation changes its owning surface. */
+  current(): boolean;
+}
+
+/** Carry the complete admitted command identity to the surface that will perform it.
+ * The surface checks its own revision before applying delayed work; current() only
+ * confirms that this request and attachment have not been superseded or retired.
+ * Neither the request nor this scope grants native privileges.
+ */
+export interface CanvasCommandScope extends CanvasOperationScope {
+  readonly request: CanvasCommandRequest;
+}
+
 export type CanvasCommandOutcome =
   | { readonly status: 'applied'; readonly revision: number }
   | { readonly status: 'stale' | 'unsupported' | 'cancelled'; readonly revision: number }
@@ -122,28 +141,14 @@ export interface CanvasCapabilities {
   readonly commands: readonly CanvasCommand['type'][];
 }
 
-export interface CanvasSurfaceGeometry {
-  readonly coordinateSpace: 'client';
-  readonly units: 'css-pixels';
-  readonly origin: { readonly x: number; readonly y: number };
-  readonly viewport: { readonly width: number; readonly height: number };
-  readonly clip: {
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  };
-  readonly physicalPixelsPerCssPixel: number;
-  readonly visible: boolean;
-  readonly focused: boolean;
-}
-
 export interface CanvasViewPort {
   readonly capabilities: CanvasCapabilities;
   /** Read an immutable snapshot from the surface's authority. */
   read(): CanvasViewSnapshot;
   /** Observe this attachment without subscribing to another window's view. */
   subscribe(listener: (snapshot: CanvasViewSnapshot) => void): () => void;
+  /** Allocate an attachment-wide identity for the snapshot revision that produced this intent. */
+  createRequest(command: CanvasCommand, expectedRevision: number): CanvasCommandRequest;
   /** Apply a qualified intent or return an explicit stale/unsupported/error outcome. */
   dispatch(request: CanvasCommandRequest): Promise<CanvasCommandOutcome>;
   /** Publish client geometry with explicit CSS units and physical display density. */

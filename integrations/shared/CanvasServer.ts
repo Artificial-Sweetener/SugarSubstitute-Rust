@@ -25,6 +25,7 @@ import type {
 } from '../contracts/CanvasProtocol.generated.js';
 import type { CanvasSourceHost } from '../contracts/CanvasSources.js';
 import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
+import type { CanvasSurfaceHost } from '../contracts/CanvasSurface.js';
 import type {
   CanvasGeometryRequest,
   CanvasGeometryResult,
@@ -33,10 +34,17 @@ import { CanvasCancellation } from './CanvasCancellation.js';
 import { isCanvasMessage } from './CanvasValidation.generated.js';
 import { MAX_CANVAS_ENCODED_CHARACTERS } from './CanvasImageEncoding.js';
 import { CanvasChangeRelay } from './CanvasChangeRelay.js';
+import {
+  dispatchCanvasSurface,
+  isCanvasSurfaceRequest,
+  snapshotCanvasSurface,
+  type CanvasSurfaceRequest,
+} from './CanvasSurfaceDispatch.js';
 /** Supply editor capabilities through typed ports rather than importing native APIs. */
 export interface CanvasServerPort {
   readonly geometry?: CanvasGeometryHost;
   readonly sources?: CanvasSourceHost;
+  readonly surface?: CanvasSurfaceHost;
   /** Read fresh native document metadata through the host's process boundary. */
   context(): Promise<CanvasContext>;
   insert(image: CanvasInsertImage, cancellation: CanvasCancellation): Promise<CanvasInsertResult>;
@@ -83,25 +91,33 @@ export class CanvasServer {
       value.type !== 'context.request' &&
       value.type !== 'image.insert' &&
       value.type !== 'geometry.request' &&
-      value.type !== 'source.request'
+      value.type !== 'source.request' &&
+      value.type !== 'surface.prepare' &&
+      value.type !== 'surface.geometry' &&
+      value.type !== 'surface.select' &&
+      value.type !== 'surface.commit' &&
+      value.type !== 'surface.release'
     )
       return false;
+    const surface = isCanvasSurfaceRequest(value) ? snapshotCanvasSurface(value) : null;
     const fingerprint =
       value.type === 'context.request'
         ? value.type
         : value.type === 'source.request' || value.type === 'geometry.request'
           ? JSON.stringify([value.type, value.command])
-          : JSON.stringify([
-              value.type,
-              value.image.document.id,
-              value.image.document.geometryRevision,
-              value.image.document.width,
-              value.image.document.height,
-              value.image.image.format,
-              value.image.image.encoding,
-              value.image.layerName,
-              value.image.position ?? null,
-            ]);
+          : value.type === 'image.insert'
+            ? JSON.stringify([
+                value.type,
+                value.image.document.id,
+                value.image.document.geometryRevision,
+                value.image.document.width,
+                value.image.document.height,
+                value.image.image.format,
+                value.image.image.encoding,
+                value.image.layerName,
+                value.image.position ?? null,
+              ])
+            : JSON.stringify(surface);
     const existing = this.#entries.get(value.requestId);
     const imageData = value.type === 'image.insert' ? value.image.image.data : '';
     if (existing) {
@@ -134,8 +150,14 @@ export class CanvasServer {
     if (value.type === 'context.request') void this.#context(value.requestId, entry);
     else if (value.type === 'geometry.request') void this.#geometry(value, entry);
     else if (value.type === 'source.request') void this.#source(value, entry);
-    else void this.#insert(value, entry);
+    else if (value.type === 'image.insert') void this.#insert(value, entry);
+    else if (surface) void this.#surface(surface, entry);
     return true;
+  }
+  /** Reuse the session's replay, admission and cancellation owner for surface operations. */
+  async #surface(request: CanvasSurfaceRequest, entry: Entry): Promise<void> {
+    const reply = await dispatchCanvasSurface(request, entry.cancellation, this.port);
+    this.#reply(entry, reply);
   }
   /** Cancel owned operations and refuse responses after the native panel is destroyed. */
   dispose(): void {

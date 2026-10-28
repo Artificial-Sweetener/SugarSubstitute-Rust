@@ -18,9 +18,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { contractBindings } from './ContractBindings.js';
+import { rustContractBindings } from './RustContractBindings.js';
 /** Preserve the public panel build entry point while sharing schema policy. */
-export function panelBindings(schemaText: string): Promise<Readonly<Record<string, string>>> {
-  return contractBindings(schemaText, {
+export async function panelBindings(schemaText: string): Promise<Readonly<Record<string, string>>> {
+  const typescript = await contractBindings(schemaText, {
     union: 'PanelMessage',
     schema: 'panel.schema.json',
     generator: 'scripts/integrations/generate-panel-contract.ts',
@@ -29,6 +30,19 @@ export function panelBindings(schemaText: string): Promise<Readonly<Record<strin
     importPath: '../contracts/PanelProtocol.generated.js',
     description: 'every version-three embedded panel message',
   });
+  const schema = JSON.parse(schemaText) as { $defs: Record<string, unknown> };
+  return {
+    ...typescript,
+    'integrations/contracts/PanelProtocol.generated.rs': rustContractBindings(
+      schema.$defs,
+      schemaText,
+      {
+        schema: 'panel.schema.json',
+        generator: 'scripts/integrations/generate-panel-contract.ts',
+        prefix: 'Panel',
+      },
+    ),
+  };
 }
 /** Generate or check bindings without modifying application or host state. */
 async function main(): Promise<void> {

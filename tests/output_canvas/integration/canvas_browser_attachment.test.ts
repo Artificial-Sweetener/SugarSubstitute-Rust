@@ -18,14 +18,20 @@
 import { jest } from '@jest/globals';
 import { nextTick } from 'vue';
 import { BrowserCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasAttachment.js';
+import { NativeCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasAttachment.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
 import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
 import { CanvasInspectionStore } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasInspectionStore.js';
 import { CanvasImageAllowances } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasImageAllowances.js';
 import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.js';
+import { canvasRevealTarget } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasReveal.js';
 import type { CanvasCommand } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
 import type { CanvasCatalogSnapshot } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasCatalog.js';
 import type { WorkflowOutputItem } from '../../../frontend/comfyui/ui/execution/domain/WorkflowOutput.js';
+import type {
+  CanvasSurfaceCommand,
+  CanvasSurfaceHost,
+} from '../../../integrations/contracts/CanvasSurface.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { BrowserCanvasPlatformFixture } from '../support/BrowserCanvasPlatformFixture.js';
@@ -96,15 +102,20 @@ function fixture(brokenUrl = false) {
       errors.push(error);
     },
   };
-  let sequence = 0;
   /** Submit a control intent from its current qualified port revision. */
-  const command = async (surface: BrowserCanvasAttachment, intent: CanvasCommand) =>
-    surface.port.dispatch({
-      schema: 1,
-      address,
-      requestId: ++sequence,
-      expectedRevision: surface.port.read().revision,
-      command: intent,
+  const command = async (surface: Pick<BrowserCanvasAttachment, 'port'>, intent: CanvasCommand) =>
+    surface.port.dispatch(surface.port.createRequest(intent, surface.port.read().revision));
+  /** Supply drawable client geometry at the native boundary in a layout-free DOM. */
+  const drawable = (surface: NativeCanvasAttachment) =>
+    surface.port.updateSurface(address, {
+      coordinateSpace: 'client',
+      units: 'css-pixels',
+      origin: { x: 0, y: 0 },
+      viewport: { width: 800, height: 600 },
+      clip: { x: 0, y: 0, width: 800, height: 600 },
+      physicalPixelsPerCssPixel: 1,
+      visible: true,
+      focused: false,
     });
   /** Change the authoritative catalog at a named result boundary. */
   const replace = (next: CanvasCatalogSnapshot) => {
@@ -126,6 +137,7 @@ function fixture(brokenUrl = false) {
     errors,
     options,
     command,
+    drawable,
     replace,
   };
 }
@@ -134,6 +146,149 @@ describe('composed browser canvas attachment', () => {
   afterEach(() => {
     document.body.replaceChildren();
     jest.restoreAllMocks();
+  });
+
+  test('presents native outputs and tabs without allocating browser image resources', async () => {
+    const f = fixture();
+    document.getElementById('sugarcubes-output-browser-styles')?.remove();
+    const calls: CanvasSurfaceCommand[] = [];
+    const host: CanvasSurfaceHost = {
+      execute: async (command) => {
+        calls.push(command);
+        return { status: command.type === 'surface.prepare' ? 'ready' : 'applied', message: '' };
+      },
+    };
+    const surface = new NativeCanvasAttachment(f.root, {
+      ...f.options,
+      nativeSurface: () => host,
+    });
+    f.drawable(surface);
+    try {
+      for (let index = 0; index < 24; index++) await Promise.resolve();
+      expect(calls.map((call) => call.type)).toEqual([
+        'surface.prepare',
+        'surface.geometry',
+        'surface.select',
+        'surface.commit',
+      ]);
+      expect(calls[2]).toMatchObject({
+        itemId: f.catalog.entries[0]!.items[0]!.id,
+        file: f.catalog.entries[0]!.items[0]!.file,
+      });
+      expect(surface.viewport.classList.contains('sc-output-native')).toBe(true);
+      expect(f.root.querySelector('.sc-output-tabstrip')).not.toBeNull();
+      expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+      expect(f.loader.requests).toHaveLength(0);
+      expect(document.getElementById('sugarcubes-output-browser-styles')).toBeNull();
+      expect(document.getElementById('sugarcubes-output-viewport-styles')).not.toBeNull();
+
+      const second = f.catalog.entries[1]!;
+      const selected = f.command(surface, {
+        type: 'select-source',
+        selection: { sourceId: second.source.id, batchIndex: 0 },
+      });
+      expect((await selected).status).toBe('applied');
+      for (let index = 0; index < 24; index++) await Promise.resolve();
+      expect(calls.at(-1)).toMatchObject({ type: 'surface.select', itemId: second.items[0]!.id });
+      expect(surface.viewport.classList.contains('sc-output-native')).toBe(true);
+      expect(f.root.querySelector('.sc-output-tabstrip')).not.toBeNull();
+      expect(f.loader.requests).toHaveLength(0);
+      expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+    } finally {
+      surface.dispose();
+    }
+    expect(calls.at(-1)).toMatchObject({ type: 'surface.release', address: f.address });
+    expect(f.errors).toEqual([]);
+  });
+
+  test('keeps browser image resources absent while the native host connects or declines', async () => {
+    const f = fixture(true);
+    let host: CanvasSurfaceHost | null = null;
+    const surface = new NativeCanvasAttachment(f.root, { ...f.options, nativeSurface: () => host });
+    f.drawable(surface);
+    expect(surface.port.read().resource.state).toBe('unavailable');
+    expect(surface.wants()).toBe(false);
+    expect(f.loader.requests).toHaveLength(0);
+    expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+    const calls: CanvasSurfaceCommand[] = [];
+    host = {
+      execute: async (command) => {
+        calls.push(command);
+        return {
+          status: command.type === 'surface.prepare' ? 'unavailable' : 'applied',
+          message: 'Surface unavailable.',
+        };
+      },
+    };
+    surface.refresh();
+    for (let index = 0; index < 12; index++) await Promise.resolve();
+    expect(calls.map((call) => call.type)).toEqual(['surface.prepare']);
+    expect(surface.port.read().resource).toMatchObject({
+      state: 'unavailable',
+      message: 'Surface unavailable.',
+    });
+    expect(f.loader.requests).toHaveLength(0);
+    expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+    surface.dispose();
+    expect(f.errors).toEqual([]);
+  });
+
+  test('switches native batch outputs without invoking a browser image loader', async () => {
+    const f = fixture();
+    const entry = f.catalog.entries[0]!;
+    const first = entry.items[0]!;
+    const second: WorkflowOutputItem = {
+      ...first,
+      id: `${first.id}:second`,
+      batchIndex: 1,
+      file: { ...first.file, filename: 'second.png' },
+    };
+    f.replace({
+      ...f.catalog,
+      entries: [{ ...entry, items: [first, second] }, ...f.catalog.entries.slice(1)],
+    });
+    const calls: CanvasSurfaceCommand[] = [];
+    const host: CanvasSurfaceHost = {
+      execute: async (command) => {
+        calls.push(command);
+        return { status: command.type === 'surface.prepare' ? 'ready' : 'applied', message: '' };
+      },
+    };
+    const surface = new NativeCanvasAttachment(f.root, { ...f.options, nativeSurface: () => host });
+    f.drawable(surface);
+    for (let index = 0; index < 24; index++) await Promise.resolve();
+    expect((await f.command(surface, { type: 'batch', index: 1 })).status).toBe('applied');
+    for (let index = 0; index < 24; index++) await Promise.resolve();
+    expect(calls.at(-1)).toMatchObject({
+      type: 'surface.select',
+      itemId: second.id,
+      file: second.file,
+    });
+    surface.viewport.dispatchEvent(new Event('pointerdown'));
+    surface.viewport.dispatchEvent(new Event('wheel'));
+    expect(surface.viewport.classList.contains('sc-output-native')).toBe(true);
+    expect(f.loader.requests).toHaveLength(0);
+    expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+    surface.dispose();
+    expect(f.errors).toEqual([]);
+  });
+
+  test('a newer canvas control cancels a pending graph-thumbnail reveal', async () => {
+    const f = fixture();
+    const surface = new BrowserCanvasAttachment(f.root, f.options);
+    await f.loader.ready(0);
+    f.frames.advance(250);
+    const before = f.views.read(f.view).selection;
+    const item = f.catalog.entries[1]!.items[0]!;
+    const pending = surface.reveal(canvasRevealTarget(item));
+    const index = f.loader.requests.findIndex((request) => request.input.key === item.id);
+    expect(index).toBeGreaterThanOrEqual(0);
+    await f.command(surface, { type: 'fit' });
+    expect(await pending).toBe(false);
+    await f.loader.ready(index);
+    expect(f.views.read(f.view).selection).toEqual(before);
+    expect(f.loader.requests[index]!.released).toBe(true);
+    surface.dispose();
   });
 
   test('releases outgoing image gestures before Comfy model controls receive pointer input', async () => {
@@ -601,11 +756,12 @@ describe('composed browser canvas attachment', () => {
   test('contains late completion and stale commands after attachment retirement', async () => {
     const f = fixture();
     const surface = new BrowserCanvasAttachment(f.root, f.options);
+    const stale = surface.port.createRequest({ type: 'native' }, surface.port.read().revision);
     surface.dispose();
     await f.loader.ready(0);
     expect(f.loader.requests[0]?.released).toBe(true);
     expect(f.root.querySelector('img')).toBeNull();
-    expect((await f.command(surface, { type: 'native' })).status).toBe('cancelled');
+    expect((await surface.port.dispatch(stale)).status).toBe('cancelled');
     expect(surface.diagnostics().pendingDecodes).toBe(0);
     expect(f.frames.pending).toBe(0);
   });

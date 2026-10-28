@@ -81,6 +81,16 @@ export class WorkflowCanvasCoordinator {
         });
         return hosts.length === 1 ? (hosts[0] ?? null) : null;
     }
+    /** Resolve an unambiguous output surface by its registered adapter identity. */
+    surfaceHost(adapterId) {
+        const hosts = [...this.#entries.values()]
+            .filter(({ adapter }) => !adapterId || adapter.id === adapterId)
+            .flatMap(({ adapter }) => {
+            const surface = adapter.capabilities.surface;
+            return surface ? [surface] : [];
+        });
+        return hosts.length === 1 ? (hosts[0] ?? null) : null;
+    }
     /** Resolve one unambiguous mask capability by canvas identity independently of output routing. */
     maskHost(canvasId) {
         const hosts = [...this.#entries.values()]

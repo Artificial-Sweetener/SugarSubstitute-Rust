@@ -1,0 +1,47 @@
+[
+  {
+    "name": "unicode output",
+    "value": { "filename": "résumé🌈.png", "subfolder": "batch/one", "type": "output" },
+    "valid": true
+  },
+  {
+    "name": "input",
+    "value": { "filename": "source.png", "subfolder": "", "type": "input" },
+    "valid": true
+  },
+  {
+    "name": "temporary",
+    "value": { "filename": "preview.png", "subfolder": "", "type": "temp" },
+    "valid": true
+  },
+  {
+    "name": "shape does not authorize paths",
+    "value": { "filename": "../outside.png", "subfolder": "", "type": "output" },
+    "valid": true
+  },
+  {
+    "name": "unknown storage kind",
+    "value": { "filename": "source.png", "subfolder": "", "type": "other" },
+    "valid": false
+  },
+  {
+    "name": "missing subfolder",
+    "value": { "filename": "source.png", "type": "output" },
+    "valid": false
+  },
+  {
+    "name": "extra authority field",
+    "value": {
+      "filename": "source.png",
+      "subfolder": "",
+      "type": "output",
+      "url": "http://example.test"
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong filename type",
+    "value": { "filename": 12, "subfolder": "", "type": "output" },
+    "valid": false
+  }
+]

@@ -53,6 +53,7 @@ export {
   isCanvasInputSource,
   isCanvasPixelRaster,
 } from '../../../../../integrations/shared/CanvasValidation.generated.js';
+export { isCanvasSurfaceGeometry } from '../../../../../integrations/shared/CanvasSurfaceValidation.generated.js';
 export {
   encodeCanvasRaster,
   decodeCanvasRaster,

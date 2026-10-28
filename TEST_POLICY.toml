@@ -292,7 +292,7 @@ proofs = ["contract", "integration", "unit"]
 
 [[area]]
 name = "output_canvas"
-sources = ["frontend/comfyui/ui/output_canvas/**", "web/comfyui/ui/output_canvas/**"]
+sources = ["sugarcubes/frontend_assets.py", "frontend/comfyui/ui/output_canvas/**", "web/comfyui/ui/output_canvas/**"]
 proofs = ["unit", "contract", "integration"]
 
 [[area]]

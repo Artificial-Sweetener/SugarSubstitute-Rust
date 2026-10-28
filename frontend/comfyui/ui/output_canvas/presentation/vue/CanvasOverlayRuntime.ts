@@ -53,17 +53,12 @@ export function mountCanvasOverlay(
   /** Dispatch a capability-gated intent with its exact originating attachment and revision. */
   async function send(command: CanvasCommand): Promise<void> {
     if (!active || !port.capabilities.commands.includes(command.type)) return;
-    const requestId = ++sequence;
-    const request: CanvasCommandRequest = {
-      schema: 1,
-      address: initial.address,
-      requestId,
-      expectedRevision: state.value.revision,
-      command,
-    };
+    const invocation = ++sequence;
+    let request: CanvasCommandRequest | null = null;
     try {
+      request = port.createRequest(command, state.value.revision);
       const outcome = await port.dispatch(request);
-      if (!active || requestId !== sequence) return;
+      if (!active || invocation !== sequence) return;
       if (outcome.status === 'error') reportFailure(outcome, request);
       announcement.value =
         outcome.status === 'error'
@@ -73,7 +68,7 @@ export function mountCanvasOverlay(
             : '';
     } catch (error: unknown) {
       reportFailure(error, request);
-      if (active && requestId === sequence) {
+      if (active && invocation === sequence) {
         announcement.value = error instanceof Error ? error.message : 'The canvas command failed.';
       }
     }

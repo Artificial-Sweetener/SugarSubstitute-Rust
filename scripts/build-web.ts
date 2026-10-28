@@ -22,6 +22,7 @@ import { build } from 'esbuild';
 import { browserDependencyResolution } from './BrowserBuildEnvironment.js';
 import { walkArtifactFiles, synchronizeWebArtifacts } from './WebArtifactSynchronization.js';
 import { browserSharedModulePlugin, publishBrowserBundle } from './BrowserSharedModules.js';
+import { deferBrowserCanvasModules } from './DeferredComfyModules.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 const runtimeRoot = path.join(repositoryRoot, 'web');
@@ -237,6 +238,7 @@ async function main(): Promise<void> {
     ['surface/stack/vue', 'picker/vue', 'output_canvas/presentation/vue'],
     ['menus/ContextMenu.js', 'menus/FloatingSurface.js'],
   );
+  deferBrowserCanvasModules(generatedRoot);
   stageStaticAssets();
   await synchronizeWebArtifacts(generatedRoot, runtimeRoot, checkOnly);
   console.log(checkOnly ? 'Web artifacts are current.' : 'Web artifacts updated.');

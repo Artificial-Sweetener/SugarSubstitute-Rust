@@ -15,8 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Verify unified runtime composition against public host load, queue and event boundaries. */
 
+import { jest } from '@jest/globals';
 import { ComfyWorkflowExecutionRuntime } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { ComfyPromptQueueBridge } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyPromptQueueBridge.js';
+import { BrowserCanvasGenerationImages } from '../../../frontend/comfyui/ui/execution/infrastructure/BrowserCanvasGenerationImages.js';
 import { workflowFixture, WorkflowHostFixture } from '../support/workflow_host.js';
 import { WorkflowEventApi, WorkflowTestClock } from '../support/workflow_results.js';
 import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
@@ -117,6 +119,85 @@ test('routes finished node output directly to its canvas adapter before the job 
   expect(f.errors).toEqual([]);
 });
 
+test('keeps the output view and captured document delivery independent by default', async () => {
+  const f = fixture();
+  const captured: CanvasContext = {
+    canvas: {
+      id: 'editor',
+      label: 'Editor',
+      capabilities: { displayOutput: false, insertImageLayer: true, positionImageLayer: false },
+    },
+    document: { id: 'captured', geometryRevision: 'geometry', width: 512, height: 384 },
+  };
+  let current = captured;
+  const inserted: CanvasInsertImage[] = [];
+  const frames: Blob[] = [];
+  const web = new WebCanvasAdapter<Blob>({
+    wants: () => true,
+    receive: (frame) => {
+      frames.push(frame.bytes);
+    },
+  });
+  const unregister = f.runtime.canvases.register(web.adapter);
+  const imageLoad = jest.spyOn(BrowserCanvasGenerationImages.prototype, 'load').mockResolvedValue({
+    image: { format: 'png', encoding: 'base64', data: 'native-bytes' },
+    position: null,
+  });
+  f.runtime.bindCanvas(
+    {
+      readCanvas: () => current.canvas,
+      readContext: async () => current,
+      insertImage: async (image) => {
+        inserted.push(image);
+        return {
+          status: 'inserted',
+          documentId: image.document.id,
+          layerId: 'layer',
+          left: 0,
+          top: 0,
+          width: 512,
+          height: 384,
+        };
+      },
+    },
+    window,
+    (message) => {
+      f.errors.push(message);
+    },
+  );
+  try {
+    f.runtime.install();
+    f.bridge.install();
+    const session = f.runtime.sessions.read().active;
+    if (!session) throw new Error('Missing workflow.');
+    await f.api.queuePrompt(0, await f.host.graphToPrompt());
+    current = { ...captured, document: { ...captured.document!, id: 'other' } };
+    const preview = new Blob(['live-frame']);
+    f.api.emit('b_preview_with_metadata', { jobId: 'job-1', nodeId: '42:23', blob: preview });
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toBe(preview);
+    await f.host.loadGraphData({}, true, true, f.b);
+    const output = {
+      prompt_id: 'job-1',
+      node: '42:23',
+      output: { images: [{ filename: 'generation.png' }] },
+    };
+    f.api.emit('executed', output);
+    f.api.emit('executed', output);
+    await f.runtime.canvases.idle();
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ document: captured.document, layerName: 'generation' });
+    expect(web.read(session.sessionId)?.outputs[0]?.items[0]?.file.filename).toBe('generation.png');
+    expect(f.errors).toEqual([]);
+  } finally {
+    f.bridge.dispose();
+    f.runtime.dispose();
+    unregister();
+    web.dispose();
+    imageLoad.mockRestore();
+  }
+});
+
 /** Capture a host prompt at entry, independently of later graph or tab changes. */
 class ExecutionHost extends WorkflowHostFixture {
   nodeOutputs: Record<string, unknown> = {};
@@ -155,7 +236,7 @@ class ExecutionApi extends WorkflowEventApi {
 }
 
 /** Compose real owners around two host objects with colliding serialized and numeric IDs. */
-function fixture(targets: readonly string[] = ['web']) {
+function fixture(targets?: readonly string[]) {
   const a = workflowFixture('same');
   const b = workflowFixture('same');
   const host = new ExecutionHost(a);
@@ -170,7 +251,7 @@ function fixture(targets: readonly string[] = ['web']) {
   const runtime = new ComfyWorkflowExecutionRuntime({
     app: host,
     api,
-    canvasTargets: () => targets,
+    ...(targets ? { canvasTargets: () => targets } : {}),
     logger: {
       error: (...args: unknown[]) => {
         errors.push(args);

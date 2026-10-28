@@ -17,23 +17,50 @@
 import { isRecord } from '../../types/common.js';
 import { panelNavigation, type BrowserPanelTransport } from './BrowserPanelTransport.js';
 
-/** Require the injected bridge to identify the exact navigation before delivering public messages. */
-export function createNativePanelTransport(windowRef: Window): BrowserPanelTransport | null {
-  const identity = panelNavigation(windowRef.location.search);
+/** Read only the host's presentation preference, which grants no canvas or transport authority. */
+export function prefersNativeOutputSurface(windowRef: Window): boolean {
   const bridge: unknown = Reflect.get(windowRef, 'sugarcubesPanelHost');
+  return isRecord(bridge) && bridge.outputSurfacePreference === 'host';
+}
+
+/** Validate the injected identity; the native host independently authorizes every operation. */
+export function createNativePanelTransport(windowRef: Window): BrowserPanelTransport | null {
+  const bridge: unknown = Reflect.get(windowRef, 'sugarcubesPanelHost');
+  if (!isRecord(bridge)) return null;
+  const search = windowRef.location.search;
+  let identity = panelNavigation(search);
+  const query = new URLSearchParams(search);
+  if (
+    !identity &&
+    !['sc-panel-host', 'sc-panel-session', 'sc-panel-transport'].some((key) => query.has(key)) &&
+    typeof bridge.host === 'string' &&
+    typeof bridge.session === 'string'
+  ) {
+    const injected = new URLSearchParams({
+      'sc-panel-host': bridge.host,
+      'sc-panel-session': bridge.session,
+    });
+    identity = panelNavigation(injected.toString());
+  }
   if (
     !identity ||
-    !isRecord(bridge) ||
     bridge.host !== identity.host ||
     bridge.session !== identity.session ||
     typeof bridge.send !== 'function' ||
     typeof bridge.subscribe !== 'function'
   )
     return null;
+  const preferencePolicy: unknown = bridge.preferencePolicy;
+  if (preferencePolicy !== undefined && preferencePolicy !== 'host' && preferencePolicy !== 'saved')
+    return null;
+  const outputSurfacePreference: unknown = bridge.outputSurfacePreference;
+  if (outputSurfacePreference !== undefined && outputSurfacePreference !== 'host') return null;
   const send = bridge.send;
   const subscribe = bridge.subscribe;
   return {
     session: identity.session,
+    preferencePolicy: preferencePolicy ?? 'host',
+    ...(outputSurfacePreference ? { outputSurfacePreference } : {}),
     send: (message) => {
       send.call(bridge, message);
     },

@@ -24,7 +24,7 @@ import type {
 import { CanvasWorkspaceResizeInput } from '../presentation/browser/CanvasWorkspaceResizeInput.js';
 import { ComfyCanvasFrameAllocation } from './ComfyCanvasFrameAllocation.js';
 import { ComfyCanvasWorkspaceFrame } from './ComfyCanvasWorkspaceFrame.js';
-import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyles.js';
+import { ensureCanvasWorkspaceStyles } from './CanvasWorkspaceStyles.js';
 import { BrowserCanvasWorkspaceMotion } from './BrowserCanvasWorkspaceMotion.js';
 
 export interface BrowserCanvasWorkspaceActions {
@@ -64,7 +64,7 @@ export class BrowserCanvasWorkspace {
   ) {
     this.#frame = new ComfyCanvasFrameAllocation(root, panel);
     const document = panel.ownerDocument;
-    ensureBrowserCanvasWorkspaceStyles(document);
+    ensureCanvasWorkspaceStyles(document);
     this.content = document.createElement('div');
     this.content.className = 'sc-output-workspace-content';
     this.#pane = document.createElement('aside');

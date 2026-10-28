@@ -68,12 +68,21 @@ export class ComfyCanvasWorkspaceFrame {
             next.left === previous.left &&
             next.top === previous.top &&
             next.width === previous.width &&
-            next.height === previous.height)
+            next.height === previous.height &&
+            next.frameWidth === previous.frameWidth &&
+            next.frameHeight === previous.frameHeight)
             return;
         this.#bounds = next;
-        for (const [property, value] of Object.entries(next))
-            this.element.style.setProperty(property, `${value}px`);
-        if (!previous || next.width !== previous.width || next.height !== previous.height)
+        for (const property of ['left', 'top', 'width', 'height']) {
+            const value = `${next[property]}px`;
+            if (this.element.style.getPropertyValue(property) !== value)
+                this.element.style.setProperty(property, value);
+        }
+        if (!previous ||
+            next.width !== previous.width ||
+            next.height !== previous.height ||
+            next.frameWidth !== previous.frameWidth ||
+            next.frameHeight !== previous.frameHeight)
             this.changed(next.width, next.height);
     }
     /** Reanchor sibling pixels synchronously after native allocation moves their shared origin. */
@@ -93,11 +102,14 @@ export class ComfyCanvasWorkspaceFrame {
     #readBounds() {
         const origin = this.root.getBoundingClientRect();
         const panel = this.panel.getBoundingClientRect();
+        const frame = this.root.parentElement?.getBoundingClientRect();
         return {
             left: panel.left - origin.left,
             top: panel.top - origin.top,
             width: panel.width,
             height: panel.height,
+            frameWidth: frame?.width ?? 0,
+            frameHeight: frame?.height ?? 0,
         };
     }
     /** Release geometry scheduling and the owned sibling while leaving every native surface intact. */
@@ -117,6 +129,7 @@ export class ComfyCanvasWorkspaceFrame {
         this.#resize?.disconnect();
         for (const element of [
             this.root,
+            this.root.parentElement,
             this.panel,
             this.panel.parentElement?.parentElement,
             this.#toolbar.row(),

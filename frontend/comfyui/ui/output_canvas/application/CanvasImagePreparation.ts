@@ -20,13 +20,7 @@ import type {
   CanvasRetainedPreview,
 } from './CanvasImageResources.js';
 import { CANVAS_IMAGE_BYTE_LIMIT } from './CanvasImageBudget.js';
-
-export interface CanvasImagePreparationLease {
-  readonly ready: Promise<boolean>;
-  readonly unavailable: boolean;
-  /** Commit navigation synchronously so the normal interest update adopts staged handles. */
-  commit(apply: () => boolean): boolean;
-}
+import type { CanvasSourcePreparationLease } from './CanvasSourceNavigation.js';
 
 interface Preparation<Payload> {
   readonly images: readonly CanvasVisibleImage<Payload>[];
@@ -64,7 +58,7 @@ export class CanvasImagePreparation<Payload, Handle> {
   }
 
   /** Stage only final pixels that fit the existing visible-slot and byte admission rules. */
-  prepare(images: readonly CanvasVisibleImage<Payload>[]): CanvasImagePreparationLease | null {
+  prepare(images: readonly CanvasVisibleImage<Payload>[]): CanvasSourcePreparationLease | null {
     this.cancel();
     if (
       this.#disposed ||

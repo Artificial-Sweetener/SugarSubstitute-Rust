@@ -17,6 +17,10 @@
 import { CanvasClient, CanvasMaskClient, } from './CanvasRuntime.js';
 /** Keep the optional native canvas unavailable until the panel has authenticated and negotiated it. */
 export class EmbeddedCanvasConnection {
+    /** Negotiate output presentation through this same canvas session. */
+    get surface() {
+        return this.#client?.surface ?? null;
+    }
     /** Borrow the existing authenticated request sequence for optional geometry operations. */
     get geometry() {
         return this.#client?.geometry ?? null;

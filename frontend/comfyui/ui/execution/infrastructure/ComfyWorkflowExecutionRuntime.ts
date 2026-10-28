@@ -98,7 +98,7 @@ export class ComfyWorkflowExecutionRuntime {
       this.results,
       (error) => options.logger.error('SugarCubes canvas coordination failed.', { error }),
       options.canvasTargets ??
-        (() => (this.#canvasDelivery?.available ? ['embedded-document'] : ['web'])),
+        (() => (this.#canvasDelivery?.available ? ['web', 'embedded-document'] : ['web'])),
     );
     this.#stopSeeds = this.sessions.subscribe((snapshot) => {
       this.seeds.synchronize(snapshot);

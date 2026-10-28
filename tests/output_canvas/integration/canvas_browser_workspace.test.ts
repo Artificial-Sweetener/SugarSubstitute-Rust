@@ -38,6 +38,17 @@ function fixture(width = 1400) {
   frame.append(root);
   document.body.append(frame);
   let measuredWidth = width;
+  jest.spyOn(frame, 'getBoundingClientRect').mockImplementation(() => ({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    width: measuredWidth,
+    height: 800,
+    right: measuredWidth,
+    bottom: 800,
+    toJSON: () => ({}),
+  }));
   jest.spyOn(panel, 'getBoundingClientRect').mockImplementation(() => ({
     x: 0,
     y: 0,
@@ -213,6 +224,7 @@ test('coalesces workspace measurements and cancels pending observation on teardo
   f.frames.advance(16);
   expect(f.workspace.content.style.left).toBe('0px');
   expect(f.workspace.content.style.width).toBe('calc(100% - 599.6px)');
+  expect(f.chrome.style.width).toBe('1499px');
   expect(f.actions.changed).toHaveBeenCalledTimes(changed + 1);
   f.resize(1600);
   f.dispose();

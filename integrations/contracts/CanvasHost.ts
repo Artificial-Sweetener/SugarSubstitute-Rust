@@ -23,9 +23,12 @@ import type {
 import type { CanvasMaskHost } from './CanvasMasks.js';
 import type { CanvasSourceHost } from './CanvasSources.js';
 import type { CanvasGeometryHost } from './CanvasGeometry.js';
+import type { CanvasSurfaceHost } from './CanvasSurface.js';
 /** Expose common discovery without requiring document editing from display-only canvases. */
 export interface CanvasHost {
   readCanvas(): CanvasDescriptor | null;
+  /** Optional renderer-owned output surface, negotiated independently of layer editing. */
+  readonly surface?: CanvasSurfaceHost | null;
 }
 /** Supply image insertion only on hosts declaring the corresponding capability. */
 export interface CanvasLayerHost extends CanvasHost {

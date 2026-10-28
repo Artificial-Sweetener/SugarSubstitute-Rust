@@ -102,6 +102,11 @@ export class CanvasViewRegistry {
         const attachment = this.#views.get(address.viewId)?.attachment;
         return Boolean(attachment && sameCanvasAttachment(attachment, address));
     }
+    /** Admit only preparation of the exact pending surface, never its ordinary view operations. */
+    acceptsPreparation(address) {
+        const pending = this.#views.get(address.viewId)?.pending;
+        return Boolean(pending && sameCanvasAttachment(pending, address));
+    }
     /** Release only the named current surface; stale teardown leaves its replacement intact. */
     releaseAttachment(address) {
         const record = this.#views.get(address.viewId);
