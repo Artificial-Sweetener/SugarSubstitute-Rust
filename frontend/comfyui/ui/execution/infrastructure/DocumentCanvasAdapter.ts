@@ -45,9 +45,7 @@ export function documentCanvasAdapter<Bytes>(
         return host.masks ?? undefined;
       },
       get surface() {
-        return host.readCanvas()?.capabilities.displayOutput
-          ? (host.surface ?? undefined)
-          : undefined;
+        return host.surface ?? undefined;
       },
       output: {
         ordering: 'serial',

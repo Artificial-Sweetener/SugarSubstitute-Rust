@@ -15,6 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise the composed browser surface and reusable Vue overlay against actual state owners. */
 
+import { EmbeddedCanvasConnection } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedCanvasConnection.js';
+import {
+  createNativePanelTransport,
+  prefersNativeOutputSurface,
+} from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
+import type { CanvasMessage } from '../../../integrations/contracts/CanvasProtocol.generated.js';
+import { selectedPngCapabilities } from '../../editor_integrations/support/canvas_surface.js';
 import { jest } from '@jest/globals';
 import { nextTick } from 'vue';
 import { BrowserCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasAttachment.js';
@@ -151,6 +158,138 @@ describe('composed browser canvas attachment', () => {
     jest.restoreAllMocks();
   });
 
+  test('keeps native resources selected through delayed discovery and mounts acknowledged native pixels', async () => {
+    const f = fixture();
+    for (const key of ['offsetWidth', 'clientWidth'] as const)
+      jest.spyOn(HTMLElement.prototype, key, 'get').mockReturnValue(800);
+    for (const key of ['offsetHeight', 'clientHeight'] as const)
+      jest.spyOn(HTMLElement.prototype, key, 'get').mockReturnValue(600);
+    const listeners = new Set<(value: unknown) => void>();
+    const messages: CanvasMessage[] = [];
+    const connection = new EmbeddedCanvasConnection();
+    const bridge = {
+      host: 'ai.artificialsweetener.sugarsubstitute',
+      session: 'delayed-native-session',
+      outputSurfacePreference: 'host',
+      send: (message: CanvasMessage) => {
+        messages.push(message);
+        if (message.type === 'context.request')
+          for (const receive of listeners)
+            receive({
+              ...message,
+              type: 'context.reply',
+              context: {
+                canvas: {
+                  id: 'native',
+                  label: 'Native',
+                  capabilities: {
+                    displayOutput: true,
+                    insertImageLayer: false,
+                    positionImageLayer: false,
+                  },
+                },
+                document: null,
+              },
+            });
+        if (
+          message.type === 'surface.prepare' ||
+          message.type === 'surface.geometry' ||
+          message.type === 'surface.select' ||
+          message.type === 'surface.commit' ||
+          message.type === 'surface.release'
+        )
+          for (const receive of listeners)
+            receive({
+              protocol: message.protocol,
+              version: message.version,
+              session: message.session,
+              requestId: message.requestId,
+              type: 'surface.reply',
+              address: message.address,
+              revision: message.revision,
+              status: message.type === 'surface.prepare' ? 'ready' : 'applied',
+              message: '',
+            });
+      },
+      subscribe: (receive: (value: unknown) => void) => {
+        listeners.add(receive);
+        return () => {
+          listeners.delete(receive);
+        };
+      },
+    };
+    Object.defineProperty(window, 'sugarcubesPanelHost', { value: bridge, configurable: true });
+    const transport = createNativePanelTransport(window);
+    if (!transport) throw new Error('Native transport fixture was not admitted.');
+    const primary = new CanvasPrimarySurface({
+      document,
+      views: f.views,
+      window: windowId('browser'),
+      coordinator: {
+        active: () => f.view,
+        catalog: () => f.options.catalog(),
+        subscribe: () => () => {},
+      } as unknown as CanvasSessionCoordinator,
+      element: () => f.root,
+      renderer: () => (prefersNativeOutputSurface(window) ? 'native' : 'browser'),
+      report: f.options.report,
+      mount: (element, address, _catalog, accepts, acceptsPreparation) => {
+        expect(prefersNativeOutputSurface(window)).toBe(true);
+        return new NativeCanvasAttachment(element, {
+          ...f.options,
+          address,
+          accepts,
+          acceptsPreparation,
+          nativeSurface: () => connection.surface,
+        });
+      },
+    });
+    document.addEventListener('sugarcubes-canvas-ready', primary.reconcile);
+    try {
+      connection.connect(transport, window, f.options.report);
+      primary.setup();
+      for (let turn = 0; turn < 16; turn++) await Promise.resolve();
+      const request = messages.find((message) => message.type === 'surface.capabilities.request');
+      if (!request) throw new Error('Missing delayed discovery request.');
+      expect(connection.surface).toBeNull();
+      expect(primary.diagnostics().address).toBeNull();
+      expect(prefersNativeOutputSurface(window)).toBe(true);
+      expect(f.loader.requests).toHaveLength(0);
+      expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+      for (const receive of listeners)
+        receive({
+          protocol: request.protocol,
+          version: request.version,
+          session: request.session,
+          requestId: request.requestId,
+          type: 'surface.capabilities.reply',
+          status: 'available',
+          capabilities: selectedPngCapabilities,
+          message: '',
+        });
+      for (let turn = 0; turn < 48; turn++) await Promise.resolve();
+      expect(primary.diagnostics().address).not.toBeNull();
+      expect(messages.at(-1)).toMatchObject({
+        type: 'surface.commit',
+        address: primary.diagnostics().address,
+      });
+      expect(f.root.querySelector('.sc-output-native')).not.toBeNull();
+      expect(f.loader.requests).toHaveLength(0);
+      expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+      expect(f.errors).toEqual([
+        expect.objectContaining({ message: 'The native canvas is unavailable.' }),
+      ]);
+    } finally {
+      document.removeEventListener('sugarcubes-canvas-ready', primary.reconcile);
+      primary.dispose();
+      for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+      connection.dispose();
+      Reflect.deleteProperty(window, 'sugarcubesPanelHost');
+    }
+    expect(f.clock.pending).toBe(0);
+    expect(f.frames.pending).toBe(0);
+  });
+
   test('waits for actual native attachment release before preparing the next mounted surface', async () => {
     const f = fixture();
     for (const key of ['offsetWidth', 'clientWidth'] as const)
@@ -161,6 +300,7 @@ describe('composed browser canvas attachment', () => {
     let visible = true;
     let released!: (result: CanvasSurfaceResult) => void;
     const host: CanvasSurfaceHost = {
+      capabilities: selectedPngCapabilities,
       execute: async (command) => {
         calls.push(command);
         if (command.type === 'surface.release')
@@ -239,6 +379,7 @@ describe('composed browser canvas attachment', () => {
       const calls: CanvasSurfaceCommand[] = [];
       let selected!: (result: CanvasSurfaceResult) => void;
       const host: CanvasSurfaceHost = {
+        capabilities: selectedPngCapabilities,
         execute: async (command) => {
           calls.push(command);
           if (command.type === 'surface.select')
@@ -310,6 +451,7 @@ describe('composed browser canvas attachment', () => {
         accepts: () => f.views.accepts(candidate),
         acceptsPreparation: () => f.views.acceptsPreparation(candidate),
         nativeSurface: () => ({
+          capabilities: selectedPngCapabilities,
           execute: async (command) => {
             calls.push(command);
             if (command.type === 'surface.prepare')
@@ -342,6 +484,7 @@ describe('composed browser canvas attachment', () => {
     document.getElementById('sugarcubes-output-browser-styles')?.remove();
     const calls: CanvasSurfaceCommand[] = [];
     const host: CanvasSurfaceHost = {
+      capabilities: selectedPngCapabilities,
       execute: async (command) => {
         calls.push(command);
         return { status: command.type === 'surface.prepare' ? 'ready' : 'applied', message: '' };
@@ -406,6 +549,7 @@ describe('composed browser canvas attachment', () => {
     expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
     const calls: CanvasSurfaceCommand[] = [];
     host = {
+      capabilities: selectedPngCapabilities,
       execute: async (command) => {
         calls.push(command);
         return {
@@ -443,6 +587,7 @@ describe('composed browser canvas attachment', () => {
     });
     const calls: CanvasSurfaceCommand[] = [];
     const host: CanvasSurfaceHost = {
+      capabilities: selectedPngCapabilities,
       execute: async (command) => {
         calls.push(command);
         return { status: command.type === 'surface.prepare' ? 'ready' : 'applied', message: '' };

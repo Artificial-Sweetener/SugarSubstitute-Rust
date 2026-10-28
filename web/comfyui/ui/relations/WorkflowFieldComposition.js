@@ -80,6 +80,7 @@ export function createWorkflowFieldHost(options) {
                 presentation: embedded,
                 canvas,
                 connected: options.connected,
+                subscribeConnection: options.subscribeConnection,
                 report: options.reportPresentationError,
             });
     }

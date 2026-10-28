@@ -36,7 +36,12 @@ export class EmbeddedCanvasConnection {
         return this.#masks;
     }
     #stop = null;
-    /** Start discovery once after panel configuration, including a bridge injected after page startup. */
+    #window = null;
+    #report = null;
+    #read = {};
+    #refreshing = null;
+    #refreshAgain = false;
+    /** Read context and optional surface capabilities before publishing panel readiness. */
     connect(transport, window, report) {
         if (this.#client)
             return;
@@ -49,6 +54,8 @@ export class EmbeddedCanvasConnection {
             report,
         });
         this.#client = client;
+        this.#window = window;
+        this.#report = report;
         this.#masks = new CanvasMaskClient(transport.session, {
             send: (message) => transport.send(message),
             report,
@@ -61,10 +68,31 @@ export class EmbeddedCanvasConnection {
             client.receive(value);
             this.#masks?.receive(value);
         });
-        void client
-            .readContext()
-            .then(() => window.document.dispatchEvent(new Event('sugarcubes-canvas-ready')))
-            .catch(report);
+        this.refresh();
+    }
+    /** Coalesce native discovery after an actual backend connection transition. */
+    refresh() {
+        const client = this.#client;
+        if (!client)
+            return;
+        if (this.#refreshing) {
+            this.#refreshAgain = true;
+            return;
+        }
+        const pending = this.readContext().then(() => { }, (error) => {
+            if (this.#client === client)
+                this.#report?.(error);
+        });
+        this.#refreshing = pending;
+        void pending.then(() => {
+            if (this.#refreshing !== pending)
+                return;
+            this.#refreshing = null;
+            if (this.#refreshAgain) {
+                this.#refreshAgain = false;
+                this.refresh();
+            }
+        });
     }
     /** Advertise only the capability descriptor received from the current native session. */
     readCanvas() {
@@ -72,9 +100,15 @@ export class EmbeddedCanvasConnection {
     }
     /** Capture a native document identity before preparing an image transfer. */
     async readContext() {
-        if (!this.#client)
+        const client = this.#client;
+        if (!client)
             throw new Error('The native canvas is unavailable.');
-        return await this.#client.readContext();
+        const read = {};
+        this.#read = read;
+        const context = await client.readContext();
+        if (this.#client === client && this.#read === read)
+            this.#window?.document.dispatchEvent(new Event('sugarcubes-canvas-ready'));
+        return context;
     }
     /** Delegate a mutation once to the correlated session client. */
     async insertImage(image, cancellation) {
@@ -88,6 +122,10 @@ export class EmbeddedCanvasConnection {
         this.#stop = null;
         this.#client?.dispose();
         this.#client = null;
+        this.#window = null;
+        this.#report = null;
+        this.#refreshing = null;
+        this.#refreshAgain = false;
         this.#masks?.dispose();
         this.#masks = null;
     }

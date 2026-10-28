@@ -16,6 +16,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise one shared canvas session against capable and limited surface hosts. */
 
+import {
+  connectCanvasSurface,
+  negotiatedSurface,
+  selectedPngCapabilities,
+} from '../support/canvas_surface.js';
 import { jest } from '@jest/globals';
 import { CanvasClient } from '../../../integrations/shared/CanvasClient.js';
 import { CanvasServer } from '../../../integrations/shared/CanvasServer.js';
@@ -57,7 +62,7 @@ function fixture(capable: boolean) {
     }),
   );
   const server = new CanvasServer(session, {
-    ...(capable ? { surface: { execute } } : {}),
+    ...(capable ? { surface: { capabilities: selectedPngCapabilities, execute } } : {}),
     context: async () => ({
       canvas: {
         id: 'native',
@@ -90,34 +95,39 @@ test.each([true, false])(
   async (capable) => {
     const f = fixture(capable);
     try {
-      const prepared = await f.client.surface.execute({
+      await f.client.readContext();
+      if (!capable) {
+        expect(f.client.surface).toBeNull();
+        expect(f.sent.map(({ type }) => type)).toEqual(['context.request']);
+        return;
+      }
+      const prepared = await negotiatedSurface(f.client).execute({
         type: 'surface.prepare',
         address,
         revision: 1,
       });
-      expect(prepared.status).toBe(capable ? 'ready' : 'unavailable');
+      expect(prepared.status).toBe('ready');
       expect(f.execute).toHaveBeenCalledTimes(capable ? 1 : 0);
-      if (!capable) return;
       const commands: CanvasSurfaceCommand[] = [
         {
           type: 'surface.select',
           address,
           revision: 2,
           itemId: 'result:one',
-          file: { filename: 'résumé.png', subfolder: 'batch', type: 'output' },
+          file: { filename: 'rÃ©sumÃ©.png', subfolder: 'batch', type: 'output' },
         },
         { type: 'surface.commit', address, revision: 3 },
         { type: 'surface.geometry', address, revision: 4, geometry },
         { type: 'surface.release', address, revision: 5 },
       ];
       for (const command of commands)
-        expect((await f.client.surface.execute(command)).status).toBe('applied');
+        expect((await negotiatedSurface(f.client).execute(command)).status).toBe('applied');
       expect(f.execute.mock.calls.map(([command]) => command)).toEqual([
         { type: 'surface.prepare', address, revision: 1 },
         ...commands,
       ]);
-      expect(f.sent.map((message) => message.requestId)).toEqual([1, 2, 3, 4, 5]);
-      f.server.receive(f.sent[1]);
+      expect(f.sent.map((message) => message.requestId)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      f.server.receive(f.sent[3]);
       expect(f.execute).toHaveBeenCalledTimes(5);
       expect(f.errors).toEqual([]);
     } finally {
@@ -137,13 +147,19 @@ test.each([
     later: () => () => {},
     report: () => {},
   });
-  const pending = client.surface.execute({ type: 'surface.prepare', address, revision: 1 });
+  await connectCanvasSurface(client, sent);
+  sent.length = 0;
+  const pending = negotiatedSurface(client).execute({
+    type: 'surface.prepare',
+    address,
+    revision: 1,
+  });
   expect(
     client.receive({
       protocol: 'sugarcubes.canvas',
       version: 3,
       session,
-      requestId: 1,
+      requestId: 3,
       type: 'surface.reply',
       address: foreign,
       revision: 1,
@@ -163,7 +179,9 @@ test('surface cancellation waits for the correlated host acknowledgement', async
     later: () => () => {},
     report: () => {},
   });
-  const pending = client.surface.execute(
+  await connectCanvasSurface(client, sent);
+  sent.length = 0;
+  const pending = negotiatedSurface(client).execute(
     { type: 'surface.prepare', address, revision: 1 },
     cancellation,
   );
@@ -175,15 +193,15 @@ test('surface cancellation waits for the correlated host acknowledgement', async
   await Promise.resolve();
   expect(settled).toBe(false);
   expect(sent.map(({ type, requestId }) => ({ type, requestId }))).toEqual([
-    { type: 'surface.prepare', requestId: 1 },
-    { type: 'cancel', requestId: 1 },
+    { type: 'surface.prepare', requestId: 3 },
+    { type: 'cancel', requestId: 3 },
   ]);
   expect(
     client.receive({
       protocol: 'sugarcubes.canvas',
       version: 3,
       session,
-      requestId: 1,
+      requestId: 3,
       type: 'surface.reply',
       address,
       revision: 1,
@@ -197,7 +215,7 @@ test('surface cancellation waits for the correlated host acknowledgement', async
       protocol: 'sugarcubes.canvas',
       version: 3,
       session,
-      requestId: 1,
+      requestId: 3,
       type: 'surface.reply',
       address,
       revision: 1,
@@ -217,8 +235,13 @@ test('an already cancelled surface request remains local', async () => {
     later: () => () => {},
     report: () => {},
   });
+  await connectCanvasSurface(client, sent);
+  sent.length = 0;
   await expect(
-    client.surface.execute({ type: 'surface.prepare', address, revision: 1 }, cancellation),
+    negotiatedSurface(client).execute(
+      { type: 'surface.prepare', address, revision: 1 },
+      cancellation,
+    ),
   ).resolves.toMatchObject({ status: 'cancelled' });
   expect(sent).toEqual([]);
   client.dispose();
@@ -227,8 +250,10 @@ test('an already cancelled surface request remains local', async () => {
 test('rejects invalid selected-result identities and malformed geometry before dispatch', async () => {
   const f = fixture(true);
   try {
+    await f.client.readContext();
+    f.sent.length = 0;
     await expect(
-      f.client.surface.execute({
+      negotiatedSurface(f.client).execute({
         type: 'surface.select',
         address,
         revision: 1,
@@ -272,6 +297,7 @@ test('keeps the admitted surface request unchanged while the host context is pen
   const commands: CanvasSurfaceCommand[] = [];
   const server = new CanvasServer(session, {
     surface: {
+      capabilities: selectedPngCapabilities,
       execute: async (command) => {
         commands.push(command);
         if (commands.length === 2) completed();

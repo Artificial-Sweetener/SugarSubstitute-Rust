@@ -31,12 +31,12 @@ import type {
 import { isCanvasMessage } from './CanvasValidation.generated.js';
 import { CanvasSourceConnection } from './CanvasSourceConnection.js';
 import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
-import type {
-  CanvasSurfaceCommand,
-  CanvasSurfaceHost,
-  CanvasSurfaceResult,
-} from '../contracts/CanvasSurface.js';
-import type { CanvasSurfaceAddress } from '../contracts/CanvasSurfaceProtocol.generated.js';
+import type { CanvasSurfaceCommand, CanvasSurfaceHost } from '../contracts/CanvasSurface.js';
+import { requestCanvasSurface } from './CanvasSurfaceClient.js';
+import {
+  snapshotCanvasSurfaceCapabilities,
+  discoverCanvasSurface,
+} from './CanvasSurfaceDiscovery.js';
 import type {
   CanvasGeometryCommand,
   CanvasGeometryRequest,
@@ -54,6 +54,7 @@ interface Pending {
     | 'image.reply'
     | 'source.reply'
     | 'geometry.reply'
+    | 'surface.capabilities.reply'
     | 'surface.reply';
   accept(message: CanvasMessage): void;
   reject(error: Error): void;
@@ -65,26 +66,24 @@ type Request =
   | Pick<CanvasInsertRequest, 'type' | 'image'>
   | Pick<CanvasSourceRequest, 'type' | 'command'>
   | Pick<CanvasGeometryRequest, 'type' | 'command'>
+  | { readonly type: 'surface.capabilities.request'; readonly schema: 1 }
   | CanvasSurfaceCommand;
 /** Retain one correlated client for a validated host session; never replay mutations after reconnect. */
 export class CanvasClient implements CanvasLayerHost {
   readonly geometry: CanvasGeometryHost;
   readonly sources: CanvasSourceConnection;
-  readonly surface: CanvasSurfaceHost;
+  #surface: CanvasSurfaceHost | null = null;
   readonly #pending = new Map<number, Pending>();
   readonly #sourceListeners = new Set<(change: CanvasSourceChange) => void>();
   #next = 0;
   #context: CanvasContext | null = null;
-  #contextReply = 0;
+  #contextRevision: object = {};
   #disposed = false;
   /** Bind an authenticated session and injected clock without claiming its transport lifetime. */
   constructor(
     private readonly session: string,
     private readonly port: CanvasClientPort,
   ) {
-    this.surface = {
-      execute: (command, cancellation) => this.#surfaceRequest(command, cancellation),
-    };
     this.geometry = {
       get canvasId() {
         return readIdentity();
@@ -110,16 +109,46 @@ export class CanvasClient implements CanvasLayerHost {
   readCanvas(): CanvasDescriptor | null {
     return this.#context?.canvas ?? null;
   }
+  /** Expose only a surface discovered for the current context read in this live session. */
+  get surface(): CanvasSurfaceHost | null {
+    return this.#surface;
+  }
   /** Read native context while keeping cached capabilities on the latest reply in this live session. */
   async readContext(): Promise<CanvasContext> {
+    const revision = {};
+    this.#contextRevision = revision;
+    this.#surface = null;
     const reply = await this.#request({ type: 'context.request' }, 'context.reply');
     if (reply.type !== 'context.reply') throw new Error('Invalid canvas context reply.');
-    if (this.#disposed) throw new Error('Canvas connection closed.');
-    if (reply.requestId > this.#contextReply) {
-      this.#contextReply = reply.requestId;
+    this.#requireConnected();
+    if (revision === this.#contextRevision) {
       this.#context = reply.context;
+      if (reply.context.canvas.capabilities.displayOutput) {
+        const surface = await discoverCanvasSurface({
+          read: () =>
+            this.#request(
+              { type: 'surface.capabilities.request', schema: 1 },
+              'surface.capabilities.reply',
+            ),
+          current: () => !this.#disposed && revision === this.#contextRevision,
+          owns: (host) => this.#surface === host,
+          execute: (command, cancellation) =>
+            requestCanvasSurface(command, cancellation, (admitted, scope) =>
+              this.#request(admitted, 'surface.reply', scope),
+            ),
+          report: (error) => {
+            this.port.report(error);
+          },
+        });
+        if (revision === this.#contextRevision) this.#surface = surface;
+      }
     }
+    this.#requireConnected();
     return reply.context;
+  }
+  /** Recheck page teardown after each awaited discovery step. */
+  #requireConnected(): void {
+    if (this.#disposed) throw new Error('Canvas connection closed.');
   }
   /** Insert once using the caller's captured destination rather than a later active document. */
   async insertImage(
@@ -144,6 +173,13 @@ export class CanvasClient implements CanvasLayerHost {
     this.#pending.delete(value.requestId);
     pending.stop();
     if (value.type === 'error.reply') pending.reject(new Error(value.failure.message));
+    else if (value.type === 'surface.capabilities.reply')
+      pending.accept({
+        ...value,
+        capabilities: snapshotCanvasSurfaceCapabilities(value.capabilities),
+      });
+    else if (value.type === 'context.reply')
+      pending.accept({ ...value, context: snapshotCanvasContext(value.context) });
     else pending.accept(value);
     return true;
   }
@@ -157,13 +193,15 @@ export class CanvasClient implements CanvasLayerHost {
       if (
         pending.type === 'image.reply' ||
         pending.type === 'geometry.reply' ||
-        pending.type === 'surface.reply'
+        pending.type === 'surface.reply' ||
+        pending.type === 'surface.capabilities.reply'
       )
         pending.cancel();
       pending.reject(new Error('Canvas connection closed.'));
     }
     this.#pending.clear();
     this.#context = null;
+    this.#surface = null;
     this.#sourceListeners.clear();
   }
   /** Translate source query failures without introducing another transport or request sequence. */
@@ -195,28 +233,6 @@ export class CanvasClient implements CanvasLayerHost {
     );
     if (reply.type !== 'geometry.reply') throw new Error('Invalid canvas geometry reply.');
     return reply.result;
-  }
-  /** Require the exact attachment and revision in the host's correlated surface reply. */
-  async #surfaceRequest(
-    command: CanvasSurfaceCommand,
-    cancellation?: CanvasCancellationSource,
-  ): Promise<CanvasSurfaceResult> {
-    if (cancellation?.cancelled())
-      return { status: 'cancelled', message: 'Canvas surface request cancelled.' };
-    const address = Object.freeze({ ...command.address });
-    const revision = command.revision;
-    const type = command.type;
-    const admitted = { ...command, address };
-    const reply = await this.#request(admitted, 'surface.reply', cancellation);
-    if (
-      reply.type !== 'surface.reply' ||
-      reply.revision !== revision ||
-      !sameSurface(reply.address, address) ||
-      (reply.status === 'ready' && type !== 'surface.prepare') ||
-      (reply.status === 'applied' && type === 'surface.prepare')
-    )
-      throw new Error('Canvas surface reply does not match its attachment.');
-    return { status: reply.status, message: reply.message };
   }
   /** Register reply ownership before synchronous transports can answer, and bound every request. */
   #request(
@@ -342,16 +358,16 @@ export class CanvasClient implements CanvasLayerHost {
 
 /** Distinguish requests whose cancellation completion is acknowledged by the native surface. */
 function isSurfaceRequest(request: Request): request is CanvasSurfaceCommand {
-  return request.type.startsWith('surface.');
+  return request.type.startsWith('surface.') && request.type !== 'surface.capabilities.request';
 }
 
-/** Compare every component rather than treating a public attachment label as authority. */
-function sameSurface(left: CanvasSurfaceAddress, right: CanvasSurfaceAddress): boolean {
-  return (
-    left.sessionId === right.sessionId &&
-    left.viewId === right.viewId &&
-    left.windowId === right.windowId &&
-    left.attachmentId === right.attachmentId &&
-    left.generation === right.generation
-  );
+/** Retain admitted context metadata before an asynchronous consumer can observe caller mutation. */
+function snapshotCanvasContext(context: CanvasContext): CanvasContext {
+  return Object.freeze({
+    canvas: Object.freeze({
+      ...context.canvas,
+      capabilities: Object.freeze({ ...context.canvas.capabilities }),
+    }),
+    document: context.document ? Object.freeze({ ...context.document }) : null,
+  });
 }

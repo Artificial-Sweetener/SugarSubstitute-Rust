@@ -24,6 +24,7 @@ export class EmbeddedPanelHost {
     transport;
     #layout;
     #stop = null;
+    #stopConnection = null;
     #timer = null;
     /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
     constructor(options, transport) {
@@ -55,6 +56,11 @@ export class EmbeddedPanelHost {
                 this.options.report(error);
             }
         });
+        this.#stopConnection =
+            this.options.subscribeConnection?.((connected) => {
+                if (connected)
+                    this.options.canvas?.refresh();
+            }) ?? null;
         const ready = () => {
             try {
                 client.ready();
@@ -71,6 +77,8 @@ export class EmbeddedPanelHost {
     dispose = () => {
         this.#stop?.();
         this.#stop = null;
+        this.#stopConnection?.();
+        this.#stopConnection = null;
         if (this.#timer !== null)
             this.options.window.clearInterval(this.#timer);
         this.#timer = null;

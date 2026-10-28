@@ -25,7 +25,7 @@ import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputCo
 export function createWorkflowCanvasComposition(
   options: Omit<
     WorkflowFieldHostOptions,
-    'seeds' | 'activity' | 'progress' | 'connected' | 'sessions'
+    'seeds' | 'activity' | 'progress' | 'connected' | 'subscribeConnection' | 'sessions'
   > & {
     api: unknown;
     logger: Pick<Console, 'error' | 'warn'>;
@@ -48,6 +48,7 @@ export function createWorkflowCanvasComposition(
     activity: workflowExecution.activity,
     progress: workflowExecution.progress,
     connected: () => workflowExecution.connected,
+    subscribeConnection: (listener) => workflowExecution.subscribeConnection(listener),
   });
   const window = options.document.defaultView;
   if (window) workflowExecution.bindCanvas(workflowFields.canvas, window, options.notifyCanvas);

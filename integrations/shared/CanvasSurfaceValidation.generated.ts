@@ -16,6 +16,103 @@
 /** Generated protocol validation; edit the authoritative canvas.schema.json. */
 import type * as Contract from '../contracts/CanvasSurfaceProtocol.generated.js';
 import { isRecord } from './ContractRecord.js';
+/** Validate a bounded CanvasSurfaceCapabilities payload before dispatch. */
+export function isCanvasSurfaceCapabilities(
+  value: unknown,
+): value is Contract.CanvasSurfaceCapabilities {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 7 &&
+    Object.hasOwn(value, 'schema') &&
+    value['schema'] === 1 &&
+    Object.hasOwn(value, 'imageFormats') &&
+    Array.isArray(value['imageFormats']) &&
+    value['imageFormats'].length <= 3 &&
+    value['imageFormats'].every(
+      (item: unknown) => item === 'png' || item === 'jpeg' || item === 'webp',
+    ) &&
+    Object.hasOwn(value, 'viewportCommands') &&
+    Array.isArray(value['viewportCommands']) &&
+    value['viewportCommands'].length <= 4 &&
+    value['viewportCommands'].every(
+      (item: unknown) => item === 'fit' || item === 'native' || item === 'zoom' || item === 'pan',
+    ) &&
+    Object.hasOwn(value, 'viewportState') &&
+    typeof value['viewportState'] === 'boolean' &&
+    Object.hasOwn(value, 'previewFormats') &&
+    Array.isArray(value['previewFormats']) &&
+    value['previewFormats'].length <= 2 &&
+    value['previewFormats'].every((item: unknown) => item === 'png' || item === 'jpeg') &&
+    Object.hasOwn(value, 'comparison') &&
+    typeof value['comparison'] === 'boolean' &&
+    Object.hasOwn(value, 'overview') &&
+    typeof value['overview'] === 'boolean'
+  );
+}
+/** Validate a bounded CanvasSurfaceCapabilitiesRequest payload before dispatch. */
+export function isCanvasSurfaceCapabilitiesRequest(
+  value: unknown,
+): value is Contract.CanvasSurfaceCapabilitiesRequest {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 6 &&
+    Object.hasOwn(value, 'protocol') &&
+    value['protocol'] === 'sugarcubes.canvas' &&
+    Object.hasOwn(value, 'version') &&
+    value['version'] === 3 &&
+    Object.hasOwn(value, 'session') &&
+    typeof value['session'] === 'string' &&
+    value['session'].length <= 80 &&
+    new RegExp('^[a-zA-Z0-9-]{16,80}$').test(value['session']) &&
+    Object.hasOwn(value, 'requestId') &&
+    typeof value['requestId'] === 'number' &&
+    Number.isSafeInteger(value['requestId']) &&
+    value['requestId'] >= 1 &&
+    value['requestId'] <= 2147483647 &&
+    Object.hasOwn(value, 'type') &&
+    value['type'] === 'surface.capabilities.request' &&
+    Object.hasOwn(value, 'schema') &&
+    value['schema'] === 1
+  );
+}
+/** Validate a bounded CanvasSurfaceCapabilitiesReply payload before dispatch. */
+export function isCanvasSurfaceCapabilitiesReply(
+  value: unknown,
+): value is Contract.CanvasSurfaceCapabilitiesReply {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 8 &&
+    Object.hasOwn(value, 'protocol') &&
+    value['protocol'] === 'sugarcubes.canvas' &&
+    Object.hasOwn(value, 'version') &&
+    value['version'] === 3 &&
+    Object.hasOwn(value, 'session') &&
+    typeof value['session'] === 'string' &&
+    value['session'].length <= 80 &&
+    new RegExp('^[a-zA-Z0-9-]{16,80}$').test(value['session']) &&
+    Object.hasOwn(value, 'requestId') &&
+    typeof value['requestId'] === 'number' &&
+    Number.isSafeInteger(value['requestId']) &&
+    value['requestId'] >= 1 &&
+    value['requestId'] <= 2147483647 &&
+    Object.hasOwn(value, 'type') &&
+    value['type'] === 'surface.capabilities.reply' &&
+    Object.hasOwn(value, 'status') &&
+    (value['status'] === 'available' ||
+      value['status'] === 'unsupported' ||
+      value['status'] === 'unavailable' ||
+      value['status'] === 'error') &&
+    Object.hasOwn(value, 'capabilities') &&
+    isCanvasSurfaceCapabilities(value['capabilities']) &&
+    Object.hasOwn(value, 'message') &&
+    typeof value['message'] === 'string' &&
+    value['message'].length <= 1024 &&
+    Array.from(value['message']).length <= 512 &&
+    new RegExp('^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$').test(
+      value['message'],
+    )
+  );
+}
 /** Validate a bounded CanvasSurfaceAddress payload before dispatch. */
 export function isCanvasSurfaceAddress(value: unknown): value is Contract.CanvasSurfaceAddress {
   return (
@@ -404,6 +501,8 @@ export function isCanvasSurfaceReply(value: unknown): value is Contract.CanvasSu
 /** Validate a bounded CanvasSurfaceMessage payload before dispatch. */
 export function isCanvasSurfaceMessage(value: unknown): value is Contract.CanvasSurfaceMessage {
   return (
+    isCanvasSurfaceCapabilitiesRequest(value) ||
+    isCanvasSurfaceCapabilitiesReply(value) ||
     isCanvasSurfacePrepareRequest(value) ||
     isCanvasSurfaceGeometryRequest(value) ||
     isCanvasSurfaceSelectRequest(value) ||

@@ -16,6 +16,7 @@
 /** Generate Rust decoders from the same closed schemas as the web guards. */
 
 import { createHash } from 'node:crypto';
+import { contractArrayEnum, contractArraySchema } from './ContractArraySchema.js';
 
 type Schema = Record<string, unknown>;
 const WELL_FORMED_TEXT = '^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$';
@@ -110,6 +111,36 @@ function property(
 ): { type: string; valid: readonly string[]; requiredOption?: boolean; helper?: string } {
   const node = record(value);
   const access = `self.${field}`;
+  if (node.type === 'array') {
+    const array = contractArraySchema(node);
+    const choices = contractArrayEnum(array.items);
+    if (array.maximum === 0) return { type: 'Vec<String>', valid: [`${access}.is_empty()`] };
+    const condition = `        if !matches!(item.as_str(), ${choices.map((choice) => JSON.stringify(choice)).join(' | ')}) {`;
+    const patterns = choices
+      .map(
+        (choice, index) =>
+          `${index ? '                | ' : '            '}${JSON.stringify(choice)}`,
+      )
+      .join('\n');
+    if (patterns.split('\n').some((line) => line.length > 100))
+      throw new Error('Rust contract enum needs a bounded compact validator.');
+    const helperName = `valid_${owner.replace(/[A-Z]/g, (letter, index) => `${index ? '_' : ''}${letter.toLowerCase()}`)}_${field.replace(/^r#/, '')}`;
+    return {
+      type: 'Vec<String>',
+      valid: [`${helperName}(&${access})`],
+      helper: `fn ${helperName}(value: &[String]) -> bool {
+    if value.len() > ${array.maximum} {
+        return false;
+    }
+    for item in value {
+${condition.length <= 100 ? condition : `        if !matches!(\n            item.as_str(),\n${patterns}\n        ) {`}
+            return false;
+        }
+    }
+    true
+}`,
+    };
+  }
   if (typeof node.$ref === 'string') {
     keys(node, ['$ref']);
     const reference = /^#\/\$defs\/([A-Za-z]+)$/.exec(node.$ref)?.[1];

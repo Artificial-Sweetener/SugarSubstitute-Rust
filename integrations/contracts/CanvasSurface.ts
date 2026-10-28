@@ -17,6 +17,7 @@
 
 import type { CanvasCancellationSource } from './CanvasHost.js';
 import type {
+  CanvasSurfaceCapabilities,
   CanvasSurfaceCommitRequest,
   CanvasSurfaceGeometryRequest,
   CanvasSurfacePrepareRequest,
@@ -24,6 +25,8 @@ import type {
   CanvasSurfaceReply,
   CanvasSurfaceSelectRequest,
 } from './CanvasSurfaceProtocol.generated.js';
+
+export type { CanvasSurfaceCapabilities } from './CanvasSurfaceProtocol.generated.js';
 
 type Envelope = 'protocol' | 'version' | 'session' | 'requestId';
 
@@ -40,6 +43,8 @@ export type CanvasSurfaceResult = Pick<CanvasSurfaceReply, 'status' | 'message'>
 
 /** Negotiate and operate an optional presentation surface using the existing canvas session. */
 export interface CanvasSurfaceHost {
+  /** Describe implemented presentation operations; this declaration grants no native authority. */
+  readonly capabilities: CanvasSurfaceCapabilities;
   /**
    * Prepare a hidden candidate, select its output, commit it, update geometry or release it.
    * A successful selection on a committed surface, or a successful commit, acknowledges that

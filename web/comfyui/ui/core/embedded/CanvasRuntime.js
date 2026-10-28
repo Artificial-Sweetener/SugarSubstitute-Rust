@@ -4,6 +4,21 @@ function isRecord(value) {
 }
 
 // integrations/shared/CanvasSurfaceValidation.generated.ts
+function isCanvasSurfaceCapabilities(value) {
+  return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "schema") && value["schema"] === 1 && Object.hasOwn(value, "imageFormats") && Array.isArray(value["imageFormats"]) && value["imageFormats"].length <= 3 && value["imageFormats"].every(
+    (item) => item === "png" || item === "jpeg" || item === "webp"
+  ) && Object.hasOwn(value, "viewportCommands") && Array.isArray(value["viewportCommands"]) && value["viewportCommands"].length <= 4 && value["viewportCommands"].every(
+    (item) => item === "fit" || item === "native" || item === "zoom" || item === "pan"
+  ) && Object.hasOwn(value, "viewportState") && typeof value["viewportState"] === "boolean" && Object.hasOwn(value, "previewFormats") && Array.isArray(value["previewFormats"]) && value["previewFormats"].length <= 2 && value["previewFormats"].every((item) => item === "png" || item === "jpeg") && Object.hasOwn(value, "comparison") && typeof value["comparison"] === "boolean" && Object.hasOwn(value, "overview") && typeof value["overview"] === "boolean";
+}
+function isCanvasSurfaceCapabilitiesRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.capabilities.request" && Object.hasOwn(value, "schema") && value["schema"] === 1;
+}
+function isCanvasSurfaceCapabilitiesReply(value) {
+  return isRecord(value) && Object.keys(value).length === 8 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.capabilities.reply" && Object.hasOwn(value, "status") && (value["status"] === "available" || value["status"] === "unsupported" || value["status"] === "unavailable" || value["status"] === "error") && Object.hasOwn(value, "capabilities") && isCanvasSurfaceCapabilities(value["capabilities"]) && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 1024 && Array.from(value["message"]).length <= 512 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["message"]
+  );
+}
 function isCanvasSurfaceAddress(value) {
   return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "sessionId") && typeof value["sessionId"] === "string" && value["sessionId"].length <= 512 && Array.from(value["sessionId"]).length <= 256 && new RegExp(
     "^canvas:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
@@ -57,7 +72,7 @@ function isCanvasSurfaceReply(value) {
   );
 }
 function isCanvasSurfaceMessage(value) {
-  return isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value);
+  return isCanvasSurfaceCapabilitiesRequest(value) || isCanvasSurfaceCapabilitiesReply(value) || isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value);
 }
 
 // integrations/shared/CanvasValidation.generated.ts
@@ -351,15 +366,73 @@ var CanvasSourceConnection = class {
   }
 };
 
+// integrations/shared/CanvasSurfaceClient.ts
+async function requestCanvasSurface(command, cancellation, request) {
+  if (cancellation?.cancelled())
+    return { status: "cancelled", message: "Canvas surface request cancelled." };
+  const address = Object.freeze({ ...command.address });
+  const revision = command.revision;
+  const type = command.type;
+  const reply = await request({ ...command, address }, cancellation);
+  if (reply.type !== "surface.reply" || reply.revision !== revision || !sameSurface(reply.address, address) || reply.status === "ready" && type !== "surface.prepare" || reply.status === "applied" && type === "surface.prepare")
+    throw new Error("Canvas surface reply does not match its attachment.");
+  return { status: reply.status, message: reply.message };
+}
+function sameSurface(left, right) {
+  return left.sessionId === right.sessionId && left.viewId === right.viewId && left.windowId === right.windowId && left.attachmentId === right.attachmentId && left.generation === right.generation;
+}
+
+// integrations/shared/CanvasSurfaceDiscovery.ts
+var EMPTY_CANVAS_SURFACE_CAPABILITIES = Object.freeze({
+  schema: 1,
+  imageFormats: Object.freeze([]),
+  viewportCommands: Object.freeze([]),
+  viewportState: false,
+  previewFormats: Object.freeze([]),
+  comparison: false,
+  overview: false
+});
+function emptyCanvasSurfaceCapabilities(value) {
+  return value.imageFormats.length === 0 && value.viewportCommands.length === 0 && !value.viewportState && value.previewFormats.length === 0 && !value.comparison && !value.overview;
+}
+function snapshotCanvasSurfaceCapabilities(value) {
+  return Object.freeze({
+    ...value,
+    imageFormats: Object.freeze([...value.imageFormats]),
+    viewportCommands: Object.freeze([...value.viewportCommands]),
+    previewFormats: Object.freeze([...value.previewFormats])
+  });
+}
+async function discoverCanvasSurface(port) {
+  try {
+    const reply = await port.read();
+    if (!port.current()) return null;
+    if (reply.type !== "surface.capabilities.reply")
+      throw new Error("Invalid canvas surface capability reply.");
+    if (reply.status !== "available") {
+      if (!emptyCanvasSurfaceCapabilities(reply.capabilities))
+        throw new Error("Unavailable canvas surface declared capabilities.");
+      if (reply.status === "error")
+        port.report(new Error(reply.message || "Canvas surface discovery failed."));
+      return null;
+    }
+    const host = Object.freeze({
+      capabilities: snapshotCanvasSurfaceCapabilities(reply.capabilities),
+      execute: (command, cancellation) => command.type === "surface.release" || port.current() && port.owns(host) ? port.execute(command, cancellation) : Promise.resolve({ status: "unavailable", message: "The canvas context changed." })
+    });
+    return host;
+  } catch (error) {
+    if (port.current()) port.report(error);
+    return null;
+  }
+}
+
 // integrations/shared/CanvasClient.ts
 var CanvasClient = class {
   /** Bind an authenticated session and injected clock without claiming its transport lifetime. */
   constructor(session, port) {
     this.session = session;
     this.port = port;
-    this.surface = {
-      execute: (command, cancellation) => this.#surfaceRequest(command, cancellation)
-    };
     this.geometry = {
       get canvasId() {
         return readIdentity();
@@ -383,27 +456,57 @@ var CanvasClient = class {
   }
   geometry;
   sources;
-  surface;
+  #surface = null;
   #pending = /* @__PURE__ */ new Map();
   #sourceListeners = /* @__PURE__ */ new Set();
   #next = 0;
   #context = null;
-  #contextReply = 0;
+  #contextRevision = {};
   #disposed = false;
   /** Discover only capabilities actually reported by this canvas implementation. */
   readCanvas() {
     return this.#context?.canvas ?? null;
   }
+  /** Expose only a surface discovered for the current context read in this live session. */
+  get surface() {
+    return this.#surface;
+  }
   /** Read native context while keeping cached capabilities on the latest reply in this live session. */
   async readContext() {
+    const revision = {};
+    this.#contextRevision = revision;
+    this.#surface = null;
     const reply = await this.#request({ type: "context.request" }, "context.reply");
     if (reply.type !== "context.reply") throw new Error("Invalid canvas context reply.");
-    if (this.#disposed) throw new Error("Canvas connection closed.");
-    if (reply.requestId > this.#contextReply) {
-      this.#contextReply = reply.requestId;
+    this.#requireConnected();
+    if (revision === this.#contextRevision) {
       this.#context = reply.context;
+      if (reply.context.canvas.capabilities.displayOutput) {
+        const surface = await discoverCanvasSurface({
+          read: () => this.#request(
+            { type: "surface.capabilities.request", schema: 1 },
+            "surface.capabilities.reply"
+          ),
+          current: () => !this.#disposed && revision === this.#contextRevision,
+          owns: (host) => this.#surface === host,
+          execute: (command, cancellation) => requestCanvasSurface(
+            command,
+            cancellation,
+            (admitted, scope) => this.#request(admitted, "surface.reply", scope)
+          ),
+          report: (error) => {
+            this.port.report(error);
+          }
+        });
+        if (revision === this.#contextRevision) this.#surface = surface;
+      }
     }
+    this.#requireConnected();
     return reply.context;
+  }
+  /** Recheck page teardown after each awaited discovery step. */
+  #requireConnected() {
+    if (this.#disposed) throw new Error("Canvas connection closed.");
   }
   /** Insert once using the caller's captured destination rather than a later active document. */
   async insertImage(image, cancellation) {
@@ -425,6 +528,13 @@ var CanvasClient = class {
     this.#pending.delete(value.requestId);
     pending.stop();
     if (value.type === "error.reply") pending.reject(new Error(value.failure.message));
+    else if (value.type === "surface.capabilities.reply")
+      pending.accept({
+        ...value,
+        capabilities: snapshotCanvasSurfaceCapabilities(value.capabilities)
+      });
+    else if (value.type === "context.reply")
+      pending.accept({ ...value, context: snapshotCanvasContext(value.context) });
     else pending.accept(value);
     return true;
   }
@@ -435,12 +545,13 @@ var CanvasClient = class {
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();
-      if (pending.type === "image.reply" || pending.type === "geometry.reply" || pending.type === "surface.reply")
+      if (pending.type === "image.reply" || pending.type === "geometry.reply" || pending.type === "surface.reply" || pending.type === "surface.capabilities.reply")
         pending.cancel();
       pending.reject(new Error("Canvas connection closed."));
     }
     this.#pending.clear();
     this.#context = null;
+    this.#surface = null;
     this.#sourceListeners.clear();
   }
   /** Translate source query failures without introducing another transport or request sequence. */
@@ -468,19 +579,6 @@ var CanvasClient = class {
     );
     if (reply.type !== "geometry.reply") throw new Error("Invalid canvas geometry reply.");
     return reply.result;
-  }
-  /** Require the exact attachment and revision in the host's correlated surface reply. */
-  async #surfaceRequest(command, cancellation) {
-    if (cancellation?.cancelled())
-      return { status: "cancelled", message: "Canvas surface request cancelled." };
-    const address = Object.freeze({ ...command.address });
-    const revision = command.revision;
-    const type = command.type;
-    const admitted = { ...command, address };
-    const reply = await this.#request(admitted, "surface.reply", cancellation);
-    if (reply.type !== "surface.reply" || reply.revision !== revision || !sameSurface(reply.address, address) || reply.status === "ready" && type !== "surface.prepare" || reply.status === "applied" && type === "surface.prepare")
-      throw new Error("Canvas surface reply does not match its attachment.");
-    return { status: reply.status, message: reply.message };
   }
   /** Register reply ownership before synchronous transports can answer, and bound every request. */
   #request(request, reply, cancellation) {
@@ -598,10 +696,16 @@ var CanvasClient = class {
   }
 };
 function isSurfaceRequest(request) {
-  return request.type.startsWith("surface.");
+  return request.type.startsWith("surface.") && request.type !== "surface.capabilities.request";
 }
-function sameSurface(left, right) {
-  return left.sessionId === right.sessionId && left.viewId === right.viewId && left.windowId === right.windowId && left.attachmentId === right.attachmentId && left.generation === right.generation;
+function snapshotCanvasContext(context) {
+  return Object.freeze({
+    canvas: Object.freeze({
+      ...context.canvas,
+      capabilities: Object.freeze({ ...context.canvas.capabilities })
+    }),
+    document: context.document ? Object.freeze({ ...context.document }) : null
+  });
 }
 
 // integrations/shared/CanvasImagePolicy.ts

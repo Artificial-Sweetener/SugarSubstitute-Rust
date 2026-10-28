@@ -15,6 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise selection handoff with the actual shared surface command contract. */
 
+import {
+  connectCanvasSurface,
+  selectedPngCapabilities,
+} from '../../editor_integrations/support/canvas_surface.js';
 import { NativeCanvasPresentation } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasPresentation.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
 import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.js';
@@ -60,6 +64,7 @@ function hostFixture() {
   const calls: CanvasSurfaceCommand[] = [];
   const pending: { resolve(result: CanvasSurfaceResult): void; cancelled(): boolean }[] = [];
   const host: CanvasSurfaceHost = {
+    capabilities: selectedPngCapabilities,
     execute(command: CanvasSurfaceCommand, cancellation?: CanvasCancellationSource) {
       calls.push(command);
       return new Promise<CanvasSurfaceResult>((resolve) => {
@@ -171,6 +176,7 @@ async function revealClientSurface(
   presentation: ReturnType<typeof fixture>,
   native: ReturnType<typeof clientHostFixture>,
 ): Promise<void> {
+  await connectCanvasSurface(native.client, native.sent);
   presentation.setHost(native.client.surface);
   presentation.surface.update(geometry, presentation.first);
   for (const [index, status] of ['ready', 'applied', 'applied', 'applied'].entries()) {
@@ -478,7 +484,7 @@ test('coalesces fractional geometry churn until native cancellation is acknowled
   const pending = native.requests()[4];
   if (!pending || pending.type !== 'surface.geometry')
     throw new Error('Pending geometry request is missing.');
-  expect(native.sent.slice(4).map(({ type, requestId }) => ({ type, requestId }))).toEqual([
+  expect(native.sent.slice(6).map(({ type, requestId }) => ({ type, requestId }))).toEqual([
     { type: 'surface.geometry', requestId: pending.requestId },
     { type: 'cancel', requestId: pending.requestId },
   ]);
@@ -507,7 +513,7 @@ test('reconciles newest geometry when native application wins the cancellation r
   const pending = native.requests()[4];
   if (!pending || pending.type !== 'surface.geometry')
     throw new Error('Pending geometry request is missing.');
-  expect(native.sent.slice(4).map(({ type, requestId }) => ({ type, requestId }))).toEqual([
+  expect(native.sent.slice(6).map(({ type, requestId }) => ({ type, requestId }))).toEqual([
     { type: 'surface.geometry', requestId: pending.requestId },
     { type: 'cancel', requestId: pending.requestId },
   ]);

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Resolve negotiated output surfaces without creating or mutating an editor document. */
+import { selectedPngCapabilities } from '../../editor_integrations/support/canvas_surface.js';
 import { jest } from '@jest/globals';
 import { WorkflowCanvasCoordinator } from '../../../frontend/comfyui/ui/execution/application/WorkflowCanvasCoordinator.js';
 import { WorkflowGenerationEvents } from '../../../frontend/comfyui/ui/execution/application/WorkflowGenerationEvents.js';
@@ -34,13 +35,15 @@ test('exposes only negotiated surfaces and rejects ambiguous registered peers', 
     () => [],
   );
   const first: CanvasSurfaceHost = {
+    capabilities: selectedPngCapabilities,
     execute: async () => ({ status: 'ready', message: '' }),
   };
   const second: CanvasSurfaceHost = {
+    capabilities: selectedPngCapabilities,
     execute: async () => ({ status: 'unavailable', message: '' }),
   };
   let descriptor: CanvasDescriptor | null = null;
-  let surface: CanvasSurfaceHost | null = first;
+  let surface: CanvasSurfaceHost | null = null;
   const readContext = jest.fn<CanvasLayerHost['readContext']>();
   const insertImage = jest.fn<CanvasLayerHost['insertImage']>();
   const host: CanvasLayerHost = {
@@ -60,6 +63,7 @@ test('exposes only negotiated surfaces and rejects ambiguous registered peers', 
     capabilities: { displayOutput: false, insertImageLayer: true, positionImageLayer: false },
   };
   expect(coordinator.surfaceHost('embedded')).toBeNull();
+  surface = first;
   descriptor = {
     ...descriptor,
     capabilities: { ...descriptor.capabilities, displayOutput: true, insertImageLayer: false },

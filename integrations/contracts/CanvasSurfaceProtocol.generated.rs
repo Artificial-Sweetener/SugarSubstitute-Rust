@@ -1,7 +1,79 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): 042745fee8355990f1d9944dccdc58cb77c94a3e58f83d275e4354338fabe87c
+// Schema SHA-256 (LF): 8b0c57e7338d83bd65d4958f21e76073d0a3d753f800db25944fc19c32748492
+
+/// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceCapabilities {
+    pub(super) schema: u64,
+    pub(super) image_formats: Vec<String>,
+    pub(super) viewport_commands: Vec<String>,
+    pub(super) viewport_state: bool,
+    pub(super) preview_formats: Vec<String>,
+    pub(super) comparison: bool,
+    pub(super) overview: bool,
+}
+impl CanvasSurfaceCapabilities {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.schema == 1
+            && valid_canvas_surface_capabilities_image_formats(&self.image_formats)
+            && valid_canvas_surface_capabilities_viewport_commands(&self.viewport_commands)
+            && valid_canvas_surface_capabilities_preview_formats(&self.preview_formats)
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceCapabilitiesRequest data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceCapabilitiesRequest {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+    pub(super) schema: u64,
+}
+impl CanvasSurfaceCapabilitiesRequest {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && (1..=2147483647).contains(&self.request_id)
+            && self.r#type == "surface.capabilities.request"
+            && self.schema == 1
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceCapabilitiesReply data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceCapabilitiesReply {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+    pub(super) status: String,
+    pub(super) capabilities: CanvasSurfaceCapabilities,
+    pub(super) message: String,
+}
+impl CanvasSurfaceCapabilitiesReply {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && (1..=2147483647).contains(&self.request_id)
+            && self.r#type == "surface.capabilities.reply"
+            && valid_canvas_surface_capabilities_reply_status(&self.status)
+            && self.capabilities.valid()
+            && self.message.chars().count() <= 512
+    }
+}
 
 /// Schema-defined untrusted CanvasSurfaceAddress data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -295,16 +367,56 @@ impl CanvasSurfaceReply {
     }
 }
 
-fn valid_surface_identity(value: &str, prefix: &str, maximum: usize) -> bool {
-    value
-        .strip_prefix(prefix)
-        .is_some_and(|tail| !tail.is_empty() && !tail.chars().any(char::is_control))
-        && value.chars().count() <= maximum
+fn valid_canvas_surface_capabilities_image_formats(value: &[String]) -> bool {
+    if value.len() > 3 {
+        return false;
+    }
+    for item in value {
+        if !matches!(item.as_str(), "png" | "jpeg" | "webp") {
+            return false;
+        }
+    }
+    true
+}
+
+fn valid_canvas_surface_capabilities_viewport_commands(value: &[String]) -> bool {
+    if value.len() > 4 {
+        return false;
+    }
+    for item in value {
+        if !matches!(item.as_str(), "fit" | "native" | "zoom" | "pan") {
+            return false;
+        }
+    }
+    true
+}
+
+fn valid_canvas_surface_capabilities_preview_formats(value: &[String]) -> bool {
+    if value.len() > 2 {
+        return false;
+    }
+    for item in value {
+        if !matches!(item.as_str(), "png" | "jpeg") {
+            return false;
+        }
+    }
+    true
 }
 
 pub(super) fn valid_panel_session(value: &str) -> bool {
     (16..=80).contains(&value.len())
         && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}
+
+fn valid_canvas_surface_capabilities_reply_status(value: &str) -> bool {
+    matches!(value, "available" | "unsupported" | "unavailable" | "error")
+}
+
+fn valid_surface_identity(value: &str, prefix: &str, maximum: usize) -> bool {
+    value
+        .strip_prefix(prefix)
+        .is_some_and(|tail| !tail.is_empty() && !tail.chars().any(char::is_control))
+        && value.chars().count() <= maximum
 }
 
 fn valid_canvas_surface_reply_status(value: &str) -> bool {
