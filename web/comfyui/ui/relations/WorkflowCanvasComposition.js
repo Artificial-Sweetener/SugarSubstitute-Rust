@@ -31,6 +31,7 @@ export function createWorkflowCanvasComposition(options) {
         activity: workflowExecution.activity,
         progress: workflowExecution.progress,
         connected: () => workflowExecution.connected,
+        subscribeConnection: (listener) => workflowExecution.subscribeConnection(listener),
     });
     const window = options.document.defaultView;
     if (window)

@@ -14,6 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove identified WebViews negotiate presentation while ordinary browser sessions remain untouched. */
+import { EMPTY_CANVAS_SURFACE_CAPABILITIES } from '../../../integrations/shared/CanvasSurfaceDiscovery.js';
+import { EmbeddedCanvasConnection } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedCanvasConnection.js';
+import { selectedPngCapabilities } from '../../editor_integrations/support/canvas_surface.js';
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { EmbeddedPresentation } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPresentation.js';
 import { EmbeddedPanelLayout } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPanelLayout.js';
@@ -270,4 +273,229 @@ test('discovers a native canvas after configuration and releases correlated requ
   canvas.dispose();
   expect(listeners.size).toBe(0);
   expect(canvas.readCanvas()).toBeNull();
+});
+
+/** Capability discovery completes before observers can mount a usable native surface. */
+test('publishes canvas readiness only after delayed surface discovery completes', async () => {
+  const { EmbeddedCanvasConnection } = await import(
+    '../../../frontend/comfyui/ui/core/embedded/EmbeddedCanvasConnection.js'
+  );
+  const listeners = new Set<(value: unknown) => void>();
+  const sent: CanvasMessage[] = [];
+  const canvas = new EmbeddedCanvasConnection();
+  const ready = jest.fn();
+  document.addEventListener('sugarcubes-canvas-ready', ready);
+  try {
+    canvas.connect(
+      {
+        session,
+        send: (message) => {
+          if (message.protocol !== 'sugarcubes.canvas') throw new Error('Unexpected protocol.');
+          sent.push(message);
+          if (message.type === 'context.request')
+            for (const receive of listeners)
+              receive({
+                ...message,
+                type: 'context.reply',
+                context: {
+                  canvas: {
+                    id: 'native',
+                    label: 'Native',
+                    capabilities: {
+                      displayOutput: true,
+                      insertImageLayer: false,
+                      positionImageLayer: false,
+                    },
+                  },
+                  document: null,
+                },
+              });
+        },
+        subscribe: (receive) => {
+          listeners.add(receive);
+          return () => {
+            listeners.delete(receive);
+          };
+        },
+      },
+      window,
+      (error) => {
+        throw error;
+      },
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent.map(({ type }) => type)).toEqual([
+      'context.request',
+      'surface.capabilities.request',
+    ]);
+    expect(canvas.surface).toBeNull();
+    expect(ready).not.toHaveBeenCalled();
+    const request = sent[1];
+    if (request?.type !== 'surface.capabilities.request')
+      throw new Error('Missing discovery request.');
+    for (const receive of listeners)
+      receive({
+        protocol: request.protocol,
+        version: request.version,
+        session: request.session,
+        requestId: request.requestId,
+        type: 'surface.capabilities.reply',
+        status: 'available',
+        capabilities: selectedPngCapabilities,
+        message: '',
+      });
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(canvas.surface?.capabilities.imageFormats).toEqual(['png']);
+    expect(ready).toHaveBeenCalledTimes(1);
+  } finally {
+    document.removeEventListener('sugarcubes-canvas-ready', ready);
+    canvas.dispose();
+  }
+});
+
+/** Collect real client requests while controlling only the host transport. */
+function discoveryFixture() {
+  const listeners = new Set<(value: unknown) => void>();
+  const messages: CanvasMessage[] = [];
+  const canvas = new EmbeddedCanvasConnection();
+  const report = jest.fn();
+  const transport = {
+    session,
+    send: (message: PanelMessage | CanvasMessage) => {
+      if (message.protocol === 'sugarcubes.canvas') messages.push(message);
+    },
+    subscribe: (receive: (value: unknown) => void) => {
+      listeners.add(receive);
+      return () => {
+        listeners.delete(receive);
+      };
+    },
+  };
+  const receive = (value: unknown): void => {
+    for (const listener of listeners) listener(value);
+  };
+  const context = (index: number): void =>
+    receive({
+      ...messages[index],
+      type: 'context.reply',
+      context: {
+        canvas: {
+          id: 'native',
+          label: 'Native',
+          capabilities: { displayOutput: true, insertImageLayer: false, positionImageLayer: false },
+        },
+        document: null,
+      },
+    });
+  const capabilities = (index: number, available: boolean): void => {
+    const request = messages[index];
+    if (request?.type !== 'surface.capabilities.request')
+      throw new Error('Missing discovery request.');
+    receive({
+      protocol: request.protocol,
+      version: request.version,
+      session: request.session,
+      requestId: request.requestId,
+      type: 'surface.capabilities.reply',
+      status: available ? 'available' : 'unavailable',
+      capabilities: available ? selectedPngCapabilities : EMPTY_CANVAS_SURFACE_CAPABILITIES,
+      message: '',
+    });
+  };
+  return { canvas, report, messages, transport, receive, context, capabilities, listeners };
+}
+
+/** A later public read owns the single readiness publication for its completed negotiation. */
+test('overlapping context reads cannot announce readiness before the current discovery completes', async () => {
+  const f = discoveryFixture();
+  const ready = jest.fn();
+  document.addEventListener('sugarcubes-canvas-ready', ready);
+  try {
+    f.canvas.connect(f.transport, window, f.report);
+    const second = f.canvas.readContext();
+    f.context(0);
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(ready).not.toHaveBeenCalled();
+    expect(f.messages.map(({ type }) => type)).toEqual(['context.request', 'context.request']);
+    f.context(1);
+    await Promise.resolve();
+    expect(ready).not.toHaveBeenCalled();
+    f.capabilities(2, true);
+    await second;
+    expect(f.canvas.surface?.capabilities.imageFormats).toEqual(['png']);
+    expect(ready).toHaveBeenCalledTimes(1);
+    expect(f.report).not.toHaveBeenCalled();
+  } finally {
+    document.removeEventListener('sugarcubes-canvas-ready', ready);
+    f.canvas.dispose();
+  }
+});
+
+/** Reuse actual Comfy connectivity transitions and the existing session instead of polling discovery. */
+test('renegotiates once after reconnect during an unavailable discovery and releases the connection subscription', async () => {
+  jest.useFakeTimers();
+  const f = discoveryFixture();
+  let connection: ((connected: boolean) => void) | null = null;
+  const stopConnection = jest.fn();
+  const host = new EmbeddedPanelHost(
+    {
+      window,
+      presentation: new EmbeddedPresentation(),
+      canvas: f.canvas,
+      connected: () => true,
+      report: f.report,
+      subscribeConnection: (listener) => {
+        connection = listener;
+        return stopConnection;
+      },
+    },
+    f.transport,
+  );
+  host.setup();
+  f.receive({
+    protocol: 'sugarcubes.panel',
+    version: 3,
+    session,
+    type: 'configure',
+    presentation: {
+      pluginMode: false,
+      visualStyle: 'comfy',
+      photoProPalette: 'dark-gray',
+      accentColor: null,
+      resizeCornerSize: 0,
+    },
+  });
+  f.context(0);
+  await Promise.resolve();
+  const reconnect = (connected: boolean): void => {
+    connection?.(connected);
+  };
+  reconnect(false);
+  reconnect(true);
+  reconnect(true);
+  expect(f.messages.map(({ type }) => type)).toEqual([
+    'context.request',
+    'surface.capabilities.request',
+  ]);
+  f.capabilities(1, false);
+  for (let turn = 0; turn < 12; turn++) await Promise.resolve();
+  expect(f.canvas.surface).toBeNull();
+  expect(f.messages.map(({ type }) => type)).toEqual([
+    'context.request',
+    'surface.capabilities.request',
+    'context.request',
+  ]);
+  f.context(2);
+  await Promise.resolve();
+  f.capabilities(3, true);
+  for (let turn = 0; turn < 12; turn++) await Promise.resolve();
+  expect(f.canvas.surface?.capabilities.imageFormats).toEqual(['png']);
+  expect(f.report).not.toHaveBeenCalled();
+  host.dispose();
+  expect(stopConnection).toHaveBeenCalledTimes(1);
+  expect(f.listeners.size).toBe(0);
+  expect(jest.getTimerCount()).toBe(0);
+  reconnect(true);
+  expect(f.messages).toHaveLength(4);
 });

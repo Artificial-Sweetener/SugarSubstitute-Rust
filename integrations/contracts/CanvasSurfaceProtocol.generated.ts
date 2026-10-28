@@ -14,6 +14,36 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts. */
+/** Describe the schema-defined CanvasSurfaceCapabilities wire value. */
+export type CanvasSurfaceCapabilities = {
+  readonly schema: 1;
+  readonly imageFormats: readonly ('png' | 'jpeg' | 'webp')[];
+  readonly viewportCommands: readonly ('fit' | 'native' | 'zoom' | 'pan')[];
+  readonly viewportState: boolean;
+  readonly previewFormats: readonly ('png' | 'jpeg')[];
+  readonly comparison: boolean;
+  readonly overview: boolean;
+};
+/** Describe the schema-defined CanvasSurfaceCapabilitiesRequest wire value. */
+export type CanvasSurfaceCapabilitiesRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.capabilities.request';
+  readonly schema: 1;
+};
+/** Describe the schema-defined CanvasSurfaceCapabilitiesReply wire value. */
+export type CanvasSurfaceCapabilitiesReply = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.capabilities.reply';
+  readonly status: 'available' | 'unsupported' | 'unavailable' | 'error';
+  readonly capabilities: CanvasSurfaceCapabilities;
+  readonly message: string;
+};
 /** Describe the schema-defined CanvasSurfaceAddress wire value. */
 export type CanvasSurfaceAddress = {
   readonly sessionId: string;
@@ -125,6 +155,8 @@ export type CanvasSurfaceReply = {
 };
 /** Describe the shared canvas surface messages. */
 export type CanvasSurfaceMessage =
+  | CanvasSurfaceCapabilitiesRequest
+  | CanvasSurfaceCapabilitiesReply
   | CanvasSurfacePrepareRequest
   | CanvasSurfaceGeometryRequest
   | CanvasSurfaceSelectRequest

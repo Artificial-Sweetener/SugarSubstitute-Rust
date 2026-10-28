@@ -17,6 +17,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { format } from 'prettier';
+import { contractArraySchema } from './ContractArraySchema.js';
 type Schema = Record<string, unknown>;
 
 /** Narrow authored schema nodes before producing executable bindings. */
@@ -29,6 +30,10 @@ function record(value: unknown): Schema {
 /** Translate the deliberately limited schema vocabulary into one TypeScript type. */
 function binding(value: unknown): string {
   const node = record(value);
+  if (node.type === 'array') {
+    const array = contractArraySchema(node);
+    return `readonly (${binding(array.items)})[]`;
+  }
   if (typeof node.$ref === 'string') return reference(node.$ref);
   if (node.const !== undefined) return JSON.stringify(node.const);
   if (Array.isArray(node.enum))
@@ -36,7 +41,6 @@ function binding(value: unknown): string {
   if (Array.isArray(node.oneOf)) return node.oneOf.map(binding).join(' | ');
   if (node.type === 'boolean' || node.type === 'string') return node.type;
   if (node.type === 'integer' || node.type === 'number') return 'number';
-  if (node.type === 'array') return `readonly (${binding(node.items)})[]`;
   if (node.type === 'object') {
     const properties = record(node.properties);
     if (
@@ -61,6 +65,10 @@ function reference(value: string): string {
 /** Emit fail-closed validation directly from the same closed wire schema. */
 function predicate(value: unknown, expression: string): string {
   const node = record(value);
+  if (node.type === 'array') {
+    const array = contractArraySchema(node);
+    return `Array.isArray(${expression}) && ${expression}.length <= ${array.maximum} && ${expression}.every((item: unknown) => (${predicate(array.items, 'item')}))`;
+  }
   if (typeof node.$ref === 'string') return `is${reference(node.$ref)}(${expression})`;
   if (node.const !== undefined) return `${expression} === ${JSON.stringify(node.const)}`;
   if (Array.isArray(node.enum))
@@ -68,10 +76,6 @@ function predicate(value: unknown, expression: string): string {
   if (Array.isArray(node.oneOf))
     return `(${node.oneOf.map((item: unknown) => predicate(item, expression)).join(' || ')})`;
   if (node.type === 'boolean') return `typeof ${expression} === 'boolean'`;
-  if (node.type === 'array') {
-    if (typeof node.maxItems !== 'number') throw new Error('Contract arrays require a bound.');
-    return `Array.isArray(${expression}) && ${expression}.length <= ${node.maxItems} && ${expression}.every((item: unknown) => (${predicate(node.items, 'item')}))`;
-  }
   if (node.type === 'integer' || node.type === 'number') {
     const minimum = typeof node.minimum === 'number' ? ` && ${expression} >= ${node.minimum}` : '';
     const exclusiveMinimum =

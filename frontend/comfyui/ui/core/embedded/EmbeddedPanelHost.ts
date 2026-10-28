@@ -28,6 +28,7 @@ export interface EmbeddedPanelOptions {
   readonly presentation: EmbeddedPresentation;
   readonly canvas?: EmbeddedCanvasConnection;
   connected(): boolean;
+  subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
 }
 
@@ -35,6 +36,7 @@ export interface EmbeddedPanelOptions {
 export class EmbeddedPanelHost {
   readonly #layout: EmbeddedPanelLayout;
   #stop: (() => void) | null = null;
+  #stopConnection: (() => void) | null = null;
   #timer: number | null = null;
 
   /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
@@ -67,6 +69,10 @@ export class EmbeddedPanelHost {
         this.options.report(error);
       }
     });
+    this.#stopConnection =
+      this.options.subscribeConnection?.((connected) => {
+        if (connected) this.options.canvas?.refresh();
+      }) ?? null;
     const ready = (): void => {
       try {
         client.ready();
@@ -83,6 +89,8 @@ export class EmbeddedPanelHost {
   readonly dispose = (): void => {
     this.#stop?.();
     this.#stop = null;
+    this.#stopConnection?.();
+    this.#stopConnection = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

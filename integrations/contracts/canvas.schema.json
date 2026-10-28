@@ -3,6 +3,78 @@
   "$id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/v3",
   "title": "SugarCubes canvas protocol version 3",
   "$defs": {
+    "CanvasSurfaceCapabilities": {
+      "type": "object",
+      "properties": {
+        "schema": { "const": 1 },
+        "imageFormats": {
+          "type": "array",
+          "items": { "enum": ["png", "jpeg", "webp"] },
+          "maxItems": 3
+        },
+        "viewportCommands": {
+          "type": "array",
+          "items": { "enum": ["fit", "native", "zoom", "pan"] },
+          "maxItems": 4
+        },
+        "viewportState": { "type": "boolean" },
+        "previewFormats": { "type": "array", "items": { "enum": ["png", "jpeg"] }, "maxItems": 2 },
+        "comparison": { "type": "boolean" },
+        "overview": { "type": "boolean" }
+      },
+      "required": [
+        "schema",
+        "imageFormats",
+        "viewportCommands",
+        "viewportState",
+        "previewFormats",
+        "comparison",
+        "overview"
+      ],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceCapabilitiesRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.capabilities.request" },
+        "schema": { "const": 1 }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "schema"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceCapabilitiesReply": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.capabilities.reply" },
+        "status": { "enum": ["available", "unsupported", "unavailable", "error"] },
+        "capabilities": { "$ref": "#/$defs/CanvasSurfaceCapabilities" },
+        "message": {
+          "type": "string",
+          "maxLength": 512,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$"
+        }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "requestId",
+        "type",
+        "status",
+        "capabilities",
+        "message"
+      ],
+      "additionalProperties": false
+    },
     "CanvasSurfaceAddress": {
       "type": "object",
       "properties": {
@@ -1415,6 +1487,8 @@
     }
   },
   "oneOf": [
+    { "$ref": "#/$defs/CanvasSurfaceCapabilitiesRequest" },
+    { "$ref": "#/$defs/CanvasSurfaceCapabilitiesReply" },
     {
       "$ref": "#/$defs/CanvasReadRequest"
     },

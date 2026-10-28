@@ -26,6 +26,7 @@ import type {
 import type { CanvasSourceHost } from '../contracts/CanvasSources.js';
 import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
 import type { CanvasSurfaceHost } from '../contracts/CanvasSurface.js';
+import { dispatchCanvasSurfaceDiscovery } from './CanvasSurfaceDiscovery.js';
 import type {
   CanvasGeometryRequest,
   CanvasGeometryResult,
@@ -92,6 +93,7 @@ export class CanvasServer {
       value.type !== 'image.insert' &&
       value.type !== 'geometry.request' &&
       value.type !== 'source.request' &&
+      value.type !== 'surface.capabilities.request' &&
       value.type !== 'surface.prepare' &&
       value.type !== 'surface.geometry' &&
       value.type !== 'surface.select' &&
@@ -101,7 +103,7 @@ export class CanvasServer {
       return false;
     const surface = isCanvasSurfaceRequest(value) ? snapshotCanvasSurface(value) : null;
     const fingerprint =
-      value.type === 'context.request'
+      value.type === 'context.request' || value.type === 'surface.capabilities.request'
         ? value.type
         : value.type === 'source.request' || value.type === 'geometry.request'
           ? JSON.stringify([value.type, value.command])
@@ -148,6 +150,10 @@ export class CanvasServer {
     this.#retainedCharacters += retained;
     this.#entries.set(value.requestId, entry);
     if (value.type === 'context.request') void this.#context(value.requestId, entry);
+    else if (value.type === 'surface.capabilities.request')
+      void dispatchCanvasSurfaceDiscovery(value, entry.cancellation, this.port).then((reply) => {
+        this.#reply(entry, reply);
+      });
     else if (value.type === 'geometry.request') void this.#geometry(value, entry);
     else if (value.type === 'source.request') void this.#source(value, entry);
     else if (value.type === 'image.insert') void this.#insert(value, entry);

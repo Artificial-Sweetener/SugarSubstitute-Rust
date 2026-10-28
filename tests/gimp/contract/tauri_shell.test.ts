@@ -52,9 +52,9 @@ function claimPage(scenario: Scenario, engine: Engine): Page {
 }
 
 /** Retire only the currently claimed page, leaving a later case's custody untouched. */
-async function closeClaimedPage(page?: Page): Promise<void> {
+async function closeClaimedPage(): Promise<void> {
   const claimed = activePage;
-  if (!claimed || (page && claimed.page !== page)) return;
+  if (!claimed) return;
   claimed.closing ??= claimed.page.isClosed() ? Promise.resolve() : claimed.page.close();
   await claimed.closing;
   if (activePage === claimed) activePage = undefined;
@@ -110,7 +110,9 @@ beforeAll(async () => {
     for (const engine of engines) {
       const browser = browsers.get(engine);
       if (!browser) throw new Error(`Missing ${engine} browser fixture.`);
-      candidates.set(engine, await browser.newPage());
+      const page = await browser.newPage();
+      candidates.set(engine, page);
+      await configurePage(page, scenario === 'native-document', scenario === 'panel-admission');
     }
   }
 }, 60_000);
@@ -207,23 +209,16 @@ test.each(engines)(
   'shows unavailable-server feedback literally and retries through the native port: %s',
   async (engine) => {
     const view = claimPage('unavailable', engine);
-    try {
-      await configurePage(view);
-      await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
-      expect(await view.locator('#connection-detail').textContent()).toContain(
-        '<img src=x onerror=boom>',
-      );
-      expect(await view.locator('img').count()).toBe(0);
-      expect(await view.getByRole('button', { name: 'Retry' }).isEnabled()).toBe(true);
-      await view.getByRole('button', { name: 'Retry' }).click();
-      await view.getByRole('heading', { name: 'Connected', exact: true }).waitFor();
-      expect(await view.evaluate(() => Reflect.get(globalThis, 'nativeConnectionCalls'))).toBe(2);
-      expect(await view.locator('#connection-address').textContent()).toBe(
-        'http://127.0.0.1:8226/',
-      );
-    } finally {
-      await closeClaimedPage(view);
-    }
+    await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
+    expect(await view.locator('#connection-detail').textContent()).toContain(
+      '<img src=x onerror=boom>',
+    );
+    expect(await view.locator('img').count()).toBe(0);
+    expect(await view.getByRole('button', { name: 'Retry' }).isEnabled()).toBe(true);
+    await view.getByRole('button', { name: 'Retry' }).click();
+    await view.getByRole('heading', { name: 'Connected', exact: true }).waitFor();
+    expect(await view.evaluate(() => Reflect.get(globalThis, 'nativeConnectionCalls'))).toBe(2);
+    expect(await view.locator('#connection-address').textContent()).toBe('http://127.0.0.1:8226/');
   },
 );
 
@@ -231,18 +226,13 @@ test.each(engines)(
   'shows the native launch image literally while ComfyUI is disconnected: %s',
   async (engine) => {
     const view = claimPage('native-document', engine);
-    try {
-      await configurePage(view, true);
-      await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
-      await view.locator('#native-document').waitFor({ state: 'visible' });
-      expect(await view.locator('#native-document').textContent()).toBe(
-        '<img src=x onerror=boom> Native GIMP image',
-      );
-      expect(await view.locator('img').count()).toBe(0);
-      expect(await view.getByRole('button', { name: 'Retry' }).isEnabled()).toBe(true);
-    } finally {
-      await closeClaimedPage(view);
-    }
+    await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
+    await view.locator('#native-document').waitFor({ state: 'visible' });
+    expect(await view.locator('#native-document').textContent()).toBe(
+      '<img src=x onerror=boom> Native GIMP image',
+    );
+    expect(await view.locator('img').count()).toBe(0);
+    expect(await view.getByRole('button', { name: 'Retry' }).isEnabled()).toBe(true);
   },
 );
 
@@ -250,16 +240,11 @@ test.each(engines)(
   'retries native panel admission immediately through the compiled shell: %s',
   async (engine) => {
     const view = claimPage('panel-admission', engine);
-    try {
-      await configurePage(view, false, true);
-      await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
-      expect(await view.evaluate(() => Reflect.get(globalThis, 'nativePanelCalls'))).toBe(1);
-      await view.getByRole('button', { name: 'Retry' }).click();
-      await view.getByRole('heading', { name: 'Connected', exact: true }).waitFor();
-      expect(await view.evaluate(() => Reflect.get(globalThis, 'nativePanelCalls'))).toBe(2);
-      expect(await view.evaluate(() => Reflect.get(globalThis, 'nativeConnectionCalls'))).toBe(1);
-    } finally {
-      await closeClaimedPage(view);
-    }
+    await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
+    expect(await view.evaluate(() => Reflect.get(globalThis, 'nativePanelCalls'))).toBe(1);
+    await view.getByRole('button', { name: 'Retry' }).click();
+    await view.getByRole('heading', { name: 'Connected', exact: true }).waitFor();
+    expect(await view.evaluate(() => Reflect.get(globalThis, 'nativePanelCalls'))).toBe(2);
+    expect(await view.evaluate(() => Reflect.get(globalThis, 'nativeConnectionCalls'))).toBe(1);
   },
 );

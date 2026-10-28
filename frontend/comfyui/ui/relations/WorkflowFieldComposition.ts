@@ -35,6 +35,7 @@ export interface WorkflowFieldHostOptions
   progress: WorkflowProgressStore;
   stackControls(): CubeStackFrameControls;
   connected(): boolean;
+  subscribeConnection(listener: (connected: boolean) => void): () => void;
 }
 
 /** Share seed reuse across actual native field mounts and the override toolbar. */
@@ -100,6 +101,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         presentation: embedded,
         canvas,
         connected: options.connected,
+        subscribeConnection: options.subscribeConnection,
         report: options.reportPresentationError,
       });
   }

@@ -82,6 +82,9 @@ export async function canvasBindings(
     oneOf: readonly { $ref: string }[];
   };
   const surfaceNames = [
+    'CanvasSurfaceCapabilities',
+    'CanvasSurfaceCapabilitiesRequest',
+    'CanvasSurfaceCapabilitiesReply',
     'CanvasSurfaceAddress',
     'CanvasSurfaceFileReference',
     'CanvasSurfacePoint',
@@ -103,7 +106,7 @@ export async function canvasBindings(
   const surfaceMessages = schema.oneOf.filter(({ $ref }) =>
     surfaceNames.some((name) => $ref === `#/$defs/${name}`),
   );
-  if (surfaceMessages.length !== 6) throw new Error('Canvas surface message union changed.');
+  if (surfaceMessages.length !== 8) throw new Error('Canvas surface message union changed.');
   const ordinaryDefinitions = Object.fromEntries(
     Object.entries(schema.$defs).filter(([name]) => !surfaceNames.includes(name)),
   );
