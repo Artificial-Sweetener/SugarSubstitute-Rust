@@ -21,6 +21,7 @@ import { CanvasViewProjection } from '../application/CanvasViewProjection.js';
 import { canvasViewSnapshot } from '../application/CanvasViewSnapshot.js';
 import { mountCanvasOverlay, } from '../presentation/vue/CanvasOverlayRuntime.js';
 import { CanvasMediaActions } from './CanvasMediaActions.js';
+import { NativeCanvasReadiness } from './NativeCanvasReadiness.js';
 import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.js';
 import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
@@ -30,6 +31,8 @@ import { NativeCanvasPresentation, } from './NativeCanvasPresentation.js';
 export class NativeCanvasAttachment {
     element;
     options;
+    ready;
+    #readiness;
     viewport;
     port;
     #projection;
@@ -111,11 +114,15 @@ export class NativeCanvasAttachment {
         });
         this.#native = new NativeCanvasPresentation({
             address: options.address,
+            acceptsPreparation: () => !this.#disposed && options.acceptsPreparation(),
+            prepared: () => this.#readiness.complete(),
             host: options.nativeSurface,
             accepts: () => !this.#disposed && options.accepts(),
             visible: (value) => this.viewport.classList.toggle('sc-output-native', value),
             status: (value) => {
                 this.#presentation = value;
+                if (value.state === 'error' || value.state === 'unavailable')
+                    this.#readiness.fail(new Error(value.message));
                 if (this.#ready)
                     this.#status.changed(true);
             },
@@ -126,7 +133,10 @@ export class NativeCanvasAttachment {
                 if (this.#ready)
                     this.#status.changed(true);
             }) ?? (() => { });
+        this.#readiness = new NativeCanvasReadiness(options.clock);
+        this.ready = this.#readiness.ready;
         const cleanup = [
+            () => this.#readiness.dispose(),
             () => this.#native.dispose(),
             () => this.#media.dispose(),
             () => this.#status.dispose(),
@@ -136,7 +146,7 @@ export class NativeCanvasAttachment {
         try {
             this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element);
             cleanup.push(() => this.#overlay.dispose());
-            this.#geometry = new CanvasSurfaceGeometryObserver(this.viewport, options.frames, (geometry) => this.port.updateSurface(options.address, geometry));
+            this.#geometry = new CanvasSurfaceGeometryObserver(this.viewport, options.frames, (geometry) => this.#observeGeometry(geometry));
             cleanup.push(() => this.#geometry.dispose());
             this.#stopView = options.views.subscribe(options.address.viewId, () => this.refresh());
             cleanup.push(this.#stopView);
@@ -163,10 +173,12 @@ export class NativeCanvasAttachment {
     }
     /** Reconcile the current workflow and its selected native output. */
     refresh() {
-        if (!this.#ready || this.#disposed || !this.options.accepts())
+        if (!this.#ready ||
+            this.#disposed ||
+            !(this.options.accepts() || this.options.acceptsPreparation()))
             return;
         if (!this.#surface?.visible)
-            this.port.updateSurface(this.options.address, this.#geometry.read());
+            this.#observeGeometry(this.#geometry.read());
         const catalog = this.options.catalog();
         if (!catalog || catalog.generation !== this.#catalog.generation)
             return;
@@ -198,9 +210,10 @@ export class NativeCanvasAttachment {
     /** Release the native surface and shared controls before retiring their view lease. */
     dispose() {
         if (this.#disposed)
-            return;
+            return this.#native.dispose();
         this.#disposed = true;
         this.#ready = false;
+        this.#readiness.dispose();
         this.#stopView();
         this.#stopTransfer();
         this.#status.dispose();
@@ -208,9 +221,17 @@ export class NativeCanvasAttachment {
         this.#geometry.dispose();
         this.#overlay.dispose();
         this.#media.dispose();
-        this.#native.dispose();
+        const released = this.#native.dispose();
         this.options.views.releaseAttachment(this.options.address);
         this.element.replaceChildren();
+        return released;
+    }
+    /** Measure hidden candidates without granting them committed control-port authority. */
+    #observeGeometry(surface) {
+        if (this.options.acceptsPreparation())
+            this.#resize(surface);
+        else
+            this.port.updateSurface(this.options.address, surface);
     }
     /** Forward qualified geometry without constructing a browser drawing surface. */
     #resize(surface) {
