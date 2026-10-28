@@ -93,6 +93,31 @@ fn released_presentation_does_not_block_the_next_document_on_an_unacknowledged_f
 }
 
 #[test]
+fn cancelling_a_fully_loaded_unpresented_selection_allows_the_next_document_to_prepare()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::start(true)?;
+    let pending = fixture.colored_frame([255, 0, 0])?;
+    let selection = fixture.session.selection;
+    assert!(fixture.session.loading.is_none());
+    assert!(fixture.session.pending_open.is_none());
+    assert_eq!(fixture.session.document.cpu_pending, Some(pending));
+
+    fixture.session.cancel_selection()?;
+
+    assert!(fixture.session.selection > selection);
+    assert!(fixture.session.document.cpu_pending.is_none());
+    assert!(fixture.session.document.pending_cpu_evidence.is_none());
+    assert!(fixture.session.selected_cpu_frame().is_none());
+    assert!(fixture.session.did_present_cpu(pending).is_err());
+    let token = fixture.stage_document()?;
+    let blue = fixture.colored_frame([0, 0, 255])?;
+    fixture.session.did_present_cpu(blue)?;
+    fixture.session.promote_document(token, blue)?;
+    let _directory = fixture.finish()?;
+    Ok(())
+}
+
+#[test]
 fn acknowledged_candidate_promotes_once_and_retires_both_documents_on_close()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::start(true)?;

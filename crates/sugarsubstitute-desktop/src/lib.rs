@@ -35,10 +35,13 @@ mod main_canvas_context;
 #[cfg(any(target_os = "windows", test))]
 mod main_downloads;
 mod main_environment;
+#[cfg(target_os = "windows")]
+mod main_native_delivery;
 mod main_navigation;
 mod main_panel_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_panel_ingress;
+mod main_panel_ingress_receipt;
 mod main_readiness;
 mod main_readiness_storage;
 mod main_readiness_types;
@@ -167,6 +170,7 @@ pub use main_canvas_context::{
 };
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};
 pub use main_panel_contract::{PanelCommand, PanelObservation};
+pub use main_panel_ingress_receipt::{PanelIngressReceipt, PanelIngressReceiptError};
 pub use main_surface_contract::{SurfaceObservation, SurfaceReply, SurfaceReplyError};
 
 #[cfg(target_os = "windows")]

@@ -31,7 +31,7 @@ id = "sugarcubes-canvas-context-v3"
 owner = "sugarsubstitute-contracts"
 vendored_component = "sugarcubes-canvas-surface-contract"
 sources = ["crates/sugarsubstitute-contracts/src/canvas_context.rs", "crates/sugarsubstitute-contracts/src/canvas_context/wire.rs", "third_party/sugarcubes-canvas/canvas.schema.json"]
-source_sha256 = "sha256:5e362c1e8d548827d6a516836526dec990451b003a4ec0578d0a5fa7e450a859"
+source_sha256 = "sha256:c8195a5a7dab13c07c131c40ad0e2107994b760bf29682ee16374f8e0d7e76dc"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -1434,5 +1434,17 @@ classification = "authored_document"
 preservation = "must_preserve"
 current_version = 5
 accepted_versions = [5]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "native-panel-admission-v1"
+owner = "sugarsubstitute-desktop"
+sources = ["crates/sugarsubstitute-desktop/src/main_panel_ingress.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/admission.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/delivery.rs"]
+source_sha256 = "sha256:ce98c1701f4fc57881edc4ae11a3b77b2f64009e140f335015419233cdcbee50"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
 compatibility = "reject"
 migrations = []

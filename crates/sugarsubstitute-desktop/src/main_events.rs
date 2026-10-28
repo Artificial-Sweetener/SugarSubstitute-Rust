@@ -24,6 +24,14 @@ pub(crate) enum Command {
     FrameConfiguration(ProbeTarget),
     Barrier(ProbeTarget),
     PanelDelivery(i64),
+    OwnedPanelDelivery {
+        context: i64,
+        id: u64,
+    },
+    PanelTransport {
+        context: i64,
+        action: crate::main_panel_ingress::TransportAction,
+    },
     #[cfg(feature = "k1-native-qualification")]
     Downloads,
 }
@@ -78,6 +86,7 @@ pub(crate) struct Events {
     callback_depth: Cell<usize>,
     process_failed: Cell<Option<i32>>,
     panel_rejected: Cell<bool>,
+    panel_overflow: Cell<bool>,
     wake: Box<dyn Fn()>,
 }
 
@@ -137,6 +146,7 @@ impl Events {
             callback_depth: Cell::new(0),
             process_failed: Cell::new(None),
             panel_rejected: Cell::new(false),
+            panel_overflow: Cell::new(false),
             wake: Box::new(wake),
         }))
     }
@@ -273,10 +283,17 @@ impl Events {
 
     /// Reject an untrusted panel payload without consuming lifecycle receiver capacity.
     fn reject_panel(&self, cause: Option<&DesktopError>) {
+        self.panel_overflow.set(true);
+        (self.wake)();
         if !self.panel_rejected.replace(true) {
             tracing::warn!(operation="panel_event_rejected", cause=?cause,
                 "Panel callback exceeded its bounded admission");
         }
+    }
+
+    /// Wake the actor once for raw callback loss without retaining untrusted overflow payloads.
+    pub(crate) fn take_panel_overflow(&self) -> bool {
+        self.panel_overflow.replace(false)
     }
 
     /// Consume one entry without cloning/copying it; never invoke native effects in consume.

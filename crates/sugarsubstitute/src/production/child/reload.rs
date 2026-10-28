@@ -175,6 +175,7 @@ impl ProductionChild {
                 .as_mut()
                 .ok_or("Running backend absent")?
                 .reload_main(previous, next)?;
+            self.panel_deliveries.clear();
             self.identity = next;
             self.phase = Some(prepared.session().phase());
             self.lease = Some(self.reload.as_ref().ok_or("Reload absent")?.lease);

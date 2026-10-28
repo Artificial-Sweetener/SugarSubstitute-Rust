@@ -187,6 +187,7 @@ impl Session {
                         let snapshot = scene.document.snapshot();
                         packet.document == (snapshot.identity(), snapshot.revision())
                             && packet.source_revision == scene.source_revision
+                            && packet.source_revision == self.selection
                             && completed_coverage_is_current(
                                 packet.tier,
                                 rendering.coverage,

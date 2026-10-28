@@ -98,7 +98,8 @@ impl Session {
         if self.document_suspended {
             return Ok(());
         }
-        if self.document.scene.is_none() {
+        if self.document.scene.as_ref().is_none_or(|scene| scene.source_revision != self.selection)
+        {
             return Ok(());
         }
         if self.failed.is_none() {

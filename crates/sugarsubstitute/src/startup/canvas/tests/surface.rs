@@ -22,6 +22,7 @@ use sugarsubstitute_desktop::{
 };
 
 mod backend;
+mod cancellation;
 mod replacement;
 
 struct ClockValue(AtomicU64);
@@ -75,6 +76,18 @@ fn request(
 fn reply(canvas: &mut EmbeddedCanvas, id: u64, status: &str) -> Result<(), Box<dyn Error>> {
     let command = canvas.take_command().ok_or("Surface reply is missing")?;
     check_reply(command, id, status)
+}
+
+/// Observe cancellation-lane consumption separately from the operation's terminal reply.
+fn cancel_consumed(
+    canvas: &mut EmbeddedCanvas,
+    identity: MainIdentity,
+) -> Result<(), Box<dyn Error>> {
+    let Some(DesktopStartupCommand::CompletePanelIngress(receipt)) = canvas.take_command() else {
+        return Err("Cancellation consumption receipt is missing".into());
+    };
+    assert_eq!(receipt.identity(), identity);
+    Ok(())
 }
 
 fn check_reply(
@@ -328,6 +341,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     }))?)?;
     canvas.surface(identity, cancellation, None, memory.claim(64 * 1024)?)?;
     reply(&mut canvas, 8, "cancelled")?;
+    cancel_consumed(&mut canvas, identity)?;
     let final_geometry = json!({"geometry":{
         "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":12,"y":24},
         "viewport":{"width":12,"height":12}, "clip":{"x":12,"y":24,"width":12,"height":12},
@@ -381,10 +395,22 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     }))?)?;
     canvas.surface(identity, cancellation, None, memory.claim(64 * 1024)?)?;
     reply(&mut canvas, 11, "cancelled")?;
+    cancel_consumed(&mut canvas, identity)?;
     let MainCanvasPresentation::Retain(retained) = canvas.presentation() else {
         return Err("Cancelled source replacement withdrew the acknowledged native image".into());
     };
     assert_eq!(retained.target, resized_stamp);
+    replacement::Replacement {
+        canvas: &mut canvas,
+        client: &client,
+        wake: &wake,
+        clock: &clock,
+        panel: &panel,
+        memory: &memory,
+        identity,
+        allocation,
+    }
+    .cancel_prepared_selection()?;
     canvas.close_until(Moment::from_nanos(10_000_000_000))?;
     assert!(matches!(canvas.presentation(), MainCanvasPresentation::Hide));
     loop {

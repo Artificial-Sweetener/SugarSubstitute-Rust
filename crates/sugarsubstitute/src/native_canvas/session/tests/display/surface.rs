@@ -35,6 +35,8 @@ fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn Error>> {
         source_revision: 7,
         original: None,
     });
+    session.selection = 7;
+    session.source_sequence = 7;
     session.document.front = Some(products.surface);
     let mut drawing = Some(work::Draw {
         underlay: None,
@@ -108,6 +110,35 @@ fn replacing_the_selected_output_releases_an_unpresented_cpu_frame() -> Result<(
     assert!(fixture.session.frame().is_none());
     assert!(fixture.session.did_present_cpu(obsolete).is_err());
     assert!(fixture.session.pending_open.is_some());
+    assert!(!matches!(
+        fixture.session.pacing.readiness(Duration::ZERO)?,
+        PresentationReadiness::Busy { .. }
+    ));
+    Ok(())
+}
+
+#[cfg(feature = "native-composition")]
+#[test]
+fn selection_cancel_rejects_an_already_completed_display_before_native_publication()
+-> Result<(), Box<dyn Error>> {
+    let (mut fixture, target) = cpu_draw(true)?;
+    loop {
+        let observed = fixture.wake.revision();
+        let runtime = fixture.session.runtime.as_ref().ok_or("Draw execution absent")?;
+        runtime.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+        let drawing = fixture.session.displaying.as_ref().ok_or("Draw identity absent")?;
+        if matches!(drawing.job.status().phase, JobPhase::Terminal(TerminalKind::Success)) {
+            break;
+        }
+        fixture.wake.wait_after(observed)?;
+    }
+    fixture.session.cancel_selection()?;
+    consume(&mut fixture.session, &fixture.wake)?;
+    assert!(fixture.session.document.cpu_pending.is_none());
+    assert!(fixture.session.document.pending_cpu_evidence.is_none());
+    assert!(fixture.session.document.native_presented.is_none());
+    assert!(fixture.session.did_present_cpu(target).is_err());
+    assert!(fixture.session.failed.is_none());
     assert!(!matches!(
         fixture.session.pacing.readiness(Duration::ZERO)?,
         PresentationReadiness::Busy { .. }

@@ -38,6 +38,7 @@ impl ProductionChild {
             return Err(cause);
         }
         self.failed = false;
+        self.panel_deliveries.clear();
         self.identity = identity;
         self.connection_budget = None;
         self.acquire = None;

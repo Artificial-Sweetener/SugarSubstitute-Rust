@@ -89,6 +89,15 @@ impl EmbeddedCanvas {
         self.surface.matches_backend(backend)
     }
 
+    /// Retire a closed native navigation even when it never acquired an attachment.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn main_retired(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+    ) -> Result<(), Box<dyn Error>> {
+        self.surface.retire_navigation(identity, self.session.as_mut())
+    }
+
     /// Start once on the application's existing executor; a reload retains the same session.
     pub(super) fn start(
         &mut self,
@@ -156,8 +165,40 @@ impl EmbeddedCanvas {
         allocation: Option<sugarsubstitute_desktop::canvas::placement::WebViewAllocation>,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
-        let session = self.session.as_mut().ok_or("Application canvas is not started")?;
-        self.surface.receive(identity, message, allocation, claim, session)
+        match message {
+            sugarsubstitute_contracts::canvas_surface::CanvasSurfaceMessage::Cancel {
+                request_id,
+                ..
+            } => self.surface.cancel(identity, request_id, claim, self.session.as_mut()),
+            message => match self.session.as_mut() {
+                Some(session) => {
+                    self.surface.receive(identity, message, allocation, claim, session)
+                }
+                None => self.surface.refuse(identity, message, claim, None),
+            },
+        }
+    }
+
+    /// Preserve terminal response custody when the current page lacks application authority.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn refuse_surface(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+        message: sugarsubstitute_contracts::canvas_surface::CanvasSurfaceMessage,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    ) -> Result<(), Box<dyn Error>> {
+        self.surface.refuse(identity, message, claim, self.session.as_mut())
+    }
+
+    /// Return the unavailable context through the existing native reply owner.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn refuse_context(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+        request: &sugarsubstitute_contracts::canvas_context::CanvasContextRequest,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    ) -> Result<(), Box<dyn Error>> {
+        self.surface.refuse_context(identity, request, claim)
     }
 
     /// Transfer a correlated context or surface reply with its admitted allocation.

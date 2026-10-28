@@ -58,6 +58,54 @@ impl Session {
     /// observed until it stops and any native transport has actually retired.
     #[cfg(feature = "native-composition")]
     pub(crate) fn revoke_acquirer(&mut self) -> Result<(), Box<dyn Error>> {
+        let revoked = self.cancel_acquirers();
+        if revoked {
+            if let Some(loading) = &self.loading
+                && loading.acquirer.is_some()
+            {
+                loading.job.cancel();
+            }
+            self.source_sequence =
+                self.source_sequence.checked_add(1).ok_or("Canvas source revision exhausted")?;
+            self.selection = self.source_sequence;
+            self.abandon_cpu_frame(self.navigation_time())?;
+        }
+        Ok(())
+    }
+
+    /// Fence a cancelled selection even after acquisition finished and pixels await native acceptance.
+    /// Retained acknowledged presentation stays owned; workers and originals retire on their existing
+    /// observed paths. A new source intent or document preparation may proceed after that settlement.
+    ///
+    /// # Errors
+    /// Rejects exhausted source identities or inconsistent pending CPU/pacing custody.
+    #[cfg(feature = "native-composition")]
+    pub(crate) fn cancel_selection(&mut self) -> Result<(), Box<dyn Error>> {
+        let next = self.source_sequence.checked_add(1).ok_or("Canvas source revision exhausted")?;
+        self.abandon_cpu_frame(self.navigation_time())?;
+        self.cancel_acquirers();
+        if let Some(loading) = &self.loading {
+            loading.job.cancel();
+        }
+        if let Some(rendering) = &mut self.rendering {
+            rendering.superseded = true;
+            rendering.job.cancel();
+        }
+        if let Some(displaying) = &self.displaying {
+            displaying.job.cancel();
+        }
+        if let Some(presenting) = &self.presenting {
+            presenting.job.cancel();
+        }
+        self.source_sequence = next;
+        self.selection = next;
+        self.pending_first_image = None;
+        Ok(())
+    }
+
+    /// Stop external acquisition owners without dropping their worker/native custody.
+    #[cfg(feature = "native-composition")]
+    fn cancel_acquirers(&self) -> bool {
         let mut revoked = false;
         if let Some(Open { source: OpenSource::Acquired(owner), .. }) = &self.pending_open {
             owner.cancel();
@@ -67,16 +115,9 @@ impl Session {
             && let Some(owner) = &loading.acquirer
         {
             owner.cancel();
-            loading.job.cancel();
             revoked = true;
         }
-        if revoked {
-            self.source_sequence =
-                self.source_sequence.checked_add(1).ok_or("Canvas source revision exhausted")?;
-            self.selection = self.source_sequence;
-            self.abandon_cpu_frame(self.navigation_time())?;
-        }
-        Ok(())
+        revoked
     }
 
     /// Assign one canvas source generation while preserving the caller's unaccepted input.

@@ -179,7 +179,9 @@ pub(super) fn consume(
                 effect = Effect::Receipt(owner.barrier_complete(target).map_err(readiness_error)?);
                 Ok(())
             }
-            Command::PanelDelivery(context) => {
+            Command::PanelDelivery(context)
+            | Command::OwnedPanelDelivery { context, .. }
+            | Command::PanelTransport { context, .. } => {
                 if owner.panel_context() != Some(context) {
                     return Ok(Effect::None);
                 }

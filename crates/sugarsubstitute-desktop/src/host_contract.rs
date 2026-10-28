@@ -297,6 +297,8 @@ pub enum DesktopStartupCommand {
     SendCanvasContext(crate::CanvasContextReply),
     /// Deliver a correlated canvas reply to the same current top document.
     SendSurface(crate::SurfaceReply),
+    /// Complete consumed control or cancellation ingress while retaining its original allocation.
+    CompletePanelIngress(crate::PanelIngressReceipt),
     /// Capture one current revealed renderer for an explicitly admitted native qualification.
     /// The inert cutoff grants no authentication or file authority and is never renewed.
     #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]

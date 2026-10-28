@@ -21,9 +21,7 @@ enum Effect {
     Barrier(Box<ProbeTarget>),
     Receipt(ReadinessReceipt),
     Reload(crate::MainReloadReason),
-    Panel(crate::PanelObservation),
-    Surface(crate::SurfaceObservation),
-    Context(crate::CanvasContextObservation),
+    Ingress(super::panel::ingress::Ingress),
 }
 
 /// Distinguish an empty queue from one consumed evidence item that produced no observation.
@@ -39,41 +37,15 @@ impl MainActor {
         let events = self.events()?.clone();
         let mut effect = Effect::None;
         let mut completed_probe = None;
+        let mut completed_delivery = None;
+        let mut completed_transport = None;
         // The pure decoder/readiness owner performs no native calls while queue storage is borrowed.
         let consumed = events.consume(|observation| {
             if observation.kind == Kind::PanelBinding {
-                if !self.revealed {
-                    return Ok(());
-                }
-                let context = self.readiness.as_ref().and_then(MainReadiness::panel_context);
-                if context.is_none() {
-                    return Ok(());
-                }
-                let lease = self.request()?.storage_lease().clone();
-                let claim = match lease.claim(64 * 1024) {
-                    Ok(claim) => claim,
-                    Err(cause) => {
-                        if !self.panel_ingress_overflow {
-                            tracing::warn!(operation="panel_ingress_admission", cause=%cause,
-                                "Panel message rejected because its bounded storage is unavailable");
-                            self.panel_ingress_overflow = true;
-                        }
-                        return Ok(());
-                    }
-                };
-                self.panel_ingress_overflow = false;
-                let session = sugarsubstitute_contracts::panel::PanelSession::for_main(self.identity())
-                    .map_err(|cause| DesktopError::new("panel_session_identity", cause))?;
-                if let Some(message) = crate::main_panel_ingress::decode(observation.payload, context, &session) {
-                    effect = match message {
-                        crate::main_panel_ingress::ClientMessage::Panel(message) =>
-                            Effect::Panel(crate::PanelObservation::new(self.identity(), message, lease, claim)),
-                        crate::main_panel_ingress::ClientMessage::Surface(message) =>
-                            Effect::Surface(crate::SurfaceObservation::new(self.identity(), message, lease, claim)),
-                        crate::main_panel_ingress::ClientMessage::Context(request) =>
-                            Effect::Context(crate::CanvasContextObservation::new(self.identity(), request, lease, claim)),
-                    };
-                }
+                effect = self
+                    .decode_panel_ingress(observation.payload)?
+                    .map(Effect::Ingress)
+                    .unwrap_or(Effect::None);
                 return Ok(());
             }
             #[cfg(feature = "k1-native-qualification")]
@@ -87,6 +59,12 @@ impl MainActor {
                 return Ok(());
             }
             let command = observation.command;
+            if let Some(Command::OwnedPanelDelivery { context, id }) = command {
+                completed_delivery = Some((context, id));
+            }
+            if let Some(Command::PanelTransport { context, action }) = command {
+                completed_transport = Some((context, action));
+            }
             completed_probe = match command {
                 Some(Command::Probe(target)) => Some(target),
                 _ => None,
@@ -117,6 +95,19 @@ impl MainActor {
             }
             Ok(())
         })?;
+        if let Some((context, action)) = completed_transport {
+            self.panel_transport.action_completed(context, action)?;
+        }
+        if let Some((context, id)) = completed_delivery {
+            let completed = self.receivers()?.take_delivery(id)?;
+            if completed.context != context {
+                return Err(DesktopError::message(
+                    "complete_panel_delivery",
+                    "native context identity changed",
+                ));
+            }
+            self.panel_transport.completed(completed.ticket, completed.delivery)?;
+        }
         if !consumed {
             return Ok(EvidenceProgress { consumed: false, observation: None });
         }
@@ -134,36 +125,7 @@ impl MainActor {
                 identity: self.identity(),
                 reason,
             }),
-            Effect::Panel(observation) => {
-                Some(DesktopStartupObservation::PanelMessage(observation))
-            }
-            Effect::Surface(observation) => {
-                #[cfg(feature = "native-composition")]
-                let mut observation = observation;
-                #[cfg(feature = "native-composition")]
-                if matches!(
-                    observation.message(),
-                    sugarsubstitute_contracts::canvas_surface::CanvasSurfaceMessage::Request(request)
-                        if matches!(request.operation(), sugarsubstitute_contracts::canvas_surface::CanvasSurfaceOperation::Geometry(_))
-                ) {
-                    match self.canvas_allocation() {
-                        Ok(allocation) => observation.set_allocation(allocation),
-                        Err(cause) => {
-                            tracing::warn!(operation="canvas_geometry_observation", cause=%cause,
-                            "Native WebView allocation is unavailable")
-                        }
-                    }
-                }
-                Some(DesktopStartupObservation::SurfaceMessage(observation))
-            }
-            Effect::Context(observation) => {
-                #[cfg(feature = "k1-native-qualification")]
-                crate::qualification_trace::progress(
-                    crate::qualification_trace::Progress::CanvasContextObserved,
-                    self.identity(),
-                );
-                Some(DesktopStartupObservation::CanvasContextMessage(observation))
-            }
+            Effect::Ingress(observation) => Some(self.publish_panel_ingress(observation)),
             Effect::Incomplete(blocked) => {
                 if let Some(target) = completed_probe {
                     self.probe_diagnostics.completed(
@@ -271,6 +233,8 @@ fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
             Some(Command::FrameConfiguration(_)) => "FrameConfiguration",
             Some(Command::Barrier(_)) => "Barrier",
             Some(Command::PanelDelivery(_)) => "PanelDelivery",
+            Some(Command::OwnedPanelDelivery { .. }) => "OwnedPanelDelivery",
+            Some(Command::PanelTransport { .. }) => "PanelTransport",
             #[cfg(feature = "k1-native-qualification")]
             Some(Command::Downloads) => "Downloads",
             None => "Command",

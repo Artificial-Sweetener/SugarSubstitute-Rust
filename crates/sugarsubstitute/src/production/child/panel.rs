@@ -4,30 +4,20 @@
 
 use super::*;
 use std::time::Duration;
-use sugarsubstitute_application::{
-    panel::{PanelEffects, PanelHostSession, PanelState},
-    startup::StartupPhase,
-};
-use sugarsubstitute_contracts::canvas_context::{CanvasContextRequest, CanvasDisplayCapability};
-use sugarsubstitute_contracts::canvas_surface::{
-    CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryStatus, CanvasSurfaceMessage,
-    CanvasSurfaceReplyStatus,
-};
+use sugarsubstitute_application::panel::{PanelEffects, PanelHostSession, PanelState};
 use sugarsubstitute_contracts::panel::{
     PanelMessage, PanelPalette, PanelPresentation, PanelSession, PanelStyle,
 };
-use sugarsubstitute_desktop::{
-    CanvasContextObservation, CanvasContextReply, PanelCommand, PanelObservation,
-    SurfaceObservation, SurfaceReply,
-};
+use sugarsubstitute_desktop::PanelCommand;
+
+#[path = "panel/deliveries.rs"]
+mod deliveries;
+#[path = "panel/routing.rs"]
+mod routing;
+pub(super) use deliveries::Deliveries;
 
 const OWNER_BYTES: u64 = 4096;
 const ADMISSION_RETRY: Duration = Duration::from_millis(100);
-
-enum CanvasReply {
-    Context(CanvasContextReply),
-    Surface(SurfaceReply),
-}
 
 /// Retain one current page's policy and at most one pending message of each host kind.
 pub(super) struct PanelOwner {
@@ -36,7 +26,6 @@ pub(super) struct PanelOwner {
     lease: MemoryLease,
     configuration: Option<PanelCommand>,
     ping: Option<PanelCommand>,
-    canvas_replies: [Option<CanvasReply>; 4],
     pending_applied: bool,
     deadline: Option<Moment>,
     admission_warned: bool,
@@ -44,12 +33,15 @@ pub(super) struct PanelOwner {
 }
 
 impl PanelOwner {
+    /// Check the policy owner's original navigation and reservation independently of its state.
+    fn same_lifetime(&self, identity: MainIdentity, lease: &MemoryLease) -> bool {
+        self.identity == identity && self.lease.same_reservation(lease)
+    }
+
     /// Check the current navigation and its original admitted native allocation.
     #[cfg(feature = "native-composition")]
     pub(super) fn admits_canvas(&self, identity: MainIdentity, lease: &MemoryLease) -> bool {
-        self.identity == identity
-            && self.lease.same_reservation(lease)
-            && self.policy.state() != PanelState::Failed
+        self.same_lifetime(identity, lease) && self.policy.state() != PanelState::Failed
     }
 
     /// Claim the persistent state before constructing the navigation-bound panel policy.
@@ -69,7 +61,6 @@ impl PanelOwner {
             lease,
             configuration: None,
             ping: None,
-            canvas_replies: std::array::from_fn(|_| None),
             pending_applied: false,
             deadline,
             admission_warned: false,
@@ -207,172 +198,9 @@ impl PanelOwner {
         self.configuration.take().or_else(|| self.ping.take())
     }
 
-    /// Transfer the next response while retaining its original ingress allocation.
-    pub(super) fn take_canvas_reply(&mut self) -> Option<DesktopStartupCommand> {
-        take_first(&mut self.canvas_replies).map(|reply| match reply {
-            CanvasReply::Context(reply) => DesktopStartupCommand::SendCanvasContext(reply),
-            CanvasReply::Surface(reply) => DesktopStartupCommand::SendSurface(reply),
-        })
-    }
-
-    /// Correlate a surface request with the retained panel and its native admission.
-    fn receive_surface(
-        &mut self,
-        identity: MainIdentity,
-        message: CanvasSurfaceMessage,
-        lease: &MemoryLease,
-        claim: MemoryClaim,
-    ) -> Result<()> {
-        if self.identity != identity || !self.lease.same_reservation(lease) {
-            return Err("Surface observation belongs to another native lifetime".into());
-        }
-        if self.policy.state() == PanelState::Failed {
-            return Ok(());
-        }
-        if matches!(message, CanvasSurfaceMessage::Cancel { .. }) {
-            return Ok(());
-        }
-        let Some(slot) = self.canvas_replies.iter_mut().find(|slot| slot.is_none()) else {
-            tracing::warn!(operation="surface_reply_admission", identity=?identity,
-                "Surface request rejected because the response queue is full");
-            return Ok(());
-        };
-        let reply = match message {
-            CanvasSurfaceMessage::Request(request) => SurfaceReply::new(
-                identity,
-                &request,
-                CanvasSurfaceReplyStatus::Unavailable,
-                "",
-                claim,
-            )?,
-            CanvasSurfaceMessage::Discovery(request) => SurfaceReply::discovery(
-                identity,
-                &request,
-                CanvasSurfaceDiscoveryStatus::Unsupported,
-                &CanvasSurfaceCapabilities::default(),
-                "",
-                claim,
-            )?,
-            CanvasSurfaceMessage::Cancel { .. } => return Ok(()),
-        };
-        *slot = Some(CanvasReply::Surface(reply));
-        Ok(())
-    }
-
-    /// Answer capability discovery for this exact panel without advertising an unowned surface.
-    fn receive_context(
-        &mut self,
-        identity: MainIdentity,
-        request: CanvasContextRequest,
-        lease: &MemoryLease,
-        claim: MemoryClaim,
-    ) -> Result<()> {
-        if self.identity != identity || !self.lease.same_reservation(lease) {
-            return Err("Canvas context observation belongs to another native lifetime".into());
-        }
-        if self.policy.state() == PanelState::Failed {
-            return Ok(());
-        }
-        let Some(slot) = self.canvas_replies.iter_mut().find(|slot| slot.is_none()) else {
-            tracing::warn!(operation="canvas_context_reply_admission", identity=?identity,
-                "Canvas context request rejected because the response queue is full");
-            return Ok(());
-        };
-        *slot = Some(CanvasReply::Context(CanvasContextReply::new(
-            identity,
-            &request,
-            CanvasDisplayCapability::Unavailable,
-            claim,
-        )?));
-        Ok(())
-    }
-
     /// Borrow the last checked application-clock deadline.
     pub(super) const fn deadline(&self) -> Option<Moment> {
         self.deadline
-    }
-}
-
-impl ProductionChild {
-    /// Route only an actual current, revealed main's panel observation into one policy owner.
-    pub(super) fn observe_panel(
-        &mut self,
-        observation: PanelObservation,
-        prepared: Option<&PreparedChildStartup>,
-    ) -> Result<()> {
-        let (identity, message, lease, _message_claim) = observation.into_parts();
-        if self.shutdown.closing()
-            || identity != self.identity
-            || prepared.is_none_or(|prepared| prepared.session().phase() != StartupPhase::Running)
-        {
-            return Ok(());
-        }
-        if self.panel.is_none() && !matches!(message, PanelMessage::Ready(_)) {
-            return Ok(());
-        }
-        let now = self.client()?.now()?;
-        if self.panel.is_none() {
-            let Some(panel) = PanelOwner::new(identity, lease.clone(), now)? else {
-                if !self.panel_owner_admission_warned {
-                    tracing::warn!(
-                        operation = "panel_owner_admission",
-                        "Panel session deferred because bounded storage is unavailable"
-                    );
-                    self.panel_owner_admission_warned = true;
-                }
-                return Ok(());
-            };
-            self.panel_owner_admission_warned = false;
-            self.panel = Some(panel);
-        }
-        let panel = self.panel.as_mut().ok_or("Panel owner disappeared")?;
-        if panel.identity != identity || !panel.lease.same_reservation(&lease) {
-            return Err("Panel observation belongs to another native lifetime".into());
-        }
-        panel.receive(message, now)
-    }
-
-    /// Refuse surface operations until a native presentation owner has been admitted.
-    pub(super) fn observe_surface(
-        &mut self,
-        observation: SurfaceObservation,
-        prepared: Option<&PreparedChildStartup>,
-    ) -> Result<()> {
-        let (identity, message, lease, claim) = observation.into_parts();
-        if self.shutdown.closing()
-            || identity != self.identity
-            || prepared.is_none_or(|prepared| prepared.session().phase() != StartupPhase::Running)
-        {
-            return Ok(());
-        }
-        let Some(panel) = self.panel.as_mut() else { return Ok(()) };
-        panel.receive_surface(identity, message, &lease, claim)
-    }
-
-    /// Resolve context only through the currently revealed panel and its native allocation.
-    pub(super) fn observe_canvas_context(
-        &mut self,
-        observation: CanvasContextObservation,
-        prepared: Option<&PreparedChildStartup>,
-    ) -> Result<()> {
-        let (identity, request, lease, claim) = observation.into_parts();
-        if self.shutdown.closing()
-            || identity != self.identity
-            || prepared.is_none_or(|prepared| prepared.session().phase() != StartupPhase::Running)
-        {
-            return Ok(());
-        }
-        let Some(panel) = self.panel.as_mut() else { return Ok(()) };
-        panel.receive_context(identity, request, &lease, claim)
-    }
-
-    /// Advance the same session with the existing execution clock when its wake is due.
-    pub(super) fn advance_panel(&mut self) -> Result<()> {
-        if self.shutdown.closing() || self.panel.is_none() {
-            return Ok(());
-        }
-        let now = self.client()?.now()?;
-        self.panel.as_mut().ok_or("Panel owner disappeared")?.tick(now)
     }
 }
 

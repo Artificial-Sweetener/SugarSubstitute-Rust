@@ -53,6 +53,20 @@ fn escaped_shared_reply_fits_the_actual_native_command_without_changing_its_data
             serde_json::from_slice::<Value>(&payload)?
         );
         assert_eq!(serde_json::from_str::<Value>(argument)?["message"], message);
+        let ticket = crate::main_panel_ingress::Ticket(9007199254740991);
+        let owned = encode_owned(i64::MAX, &payload, ticket)?;
+        assert!(owned.len() <= MAX_PARAMETERS_BYTES);
+        let owned: Value = serde_json::from_str(&owned)?;
+        let expression = owned["expression"].as_str().ok_or("Missing owned expression")?;
+        let suffix = format!(",{})", ticket.0);
+        let argument = expression
+            .strip_prefix(PREFIX)
+            .and_then(|value| value.strip_suffix(suffix.as_str()))
+            .ok_or("Missing exact private ticket")?;
+        assert_eq!(
+            serde_json::from_str::<Value>(argument)?,
+            serde_json::from_slice::<Value>(&payload)?
+        );
     }
     Ok(())
 }

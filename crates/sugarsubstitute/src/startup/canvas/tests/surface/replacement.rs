@@ -18,6 +18,67 @@ pub(super) struct Replacement<'a> {
 }
 
 impl Replacement<'_> {
+    /// Cancel a completed selection before native acceptance, then prepare its successor.
+    pub(super) fn cancel_prepared_selection(&mut self) -> Result<(), Box<dyn Error>> {
+        self.select_current(400, "blue.png")?;
+        let blue = self.prepared_selection()?;
+        self.canvas.presented(blue)?;
+        reply(self.canvas, 400, "applied")?;
+        self.select_current(401, "red.png")?;
+        let cancelled = self.prepared_selection()?;
+        assert_ne!(cancelled, blue);
+        let cancellation = CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
+            "protocol":"sugarcubes.canvas", "version":3, "session":self.panel.as_str(),
+            "requestId":401, "type":"cancel"
+        }))?)?;
+        self.canvas.surface(self.identity, cancellation, None, self.memory.claim(64 * 1024)?)?;
+        reply(self.canvas, 401, "cancelled")?;
+        cancel_consumed(self.canvas, self.identity)?;
+        assert!(self.canvas.presented(cancelled).is_err());
+        self.retained(blue)?;
+        self.send(400, 402, "surface.prepare", json!({}))?;
+        wait_reply(self.canvas, self.client, self.wake, 402, "ready")?;
+        self.retained(blue)?;
+        Ok(())
+    }
+
+    /// Select through the committed address instead of a staged candidate.
+    fn select_current(&mut self, id: u64, filename: &str) -> Result<(), Box<dyn Error>> {
+        self.clock.0.fetch_add(1_000_000_000, Ordering::SeqCst);
+        self.canvas.surface(
+            self.identity,
+            request(
+                self.panel,
+                id,
+                "surface.select",
+                json!({
+                    "itemId":format!("result:{filename}"),
+                    "file":{"filename":filename,"subfolder":"","type":"output"}
+                }),
+            )?,
+            None,
+            self.memory.claim(64 * 1024)?,
+        )
+    }
+
+    /// Hold the real current CPU frame without supplying its native acknowledgement.
+    fn prepared_selection(&mut self) -> Result<FrameStamp, Box<dyn Error>> {
+        loop {
+            let observed = self.wake.revision();
+            pump(self.canvas, self.client)?;
+            if let Some(frame) = prepared_frame(self.canvas) {
+                assert!(frame.frame.pending);
+                let target = frame.frame.target;
+                assert!(self.canvas.take_command().is_none());
+                return Ok(target);
+            }
+            if self.canvas.take_command().is_some() {
+                return Err("Selection completed before its native frame was acknowledged".into());
+            }
+            self.wake.wait_after(observed)?;
+        }
+    }
+
     /// Prepare both actual pixels and a failing original, then restore the same committed image.
     pub(super) fn rollback(&mut self, current: FrameStamp) -> Result<(), Box<dyn Error>> {
         for (base, filename, status) in [(100, "red.png", "applied"), (200, "missing.png", "error")]

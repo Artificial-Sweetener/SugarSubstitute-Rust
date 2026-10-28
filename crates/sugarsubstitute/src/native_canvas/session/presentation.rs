@@ -49,7 +49,12 @@ impl Session {
 
     /// Transfer a validated frame only after admission, preserving it and its cutoff on rejection.
     pub(super) fn submit_gpu_presentation(&mut self) -> Result<(), Box<dyn Error>> {
-        if self.closing || self.pending_open.is_some() {
+        let superseded = self
+            .document
+            .scene
+            .as_ref()
+            .is_some_and(|scene| scene.source_revision != self.selection);
+        if self.closing || self.pending_open.is_some() || superseded {
             if let Some(receipt) = self.gpu_presentation.take()
                 && !self.closing
             {
@@ -109,7 +114,12 @@ impl Session {
             self.presenting.take().ok_or("Native presentation execution identity was lost")?;
         Self::observe_terminal(&job, &completion.outcome);
         let outcome = Self::terminal(completion.outcome);
-        if self.closing || self.pending_open.is_some() {
+        let superseded = self
+            .document
+            .scene
+            .as_ref()
+            .is_some_and(|scene| scene.source_revision != self.selection);
+        if self.closing || self.pending_open.is_some() || superseded {
             if !self.closing {
                 self.pacing.abandoned(target, self.navigation_time())?;
             }

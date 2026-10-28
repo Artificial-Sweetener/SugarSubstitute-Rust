@@ -21,6 +21,8 @@ pub struct CanvasContextObservation {
 /// An encoded context reply and its original native delivery allocation.
 pub struct CanvasContextReply {
     identity: MainIdentity,
+    #[cfg(any(target_os = "windows", test))]
+    request_id: u64,
     payload: Vec<u8>,
     _claim: MemoryClaim,
 }
@@ -96,6 +98,44 @@ impl CanvasContextReply {
         capability: CanvasDisplayCapability,
         claim: MemoryClaim,
     ) -> Result<Self, CanvasContextReplyError> {
+        Self::validate_custody(identity, request, &claim)?;
+        let payload = request.reply(capability).map_err(CanvasContextReplyError::Encode)?;
+        Ok(Self {
+            identity,
+            #[cfg(any(target_os = "windows", test))]
+            request_id: request.request_id(),
+            payload,
+            _claim: claim,
+        })
+    }
+
+    /// Encode cancellation after the native owner retires this exact retained context request.
+    ///
+    /// The response retains its original ingress allocation through actual browser completion.
+    /// # Errors
+    /// Rejects inadequate custody, a foreign session or generated-contract serialization failures.
+    pub fn cancelled(
+        identity: MainIdentity,
+        request: &CanvasContextRequest,
+        claim: MemoryClaim,
+    ) -> Result<Self, CanvasContextReplyError> {
+        Self::validate_custody(identity, request, &claim)?;
+        let payload = request.cancelled_reply().map_err(CanvasContextReplyError::Encode)?;
+        Ok(Self {
+            identity,
+            #[cfg(any(target_os = "windows", test))]
+            request_id: request.request_id(),
+            payload,
+            _claim: claim,
+        })
+    }
+
+    /// Apply identical native identity and allocation requirements to both terminal outcomes.
+    fn validate_custody(
+        identity: MainIdentity,
+        request: &CanvasContextRequest,
+        claim: &MemoryClaim,
+    ) -> Result<(), CanvasContextReplyError> {
         if claim.bytes() < Self::STORAGE_BYTES {
             return Err(CanvasContextReplyError::Storage);
         }
@@ -104,8 +144,7 @@ impl CanvasContextReply {
         {
             return Err(CanvasContextReplyError::ForeignNavigation);
         }
-        let payload = request.reply(capability).map_err(CanvasContextReplyError::Encode)?;
-        Ok(Self { identity, payload, _claim: claim })
+        Ok(())
     }
 
     /// Borrow the exact native navigation addressed by this reply.
@@ -117,4 +156,21 @@ impl CanvasContextReply {
     pub fn payload(&self) -> &[u8] {
         &self.payload
     }
+
+    /// Return the original request correlation without decoding the retained payload.
+    #[cfg(any(target_os = "windows", test))]
+    pub(crate) const fn request_id(&self) -> u64 {
+        self.request_id
+    }
+
+    /// Drop encoded storage before transferring its original claim after native completion.
+    #[cfg(any(target_os = "windows", test))]
+    pub(crate) fn into_claim(self) -> MemoryClaim {
+        let Self { payload, _claim, .. } = self;
+        drop(payload);
+        _claim
+    }
 }
+
+#[cfg(test)]
+mod tests;

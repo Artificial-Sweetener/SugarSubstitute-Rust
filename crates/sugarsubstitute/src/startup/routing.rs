@@ -119,9 +119,13 @@ impl<B: StartupBackend> StartupHost<B> {
                 #[cfg(all(windows, feature = "native-composition"))]
                 if let DesktopStartupObservation::MainRetired(identity)
                 | DesktopStartupObservation::MainAbsent(identity) = &observation
-                    && let Some(composition) = &mut self.composition
                 {
-                    composition.main_retired(*identity)?;
+                    if let Some(composition) = &mut self.composition {
+                        composition.main_retired(*identity)?;
+                    }
+                    if let Some(canvas) = &mut self.canvas {
+                        canvas.main_retired(*identity)?;
+                    }
                 }
                 #[cfg(all(windows, feature = "native-composition"))]
                 let observation = {
@@ -141,6 +145,11 @@ impl<B: StartupBackend> StartupHost<B> {
                                     self.canvas.as_mut().ok_or("Application canvas disappeared")?;
                                 canvas.backend(backend)?;
                                 canvas.surface(identity, message, allocation, claim)?;
+                            } else {
+                                self.canvas
+                                    .as_mut()
+                                    .ok_or("Application canvas disappeared")?
+                                    .refuse_surface(identity, message, claim)?;
                             }
                             return Ok(());
                         }
@@ -153,6 +162,10 @@ impl<B: StartupBackend> StartupHost<B> {
                                 canvas.backend(backend)?;
                                 canvas.context(identity, request, claim)?;
                             } else {
+                                self.canvas
+                                    .as_mut()
+                                    .ok_or("Application canvas disappeared")?
+                                    .refuse_context(identity, &request, claim)?;
                                 #[cfg(feature = "k1-native-qualification")]
                                 sugarsubstitute_desktop::qualification_trace::progress(
                                     sugarsubstitute_desktop::qualification_trace::Progress::CanvasContextRejected,

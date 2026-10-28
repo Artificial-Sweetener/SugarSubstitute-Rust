@@ -172,6 +172,25 @@ fn source_replacement_waits_for_native_return_and_rejects_the_old_receipt()
     Ok(())
 }
 
+#[cfg(feature = "native-composition")]
+#[test]
+fn cancelled_selection_retains_native_presentation_until_actual_return_and_rejects_its_receipt()
+-> Result<(), Box<dyn Error>> {
+    let (mut fixture, release, _) = presenting(true)?;
+    fixture.session.cancel_selection()?;
+    let presenting = fixture.session.presenting.as_ref().ok_or("Native custody was discarded")?;
+    assert!(presenting.job.status().cancellation_requested);
+    assert!(!matches!(presenting.job.status().phase, JobPhase::Terminal(_)));
+    release.0.release();
+    consume_present(&mut fixture.session, &fixture.wake)?;
+    assert!(fixture.session.presenting.is_none());
+    assert!(fixture.session.gpu_presentation.is_none());
+    assert!(fixture.session.document.pending_gpu_evidence.is_none());
+    assert!(!fixture.session.gpu_presentation_pending());
+    assert!(fixture.session.failed.is_none());
+    Ok(())
+}
+
 fn install_storage(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
     let anchor = fixture._directory.path().join("cache");
     let spec = fixture.session.spec(

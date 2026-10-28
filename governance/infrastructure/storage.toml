@@ -4248,7 +4248,7 @@ rationale = "Owned temporary directories keep viewer document and refinement fix
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/display.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:8b2f9460b048f02b0232dc06c3e17c1991eb132184d19564eb2b853fa2dd5196"
+source_sha256 = "sha256:356af5b3a8b296c9f8b7141a623e5b39687c888ca5d4f8704bfa63e905498c7a"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "The admitted document and display publication fixture retains its isolated temporary directory through the actual session and execution lifetime. Temporary directory construction remains in the shared viewer test helper."
@@ -4296,7 +4296,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5f1f5e5058c4136683bf0ec366f36e73fe688517e857c4a8df900e64da106ff8"
+source_sha256 = "sha256:6d737569dc2693e936621259ab7d5a59fa5a047a78e420e45eb1f93f63aa58ff"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
@@ -4304,7 +4304,7 @@ rationale = "Owned temporary PNG fixtures exercise current output selection and 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:1caa3fa7ff702eb953a959accb850b25b624788eef30c561e0b92be86b86188f"
+source_sha256 = "sha256:9c2a052523df9bc26c9416b6452f34fcfb1596dbc34ce31154c30d086a99376e"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor exercises backend revocation while the canvas session retains its worker lifetime."
@@ -4336,7 +4336,7 @@ rationale = "An owned temporary cache scope qualifies the real loopback output t
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:2ccf3ad1305db3c8bc08aba38b51b6025d602977bb9f29c84e70bf59ca6b0658"
+source_sha256 = "sha256:22618cf80a1f1e5cfd24ace21537d765530f43095e919e99a16743d909a800ff"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read only the injected transport source for executable envelope-boundary regression tests."

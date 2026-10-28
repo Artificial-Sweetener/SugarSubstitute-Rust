@@ -95,6 +95,31 @@ impl CanvasContextRequest {
         }
         Ok(bytes)
     }
+
+    /// Encode the existing shared cancellation failure for this exact context request.
+    ///
+    /// Cancellation returns no context or capability declarations and grants no host authority.
+    /// The native owner sends this only after retiring its retained request.
+    /// # Errors
+    /// Preserves generated-schema, JSON serialization and bounded-reply failures.
+    pub fn cancelled_reply(&self) -> Result<Vec<u8>, CanvasContextError> {
+        let reply = wire::CanvasErrorReply {
+            protocol: "sugarcubes.canvas".into(),
+            version: 3,
+            session: self.session.as_str().into(),
+            request_id: self.request_id,
+            r#type: "error.reply".into(),
+            failure: wire::CanvasFailure { status: "cancelled".into(), message: String::new() },
+        };
+        if !reply.valid() {
+            return Err(CanvasContextError::Invalid);
+        }
+        let bytes = serde_json::to_vec(&reply).map_err(CanvasContextError::Malformed)?;
+        if bytes.len() > MAX_CANVAS_CONTEXT_BYTES {
+            return Err(CanvasContextError::TooLarge);
+        }
+        Ok(bytes)
+    }
 }
 
 /// Distinguish a bounded schema rejection from its actual JSON cause.

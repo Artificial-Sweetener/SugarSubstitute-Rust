@@ -14,6 +14,7 @@ impl MainActor {
             return Err(DesktopError::message("retire_main", "main identity is stale or foreign"));
         }
         self.admission.close();
+        self.panel_transport.close();
         self.canvas_replies.clear();
         self.recovery.close();
         #[cfg(feature = "native-composition")]

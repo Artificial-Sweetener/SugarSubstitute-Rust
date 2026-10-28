@@ -4,6 +4,8 @@
 
 mod attachment;
 mod capabilities;
+mod ingress;
+mod navigation;
 mod presentation;
 #[cfg(test)]
 #[path = "surface/replies_tests.rs"]
@@ -138,7 +140,6 @@ impl NativeSurface {
         self.backend = backend;
         if changed_attachment {
             self.discard_attachment(session)?;
-            self.replies = std::array::from_fn(|_| None);
             if let Some(pending) = self.pending.take() {
                 self.reply(
                     pending.identity,
@@ -176,11 +177,10 @@ impl NativeSurface {
                 identity,
             );
         }
-        if self.binding.as_ref().is_some_and(|binding| binding.identity != identity) {
-            self.discard_attachment(session.as_deref_mut())?;
-            self.pending = None;
-            self.contexts = std::array::from_fn(|_| None);
-            self.replies = std::array::from_fn(|_| None);
+        if let Some(previous) = self.binding.as_ref().map(|binding| binding.identity)
+            && previous != identity
+        {
+            self.retire_navigation(previous, session.as_deref_mut())?;
         }
         let slot = self
             .contexts
@@ -211,30 +211,7 @@ impl NativeSurface {
                 return self.discover(identity, &request, claim, session);
             }
             CanvasSurfaceMessage::Cancel { request_id, .. } => {
-                if self.pending.as_ref().is_some_and(|pending| {
-                    pending.identity == identity && pending.request.request_id() == request_id
-                }) {
-                    let pending =
-                        self.pending.take().ok_or("Pending canvas request disappeared")?;
-                    if matches!(pending.kind, PendingKind::Select)
-                        && let Some(binding) = &mut self.binding
-                    {
-                        session.revoke_acquirer()?;
-                        binding.selected = false;
-                    }
-                    if matches!(pending.kind, PendingKind::Prepare) {
-                        self.binding = self.retained.take();
-                        session.cancel_document_preparation();
-                        self.resume_document(session)?;
-                    }
-                    self.reply(
-                        pending.identity,
-                        &pending.request,
-                        CanvasSurfaceReplyStatus::Cancelled,
-                        pending.claim,
-                    )?;
-                }
-                return Ok(());
+                return self.cancel(identity, request_id, claim, Some(session));
             }
             CanvasSurfaceMessage::Request(request) => request,
         };

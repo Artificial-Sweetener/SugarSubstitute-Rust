@@ -252,6 +252,7 @@ impl Session {
                         let doc = scene.document.snapshot();
                         drawing.document == (doc.identity(), doc.revision())
                             && drawing.source_revision == scene.source_revision
+                            && drawing.source_revision == self.selection
                     });
                 if !current {
                     self.pacing.abandoned(target, now)?;
@@ -350,7 +351,12 @@ impl Session {
                 let restoring = self.restoring_document();
                 #[cfg(not(feature = "native-composition"))]
                 let restoring = false;
-                if self.closing || self.pending_open.is_some() || restoring {
+                let superseded = self
+                    .document
+                    .scene
+                    .as_ref()
+                    .is_some_and(|scene| scene.source_revision != self.selection);
+                if self.closing || self.pending_open.is_some() || restoring || superseded {
                     tracing::debug!(operation="canvas_display_stopped", cause=%cause, "Canvas display reached a terminal outcome before replacement");
                 } else {
                     self.fail(cause);

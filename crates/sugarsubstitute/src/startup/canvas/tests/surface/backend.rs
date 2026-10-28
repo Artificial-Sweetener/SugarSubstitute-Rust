@@ -17,11 +17,12 @@ fn discovery(
     request_id: u64,
     expected: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let request = CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
-        "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
-        "requestId":request_id, "type":"surface.capabilities.request", "schema":1
-    }))?)?;
-    canvas.surface(identity()?, request, None, memory.claim(64 * 1024)?)?;
+    canvas.surface(
+        identity()?,
+        discovery_request(panel, request_id)?,
+        None,
+        memory.claim(64 * 1024)?,
+    )?;
     let Some(DesktopStartupCommand::SendSurface(reply)) = canvas.take_command() else {
         return Err("Surface discovery response absent".into());
     };
@@ -40,6 +41,17 @@ fn discovery(
         assert_eq!(value["capabilities"][field], false);
     }
     Ok(())
+}
+
+/// Admit discovery independently of when its ordinary terminal reaches the browser.
+fn discovery_request(
+    panel: &PanelSession,
+    request_id: u64,
+) -> Result<CanvasSurfaceMessage, Box<dyn Error>> {
+    Ok(CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
+        "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
+        "requestId":request_id, "type":"surface.capabilities.request", "schema":1
+    }))?)?)
 }
 
 #[test]
@@ -108,6 +120,39 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
     assert!(!canvas.matches_backend(backend));
     assert!(matches!(canvas.presentation(), MainCanvasPresentation::Hide));
     discovery(&mut canvas, &panel, &memory, 93, "unavailable")?;
+
+    canvas.backend(Some(backend))?;
+    canvas.surface(
+        identity,
+        request(&panel, 94, "surface.prepare", json!({}))?,
+        None,
+        memory.claim(64 * 1024)?,
+    )?;
+    wait_reply(&mut canvas, &client, &wake, 94, "ready")?;
+    assert!(canvas.matches_backend(backend));
+    let terminal_credit = MemoryLease::new(64 * 1024, Box::new(Release));
+    canvas.surface(
+        identity,
+        discovery_request(&panel, 95)?,
+        None,
+        terminal_credit.claim(64 * 1024)?,
+    )?;
+    assert!(terminal_credit.claim(1).is_err());
+    canvas.backend(None)?;
+    assert!(!canvas.matches_backend(backend));
+    let Some(DesktopStartupCommand::SendSurface(reply)) = canvas.take_command() else {
+        return Err("Backend revocation discarded an admitted discovery terminal".into());
+    };
+    let value: Value = serde_json::from_slice(reply.payload())?;
+    assert_eq!(reply.identity(), identity);
+    assert_eq!(value["type"], "surface.capabilities.reply");
+    assert_eq!(value["requestId"], 95);
+    assert_eq!(value["session"], panel.as_str());
+    assert_eq!(value["status"], "available");
+    assert!(terminal_credit.claim(1).is_err());
+    assert!(canvas.take_command().is_none());
+    drop(reply);
+    drop(terminal_credit.claim(64 * 1024)?);
 
     canvas.close_until(Moment::from_nanos(10_000_000_000))?;
     loop {

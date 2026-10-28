@@ -26,14 +26,57 @@ struct Parameters<'a> {
 /// # Errors
 /// Rejects oversized or non-UTF-8 payloads and final parameters exceeding native admission.
 pub(super) fn encode(context: i64, payload: &[u8]) -> Result<String, DesktopError> {
+    encode_message(context, payload, None)
+}
+
+/// Qualify an ordinary response with the exact private ticket that admitted its request.
+pub(super) fn encode_owned(
+    context: i64,
+    payload: &[u8],
+    ticket: crate::main_panel_ingress::Ticket,
+) -> Result<String, DesktopError> {
+    encode_message(context, payload, Some(ticket))
+}
+
+/// Serialize one bounded private control operation through the same native CDP owner.
+pub(super) fn transport(
+    context: i64,
+    action: &str,
+    lane: crate::main_panel_ingress::Lane,
+    ticket: crate::main_panel_ingress::Ticket,
+) -> Result<String, DesktopError> {
+    parameters(
+        context,
+        &format!(
+            "globalThis.__sugarcubes_substitute_transport_v1({action:?},{:?},{})",
+            lane.token(),
+            ticket.0
+        ),
+    )
+}
+
+/// Borrow already-validated public JSON and optionally append its private admission identity.
+fn encode_message(
+    context: i64,
+    payload: &[u8],
+    ticket: Option<crate::main_panel_ingress::Ticket>,
+) -> Result<String, DesktopError> {
     if payload.len() > MAX_PAYLOAD_BYTES {
         return Err(DesktopError::message("encode_panel_delivery", "payload bound exceeded"));
     }
     let payload = std::str::from_utf8(payload)
         .map_err(|cause| DesktopError::new("encode_panel_utf8", cause))?;
-    let expression = format!("{PREFIX}{payload})");
+    let expression = match ticket {
+        Some(ticket) => format!("{PREFIX}{payload},{})", ticket.0),
+        None => format!("{PREFIX}{payload})"),
+    };
+    parameters(context, &expression)
+}
+
+/// Enforce the final command bound for both public delivery and private admission effects.
+fn parameters(context: i64, expression: &str) -> Result<String, DesktopError> {
     let parameters = serde_json::to_string(&Parameters {
-        expression: &expression,
+        expression,
         context_id: context,
         return_by_value: true,
     })

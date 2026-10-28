@@ -101,6 +101,7 @@ pub(crate) struct ProductionChild {
     main: main::MainPreparation,
     output: output::ChildOutput,
     panel: Option<panel::PanelOwner>,
+    panel_deliveries: panel::Deliveries,
     panel_owner_admission_warned: bool,
     running_backend: Option<backend::RunningBackendBinding>,
     #[cfg(feature = "native-composition")]
@@ -170,6 +171,7 @@ impl ProductionChild {
             main: main::MainPreparation::new(settings),
             output: output::ChildOutput::new(),
             panel: None,
+            panel_deliveries: panel::Deliveries::new(),
             panel_owner_admission_warned: false,
             running_backend: None,
             #[cfg(feature = "native-composition")]
@@ -366,10 +368,7 @@ impl ProductionChild {
             {
                 return Ok(Some(DesktopStartupCommand::SendPanel(command)));
             }
-            if !self.shutdown.closing()
-                && let Some(reply) =
-                    self.panel.as_mut().and_then(panel::PanelOwner::take_canvas_reply)
-            {
+            if let Some(reply) = self.panel_deliveries.take_command(self.identity) {
                 return Ok(Some(reply));
             }
             if !self.shutdown.closing()

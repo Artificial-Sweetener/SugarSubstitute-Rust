@@ -94,6 +94,10 @@ impl ChildShutdown {
     pub(super) fn closing(&self) -> bool {
         self.closing
     }
+    /// Whether the actual native owner has reported complete retirement.
+    pub(super) const fn native_retired(&self) -> bool {
+        self.native_retired
+    }
     pub(super) fn deadline(&self) -> Option<Moment> {
         [self.pending.map(|p| p.original), self.budget.map(|b| b.settle_until)]
             .into_iter()
@@ -205,6 +209,7 @@ impl ProductionChild {
             self.main.close();
             self.output.close();
             self.panel = None;
+            self.panel_deliveries.clear();
         }
         // The existing control owner freezes its own header before capture measurement
         // completes. Genuine capture custody and its independent budget remain unchanged.

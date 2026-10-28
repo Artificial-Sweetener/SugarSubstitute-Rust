@@ -162,6 +162,11 @@ pub(super) fn drain(
             DesktopStartupCommand::SendSurface(reply) => {
                 main_operation(session, content, |owner| owner.send_surface(reply).map(|()| None))?;
             }
+            DesktopStartupCommand::CompletePanelIngress(receipt) => {
+                main_operation(session, content, |owner| {
+                    owner.complete_panel_ingress(receipt).map(|()| None)
+                })?;
+            }
             #[cfg(feature = "k1-native-qualification")]
             DesktopStartupCommand::CaptureMainPreview { identity, source_deadline, downloads } => {
                 tracing::info!(operation="main_command_dispatched", command="CaptureMainPreview", identity=?identity,

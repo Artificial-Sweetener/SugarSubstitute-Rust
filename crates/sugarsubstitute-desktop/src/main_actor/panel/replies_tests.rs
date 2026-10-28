@@ -3,7 +3,10 @@
 //! Exercise response ordering, backpressure and lifetime without a native browser.
 
 use super::*;
-use crate::main_events::{Command, Events, Kind};
+use crate::{
+    CanvasContextReply, MainIdentity, SurfaceReply,
+    main_events::{Command, Events, Kind},
+};
 use serde_json::{Value, json};
 use std::error::Error;
 use sugarsubstitute_contracts::{
@@ -37,13 +40,17 @@ fn identity() -> Result<MainIdentity, Box<dyn Error>> {
     })
 }
 
-fn context(identity: MainIdentity, id: u64, lease: &MemoryLease) -> Result<Reply, Box<dyn Error>> {
+fn context(
+    identity: MainIdentity,
+    id: u64,
+    lease: &MemoryLease,
+) -> Result<NativeDelivery, Box<dyn Error>> {
     let session = PanelSession::for_main(identity)?;
     let request = CanvasContextRequest::decode(&serde_json::to_vec(&json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
         "requestId":id, "type":"context.request"
     }))?)?;
-    Ok(Reply::Context(CanvasContextReply::new(
+    Ok(NativeDelivery::Context(CanvasContextReply::new(
         identity,
         &request,
         CanvasDisplayCapability::Available,
@@ -51,7 +58,11 @@ fn context(identity: MainIdentity, id: u64, lease: &MemoryLease) -> Result<Reply
     )?))
 }
 
-fn surface(identity: MainIdentity, id: u64, lease: &MemoryLease) -> Result<Reply, Box<dyn Error>> {
+fn surface(
+    identity: MainIdentity,
+    id: u64,
+    lease: &MemoryLease,
+) -> Result<NativeDelivery, Box<dyn Error>> {
     let session = PanelSession::for_main(identity)?;
     let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
@@ -62,7 +73,7 @@ fn surface(identity: MainIdentity, id: u64, lease: &MemoryLease) -> Result<Reply
     let CanvasSurfaceMessage::Request(request) = message else {
         return Err("Expected a surface request".into());
     };
-    Ok(Reply::Surface(SurfaceReply::new(
+    Ok(NativeDelivery::Surface(SurfaceReply::new(
         identity,
         &request,
         CanvasSurfaceReplyStatus::Ready,
@@ -108,10 +119,14 @@ fn replenished_panel_evidence_cannot_starve_real_reply_custody() -> Result<(), B
     let mut first_reply_turn = None;
     for turn in 1..=64 {
         if replies.reply_due()
-            && replies.progress(true, |owner, payload| {
-                assert_eq!(owner, identity);
-                let message: Value = serde_json::from_slice(payload)
-                    .map_err(|cause| DesktopError::new("test_reply", cause))?;
+            && replies.progress(true, |reply| {
+                assert_eq!(reply.identity(), identity);
+                let message: Value = serde_json::from_slice(
+                    reply
+                        .payload()
+                        .ok_or_else(|| DesktopError::message("test_reply", "missing payload"))?,
+                )
+                .map_err(|cause| DesktopError::new("test_reply", cause))?;
                 sent.push(message["requestId"].as_u64().ok_or_else(|| {
                     DesktopError::message("test_reply", "request identity is missing")
                 })?);
@@ -153,7 +168,7 @@ fn busy_reply_turn_services_real_completion_evidence_before_retry() -> Result<()
 
     let mut sent = Vec::new();
     assert!(replies.reply_due());
-    assert!(!replies.progress(false, |_, _| {
+    assert!(!replies.progress(false, |_| {
         sent.push(0);
         Ok(())
     })?);
@@ -163,10 +178,14 @@ fn busy_reply_turn_services_real_completion_evidence_before_retry() -> Result<()
         Ok(())
     })?);
     replies.evidence_serviced();
-    assert!(replies.progress(true, |owner, payload| {
-        assert_eq!(owner, identity);
-        let message: Value = serde_json::from_slice(payload)
-            .map_err(|cause| DesktopError::new("test_reply", cause))?;
+    assert!(replies.progress(true, |reply| {
+        assert_eq!(reply.identity(), identity);
+        let message: Value = serde_json::from_slice(
+            reply
+                .payload()
+                .ok_or_else(|| DesktopError::message("test_reply", "missing payload"))?,
+        )
+        .map_err(|cause| DesktopError::new("test_reply", cause))?;
         sent.push(
             message["requestId"].as_u64().ok_or_else(|| {
                 DesktopError::message("test_reply", "request identity is missing")
@@ -188,17 +207,21 @@ fn busy_delivery_retains_original_claims_and_sends_each_reply_in_order()
     queue.push(context(identity, 1, &lease)?)?;
     queue.push(surface(identity, 2, &lease)?)?;
     let mut sent = Vec::new();
-    assert!(!queue.progress(false, |_, _| {
+    assert!(!queue.progress(false, |_| {
         sent.push(0);
         Ok(())
     })?);
     assert!(sent.is_empty());
     assert!(lease.claim(1).is_err());
     for expected in [1, 2] {
-        assert!(queue.progress(true, |owner, payload| {
-            assert_eq!(owner, identity);
-            let message: Value = serde_json::from_slice(payload)
-                .map_err(|cause| DesktopError::new("test_reply", cause))?;
+        assert!(queue.progress(true, |reply| {
+            assert_eq!(reply.identity(), identity);
+            let message: Value = serde_json::from_slice(
+                reply
+                    .payload()
+                    .ok_or_else(|| DesktopError::message("test_reply", "missing payload"))?,
+            )
+            .map_err(|cause| DesktopError::new("test_reply", cause))?;
             assert_eq!(message["requestId"], expected);
             sent.push(expected);
             Ok(())
@@ -206,26 +229,33 @@ fn busy_delivery_retains_original_claims_and_sends_each_reply_in_order()
     }
     assert_eq!(sent, [1, 2]);
     assert!(queue.is_empty());
-    assert!(!queue.progress(true, |_, _| Ok(()))?);
+    assert!(!queue.progress(true, |_| Ok(()))?);
     assert!(lease.claim(2 * SurfaceReply::STORAGE_BYTES).is_ok());
     Ok(())
 }
 
 #[test]
-fn failed_submission_retains_reply_until_close() -> Result<(), Box<dyn Error>> {
+fn failed_submission_transfers_original_custody_to_its_native_owner() -> Result<(), Box<dyn Error>>
+{
     let identity = identity()?;
     let lease = MemoryLease::new(SurfaceReply::STORAGE_BYTES, Box::new(Release));
     let mut queue = Replies::new();
     queue.push(surface(identity, 3, &lease)?)?;
+    let mut native = None;
     assert!(
         queue
-            .progress(true, |_, _| Err(DesktopError::message("test", "submission failed")))
+            .progress(true, |reply| {
+                native = Some(reply);
+                Err(DesktopError::message("test", "submission failed"))
+            })
             .is_err()
     );
-    assert!(!queue.is_empty());
+    assert!(queue.is_empty());
     assert!(lease.claim(1).is_err());
     queue.clear();
     assert!(queue.is_empty());
+    assert!(lease.claim(1).is_err());
+    drop(native);
     assert!(lease.claim(SurfaceReply::STORAGE_BYTES).is_ok());
     Ok(())
 }

@@ -192,6 +192,25 @@ impl Receivers {
         completion::call(&self.core, &self.operations, kind, method, parameters)
     }
 
+    /// Transfer complete typed delivery custody before submitting its possibly reentrant native call.
+    pub(crate) fn deliver(
+        &self,
+        parameters: &str,
+        delivery: crate::main_native_delivery::OwnedDelivery,
+    ) -> Result<(), DesktopError> {
+        self.require_outer_call()?;
+        completion::call_owned(&self.core, &self.operations, parameters, delivery)
+    }
+
+    /// Take a returned callback only while the outer actor can validate its result and navigation.
+    pub(crate) fn take_delivery(
+        &self,
+        id: u64,
+    ) -> Result<crate::main_native_delivery::OwnedDelivery, DesktopError> {
+        self.require_outer_call()?;
+        self.operations.take_delivery(id)
+    }
+
     /// Open only the exact current trusted frontend navigation after both authorization fences.
     pub(super) fn reveal_navigation(&self) {
         self.navigation.revealed();
@@ -211,6 +230,7 @@ impl Receivers {
     pub(crate) fn retire_step(&mut self) -> Result<bool, DesktopError> {
         self.require_outer_call()?;
         self.events.close_admission();
+        self.operations.retire_completed();
         if !self.downloads.retire_step()? {
             return Ok(false);
         }

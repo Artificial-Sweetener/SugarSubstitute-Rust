@@ -64,6 +64,7 @@ pub(crate) struct MainActor {
     composition_registered: bool,
     panel_bridge: Option<panel::bridge::Bridge>,
     canvas_replies: panel::Replies,
+    panel_transport: panel::admission::Admission,
     panel_navigation_started: bool,
     receivers: Option<crate::windows_main_receivers::Receivers>,
     events: Option<Rc<Events>>,
@@ -76,7 +77,6 @@ pub(crate) struct MainActor {
     native_storage: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
     failure_observation: &'static str,
     probe_diagnostics: probe_diagnostics::ProbeDiagnostics,
-    panel_ingress_overflow: bool,
     #[cfg(feature = "k1-native-qualification")]
     preview: Option<render_preview::Capture>,
     #[cfg(feature = "k1-native-qualification")]
@@ -108,6 +108,7 @@ impl MainActor {
             request.versions(),
             request.storage_lease(),
         )?;
+        let panel_transport = panel::admission::Admission::new(request.storage_lease())?;
         Ok(Self {
             request: Some(request),
             admission,
@@ -125,6 +126,7 @@ impl MainActor {
             composition_registered: false,
             panel_bridge: None,
             canvas_replies: panel::Replies::new(),
+            panel_transport,
             panel_navigation_started: false,
             receivers: None,
             events: Some(events),
@@ -137,7 +139,6 @@ impl MainActor {
             native_storage: Some(native_storage),
             failure_observation: "None",
             probe_diagnostics: probe_diagnostics::ProbeDiagnostics::default(),
-            panel_ingress_overflow: false,
             #[cfg(feature = "k1-native-qualification")]
             preview: None,
             #[cfg(feature = "k1-native-qualification")]
@@ -175,6 +176,7 @@ impl MainActor {
                 || self.events.as_ref().is_some_and(|events| events.remaining() != 0)
                 || self.panel_bridge_needs_progress()
                 || self.canvas_reply_needs_progress()
+                || self.panel_transport_needs_progress()
                 || self.preview_needs_progress())
     }
     fn request(&self) -> Result<&MainWindowRequest, DesktopError> {
@@ -259,6 +261,9 @@ impl MainActor {
         }
         if self.stage != ConstructionStage::Live {
             return self.construct_step(target, proxy, title);
+        }
+        if self.progress_panel_transport()? {
+            return Ok(None);
         }
         let reply_was_due = self.canvas_replies.reply_due();
         if reply_was_due && self.progress_canvas_reply()? {
@@ -365,6 +370,8 @@ impl MainActor {
         self.confirm_visible()?;
         self.receivers()?.reveal_navigation();
         self.revealed = true;
+        self.panel_transport
+            .synchronize(self.readiness.as_ref().and_then(MainReadiness::panel_context));
         #[cfg(feature = "k1-native-qualification")]
         tracing::info!(operation="main_revealed", identity=?identity,
             "Actual ready Main reveal completed after splash retirement");
