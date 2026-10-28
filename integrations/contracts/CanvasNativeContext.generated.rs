@@ -24,6 +24,43 @@ impl CanvasReadRequest {
     }
 }
 
+/// Schema-defined untrusted CanvasFailure data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasFailure {
+    pub(super) status: String,
+    pub(super) message: String,
+}
+impl CanvasFailure {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        valid_canvas_failure_status(&self.status) && self.message.encode_utf16().count() <= 512
+    }
+}
+
+/// Schema-defined untrusted CanvasErrorReply data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasErrorReply {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+    pub(super) failure: CanvasFailure,
+}
+impl CanvasErrorReply {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && (1..=2147483647).contains(&self.request_id)
+            && self.r#type == "error.reply"
+            && self.failure.valid()
+    }
+}
+
 /// Schema-defined untrusted CanvasNativeCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -96,4 +133,8 @@ impl CanvasNativeReadReply {
 pub(super) fn valid_panel_session(value: &str) -> bool {
     (16..=80).contains(&value.len())
         && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}
+
+fn valid_canvas_failure_status(value: &str) -> bool {
+    matches!(value, "unavailable" | "unsupported" | "stale" | "cancelled" | "error")
 }

@@ -51,6 +51,8 @@ function nativeContextDefinitions(definitions: Record<string, unknown>): Record<
     throw new Error('Canvas context schema no longer supports the native display-only form.');
   return {
     CanvasReadRequest: definitions.CanvasReadRequest,
+    CanvasFailure: definitions.CanvasFailure,
+    CanvasErrorReply: definitions.CanvasErrorReply,
     CanvasNativeCapabilities: capabilities[0],
     CanvasNativeDescriptor: {
       ...descriptor,

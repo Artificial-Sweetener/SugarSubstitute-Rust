@@ -44,6 +44,14 @@
       "document": null
     }
   },
+  "cancelled": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "session-12345678",
+    "requestId": 7,
+    "type": "error.reply",
+    "failure": { "status": "cancelled", "message": "" }
+  },
   "invalidRequests": [
     {
       "protocol": "sugarcubes.canvas",

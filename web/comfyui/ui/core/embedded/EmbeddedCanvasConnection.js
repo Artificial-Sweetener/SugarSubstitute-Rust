@@ -41,8 +41,11 @@ export class EmbeddedCanvasConnection {
     #read = {};
     #refreshing = null;
     #refreshAgain = false;
+    #disposed = false;
     /** Read context and optional surface capabilities before publishing panel readiness. */
     connect(transport, window, report) {
+        if (this.#disposed)
+            throw new Error('The native canvas connection is closed.');
         if (this.#client)
             return;
         const client = new CanvasClient(transport.session, {
@@ -116,8 +119,11 @@ export class EmbeddedCanvasConnection {
             return { status: 'unavailable', message: 'The native canvas is unavailable.' };
         return await this.#client.insertImage(image, cancellation);
     }
-    /** Stop accepting replies before releasing pending requests at page teardown. */
+    /** Retire this page's connection permanently before releasing pending requests. */
     dispose() {
+        if (this.#disposed)
+            return;
+        this.#disposed = true;
         this.#stop?.();
         this.#stop = null;
         this.#client?.dispose();
