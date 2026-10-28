@@ -15,26 +15,34 @@ impl NativeSurface {
         if let Some(frame) = self.frame(session) {
             return MainCanvasPresentation::Frame(frame);
         }
-        let retained = self.binding.as_ref().and_then(|binding| {
-            let presented = binding.presented?;
-            if self.closed
-                || !binding.committed
-                || binding.placement != Some(presented.placement)
-                || binding.allocation != Some(presented.allocation)
-            {
-                return None;
-            }
-            Some(presented)
-        });
+        let retained = self
+            .binding
+            .as_ref()
+            .filter(|binding| binding.presented.is_some())
+            .or(self.retained.as_ref())
+            .and_then(|binding| {
+                let presented = binding.presented?;
+                if self.closed
+                    || !binding.committed
+                    || binding.placement != Some(presented.placement)
+                    || binding.allocation != Some(presented.allocation)
+                {
+                    return None;
+                }
+                Some(presented)
+            });
         retained.map_or(MainCanvasPresentation::Hide, MainCanvasPresentation::Retain)
     }
 
     /// Resolve initial selection only once actual current pixels have been prepared.
     pub(in crate::startup::canvas) fn poll(
         &mut self,
-        session: &Session,
+        session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
         if self.closed {
+            return Ok(());
+        }
+        if self.poll_attachment(session)? {
             return Ok(());
         }
         if session.initialized() {
@@ -74,7 +82,17 @@ impl NativeSurface {
         &self,
         session: &'a Session,
     ) -> Option<MainCanvasFrame<'a>> {
-        let binding = self.binding.as_ref()?;
+        let binding = if self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| matches!(pending.kind, PendingKind::Prepare))
+        {
+            self.retained.as_ref()?
+        } else if self.restoring {
+            return None;
+        } else {
+            self.binding.as_ref()?
+        };
         if !binding.selected || !binding.committed {
             return None;
         }
@@ -106,14 +124,27 @@ impl NativeSurface {
         if frame.pending {
             session.did_present_cpu(target)?;
         }
-        let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
+        let preparing = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| matches!(pending.kind, PendingKind::Prepare));
+        let binding = if preparing { self.retained.as_mut() } else { self.binding.as_mut() }
+            .ok_or("Canvas binding disappeared")?;
+        let promoting = binding.document.is_some();
+        if let Some(token) = binding.document {
+            session.promote_document(token, target)?;
+            binding.document = None;
+        }
         binding.presented = Some(MainCanvasRetention {
             identity: binding.identity,
             target,
             placement: binding.placement.ok_or("Canvas placement disappeared")?,
             allocation: binding.allocation.ok_or("Canvas allocation disappeared")?,
         });
-        if let Some(pending) = self.pending.take() {
+        if promoting {
+            self.retained = None;
+        }
+        if !preparing && let Some(pending) = self.pending.take() {
             self.reply(
                 pending.identity,
                 &pending.request,

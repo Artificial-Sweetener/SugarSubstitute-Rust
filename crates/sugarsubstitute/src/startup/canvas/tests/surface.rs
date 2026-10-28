@@ -22,6 +22,7 @@ use sugarsubstitute_desktop::{
 };
 
 mod backend;
+mod replacement;
 
 struct ClockValue(AtomicU64);
 impl Clock for ClockValue {
@@ -103,6 +104,24 @@ fn pump(canvas: &mut EmbeddedCanvas, client: &ExecutionClient) -> Result<(), Box
     canvas.poll()
 }
 
+/// Observe actual preparation completion rather than assuming immediate empty-scene admission.
+fn wait_reply(
+    canvas: &mut EmbeddedCanvas,
+    client: &ExecutionClient,
+    wake: &Wake,
+    id: u64,
+    status: &str,
+) -> Result<(), Box<dyn Error>> {
+    loop {
+        let revision = wake.revision();
+        pump(canvas, client)?;
+        if let Some(command) = canvas.take_command() {
+            return check_reply(command, id, status);
+        }
+        wake.wait_after(revision)?;
+    }
+}
+
 fn image(path: &std::path::Path, color: [u8; 3]) -> Result<(), Box<dyn Error>> {
     let file = std::fs::File::create(path)?;
     let mut encoder = png::Encoder::new(file, 1, 1);
@@ -158,7 +177,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         None,
         memory.claim(64 * 1024)?,
     )?;
-    reply(&mut canvas, 1, "ready")?;
+    wait_reply(&mut canvas, &client, &wake, 1, "ready")?;
     let geometry = json!({"geometry":{
         "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":10,"y":20},
         "viewport":{"width":8,"height":8}, "clip":{"x":10,"y":20,"width":8,"height":8},
@@ -231,6 +250,18 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     canvas.presented(second_stamp)?;
     reply(&mut canvas, 5, "applied")?;
 
+    replacement::Replacement {
+        canvas: &mut canvas,
+        client: &client,
+        wake: &wake,
+        clock: &clock,
+        panel: &panel,
+        memory: &memory,
+        identity,
+        allocation,
+    }
+    .rollback(second_stamp)?;
+
     let hidden_geometry = json!({"geometry":{
         "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":10,"y":20},
         "viewport":{"width":8,"height":8}, "clip":{"x":0,"y":0,"width":0,"height":0},
@@ -277,7 +308,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     canvas.presented(restored_stamp)?;
     reply(&mut canvas, 7, "applied")?;
 
-    clock.0.store(2_000_000_000, Ordering::SeqCst);
+    clock.0.fetch_add(1_000_000_000, Ordering::SeqCst);
     let resized_geometry = json!({"geometry":{
         "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":10,"y":20},
         "viewport":{"width":10,"height":10}, "clip":{"x":10,"y":20,"width":10,"height":10},

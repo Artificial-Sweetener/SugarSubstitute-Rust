@@ -26,6 +26,19 @@ pub(super) struct DisplayEvidence {
 }
 
 impl Session {
+    /// Withdraw presentation authority when its native attachment is released.
+    /// Pending CPU pixels remain owned, but cannot wait for an acknowledgement from a dead peer.
+    /// Running display work remains observed and is rejected while the document is hidden.
+    ///
+    /// # Errors
+    /// Preserves custody when pending frame evidence or its pacing identity is inconsistent.
+    #[cfg(feature = "native-composition")]
+    pub(crate) fn revoke_presentation(&mut self) -> Result<(), Box<dyn Error>> {
+        self.abandon_cpu_frame(self.navigation_time())?;
+        self.drawable = false;
+        Ok(())
+    }
+
     /// Check frame and pacing custody before another owner mutates its viewport or source.
     pub(super) fn pending_cpu_withdrawal(
         &self,
@@ -333,7 +346,11 @@ impl Session {
             }
             Err(cause) => {
                 self.pacing.abandoned(target, now)?;
-                if self.closing || self.pending_open.is_some() {
+                #[cfg(feature = "native-composition")]
+                let restoring = self.restoring_document();
+                #[cfg(not(feature = "native-composition"))]
+                let restoring = false;
+                if self.closing || self.pending_open.is_some() || restoring {
                     tracing::debug!(operation="canvas_display_stopped", cause=%cause, "Canvas display reached a terminal outcome before replacement");
                 } else {
                     self.fail(cause);

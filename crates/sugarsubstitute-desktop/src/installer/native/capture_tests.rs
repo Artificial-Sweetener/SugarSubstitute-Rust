@@ -7,6 +7,7 @@ use crate::pixel_capture::PixelCapture;
 #[derive(Default)]
 pub(super) struct Evidence {
     pub(super) enabled: bool,
+    pub(super) expected_shape: Option<FrameShape>,
     surfaces: usize,
     text: usize,
     scrollbar: usize,
@@ -14,7 +15,7 @@ pub(super) struct Evidence {
 }
 impl PixelCapture for Evidence {
     fn surface(&mut self, frame: &PreparedFrame) {
-        assert_eq!((frame.shape().width(), frame.shape().height()), (1180, 760));
+        assert_eq!(Some(frame.shape()), self.expected_shape);
         self.surfaces += 1;
     }
     fn overlay(

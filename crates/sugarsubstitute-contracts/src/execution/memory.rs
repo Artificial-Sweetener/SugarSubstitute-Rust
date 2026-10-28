@@ -110,6 +110,14 @@ pub struct MemoryClaim {
 }
 
 impl MemoryClaim {
+    /// Move an existing allocation's charge only after the replacement reservation admits it.
+    pub(crate) fn fund_sibling(&self, allocation: &mut Self) -> Result<(), MemoryClaimError> {
+        if !self.lease.same_reservation(&allocation.lease) {
+            *allocation = self.lease.claim(allocation.bytes)?;
+        }
+        Ok(())
+    }
+
     /// Claim distinct retained storage from this allocation's original admitted reservation.
     pub(crate) fn claim_sibling(&self, bytes: u64) -> Result<Self, MemoryClaimError> {
         self.lease.claim(bytes)

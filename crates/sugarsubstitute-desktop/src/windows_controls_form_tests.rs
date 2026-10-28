@@ -155,6 +155,20 @@ fn qualify() -> TestResult {
             drain_inputs(&mut events).0.is_empty(),
             "Acknowledged snapshots must not create edit feedback"
         );
+        let value_before_hide = engine.field_value()?;
+        plan[1].control.visible = false;
+        controls.update(&plan)?;
+        controls.present_fields(&frame, true)?;
+        assert_eq!(engine.field_value()?.text, value_before_hide.text);
+        assert_eq!(engine.field_value()?.revision, value_before_hide.revision);
+        assert_eq!(engine.message(EM_GETSEL, WPARAM(0), LPARAM(0))?, selection);
+        plan[1].control.visible = true;
+        controls.update(&plan)?;
+        controls.present_fields(&frame, true)?;
+        assert_eq!(controls.creation.peers[1].value.hwnd, original);
+        assert_eq!(engine.field_value()?.text, value_before_hide.text);
+        assert_eq!(engine.message(EM_GETSEL, WPARAM(0), LPARAM(0))?, selection);
+        controls.focus(plan[1].control.id)?;
         // SAFETY: Send a character only to this original field on the private inactive desktop.
         unsafe {
             SendMessageW(original, WM_CHAR, Some(WPARAM(usize::from(b'Z'))), Some(LPARAM(1)))

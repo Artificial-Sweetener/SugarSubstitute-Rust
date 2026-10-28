@@ -56,7 +56,7 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
         None,
         memory.claim(64 * 1024)?,
     )?;
-    reply(&mut canvas, 1, "ready")?;
+    wait_reply(&mut canvas, &client, &wake, 1, "ready")?;
     assert!(canvas.matches_backend(backend));
     canvas.surface(
         identity,

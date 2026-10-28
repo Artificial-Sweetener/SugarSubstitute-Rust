@@ -90,6 +90,48 @@ fn presenter_storage_cannot_duplicate_claims_and_reuses_only_released_capacity()
 }
 
 #[test]
+fn retained_storage_transfers_credit_without_gaps_or_duplicate_exposure_claims()
+-> Result<(), Box<dyn Error>> {
+    let make = |bytes, released: &Arc<Releases>| -> Result<PreparedFrame, Box<dyn Error>> {
+        let mut validator = FrameValidator::new(
+            FrameShape::new(1, 1, 1.0)?,
+            identity()?,
+            vec![0; 4],
+            lease(bytes, released),
+        )?;
+        assert!(validator.validate_next(NonZeroUsize::MIN)?);
+        Ok(validator.finish()?)
+    };
+    let first_release = Arc::new(Releases::default());
+    let second_release = Arc::new(Releases::default());
+    let first = make(12, &first_release)?;
+    let mut allocation = first.claim_storage(8)?;
+    first.fund_storage(&mut allocation)?;
+    assert_eq!(first.claim_storage(1).err().map(|error| error.available_bytes), Some(0));
+    drop(first);
+    let rejected = make(11, &Arc::new(Releases::default()))?;
+    assert_eq!(
+        rejected.fund_storage(&mut allocation).err(),
+        Some(MemoryClaimError { requested_bytes: 8, available_bytes: 7 })
+    );
+    assert_eq!(first_release.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(allocation.bytes(), 8);
+    assert_eq!(allocation.reserved_bytes(), 12);
+    // Equal frame identities cannot stand in for actual reservation identity.
+    let second = make(12, &second_release)?;
+    second.fund_storage(&mut allocation)?;
+    assert_eq!(first_release.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(first_release.bytes.load(Ordering::SeqCst), 12);
+    second.fund_storage(&mut allocation)?;
+    drop(second);
+    assert_eq!(second_release.calls.load(Ordering::SeqCst), 0);
+    drop(allocation);
+    assert_eq!(second_release.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(second_release.bytes.load(Ordering::SeqCst), 12);
+    Ok(())
+}
+
+#[test]
 fn shape_bounds_cover_dimensions_scales_and_exact_tight_storage() -> Result<(), FrameError> {
     for (width, height) in [(0, 1), (1, 0), (4097, 1), (1, 4097), (u32::MAX, u32::MAX)] {
         assert_eq!(FrameShape::new(width, height, 1.0), Err(FrameError::InvalidDimensions));

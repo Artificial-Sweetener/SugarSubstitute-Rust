@@ -184,10 +184,12 @@ impl Controls {
     ) -> Result<(), DesktopError> {
         for slot in &self.creation.peers {
             let peer = &slot.value;
-            if let Some(engine) = &peer.engine
-                && peer.snapshot.visible
-            {
-                engine.prepare(frame, None, peer.rect, dark, self.window.scale_factor())?;
+            if let Some(engine) = &peer.engine {
+                if peer.snapshot.visible {
+                    engine.prepare(frame, None, peer.rect, dark, self.window.scale_factor())?;
+                } else {
+                    engine.hide_presentation(frame)?;
+                }
             }
         }
         Ok(())

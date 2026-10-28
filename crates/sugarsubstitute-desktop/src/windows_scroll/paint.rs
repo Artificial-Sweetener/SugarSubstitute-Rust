@@ -47,6 +47,8 @@ impl Paint {
             Dib::for_shape(&mut self.output, frame, shape)?;
             self.alpha = replacement;
         }
+        self.alpha.fund(frame)?;
+        Dib::for_shape(&mut self.output, frame, shape)?;
         self.bounds = bounds;
         self.source = frame.clone();
         Ok(())

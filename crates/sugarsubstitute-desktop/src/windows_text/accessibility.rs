@@ -69,7 +69,7 @@ struct Shared {
     root: Cell<*mut c_void>,
     child: Cell<*mut c_void>,
     leases: RefCell<Vec<Weak<Lease>>>,
-    _claim: MemoryClaim,
+    claim: RefCell<MemoryClaim>,
 }
 impl Shared {
     /// Native disconnection still needs immutable identity after document access is fenced.
@@ -142,6 +142,22 @@ pub(super) struct Accessibility {
     published: Cell<bool>,
 }
 impl Accessibility {
+    /// Preserve provider custody while moving its storage charge to the accepted native frame.
+    pub(super) fn fund(
+        &self,
+        frame: &sugarsubstitute_contracts::presentation::PreparedFrame,
+    ) -> Result<(), DesktopError> {
+        self.shared.check().map_err(|cause| DesktopError::new("text_accessibility_fund", cause))?;
+        let mut claim = self
+            .shared
+            .claim
+            .try_borrow_mut()
+            .map_err(|cause| DesktopError::new("text_accessibility_fund", cause))?;
+        frame
+            .fund_storage(&mut claim)
+            .map_err(|cause| DesktopError::new("text_accessibility_fund", cause))
+    }
+
     /// Update the same provider's localized accessible name without replacing its document.
     pub(super) fn rename(&self, label: &'static str) -> Result<(), DesktopError> {
         self.shared.check().map_err(|cause| DesktopError::new("text_accessibility_name", cause))?;
@@ -205,7 +221,7 @@ impl Accessibility {
             root: Cell::new(std::ptr::null_mut()),
             child: Cell::new(std::ptr::null_mut()),
             leases: RefCell::new(inventory),
-            _claim: claim,
+            claim: RefCell::new(claim),
         });
         let site: abi::Site = provider::WindowlessSite { shared: shared.clone() }.into();
         let site: IRawElementProviderWindowlessSite = site.cast()?;

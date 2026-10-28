@@ -228,6 +228,7 @@ fn hidden_complete_frame_reuses_same_native_buffer_across_checked_show_hide_expo
     let mut fixture = Fixture::new()?;
     disable_splash_transitions(fixture.window)?;
     let (frame, released) = frame()?;
+    let (replacement, replacement_released) = self::frame()?;
     let mut retained = None;
     let dib = prepare_pixels(&mut retained, &frame, NativeMaterial::Mica, 32)?;
     assert!(!fixture.visible());
@@ -250,7 +251,14 @@ fn hidden_complete_frame_reuses_same_native_buffer_across_checked_show_hide_expo
         }
         assert!(dib.pixels_mut()?.chunks_exact(4).all(|pixel| pixel == [12, 10, 8, 247]));
     }
-    let dib = retained.as_mut().ok_or("retained native buffer absent")?;
+    let dib = prepare_pixels(&mut retained, &replacement, NativeMaterial::Mica, 32)?;
+    assert_eq!(dib.dc(), original_dc);
+    // SAFETY: Accepted replacement pixels reuse the same retained native bitmap and its affine DC.
+    assert_eq!(unsafe { GetCurrentObject(dib.dc(), OBJ_BITMAP) }, original_bitmap);
+    drop(frame);
+    assert_eq!(released.load(Ordering::SeqCst), 1, "old preparation credit remained pinned");
+    drop(replacement);
+    assert_eq!(replacement_released.load(Ordering::SeqCst), 0);
     dib.close()?;
     let failure = copy_to_window(fixture.window, dib, None)
         .err()
@@ -259,8 +267,8 @@ fn hidden_complete_frame_reuses_same_native_buffer_across_checked_show_hide_expo
     assert!(failure.source().is_some());
     retained = None;
     fixture.close()?;
-    drop((retained, frame, fixture));
-    assert_eq!(released.load(Ordering::SeqCst), 1);
+    drop((retained, fixture));
+    assert_eq!(replacement_released.load(Ordering::SeqCst), 1);
     Ok(())
 }
 

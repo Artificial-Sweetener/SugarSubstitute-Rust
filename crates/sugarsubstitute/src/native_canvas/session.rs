@@ -10,6 +10,10 @@ mod closing;
 mod completion;
 mod display;
 mod document;
+#[cfg(feature = "native-composition")]
+mod document_transaction;
+#[cfg(feature = "native-composition")]
+pub(crate) use document_transaction::DocumentToken;
 mod gpu;
 #[cfg(all(windows, feature = "native-composition"))]
 mod host_graphics;
@@ -87,7 +91,9 @@ struct Retired {
     _projection: Option<Box<CpuProjection>>,
     _buffers: [Option<ProjectionBuffer>; 2],
     _scene: Option<Scene>,
-    _document: Option<document::DocumentState>,
+    _document: Option<Box<document::DocumentState>>,
+    #[cfg(feature = "native-composition")]
+    _retained_document: Option<document_transaction::RetainedDocument>,
     _packet: Option<Packet>,
     _resources: Option<Resources>,
     _front: Option<Arc<CpuSurface>>,
@@ -153,7 +159,7 @@ pub(crate) struct Session {
     gpu_diagnostics: Option<sugarsubstitute_image_gpu::GpuDiagnostics>,
     presentation: attachment::Presentation,
     resources: Option<Resources>,
-    document: document::DocumentState,
+    document: Box<document::DocumentState>,
     loading: Option<Loading>,
     #[cfg(feature = "native-composition")]
     acquisition_retirement: Option<acquisition::Retirement>,
@@ -163,6 +169,13 @@ pub(crate) struct Session {
     /// Intent-through-native-queue acceptance, including import/load but excluding scanout.
     first_image_queue_latency: Option<Duration>,
     selection: u64,
+    source_sequence: u64,
+    #[cfg(feature = "native-composition")]
+    document_sequence: u64,
+    #[cfg(feature = "native-composition")]
+    document_transaction: Option<document_transaction::Transaction>,
+    #[cfg(feature = "native-composition")]
+    document_suspended: bool,
     rendering: Option<Rendering>,
     displaying: Option<display::Displaying>,
     pending_retirement: Option<Retired>,
@@ -199,7 +212,7 @@ impl Session {
     /// Report completed storage and document initialization without claiming a visible frame.
     pub(crate) fn initialized(&self) -> bool {
         self.resources.is_some()
-            && self.document.scene.is_some()
+            && self.initializing.is_none()
             && self.failed.is_none()
             && !self.closing
     }
@@ -243,7 +256,7 @@ impl Session {
             gpu_diagnostics: None,
             presentation: attachment::Presentation::Headless,
             resources: None,
-            document: document::DocumentState::new(view),
+            document: Box::new(document::DocumentState::new(view)),
             loading: None,
             #[cfg(feature = "native-composition")]
             acquisition_retirement: None,
@@ -251,6 +264,13 @@ impl Session {
             pending_first_image: None,
             first_image_queue_latency: None,
             selection: 1,
+            source_sequence: 1,
+            #[cfg(feature = "native-composition")]
+            document_sequence: 0,
+            #[cfg(feature = "native-composition")]
+            document_transaction: None,
+            #[cfg(feature = "native-composition")]
+            document_suspended: false,
             rendering: None,
             displaying: None,
             pending_retirement: None,

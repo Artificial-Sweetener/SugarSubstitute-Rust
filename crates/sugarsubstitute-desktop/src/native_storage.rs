@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Charge independent native pixel copies to their source frame's admitted reservation.
+//! Fund independent native pixel copies from accepted source frames without pinning obsolete preparation.
 
 use crate::DesktopError;
 use sugarsubstitute_contracts::{execution::MemoryClaim, presentation::PreparedFrame};
@@ -107,7 +107,7 @@ use windows::Win32::Graphics::Gdi::{
     DeleteDC, DeleteObject, HBITMAP, HDC, HGDIOBJ, SelectObject,
 };
 
-/// Own one selected top-down DIB and its original frame reservation on the native thread.
+/// Own one selected top-down DIB and its admitted storage credit on the native thread.
 #[cfg(target_os = "windows")]
 pub(crate) struct Dib {
     dc: HDC,
@@ -149,9 +149,17 @@ impl Dib {
             }
             *retained = Some(replacement);
         }
-        retained.as_mut().ok_or_else(|| {
+        let dib = retained.as_mut().ok_or_else(|| {
             DesktopError::message("allocate_dib", "DIB allocation did not retain a surface")
-        })
+        })?;
+        frame
+            .fund_storage(
+                dib.claim.as_mut().ok_or_else(|| {
+                    DesktopError::message("fund_dib", "Native storage credit absent")
+                })?,
+            )
+            .map_err(|cause| DesktopError::new("fund_dib", cause))?;
+        Ok(dib)
     }
 
     /// Claim the complete physical pixel storage before the first native allocation.

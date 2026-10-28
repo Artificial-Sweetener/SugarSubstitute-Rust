@@ -10,6 +10,8 @@ use sugarsubstitute_supervision::cache::{Namespace, RuntimeCache, storage_key};
 #[cfg(feature = "native-composition")]
 mod acquisition;
 mod frames;
+#[cfg(feature = "native-composition")]
+mod transactions;
 
 const FIXTURE_TIME: u64 = 4_000_000_000;
 

@@ -77,7 +77,7 @@ impl EmbeddedCanvas {
         backend: Option<crate::startup::CanvasBackend>,
     ) -> Result<(), Box<dyn Error>> {
         self.surface.backend(backend, self.session.as_mut())?;
-        if let Some(session) = &self.session {
+        if let Some(session) = &mut self.session {
             self.surface.poll(session)?;
         }
         Ok(())
@@ -144,7 +144,7 @@ impl EmbeddedCanvas {
         request: sugarsubstitute_contracts::canvas_context::CanvasContextRequest,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
-        self.surface.context(identity, request, claim, self.session.as_ref())
+        self.surface.context(identity, request, claim, self.session.as_mut())
     }
 
     /// Receive the current panel's shared surface operation.

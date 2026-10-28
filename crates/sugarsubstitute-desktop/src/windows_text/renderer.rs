@@ -88,6 +88,13 @@ impl Renderer {
             Dib::for_shape(&mut self.output, frame, shape)?;
             self.glyphs = Some(replacement);
         }
+        self.glyphs.as_mut().ok_or_else(|| rejected("console_glyphs_retired"))?.fund(frame)?;
+        Dib::for_shape(&mut self.output, frame, shape)?;
+        if let Some(claim) = &mut self._paint_claim {
+            frame
+                .fund_storage(claim)
+                .map_err(|cause| DesktopError::new("console_paint_funding", cause))?;
+        }
         self.source = frame.clone();
         self.transcript = transcript;
         self.bounds = bounds;

@@ -36,7 +36,7 @@ impl Fixture {
     }
 
     /// Observe a complete pending CPU frame while the shared executor delivers real work.
-    fn pending_frame(&mut self) -> Result<(FrameStamp, Extent, u32), Box<dyn Error>> {
+    pub(super) fn pending_frame(&mut self) -> Result<(FrameStamp, Extent, u32), Box<dyn Error>> {
         loop {
             let observed = self.wake.revision();
             self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;

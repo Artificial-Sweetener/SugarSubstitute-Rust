@@ -71,8 +71,9 @@ impl Session {
             revoked = true;
         }
         if revoked {
-            self.selection =
-                self.selection.checked_add(1).ok_or("Canvas source revision exhausted")?;
+            self.source_sequence =
+                self.source_sequence.checked_add(1).ok_or("Canvas source revision exhausted")?;
+            self.selection = self.source_sequence;
             self.abandon_cpu_frame(self.navigation_time())?;
         }
         Ok(())
@@ -91,7 +92,7 @@ impl Session {
         if source.is_none() {
             return Err("Canvas source is unavailable".into());
         }
-        let next = self.selection.checked_add(1).ok_or("Canvas source revision exhausted")?;
+        let next = self.source_sequence.checked_add(1).ok_or("Canvas source revision exhausted")?;
         let retiring = self
             .pending_open
             .as_ref()
@@ -108,6 +109,7 @@ impl Session {
         let source = source.take().ok_or("Canvas source is unavailable")?;
         self.input_observed = self.navigation_time();
         self.selection = next;
+        self.source_sequence = next;
         if self.first_image_queue_latency.is_none() {
             self.pending_first_image = Some((self.selection, self.input_observed));
         }

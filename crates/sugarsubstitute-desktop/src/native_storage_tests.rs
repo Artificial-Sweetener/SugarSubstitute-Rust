@@ -161,24 +161,33 @@ fn native_dib_drop_releases_bitmap_after_restoring_selection() -> Result<(), Box
     Ok(())
 }
 
-/// Same-size publication reuses the DIB and keeps the original reservation after source replacement.
+/// Same-size publication transfers admitted credit while preserving the exact native allocation.
 #[cfg(target_os = "windows")]
 #[test]
-fn native_dib_reuse_does_not_recharge_replacement_source() -> Result<(), Box<dyn Error>> {
+fn native_dib_reuse_transfers_credit_and_rejected_funding_preserves_storage()
+-> Result<(), Box<dyn Error>> {
     let (original, first_release) = frame(2, 2, 32)?;
     let mut retained = None;
     let first_handle = Dib::for_frame(&mut retained, &original)?.bitmap;
     drop(original);
     assert_eq!(first_release.calls.load(Ordering::SeqCst), 0);
+    let (underfunded, _) = frame(2, 2, 16)?;
+    let failure =
+        Dib::for_frame(&mut retained, &underfunded).err().ok_or("Unfunded reuse accepted")?;
+    assert!(failure.to_string().starts_with("fund_dib:"));
+    let held = retained.as_ref().ok_or("Rejected transfer lost original storage")?;
+    assert_eq!(held.bitmap, first_handle);
+    assert!(bitmap_live(held));
+    assert_eq!(first_release.calls.load(Ordering::SeqCst), 0);
     let (replacement, second_release) = frame(2, 2, 32)?;
     assert_eq!(Dib::for_frame(&mut retained, &replacement)?.bitmap, first_handle);
-    let available = replacement.claim_storage(16)?;
-    drop(available);
-    drop(replacement);
-    assert_eq!(second_release.calls.load(Ordering::SeqCst), 1);
-    assert_eq!(first_release.calls.load(Ordering::SeqCst), 0);
-    drop(retained);
+    assert_eq!(Dib::for_frame(&mut retained, &replacement)?.bitmap, first_handle);
+    assert!(replacement.claim_storage(1).is_err());
     assert_eq!(first_release.calls.load(Ordering::SeqCst), 1);
+    drop(replacement);
+    assert_eq!(second_release.calls.load(Ordering::SeqCst), 0);
+    drop(retained);
+    assert_eq!(second_release.calls.load(Ordering::SeqCst), 1);
     Ok(())
 }
 

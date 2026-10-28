@@ -15,7 +15,7 @@ use windows::Win32::{
     },
     System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
 };
-/// Native bitmap allocation and its target release before returning their original frame credit.
+/// Native bitmap allocation and its target release before returning their admitted storage credit.
 pub(crate) struct AlphaSurface {
     pub(crate) target: ID2D1RenderTarget,
     pub(crate) bitmap: IWICBitmap,
@@ -23,6 +23,13 @@ pub(crate) struct AlphaSurface {
     _claim: MemoryClaim,
 }
 impl AlphaSurface {
+    /// Keep reusable native pixels charged to the accepted frame without retaining obsolete work.
+    pub(crate) fn fund(&mut self, frame: &PreparedFrame) -> Result<(), DesktopError> {
+        frame
+            .fund_storage(&mut self._claim)
+            .map_err(|cause| DesktopError::new("console_glyph_funding", cause))
+    }
+
     /// Claim the exact bitmap extent before creating the retained affine software target.
     pub(crate) fn new(frame: &PreparedFrame, shape: FrameShape) -> Result<Self, DesktopError> {
         let claim = frame

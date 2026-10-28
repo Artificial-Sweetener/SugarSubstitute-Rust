@@ -207,6 +207,7 @@ pub(super) fn run(
                             owner.update(&next.specifications)?;
                             owner.clip(&next.clips)?;
                             owner.present_fields(page.frame, true)?;
+                            page.frame.fund_storage(storage.as_mut().ok_or("Native control storage absent")?)?;
                             let painter = presenter.as_mut().ok_or("Native installer presenter absent")?;
                             painter.present(page.frame, None)?;
                             identity = Some(page.frame.identity());

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Coordinate the shared web surface with the current authorized canvas and backend.
 
+mod attachment;
 mod presentation;
 #[cfg(test)]
 #[path = "surface/replies_tests.rs"]
@@ -25,7 +26,7 @@ use sugarsubstitute_desktop::{
     CanvasContextReply, DesktopStartupCommand, SurfaceReply,
     canvas::{
         MainCanvasFrame, MainCanvasRetention,
-        placement::{CanvasPlacement, WebViewAllocation, placement},
+        placement::{CanvasPlacement, WebViewAllocation, placement, preparation_viewport},
     },
 };
 use sugarsubstitute_image_io::CacheReuse;
@@ -39,6 +40,7 @@ struct Context {
 }
 
 struct Binding {
+    document: Option<crate::native_canvas::session::DocumentToken>,
     identity: MainIdentity,
     backend: Option<crate::startup::CanvasBackend>,
     address: CanvasSurfaceAddress,
@@ -52,6 +54,8 @@ struct Binding {
 
 #[derive(Clone, Copy)]
 enum PendingKind {
+    Prepare,
+    Restore,
     Select,
     Geometry,
     Hide,
@@ -71,6 +75,8 @@ pub(super) struct NativeSurface {
     #[cfg(test)]
     fixture_output: Option<PathBuf>,
     binding: Option<Binding>,
+    retained: Option<Binding>,
+    restoring: bool,
     pending: Option<Pending>,
     contexts: [Option<Context>; 4],
     replies: [Option<DesktopStartupCommand>; 8],
@@ -85,6 +91,8 @@ impl NativeSurface {
             #[cfg(test)]
             fixture_output: None,
             binding: None,
+            retained: None,
+            restoring: false,
             pending: None,
             contexts: std::array::from_fn(|_| None),
             replies: std::array::from_fn(|_| None),
@@ -128,11 +136,7 @@ impl NativeSurface {
             .is_some_and(|binding| binding.backend.is_some() && binding.backend != backend);
         self.backend = backend;
         if changed_attachment {
-            if let Some(session) = session {
-                session.revoke_acquirer()?;
-                session.input(Input::Drawable(false))?;
-            }
-            self.binding = None;
+            self.discard_attachment(session)?;
             self.replies = std::array::from_fn(|_| None);
             if let Some(pending) = self.pending.take() {
                 self.reply(
@@ -152,13 +156,13 @@ impl NativeSurface {
         identity: MainIdentity,
         request: CanvasContextRequest,
         claim: MemoryClaim,
-        session: Option<&Session>,
+        mut session: Option<&mut Session>,
     ) -> Result<(), Box<dyn Error>> {
         if self.closed {
             return Ok(());
         }
         #[cfg(feature = "k1-native-qualification")]
-        if !session.is_some_and(Session::initialized) {
+        if !session.as_deref().is_some_and(Session::initialized) {
             sugarsubstitute_desktop::qualification_trace::progress(
                 sugarsubstitute_desktop::qualification_trace::Progress::CanvasContextWaitingSession,
                 identity,
@@ -172,7 +176,7 @@ impl NativeSurface {
             );
         }
         if self.binding.as_ref().is_some_and(|binding| binding.identity != identity) {
-            self.binding = None;
+            self.discard_attachment(session.as_deref_mut())?;
             self.pending = None;
             self.contexts = std::array::from_fn(|_| None);
             self.replies = std::array::from_fn(|_| None);
@@ -183,7 +187,7 @@ impl NativeSurface {
             .find(|slot| slot.is_none())
             .ok_or("Canvas context queue is full")?;
         *slot = Some(Context { identity, request, claim });
-        if session.is_some_and(Session::initialized) && self.available(identity) {
+        if session.as_deref().is_some_and(Session::initialized) && self.available(identity) {
             self.flush_contexts()?;
         }
         Ok(())
@@ -214,6 +218,11 @@ impl NativeSurface {
                         session.revoke_acquirer()?;
                         binding.selected = false;
                     }
+                    if matches!(pending.kind, PendingKind::Prepare) {
+                        self.binding = self.retained.take();
+                        session.cancel_document_preparation();
+                        self.resume_document(session)?;
+                    }
                     self.reply(
                         pending.identity,
                         &pending.request,
@@ -225,7 +234,7 @@ impl NativeSurface {
             }
             CanvasSurfaceMessage::Request(request) => request,
         };
-        if self.pending.is_some() {
+        if self.pending.is_some() || self.restoring {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
         let operation = request.operation().clone();
@@ -233,27 +242,7 @@ impl NativeSurface {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
         if matches!(operation, CanvasSurfaceOperation::Prepare) {
-            if self.binding.as_ref().is_some_and(|binding| {
-                binding.identity == identity
-                    && binding.address == *request.address()
-                    && request.revision() <= binding.revision
-            }) {
-                return self.reply(identity, &request, CanvasSurfaceReplyStatus::Stale, claim);
-            }
-            session.revoke_acquirer()?;
-            session.input(Input::Drawable(false))?;
-            self.binding = Some(Binding {
-                identity,
-                backend: self.backend,
-                address: request.address().clone(),
-                revision: request.revision(),
-                placement: None,
-                allocation: None,
-                selected: false,
-                committed: false,
-                presented: None,
-            });
-            return self.reply(identity, &request, CanvasSurfaceReplyStatus::Ready, claim);
+            return self.prepare(identity, request, claim, session);
         }
         let Some(binding) = &mut self.binding else {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Stale, claim);
@@ -267,12 +256,7 @@ impl NativeSurface {
         binding.revision = request.revision();
         match operation {
             CanvasSurfaceOperation::Prepare => Err("Canvas preparation was not admitted".into()),
-            CanvasSurfaceOperation::Release => {
-                self.binding = None;
-                session.revoke_acquirer()?;
-                session.input(Input::Drawable(false))?;
-                self.reply(identity, &request, CanvasSurfaceReplyStatus::Applied, claim)
-            }
+            CanvasSurfaceOperation::Release => self.release(identity, request, claim, session),
             CanvasSurfaceOperation::Geometry(geometry) => {
                 let Some(allocation) = allocation else {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
@@ -289,13 +273,27 @@ impl NativeSurface {
                     }
                 };
                 let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
+                let viewport = match projected {
+                    Some(projected) => Some(projected.viewport),
+                    None if !binding.committed => match preparation_viewport(&geometry, allocation)
+                    {
+                        Ok(viewport) if viewport.width > 0 && viewport.height > 0 => Some(viewport),
+                        Ok(_) => None,
+                        Err(_) => {
+                            return self.reply(
+                                identity,
+                                &request,
+                                CanvasSurfaceReplyStatus::Error,
+                                claim,
+                            );
+                        }
+                    },
+                    None => None,
+                };
                 binding.placement = projected;
                 binding.allocation = Some(allocation);
-                if let Some(projected) = projected {
-                    session.resize(Extent::new(
-                        projected.viewport.width,
-                        projected.viewport.height,
-                    )?)?;
+                if let Some(viewport) = viewport {
+                    session.resize(Extent::new(viewport.width, viewport.height)?)?;
                     session.input(Input::Drawable(true))?;
                 } else {
                     session.input(Input::Drawable(false))?;
@@ -466,6 +464,7 @@ impl NativeSurface {
     pub(super) fn close(&mut self) {
         self.closed = true;
         self.binding = None;
+        self.retained = None;
         self.pending = None;
         self.contexts = std::array::from_fn(|_| None);
         self.replies = std::array::from_fn(|_| None);

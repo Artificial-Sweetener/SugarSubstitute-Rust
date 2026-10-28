@@ -4067,7 +4067,7 @@ rationale = "Repository tooling source.rs: Own portable source discovery, safe p
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_text.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:d17c7bb73b0a1fb34267f5b002a7c8a73635293076f78dd7cfd7e2a024a58734"
+source_sha256 = "sha256:85514f9f8d7472ec9b5b809a0188dce3999d4fd2ffc11031d6fc95e417cc721b"
 capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
 disposition = "boundary"
 rationale = "Resolve the original system RichEdit interface through its retained module; the affine desktop owner adopts and retires the resulting text service."
@@ -4076,7 +4076,7 @@ boundary = "external_runtime"
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_text/accessibility.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:59fd8dc71aff89f1f88f0e5b8bbf2a8a90ad96e9cb21e745d5b1678939a24ae6"
+source_sha256 = "sha256:de2d85db96270b0ee4cac8a7d813dfe489915c9cec73b053298c07ed17a028c0"
 capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
 disposition = "boundary"
 rationale = "Resolve the original native accessibility entry from the retained system text module. Provider and document references remain pinned until checked native disconnection."
@@ -4272,7 +4272,7 @@ rationale = "Owned temporary cache fixtures verify retained encoded originals, a
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:66d3ef680bb6a424238c9c88cbf6345c005d552f2edc0afd8ce8cc3861e24ee0"
+source_sha256 = "sha256:88c277f4e31c04f3107f642b1f4fb04c44d08c0fe320021ed8dccd9d2a7dfaee"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary cache fixtures exercise canvas source replacement, worker disposal and scoped shutdown without using user data."
@@ -4296,7 +4296,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:297dba36b0234ff23252363badfe91bccc5ebbac297be3a05f13601c536bd95a"
+source_sha256 = "sha256:5f1f5e5058c4136683bf0ec366f36e73fe688517e857c4a8df900e64da106ff8"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
@@ -4304,7 +4304,7 @@ rationale = "Owned temporary PNG fixtures exercise current output selection and 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:f674f4ac3d65efc2f031dc271272478605e221eff225d5aa4d646edcb5ac9778"
+source_sha256 = "sha256:c42c96f92c6e0b2d69846b348440954aa8794c851bfbdc1992d97ca94afcbe14"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor exercises backend revocation while the canvas session retains its worker lifetime."

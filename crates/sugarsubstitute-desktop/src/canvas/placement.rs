@@ -76,6 +76,36 @@ pub fn placement(
     if !geometry.visible() {
         return Ok(None);
     }
+    let viewport = preparation_viewport(geometry, allocation)?;
+    let scale = allocation.physical_pixels_per_css_pixel;
+    let bounds = allocation.bounds;
+    let (x, y) = geometry.origin();
+    let (width, height) = geometry.viewport();
+    let (clip_x, clip_y, clip_width, clip_height) = geometry.clip();
+    let left = x.max(clip_x).max(0.0);
+    let top = y.max(clip_y).max(0.0);
+    let right = (x + width).min(clip_x + clip_width).min(f64::from(bounds.width) / scale);
+    let bottom = (y + height).min(clip_y + clip_height).min(f64::from(bounds.height) / scale);
+    if right <= left || bottom <= top {
+        return Ok(None);
+    }
+    let clip = rect([left, top, right, bottom], scale, bounds, true)?;
+    if clip.width == 0 || clip.height == 0 {
+        return Ok(None);
+    }
+    Ok(Some(CanvasPlacement { viewport, clip }))
+}
+
+/// Measure a bounded physical viewport for hidden candidate preparation.
+/// This validates native density and extent but grants no visibility or input authority.
+/// The caller must separately obtain `placement` before presenting any native pixels.
+///
+/// # Errors
+/// Rejects stale density, invalid native observations, overflow and unsupported extents.
+pub fn preparation_viewport(
+    geometry: &CanvasSurfaceGeometry,
+    allocation: WebViewAllocation,
+) -> Result<PhysicalRect, PlacementError> {
     let scale = allocation.physical_pixels_per_css_pixel;
     if !scale.is_finite() || !(0.0..=64.0).contains(&scale) || scale == 0.0 {
         return Err(PlacementError::InvalidAllocation);
@@ -92,23 +122,11 @@ pub fn placement(
     }
     let (x, y) = geometry.origin();
     let (width, height) = geometry.viewport();
-    let (clip_x, clip_y, clip_width, clip_height) = geometry.clip();
     let viewport = rect([x, y, x + width, y + height], scale, bounds, false)?;
     if viewport.width > super::MAX_VIEWPORT_EDGE || viewport.height > super::MAX_VIEWPORT_EDGE {
         return Err(PlacementError::ViewportTooLarge);
     }
-    let left = x.max(clip_x).max(0.0);
-    let top = y.max(clip_y).max(0.0);
-    let right = (x + width).min(clip_x + clip_width).min(f64::from(bounds.width) / scale);
-    let bottom = (y + height).min(clip_y + clip_height).min(f64::from(bounds.height) / scale);
-    if right <= left || bottom <= top {
-        return Ok(None);
-    }
-    let clip = rect([left, top, right, bottom], scale, bounds, true)?;
-    if clip.width == 0 || clip.height == 0 {
-        return Ok(None);
-    }
-    Ok(Some(CanvasPlacement { viewport, clip }))
+    Ok(viewport)
 }
 
 /// Round outer viewport edges out and clip edges in before adding the native allocation origin.

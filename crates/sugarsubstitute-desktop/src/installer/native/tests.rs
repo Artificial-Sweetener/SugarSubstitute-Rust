@@ -93,6 +93,7 @@ impl Fixture {
         self.frame = Some(validator.finish()?);
         self.allocated += 1;
         self.shape = Some(shape);
+        self.capture.expected_shape = Some(shape);
         Ok(())
     }
 }

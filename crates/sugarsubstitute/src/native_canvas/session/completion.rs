@@ -136,6 +136,7 @@ impl Session {
             });
         if self.config.gpu.is_none()
             && !self.closing
+            && self.drawable
             && self.pending_open.is_none()
             && (self.document.cpu_pending.is_some()
                 || backing_borrowed

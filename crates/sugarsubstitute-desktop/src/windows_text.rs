@@ -268,8 +268,8 @@ impl Engine {
         &self,
         frame: &sugarsubstitute_contracts::presentation::PreparedFrame,
     ) -> Result<(), DesktopError> {
-        if self.accessibility.borrow().is_some() {
-            return Ok(());
+        if let Some(owner) = self.accessibility.borrow().as_ref() {
+            return owner.fund(frame);
         }
         let label = self.accessibility_label.get().ok_or_else(|| {
             DesktopError::message("console_accessibility", "provider configuration absent")
@@ -339,6 +339,24 @@ impl Engine {
         }
         self.state.check()
     }
+    /// Retain the hidden field's document and providers while retiring its obsolete painted frame.
+    pub(crate) fn hide_presentation(
+        &self,
+        frame: &sugarsubstitute_contracts::presentation::PreparedFrame,
+    ) -> Result<(), DesktopError> {
+        self.check()?;
+        if let Some(owner) = self.accessibility.borrow().as_ref() {
+            owner.fund(frame)?;
+        }
+        let mut renderer = self.renderer.borrow_mut();
+        if let Some(owner) = renderer.as_mut() {
+            owner.close()?;
+        }
+        renderer.take();
+        self.state.invalidate();
+        Ok(())
+    }
+
     /// Observe native scroll state from the authoritative text engine without a stock scrollbar HWND.
     pub(crate) fn at_bottom(&self) -> Result<bool, DesktopError> {
         Ok(scroll::Scroll::observe(&self.services()?)?.at_bottom())

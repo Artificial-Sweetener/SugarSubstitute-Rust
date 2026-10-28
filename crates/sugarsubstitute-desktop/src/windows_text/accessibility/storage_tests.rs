@@ -48,7 +48,7 @@ fn bounded_inventory_retains_credit_until_last_guarded_wrapper_drops()
         root: Cell::new(std::ptr::null_mut()),
         child: Cell::new(std::ptr::null_mut()),
         leases: RefCell::new(storage::inventory()?),
-        _claim: claim,
+        claim: RefCell::new(claim),
     });
     let source: IValueProvider = NativeValue.into();
     let native = shared.lease(source.cast()?)?;

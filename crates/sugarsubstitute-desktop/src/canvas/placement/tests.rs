@@ -53,6 +53,24 @@ fn hides_empty_or_offscreen_allocations_and_rejects_stale_scale() -> Result<(), 
 }
 
 #[test]
+fn hidden_preparation_validates_extent_and_density_without_granting_placement()
+-> Result<(), Box<dyn Error>> {
+    let allocation = WebViewAllocation {
+        bounds: PhysicalRect { x: 0, y: 0, width: 800, height: 600 },
+        physical_pixels_per_css_pixel: 1.5,
+    };
+    let hidden = geometry((10.25, 20.5), (80.0, 60.0), (0.0, 0.0, 0.0, 0.0), 1.5, false)?;
+    let viewport = preparation_viewport(&hidden, allocation)?;
+    assert_eq!((viewport.width, viewport.height), (121, 91));
+    assert_eq!(placement(&hidden, allocation)?, None);
+    let stale = WebViewAllocation { physical_pixels_per_css_pixel: 1.0, ..allocation };
+    assert_eq!(preparation_viewport(&hidden, stale), Err(PlacementError::ScaleMismatch));
+    let oversized = geometry((0.0, 0.0), (20_000.0, 60.0), (0.0, 0.0, 0.0, 0.0), 1.5, false)?;
+    assert_eq!(preparation_viewport(&oversized, allocation), Err(PlacementError::ViewportTooLarge));
+    Ok(())
+}
+
+#[test]
 fn rejects_oversized_viewports_and_unrepresentable_native_origins() -> Result<(), Box<dyn Error>> {
     let value = geometry((0.0, 0.0), (20_000.0, 20.0), (0.0, 0.0, 100.0, 20.0), 1.0, true)?;
     let bounds = PhysicalRect { x: 0, y: 0, width: 100, height: 100 };

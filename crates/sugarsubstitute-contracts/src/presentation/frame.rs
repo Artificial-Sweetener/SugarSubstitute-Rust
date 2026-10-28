@@ -139,7 +139,8 @@ impl PreparedFrame {
     /// Claim distinct presenter storage from this frame's original admitted reservation.
     ///
     /// Claim before allocating a native copy and retain the non-cloneable guard
-    /// until that allocation is released. The guard may outlive every source-frame
+    /// until that allocation is released or [`Self::fund_storage`] transfers its credit.
+    /// The guard may outlive every source-frame
     /// clone, preserving admission accounting across resize and native teardown.
     /// This checks aggregate capacity without allocating or exposing scheduling ports.
     ///
@@ -147,6 +148,17 @@ impl PreparedFrame {
     /// Rejects storage exceeding unclaimed bytes in the already-admitted reservation.
     pub fn claim_storage(&self, bytes: u64) -> Result<MemoryClaim, MemoryClaimError> {
         self.storage.claim.claim_sibling(bytes)
+    }
+
+    /// Fund retained presenter storage from this accepted frame without reallocating its pixels.
+    ///
+    /// The allocation stays charged throughout transfer: replacement credit is claimed before
+    /// releasing the previous claim. Repeated exposure of the same reservation is a no-op.
+    /// The caller retains the allocation and its unchanged byte extent and thread affinity.
+    /// # Errors
+    /// Insufficient replacement capacity preserves the original claim and allocation.
+    pub fn fund_storage(&self, allocation: &mut MemoryClaim) -> Result<(), MemoryClaimError> {
+        self.storage.claim.fund_sibling(allocation)
     }
 }
 

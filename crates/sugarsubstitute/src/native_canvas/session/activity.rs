@@ -49,8 +49,13 @@ impl Session {
         if self.closing {
             self.advance_close()?;
         }
+        #[cfg(feature = "native-composition")]
+        let restoring = self.advance_document_transaction()?;
+        #[cfg(not(feature = "native-composition"))]
+        let restoring = false;
         self.submit_retirement()?;
-        if self.closing
+        if restoring
+            || self.closing
             || self.pending_retirement.is_some()
             || self.deferred_retirement.is_some()
             || self.retirement.is_some()
@@ -87,6 +92,13 @@ impl Session {
             {
                 self.submit_load()?;
             }
+            return Ok(());
+        }
+        #[cfg(feature = "native-composition")]
+        if self.document_suspended {
+            return Ok(());
+        }
+        if self.document.scene.is_none() {
             return Ok(());
         }
         if self.failed.is_none() {
@@ -194,6 +206,8 @@ impl Session {
             let retired = Retired {
                 _open: self.pending_open.take(),
                 _document: Some(document),
+                #[cfg(feature = "native-composition")]
+                _retained_document: self.take_retained_document(),
                 _resources: self.resources.take(),
                 #[cfg(all(windows, feature = "native-composition"))]
                 _host_graphics: self.host_graphics.take(),

@@ -6,6 +6,8 @@ use super::*;
 use sugarsubstitute_desktop::canvas::{CpuFrame, CpuFrameKind};
 
 /// Movable document custody within one execution and graphics lifetime.
+/// Sessions and retirement workers transfer its heap allocation, keeping native callback
+/// stack frames independent of the retained document's inline tool and presentation state.
 /// Shared jobs must reach their observed terminal outcomes before this owner is withdrawn.
 /// Its pixels and originals retain their existing memory and storage claims while held.
 pub(super) struct DocumentState {
@@ -108,7 +110,7 @@ impl Session {
     ///
     /// # Errors
     /// Refuses unobserved document jobs or CPU/GPU evidence awaiting native acknowledgement.
-    pub(super) fn withdraw_document(&mut self) -> Result<DocumentState, Box<dyn Error>> {
+    pub(super) fn withdraw_document(&mut self) -> Result<Box<DocumentState>, Box<dyn Error>> {
         if self.initializing.is_some()
             || self.loading.is_some()
             || self.rendering.is_some()
@@ -127,6 +129,6 @@ impl Session {
         let empty = DocumentState::new(Viewport::new(
             self.document.tools.navigation().viewport().surface(),
         )?);
-        Ok(std::mem::replace(&mut self.document, empty))
+        Ok(std::mem::replace(&mut self.document, Box::new(empty)))
     }
 }
