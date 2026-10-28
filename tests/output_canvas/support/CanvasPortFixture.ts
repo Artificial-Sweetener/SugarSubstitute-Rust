@@ -29,12 +29,38 @@ import {
 import { initialCanvasViewState } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewState.js';
 import type {
   CanvasCapabilities,
+  CanvasCommand,
   CanvasCommandOutcome,
   CanvasCommandRequest,
+  CanvasCommandScope,
+  CanvasOperationScope,
   CanvasSurfaceGeometry,
   CanvasViewPort,
   CanvasViewSnapshot,
 } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
+
+/** Supply a live operation boundary to tests of shared surface collaborators. */
+export function canvasOperationScope(): CanvasOperationScope {
+  const controller = new AbortController();
+  return { signal: controller.signal, current: () => !controller.signal.aborted };
+}
+
+/** Supply a complete admitted request to tests of the shared action routing boundary. */
+export function canvasCommandScope(request: CanvasCommandRequest): CanvasCommandScope {
+  return { ...canvasOperationScope(), request };
+}
+
+/** Supply an admitted command identity to direct source-preparation tests. */
+export function canvasNavigationScope(): CanvasCommandScope {
+  const initial = canvasSnapshot('navigation');
+  return canvasCommandScope({
+    schema: 1,
+    address: initial.address,
+    requestId: 1,
+    expectedRevision: initial.revision,
+    command: { type: 'fit' },
+  });
+}
 
 /** Construct a contract-only state source; its status is supplied by the surface authority. */
 export function canvasSnapshot(key: string): CanvasViewSnapshot {
@@ -103,6 +129,7 @@ export class CanvasPortFixture implements CanvasViewPort {
   readonly #listeners = new Set<(snapshot: CanvasViewSnapshot) => void>();
   readonly #pending = new Map<number, (outcome: CanvasCommandOutcome) => void>();
   #snapshot: CanvasViewSnapshot;
+  #issued = 0;
   delayed = false;
   failure: Error | null = null;
 
@@ -149,8 +176,20 @@ export class CanvasPortFixture implements CanvasViewPort {
     return () => this.#listeners.delete(listener);
   }
 
+  /** Reserve a distinct request for every fixture consumer. */
+  createRequest(command: CanvasCommand, expectedRevision: number): CanvasCommandRequest {
+    return {
+      schema: 1,
+      address: this.#snapshot.address,
+      requestId: ++this.#issued,
+      expectedRevision,
+      command,
+    };
+  }
+
   /** Record intent and optionally delay acknowledgment past root disposal. */
   async dispatch(request: CanvasCommandRequest): Promise<CanvasCommandOutcome> {
+    this.#issued = Math.max(this.#issued, request.requestId);
     this.requests.push(request);
     if (this.failure) throw this.failure;
     if (this.delayed)

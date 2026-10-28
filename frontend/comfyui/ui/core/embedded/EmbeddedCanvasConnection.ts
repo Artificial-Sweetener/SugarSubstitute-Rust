@@ -27,8 +27,13 @@ import {
 } from './CanvasRuntime.js';
 import type { BrowserPanelTransport } from './BrowserPanelTransport.js';
 import type { CanvasGeometryHost } from '../../../../../integrations/contracts/CanvasGeometry.js';
+import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/CanvasSurface.js';
 /** Keep the optional native canvas unavailable until the panel has authenticated and negotiated it. */
 export class EmbeddedCanvasConnection implements CanvasLayerHost {
+  /** Negotiate output presentation through this same canvas session. */
+  get surface(): CanvasSurfaceHost | null {
+    return this.#client?.surface ?? null;
+  }
   /** Borrow the existing authenticated request sequence for optional geometry operations. */
   get geometry(): CanvasGeometryHost | null {
     return this.#client?.geometry ?? null;

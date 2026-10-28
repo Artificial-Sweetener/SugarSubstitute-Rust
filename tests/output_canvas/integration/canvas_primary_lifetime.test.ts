@@ -108,7 +108,7 @@ function fixture() {
     renderer: () => renderer,
     report,
     mount: (element, address, _catalog, accepts) => {
-      expect(loaders.filter((loader) => !loader.disposed)).toHaveLength(0);
+      expect(loaders.filter((loader) => !loader.disposed).length).toBeLessThanOrEqual(1);
       addresses.push(address);
       if (fail) throw new Error('Mount failed.');
       const loader = new BrowserCanvasPlatformFixture();
@@ -238,7 +238,7 @@ test('releases hidden, suspended, renderer-replaced, and closed-workflow pixels 
   expect(f.frames.pending).toBe(0);
 });
 
-test('reports failed mounting and revokes the committed lease before a later explicit recovery', () => {
+test('reports failed mounting and cancels its pending lease before a later explicit recovery', () => {
   const f = fixture();
   f.available(false);
   f.fail(true);

@@ -73,14 +73,27 @@ function predicate(value: unknown, expression: string): string {
     return `Array.isArray(${expression}) && ${expression}.length <= ${node.maxItems} && ${expression}.every((item: unknown) => (${predicate(node.items, 'item')}))`;
   }
   if (node.type === 'integer' || node.type === 'number') {
-    if (typeof node.minimum !== 'number' || typeof node.maximum !== 'number')
+    const minimum = typeof node.minimum === 'number' ? ` && ${expression} >= ${node.minimum}` : '';
+    const exclusiveMinimum =
+      typeof node.exclusiveMinimum === 'number'
+        ? ` && ${expression} > ${node.exclusiveMinimum}`
+        : '';
+    if ((!minimum && !exclusiveMinimum) || typeof node.maximum !== 'number')
       throw new Error('Contract numbers require lower and upper bounds.');
     const admission = node.type === 'integer' ? 'Number.isSafeInteger' : 'Number.isFinite';
-    return `typeof ${expression} === 'number' && ${admission}(${expression}) && ${expression} >= ${node.minimum} && ${expression} <= ${node.maximum}`;
+    return `typeof ${expression} === 'number' && ${admission}(${expression})${minimum}${exclusiveMinimum} && ${expression} <= ${node.maximum}`;
   }
   if (node.type === 'string') {
     if (typeof node.maxLength !== 'number') throw new Error('Contract strings require a bound.');
-    return `typeof ${expression} === 'string' && ${expression}.length <= ${node.maxLength}${typeof node.pattern === 'string' ? ` && new RegExp(${JSON.stringify(node.pattern)}).test(${expression})` : ''}`;
+    if (node['x-length-unit'] !== undefined && node['x-length-unit'] !== 'unicode-codepoints')
+      throw new Error('Unsupported contract string length unit.');
+    if (node['x-length-unit'] === 'unicode-codepoints' && !Number.isSafeInteger(node.maxLength))
+      throw new Error('Unicode contract strings require a finite integer bound.');
+    const length =
+      node['x-length-unit'] === 'unicode-codepoints'
+        ? `${expression}.length <= ${node.maxLength * 2} && Array.from(${expression}).length <= ${node.maxLength}`
+        : `${expression}.length <= ${node.maxLength}`;
+    return `typeof ${expression} === 'string' && ${length}${typeof node.pattern === 'string' ? ` && new RegExp(${JSON.stringify(node.pattern)}).test(${expression})` : ''}`;
   }
   if (node.type === 'object') {
     const properties = Object.entries(record(node.properties));
@@ -98,6 +111,14 @@ export interface ContractOutput {
   readonly validation: string;
   readonly importPath: string;
   readonly description: string;
+  /** Share a record guard when related generated schemas live in separate modules. */
+  readonly recordImport?: string;
+  /** Import one separately generated union while keeping a single public root guard. */
+  readonly external?: {
+    readonly name: string;
+    readonly typesImport: string;
+    readonly validationImport: string;
+  };
 }
 /** Generate deterministic values and guards through the repository's shared schema vocabulary. */
 export async function contractBindings(
@@ -107,6 +128,25 @@ export async function contractBindings(
   const schema = record(JSON.parse(schemaText));
   const definitions = Object.entries(record(schema.$defs));
   const header = readFileSync(fileURLToPath(import.meta.url), 'utf8').split('/**')[0] ?? '';
+  const external = options.external;
+  if (
+    external &&
+    (!/^[A-Za-z]+$/.test(external.name) ||
+      !/^\.\.?\/[A-Za-z0-9./-]+\.js$/.test(external.typesImport) ||
+      !/^\.\.?\/[A-Za-z0-9./-]+\.js$/.test(external.validationImport))
+  )
+    throw new Error('Invalid external contract union.');
+  const externalType = external
+    ? `import type { ${external.name} } from '${external.typesImport}';\n`
+    : '';
+  const externalGuard = external
+    ? `import { is${external.name} } from '${external.validationImport}';\n`
+    : '';
+  if (options.recordImport && !/^\.\.?\/[A-Za-z0-9./-]+\.js$/.test(options.recordImport))
+    throw new Error('Invalid shared record guard.');
+  const recordGuard = options.recordImport
+    ? `import { isRecord } from '${options.recordImport}';\n`
+    : `/** Narrow external records without allowing arrays. */\nfunction isRecord(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value); }\n`;
   const types = definitions
     .map(
       ([name, node]) =>
@@ -120,8 +160,8 @@ export async function contractBindings(
     )
     .join('\n');
   const sources = {
-    [options.types]: `${header}/** Generated from ${options.schema} by ${options.generator}. */\n${types}\n/** Describe ${options.description}. */\nexport type ${options.union} = ${binding(schema)};`,
-    [options.validation]: `${header}/** Generated protocol validation; edit the authoritative ${options.schema}. */\nimport type * as Contract from '${options.importPath}';\n/** Narrow external records without allowing arrays. */\nfunction isRecord(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value); }\n${guards}`,
+    [options.types]: `${header}/** Generated from ${options.schema} by ${options.generator}. */\n${externalType}${types}\n/** Describe ${options.description}. */\nexport type ${options.union} = ${binding(schema)};`,
+    [options.validation]: `${header}/** Generated protocol validation; edit the authoritative ${options.schema}. */\nimport type * as Contract from '${options.importPath}';\n${externalGuard}${recordGuard}${guards}`,
   };
   const result: Record<string, string> = {};
   for (const [file, source] of Object.entries(sources))

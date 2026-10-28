@@ -36,6 +36,7 @@ mutation_observer_owners = [
   "frontend/sugarprompt/editor/src/reorder-native-projection.ts",
   "frontend/sugarprompt/editor/src/reorder-slot-layout-read.ts",
   "frontend/comfyui/ui/surface/appearance/AccentThemeHost.ts",
+  "frontend/comfyui/ui/core/HostAncestryObserver.ts",
   "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
   "frontend/comfyui/ui/dialogs/ModalAppearance.ts",
   "frontend/comfyui/ui/picker/ComfyCubePickerResultPresenter.ts",

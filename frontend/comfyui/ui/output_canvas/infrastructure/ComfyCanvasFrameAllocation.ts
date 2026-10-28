@@ -85,7 +85,16 @@ export class ComfyCanvasFrameAllocation {
       : 0;
     const horizontal = left + right + inset;
     const vertical = top + bottom;
-    const allocation = JSON.stringify([inset, left, right, top, bottom]);
+    // Explicit chrome dimensions remove inverse calc rounding, so outer-frame resizes join the key.
+    const allocation = JSON.stringify([
+      inset,
+      left,
+      right,
+      top,
+      bottom,
+      measuredWidth ? frame.width : null,
+      measured ? frame.height : null,
+    ]);
     if (this.#allocation === allocation) return;
     this.#allocation = allocation;
     if (horizontal === 0 && vertical === 0) {
@@ -106,9 +115,17 @@ export class ComfyCanvasFrameAllocation {
       `inset(${-top}px ${-(right + inset)}px ${-bottom}px ${-left}px)`,
     );
     this.#set(this.#chrome, 'left', horizontal ? `${-left}px` : null);
-    this.#set(this.#chrome, 'width', horizontal ? `calc(100% + ${horizontal}px)` : null);
+    this.#set(
+      this.#chrome,
+      'width',
+      horizontal ? (measuredWidth ? `${frame.width}px` : `calc(100% + ${horizontal}px)`) : null,
+    );
     this.#set(this.#chrome, 'top', vertical ? `${-top}px` : null);
-    this.#set(this.#chrome, 'height', vertical ? `calc(100% + ${vertical}px)` : null);
+    this.#set(
+      this.#chrome,
+      'height',
+      vertical ? (measured ? `${frame.height}px` : `calc(100% + ${vertical}px)`) : null,
+    );
   }
 
   /** Relinquish viewport allocation while Comfy owns an alternate application surface. */

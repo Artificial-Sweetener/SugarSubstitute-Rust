@@ -32,6 +32,7 @@ import { WorkflowCanvasImages } from './WorkflowCanvasImages.js';
 import type { CanvasMaskHost } from '../../../../../integrations/contracts/CanvasMasks.js';
 import type { CanvasSourceHost } from '../../../../../integrations/contracts/CanvasSources.js';
 import type { CanvasLayerHost } from '../../../../../integrations/contracts/CanvasHost.js';
+import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/CanvasSurface.js';
 
 interface CanvasEntry<Bytes> {
   readonly adapter: WorkflowCanvasAdapter<Bytes>;
@@ -133,6 +134,17 @@ export class WorkflowCanvasCoordinator<Bytes> {
       .filter((host) => {
         const descriptor = host.readCanvas();
         return descriptor && (!canvasId || descriptor.id === canvasId);
+      });
+    return hosts.length === 1 ? (hosts[0] ?? null) : null;
+  }
+
+  /** Resolve an unambiguous output surface by its registered adapter identity. */
+  surfaceHost(adapterId?: string): CanvasSurfaceHost | null {
+    const hosts = [...this.#entries.values()]
+      .filter(({ adapter }) => !adapterId || adapter.id === adapterId)
+      .flatMap(({ adapter }) => {
+        const surface = adapter.capabilities.surface;
+        return surface ? [surface] : [];
       });
     return hosts.length === 1 ? (hosts[0] ?? null) : null;
   }

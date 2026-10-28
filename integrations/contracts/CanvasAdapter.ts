@@ -18,6 +18,7 @@ import type { CanvasCancellationSource, CanvasLayerHost } from './CanvasHost.js'
 import type { CanvasMaskHost } from './CanvasMasks.js';
 import type { CanvasSourceHost } from './CanvasSources.js';
 import type { CanvasGeometryHost } from './CanvasGeometry.js';
+import type { CanvasSurfaceHost } from './CanvasSurface.js';
 
 /** Receive supported output in a destination captured before execution begins. */
 export interface CanvasOutputBinding<Output> {
@@ -51,6 +52,7 @@ export interface CanvasAdapter<Submission, Output, ViewState, Preview> {
     readonly layers?: CanvasLayerHost | undefined;
     readonly masks?: CanvasMaskHost | undefined;
     readonly sources?: CanvasSourceHost | undefined;
+    readonly surface?: CanvasSurfaceHost | undefined;
     readonly output: CanvasOutputCapability<Submission, Output>;
     readonly outputView?: {
       update(state: ViewState): void;

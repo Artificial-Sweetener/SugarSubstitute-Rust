@@ -247,6 +247,29 @@ test('generated language bindings and validators match the authoritative wire sc
     expect(readFileSync(file, 'utf8').replaceAll('\r\n', '\n')).toBe(source);
 });
 
+test('shared panel vectors preserve the closed version-three wire contract', () => {
+  const vectors = JSON.parse(
+    readFileSync('tests/editor_integrations/support/panel_wire_vectors.json', 'utf8'),
+  ) as { label: string; valid: boolean; value: unknown }[];
+  for (const vector of vectors)
+    expect([vector.label, isPanelMessage(vector.value)]).toEqual([vector.label, vector.valid]);
+});
+
+test('Rust panel generation retains required nullability and rejects unsupported schema changes', async () => {
+  const text = readFileSync('integrations/contracts/panel.schema.json', 'utf8');
+  const bindings = await panelBindings(text);
+  const rust = bindings['integrations/contracts/PanelProtocol.generated.rs'];
+  expect(rust).toContain('#[serde(deserialize_with = "deserialize_required_option")]');
+  expect(rust).toContain('valid_panel_session(&self.session)');
+  const schema = JSON.parse(text) as {
+    $defs: { PanelReady: { properties: { session: { pattern: string } } } };
+  };
+  schema.$defs.PanelReady.properties.session.pattern = '.*';
+  await expect(panelBindings(JSON.stringify(schema))).rejects.toThrow(
+    'Rust contract strings require bounded, well-formed text',
+  );
+});
+
 test('accepts GIMP as an additive panel presentation style', () => {
   expect(
     isPanelMessage({

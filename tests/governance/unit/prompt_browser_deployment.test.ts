@@ -22,7 +22,7 @@ import ts from 'typescript';
 function browserModules(root: string): string[] {
   return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
     const file = path.join(root, entry.name);
-    return entry.isDirectory() ? browserModules(file) : entry.name.endsWith('.js') ? [file] : [];
+    return entry.isDirectory() ? browserModules(file) : /\.m?js$/u.test(entry.name) ? [file] : [];
   });
 }
 

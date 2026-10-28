@@ -14,37 +14,31 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Normalize surface geometry without mixing CSS and physical coordinate spaces. */
+import { isCanvasSurfaceGeometry } from '../../core/embedded/CanvasRuntime.js';
 import { isRecord } from '../../types/common.js';
 import { authorizeCanvasMessage } from './CanvasMessageAuthority.js';
 /** Accept only authorized, finite, bounded geometry with explicit density and visibility. */
 export function decodeCanvasSurfaceGeometry(message, origin, authority) {
     if (!authorizeCanvasMessage(message, origin, authority) || !isRecord(message.geometry))
         return null;
-    const value = message.geometry;
-    if (value.coordinateSpace !== 'client' ||
-        value.units !== 'css-pixels' ||
-        !isRecord(value.origin) ||
-        !isRecord(value.viewport) ||
-        !isRecord(value.clip))
+    const raw = message.geometry;
+    if (!isRecord(raw.origin) || !isRecord(raw.viewport) || !isRecord(raw.clip))
+        return null;
+    const value = {
+        coordinateSpace: raw.coordinateSpace,
+        units: raw.units,
+        origin: { x: raw.origin.x, y: raw.origin.y },
+        viewport: { width: raw.viewport.width, height: raw.viewport.height },
+        clip: { x: raw.clip.x, y: raw.clip.y, width: raw.clip.width, height: raw.clip.height },
+        physicalPixelsPerCssPixel: raw.physicalPixelsPerCssPixel,
+        visible: raw.visible,
+        focused: raw.focused,
+    };
+    if (!isCanvasSurfaceGeometry(value))
         return null;
     const position = value.origin;
     const viewport = value.viewport;
     const clip = value.clip;
-    if (!coordinate(position.x) ||
-        !coordinate(position.y) ||
-        !extent(viewport.width) ||
-        !extent(viewport.height) ||
-        !coordinate(clip.x) ||
-        !coordinate(clip.y) ||
-        !extent(clip.width) ||
-        !extent(clip.height) ||
-        typeof value.physicalPixelsPerCssPixel !== 'number' ||
-        !Number.isFinite(value.physicalPixelsPerCssPixel) ||
-        value.physicalPixelsPerCssPixel <= 0 ||
-        value.physicalPixelsPerCssPixel > 64 ||
-        typeof value.visible !== 'boolean' ||
-        typeof value.focused !== 'boolean')
-        return null;
     return Object.freeze({
         coordinateSpace: 'client',
         units: 'css-pixels',
@@ -55,12 +49,4 @@ export function decodeCanvasSurfaceGeometry(message, origin, authority) {
         visible: value.visible,
         focused: value.focused,
     });
-}
-/** Bound screen coordinates while allowing surfaces on monitors left of the primary display. */
-function coordinate(value) {
-    return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1_000_000;
-}
-/** Allow hidden zero-sized surfaces without accepting negative or unbounded allocations. */
-function extent(value) {
-    return coordinate(value) && value >= 0;
 }

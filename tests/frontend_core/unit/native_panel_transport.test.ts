@@ -18,6 +18,18 @@ import { afterEach, expect, jest, test } from '@jest/globals';
 import { startEmbeddedPanel } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedPresentation } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPresentation.js';
 import { panelNavigation } from '../../../frontend/comfyui/ui/core/embedded/BrowserPanelTransport.js';
+import {
+  createNativePanelTransport,
+  prefersNativeOutputSurface,
+} from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
+import {
+  registerVisualStylePreference,
+  VISUAL_STYLE_SETTING,
+} from '../../../frontend/comfyui/ui/surface/appearance/VisualStylePreference.js';
+import {
+  registerPluginModePreference,
+  PLUGIN_MODE_SETTING,
+} from '../../../frontend/comfyui/ui/surface/frame/PluginModePreference.js';
 
 const session = 'fixture-session-0001';
 const hostId = 'fixture.editor.panel';
@@ -60,6 +72,203 @@ test('requires the native injected identity and never falls back to an unrelated
     }),
   ).toBeNull();
   expect(send).not.toHaveBeenCalled();
+});
+
+test('rejects an unrecognized native preference policy', () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    preferencePolicy: 'unexpected',
+    send: jest.fn(),
+    subscribe: jest.fn(),
+  });
+  expect(
+    startEmbeddedPanel({
+      window,
+      presentation: new EmbeddedPresentation(),
+      connected: () => true,
+      report: jest.fn(),
+    }),
+  ).toBeNull();
+});
+
+test('reads the optional host canvas preference before capability negotiation', () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  for (const value of [undefined, 'host'] as const) {
+    Reflect.set(window, 'sugarcubesPanelHost', {
+      host: hostId,
+      session,
+      outputSurfacePreference: value,
+      send: jest.fn(),
+      subscribe: jest.fn(),
+    });
+    expect(createNativePanelTransport(window)?.outputSurfacePreference).toBe(value);
+  }
+});
+
+test('rejects an invalid host canvas preference', () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    outputSurfacePreference: 'invalid',
+    send: jest.fn(),
+    subscribe: jest.fn(),
+  });
+  expect(createNativePanelTransport(window)).toBeNull();
+});
+
+test('retains the presentation preference and injected transport after Comfy changes its route', () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    outputSurfacePreference: 'host',
+    send: jest.fn(),
+    subscribe: jest.fn(),
+  });
+  expect(prefersNativeOutputSurface(window)).toBe(true);
+  expect(createNativePanelTransport(window)).not.toBeNull();
+  window.history.replaceState(null, '', '/#workflow');
+  expect(createNativePanelTransport(window)?.session).toBe(session);
+  expect(prefersNativeOutputSurface(window)).toBe(true);
+});
+
+test('uses browser output when no host presentation preference exists', () => {
+  expect(prefersNativeOutputSurface(window)).toBe(false);
+  Reflect.set(window, 'sugarcubesPanelHost', { outputSurfacePreference: 'invalid' });
+  expect(prefersNativeOutputSurface(window)).toBe(false);
+  Reflect.set(window, 'sugarcubesPanelHost', {});
+  expect(prefersNativeOutputSurface(window)).toBe(false);
+});
+
+test('starts the native panel after a route change using the injected navigation identity', () => {
+  window.history.replaceState(null, '', '/#workflow');
+  const send = jest.fn();
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    outputSurfacePreference: 'host',
+    send,
+    subscribe: () => () => undefined,
+  });
+  const panel = startEmbeddedPanel({
+    window,
+    presentation: new EmbeddedPresentation(),
+    connected: () => true,
+    report: jest.fn(),
+  });
+  expect(panel).not.toBeNull();
+  expect(send).toHaveBeenCalled();
+  panel?.dispose();
+});
+
+test('a presentation preference alone cannot create a native transport', () => {
+  window.history.replaceState(null, '', '/#workflow');
+  Reflect.set(window, 'sugarcubesPanelHost', { outputSurfacePreference: 'host' });
+  expect(prefersNativeOutputSurface(window)).toBe(true);
+  expect(createNativePanelTransport(window)).toBeNull();
+});
+
+test('rejects partial native navigation identities even with an injected bridge', () => {
+  window.history.replaceState(null, '', '/?sc-panel-transport=native');
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    send: jest.fn(),
+    subscribe: jest.fn(),
+  });
+  expect(createNativePanelTransport(window)).toBeNull();
+});
+
+test('native hosts can retain live saved preferences while completing the panel handshake', () => {
+  jest.useFakeTimers();
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  let receive: ((value: unknown) => void) | undefined;
+  const send = jest.fn();
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    preferencePolicy: 'saved',
+    send,
+    subscribe: (listener: (value: unknown) => void) => {
+      receive = listener;
+      return () => undefined;
+    },
+  });
+  const changes = new Map<string, (value: unknown) => void>();
+  const writes = jest.fn();
+  const app = {
+    ui: {
+      settings: {
+        getSettingValue: (id: string): unknown =>
+          id === VISUAL_STYLE_SETTING ? 'fluent' : id === PLUGIN_MODE_SETTING,
+        addSetting: (value: { id: string; onChange(value: unknown): void }): void => {
+          changes.set(value.id, value.onChange);
+        },
+        setSettingValue: writes,
+      },
+    },
+  };
+  const presentation = new EmbeddedPresentation();
+  const style = jest.fn();
+  const mode = jest.fn();
+  const report = jest.fn();
+  const stopStyle = registerVisualStylePreference(app, style, report, presentation);
+  const stopMode = registerPluginModePreference(app, document, mode, report, presentation);
+  const owner = startEmbeddedPanel({ window, presentation, connected: () => true, report });
+  receive?.({
+    protocol: 'sugarcubes.panel',
+    version: 3,
+    session,
+    type: 'configure',
+    presentation: {
+      pluginMode: false,
+      visualStyle: 'comfy',
+      photoProPalette: 'dark-gray',
+      accentColor: null,
+      resizeCornerSize: 0,
+    },
+  });
+  expect(send).toHaveBeenLastCalledWith({
+    protocol: 'sugarcubes.panel',
+    version: 3,
+    session,
+    type: 'applied',
+  });
+  expect(presentation.read()).toBeNull();
+  expect(style).toHaveBeenLastCalledWith('fluent');
+  expect(mode).toHaveBeenLastCalledWith(true);
+  changes.get(VISUAL_STYLE_SETTING)?.('spectrum');
+  changes.get(PLUGIN_MODE_SETTING)?.(false);
+  expect(style).toHaveBeenLastCalledWith('spectrum');
+  expect(mode).toHaveBeenLastCalledWith(false);
+  expect(writes).not.toHaveBeenCalled();
+  expect(report).not.toHaveBeenCalled();
+  owner?.dispose();
+  stopStyle();
+  stopMode();
 });
 
 test('negotiates GIMP presentation over native transport and releases its subscriptions', () => {

@@ -37,7 +37,9 @@ describe('canvas view lifetime', () => {
     const state = owner.create(canvasSessionId(workflowSessionId('first')));
     const first = owner.prepareAttachment(state.viewId, windowId('primary'));
     expect(owner.accepts(first)).toBe(false);
+    expect(owner.acceptsPreparation(first)).toBe(true);
     expect(owner.commitAttachment(first)).toBeNull();
+    expect(owner.acceptsPreparation(first)).toBe(false);
     const selected = owner.update(state.viewId, (current) => ({
       ...current,
       selection: { sourceId: outputSourceId('7:23'), batchIndex: 2 },
@@ -51,9 +53,12 @@ describe('canvas view lifetime', () => {
     const destination = owner.prepareAttachment(state.viewId, windowId('detached'));
     expect(owner.accepts(first)).toBe(true);
     expect(owner.accepts(destination)).toBe(false);
+    expect(owner.acceptsPreparation(destination)).toBe(true);
+    expect(owner.acceptsPreparation({ ...destination, windowId: windowId('forged') })).toBe(false);
     expect(owner.read(state.viewId)).toBe(selected);
 
     expect(owner.commitAttachment(destination)).toBe(first);
+    expect(owner.acceptsPreparation(destination)).toBe(false);
     expect(owner.accepts(first)).toBe(false);
     expect(owner.accepts(destination)).toBe(true);
     expect(owner.releaseAttachment(first)).toBe(false);
@@ -68,6 +73,7 @@ describe('canvas view lifetime', () => {
     owner.commitAttachment(first);
     const failed = owner.prepareAttachment(state.viewId, windowId('detached'));
     expect(owner.cancelAttachment(failed)).toBe(true);
+    expect(owner.acceptsPreparation(failed)).toBe(false);
     expect(owner.accepts(first)).toBe(true);
     expect(() => owner.commitAttachment(failed)).toThrow('stale');
     const replacement = owner.prepareAttachment(state.viewId, windowId('retry'));

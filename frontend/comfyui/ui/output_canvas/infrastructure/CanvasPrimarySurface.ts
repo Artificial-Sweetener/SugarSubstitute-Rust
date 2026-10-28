@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Retire inactive primary browser attachments while retaining per-workflow lightweight view state. */
+/** Retire inactive primary attachments while retaining per-workflow lightweight view state. */
 
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress, CanvasViewId, WindowId } from '../domain/CanvasIdentity.js';
@@ -27,6 +27,8 @@ import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import type { CanvasRevealDestination } from '../application/CanvasRevealCoordinator.js';
 
 export interface PrimaryCanvasAttachment {
+  /** Settle within the host's bounded readiness deadline; disposal must also settle this promise. */
+  readonly ready?: Promise<void>;
   /** Read counters only on explicit diagnostic request, with no telemetry timer. */
   diagnostics(): CanvasImageDiagnostics & { readonly renderFrames: number };
   refresh(): void;
@@ -40,6 +42,20 @@ export interface PrimaryCanvasAttachment {
   dispose(): void;
 }
 
+interface AttachmentRecord {
+  readonly view: CanvasViewId;
+  readonly generation: number;
+  readonly element: HTMLElement;
+  readonly renderer: string;
+  readonly address: CanvasAttachmentAddress;
+  readonly root: HTMLElement;
+  readonly attachment: PrimaryCanvasAttachment;
+}
+
+interface PendingAttachment extends Omit<AttachmentRecord, 'attachment'> {
+  attachment: PrimaryCanvasAttachment | null;
+}
+
 export interface CanvasPrimarySurfaceOptions {
   readonly document: Document;
   readonly window: WindowId;
@@ -47,25 +63,21 @@ export interface CanvasPrimarySurfaceOptions {
   readonly coordinator: CanvasSessionCoordinator;
   element(): HTMLElement | null;
   renderer(): string;
+  /** Separate staged preparation authority from committed view and preview delivery. */
   mount(
     element: HTMLElement,
     address: CanvasAttachmentAddress,
     catalog: CanvasCatalogSnapshot,
     accepts: () => boolean,
-  ): PrimaryCanvasAttachment;
+    acceptsPreparation: () => boolean,
+  ): PrimaryCanvasAttachment | Promise<PrimaryCanvasAttachment | null>;
   report(error: unknown): void;
 }
 
-/** Give exactly one active visible primary workflow ownership of browser pixels and ephemeral preview bytes. */
+/** Give exactly one active visible primary workflow ownership of its surface and ephemeral previews. */
 export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
-  #current: {
-    view: CanvasViewId;
-    generation: number;
-    element: HTMLElement;
-    renderer: string;
-    address: CanvasAttachmentAddress;
-    attachment: PrimaryCanvasAttachment;
-  } | null = null;
+  #current: AttachmentRecord | null = null;
+  #pending: PendingAttachment | null = null;
   #stop: (() => void) | null = null;
   #disposed = false;
 
@@ -100,7 +112,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     this.reconcile();
   }
 
-  /** Replace resources before a tab/generation/renderer/allocated-container transition can overlap ownership. */
+  /** Keep a same-view surface until its replacement is ready; never show a different workflow. */
   readonly reconcile = (): void => {
     if (this.#disposed) return;
     const { coordinator, views } = this.options;
@@ -109,6 +121,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     const catalog = view && element ? coordinator.catalog(view) : null;
     const renderer = this.options.renderer();
     if (!view || !element || !catalog) {
+      this.#cancelPending();
       this.#release();
       return;
     }
@@ -118,32 +131,82 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       this.#current.element === element &&
       this.#current.renderer === renderer
     ) {
+      this.#cancelPending();
       this.#current.attachment.refresh();
       return;
     }
-    this.#release();
-    const address = views.prepareAttachment(view, this.options.window);
-    views.commitAttachment(address);
+    if (
+      this.#pending?.view === view &&
+      this.#pending.generation === catalog.generation &&
+      this.#pending.element === element &&
+      this.#pending.renderer === renderer
+    ) {
+      this.#current?.attachment.refresh();
+      return;
+    }
+    this.#cancelPending();
+    if (
+      this.#current &&
+      (this.#current.view !== view ||
+        this.#current.generation !== catalog.generation ||
+        this.#current.element !== element)
+    )
+      this.#release();
+    const root = this.options.document.createElement('div');
+    root.style.position = 'absolute';
+    root.style.inset = '0';
+    root.style.visibility = 'hidden';
+    root.style.pointerEvents = 'none';
+    let address: CanvasAttachmentAddress;
+    try {
+      address = views.prepareAttachment(view, this.options.window);
+      try {
+        element.append(root);
+      } catch (error: unknown) {
+        views.cancelAttachment(address);
+        throw error;
+      }
+    } catch (error: unknown) {
+      root.remove();
+      this.options.report(error);
+      return;
+    }
+    const pending: PendingAttachment = {
+      view,
+      generation: catalog.generation,
+      element,
+      renderer,
+      address,
+      root,
+      attachment: null,
+    };
+    this.#pending = pending;
     try {
       const accepts = (): boolean =>
         !this.#disposed &&
         views.accepts(address) &&
         coordinator.active() === view &&
+        coordinator.catalog(view)?.generation === catalog.generation &&
+        !this.options.document.hidden &&
+        this.options.element() === element;
+      const acceptsPreparation = (): boolean =>
+        !this.#disposed &&
+        this.#pending === pending &&
+        views.acceptsPreparation(address) &&
+        coordinator.active() === view &&
+        coordinator.catalog(view)?.generation === catalog.generation &&
         !this.options.document.hidden &&
         this.options.element() === element &&
         this.options.renderer() === renderer;
-      const attachment = this.options.mount(element, address, catalog, accepts);
-      this.#current = {
-        view,
-        element,
-        address,
-        attachment,
-        renderer,
-        generation: catalog.generation,
-      };
+      const attachment = this.options.mount(root, address, catalog, accepts, acceptsPreparation);
+      if (attachment instanceof Promise)
+        void attachment.then(
+          (loaded) => this.#adopt(pending, loaded),
+          (error: unknown) => this.#failPending(pending, error),
+        );
+      else this.#adopt(pending, attachment);
     } catch (error: unknown) {
-      views.releaseAttachment(address);
-      this.options.report(error);
+      this.#failPending(pending, error);
     }
   };
 
@@ -170,14 +233,117 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     this.#stop?.();
     this.#stop = null;
     this.options.document.removeEventListener('visibilitychange', this.reconcile);
+    this.#cancelPending();
     this.#release();
+  }
+
+  /** Adopt only the still-current constructed attachment, retiring late loads immediately. */
+  #adopt(pending: PendingAttachment, attachment: PrimaryCanvasAttachment | null): void {
+    if (!attachment) {
+      if (this.#pending === pending) {
+        this.#cancelPending();
+        this.reconcile();
+      }
+      return;
+    }
+    if (this.#pending !== pending) {
+      void attachment.ready?.catch(() => {});
+      try {
+        attachment.dispose();
+      } catch (error: unknown) {
+        this.options.report(error);
+      } finally {
+        pending.root.remove();
+      }
+      return;
+    }
+    pending.attachment = attachment;
+    if (attachment.ready)
+      void attachment.ready.then(
+        () => this.#activate(pending),
+        (error: unknown) => this.#failPending(pending, error),
+      );
+    else this.#activate(pending);
+  }
+
+  /** Commit only a still-current ready candidate, then retire the replaced surface. */
+  #activate(pending: PendingAttachment): void {
+    if (this.#pending !== pending) return;
+    const { coordinator, views } = this.options;
+    if (
+      this.#disposed ||
+      this.options.document.hidden ||
+      coordinator.active() !== pending.view ||
+      coordinator.catalog(pending.view)?.generation !== pending.generation ||
+      this.options.element() !== pending.element ||
+      this.options.renderer() !== pending.renderer ||
+      !pending.attachment
+    ) {
+      this.#cancelPending();
+      this.reconcile();
+      return;
+    }
+    try {
+      views.commitAttachment(pending.address);
+    } catch (error: unknown) {
+      this.#failPending(pending, error);
+      return;
+    }
+    const previous = this.#current;
+    this.#pending = null;
+    this.#current = { ...pending, attachment: pending.attachment };
+    pending.root.style.visibility = '';
+    pending.root.style.pointerEvents = '';
+    if (previous) {
+      try {
+        this.#retire(previous);
+      } catch (error: unknown) {
+        this.options.report(error);
+      }
+    }
+    try {
+      pending.attachment.refresh();
+    } catch (error: unknown) {
+      this.options.report(error);
+    }
+  }
+
+  /** Ignore failures from a canceled candidate and retain the previous committed attachment. */
+  #failPending(pending: PendingAttachment, error: unknown): void {
+    if (this.#pending !== pending) return;
+    this.#cancelPending();
+    this.options.report(error);
+  }
+
+  /** Cancel the exact staged transaction before disposing any candidate resources. */
+  #cancelPending(): void {
+    const pending = this.#pending;
+    if (!pending) return;
+    this.#pending = null;
+    this.options.views.cancelAttachment(pending.address);
+    try {
+      pending.attachment?.dispose();
+    } catch (error: unknown) {
+      this.options.report(error);
+    } finally {
+      pending.root.remove();
+    }
   }
 
   /** Clear routing before surface disposal so late decoder or preview callbacks cannot regain ownership. */
   #release(): void {
     const previous = this.#current;
     this.#current = null;
-    previous?.attachment.dispose();
-    if (previous) this.options.views.releaseAttachment(previous.address);
+    if (previous) this.#retire(previous);
+  }
+
+  /** Release only a surface's own DOM and lease, even after a replacement commits. */
+  #retire(previous: AttachmentRecord): void {
+    try {
+      previous.attachment.dispose();
+    } finally {
+      previous.root.remove();
+      this.options.views.releaseAttachment(previous.address);
+    }
   }
 }

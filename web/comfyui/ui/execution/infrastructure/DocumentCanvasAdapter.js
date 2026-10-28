@@ -16,6 +16,11 @@ export function documentCanvasAdapter(id, host, images, report) {
             get masks() {
                 return host.masks ?? undefined;
             },
+            get surface() {
+                return host.readCanvas()?.capabilities.displayOutput
+                    ? (host.surface ?? undefined)
+                    : undefined;
+            },
             output: {
                 ordering: 'serial',
                 bind(_submission, cancellation) {

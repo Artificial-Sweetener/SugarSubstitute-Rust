@@ -17,14 +17,18 @@
 import { jest } from '@jest/globals';
 import { canvasContextActions } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasContextActions.js';
 import { mountCanvasOverlay } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.js';
-import { BrowserCanvasMediaActions } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasMediaActions.js';
+import { CanvasMediaActions } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasMediaActions.js';
 import type {
   CanvasCommand,
   CanvasViewSnapshot,
 } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
 import type { WorkflowOutputItem } from '../../../frontend/comfyui/ui/execution/domain/WorkflowOutput.js';
 import type { OutputCopyFormat } from '../../../frontend/comfyui/ui/output_saving/domain/OutputMedia.js';
-import { canvasSnapshot, CanvasPortFixture } from '../support/CanvasPortFixture.js';
+import {
+  canvasOperationScope,
+  canvasSnapshot,
+  CanvasPortFixture,
+} from '../support/CanvasPortFixture.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 
 /** Combine real catalog identities with a renderer-neutral ready snapshot. */
@@ -139,16 +143,20 @@ test('media owner rejects a replaced batch identity and cancels an older copy in
       ) => Promise<boolean>
     >()
     .mockResolvedValue(true);
-  const owner = new BrowserCanvasMediaActions({ read: () => current, accepts: () => true, copy });
+  const owner = new CanvasMediaActions({ read: () => current, accepts: () => true, copy });
   const target = { sourceId: other.provenance.sourceId, itemId: other.id };
-  expect(await owner.run({ type: 'copy-media', target, format: 'jpeg' })).toBe(true);
+  expect(
+    await owner.run({ type: 'copy-media', target, format: 'jpeg' }, canvasOperationScope()),
+  ).toBe(true);
   expect(copy.mock.calls[0]?.[0]).toBe(other);
   const qualifies = copy.mock.calls[0]![1];
   expect(qualifies()).toBe(true);
-  await owner.run({ type: 'copy-media', target: 'primary', format: 'png' });
+  await owner.run({ type: 'copy-media', target: 'primary', format: 'png' }, canvasOperationScope());
   expect(qualifies()).toBe(false);
   current = { ...current, grid: [], selected: first };
-  expect(await owner.run({ type: 'copy-media', target, format: 'jpeg' })).toBe(false);
+  expect(
+    await owner.run({ type: 'copy-media', target, format: 'jpeg' }, canvasOperationScope()),
+  ).toBe(false);
   expect(copy).toHaveBeenCalledTimes(2);
   owner.dispose();
 });
@@ -168,7 +176,7 @@ test('disables file-backed actions while a live preview or replacement image is 
 test('aborts pending transport when the originating image retires or its attachment is disposed', async () => {
   let current = snapshot();
   const signals: AbortSignal[] = [];
-  const owner = new BrowserCanvasMediaActions({
+  const owner = new CanvasMediaActions({
     read: () => current,
     accepts: () => true,
     copy: (_item, _accepts, _format, signal) => {
@@ -180,14 +188,43 @@ test('aborts pending transport when the originating image retires or its attachm
       });
     },
   });
-  const first = owner.run({ type: 'copy-media', target: 'primary', format: 'png' });
+  const first = owner.run(
+    { type: 'copy-media', target: 'primary', format: 'png' },
+    canvasOperationScope(),
+  );
   current = { ...current, preview: true };
   owner.reconcile();
   expect(signals[0]?.aborted).toBe(true);
   expect(await first).toBe(false);
   current = snapshot();
-  const second = owner.run({ type: 'copy-media', target: 'primary', format: 'jpeg' });
+  const second = owner.run(
+    { type: 'copy-media', target: 'primary', format: 'jpeg' },
+    canvasOperationScope(),
+  );
   owner.dispose();
   expect(signals[1]?.aborted).toBe(true);
   expect(await second).toBe(false);
+});
+
+test('aborts a pending transfer when its originating surface command is superseded', async () => {
+  const controller = new AbortController();
+  const transfers: AbortSignal[] = [];
+  const owner = new CanvasMediaActions({
+    read: snapshot,
+    accepts: () => true,
+    copy: (_item, _accepts, _format, signal) => {
+      transfers.push(signal);
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('Canceled', 'AbortError')));
+      });
+    },
+  });
+  const pending = owner.run(
+    { type: 'copy-media', target: 'primary', format: 'png' },
+    { signal: controller.signal, current: () => !controller.signal.aborted },
+  );
+  controller.abort();
+  expect(transfers[0]?.aborted).toBe(true);
+  expect(await pending).toBe(false);
+  owner.dispose();
 });

@@ -15,16 +15,16 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Style the browser image viewport independently of reusable overlay controls. */
 
+import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
+
 /** Install static transform layers without allocating images or modifying host graph layout. */
 export function ensureBrowserCanvasStyles(document: Document): void {
+  ensureCanvasViewportStyles(document);
   if (document.getElementById('sugarcubes-output-browser-styles')) return;
   const style = document.createElement('style');
   style.id = 'sugarcubes-output-browser-styles';
   style.textContent = `
-    .sc-output-viewport { position:absolute; inset:0; overflow:hidden; touch-action:none;
-      background:var(--sugarcubes-canvas-background,#151515); cursor:grab; outline:none;
-      overscroll-behavior:contain; user-select:none; }
-    .sc-output-viewport:focus-visible { outline:2px solid var(--p-primary-color,var(--ring,#df258e)); outline-offset:-2px; }
+    .sc-output-viewport { cursor:grab; }
     .sc-output-viewport.sc-output-dragging { cursor:grabbing; }
     .sc-output-image-layer { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
     .sc-output-image { position:absolute; left:0; top:0; display:block; pointer-events:auto;

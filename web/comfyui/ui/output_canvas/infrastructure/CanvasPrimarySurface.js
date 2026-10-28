@@ -13,11 +13,12 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Retire inactive primary browser attachments while retaining per-workflow lightweight view state. */
-/** Give exactly one active visible primary workflow ownership of browser pixels and ephemeral preview bytes. */
+/** Retire inactive primary attachments while retaining per-workflow lightweight view state. */
+/** Give exactly one active visible primary workflow ownership of its surface and ephemeral previews. */
 export class CanvasPrimarySurface {
     options;
     #current = null;
+    #pending = null;
     #stop = null;
     #disposed = false;
     /** Inject attachment construction so lifecycle proofs exercise authority without borrowing platform decoders. */
@@ -52,7 +53,7 @@ export class CanvasPrimarySurface {
         this.options.document.addEventListener('visibilitychange', this.reconcile);
         this.reconcile();
     }
-    /** Replace resources before a tab/generation/renderer/allocated-container transition can overlap ownership. */
+    /** Keep a same-view surface until its replacement is ready; never show a different workflow. */
     reconcile = () => {
         if (this.#disposed)
             return;
@@ -62,6 +63,7 @@ export class CanvasPrimarySurface {
         const catalog = view && element ? coordinator.catalog(view) : null;
         const renderer = this.options.renderer();
         if (!view || !element || !catalog) {
+            this.#cancelPending();
             this.#release();
             return;
         }
@@ -69,32 +71,77 @@ export class CanvasPrimarySurface {
             this.#current.generation === catalog.generation &&
             this.#current.element === element &&
             this.#current.renderer === renderer) {
+            this.#cancelPending();
             this.#current.attachment.refresh();
             return;
         }
-        this.#release();
-        const address = views.prepareAttachment(view, this.options.window);
-        views.commitAttachment(address);
+        if (this.#pending?.view === view &&
+            this.#pending.generation === catalog.generation &&
+            this.#pending.element === element &&
+            this.#pending.renderer === renderer) {
+            this.#current?.attachment.refresh();
+            return;
+        }
+        this.#cancelPending();
+        if (this.#current &&
+            (this.#current.view !== view ||
+                this.#current.generation !== catalog.generation ||
+                this.#current.element !== element))
+            this.#release();
+        const root = this.options.document.createElement('div');
+        root.style.position = 'absolute';
+        root.style.inset = '0';
+        root.style.visibility = 'hidden';
+        root.style.pointerEvents = 'none';
+        let address;
+        try {
+            address = views.prepareAttachment(view, this.options.window);
+            try {
+                element.append(root);
+            }
+            catch (error) {
+                views.cancelAttachment(address);
+                throw error;
+            }
+        }
+        catch (error) {
+            root.remove();
+            this.options.report(error);
+            return;
+        }
+        const pending = {
+            view,
+            generation: catalog.generation,
+            element,
+            renderer,
+            address,
+            root,
+            attachment: null,
+        };
+        this.#pending = pending;
         try {
             const accepts = () => !this.#disposed &&
                 views.accepts(address) &&
                 coordinator.active() === view &&
+                coordinator.catalog(view)?.generation === catalog.generation &&
+                !this.options.document.hidden &&
+                this.options.element() === element;
+            const acceptsPreparation = () => !this.#disposed &&
+                this.#pending === pending &&
+                views.acceptsPreparation(address) &&
+                coordinator.active() === view &&
+                coordinator.catalog(view)?.generation === catalog.generation &&
                 !this.options.document.hidden &&
                 this.options.element() === element &&
                 this.options.renderer() === renderer;
-            const attachment = this.options.mount(element, address, catalog, accepts);
-            this.#current = {
-                view,
-                element,
-                address,
-                attachment,
-                renderer,
-                generation: catalog.generation,
-            };
+            const attachment = this.options.mount(root, address, catalog, accepts, acceptsPreparation);
+            if (attachment instanceof Promise)
+                void attachment.then((loaded) => this.#adopt(pending, loaded), (error) => this.#failPending(pending, error));
+            else
+                this.#adopt(pending, attachment);
         }
         catch (error) {
-            views.releaseAttachment(address);
-            this.options.report(error);
+            this.#failPending(pending, error);
         }
     };
     /** Refuse inactive preview bytes synchronously, before any object URL or decode is created. */
@@ -113,14 +160,119 @@ export class CanvasPrimarySurface {
         this.#stop?.();
         this.#stop = null;
         this.options.document.removeEventListener('visibilitychange', this.reconcile);
+        this.#cancelPending();
         this.#release();
+    }
+    /** Adopt only the still-current constructed attachment, retiring late loads immediately. */
+    #adopt(pending, attachment) {
+        if (!attachment) {
+            if (this.#pending === pending) {
+                this.#cancelPending();
+                this.reconcile();
+            }
+            return;
+        }
+        if (this.#pending !== pending) {
+            void attachment.ready?.catch(() => { });
+            try {
+                attachment.dispose();
+            }
+            catch (error) {
+                this.options.report(error);
+            }
+            finally {
+                pending.root.remove();
+            }
+            return;
+        }
+        pending.attachment = attachment;
+        if (attachment.ready)
+            void attachment.ready.then(() => this.#activate(pending), (error) => this.#failPending(pending, error));
+        else
+            this.#activate(pending);
+    }
+    /** Commit only a still-current ready candidate, then retire the replaced surface. */
+    #activate(pending) {
+        if (this.#pending !== pending)
+            return;
+        const { coordinator, views } = this.options;
+        if (this.#disposed ||
+            this.options.document.hidden ||
+            coordinator.active() !== pending.view ||
+            coordinator.catalog(pending.view)?.generation !== pending.generation ||
+            this.options.element() !== pending.element ||
+            this.options.renderer() !== pending.renderer ||
+            !pending.attachment) {
+            this.#cancelPending();
+            this.reconcile();
+            return;
+        }
+        try {
+            views.commitAttachment(pending.address);
+        }
+        catch (error) {
+            this.#failPending(pending, error);
+            return;
+        }
+        const previous = this.#current;
+        this.#pending = null;
+        this.#current = { ...pending, attachment: pending.attachment };
+        pending.root.style.visibility = '';
+        pending.root.style.pointerEvents = '';
+        if (previous) {
+            try {
+                this.#retire(previous);
+            }
+            catch (error) {
+                this.options.report(error);
+            }
+        }
+        try {
+            pending.attachment.refresh();
+        }
+        catch (error) {
+            this.options.report(error);
+        }
+    }
+    /** Ignore failures from a canceled candidate and retain the previous committed attachment. */
+    #failPending(pending, error) {
+        if (this.#pending !== pending)
+            return;
+        this.#cancelPending();
+        this.options.report(error);
+    }
+    /** Cancel the exact staged transaction before disposing any candidate resources. */
+    #cancelPending() {
+        const pending = this.#pending;
+        if (!pending)
+            return;
+        this.#pending = null;
+        this.options.views.cancelAttachment(pending.address);
+        try {
+            pending.attachment?.dispose();
+        }
+        catch (error) {
+            this.options.report(error);
+        }
+        finally {
+            pending.root.remove();
+        }
     }
     /** Clear routing before surface disposal so late decoder or preview callbacks cannot regain ownership. */
     #release() {
         const previous = this.#current;
         this.#current = null;
-        previous?.attachment.dispose();
         if (previous)
+            this.#retire(previous);
+    }
+    /** Release only a surface's own DOM and lease, even after a replacement commits. */
+    #retire(previous) {
+        try {
+            previous.attachment.dispose();
+        }
+        finally {
+            previous.root.remove();
             this.options.views.releaseAttachment(previous.address);
+        }
     }
 }

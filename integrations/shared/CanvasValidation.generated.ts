@@ -15,10 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Generated protocol validation; edit the authoritative canvas.schema.json. */
 import type * as Contract from '../contracts/CanvasProtocol.generated.js';
-/** Narrow external records without allowing arrays. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
+import { isCanvasSurfaceMessage } from './CanvasSurfaceValidation.generated.js';
+import { isRecord } from './ContractRecord.js';
 /** Validate a bounded CanvasCapabilities payload before dispatch. */
 export function isCanvasCapabilities(value: unknown): value is Contract.CanvasCapabilities {
   return (
@@ -863,6 +861,7 @@ export function isCanvasMessage(value: unknown): value is Contract.CanvasMessage
     isCanvasSourceReply(value) ||
     isCanvasSourceChanged(value) ||
     isCanvasGeometryRequest(value) ||
-    isCanvasGeometryReply(value)
+    isCanvasGeometryReply(value) ||
+    isCanvasSurfaceMessage(value)
   );
 }

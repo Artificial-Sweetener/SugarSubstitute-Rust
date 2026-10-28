@@ -17,6 +17,7 @@
 
 import type { CanvasDisplayPlan } from '../../application/CanvasDisplayPlan.js';
 import { canvasComparisonAvailable } from '../../application/CanvasComparisonSelection.js';
+import { canvasViewSnapshot } from '../../application/CanvasViewSnapshot.js';
 import type { CanvasInspectionTarget } from '../../application/CanvasInspectionStore.js';
 import type { CanvasCatalogSnapshot } from '../../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from '../../domain/CanvasIdentity.js';
@@ -85,22 +86,11 @@ export function browserCanvasSnapshot(
   if (!frame && b) resource = { ...resource, message: `${resource.message} Showing B.` };
   if (plan.view.mode === 'overview') resource = status('empty', '');
   if (preparing) resource = status('loading', 'Loading workflow output…');
-  return Object.freeze({
-    schema: 1,
-    address,
-    revision: 0,
-    view: plan.view,
-    sources,
-    grid: plan.grid,
+  return canvasViewSnapshot(address, plan, catalog, sources, connected, mediaActions, {
     comparisonAvailable: canvasComparisonAvailable(catalog),
-    selected: plan.primary?.item ?? null,
-    secondary: plan.secondary?.item ?? null,
     preview,
-    resource: Object.freeze(resource),
-    secondaryResource: secondaryResource ? Object.freeze(secondaryResource) : null,
-    runStatus: catalog.result.runStatus,
-    connected,
-    mediaActions,
+    resource,
+    secondaryResource,
     zoom: Object.freeze({
       mode: camera?.camera.mode ?? 'fit',
       physicalScale,

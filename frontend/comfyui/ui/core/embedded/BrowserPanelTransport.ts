@@ -20,6 +20,10 @@ import type { CanvasMessage, CanvasMaskMessage } from './CanvasRuntime.js';
 /** Keep editor transport mechanics outside the embedded application lifecycle. */
 export interface BrowserPanelTransport {
   readonly session: string;
+  /** Choose whether host presentation temporarily overrides Comfy's saved preferences. */
+  readonly preferencePolicy?: 'host' | 'saved';
+  /** Prefer an embedded host surface before capability negotiation; grants no native authority. */
+  readonly outputSurfacePreference?: 'host';
   send(message: PanelMessage | CanvasMessage | CanvasMaskMessage): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }

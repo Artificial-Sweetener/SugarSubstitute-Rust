@@ -1,0 +1,40 @@
+{
+  "base": {
+    "coordinateSpace": "client",
+    "units": "css-pixels",
+    "origin": { "x": -100, "y": 50 },
+    "viewport": { "width": 800, "height": 600 },
+    "clip": { "x": 0, "y": 0, "width": 800, "height": 600 },
+    "physicalPixelsPerCssPixel": 1.5,
+    "visible": true,
+    "focused": false
+  },
+  "cases": [
+    { "name": "ordinary", "valid": true },
+    { "name": "minimum origin", "path": "origin.x", "value": -1000000, "valid": true },
+    { "name": "maximum size", "path": "viewport.width", "value": 1000000, "valid": true },
+    { "name": "empty clip", "path": "clip.width", "value": 0, "valid": true },
+    {
+      "name": "minimum density",
+      "path": "physicalPixelsPerCssPixel",
+      "value": 5e-324,
+      "valid": true
+    },
+    { "name": "maximum density", "path": "physicalPixelsPerCssPixel", "value": 64, "valid": true },
+    { "name": "wrong units", "path": "units", "value": "physical-pixels", "valid": false },
+    { "name": "wrong space", "path": "coordinateSpace", "value": "document", "valid": false },
+    { "name": "zero density", "path": "physicalPixelsPerCssPixel", "value": 0, "valid": false },
+    {
+      "name": "large density",
+      "path": "physicalPixelsPerCssPixel",
+      "value": 64.01,
+      "valid": false
+    },
+    { "name": "negative size", "path": "viewport.height", "value": -1, "valid": false },
+    { "name": "large origin", "path": "origin.y", "value": 1000000.1, "valid": false },
+    { "name": "unknown nested field", "path": "origin.extra", "value": true, "valid": false },
+    { "name": "unknown field", "path": "extra", "value": true, "valid": false },
+    { "name": "wrong visible type", "path": "visible", "value": "true", "valid": false },
+    { "name": "missing focused", "path": "focused", "remove": true, "valid": false }
+  ]
+}

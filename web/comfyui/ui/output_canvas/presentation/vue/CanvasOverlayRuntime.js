@@ -58,22 +58,17 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
   let sequence = 0;
   async function send(command) {
     if (!active || !port.capabilities.commands.includes(command.type)) return;
-    const requestId = ++sequence;
-    const request = {
-      schema: 1,
-      address: initial.address,
-      requestId,
-      expectedRevision: state.value.revision,
-      command
-    };
+    const invocation = ++sequence;
+    let request = null;
     try {
+      request = port.createRequest(command, state.value.revision);
       const outcome = await port.dispatch(request);
-      if (!active || requestId !== sequence) return;
+      if (!active || invocation !== sequence) return;
       if (outcome.status === "error") reportFailure(outcome, request);
       announcement.value = outcome.status === "error" ? outcome.message : outcome.status === "stale" ? "View updated; try again." : "";
     } catch (error) {
       reportFailure(error, request);
-      if (active && requestId === sequence) {
+      if (active && invocation === sequence) {
         announcement.value = error instanceof Error ? error.message : "The canvas command failed.";
       }
     }

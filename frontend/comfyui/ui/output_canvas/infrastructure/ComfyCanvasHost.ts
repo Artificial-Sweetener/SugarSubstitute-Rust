@@ -17,25 +17,26 @@
 
 import type { ComfyWorkflowExecutionRuntime } from '../../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { resolveComfyRendererMode } from '../../core/ComfyRendererMode.js';
+import { prefersNativeOutputSurface } from '../../core/embedded/NativePanelTransport.js';
 import { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
 import { CanvasSourceInventory } from '../application/CanvasSourceInventory.js';
 import { CanvasSelectionController } from '../application/CanvasSelectionController.js';
 import { CanvasInspectionStore } from '../application/CanvasInspectionStore.js';
-import { CanvasImageAllowances } from '../application/CanvasImageAllowances.js';
 import { WebCanvasAdapter } from '../application/WebCanvasAdapter.js';
 import { CanvasSessionCoordinator } from '../application/CanvasSessionCoordinator.js';
 import { windowId } from '../domain/CanvasIdentity.js';
 import { isRecord } from '../../types/common.js';
-import { BrowserCanvasAttachment } from './BrowserCanvasAttachment.js';
-import { BrowserCanvasImageLoader } from './BrowserCanvasImageLoader.js';
+import { NativeCanvasAttachment } from './NativeCanvasAttachment.js';
+import type { CanvasAttachmentOptions } from './CanvasAttachmentOptions.js';
+import type { ComfyBrowserCanvasHost } from './ComfyBrowserCanvasHost.js';
 import { ComfyCanvasSourceInventory } from './ComfyCanvasSourceInventory.js';
 import { ComfyCanvasPreferences } from './ComfyCanvasPreferences.js';
 import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
 import { ComfyCanvasWorkspaceHost } from './ComfyCanvasWorkspaceHost.js';
 import { CanvasPrimarySurface } from './CanvasPrimarySurface.js';
 import { ComfyCanvasToolbar } from './ComfyCanvasToolbar.js';
-import { comfyCanvasMediaUrl, openComfyCanvasMedia } from './ComfyCanvasMedia.js';
-import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyles.js';
+import { openComfyCanvasMedia } from './ComfyCanvasMedia.js';
+import { ensureCanvasWorkspaceStyles } from './CanvasWorkspaceStyles.js';
 import { CanvasRevealCoordinator } from '../application/CanvasRevealCoordinator.js';
 import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import { ComfyImageRevealHost } from './ComfyImageRevealHost.js';
@@ -44,10 +45,6 @@ import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard
 import { BrowserImageDownload } from '../../output_saving/BrowserImageDownload.js';
 import type { OutputSavingFeature } from '../../output_saving/OutputSavingFeature.js';
 import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
-import { ComfyCanvasModelRuntime } from './ComfyCanvasModelRuntime.js';
-import { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.js';
-import { BrowserCanvasMediaPosters } from './BrowserCanvasMediaPosters.js';
-import { BrowserCanvasPosterRenderer } from './BrowserCanvasPosterRenderer.js';
 
 export interface ComfyCanvasHostOptions {
   readonly saving: OutputSavingFeature | null;
@@ -72,8 +69,7 @@ export class ComfyCanvasHost {
   readonly #imageActions: ComfyImageRevealHost;
   readonly #saving: NativeSourceSavingHost | null;
   readonly #transfers: BrowserOutputTransfer;
-  readonly #posters: BrowserCanvasMediaPosters;
-  readonly #mediaSessions = new BrowserCanvasMediaSessions();
+  #browser: ComfyBrowserCanvasHost | null = null;
   readonly #stops: (() => void)[] = [];
   #started = false;
   #disposed = false;
@@ -83,10 +79,6 @@ export class ComfyCanvasHost {
     const { document, execution, app, logger, report, saving } = options;
     const window = document.defaultView;
     if (!window) throw new Error('Output canvas window is unavailable.');
-    const models = new ComfyCanvasModelRuntime(() => (isRecord(window) ? window.comfyAPI : null));
-    this.#posters = new BrowserCanvasMediaPosters(
-      new BrowserCanvasPosterRenderer(document, models),
-    );
     const transfers = (this.#transfers = new BrowserOutputTransfer(
       document.location.origin,
       (input, init) => window.fetch(input, init),
@@ -116,7 +108,6 @@ export class ComfyCanvasHost {
       latestOrder: (session) => execution.latestSubmissionOrder(session),
     });
     const inspections = new CanvasInspectionStore();
-    const allowances = new CanvasImageAllowances();
     const inventory = new CanvasSourceInventory();
     this.#sources = new ComfyCanvasSourceInventory(
       execution.sessions,
@@ -152,7 +143,7 @@ export class ComfyCanvasHost {
     this.#stops.push(
       this.#coordinator.onRetired((view) => {
         inspections.remove(view);
-        allowances.remove(view);
+        this.#browser?.remove(view);
       }),
     );
     this.#preferences = new ComfyCanvasPreferences(app);
@@ -171,46 +162,35 @@ export class ComfyCanvasHost {
       report,
       options.presentation,
     );
+    const nativePresenter = (): boolean =>
+      prefersNativeOutputSurface(window) ||
+      execution.canvases.surfaceHost('embedded-document') !== null;
     this.#primary = new CanvasPrimarySurface({
       document,
       window: windowId(nextKey()),
       views,
       coordinator: this.#coordinator,
       element: () => this.#workspace.canvas,
-      renderer: () => resolveComfyRendererMode(app, null, document),
+      renderer: () =>
+        `${resolveComfyRendererMode(app, null, document)}:${nativePresenter() ? 'native' : 'browser'}`,
       report,
-      mount: (element, address, _catalog, accepts) => {
-        const loader = new BrowserCanvasImageLoader(
-          document,
-          {
-            create: (blob) => window.URL.createObjectURL(blob),
-            revoke: (url) => window.URL.revokeObjectURL(url),
-          },
-          this.#posters,
-        );
-        return new BrowserCanvasAttachment(element, {
+      mount: (element, address, _catalog, accepts, acceptsPreparation) => {
+        const shared: CanvasAttachmentOptions = {
           address,
           views,
           selection,
           inspections,
-          allowances,
           clock,
           frames,
-          loader,
-          logger,
-          models,
-          mediaSessions: this.#mediaSessions,
           accepts,
           catalog: () => this.#coordinator.catalog(address.viewId),
           connected: () => execution.connected,
-          url: (item) => comfyCanvasMediaUrl(document.location.origin, item),
           open: (item) => openComfyCanvasMedia(window, item),
           copy: (item, accepts, format, signal) =>
             transfers.copy(item.file, accepts, format, signal),
           fileAction: (item, accepts, signal) => transfers.fileAction(item.file, accepts, signal),
           mediaProfile: () => transfers.profile(),
-          drag: (item, signal) => transfers.drag(item.file, signal),
-          transferChanged: (listener) => {
+          transferChanged: (listener: () => void) => {
             const profile = transfers.subscribe(listener);
             const settings = saving?.configuration.subscribe(listener);
             return () => {
@@ -218,8 +198,21 @@ export class ComfyCanvasHost {
               settings?.();
             };
           },
-          disposeLoader: () => loader.dispose(),
-          report: (error) => report(error),
+          report: (error: unknown) => report(error),
+        };
+        if (nativePresenter())
+          return new NativeCanvasAttachment(element, {
+            ...shared,
+            nativeSurface: () => execution.canvases.surfaceHost('embedded-document'),
+          });
+        return import('./ComfyBrowserCanvasHost.js').then(({ ComfyBrowserCanvasHost }) => {
+          if (!acceptsPreparation()) return null;
+          const browser = (this.#browser ??= new ComfyBrowserCanvasHost(
+            document,
+            logger,
+            (item, signal) => transfers.drag(item.file, signal),
+          ));
+          return browser.mount(element, shared);
         });
       },
     });
@@ -259,7 +252,7 @@ export class ComfyCanvasHost {
     return {
       ...this.#primary.diagnostics(),
       inventory: this.#sources.diagnostics(),
-      ...this.#posters.diagnostics(),
+      ...(this.#browser?.diagnostics() ?? { posters: 0, posterBytes: 0 }),
     };
   }
 
@@ -279,13 +272,14 @@ export class ComfyCanvasHost {
             void this.#transfers.refresh().catch(this.options.report);
           }),
         );
-      ensureBrowserCanvasWorkspaceStyles(this.options.document);
+      ensureCanvasWorkspaceStyles(this.options.document);
       this.#primary.setup();
       this.#workspace.setup();
       this.#toolbar.setup();
       this.#imageActions.setup();
       this.#saving?.setup();
       this.#stops.push(this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
+      this.options.document.addEventListener('sugarcubes-canvas-ready', this.#canvasReady);
       this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
     } catch (error: unknown) {
       this.dispose();
@@ -320,6 +314,7 @@ export class ComfyCanvasHost {
     if (this.#disposed) return;
     this.#disposed = true;
     this.options.document.defaultView?.removeEventListener('pagehide', this.#pagehide);
+    this.options.document.removeEventListener('sugarcubes-canvas-ready', this.#canvasReady);
     this.#primary.dispose();
     this.#imageActions.dispose();
     this.#saving?.dispose();
@@ -331,10 +326,10 @@ export class ComfyCanvasHost {
     this.#sources.dispose();
     this.#preferences.dispose();
     this.#transfers.dispose();
-    this.#posters.dispose();
-    this.#mediaSessions.dispose();
+    this.#browser?.dispose();
   }
 
   /** Honor actual page teardown without introducing a recurring visibility or frame loop. */
   readonly #pagehide = (): void => this.dispose();
+  readonly #canvasReady = (): void => this.#primary.reconcile();
 }

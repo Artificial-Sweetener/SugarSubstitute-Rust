@@ -15,29 +15,22 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose a qualified browser image surface beneath reusable, renderer-independent Vue controls. */
 
-import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
-import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type {
   WorkflowSessionId,
   OutputSourceId,
 } from '../../execution/domain/ExecutionIdentity.js';
 import { CanvasCameraController } from '../application/CanvasCameraController.js';
-import type { CanvasFrameClock } from '../application/CanvasCameraTransition.js';
-import { canvasDisplayPlan, type CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
+import type { CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
 import { CanvasImageBudget } from '../application/CanvasImageBudget.js';
-import type { CanvasImageAllowances } from '../application/CanvasImageAllowances.js';
 import { CanvasImageDecodeScheduler } from '../application/CanvasImageDecodeScheduler.js';
 import { CanvasImageResources } from '../application/CanvasImageResources.js';
-import type { CanvasInspectionStore } from '../application/CanvasInspectionStore.js';
-import type { CanvasSelectionController } from '../application/CanvasSelectionController.js';
 import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
-import type { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
+import { CanvasSourceNavigation } from '../application/CanvasSourceNavigation.js';
+import { CanvasViewProjection } from '../application/CanvasViewProjection.js';
 import { inspectBrowserCanvasFrame } from './BrowserCanvasInspection.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
-import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
-import type { CanvasImageLoadPort } from '../domain/CanvasImageResource.js';
-import type { CanvasCommandRequest, CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
+import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import type { CanvasSourceSummary } from '../domain/CanvasViewPort.js';
 import { sameCanvasNavigation } from '../domain/CanvasViewState.js';
 import { BrowserCanvasImages } from '../presentation/browser/BrowserCanvasImages.js';
@@ -48,80 +41,38 @@ import {
   mountCanvasOverlay,
   type MountedCanvasOverlay,
 } from '../presentation/vue/CanvasOverlayRuntime.js';
-import { BrowserCanvasGeometry } from './BrowserCanvasGeometry.js';
-import { BrowserCanvasPort } from './BrowserCanvasPort.js';
+import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.js';
+import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import { BrowserCanvasResources } from './BrowserCanvasResources.js';
-import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
-import { applyBrowserCanvasCommand } from './BrowserCanvasActions.js';
-import { BrowserCanvasSourceNavigation } from './BrowserCanvasSourceNavigation.js';
+import { applyCanvasAction } from '../application/CanvasActions.js';
+import { BrowserCanvasActionSurface } from './BrowserCanvasActionSurface.js';
 import { ensureBrowserCanvasStyles } from './BrowserCanvasStyles.js';
-import {
-  BrowserCanvasDrag,
-  type BrowserCanvasDragPayload,
-} from '../presentation/browser/BrowserCanvasDrag.js';
+import { BrowserCanvasDrag } from '../presentation/browser/BrowserCanvasDrag.js';
 import { BrowserCanvasDragSubjects } from './BrowserCanvasDragSubject.js';
-import {
-  BrowserCanvasMediaActions,
-  type BrowserCanvasMediaOptions,
-} from './BrowserCanvasMediaActions.js';
+import { CanvasMediaActions } from './CanvasMediaActions.js';
 import { BrowserCanvasMediaDetail } from './BrowserCanvasMediaDetail.js';
 import { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.js';
-import { ComfyCanvasModelRuntime, type CanvasModelRuntime } from './ComfyCanvasModelRuntime.js';
+import { ComfyCanvasModelRuntime } from './ComfyCanvasModelRuntime.js';
 import { isRecord } from '../../types/common.js';
-
-export interface BrowserCanvasAttachmentOptions {
-  readonly address: CanvasAttachmentAddress;
-  readonly views: CanvasViewRegistry;
-  readonly selection: CanvasSelectionController;
-  readonly inspections: CanvasInspectionStore;
-  readonly allowances: CanvasImageAllowances;
-  readonly clock: ExecutionClock;
-  readonly frames: CanvasFrameClock;
-  readonly loader: CanvasImageLoadPort<BrowserCanvasImagePayload, HTMLImageElement>;
-  readonly logger: Pick<Console, 'error'>;
-  readonly models?: CanvasModelRuntime;
-  readonly mediaSessions?: BrowserCanvasMediaSessions;
-  /** Read the authoritative active catalog only at result/navigation boundaries. */
-  catalog(): CanvasCatalogSnapshot | null;
-  /** Check the fixed attachment and workflow generation without graph traversal. */
-  accepts(): boolean;
-  /** Read shared connection state without installing another execution listener. */
-  connected(): boolean;
-  /** Build the host's validated full-fidelity file URL. */
-  url(item: WorkflowOutputItem): string;
-  /** Open supported media through the host-facing browser adapter. */
-  open(item: WorkflowOutputItem): void;
-  /** Copy a completed image through the platform's shared transfer adapter. */
-  copy?: BrowserCanvasMediaOptions['copy'];
-  fileAction?: BrowserCanvasMediaOptions['fileAction'];
-  mediaProfile?: BrowserCanvasMediaOptions['profile'];
-  /** Prepare one exact completed image for platform-owned outbound dragging. */
-  drag?(item: WorkflowOutputItem, signal: AbortSignal): Promise<BrowserCanvasDragPayload | null>;
-  /** Invalidate prepared transfers after an accepted shared preference change. */
-  transferChanged?(listener: () => void): () => void;
-  /** Dispose platform loading after the resource owner has canceled every lease. */
-  disposeLoader(): void;
-  /** Report product feedback through the existing SugarCubes services. */
-  report(error: unknown, request: CanvasCommandRequest | null): void;
-}
+import type { BrowserCanvasAttachmentOptions } from './BrowserCanvasAttachmentOptions.js';
 
 /** Keep composition thin: navigation, cameras, admissions, input, and DOM each retain their own owner. */
 export class BrowserCanvasAttachment {
   readonly viewport: HTMLDivElement;
-  readonly port: BrowserCanvasPort;
+  readonly port: CanvasSurfacePort;
   readonly #images: BrowserCanvasImages;
   readonly #overview: BrowserCanvasOverview;
   readonly #input: BrowserCanvasInput;
   readonly #drag: BrowserCanvasDrag;
-  readonly #media: BrowserCanvasMediaActions;
+  readonly #media: CanvasMediaActions;
   readonly #detail: BrowserCanvasMediaDetail;
   readonly #stopTransfer: () => void;
-  readonly #geometry: BrowserCanvasGeometry;
+  readonly #geometry: CanvasSurfaceGeometryObserver;
   readonly #camera: CanvasCameraController;
   readonly #browserResources: BrowserCanvasResources;
   readonly #status: CanvasStatusPublisher;
-  readonly #navigation: BrowserCanvasSourceNavigation;
+  readonly #viewProjection: CanvasViewProjection;
   readonly #overlay: MountedCanvasOverlay;
   readonly #stopView: () => void;
   #catalog: CanvasCatalogSnapshot;
@@ -145,12 +96,18 @@ export class BrowserCanvasAttachment {
     this.#catalog = catalog;
     this.#sources = Object.freeze(catalog.entries.map((entry) => entry.summary));
     this.#sourceSignature = JSON.stringify(this.#sources);
-    this.#plan = this.#displayPlan();
-    this.#enroll();
+    this.#viewProjection = new CanvasViewProjection(
+      options.address.viewId,
+      options.views,
+      options.selection,
+      options.inspections,
+    );
+    this.#plan = this.#viewProjection.project(catalog);
     const document = element.ownerDocument;
     ensureBrowserCanvasStyles(document);
     this.viewport = document.createElement('div');
     this.viewport.className = 'sc-output-viewport';
+    this.viewport.setAttribute('data-sc-canvas-geometry', '');
     const overlay = document.createElement('div');
     overlay.className = 'sc-output-overlay-root';
     element.append(this.viewport, overlay);
@@ -238,22 +195,27 @@ export class BrowserCanvasAttachment {
         if (this.#ready) this.#status.changed();
       },
     });
-    const sources = new BrowserCanvasSourceNavigation({
+    const sources = new CanvasSourceNavigation({
       resources: this.#browserResources,
       selection: options.selection,
       read: () =>
         !this.#disposed && options.accepts() ? { plan: this.#plan, catalog: this.#catalog } : null,
       cells: (catalog) => this.#overview.cells(catalog),
     });
-    this.#navigation = sources;
-    this.#media = new BrowserCanvasMediaActions({
+    this.#media = new CanvasMediaActions({
       read: () => this.#snapshot(),
       accepts: () => !this.#disposed && options.accepts(),
       ...(options.copy ? { copy: options.copy } : {}),
       ...(options.fileAction ? { fileAction: options.fileAction } : {}),
       ...(options.mediaProfile ? { profile: options.mediaProfile } : {}),
     });
-    this.port = new BrowserCanvasPort(this.#snapshot(), {
+    const actionSurface = new BrowserCanvasActionSurface(
+      this.#camera,
+      this.#browserResources,
+      this.#media,
+      options.open,
+    );
+    this.port = new CanvasSurfacePort(this.#snapshot(), {
       origin: document.location.origin,
       capabilities: {
         schema: 1,
@@ -281,21 +243,21 @@ export class BrowserCanvasAttachment {
         ],
       },
       accepts: () => !this.#disposed && options.accepts(),
-      apply: (command) => {
+      apply: (command, scope) => {
         if (command.type === 'retry' && this.#detail.status()) {
+          sources.cancel();
+          if (!scope.current()) return false;
           this.#detail.retry(this.#plan, this.#surface?.visible === true);
           return true;
         }
-        return applyBrowserCanvasCommand(command, {
+        return applyCanvasAction(command, {
           plan: this.#plan,
           catalog: this.#catalog,
-          camera: this.#camera,
-          resources: this.#browserResources,
           selection: options.selection,
           sources,
           snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
-          open: options.open,
-          media: this.#media,
+          surface: actionSurface,
+          scope,
         });
       },
       geometry: (geometry) => this.#resize(geometry),
@@ -348,8 +310,10 @@ export class BrowserCanvasAttachment {
         },
       });
       cleanup.push(() => this.#input.dispose());
-      this.#geometry = new BrowserCanvasGeometry(this.viewport, options.frames, (geometry) =>
-        this.port.updateSurface(options.address, geometry),
+      this.#geometry = new CanvasSurfaceGeometryObserver(
+        this.viewport,
+        options.frames,
+        (geometry) => this.port.updateSurface(options.address, geometry),
       );
       cleanup.push(() => this.#geometry.dispose());
       this.#stopView = options.views.subscribe(options.address.viewId, (view) => {
@@ -379,12 +343,15 @@ export class BrowserCanvasAttachment {
   /** Accept graph-thumbnail inspection through the same preparation path as surface commands. */
   async reveal(target: CanvasRevealTarget): Promise<boolean> {
     if (this.#disposed || !this.options.accepts()) return false;
-    return await this.#navigation.reveal(target);
+    const request = this.port.createRequest({ type: 'reveal', target }, this.port.read().revision);
+    return (await this.port.dispatch(request)).status === 'applied';
   }
 
   /** Refresh light catalog state at a scoped execution/metadata/navigation boundary. */
   refresh(): void {
     if (!this.#ready || this.#disposed || !this.options.accepts()) return;
+    if (!this.#surface?.visible)
+      this.port.updateSurface(this.options.address, this.#geometry.read());
     const catalog = this.options.catalog();
     if (!catalog || catalog.generation !== this.#catalog.generation) return;
     this.#catalog = catalog;
@@ -394,9 +361,8 @@ export class BrowserCanvasAttachment {
       this.#sources = Object.freeze(sources);
       this.#sourceSignature = sourceSignature;
     }
-    this.#plan = this.#displayPlan();
+    this.#plan = this.#viewProjection.project(catalog);
     this.#drag.reconcile();
-    this.#enroll();
     const linked = this.#plan.view.linked;
     if (linked !== this.#linked) {
       this.#linked = linked;
@@ -434,8 +400,9 @@ export class BrowserCanvasAttachment {
 
   /** Admit only bytes qualified to this visible attachment's current source and workflow. */
   receive(preview: WorkflowPreview, blob: Blob): void {
-    if (this.wants(preview.sessionId, preview.generation, preview.sourceId))
+    if (this.wants(preview.sessionId, preview.generation, preview.sourceId)) {
       this.#browserResources.receive(preview, blob);
+    }
   }
 
   /** Refuse byte delivery while hidden, retired, or inspecting an exact batch/comparison. */
@@ -482,31 +449,6 @@ export class BrowserCanvasAttachment {
     this.options.views.releaseAttachment(this.options.address);
     this.element.replaceChildren();
     this.element.classList.remove('sc-output-overview-mode');
-  }
-
-  /** Resolve current route selections through the authoritative navigation owner. */
-  #displayPlan(): CanvasDisplayPlan {
-    const { address, selection, views } = this.options;
-    return canvasDisplayPlan(
-      views.read(address.viewId),
-      this.#catalog,
-      selection.items(address.viewId, this.#catalog),
-      selection.preview(address.viewId, this.#catalog),
-    );
-  }
-
-  /** Prune independent cameras against current output slots. */
-  #enroll(): void {
-    const slots = this.#catalog.entries.flatMap((entry) =>
-      entry.items.map((item) => ({ sourceId: entry.source.id, batchIndex: item.batchIndex })),
-    );
-    for (const slot of [this.#plan.primary, this.#plan.secondary])
-      if (slot?.sourcePresent) slots.push(slot.selection);
-    this.options.inspections.synchronize(
-      this.options.address.viewId,
-      this.#catalog.generation,
-      slots,
-    );
   }
 
   /** Reconcile an actual decoded route, including the outgoing image during pending replacement. */

@@ -102,10 +102,11 @@ test('allocates the real graph below chrome even with the output canvas closed a
   expect(f.root.style.marginTop).toBe('86px');
   expect(f.root.style.height).toBe('calc(100% - 90px)');
   expect(f.chrome.style.top).toBe('-86px');
-  expect(f.chrome.style.height).toBe('calc(100% + 90px)');
+  expect(f.chrome.style.height).toBe('900px');
   expect(f.root.style.marginLeft).toBe('4px');
   expect(f.root.style.width).toBe('calc(100% - 488px)');
   expect(f.chrome.style.left).toBe('-4px');
+  expect(f.chrome.style.width).toBe('1200px');
   expect(f.root.style.clipPath).toBe('inset(-86px -484px -4px -4px)');
   adapter.apply(0);
   expect(f.root.style.width).toBe('calc(100% - 8px)');
@@ -127,6 +128,59 @@ test('allocates the real graph below chrome even with the output canvas closed a
   adapter.dispose();
   expect(f.root.style.cssText).toBe('');
   expect(f.chrome.style.cssText).toBe('');
+});
+
+test('preserves one layout quantum as a real fractional inset without reconstructing chrome', () => {
+  const f = frame();
+  jest.spyOn(f.parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1484, 937));
+  jest
+    .spyOn(f.panel, 'getBoundingClientRect')
+    .mockReturnValue(rectangle(0, 78, 1484 - 1 / 64, 859));
+  const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
+  adapter.apply(593.59375);
+  expect(f.root.style.width).toBe('calc(100% - 593.609375px)');
+  expect(f.chrome.style.width).toBe('1484px');
+  adapter.dispose();
+});
+
+test('preserves a meaningful fractional edge inset without rewriting a stable allocation', () => {
+  const f = frame();
+  jest.spyOn(f.parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1484, 937));
+  jest.spyOn(f.panel, 'getBoundingClientRect').mockReturnValue(rectangle(0, 78, 1483.75, 859));
+  const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
+  adapter.apply(593.59375);
+
+  expect(f.root.style.width).toBe('calc(100% - 593.84375px)');
+  expect(f.chrome.style.width).toBe('1484px');
+  const mutations = new MutationObserver(() => undefined);
+  mutations.observe(f.root, { attributes: true, subtree: true });
+  adapter.apply(593.59375);
+  expect(mutations.takeRecords()).toHaveLength(0);
+  mutations.disconnect();
+  adapter.dispose();
+});
+
+test('updates authoritative chrome dimensions when only the outer frame resizes', () => {
+  const f = frame();
+  let width = 1484;
+  jest
+    .spyOn(f.parent, 'getBoundingClientRect')
+    .mockImplementation(() => rectangle(0, 0, width, 937));
+  jest
+    .spyOn(f.panel, 'getBoundingClientRect')
+    .mockImplementation(() => rectangle(63.25, 78.5, width - 67.375, 856.25));
+  const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
+  adapter.apply(593.59375);
+  expect(f.chrome.style.cssText).toContain('width: 1484px');
+  expect(f.chrome.style.cssText).toContain('height: 937px');
+  expect(f.root.style.marginLeft).toBe('63.25px');
+  expect(f.root.style.marginTop).toBe('78.5px');
+  expect(f.root.style.clipPath).toBe('inset(-78.5px -597.71875px -2.25px -63.25px)');
+
+  width = 1484.375;
+  adapter.apply(593.59375);
+  expect(f.chrome.style.width).toBe('1484.375px');
+  adapter.dispose();
 });
 
 /** Supply stable browser geometry without relying on JSDOM layout. */

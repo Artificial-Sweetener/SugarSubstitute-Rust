@@ -15,34 +15,29 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the workflow-owned browser canvas without extending Comfy's execution or rendering authorities. */
 import { resolveComfyRendererMode } from '../../core/ComfyRendererMode.js';
+import { prefersNativeOutputSurface } from '../../core/embedded/NativePanelTransport.js';
 import { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
 import { CanvasSourceInventory } from '../application/CanvasSourceInventory.js';
 import { CanvasSelectionController } from '../application/CanvasSelectionController.js';
 import { CanvasInspectionStore } from '../application/CanvasInspectionStore.js';
-import { CanvasImageAllowances } from '../application/CanvasImageAllowances.js';
 import { WebCanvasAdapter } from '../application/WebCanvasAdapter.js';
 import { CanvasSessionCoordinator } from '../application/CanvasSessionCoordinator.js';
 import { windowId } from '../domain/CanvasIdentity.js';
 import { isRecord } from '../../types/common.js';
-import { BrowserCanvasAttachment } from './BrowserCanvasAttachment.js';
-import { BrowserCanvasImageLoader } from './BrowserCanvasImageLoader.js';
+import { NativeCanvasAttachment } from './NativeCanvasAttachment.js';
 import { ComfyCanvasSourceInventory } from './ComfyCanvasSourceInventory.js';
 import { ComfyCanvasPreferences } from './ComfyCanvasPreferences.js';
 import { ComfyCanvasWorkspaceHost } from './ComfyCanvasWorkspaceHost.js';
 import { CanvasPrimarySurface } from './CanvasPrimarySurface.js';
 import { ComfyCanvasToolbar } from './ComfyCanvasToolbar.js';
-import { comfyCanvasMediaUrl, openComfyCanvasMedia } from './ComfyCanvasMedia.js';
-import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyles.js';
+import { openComfyCanvasMedia } from './ComfyCanvasMedia.js';
+import { ensureCanvasWorkspaceStyles } from './CanvasWorkspaceStyles.js';
 import { CanvasRevealCoordinator } from '../application/CanvasRevealCoordinator.js';
 import { ComfyImageRevealHost } from './ComfyImageRevealHost.js';
 import { BrowserOutputTransfer } from '../../output_saving/BrowserOutputTransfer.js';
 import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard.js';
 import { BrowserImageDownload } from '../../output_saving/BrowserImageDownload.js';
 import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
-import { ComfyCanvasModelRuntime } from './ComfyCanvasModelRuntime.js';
-import { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.js';
-import { BrowserCanvasMediaPosters } from './BrowserCanvasMediaPosters.js';
-import { BrowserCanvasPosterRenderer } from './BrowserCanvasPosterRenderer.js';
 /** Keep source, selection, resource, frame, settings, and execution ownership explicit in a thin composition. */
 export class ComfyCanvasHost {
     options;
@@ -57,8 +52,7 @@ export class ComfyCanvasHost {
     #imageActions;
     #saving;
     #transfers;
-    #posters;
-    #mediaSessions = new BrowserCanvasMediaSessions();
+    #browser = null;
     #stops = [];
     #started = false;
     #disposed = false;
@@ -69,8 +63,6 @@ export class ComfyCanvasHost {
         const window = document.defaultView;
         if (!window)
             throw new Error('Output canvas window is unavailable.');
-        const models = new ComfyCanvasModelRuntime(() => (isRecord(window) ? window.comfyAPI : null));
-        this.#posters = new BrowserCanvasMediaPosters(new BrowserCanvasPosterRenderer(document, models));
         const transfers = (this.#transfers = new BrowserOutputTransfer(document.location.origin, (input, init) => window.fetch(input, init), new BrowserImageClipboard(document), new BrowserImageDownload(document)));
         const nextKey = () => [...window.crypto.getRandomValues(new Uint32Array(4))]
             .map((word) => word.toString(16).padStart(8, '0'))
@@ -94,7 +86,6 @@ export class ComfyCanvasHost {
             latestOrder: (session) => execution.latestSubmissionOrder(session),
         });
         const inspections = new CanvasInspectionStore();
-        const allowances = new CanvasImageAllowances();
         const inventory = new CanvasSourceInventory();
         this.#sources = new ComfyCanvasSourceInventory(execution.sessions, inventory, () => (isRecord(app) ? app.graph : null), logger);
         this.#saving = options.saving
@@ -112,7 +103,7 @@ export class ComfyCanvasHost {
         this.#coordinator = new CanvasSessionCoordinator(execution.sessions, this.#adapter, inventory, views, selection, this.#sources);
         this.#stops.push(this.#coordinator.onRetired((view) => {
             inspections.remove(view);
-            allowances.remove(view);
+            this.#browser?.remove(view);
         }));
         this.#preferences = new ComfyCanvasPreferences(app);
         const changed = () => {
@@ -122,40 +113,31 @@ export class ComfyCanvasHost {
             }
         };
         this.#workspace = new ComfyCanvasWorkspaceHost(app, document, this.#preferences, frames, changed, report, options.presentation);
+        const nativePresenter = () => prefersNativeOutputSurface(window) ||
+            execution.canvases.surfaceHost('embedded-document') !== null;
         this.#primary = new CanvasPrimarySurface({
             document,
             window: windowId(nextKey()),
             views,
             coordinator: this.#coordinator,
             element: () => this.#workspace.canvas,
-            renderer: () => resolveComfyRendererMode(app, null, document),
+            renderer: () => `${resolveComfyRendererMode(app, null, document)}:${nativePresenter() ? 'native' : 'browser'}`,
             report,
-            mount: (element, address, _catalog, accepts) => {
-                const loader = new BrowserCanvasImageLoader(document, {
-                    create: (blob) => window.URL.createObjectURL(blob),
-                    revoke: (url) => window.URL.revokeObjectURL(url),
-                }, this.#posters);
-                return new BrowserCanvasAttachment(element, {
+            mount: (element, address, _catalog, accepts, acceptsPreparation) => {
+                const shared = {
                     address,
                     views,
                     selection,
                     inspections,
-                    allowances,
                     clock,
                     frames,
-                    loader,
-                    logger,
-                    models,
-                    mediaSessions: this.#mediaSessions,
                     accepts,
                     catalog: () => this.#coordinator.catalog(address.viewId),
                     connected: () => execution.connected,
-                    url: (item) => comfyCanvasMediaUrl(document.location.origin, item),
                     open: (item) => openComfyCanvasMedia(window, item),
                     copy: (item, accepts, format, signal) => transfers.copy(item.file, accepts, format, signal),
                     fileAction: (item, accepts, signal) => transfers.fileAction(item.file, accepts, signal),
                     mediaProfile: () => transfers.profile(),
-                    drag: (item, signal) => transfers.drag(item.file, signal),
                     transferChanged: (listener) => {
                         const profile = transfers.subscribe(listener);
                         const settings = saving?.configuration.subscribe(listener);
@@ -164,8 +146,18 @@ export class ComfyCanvasHost {
                             settings?.();
                         };
                     },
-                    disposeLoader: () => loader.dispose(),
                     report: (error) => report(error),
+                };
+                if (nativePresenter())
+                    return new NativeCanvasAttachment(element, {
+                        ...shared,
+                        nativeSurface: () => execution.canvases.surfaceHost('embedded-document'),
+                    });
+                return import('./ComfyBrowserCanvasHost.mjs').then(({ ComfyBrowserCanvasHost }) => {
+                    if (!acceptsPreparation())
+                        return null;
+                    const browser = (this.#browser ??= new ComfyBrowserCanvasHost(document, logger, (item, signal) => transfers.drag(item.file, signal)));
+                    return browser.mount(element, shared);
                 });
             },
         });
@@ -203,7 +195,7 @@ export class ComfyCanvasHost {
         return {
             ...this.#primary.diagnostics(),
             inventory: this.#sources.diagnostics(),
-            ...this.#posters.diagnostics(),
+            ...(this.#browser?.diagnostics() ?? { posters: 0, posterBytes: 0 }),
         };
     }
     /** Install one source adapter, catalog coordinator, preview consumer, and primary attachment. */
@@ -221,13 +213,14 @@ export class ComfyCanvasHost {
                 this.#stops.push(this.options.saving.configuration.subscribe(() => {
                     void this.#transfers.refresh().catch(this.options.report);
                 }));
-            ensureBrowserCanvasWorkspaceStyles(this.options.document);
+            ensureCanvasWorkspaceStyles(this.options.document);
             this.#primary.setup();
             this.#workspace.setup();
             this.#toolbar.setup();
             this.#imageActions.setup();
             this.#saving?.setup();
             this.#stops.push(this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
+            this.options.document.addEventListener('sugarcubes-canvas-ready', this.#canvasReady);
             this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
         }
         catch (error) {
@@ -260,6 +253,7 @@ export class ComfyCanvasHost {
             return;
         this.#disposed = true;
         this.options.document.defaultView?.removeEventListener('pagehide', this.#pagehide);
+        this.options.document.removeEventListener('sugarcubes-canvas-ready', this.#canvasReady);
         this.#primary.dispose();
         this.#imageActions.dispose();
         this.#saving?.dispose();
@@ -272,9 +266,9 @@ export class ComfyCanvasHost {
         this.#sources.dispose();
         this.#preferences.dispose();
         this.#transfers.dispose();
-        this.#posters.dispose();
-        this.#mediaSessions.dispose();
+        this.#browser?.dispose();
     }
     /** Honor actual page teardown without introducing a recurring visibility or frame loop. */
     #pagehide = () => this.dispose();
+    #canvasReady = () => this.#primary.reconcile();
 }

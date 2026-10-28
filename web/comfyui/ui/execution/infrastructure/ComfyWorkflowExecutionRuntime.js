@@ -72,7 +72,7 @@ export class ComfyWorkflowExecutionRuntime {
         this.options = options;
         this.#generation = new WorkflowGenerationEvents((error) => options.logger.error('SugarCubes generation lifecycle consumer failed.', { error }));
         this.canvases = new WorkflowCanvasCoordinator(this.#generation, this.results, (error) => options.logger.error('SugarCubes canvas coordination failed.', { error }), options.canvasTargets ??
-            (() => (this.#canvasDelivery?.available ? ['embedded-document'] : ['web'])));
+            (() => (this.#canvasDelivery?.available ? ['web', 'embedded-document'] : ['web'])));
         this.#stopSeeds = this.sessions.subscribe((snapshot) => {
             this.seeds.synchronize(snapshot);
             this.activity.synchronize(snapshot);

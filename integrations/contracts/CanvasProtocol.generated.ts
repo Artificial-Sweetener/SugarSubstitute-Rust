@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts. */
+import type { CanvasSurfaceMessage } from './CanvasSurfaceProtocol.generated.js';
 /** Describe the schema-defined CanvasCapabilities wire value. */
 export type CanvasCapabilities =
   | {
@@ -309,4 +310,5 @@ export type CanvasMessage =
   | CanvasSourceReply
   | CanvasSourceChanged
   | CanvasGeometryRequest
-  | CanvasGeometryReply;
+  | CanvasGeometryReply
+  | CanvasSurfaceMessage;

@@ -19,14 +19,57 @@
  */
 import { createServer, type Server } from 'node:http';
 import { chromium, firefox, type Browser, type Page } from '@playwright/test';
-import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import {
+  closeBrowserFixture,
+  launchHeadlessBrowser,
+} from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import { companionAssets } from '../../../scripts/gimp/build.js';
 
 let server: Server;
 const engines = ['chromium', 'firefox'] as const;
 type Engine = (typeof engines)[number];
+const scenarios = ['unavailable', 'native-document', 'panel-admission'] as const;
+type Scenario = (typeof scenarios)[number];
 const browsers = new Map<Engine, Browser>();
+const pages = new Map<Scenario, Map<Engine, Page>>();
+interface ActivePage {
+  page: Page;
+  closing?: Promise<void>;
+}
+let activePage: ActivePage | undefined;
 let address: string;
+
+/** Claim one preallocated page exactly once before any case setup can block. */
+function claimPage(scenario: Scenario, engine: Engine): Page {
+  if (activePage) throw new Error('A Tauri shell page is already active.');
+  const candidates = pages.get(scenario);
+  const page = candidates?.get(engine);
+  if (!candidates || !page) throw new Error(`Missing ${scenario} ${engine} page fixture.`);
+  candidates.delete(engine);
+  if (candidates.size === 0) pages.delete(scenario);
+  activePage = { page };
+  return page;
+}
+
+/** Retire only the currently claimed page, leaving a later case's custody untouched. */
+async function closeClaimedPage(page?: Page): Promise<void> {
+  const claimed = activePage;
+  if (!claimed || (page && claimed.page !== page)) return;
+  claimed.closing ??= claimed.page.isClosed() ? Promise.resolve() : claimed.page.close();
+  await claimed.closing;
+  if (activePage === claimed) activePage = undefined;
+}
+
+/** Close every browser even when another browser reports a teardown failure. */
+async function closeBrowsers(): Promise<void> {
+  const outcomes = await Promise.allSettled(
+    [...browsers.values()].map(async (browser) => browser.close()),
+  );
+  const causes = outcomes.flatMap((outcome): unknown[] =>
+    outcome.status === 'rejected' ? [outcome.reason] : [],
+  );
+  if (causes.length) throw new AggregateError(causes, 'Tauri shell browser cleanup failed');
+}
 
 beforeAll(async () => {
   const assets = await companionAssets(process.cwd());
@@ -61,28 +104,27 @@ beforeAll(async () => {
   );
   const failure = launches.find((result) => result.status === 'rejected');
   if (failure?.status === 'rejected') throw failure.reason;
+  for (const scenario of scenarios) {
+    const candidates = new Map<Engine, Page>();
+    pages.set(scenario, candidates);
+    for (const engine of engines) {
+      const browser = browsers.get(engine);
+      if (!browser) throw new Error(`Missing ${engine} browser fixture.`);
+      candidates.set(engine, await browser.newPage());
+    }
+  }
 }, 60_000);
 
 afterAll(async () => {
-  await Promise.all([...browsers.values()].map((browser) => browser.close()));
-  if (server?.listening)
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+  await closeBrowserFixture({ close: closeBrowsers }, server);
 });
 
-/** Replace only Tauri's native operation while exercising the compiled product shell. */
-async function page(
-  native = false,
-  engine: Engine = 'chromium',
-  admissionFailure = false,
-): Promise<Page> {
-  const browser = browsers.get(engine);
-  if (!browser) throw new Error('Missing companion proof browser.');
-  const page = await browser.newPage();
+afterEach(async () => {
+  await closeClaimedPage();
+});
+
+/** Replace only Tauri's native operation before exercising the compiled product shell. */
+async function configurePage(page: Page, native = false, admissionFailure = false): Promise<void> {
   await page.addInitScript(
     ({ native, admissionFailure }) => {
       let calls = 0;
@@ -159,14 +201,14 @@ async function page(
     { native, admissionFailure },
   );
   await page.goto(address);
-  return page;
 }
 
 test.each(engines)(
   'shows unavailable-server feedback literally and retries through the native port: %s',
   async (engine) => {
-    const view = await page(false, engine);
+    const view = claimPage('unavailable', engine);
     try {
+      await configurePage(view);
       await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
       expect(await view.locator('#connection-detail').textContent()).toContain(
         '<img src=x onerror=boom>',
@@ -180,7 +222,7 @@ test.each(engines)(
         'http://127.0.0.1:8226/',
       );
     } finally {
-      await view.close();
+      await closeClaimedPage(view);
     }
   },
 );
@@ -188,8 +230,9 @@ test.each(engines)(
 test.each(engines)(
   'shows the native launch image literally while ComfyUI is disconnected: %s',
   async (engine) => {
-    const view = await page(true, engine);
+    const view = claimPage('native-document', engine);
     try {
+      await configurePage(view, true);
       await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
       await view.locator('#native-document').waitFor({ state: 'visible' });
       expect(await view.locator('#native-document').textContent()).toBe(
@@ -198,7 +241,7 @@ test.each(engines)(
       expect(await view.locator('img').count()).toBe(0);
       expect(await view.getByRole('button', { name: 'Retry' }).isEnabled()).toBe(true);
     } finally {
-      await view.close();
+      await closeClaimedPage(view);
     }
   },
 );
@@ -206,8 +249,9 @@ test.each(engines)(
 test.each(engines)(
   'retries native panel admission immediately through the compiled shell: %s',
   async (engine) => {
-    const view = await page(false, engine, true);
+    const view = claimPage('panel-admission', engine);
     try {
+      await configurePage(view, false, true);
       await view.getByRole('heading', { name: 'ComfyUI is not connected' }).waitFor();
       expect(await view.evaluate(() => Reflect.get(globalThis, 'nativePanelCalls'))).toBe(1);
       await view.getByRole('button', { name: 'Retry' }).click();
@@ -215,7 +259,7 @@ test.each(engines)(
       expect(await view.evaluate(() => Reflect.get(globalThis, 'nativePanelCalls'))).toBe(2);
       expect(await view.evaluate(() => Reflect.get(globalThis, 'nativeConnectionCalls'))).toBe(1);
     } finally {
-      await view.close();
+      await closeClaimedPage(view);
     }
   },
 );

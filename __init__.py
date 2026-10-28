@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 from typing import cast
 
 from .sugarcubes import (
@@ -34,6 +35,7 @@ from .sugarcubes import (
 from .sugarcubes.backend.composition import build_backend_services
 from .sugarcubes.backend.routes import register_routes
 from .sugarcubes.extension_layout import extension_root
+from .sugarcubes.frontend_assets import install_canvas_module_mime
 from .sugarcubes.execution.comfy_execution_port import (
     ComfyExecutionModuleLike,
     DirectComfyExecutionPort,
@@ -63,6 +65,7 @@ PromptServer = (
 if PromptServer is not None:
     try:
         prompt_server = getattr(PromptServer, "instance", PromptServer)
+        install_canvas_module_mime(PromptServer, Path(__file__).parent.name)
         comfy_execution = sys.modules.get("execution")
         if comfy_execution is None:
             raise RuntimeError("Comfy execution module is unavailable")
