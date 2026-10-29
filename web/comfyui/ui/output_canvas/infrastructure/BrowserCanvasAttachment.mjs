@@ -25,6 +25,7 @@ import { inspectBrowserCanvasFrame } from './BrowserCanvasInspection.mjs';
 import { sameCanvasNavigation } from '../domain/CanvasViewState.js';
 import { BrowserCanvasImages } from '../presentation/browser/BrowserCanvasImages.mjs';
 import { BrowserCanvasInput } from '../presentation/browser/BrowserCanvasInput.mjs';
+import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { BrowserCanvasOverview } from '../presentation/browser/BrowserCanvasOverview.mjs';
 import { browserCanvasSnapshot } from '../presentation/browser/BrowserCanvasSnapshot.mjs';
 import { mountCanvasOverlay, } from '../presentation/vue/CanvasOverlayRuntime.js';
@@ -50,6 +51,7 @@ export class BrowserCanvasAttachment {
     #images;
     #overview;
     #input;
+    #stopKeyboard;
     #drag;
     #media;
     #detail;
@@ -232,14 +234,12 @@ export class BrowserCanvasAttachment {
             this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element, (target) => this.#overview.contextTarget(target) ?? this.#images.contextTarget(target) ?? 'primary');
             cleanup.push(() => this.#overlay.dispose());
             this.#input = new BrowserCanvasInput(this.viewport, {
+                navigable: () => this.#camera.navigable(),
                 outbound: (event) => this.#drag.allows(event),
                 contains: (point) => !this.#detail.status() && this.#images.contains(point),
                 interrupt: () => this.#camera.interrupt(),
                 pan: (delta) => {
                     this.#camera.pan(delta);
-                },
-                zoom: (factor) => {
-                    this.#camera.zoom(factor);
                 },
                 wheel: (delta, units, anchor) => {
                     this.#camera.wheel(delta, units, anchor);
@@ -250,10 +250,10 @@ export class BrowserCanvasAttachment {
                 doubleClick: (anchor) => {
                     this.#camera.doubleClick(anchor);
                 },
-                fit: () => {
-                    this.#camera.fit();
-                },
             });
+            const keyboard = new CanvasViewportKeyboard(this.viewport, this.port, options.report, () => this.#input.cancel());
+            cleanup.push(() => keyboard.dispose());
+            this.#stopKeyboard = () => keyboard.dispose();
             cleanup.push(() => this.#input.dispose());
             this.#geometry = new CanvasSurfaceGeometryObserver(this.viewport, options.frames, (geometry) => this.port.updateSurface(options.address, geometry));
             cleanup.push(() => this.#geometry.dispose());
@@ -377,6 +377,7 @@ export class BrowserCanvasAttachment {
         this.#stopView();
         this.#status.dispose();
         this.port.dispose();
+        this.#stopKeyboard();
         this.#input.dispose();
         this.#drag.dispose();
         this.#media.dispose();
@@ -399,22 +400,23 @@ export class BrowserCanvasAttachment {
             return;
         this.#browserResources.measured();
         const images = this.#browserResources.resources.read();
+        const primary = images.find((slot) => slot.slot === 'primary')?.frame ?? null;
+        const secondary = images.find((slot) => slot.slot === 'secondary')?.frame ?? null;
         this.#overview.images(images);
         if (this.#plan.view.mode === 'overview' || this.#detail.status()) {
             this.#images.images(null, null);
             this.#drag.reconcile();
             this.#input.cancel();
             this.#camera.suspend();
-            this.#status.changed();
+            this.#status.changed(Boolean(primary?.preview) !== this.port.read().preview);
             return;
         }
-        const primary = images.find((slot) => slot.slot === 'primary')?.frame ?? null;
-        const secondary = images.find((slot) => slot.slot === 'secondary')?.frame ?? null;
         this.#images.images(primary, secondary);
         this.#drag.reconcile();
-        if (!inspectBrowserCanvasFrame(this.#camera, primary ?? secondary, this.#surface))
+        if (!inspectBrowserCanvasFrame(this.#camera, primary ?? secondary, this.#surface) ||
+            !this.#camera.navigable())
             this.#input.cancel();
-        this.#status.changed();
+        this.#status.changed(Boolean(primary?.preview) !== this.port.read().preview);
     }
     /** Apply settled geometry while suspending all image admissions for zero-sized/hidden allocations. */
     #resize(surface) {

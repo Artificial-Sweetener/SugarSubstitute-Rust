@@ -24,9 +24,15 @@ import type {
   CanvasSurfaceReleaseRequest,
   CanvasSurfaceReply,
   CanvasSurfaceSelectRequest,
+  CanvasSurfaceViewportRequest,
+  CanvasSurfaceViewportReply,
 } from './CanvasSurfaceProtocol.generated.js';
 
-export type { CanvasSurfaceCapabilities } from './CanvasSurfaceProtocol.generated.js';
+export type {
+  CanvasSurfaceCapabilities,
+  CanvasSurfaceViewportCommand,
+  CanvasSurfaceViewportState,
+} from './CanvasSurfaceProtocol.generated.js';
 
 type Envelope = 'protocol' | 'version' | 'session' | 'requestId';
 
@@ -36,10 +42,13 @@ export type CanvasSurfaceCommand =
   | Omit<CanvasSurfaceGeometryRequest, Envelope>
   | Omit<CanvasSurfaceSelectRequest, Envelope>
   | Omit<CanvasSurfaceCommitRequest, Envelope>
-  | Omit<CanvasSurfaceReleaseRequest, Envelope>;
+  | Omit<CanvasSurfaceReleaseRequest, Envelope>
+  | Omit<CanvasSurfaceViewportRequest, Envelope>;
 
 /** Return an explicit host outcome without exposing native resources or filesystem authority. */
-export type CanvasSurfaceResult = Pick<CanvasSurfaceReply, 'status' | 'message'>;
+export type CanvasSurfaceResult =
+  | Pick<CanvasSurfaceReply, 'status' | 'message'>
+  | Pick<CanvasSurfaceViewportReply, 'status' | 'message' | 'viewport'>;
 
 /** Negotiate and operate an optional presentation surface using the existing canvas session. */
 export interface CanvasSurfaceHost {
@@ -53,6 +62,10 @@ export interface CanvasSurfaceHost {
    * acknowledges a correctly sized frame. A successful hidden geometry update acknowledges
    * that the surface accepted the hide.
    * Queue acceptance does not assert compositor completion or physical display scanout.
+   * A negotiated viewport request reads or changes the native camera. Zoom factors multiply
+   * the current scale around the viewport center; native centers physical 1:1. Pan uses
+   * viewport fractions. Successful viewport replies describe the settled camera represented
+   * by an accepted native frame. Empty or hidden surfaces return unavailable without a snapshot.
    */
   execute(
     command: CanvasSurfaceCommand,

@@ -33,6 +33,7 @@ import { CanvasSourceConnection } from './CanvasSourceConnection.js';
 import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
 import type { CanvasSurfaceCommand, CanvasSurfaceHost } from '../contracts/CanvasSurface.js';
 import { requestCanvasSurface } from './CanvasSurfaceClient.js';
+import { snapshotCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
 import {
   snapshotCanvasSurfaceCapabilities,
   discoverCanvasSurface,
@@ -55,6 +56,7 @@ interface Pending {
     | 'source.reply'
     | 'geometry.reply'
     | 'surface.capabilities.reply'
+    | 'surface.viewport.reply'
     | 'surface.reply';
   accept(message: CanvasMessage): void;
   reject(error: Error): void;
@@ -134,7 +136,13 @@ export class CanvasClient implements CanvasLayerHost {
           owns: (host) => this.#surface === host,
           execute: (command, cancellation) =>
             requestCanvasSurface(command, cancellation, (admitted, scope) =>
-              this.#request(admitted, 'surface.reply', scope),
+              this.#request(
+                admitted,
+                admitted.type === 'surface.viewport.request'
+                  ? 'surface.viewport.reply'
+                  : 'surface.reply',
+                scope,
+              ),
             ),
           report: (error) => {
             this.port.report(error);
@@ -169,7 +177,16 @@ export class CanvasClient implements CanvasLayerHost {
       return true;
     }
     const pending = this.#pending.get(value.requestId);
-    if (!pending || (pending.type !== value.type && value.type !== 'error.reply')) return false;
+    const viewportFailure =
+      pending?.type === 'surface.viewport.reply' &&
+      value.type === 'surface.reply' &&
+      value.status !== 'applied' &&
+      value.status !== 'ready';
+    if (
+      !pending ||
+      (pending.type !== value.type && value.type !== 'error.reply' && !viewportFailure)
+    )
+      return false;
     this.#pending.delete(value.requestId);
     pending.stop();
     if (value.type === 'error.reply') pending.reject(new Error(value.failure.message));
@@ -180,6 +197,12 @@ export class CanvasClient implements CanvasLayerHost {
       });
     else if (value.type === 'context.reply')
       pending.accept({ ...value, context: snapshotCanvasContext(value.context) });
+    else if (value.type === 'surface.viewport.reply')
+      pending.accept({
+        ...value,
+        address: Object.freeze({ ...value.address }),
+        viewport: snapshotCanvasSurfaceViewport(value.viewport),
+      });
     else pending.accept(value);
     return true;
   }
@@ -195,6 +218,7 @@ export class CanvasClient implements CanvasLayerHost {
         pending.type === 'image.reply' ||
         pending.type === 'geometry.reply' ||
         pending.type === 'surface.reply' ||
+        pending.type === 'surface.viewport.reply' ||
         pending.type === 'surface.capabilities.reply'
       )
         pending.cancel();

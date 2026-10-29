@@ -74,48 +74,128 @@ test('public execution events keep workflow and sampler progress separate and re
   f.adapter.dispose();
 });
 
-test('delivers enhanced preview bytes once and refuses to guess from an unassigned enhanced delivery', () => {
+test.each(['promptId', 'jobId'] as const)(
+  'delivers %s preview bytes once and refuses anonymous or terminal deliveries',
+  (field) => {
+    const f = fixture();
+    f.adapter.install();
+    f.api.emit('execution_start', { prompt_id: 'one' });
+    f.api.emit('executing', '42:23');
+    const enhanced = new Blob(['image']);
+    f.api.emit('b_preview_with_metadata', { [field]: 'one', nodeId: '42:23', blob: enhanced });
+    f.api.emit('b_preview', enhanced);
+    expect(f.previews).toHaveLength(1);
+    expect(f.previews[0]).toBe(enhanced);
+    const unassigned = new Blob(['foreign']);
+    f.api.emit('b_preview_with_metadata', {
+      [field]: 'foreign',
+      nodeId: '42:23',
+      blob: unassigned,
+    });
+    f.api.emit('b_preview', unassigned);
+    expect(f.previews).toHaveLength(1);
+    expect(f.previews[0]).toBe(enhanced);
+    const legacy = new Blob(['legacy']);
+    f.api.emit('b_preview', legacy);
+    expect(f.previews).toHaveLength(1);
+    expect(f.previews[0]).toBe(enhanced);
+    f.api.emit('execution_success', { prompt_id: 'one' });
+    f.api.emit('b_preview_with_metadata', { [field]: 'one', nodeId: '42:23', blob: new Blob() });
+    expect(f.previews).toHaveLength(1);
+    f.adapter.dispose();
+  },
+);
+
+test.each([
+  { name: 'undefined', value: undefined },
+  { name: 'null', value: null },
+  { name: 'number', value: 1 },
+  { name: 'object', value: {} },
+  { name: 'array', value: [] },
+  { name: 'empty', value: '' },
+  { name: 'whitespace', value: ' ' },
+  { name: 'overlong', value: 'x'.repeat(4097) },
+  { name: 'foreign', value: 'foreign' },
+])('refuses $name metadata without falling back to the other accepted host field', ({ value }) => {
   const f = fixture();
   f.adapter.install();
   f.api.emit('execution_start', { prompt_id: 'one' });
-  f.api.emit('executing', '42:23');
-  const enhanced = new Blob(['image']);
-  f.api.emit('b_preview_with_metadata', { jobId: 'one', nodeId: '42:23', blob: enhanced });
-  f.api.emit('b_preview', enhanced);
-  expect(f.previews).toEqual([enhanced]);
-  const unassigned = new Blob(['foreign']);
-  f.api.emit('b_preview_with_metadata', { jobId: 'foreign', nodeId: '42:23', blob: unassigned });
-  f.api.emit('b_preview', unassigned);
-  expect(f.previews).toEqual([enhanced]);
-  const legacy = new Blob(['legacy']);
-  f.api.emit('b_preview', legacy);
-  expect(f.previews).toEqual([enhanced]);
-  f.api.emit('execution_success', { prompt_id: 'one' });
-  f.api.emit('b_preview_with_metadata', { jobId: 'one', nodeId: '42:23', blob: new Blob() });
-  expect(f.previews).toHaveLength(1);
+  f.api.emit('b_preview_with_metadata', {
+    promptId: value,
+    jobId: 'one',
+    nodeId: '42:23',
+    blob: new Blob(['unqualified']),
+  });
+  f.api.emit('b_preview_with_metadata', {
+    promptId: 'one',
+    jobId: value,
+    nodeId: '42:23',
+    blob: new Blob(['unqualified-job']),
+  });
+  for (const field of ['promptId', 'jobId'])
+    f.api.emit('b_preview_with_metadata', {
+      [field]: value,
+      nodeId: '42:23',
+      blob: new Blob(['unqualified-only']),
+    });
+  expect(f.previews).toHaveLength(0);
+  expect(f.errors).toEqual([]);
   f.adapter.dispose();
 });
 
-test('never assigns delayed unqualified bytes to a newer executing generation', () => {
+test('accepts matching host metadata identities and rejects missing or conflicting identities', () => {
   const f = fixture();
   f.adapter.install();
   f.api.emit('execution_start', { prompt_id: 'one' });
-  f.api.emit('executing', '42:23');
-  const old = new Blob(['previous-generation']);
-  f.api.emit('execution_interrupted', { prompt_id: 'one' });
-  f.ingestor.accepted(f.ingestor.submitting(f.a), promptId('two'));
-  f.api.emit('execution_start', { prompt_id: 'two' });
-  f.api.emit('executing', '42:23');
-  f.api.emit('b_preview', old);
-  expect(f.previews).toEqual([]);
-  f.api.emit('b_preview_with_metadata', { jobId: 'one', nodeId: '42:23', blob: old });
-  f.api.emit('b_preview', new Blob(['previous-generation']));
-  expect(f.previews).toEqual([]);
-  const current = new Blob(['current-generation']);
-  f.api.emit('b_preview_with_metadata', { jobId: 'two', nodeId: '42:23', blob: current });
-  expect(f.previews).toEqual([current]);
+  f.api.emit('b_preview_with_metadata', {
+    nodeId: '42:23',
+    blob: new Blob(['anonymous']),
+  });
+  expect(f.previews).toHaveLength(0);
+  f.api.emit('b_preview_with_metadata', {
+    promptId: 'one',
+    jobId: 'foreign',
+    nodeId: '42:23',
+    blob: new Blob(['conflicting']),
+  });
+  expect(f.previews).toHaveLength(0);
+  const actual = new Blob(['matching-prompt']);
+  f.api.emit('b_preview_with_metadata', {
+    promptId: 'one',
+    jobId: 'one',
+    nodeId: '42:23',
+    blob: actual,
+  });
+  expect(f.previews).toHaveLength(1);
+  expect(f.previews[0]).toBe(actual);
+  expect(f.errors).toEqual([]);
   f.adapter.dispose();
 });
+
+test.each(['promptId', 'jobId'] as const)(
+  'never assigns delayed %s bytes to a newer executing generation',
+  (field) => {
+    const f = fixture();
+    f.adapter.install();
+    f.api.emit('execution_start', { prompt_id: 'one' });
+    f.api.emit('executing', '42:23');
+    const old = new Blob(['previous-generation']);
+    f.api.emit('execution_interrupted', { prompt_id: 'one' });
+    f.ingestor.accepted(f.ingestor.submitting(f.a), promptId('two'));
+    f.api.emit('execution_start', { prompt_id: 'two' });
+    f.api.emit('executing', '42:23');
+    f.api.emit('b_preview', old);
+    expect(f.previews).toHaveLength(0);
+    f.api.emit('b_preview_with_metadata', { [field]: 'one', nodeId: '42:23', blob: old });
+    f.api.emit('b_preview', new Blob(['previous-generation']));
+    expect(f.previews).toHaveLength(0);
+    const current = new Blob(['current-generation']);
+    f.api.emit('b_preview_with_metadata', { [field]: 'two', nodeId: '42:23', blob: current });
+    expect(f.previews).toHaveLength(1);
+    expect(f.previews[0]).toBe(current);
+    f.adapter.dispose();
+  },
+);
 
 test('adapts ordinary and nested finals while rejecting invalid payloads and unqualified node paths', () => {
   const f = fixture();

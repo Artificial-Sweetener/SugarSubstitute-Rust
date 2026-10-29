@@ -35,6 +35,7 @@ import type { CanvasSourceSummary } from '../domain/CanvasViewPort.js';
 import { sameCanvasNavigation } from '../domain/CanvasViewState.js';
 import { BrowserCanvasImages } from '../presentation/browser/BrowserCanvasImages.js';
 import { BrowserCanvasInput } from '../presentation/browser/BrowserCanvasInput.js';
+import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { BrowserCanvasOverview } from '../presentation/browser/BrowserCanvasOverview.js';
 import { browserCanvasSnapshot } from '../presentation/browser/BrowserCanvasSnapshot.js';
 import {
@@ -64,6 +65,7 @@ export class BrowserCanvasAttachment {
   readonly #images: BrowserCanvasImages;
   readonly #overview: BrowserCanvasOverview;
   readonly #input: BrowserCanvasInput;
+  readonly #stopKeyboard: () => void;
   readonly #drag: BrowserCanvasDrag;
   readonly #media: CanvasMediaActions;
   readonly #detail: BrowserCanvasMediaDetail;
@@ -287,14 +289,12 @@ export class BrowserCanvasAttachment {
       );
       cleanup.push(() => this.#overlay.dispose());
       this.#input = new BrowserCanvasInput(this.viewport, {
+        navigable: () => this.#camera.navigable(),
         outbound: (event) => this.#drag.allows(event),
         contains: (point) => !this.#detail.status() && this.#images.contains(point),
         interrupt: () => this.#camera.interrupt(),
         pan: (delta) => {
           this.#camera.pan(delta);
-        },
-        zoom: (factor) => {
-          this.#camera.zoom(factor);
         },
         wheel: (delta, units, anchor) => {
           this.#camera.wheel(delta, units, anchor);
@@ -305,10 +305,12 @@ export class BrowserCanvasAttachment {
         doubleClick: (anchor) => {
           this.#camera.doubleClick(anchor);
         },
-        fit: () => {
-          this.#camera.fit();
-        },
       });
+      const keyboard = new CanvasViewportKeyboard(this.viewport, this.port, options.report, () =>
+        this.#input.cancel(),
+      );
+      cleanup.push(() => keyboard.dispose());
+      this.#stopKeyboard = () => keyboard.dispose();
       cleanup.push(() => this.#input.dispose());
       this.#geometry = new CanvasSurfaceGeometryObserver(
         this.viewport,
@@ -434,6 +436,7 @@ export class BrowserCanvasAttachment {
     this.#stopView();
     this.#status.dispose();
     this.port.dispose();
+    this.#stopKeyboard();
     this.#input.dispose();
     this.#drag.dispose();
     this.#media.dispose();
@@ -456,22 +459,25 @@ export class BrowserCanvasAttachment {
     if (!this.#ready || this.#disposed) return;
     this.#browserResources.measured();
     const images = this.#browserResources.resources.read();
+    const primary = images.find((slot) => slot.slot === 'primary')?.frame ?? null;
+    const secondary = images.find((slot) => slot.slot === 'secondary')?.frame ?? null;
     this.#overview.images(images);
     if (this.#plan.view.mode === 'overview' || this.#detail.status()) {
       this.#images.images(null, null);
       this.#drag.reconcile();
       this.#input.cancel();
       this.#camera.suspend();
-      this.#status.changed();
+      this.#status.changed(Boolean(primary?.preview) !== this.port.read().preview);
       return;
     }
-    const primary = images.find((slot) => slot.slot === 'primary')?.frame ?? null;
-    const secondary = images.find((slot) => slot.slot === 'secondary')?.frame ?? null;
     this.#images.images(primary, secondary);
     this.#drag.reconcile();
-    if (!inspectBrowserCanvasFrame(this.#camera, primary ?? secondary, this.#surface))
+    if (
+      !inspectBrowserCanvasFrame(this.#camera, primary ?? secondary, this.#surface) ||
+      !this.#camera.navigable()
+    )
       this.#input.cancel();
-    this.#status.changed();
+    this.#status.changed(Boolean(primary?.preview) !== this.port.read().preview);
   }
 
   /** Apply settled geometry while suspending all image admissions for zero-sized/hidden allocations. */

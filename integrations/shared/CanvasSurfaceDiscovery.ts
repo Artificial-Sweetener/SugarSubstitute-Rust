@@ -23,6 +23,7 @@ import type {
 } from '../contracts/CanvasSurfaceProtocol.generated.js';
 import type { CanvasSurfaceCommand, CanvasSurfaceResult } from '../contracts/CanvasSurface.js';
 import { isCanvasSurfaceCapabilities } from './CanvasSurfaceValidation.generated.js';
+import { supportsCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
 
 /** Represent an explicit refusal without suggesting any executable operation. */
 export const EMPTY_CANVAS_SURFACE_CAPABILITIES: CanvasSurfaceCapabilities = Object.freeze({
@@ -140,7 +141,9 @@ export async function discoverCanvasSurface(port: {
       capabilities: snapshotCanvasSurfaceCapabilities(reply.capabilities),
       execute: (command, cancellation) =>
         command.type === 'surface.release' || (port.current() && port.owns(host))
-          ? port.execute(command, cancellation)
+          ? supportsCanvasSurfaceViewport(host.capabilities, command)
+            ? port.execute(command, cancellation)
+            : Promise.resolve({ status: 'unavailable', message: 'Canvas viewport is unavailable.' })
           : Promise.resolve({ status: 'unavailable', message: 'The canvas context changed.' }),
     });
     return host;

@@ -67,7 +67,8 @@ export interface CanvasViewSnapshot {
   readonly selected: WorkflowOutputItem | null;
   readonly secondary: WorkflowOutputItem | null;
   readonly preview: boolean;
-  readonly zoom: CanvasZoomStatus;
+  /** Null until the surface reports an authoritative camera for the current image. */
+  readonly zoom: CanvasZoomStatus | null;
   readonly resource: CanvasResourceStatus;
   readonly secondaryResource: CanvasResourceStatus | null;
   readonly runStatus: 'idle' | 'queued' | 'running' | 'complete' | 'cancelled' | 'error';

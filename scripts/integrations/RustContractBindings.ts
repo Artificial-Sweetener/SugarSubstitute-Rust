@@ -17,6 +17,7 @@
 
 import { createHash } from 'node:crypto';
 import { contractArrayEnum, contractArraySchema } from './ContractArraySchema.js';
+import { rustTaggedUnion } from './RustTaggedUnion.js';
 
 type Schema = Record<string, unknown>;
 const WELL_FORMED_TEXT = '^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$';
@@ -321,6 +322,7 @@ export function rustContractBindings(
     throw new Error('Invalid Rust contract source.');
   const names = new Set(Object.keys(definitions));
   const helpers = new Set<string>();
+  let requiredOption = false;
   const sourceHash = createHash('sha256').update(schemaText.replaceAll('\r\n', '\n')).digest('hex');
   const header = `// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
@@ -331,6 +333,13 @@ export function rustContractBindings(
     if (!name.startsWith(options.prefix) || !/^[A-Za-z]+$/.test(name))
       throw new Error('Invalid Rust contract type name.');
     const node = record(value);
+    if (Array.isArray(node.oneOf))
+      return rustTaggedUnion(name, node, (key, item, variant) => {
+        const field = rustName(key);
+        const result = property(item, field, names, `${name}${variant}`);
+        if (result.helper) helpers.add(result.helper);
+        return { field, ...result };
+      });
     keys(node, ['type', 'properties', 'required', 'additionalProperties']);
     const properties = Object.entries(record(node.properties));
     if (
@@ -342,6 +351,7 @@ export function rustContractBindings(
     const fields = properties.map(([key, item]) => {
       const field = rustName(key);
       const result = property(item, field, names, name);
+      requiredOption ||= result.requiredOption === true;
       if (result.helper) helpers.add(result.helper);
       return { field, ...result };
     });
@@ -365,9 +375,6 @@ impl ${name} {
     }
 }`;
   });
-  const requiredOption = Object.values(definitions).some((value) =>
-    Object.values(record(record(value).properties)).some((item) => 'oneOf' in record(item)),
-  );
   const helper = requiredOption
     ? `\n/// Preserve a required nullable field instead of defaulting a missing member to null.
 fn deserialize_required_option<'de, D: serde::Deserializer<'de>>(

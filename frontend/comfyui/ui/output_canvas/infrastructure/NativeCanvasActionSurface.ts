@@ -19,6 +19,7 @@ import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.j
 import type { CanvasActionSurface } from '../application/CanvasActions.js';
 import type { CanvasCommandScope } from '../domain/CanvasViewPort.js';
 import type { CanvasMediaActions } from './CanvasMediaActions.js';
+import type { CanvasSurfaceViewportCommand } from '../../../../../integrations/contracts/CanvasSurface.js';
 
 /** Advertise camera and admission operations only when the host can perform them. */
 export class NativeCanvasActionSurface implements CanvasActionSurface {
@@ -26,24 +27,29 @@ export class NativeCanvasActionSurface implements CanvasActionSurface {
   constructor(
     private readonly actions: CanvasMediaActions,
     private readonly openItem: (item: WorkflowOutputItem) => void,
+    private readonly viewport: (
+      command: CanvasSurfaceViewportCommand,
+      scope: CanvasCommandScope,
+    ) => Promise<boolean>,
   ) {}
 
-  /** Camera commands are unavailable until the native host exposes them. */
-  fit(): boolean {
-    return false;
+  /** Fit through the native presentation's existing revision stream. */
+  fit(scope: CanvasCommandScope): Promise<boolean> {
+    return this.viewport({ type: 'fit' }, scope);
   }
-  /** Native scale is unavailable until the native host exposes it. */
-  native(): boolean {
-    return false;
+  /** Request one source pixel per physical display pixel from the native camera. */
+  native(scope: CanvasCommandScope): Promise<boolean> {
+    return this.viewport({ type: 'native' }, scope);
   }
-  /** Zoom is unavailable until the native host exposes it. */
-  zoom(): boolean {
-    return false;
+  /** Keep factor interpretation and clamping with the native camera. */
+  zoom(factor: number, scope: CanvasCommandScope): Promise<boolean> {
+    return this.viewport({ type: 'zoom', factor }, scope);
   }
-  /** Pan is unavailable until the native host exposes it. */
-  pan(): boolean {
-    return false;
+  /** Forward viewport fractions without duplicating display-density conversion. */
+  pan(x: number, y: number, scope: CanvasCommandScope): Promise<boolean> {
+    return this.viewport({ type: 'pan', x, y, units: 'viewport' }, scope);
   }
+
   /** Native image retries require a host-owned retry operation. */
   retry(): boolean {
     return false;

@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own navigation, execution following, and bounded comparison revision intent. */
 import { resolveCanvasReveal } from '../domain/CanvasReveal.js';
+import { canvasOutputCatalog } from './CanvasOutputCatalog.js';
 import { canvasComparisonPair } from './CanvasComparisonSelection.js';
 import { canvasSelectedItem, canvasAvailableSelection, canvasItemSelection, canvasBatchGridCatalog, } from './CanvasContentSelection.js';
 /** Compare attributable execution progress independently of delivery order. */
@@ -67,7 +68,7 @@ export class CanvasSelectionController {
         this.views = views;
         this.submissions = submissions;
     }
-    /** Reconcile a named view without making background deliveries select another workflow. */
+    /** Follow current Run content independently of finals retained for manual inspection. */
     reconcile(viewId, catalog) {
         let state = this.views.read(viewId);
         if (state.sessionId !== catalog.sessionId)
@@ -88,7 +89,8 @@ export class CanvasSelectionController {
                 }));
             }
         }
-        const candidate = autoCandidate(catalog);
+        const automatic = canvasOutputCatalog(catalog.result, catalog.sources);
+        const candidate = autoCandidate(automatic);
         if (candidate && candidate.frontier[0] > cursor.presentedRun) {
             cursor.presentedRun = candidate.frontier[0];
             cursor.frontier = null;
@@ -119,7 +121,7 @@ export class CanvasSelectionController {
         if (state.selection && candidate.frontier[0] < catalog.result.runOrder)
             return state;
         cursor.frontier = candidate.frontier;
-        const batch = canvasBatchGridCatalog(catalog, candidate.selection, true);
+        const batch = canvasBatchGridCatalog(automatic, candidate.selection, true);
         const mode = (batch.entries[0]?.summary.batchCount ?? 0) > 1 ? 'overview' : 'image';
         if (state.selection?.sourceId === candidate.selection.sourceId &&
             state.selection.batchIndex === candidate.selection.batchIndex &&

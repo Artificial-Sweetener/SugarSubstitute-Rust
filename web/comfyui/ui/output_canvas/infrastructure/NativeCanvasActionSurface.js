@@ -18,26 +18,28 @@
 export class NativeCanvasActionSurface {
     actions;
     openItem;
+    viewport;
     /** Keep transfers with the same qualified owner as the browser surface. */
-    constructor(actions, openItem) {
+    constructor(actions, openItem, viewport) {
         this.actions = actions;
         this.openItem = openItem;
+        this.viewport = viewport;
     }
-    /** Camera commands are unavailable until the native host exposes them. */
-    fit() {
-        return false;
+    /** Fit through the native presentation's existing revision stream. */
+    fit(scope) {
+        return this.viewport({ type: 'fit' }, scope);
     }
-    /** Native scale is unavailable until the native host exposes it. */
-    native() {
-        return false;
+    /** Request one source pixel per physical display pixel from the native camera. */
+    native(scope) {
+        return this.viewport({ type: 'native' }, scope);
     }
-    /** Zoom is unavailable until the native host exposes it. */
-    zoom() {
-        return false;
+    /** Keep factor interpretation and clamping with the native camera. */
+    zoom(factor, scope) {
+        return this.viewport({ type: 'zoom', factor }, scope);
     }
-    /** Pan is unavailable until the native host exposes it. */
-    pan() {
-        return false;
+    /** Forward viewport fractions without duplicating display-density conversion. */
+    pan(x, y, scope) {
+        return this.viewport({ type: 'pan', x, y, units: 'viewport' }, scope);
     }
     /** Native image retries require a host-owned retry operation. */
     retry() {

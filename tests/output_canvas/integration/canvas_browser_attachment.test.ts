@@ -16,6 +16,7 @@
 /** Exercise the composed browser surface and reusable Vue overlay against actual state owners. */
 
 import { EmbeddedCanvasConnection } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedCanvasConnection.js';
+import { nativeCanvasRendererKey } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasCapabilities.js';
 import {
   createNativePanelTransport,
   prefersNativeOutputSurface,
@@ -167,6 +168,17 @@ describe('composed browser canvas attachment', () => {
     const listeners = new Set<(value: unknown) => void>();
     const messages: CanvasMessage[] = [];
     const connection = new EmbeddedCanvasConnection();
+    const mounted: NativeCanvasAttachment[] = [];
+    const viewportCapabilities = {
+      ...selectedPngCapabilities,
+      viewportCommands: ['fit', 'native', 'zoom', 'pan'] as const,
+      viewportState: true,
+    };
+    const state = {
+      mode: 'fit' as const,
+      physicalScale: 0.75,
+      dimensions: { width: 1024, height: 768 },
+    };
     const bridge = {
       host: 'ai.artificialsweetener.sugarsubstitute',
       session: 'delayed-native-session',
@@ -189,6 +201,23 @@ describe('composed browser canvas attachment', () => {
                   },
                 },
                 document: null,
+              },
+            });
+        if (message.type === 'surface.viewport.request')
+          for (const receive of listeners)
+            receive({
+              protocol: message.protocol,
+              version: message.version,
+              session: message.session,
+              requestId: message.requestId,
+              address: message.address,
+              revision: message.revision,
+              type: 'surface.viewport.reply',
+              status: 'applied',
+              message: '',
+              viewport: {
+                ...state,
+                ...(message.command.type === 'native' ? { mode: 'native', physicalScale: 1 } : {}),
               },
             });
         if (
@@ -231,17 +260,22 @@ describe('composed browser canvas attachment', () => {
         subscribe: () => () => {},
       } as unknown as CanvasSessionCoordinator,
       element: () => f.root,
-      renderer: () => (prefersNativeOutputSurface(window) ? 'native' : 'browser'),
+      renderer: () =>
+        prefersNativeOutputSurface(window)
+          ? nativeCanvasRendererKey(connection.surface)
+          : 'browser',
       report: f.options.report,
       mount: (element, address, _catalog, accepts, acceptsPreparation) => {
         expect(prefersNativeOutputSurface(window)).toBe(true);
-        return new NativeCanvasAttachment(element, {
+        const attachment = new NativeCanvasAttachment(element, {
           ...f.options,
           address,
           accepts,
           acceptsPreparation,
           nativeSurface: () => connection.surface,
         });
+        mounted.push(attachment);
+        return attachment;
       },
     });
     document.addEventListener('sugarcubes-canvas-ready', primary.reconcile);
@@ -264,18 +298,39 @@ describe('composed browser canvas attachment', () => {
           requestId: request.requestId,
           type: 'surface.capabilities.reply',
           status: 'available',
-          capabilities: selectedPngCapabilities,
+          capabilities: viewportCapabilities,
           message: '',
         });
       for (let turn = 0; turn < 48; turn++) await Promise.resolve();
       expect(primary.diagnostics().address).not.toBeNull();
       expect(messages.at(-1)).toMatchObject({
-        type: 'surface.commit',
+        type: 'surface.viewport.request',
+        command: { type: 'read' },
         address: primary.diagnostics().address,
       });
       expect(f.root.querySelector('.sc-output-native')).not.toBeNull();
       expect(f.loader.requests).toHaveLength(0);
       expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
+      const active = mounted.at(-1);
+      if (!active) throw new Error('Missing discovered native attachment.');
+      expect(mounted[0]?.port.capabilities.commands).not.toContain('fit');
+      expect(active.port.capabilities.commands).toEqual(
+        expect.arrayContaining(['fit', 'native', 'zoom', 'pan']),
+      );
+      expect(active.port.read().zoom).toMatchObject(state);
+      active.viewport.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '1', bubbles: true, cancelable: true }),
+      );
+      for (let turn = 0; turn < 48; turn++) await Promise.resolve();
+      expect(messages.at(-1)).toMatchObject({
+        type: 'surface.viewport.request',
+        command: { type: 'native' },
+      });
+      expect(active.port.read().zoom).toMatchObject({
+        mode: 'native',
+        physicalScale: 1,
+        dimensions: state.dimensions,
+      });
       expect(f.errors).toEqual([
         expect.objectContaining({ message: 'The native canvas is unavailable.' }),
       ]);
@@ -932,22 +987,22 @@ describe('composed browser canvas attachment', () => {
     await f.command(surface, { type: 'native' });
     f.frames.advance(45);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('native');
+    expect(surface.port.read().zoom?.mode).toBe('native');
     const sources = f.catalog.entries.map((entry) => entry.source);
     f.replace(canvasCatalogFixture(2, 0, sources));
     surface.refresh();
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('native');
+    expect(surface.port.read().zoom?.mode).toBe('native');
     await f.loader.ready(1);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('fit');
+    expect(surface.port.read().zoom?.mode).toBe('fit');
     await f.command(surface, { type: 'native' });
     f.frames.advance(45);
     f.replace(canvasCatalogFixture(2, 0, sources, 'canvas', 3));
     surface.refresh();
     await f.loader.ready(2);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('native');
+    expect(surface.port.read().zoom?.mode).toBe('native');
     surface.dispose();
     expect(f.errors).toEqual([]);
   });
@@ -977,22 +1032,52 @@ describe('composed browser canvas attachment', () => {
     surface.refresh();
     surface.receive(preview, new Blob(['preview']));
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('native');
+    expect(surface.port.read().zoom?.mode).toBe('native');
+    expect(surface.port.read().preview).toBe(false);
     await f.loader.ready(1, preview.dimensions);
-    f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('fit');
-    expect(surface.port.read().zoom.physicalScale).toBe(800 / 512);
-    await f.command(surface, { type: 'zoom', factor: 2 });
+    expect(surface.port.read().zoom?.mode).toBe('fit');
+    expect(surface.port.read().zoom?.physicalScale).toBe(800 / 512);
+    expect(surface.port.read().preview).toBe(true);
+    for (const command of [
+      { type: 'fit' },
+      { type: 'native' },
+      { type: 'zoom', factor: 2 },
+      { type: 'pan', x: 0.1, y: 0, units: 'viewport' },
+    ] as const)
+      expect((await f.command(surface, command)).status).toBe('unsupported');
     f.frames.advance(45);
+    expect(surface.port.read().zoom?.mode).toBe('fit');
+    const published = jest.fn();
+    const stop = surface.port.subscribe(published);
+    f.clock.advance(67);
+    const nextPreview = { ...preview, sequence: 2, token: 'next-preview' };
+    f.replace({
+      ...f.catalog,
+      result: { ...f.catalog.result, preview: nextPreview },
+      entries: [{ ...entry, preview: nextPreview }, ...f.catalog.entries.slice(1)],
+    });
+    surface.refresh();
+    surface.receive(nextPreview, new Blob(['next-preview']));
+    await f.loader.ready(2, preview.dimensions);
+    expect(published).not.toHaveBeenCalled();
+    expect(surface.port.read().preview).toBe(true);
+    f.clock.advance(33);
+    expect(published).toHaveBeenCalledTimes(1);
+    stop();
     f.replace(f.catalog);
     surface.refresh();
+    expect(surface.port.read().preview).toBe(false);
     await f.command(surface, {
       type: 'select',
       selection: { sourceId: entry.source.id, batchIndex: 0 },
     });
-    await f.loader.ready(2);
+    expect(surface.port.read().resource.state).toBe('loading');
+    expect((await f.command(surface, { type: 'native' })).status).toBe('unsupported');
+    await f.loader.ready(3);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('native');
+    expect(surface.port.read().zoom?.mode).toBe('native');
+    expect(surface.port.read().preview).toBe(false);
+    expect((await f.command(surface, { type: 'zoom', factor: 2 })).status).toBe('applied');
     surface.dispose();
     expect(f.errors).toEqual([]);
   });
@@ -1009,12 +1094,12 @@ describe('composed browser canvas attachment', () => {
     expect(f.root.textContent).toContain('<b>Output</b>');
     expect(f.root.querySelector('b')).toBeNull();
     expect(surface.port.read().resource.state).toBe('ready');
-    expect(surface.port.read().zoom.dimensions).toEqual({ width: 3840, height: 2160 });
+    expect(surface.port.read().zoom?.dimensions).toEqual({ width: 3840, height: 2160 });
     expect((await f.command(surface, { type: 'native' })).status).toBe('applied');
     f.frames.advance(45);
     f.frames.advance(16);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('native');
+    expect(surface.port.read().zoom?.mode).toBe('native');
     expect(image.style.transform).toContain('scale(1)');
     surface.dispose();
     expect(f.loader.requests[0]?.released).toBe(true);
@@ -1042,14 +1127,14 @@ describe('composed browser canvas attachment', () => {
     f.frames.advance(45);
     await f.loader.ready(1);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('fit');
+    expect(surface.port.read().zoom?.mode).toBe('fit');
     await f.command(surface, {
       type: 'select',
       selection: { sourceId: f.catalog.entries[0]!.source.id, batchIndex: 0 },
     });
     await f.loader.ready(2);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.physicalScale).toBe(1);
+    expect(surface.port.read().zoom?.physicalScale).toBe(1);
     surface.dispose();
   });
 
@@ -1091,7 +1176,7 @@ describe('composed browser canvas attachment', () => {
     f.frames.advance(16);
     await f.loader.ready(1);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.mode).toBe('native');
+    expect(surface.port.read().zoom?.mode).toBe('native');
     surface.dispose();
     expect(f.frames.pending).toBe(0);
   });
@@ -1131,7 +1216,7 @@ describe('composed browser canvas attachment', () => {
     f.clock.advance(100);
     f.frames.advance(16);
     expect(f.root.querySelectorAll('img')).toHaveLength(2);
-    const scale = surface.port.read().zoom.secondaryPhysicalScale;
+    const scale = surface.port.read().zoom?.secondaryPhysicalScale;
     expect(scale?.x).toBeCloseTo((800 / 3840) * (3840 / 2160));
     expect(scale?.y).toBeCloseTo((800 / 3840) * (2160 / 3840));
     const selected = surface.port.read().selected;
@@ -1223,7 +1308,7 @@ describe('composed browser canvas attachment', () => {
     f.frames.advance(16);
     expect(surface.port.read().resource.state).toBe('unavailable');
     expect(surface.port.read().resource.message).toContain('Showing B.');
-    expect(surface.port.read().zoom.dimensions).toEqual({ width: 2160, height: 3840 });
+    expect(surface.port.read().zoom?.dimensions).toEqual({ width: 2160, height: 3840 });
     expect(f.root.querySelectorAll('img')).toHaveLength(1);
     expect(f.root.querySelector('img')).toBe(b);
     expect(f.loader.requests[0]?.released).toBe(true);

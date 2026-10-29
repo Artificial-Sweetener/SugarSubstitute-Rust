@@ -100,6 +100,11 @@ export async function canvasBindings(
     'CanvasSurfaceReleaseRequest',
     'CanvasSurfaceCancelRequest',
     'CanvasSurfaceReply',
+    'CanvasSurfaceViewportCommand',
+    'CanvasSurfaceImageDimensions',
+    'CanvasSurfaceViewportState',
+    'CanvasSurfaceViewportRequest',
+    'CanvasSurfaceViewportReply',
   ];
   for (const name of surfaceNames) {
     if (!(name in schema.$defs)) throw new Error(`Missing canvas surface definition: ${name}`);
@@ -108,7 +113,7 @@ export async function canvasBindings(
   const surfaceMessages = schema.oneOf.filter(({ $ref }) =>
     surfaceNames.some((name) => $ref === `#/$defs/${name}`),
   );
-  if (surfaceMessages.length !== 8) throw new Error('Canvas surface message union changed.');
+  if (surfaceMessages.length !== 10) throw new Error('Canvas surface message union changed.');
   const ordinaryDefinitions = Object.fromEntries(
     Object.entries(schema.$defs).filter(([name]) => !surfaceNames.includes(name)),
   );
@@ -147,6 +152,29 @@ export async function canvasBindings(
       importPath: '../contracts/CanvasSurfaceProtocol.generated.js',
       recordImport: './ContractRecord.js',
       description: 'the shared canvas surface messages',
+      validationModules: [
+        {
+          file: 'integrations/shared/CanvasSurfaceGeometryValidation.generated.ts',
+          definitions: [
+            'CanvasSurfaceAddress',
+            'CanvasSurfaceFileReference',
+            'CanvasSurfacePoint',
+            'CanvasSurfaceSize',
+            'CanvasSurfaceClip',
+            'CanvasSurfaceGeometry',
+          ],
+        },
+        {
+          file: 'integrations/shared/CanvasSurfaceViewportValidation.generated.ts',
+          definitions: [
+            'CanvasSurfaceViewportCommand',
+            'CanvasSurfaceImageDimensions',
+            'CanvasSurfaceViewportState',
+            'CanvasSurfaceViewportRequest',
+            'CanvasSurfaceViewportReply',
+          ],
+        },
+      ],
     },
   );
   return {

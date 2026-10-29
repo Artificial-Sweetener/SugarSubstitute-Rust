@@ -29,7 +29,10 @@ import {
 } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSourceNavigation.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
 import { CanvasSurfacePort } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasSurfacePort.js';
-import type { CanvasCommandScope } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
+import type {
+  CanvasCommand,
+  CanvasCommandScope,
+} from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import { canvasCommandScope, canvasSnapshot } from '../support/CanvasPortFixture.js';
 
@@ -204,4 +207,37 @@ test('comparison is refused while the current surface is not ready or shows a pr
     ),
   ).resolves.toBe(false);
   expect(f.views.read(f.view).comparison).toBeNull();
+});
+
+test('rejects all preview camera commands before the surface while finals remain navigable during inference', async () => {
+  const f = fixture();
+  const owners = f.owners();
+  const commands: readonly CanvasCommand[] = [
+    { type: 'fit' },
+    { type: 'native' },
+    { type: 'zoom', factor: 2 },
+    { type: 'pan', x: 0.1, y: 0, units: 'viewport' },
+  ];
+  const changed = jest.fn<() => boolean>().mockReturnValue(true);
+  const cancelled = jest.spyOn(owners.sources, 'cancel');
+  const surface = { ...owners.surface, fit: changed, native: changed, zoom: changed, pan: changed };
+  for (const command of commands)
+    await expect(
+      applyCanvasAction(command, {
+        ...owners,
+        surface,
+        snapshot: { ...owners.snapshot, preview: true, runStatus: 'running' },
+      }),
+    ).resolves.toBe(false);
+  expect(changed).not.toHaveBeenCalled();
+  expect(cancelled).not.toHaveBeenCalled();
+  for (const command of commands)
+    await expect(
+      applyCanvasAction(command, {
+        ...owners,
+        surface,
+        snapshot: { ...owners.snapshot, preview: false, runStatus: 'running' },
+      }),
+    ).resolves.toBe(true);
+  expect(changed).toHaveBeenCalledTimes(4);
 });

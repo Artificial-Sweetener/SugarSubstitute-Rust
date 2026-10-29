@@ -83,11 +83,11 @@ test('shows numbered sets and source tabs without adding a canvas mode', () => {
   mounted.dispose();
 });
 
-test('offers only the reference comparison toggle outside comparison mode', () => {
+test('offers shared viewport commands and comparison outside comparison mode', () => {
   const port = new CanvasPortFixture(canvasSnapshot('reference-menu'));
   expect(
     canvasContextActions(port.read(), port.capabilities, jest.fn()).map((entry) => entry.label),
-  ).toEqual(['Compare outputs']);
+  ).toEqual(['Fit image', '100%', 'Zoom in', 'Zoom out', 'Compare outputs']);
 });
 
 test('describes a reactivated preview-only source before its next frame arrives', () => {
@@ -139,7 +139,7 @@ test('keeps source and comparison catalogs outside continuous camera and wipe re
         ...snapshot.view,
         comparison: { secondary: null, split: update / 100, orientation: 'vertical' },
       },
-      zoom: { ...snapshot.zoom, physicalScale: update / 10 },
+      zoom: { ...snapshot.zoom!, physicalScale: update / 10 },
     });
     await nextTick();
   }
@@ -175,7 +175,7 @@ test('keeps zoom and preview changes outside the live announcement region', asyn
       ...port.read(),
       revision: update,
       preview: true,
-      zoom: { ...port.read().zoom, physicalScale: update / 10 },
+      zoom: { ...port.read().zoom!, physicalScale: update / 10 },
     });
   await nextTick();
   expect(live.textContent).toBe('Detail');
@@ -415,7 +415,7 @@ test('retains the context menu through camera updates without rebuilding catalog
     port.publish({
       ...port.read(),
       revision,
-      zoom: { ...port.read().zoom, physicalScale: revision },
+      zoom: { ...port.read().zoom!, physicalScale: revision },
     });
   await nextTick();
   expect(document.activeElement).toBe(row);
@@ -566,5 +566,30 @@ test('shares numbered sets across sources and opens the selected source batch gr
   await choose(element, 'Output image', '3');
   expect(port.requests.at(-1)?.command).toEqual({ type: 'batch', index: 2 });
   expect(element.querySelector('select')).toBeNull();
+  mounted.dispose();
+});
+
+test('publishes observed camera state on the shared overlay and removes it when state becomes unknown', async () => {
+  const initial = canvasSnapshot('observed-viewport');
+  const port = new CanvasPortFixture({ ...initial, zoom: null });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  const overlay = element.querySelector('.sc-output-overlay');
+  expect(overlay?.getAttribute('data-canvas-zoom-mode')).toBeNull();
+  port.publish({
+    ...initial,
+    revision: 2,
+    zoom: { ...initial.zoom!, mode: 'native', physicalScale: 1 },
+  });
+  await nextTick();
+  expect(element.querySelector('.sc-output-overlay')).toBe(overlay);
+  expect(overlay?.getAttribute('data-canvas-zoom-mode')).toBe('native');
+  expect(overlay?.getAttribute('data-canvas-physical-scale')).toBe('1');
+  expect(overlay?.getAttribute('data-canvas-image-width')).toBe('4096');
+  expect(overlay?.getAttribute('data-canvas-image-height')).toBe('2160');
+  port.publish({ ...initial, revision: 3, zoom: null });
+  await nextTick();
+  for (const suffix of ['zoom-mode', 'physical-scale', 'image-width', 'image-height'])
+    expect(overlay?.hasAttribute(`data-canvas-${suffix}`)).toBe(false);
   mounted.dispose();
 });

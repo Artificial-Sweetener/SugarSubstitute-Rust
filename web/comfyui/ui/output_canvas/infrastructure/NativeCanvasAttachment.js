@@ -22,10 +22,12 @@ import { canvasViewSnapshot } from '../application/CanvasViewSnapshot.js';
 import { mountCanvasOverlay, } from '../presentation/vue/CanvasOverlayRuntime.js';
 import { CanvasMediaActions } from './CanvasMediaActions.js';
 import { NativeCanvasReadiness } from './NativeCanvasReadiness.js';
+import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.js';
 import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
 import { NativeCanvasActionSurface } from './NativeCanvasActionSurface.js';
+import { nativeCanvasViewportCommands } from './NativeCanvasCapabilities.js';
 import { NativeCanvasPresentation, } from './NativeCanvasPresentation.js';
 /** Retain controls and selection while leaving every output pixel to the native host. */
 export class NativeCanvasAttachment {
@@ -43,10 +45,12 @@ export class NativeCanvasAttachment {
     #overlay;
     #stopView;
     #stopTransfer;
+    #keyboard;
     #catalog;
     #sources;
     #plan;
     #surface = null;
+    #viewport = null;
     #presentation = { state: 'empty', message: '' };
     #ready = false;
     #disposed = false;
@@ -83,7 +87,7 @@ export class NativeCanvasAttachment {
             read: () => !this.#disposed && options.accepts() ? { plan: this.#plan, catalog: this.#catalog } : null,
             cells: () => [],
         });
-        const surface = new NativeCanvasActionSurface(this.#media, options.open);
+        const surface = new NativeCanvasActionSurface(this.#media, options.open, (command, scope) => this.#native.viewport(command, scope));
         this.port = new CanvasSurfacePort(this.#snapshot(), {
             origin: document.location.origin,
             capabilities: {
@@ -95,6 +99,7 @@ export class NativeCanvasAttachment {
                     'batch',
                     'follow',
                     'open-media',
+                    ...nativeCanvasViewportCommands(options.nativeSurface()),
                     ...this.#media.commands(),
                 ],
             },
@@ -126,6 +131,11 @@ export class NativeCanvasAttachment {
                 if (this.#ready)
                     this.#status.changed(true);
             },
+            viewport: (value) => {
+                this.#viewport = value;
+                if (this.#ready)
+                    this.#status.changed(true);
+            },
             report: (error) => options.report(error, null),
         });
         this.#stopTransfer =
@@ -133,10 +143,14 @@ export class NativeCanvasAttachment {
                 if (this.#ready)
                     this.#status.changed(true);
             }) ?? (() => { });
+        this.#keyboard = new CanvasViewportKeyboard(this.viewport, this.port, options.report);
+        this.viewport.addEventListener('pointerdown', this.#focusViewport);
         this.#readiness = new NativeCanvasReadiness(options.clock);
         this.ready = this.#readiness.ready;
         const cleanup = [
             () => this.#readiness.dispose(),
+            () => this.#keyboard.dispose(),
+            () => this.viewport.removeEventListener('pointerdown', this.#focusViewport),
             () => this.#native.dispose(),
             () => this.#media.dispose(),
             () => this.#status.dispose(),
@@ -214,6 +228,8 @@ export class NativeCanvasAttachment {
         this.#disposed = true;
         this.#ready = false;
         this.#readiness.dispose();
+        this.#keyboard.dispose();
+        this.viewport.removeEventListener('pointerdown', this.#focusViewport);
         this.#stopView();
         this.#stopTransfer();
         this.#status.dispose();
@@ -226,6 +242,11 @@ export class NativeCanvasAttachment {
         this.element.replaceChildren();
         return released;
     }
+    /** Give discrete viewer keys focus without capturing or forwarding native pointer gestures. */
+    #focusViewport = (event) => {
+        if (event.button === 0 && event.target === this.viewport && this.options.accepts())
+            this.viewport.focus({ preventScroll: true });
+    };
     /** Measure hidden candidates without granting them committed control-port authority. */
     #observeGeometry(surface) {
         if (this.options.acceptsPreparation())
@@ -279,13 +300,9 @@ export class NativeCanvasAttachment {
             preview: false,
             resource,
             secondaryResource: null,
-            zoom: {
-                mode: 'fit',
-                physicalScale: 0,
-                dimensions: null,
-                secondaryPhysicalScale: null,
-                secondaryDimensions: null,
-            },
+            zoom: this.#viewport
+                ? { ...this.#viewport, secondaryPhysicalScale: null, secondaryDimensions: null }
+                : null,
         });
         return Object.freeze({
             ...snapshot,

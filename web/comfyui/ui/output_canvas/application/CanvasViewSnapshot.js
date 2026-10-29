@@ -34,6 +34,6 @@ export function canvasViewSnapshot(address, plan, catalog, sources, connected, m
         runStatus: catalog.result.runStatus,
         connected,
         mediaActions,
-        zoom: Object.freeze(presentation.zoom),
+        zoom: presentation.zoom ? Object.freeze(presentation.zoom) : null,
     });
 }

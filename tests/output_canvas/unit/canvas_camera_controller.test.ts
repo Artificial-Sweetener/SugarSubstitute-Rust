@@ -56,7 +56,7 @@ function fixture(reduced = false) {
 }
 
 describe('canvas camera attachment orchestration', () => {
-  test('fits new preview compositions independently of final linking and retains each stream adjustment', () => {
+  test('locks every displayed preview to Fit while preserving final inspection', () => {
     const f = fixture(true);
     const a = f.slots[0]!;
     const b = f.slots[1]!;
@@ -66,25 +66,77 @@ describe('canvas camera attachment orchestration', () => {
     f.camera.show(a, preview, 1, 'preview:A');
     expect(f.camera.read()?.camera.mode).toBe('fit');
     expect(f.camera.read()?.camera.scale).toBe(800 / 512);
-    f.camera.zoom(1.25);
-    f.camera.pan({ x: -10, y: -10 });
-    const adjusted = f.camera.read()!.camera;
+    const fitted = f.camera.read()!.camera;
+    expect(f.camera.fit()).toBe(false);
+    expect(f.camera.native()).toBe(false);
+    expect(f.camera.zoom(1.25)).toBe(false);
+    expect(f.camera.pan({ x: -10, y: -10 })).toBe(false);
+    expect(f.camera.pinch(2, { x: 200, y: 100 }, { x: 20, y: 10 })).toBe(false);
+    expect(f.camera.wheel(-10, 0, { x: 200, y: 100 })).toBe(false);
+    expect(f.camera.doubleClick({ x: 200, y: 100 })).toBe(false);
     f.camera.show(a, preview, 1, 'preview:A');
-    expect(f.camera.read()?.camera).toEqual(adjusted);
+    expect(f.camera.read()?.camera).toEqual(fitted);
     f.camera.show(b, preview, 1, 'preview:B');
     expect(f.camera.read()?.camera.mode).toBe('fit');
     expect(f.camera.read()?.camera.scale).toBe(800 / 512);
     f.camera.show(a, preview, 1, 'preview:A');
-    expect(f.camera.read()?.camera.scale).toBeCloseTo(adjusted.scale);
+    expect(f.camera.read()?.camera).toEqual(fitted);
+    const resized = canvasCameraGeometry(preview.image, { width: 600, height: 400 }, 2)!;
+    f.camera.show(a, resized, 1, 'preview:A');
+    expect(f.camera.read()?.camera).toMatchObject({ mode: 'fit', scale: 600 / 512 });
     f.camera.show(b, f.geometry, 1, null);
     expect(f.camera.read()?.camera.mode).toBe('native');
+    expect(f.camera.zoom(2)).toBe(true);
     f.camera.show(a, preview, 1, 'preview:A:replacement');
     expect(f.camera.read()?.camera.mode).toBe('fit');
-    f.camera.zoom(1.25);
+    expect(f.camera.zoom(1.25)).toBe(false);
     f.camera.suspend();
     f.camera.show(a, preview, 1, 'preview:A:replacement');
-    expect(f.camera.read()?.camera.scale).toBeCloseTo(adjusted.scale);
+    expect(f.camera.read()?.camera).toEqual(fitted);
+    f.camera.show(b, f.geometry, 1, null);
+    expect(f.camera.read()?.camera.scale).toBe(2);
     f.camera.show(a, preview, 2, 'preview:A:new-run');
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    f.camera.dispose();
+    f.inspections.dispose();
+  });
+
+  test('retires final animation immediately when preview pixels replace the final image', () => {
+    const f = fixture();
+    const slot = f.slots[0]!;
+    f.camera.show(slot, f.geometry, 1, null);
+    f.camera.native();
+    f.clock.advance(10);
+    const final = f.camera.read()!.camera;
+    expect(f.clock.pending).toBe(1);
+    f.camera.show(slot, f.geometry, 1, 'preview:stream');
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    expect(f.clock.pending).toBe(0);
+    f.clock.advance(100);
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    f.camera.show(slot, f.geometry, 1, null);
+    expect(f.camera.read()?.camera.scale).toBeCloseTo(final.scale);
+    expect(f.camera.zoom(2)).toBe(true);
+    f.camera.dispose();
+    f.inspections.dispose();
+  });
+
+  test('preserves final Run inspection through a newer preview and retires it only when the newer final appears', () => {
+    const f = fixture(true);
+    const slot = f.slots[0]!;
+    f.camera.show(slot, f.geometry, 1, null);
+    f.camera.native();
+    f.camera.zoom(2);
+    f.camera.pan({ x: -120, y: 70 });
+    const inspected = f.camera.read()!.camera;
+    f.camera.show(slot, f.geometry, 2, 'preview:run2');
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    f.camera.show(slot, f.geometry, 1, null);
+    expect(f.camera.read()?.camera).toEqual(inspected);
+    f.camera.show(slot, f.geometry, 2, 'preview:run2');
+    f.camera.show(slot, f.geometry, 2, null);
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    f.camera.show(f.slots[1]!, f.geometry, 2, null);
     expect(f.camera.read()?.camera.mode).toBe('fit');
     f.camera.dispose();
     f.inspections.dispose();

@@ -28,10 +28,12 @@ export class CanvasViewProjection {
         this.selection = selection;
         this.inspections = inspections;
     }
-    /** Resolve the current selection and enroll only the inspection slots this catalog can retain. */
+    /** Preserve inspections for retained finals while pruning slots outside current workflow sources. */
     project(catalog) {
         const plan = canvasDisplayPlan(this.views.read(this.view), catalog, this.selection.items(this.view, catalog), this.selection.preview(this.view, catalog));
-        const slots = catalog.entries.flatMap((entry) => entry.items.map((item) => ({ sourceId: entry.source.id, batchIndex: item.batchIndex })));
+        const sources = new Set(catalog.sources.map((source) => source.id));
+        const retained = catalog.result.outputs.filter((output) => sources.has(output.source.id));
+        const slots = [...catalog.entries, ...retained].flatMap((entry) => entry.items.map((item) => ({ sourceId: entry.source.id, batchIndex: item.batchIndex })));
         for (const slot of [plan.primary, plan.secondary])
             if (slot?.sourcePresent)
                 slots.push(slot.selection);

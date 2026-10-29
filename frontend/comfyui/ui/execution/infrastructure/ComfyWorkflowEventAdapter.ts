@@ -16,6 +16,7 @@
 /** Adapt Comfy's public events once, preserving preview byte ownership and disposing exact listeners. */
 
 import { isRecord, type UnknownRecord } from '../../types/common.js';
+import type { PromptId } from '../domain/ExecutionIdentity.js';
 import type { WorkflowProgressStore } from '../application/WorkflowProgressStore.js';
 import {
   applyComfySamplerProgress,
@@ -199,7 +200,7 @@ export class ComfyWorkflowEventAdapter {
   #enhancedPreview(event: unknown): void {
     const detail = comfyEventDetail(event);
     if (!detail || !(detail.blob instanceof Blob)) return;
-    const id = decodeComfyPromptId(detail.jobId);
+    const id = decodeComfyPreviewPromptId(detail);
     if (!id) return;
     const source = this.options.ingestor.resolveSource(
       id,
@@ -213,4 +214,14 @@ export class ComfyWorkflowEventAdapter {
     if (source && !['complete', 'cancelled', 'error'].includes(source.run.status))
       this.options.preview(source, detail.blob);
   }
+}
+
+/** Accept ComfyUI's promptId/jobId preview metadata names only when present identities agree. */
+function decodeComfyPreviewPromptId(detail: UnknownRecord): PromptId | null {
+  const hasPromptId = Object.hasOwn(detail, 'promptId');
+  const hasJobId = Object.hasOwn(detail, 'jobId');
+  const prompt = hasPromptId ? decodeComfyPromptId(detail.promptId) : null;
+  const job = hasJobId ? decodeComfyPromptId(detail.jobId) : null;
+  if (hasPromptId && hasJobId) return prompt !== null && prompt === job ? prompt : null;
+  return prompt ?? job;
 }
