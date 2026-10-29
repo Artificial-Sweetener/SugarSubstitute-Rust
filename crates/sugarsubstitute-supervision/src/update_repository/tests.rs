@@ -149,18 +149,33 @@ fn long_root_history_yields_durable_continuation_instead_of_skipping_keys() -> T
         exchanges.extend(feed.exchanges(34));
         let trust = TrustStore::initialize(installation.path(), [98; 32], &feed.root, context)?;
         let (server, policy) = Running::start(exchanges, context)?;
-        let mut repository = Repository::new(policy, IDLE);
-        assert!(matches!(
-            repository.discover(&trust, request(Channel::Release), || NOW, context)?,
-            Check::MoreRoots
-        ));
-        assert!(repository.settled());
-        drop(trust);
-        let trust = TrustStore::open(installation.path(), [98; 32], context)?;
-        assert_eq!(trust.next_root_version(context)?, 34);
-        let offer =
-            discovered(repository.discover(&trust, request(Channel::Release), || NOW, context)?)?;
-        assert_eq!(offer.offer().admission(), Admission::Prepare);
-        server.finish()
+        let client = (|| {
+            let mut repository = Repository::new(policy, IDLE);
+            if !matches!(
+                repository.discover(&trust, request(Channel::Release), || NOW, context)?,
+                Check::MoreRoots
+            ) {
+                return Err("Long root history did not yield a continuation".into());
+            }
+            if !repository.settled() {
+                return Err("Root continuation retained HTTP custody".into());
+            }
+            drop(trust);
+            let trust = TrustStore::open(installation.path(), [98; 32], context)?;
+            if trust.next_root_version(context)? != 34 {
+                return Err("Root continuation did not durably retain every key".into());
+            }
+            let offer = discovered(repository.discover(
+                &trust,
+                request(Channel::Release),
+                || NOW,
+                context,
+            )?)?;
+            if offer.offer().admission() != Admission::Prepare {
+                return Err("Continued discovery did not admit preparation".into());
+            }
+            Ok(())
+        })();
+        server.finish_after(client)
     })
 }

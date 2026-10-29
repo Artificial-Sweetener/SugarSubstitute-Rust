@@ -4,7 +4,7 @@
 
 use super::{
     CanvasFileReference, CanvasSurfaceAddress, CanvasSurfaceDiscoveryRequest,
-    CanvasSurfaceGeometry, wire,
+    CanvasSurfaceGeometry, CanvasViewportCommand, wire,
 };
 use crate::panel::PanelSession;
 use serde::Deserialize;
@@ -53,6 +53,8 @@ pub enum CanvasSurfaceOperation {
         /// The Comfy adapter must validate the reference against its qualified backend.
         file: CanvasFileReference,
     },
+    /// Inspect or change the committed image viewport in attachment revision order.
+    Viewport(CanvasViewportCommand),
     /// Commit a prepared candidate as the current attachment.
     Commit,
     /// Release only the addressed candidate or committed attachment.
@@ -154,6 +156,21 @@ impl CanvasSurfaceMessage {
                     CanvasSurfaceOperation::Commit,
                 )?
             }
+            "surface.viewport.request" => {
+                let value: wire::CanvasSurfaceViewportRequest = parse(bytes)?;
+                if !value.valid() {
+                    return Err(CanvasSurfaceMessageError::Invalid);
+                }
+                CanvasSurfaceRequest::new(
+                    value.session,
+                    value.request_id,
+                    value.address,
+                    value.revision,
+                    CanvasSurfaceOperation::Viewport(CanvasViewportCommand::from_wire(
+                        value.command,
+                    )),
+                )?
+            }
             "surface.release" => {
                 let value: wire::CanvasSurfaceReleaseRequest = parse(bytes)?;
                 if !value.valid() {
@@ -233,48 +250,11 @@ impl CanvasSurfaceRequest {
     pub fn operation(&self) -> &CanvasSurfaceOperation {
         &self.operation
     }
-
-    /// Encode a response bound to this exact session, request, attachment and revision.
-    /// # Errors
-    /// Rejects an invalid status for preparation, an oversized message or serialization failure.
-    pub fn reply(
-        &self,
-        status: CanvasSurfaceReplyStatus,
-        message: &str,
-    ) -> Result<Vec<u8>, CanvasSurfaceMessageError> {
-        if (status == CanvasSurfaceReplyStatus::Ready
-            && !matches!(self.operation, CanvasSurfaceOperation::Prepare))
-            || (status == CanvasSurfaceReplyStatus::Applied
-                && matches!(self.operation, CanvasSurfaceOperation::Prepare))
-            || message.chars().count() > 512
-        {
-            return Err(CanvasSurfaceMessageError::Invalid);
-        }
-        let value = wire::CanvasSurfaceReply {
-            protocol: "sugarcubes.canvas".into(),
-            version: 3,
-            session: self.session.as_str().into(),
-            request_id: self.request_id,
-            r#type: "surface.reply".into(),
-            address: self.address.wire().clone(),
-            revision: self.revision,
-            status: status.as_str().into(),
-            message: message.into(),
-        };
-        if !value.valid() {
-            return Err(CanvasSurfaceMessageError::Invalid);
-        }
-        let bytes = serde_json::to_vec(&value).map_err(CanvasSurfaceMessageError::Malformed)?;
-        if bytes.len() > MAX_SURFACE_MESSAGE_BYTES {
-            return Err(CanvasSurfaceMessageError::TooLarge);
-        }
-        Ok(bytes)
-    }
 }
 
 impl CanvasSurfaceReplyStatus {
     /// Return the schema's stable wire spelling.
-    const fn as_str(self) -> &'static str {
+    pub(super) const fn as_str(self) -> &'static str {
         match self {
             Self::Ready => "ready",
             Self::Applied => "applied",

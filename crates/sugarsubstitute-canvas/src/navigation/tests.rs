@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Characterize navigation with explicit timestamps, geometry and semantic destinations.
 use super::*;
+mod commands;
 
 #[test]
 fn cancelling_an_incomplete_stop_keeps_the_visible_camera_in_custom_mode() -> TestResult {

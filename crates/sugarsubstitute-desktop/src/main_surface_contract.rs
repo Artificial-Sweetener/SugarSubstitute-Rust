@@ -7,7 +7,7 @@ use sugarsubstitute_contracts::{
     canvas_surface::{
         CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryRequest, CanvasSurfaceDiscoveryStatus,
         CanvasSurfaceMessage, CanvasSurfaceMessageError, CanvasSurfaceReplyStatus,
-        CanvasSurfaceRequest,
+        CanvasSurfaceRequest, CanvasViewportState,
     },
     execution::{MemoryClaim, MemoryLease},
     panel::{PanelError, PanelSession},
@@ -169,6 +169,29 @@ impl SurfaceReply {
         })
     }
 
+    /// Encode the native owner's observed viewport with the original delivery allocation.
+    ///
+    /// # Errors
+    /// Rejects inadequate storage, foreign navigation, or an invalid viewport response.
+    pub fn viewport(
+        identity: MainIdentity,
+        request: &CanvasSurfaceRequest,
+        viewport: &CanvasViewportState,
+        message: &str,
+        claim: MemoryClaim,
+    ) -> Result<Self, SurfaceReplyError> {
+        Self::validate_custody(identity, request.session(), &claim)?;
+        let payload =
+            request.viewport_reply(viewport, message).map_err(SurfaceReplyError::Encode)?;
+        Ok(Self {
+            identity,
+            #[cfg(any(target_os = "windows", test))]
+            request_id: request.request_id(),
+            payload,
+            _claim: claim,
+        })
+    }
+
     /// Apply identical native identity and retained-storage checks to every surface response.
     fn validate_custody(
         identity: MainIdentity,
@@ -210,59 +233,4 @@ impl SurfaceReply {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use sugarsubstitute_contracts::{
-        execution::{Generation, MemoryRelease},
-        lifecycle::{
-            CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey,
-        },
-        startup::LaunchId,
-    };
-
-    struct Release;
-    impl MemoryRelease for Release {
-        fn release(&self, _: u64) {}
-    }
-
-    #[test]
-    fn response_retains_request_identity_and_returns_its_original_credit()
-    -> Result<(), Box<dyn Error>> {
-        let identity = MainIdentity {
-            run: RunKey {
-                owner: CoordinatorKey {
-                    namespace: NamespaceId::new([7; 32]),
-                    epoch: CoordinatorEpoch::new([8; 16])?,
-                },
-                instance: InstanceId::new(1)?,
-                generation: RunGeneration::new(1)?,
-            },
-            launch: LaunchId::new(1)?,
-            navigation: Generation::new(1)?,
-        };
-        let session = PanelSession::for_main(identity)?;
-        let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&serde_json::json!({
-            "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
-            "requestId":7, "type":"surface.prepare", "revision":1,
-            "address":{"sessionId":"canvas:w", "viewId":"view:a", "windowId":"window:a", "attachmentId":"attachment:a", "generation":1}
-        }))?)?;
-        let CanvasSurfaceMessage::Request(request) = message else {
-            return Err("Missing request".into());
-        };
-        let lease = MemoryLease::new(SurfaceReply::STORAGE_BYTES, Box::new(Release));
-        let reply = SurfaceReply::new(
-            identity,
-            &request,
-            CanvasSurfaceReplyStatus::Ready,
-            "",
-            lease.claim(SurfaceReply::STORAGE_BYTES)?,
-        )?;
-        assert_eq!(reply.request_id(), 7);
-        assert!(lease.claim(1).is_err());
-        let claim = reply.into_claim();
-        assert!(lease.claim(1).is_err());
-        drop(claim);
-        assert!(lease.claim(SurfaceReply::STORAGE_BYTES).is_ok());
-        Ok(())
-    }
-}
+mod tests;

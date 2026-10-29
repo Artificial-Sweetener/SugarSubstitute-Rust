@@ -708,6 +708,6 @@ rationale = "Hidden native picker lifecycle fixtures preserve original paths and
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js"
-source_sha256 = "sha256:b5a2ace47561da4949aeec799d921d20b6c3b9112b7dd2544e75c87e8fc501f2"
+source_sha256 = "sha256:2db51ed5f9111e1262beff7bbc8784bcf67d9a3afce73d046792e546e66af7f0"
 kind = "native"
 rationale = "The bounded WebView transport defines technical JavaScript properties and error diagnostics; it does not construct product-facing text or select a locale."

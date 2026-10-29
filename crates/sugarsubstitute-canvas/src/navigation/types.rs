@@ -2,6 +2,37 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Toolkit-independent navigation observations and semantic feedback.
 
+use crate::Viewport;
+
+/// Semantic camera operations independent of physical pointer and wheel gestures.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum NavigationCommand {
+    /// Center the complete image without cropping.
+    Fit,
+    /// Center the image at one document pixel per physical viewport pixel.
+    OneToOne,
+    /// Multiply the requested scale by a factor in the inclusive range 0.01 to 100.
+    /// Preserve the document point at the viewport center and apply navigation scale bounds.
+    Zoom(f64),
+    /// Move content by fractions of the physical viewport width and height.
+    /// Each component is in the inclusive range -10 to 10; positive moves right/down.
+    Pan([f64; 2]),
+}
+
+/// Admission of a semantic operation by the existing navigation authority.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum NavigationCommandOutcome {
+    /// The command owns this destination, possibly already displayed without further motion.
+    Applied {
+        /// Final camera after any bounded interpolation finishes.
+        target: Viewport,
+    },
+    /// Current policy or an active physical gesture retains camera ownership.
+    Denied,
+    /// No image geometry is available for navigation.
+    NoContent,
+}
+
 /// Meaning of the camera scale, independent of its current animated numerical value.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ZoomMode {

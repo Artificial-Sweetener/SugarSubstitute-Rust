@@ -41,6 +41,33 @@ class IdentityTests(unittest.TestCase):
         for relative in ["Cargo.lock", "rust-toolchain.toml", "native/crashpad/BUILD.gn", "tools/local_k1/derive_build.py"]:
             self.assertTrue(derive_build.source_input(relative))
 
+    def test_embedded_scripts_and_runtime_assets_are_selected(self):
+        for relative in [
+            "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js",
+            "crates/sugarsubstitute-desktop/src/main_actor/render_preview/downloads.js",
+            "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs",
+            "crates/sugarsubstitute-networking/worker/http.ts",
+            "assets/windows/application.manifest", "assets/brand/wordmark.svg",
+            "crates/sugarsubstitute-ui/assets/fluent/Language.svg",
+            "crates/sugarsubstitute-desktop/assets/caption/close.coverage",
+            "crates/sugarsubstitute-desktop/assets/cursors/qt-open-hand.cur",
+            "crates/sugarsubstitute-splash/assets/caption/close-100.png",
+            "crates/sugarsubstitute-splash/assets/poses/1.png",
+        ]:
+            with self.subTest(relative=relative):
+                self.assertTrue(derive_build.source_input(relative))
+
+    def test_unowned_asset_locations_and_nonruntime_asset_types_are_excluded(self):
+        for relative in [
+            "assets/screenshots/capture.png", "assets/windows/diagnostic.manifest",
+            "assets/brand/draft.svg", "crates/owner/assets/capture.png",
+            "crates/sugarsubstitute-desktop/assets/cursors/openhandcursor_32.png",
+            "crates/sugarsubstitute-ui/assets/fluent/Language.svg.bak",
+            "crates/sugarsubstitute-splash/assets/poses/capture.log",
+        ]:
+            with self.subTest(relative=relative):
+                self.assertFalse(derive_build.source_input(relative))
+
 
 class InventoryTests(unittest.TestCase):
     def setUp(self):
@@ -70,9 +97,57 @@ class InventoryTests(unittest.TestCase):
         return subprocess.run(["git", "-C", str(self.root), *arguments],
                               check=True, capture_output=True)
 
-    def produce(self):
+    def produce(self, output_name="output"):
         with patch.object(derive_build, "ANCHOR_ID", derive_build.hashlib.sha256(self.anchor.read_bytes()).hexdigest()):
-            return derive_build.produce(self.root, self.anchor, self.parent, "output")
+            return derive_build.produce(self.root, self.anchor, self.parent, output_name)
+
+    def write_input(self, name, data):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def receipt(self, output_name):
+        output = self.produce(output_name)
+        return json.loads((output / "build-receipt.json").read_text())
+
+    def test_embedded_script_and_asset_edits_change_the_actual_git_inventory_identity(self):
+        names = [
+            "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js",
+            "crates/sugarsubstitute-desktop/src/main_actor/render_preview/downloads.js",
+            "assets/windows/application.manifest", "assets/brand/wordmark.svg",
+            "crates/sugarsubstitute-ui/assets/fluent/Language.svg",
+            "crates/sugarsubstitute-desktop/assets/caption/close.coverage",
+            "crates/sugarsubstitute-desktop/assets/cursors/qt-open-hand.cur",
+            "crates/sugarsubstitute-splash/assets/caption/close-100.png",
+            "crates/sugarsubstitute-splash/assets/poses/1.png",
+        ]
+        for name in names:
+            self.write_input(name, b"embedded original")
+        previous = self.receipt("baseline")
+        inventoried = {item["relative"] for item in previous["inputs"]}
+        self.assertTrue(set(names).issubset(inventoried))
+        for index, name in enumerate(names):
+            with self.subTest(relative=name):
+                self.write_input(name, b"embedded changed")
+                current = self.receipt(f"changed-{index}")
+                self.assertNotEqual(previous["build"], current["build"])
+                previous = current
+
+    def test_excluded_artifacts_and_local_state_do_not_change_identity(self):
+        self.write_input(".gitignore", b"tools/local_k1/generated/\n*.local.json\n")
+        baseline = self.receipt("baseline")
+        excluded = [
+            derive_build.DERIVED, "target/debug/build/input.json", "artifacts/capture.json",
+            "private/signer.rs", "third_party/vendor/src/lib.rs", "state/session.json",
+            "assets/screenshots/capture.png", "assets/windows/diagnostic.manifest",
+            "crates/owner/settings.local.json", "tools/local_k1/generated/receipt.json",
+        ]
+        for name in excluded:
+            self.write_input(name, b"unrelated artifact")
+        self.assertEqual(baseline, self.receipt("artifacts-added"))
+        for name in excluded:
+            self.write_input(name, b"unrelated artifact changed")
+        self.assertEqual(baseline, self.receipt("artifacts-changed"))
 
     def test_actual_git_deleted_path_excluded_retained_and_untracked_inventoried(self):
         output = self.produce()

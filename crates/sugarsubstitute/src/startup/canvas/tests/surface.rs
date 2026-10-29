@@ -24,6 +24,7 @@ use sugarsubstitute_desktop::{
 mod backend;
 mod cancellation;
 mod replacement;
+mod viewport;
 
 struct ClockValue(AtomicU64);
 impl Clock for ClockValue {

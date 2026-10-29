@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): 8b0c57e7338d83bd65d4958f21e76073d0a3d753f800db25944fc19c32748492
+// Schema SHA-256 (LF): 3931c2aaf3b10ef6548c48624085c0a314aaf3e8e00acb7341428b524472cc57
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -364,6 +364,127 @@ impl CanvasSurfaceReply {
             && (1..=9007199254740991).contains(&self.revision)
             && valid_canvas_surface_reply_status(&self.status)
             && self.message.chars().count() <= 512
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceViewportCommand data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", deny_unknown_fields, rename_all_fields = "camelCase")]
+pub(super) enum CanvasSurfaceViewportCommand {
+    #[serde(rename = "read")]
+    Read {},
+    #[serde(rename = "fit")]
+    Fit {},
+    #[serde(rename = "native")]
+    Native {},
+    #[serde(rename = "zoom")]
+    Zoom { factor: f64 },
+    #[serde(rename = "pan")]
+    Pan { x: f64, y: f64, units: String },
+}
+impl CanvasSurfaceViewportCommand {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        match self {
+            Self::Read {} => true,
+            Self::Fit {} => true,
+            Self::Native {} => true,
+            Self::Zoom { factor } => (0.01..=100.0).contains(factor),
+            Self::Pan { x, y, units } => {
+                (-10.0..=10.0).contains(x)
+                    && (-10.0..=10.0).contains(y)
+                    && units.as_str() == "viewport"
+            }
+        }
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceImageDimensions data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceImageDimensions {
+    pub(super) width: u64,
+    pub(super) height: u64,
+}
+impl CanvasSurfaceImageDimensions {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        (1..=2147483647).contains(&self.width) && (1..=2147483647).contains(&self.height)
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceViewportState data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceViewportState {
+    pub(super) mode: String,
+    pub(super) physical_scale: f64,
+    pub(super) dimensions: CanvasSurfaceImageDimensions,
+}
+impl CanvasSurfaceViewportState {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        matches!(self.mode.as_str(), "fit" | "native" | "custom")
+            && (1e-9..=16384.0).contains(&self.physical_scale)
+            && self.dimensions.valid()
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceViewportRequest data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceViewportRequest {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+    pub(super) address: CanvasSurfaceAddress,
+    pub(super) revision: u64,
+    pub(super) command: CanvasSurfaceViewportCommand,
+}
+impl CanvasSurfaceViewportRequest {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && (1..=2147483647).contains(&self.request_id)
+            && self.r#type == "surface.viewport.request"
+            && self.address.valid()
+            && (1..=9007199254740991).contains(&self.revision)
+            && self.command.valid()
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceViewportReply data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceViewportReply {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+    pub(super) address: CanvasSurfaceAddress,
+    pub(super) revision: u64,
+    pub(super) status: String,
+    pub(super) message: String,
+    pub(super) viewport: CanvasSurfaceViewportState,
+}
+impl CanvasSurfaceViewportReply {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && (1..=2147483647).contains(&self.request_id)
+            && self.r#type == "surface.viewport.reply"
+            && self.address.valid()
+            && (1..=9007199254740991).contains(&self.revision)
+            && self.status == "applied"
+            && self.message.chars().count() <= 512
+            && self.viewport.valid()
     }
 }
 

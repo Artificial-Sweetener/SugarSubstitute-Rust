@@ -62,6 +62,13 @@ impl Running {
         )?;
         Ok((Self { job, client, _scope: scope, wake, _executor: executor }, policy))
     }
+    /// Observe the server even when its client has already returned an error.
+    /// The existing server deadline and completion-observation bound remain unchanged.
+    /// # Errors
+    /// Retains the original client and server causes when both operations fail.
+    pub(crate) fn finish_after(self, client: TestResult) -> TestResult {
+        finish_results(client, self.finish())
+    }
     /// Observe actual server completion; a client succeeding cannot conceal fixture failure.
     pub(crate) fn finish(mut self) -> TestResult {
         let until = Instant::now() + Duration::from_secs(15);
@@ -92,6 +99,70 @@ impl Running {
             other => Err(format!("Unexpected HTTP fixture outcome: {:?}", other.kind()).into()),
         }
     }
+}
+
+/// Retain both independently observed failures instead of replacing the client's cause.
+#[derive(Debug)]
+struct ClientAndServerFailure {
+    client: Box<dyn std::error::Error + Send + Sync>,
+    server: Box<dyn std::error::Error + Send + Sync>,
+}
+impl std::fmt::Display for ClientAndServerFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "HTTP fixture client failed: {}; server failed: {}",
+            self.client, self.server
+        )
+    }
+}
+impl std::error::Error for ClientAndServerFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.client.as_ref())
+    }
+}
+
+/// Preserve a single original failure or both causes after observing both operations.
+fn finish_results(client: TestResult, server: TestResult) -> TestResult {
+    match (client, server) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(cause), Ok(())) | (Ok(()), Err(cause)) => Err(cause),
+        (Err(client), Err(server)) => Err(Box::new(ClientAndServerFailure { client, server })),
+    }
+}
+
+#[test]
+fn observed_client_and_server_failures_preserve_both_original_causes() -> TestResult {
+    assert!(finish_results(Ok(()), Ok(())).is_ok());
+    for client_failed in [true, false] {
+        let failure: TestResult = Err(io::Error::from_raw_os_error(87).into());
+        let result = if client_failed {
+            finish_results(failure, Ok(()))
+        } else {
+            finish_results(Ok(()), failure)
+        };
+        let cause = result.err().ok_or("Single fixture failure disappeared")?;
+        assert_eq!(cause.downcast_ref::<io::Error>().and_then(io::Error::raw_os_error), Some(87));
+    }
+    let cause = finish_results(
+        Err(io::Error::from_raw_os_error(87).into()),
+        Err(io::Error::from_raw_os_error(121).into()),
+    )
+    .err()
+    .ok_or("Combined fixture failure disappeared")?;
+    let causes = cause.downcast_ref::<ClientAndServerFailure>().ok_or("Combined causes absent")?;
+    assert_eq!(
+        causes.client.downcast_ref::<io::Error>().and_then(io::Error::raw_os_error),
+        Some(87)
+    );
+    assert_eq!(
+        causes.server.downcast_ref::<io::Error>().and_then(io::Error::raw_os_error),
+        Some(121)
+    );
+    let diagnostic = cause.to_string();
+    assert!(diagnostic.contains(&causes.client.to_string()));
+    assert!(diagnostic.contains(&causes.server.to_string()));
+    Ok(())
 }
 /// Build a raw server response; the body may deliberately be shorter than its declaration.
 pub(crate) fn exchange(

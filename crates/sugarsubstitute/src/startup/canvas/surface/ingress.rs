@@ -37,6 +37,9 @@ impl NativeSurface {
         }) {
             let session = session.ok_or("An active canvas operation lost its session")?;
             let pending = self.pending.take().ok_or("Pending canvas request disappeared")?;
+            if let PendingKind::Viewport { intent, commanded: true } = pending.kind {
+                session.cancel_camera(intent)?;
+            }
             if matches!(pending.kind, PendingKind::Select)
                 && let Some(binding) = &mut self.binding
             {

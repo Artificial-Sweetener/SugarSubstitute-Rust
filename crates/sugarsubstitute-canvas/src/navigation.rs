@@ -3,13 +3,17 @@
 //! Own semantic navigation and time-based camera motion without scheduling or native handles.
 mod actions;
 mod bounds;
+mod commands;
 mod motion;
 mod types;
 use crate::{CanvasError, Viewport};
 use motion::Transition;
 use std::time::Duration;
 use sugarsubstitute_image_ops::Extent;
-pub use types::{CursorIntent, NavigationInput, ScrollPhase, ZoomMode};
+pub use types::{
+    CursorIntent, NavigationCommand, NavigationCommandOutcome, NavigationInput, ScrollPhase,
+    ZoomMode,
+};
 
 /// Portable navigation state. The application supplies monotonic elapsed time from its clock.
 /// Native pumping and rendering jobs remain with their existing owners; no timer is created here.

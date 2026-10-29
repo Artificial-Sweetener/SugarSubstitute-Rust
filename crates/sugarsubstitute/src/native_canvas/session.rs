@@ -6,6 +6,12 @@ pub(crate) mod acquisition;
 mod activity;
 mod attachment;
 mod backing;
+#[cfg(feature = "native-composition")]
+mod camera;
+#[cfg(all(feature = "native-composition", test))]
+pub(crate) use camera::AcceptedCamera;
+#[cfg(feature = "native-composition")]
+pub(crate) use camera::{CameraCommandResult, CameraIntent, CameraSettlement};
 mod closing;
 mod completion;
 mod display;

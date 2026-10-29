@@ -1,0 +1,277 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Own real encoded input, shared execution and native acknowledgements for viewport regressions.
+
+use super::*;
+
+pub(super) struct Fixture {
+    pub(super) canvas: EmbeddedCanvas,
+    pub(super) clock: Arc<ClockValue>,
+    pub(super) panel: PanelSession,
+    pub(super) memory: MemoryLease,
+    pub(super) identity: MainIdentity,
+    client: ExecutionClient,
+    wake: Arc<Wake>,
+    owner: ExecutionOwner,
+    allocation: WebViewAllocation,
+    _directory: tempfile::TempDir,
+}
+
+impl Fixture {
+    /// Select an actual source on a prepared visible attachment, leaving commit to each test.
+    pub(super) fn new() -> Result<Self, Box<dyn Error>> {
+        Self::with_density(1.0)
+    }
+
+    /// Project CSS geometry through the same trusted desktop allocation density as production.
+    pub(super) fn with_density(density: f64) -> Result<Self, Box<dyn Error>> {
+        let directory = tempfile::tempdir()?;
+        let output = directory.path().join("canvas-qualification-output");
+        std::fs::create_dir(&output)?;
+        image(&output.join("wide.png"), 320, 160, [255, 0, 0])?;
+        image(&output.join("tall.png"), 160, 320, [0, 0, 255])?;
+        let clock = Arc::new(ClockValue(AtomicU64::new(0)));
+        let wake = Arc::new(Wake::default());
+        let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
+        let client = owner.client();
+        let mut canvas = EmbeddedCanvas::new(
+            directory.path().to_path_buf(),
+            DiagnosticHealth::fixture(),
+            clock.clone(),
+            JobSequence::new(),
+            ScopeSpec { id: ScopeId::new(1)?, deadline: None },
+        );
+        canvas.start(client.clone(), "en")?;
+        while !canvas.reported_ready {
+            let observed = wake.revision();
+            pump(&mut canvas, &client)?;
+            if !canvas.reported_ready {
+                wake.wait_after(observed)?;
+            }
+        }
+        let identity = identity()?;
+        let mut fixture = Self {
+            canvas,
+            clock,
+            panel: PanelSession::for_main(identity)?,
+            memory: MemoryLease::new(128 * 1024, Box::new(Release)),
+            identity,
+            client,
+            wake,
+            owner,
+            allocation: WebViewAllocation {
+                bounds: PhysicalRect { x: 0, y: 0, width: 300, height: 150 },
+                physical_pixels_per_css_pixel: density,
+            },
+            _directory: directory,
+        };
+        fixture.send(1, "surface.prepare", json!({}))?;
+        wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 1, "ready")?;
+        fixture.geometry(2, 80, 40)?;
+        fixture.take(2, "applied")?;
+        fixture.select(3, "wide.png")?;
+        wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+        Ok(fixture)
+    }
+
+    /// Submit the same closed public envelope used by the shared canvas client.
+    pub(super) fn send(&mut self, id: u64, kind: &str, extra: Value) -> Result<(), Box<dyn Error>> {
+        self.canvas.surface(
+            self.identity,
+            request(&self.panel, id, kind, extra)?,
+            (kind == "surface.geometry").then_some(self.allocation),
+            self.memory.claim(64 * 1024)?,
+        )
+    }
+
+    pub(super) fn viewport(&mut self, id: u64, command: Value) -> Result<(), Box<dyn Error>> {
+        self.send(id, "surface.viewport.request", json!({"command":command}))
+    }
+
+    pub(super) fn geometry(
+        &mut self,
+        id: u64,
+        width: u32,
+        height: u32,
+    ) -> Result<(), Box<dyn Error>> {
+        self.send(
+            id,
+            "surface.geometry",
+            json!({"geometry":{
+                "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":10,"y":20},
+                "viewport":{"width":width,"height":height},
+                "clip":{"x":10,"y":20,"width":width,"height":height},
+                "physicalPixelsPerCssPixel":self.allocation.physical_pixels_per_css_pixel,
+                "visible":true, "focused":false
+            }}),
+        )
+    }
+
+    pub(super) fn select(&mut self, id: u64, filename: &str) -> Result<(), Box<dyn Error>> {
+        self.send(
+            id,
+            "surface.select",
+            json!({
+                "itemId":format!("result:{filename}"),
+                "file":{"filename":filename,"subfolder":"","type":"output"}
+            }),
+        )
+    }
+
+    pub(super) fn cancel(&mut self, id: u64) -> Result<(), Box<dyn Error>> {
+        let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
+            "protocol":"sugarcubes.canvas", "version":3, "session":self.panel.as_str(),
+            "requestId":id, "type":"cancel"
+        }))?)?;
+        self.canvas.surface(self.identity, message, None, self.memory.claim(64 * 1024)?)
+    }
+
+    pub(super) fn advance(&self, milliseconds: u64) {
+        self.clock.0.fetch_add(milliseconds * 1_000_000, Ordering::SeqCst);
+    }
+
+    pub(super) fn pump(&mut self) -> Result<(), Box<dyn Error>> {
+        pump(&mut self.canvas, &self.client)
+    }
+
+    pub(super) fn accepted(&self) -> Result<AcceptedCamera, Box<dyn Error>> {
+        self.canvas
+            .session
+            .as_ref()
+            .and_then(Session::accepted_camera)
+            .ok_or("Native-accepted camera is absent".into())
+    }
+
+    /// Borrow only an actual pending frame; acknowledged retained frames cannot free a new slot.
+    pub(super) fn pending(&mut self) -> Result<FrameStamp, Box<dyn Error>> {
+        loop {
+            let observed = self.wake.revision();
+            self.pump()?;
+            if let Some(frame) = prepared_frame(&self.canvas).filter(|frame| frame.frame.pending) {
+                return Ok(frame.frame.target);
+            }
+            self.wake.wait_after(observed)?;
+        }
+    }
+
+    pub(super) fn commit(&mut self, id: u64) -> Result<AcceptedCamera, Box<dyn Error>> {
+        self.send(id, "surface.commit", json!({}))?;
+        let target = self.pending()?;
+        self.canvas.presented(target)?;
+        self.take(id, "applied")?;
+        self.accepted()
+    }
+
+    pub(super) fn take(&mut self, id: u64, status: &str) -> Result<Value, Box<dyn Error>> {
+        let command = self.canvas.take_command().ok_or("Surface response absent")?;
+        self.decode(command, id, status)
+    }
+
+    fn decode(
+        &self,
+        command: DesktopStartupCommand,
+        id: u64,
+        status: &str,
+    ) -> Result<Value, Box<dyn Error>> {
+        let DesktopStartupCommand::SendSurface(reply) = command else {
+            return Err("Expected ordinary surface response".into());
+        };
+        assert_eq!(reply.identity(), self.identity);
+        let value: Value = serde_json::from_slice(reply.payload())?;
+        assert_eq!(value["requestId"], id);
+        assert_eq!(value["status"], status);
+        assert_eq!(value["session"], self.panel.as_str());
+        Ok(value)
+    }
+
+    /// Advance injected display time while actual completions and native uploads release custody.
+    /// Check for no-op completion before demanding a frame that need not be allocated.
+    pub(super) fn complete(&mut self, id: u64) -> Result<Value, Box<dyn Error>> {
+        loop {
+            if let Some(command) = self.canvas.take_command() {
+                return self.decode(command, id, "applied");
+            }
+            self.advance(100);
+            let observed = self.wake.revision();
+            self.pump()?;
+            if let Some(command) = self.canvas.take_command() {
+                return self.decode(command, id, "applied");
+            }
+            if let Some(target) = prepared_frame(&self.canvas)
+                .filter(|frame| frame.frame.pending)
+                .map(|frame| frame.frame.target)
+            {
+                self.canvas.presented(target)?;
+            } else {
+                self.wake.wait_after(observed)?;
+            }
+        }
+    }
+
+    /// Retire the canvas scope and join its original execution owner under one finite cutoff.
+    pub(super) fn finish(self) -> Result<(), Box<dyn Error>> {
+        self.finish_observing(None)
+    }
+
+    /// Require the retained original native failure to survive scope settlement and final release.
+    pub(super) fn finish_failed(self, expected_code: i32) -> Result<(), Box<dyn Error>> {
+        self.finish_observing(Some(expected_code))
+    }
+
+    fn finish_observing(mut self, expected_code: Option<i32>) -> Result<(), Box<dyn Error>> {
+        assert!(self.canvas.take_command().is_none());
+        let cutoff = self.clock.now().checked_add(Duration::from_secs(5))?;
+        self.canvas.close_until(cutoff)?;
+        loop {
+            let observed = self.wake.revision();
+            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+            if self.canvas.settled()? {
+                break;
+            }
+            self.wake.wait_after(observed)?;
+        }
+        let canvas_result = self.canvas.finish();
+        self.owner.request_shutdown(cutoff);
+        let deadline =
+            Instant::now().checked_add(Duration::from_secs(10)).ok_or("Deadline overflow")?;
+        loop {
+            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+            if self.owner.poll_shutdown()?.settled {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err("Viewport fixture execution did not settle".into());
+            }
+            std::hint::spin_loop();
+        }
+        self.owner.finish_shutdown()?;
+        drop(self.memory.claim(128 * 1024)?);
+        match (expected_code, canvas_result) {
+            (None, result) => result,
+            (Some(code), Err(cause)) => {
+                assert_eq!(
+                    cause.downcast_ref::<std::io::Error>().and_then(std::io::Error::raw_os_error),
+                    Some(code)
+                );
+                Ok(())
+            }
+            (Some(_), Ok(())) => Err("Canvas discarded its original native failure".into()),
+        }
+    }
+}
+
+fn image(
+    path: &std::path::Path,
+    width: u32,
+    height: u32,
+    color: [u8; 3],
+) -> Result<(), Box<dyn Error>> {
+    let file = std::fs::File::create(path)?;
+    let mut encoder = png::Encoder::new(file, width, height);
+    encoder.set_color(png::ColorType::Rgb);
+    let mut writer = encoder.write_header()?;
+    let pixels = color.repeat(usize::try_from(u64::from(width) * u64::from(height))?);
+    writer.write_image_data(&pixels)?;
+    writer.finish()?;
+    Ok(())
+}

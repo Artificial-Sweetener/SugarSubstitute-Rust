@@ -9,6 +9,8 @@ use sugarsubstitute_supervision::cache::{Namespace, RuntimeCache, storage_key};
 
 #[cfg(feature = "native-composition")]
 mod acquisition;
+#[cfg(feature = "native-composition")]
+mod camera;
 mod frames;
 #[cfg(feature = "native-composition")]
 mod transactions;

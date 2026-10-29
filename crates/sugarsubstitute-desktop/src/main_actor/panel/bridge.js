@@ -15,7 +15,7 @@
   const listeners = new Set();
   const encoder = new TextEncoder();
   const controls = ['ready', 'applied', 'pong', 'rejected'];
-  const requestTypes = ['context.request', 'surface.capabilities.request', 'surface.prepare',
+  const requestTypes = ['context.request', 'surface.capabilities.request', 'surface.viewport.request', 'surface.prepare',
     'surface.geometry', 'surface.select', 'surface.commit', 'surface.release'];
   const lanes = Object.fromEntries(['o', 'c', 'x'].map(lane =>
     [lane, { credit: 0, last: 0, active: null }]));
@@ -80,11 +80,11 @@
     host, session, preferencePolicy: 'saved', outputSurfacePreference: 'host',
     send(input) {
       const encoded = JSON.stringify(input);
-      if (typeof encoded !== 'string' || encoded.length > 16384 ||
+      if (typeof encoded !== 'string' ||
           encoder.encode(encoded).byteLength > 16384)
         deny('bound');
       const envelope = JSON.stringify({ name: binding, payload: '1:o:9007199254740991:' + encoded, executionContextId: 0 });
-      if (envelope.length + 20 > 16384 || encoder.encode(envelope).byteLength + 19 > 32768)
+      if (envelope.length + 20 > 16384)
         deny('bound');
       const value = JSON.parse(encoded);
       if (!value || value.session !== session || value.version !== 3)
@@ -160,9 +160,10 @@
       if (!active || active.ticket !== ticket || active.done || !value || value.version !== 3 ||
           value.protocol !== 'sugarcubes.canvas' || value.session !== session ||
           value.requestId !== active.value.requestId) return false;
-      const expected = active.value.type === 'context.request' ? 'context.reply' :
-        active.value.type === 'surface.capabilities.request' ? 'surface.capabilities.reply' : 'surface.reply';
-      if (value.type !== expected && value.type !== 'error.reply') return false;
+      const expected = active.value.type.replace(/[^.]+$/, 'reply');
+      if (value.type !== expected && value.type !== 'error.reply' &&
+          !(expected === 'surface.viewport.reply' && value.type === 'surface.reply' &&
+            ['stale', 'cancelled', 'unavailable', 'error'].includes(value.status))) return false;
       emit(value);
       active.done = true;
       if (queues.x[0]?.value.requestId === value.requestId) queues.x.length = 0;

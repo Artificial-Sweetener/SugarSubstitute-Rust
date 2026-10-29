@@ -168,13 +168,13 @@ fn all_labels_preserve_pixels_outside_status_widget() -> Result<(), Box<dyn std:
                         if x < bounds[0] || y < bounds[1] || x >= bounds[2] || y >= bounds[3] {
                             assert_eq!(
                                 actual, original,
-                                "{} scale {scale} at ({x},{y})",
+                                "{} {theme:?} scale {scale} at ({x},{y}) for {message:?}",
                                 locale.id
                             );
                         } else {
                             assert_eq!(
                                 actual, expected,
-                                "{} scale {scale} at ({x},{y})",
+                                "{} {theme:?} scale {scale} at ({x},{y}) for {message:?}",
                                 locale.id
                             );
                             visible |= actual != original;

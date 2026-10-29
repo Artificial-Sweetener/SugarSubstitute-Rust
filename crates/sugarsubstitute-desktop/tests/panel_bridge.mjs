@@ -15,6 +15,12 @@ const canvas = (requestId = 1, type = 'context.request', extra = {}) =>
   ({ protocol: 'sugarcubes.canvas', version: 3, session, requestId, type, ...extra });
 const control = (type = 'ready', extra = {}) => ({ protocol: 'sugarcubes.panel', version: 3, session, type, ...extra });
 const selection = (text = '') => canvas(1, 'surface.select', { address, revision: 1, itemId: 'result:one', file: { filename: text, subfolder: '', type: 'output' } });
+const viewport = (requestId = 1, command = { type: 'read' }) =>
+  canvas(requestId, 'surface.viewport.request', { address, revision: 1, command });
+const viewportReply = (requestId = 1) => canvas(requestId, 'surface.viewport.reply', {
+  address, revision: 1, status: 'applied', message: '',
+  viewport: { mode: 'fit', physicalScale: .5, dimensions: { width: 640, height: 480 } },
+});
 const normalize = value => JSON.parse(JSON.stringify(value));
 function transportError(error, code) {
   assert.equal(error.message, '');
@@ -65,7 +71,10 @@ test('UTF-16 boundary includes private prefix, terminator and maximum context id
   assert.throws(() => f.bridge.send(selection(`${exact.file.filename}x`)), error => transportError(error, 'bound'));
   assert.equal(f.sent.length, 1);
 });
-for (const character of ['\\', '"', '\0', '\n', '漢', '🙂', '\u2028', '\u2029']) {
+// Well-formed JSON has UTF16 units <= UTF8 bytes <= 3 * UTF16 units.
+// ASCII framing/escaping preserves bytes minus units, so these two 16384
+// bounds imply native UTF8 <= 27305, within its independent 32768-byte limit.
+for (const character of ['\\', '"', '\0', '\n', '漢', '🙂', '\u2028', '\u2029', '漢\\🙂"\n', '\ud800漢\u07ff']) {
   test(`admission preserves ${JSON.stringify(character)} at the first native limit`, () => {
     let first = 0, last = 20000;
     while (first < last) {
@@ -74,9 +83,14 @@ for (const character of ['\\', '"', '\0', '\n', '漢', '🙂', '\u2028', '\u2029
       catch (error) { transportError(error, 'bound'); last = middle - 1; }
     }
     const exact = selection(character.repeat(first)), f = admit(exact);
+    const payload = JSON.stringify(exact), native = envelope(f.sent[0]);
     assert.equal(f.sent[0], framed(exact));
-    assert.ok(envelope(f.sent[0]).length + 1 <= 16384);
-    assert.ok(Buffer.byteLength(envelope(f.sent[0])) <= 32768);
+    assert.ok(Buffer.byteLength(payload) <= 16384);
+    assert.ok(payload.length <= 16384);
+    assert.ok(native.length + 1 <= 16384);
+    assert.equal(Buffer.byteLength(native) - native.length, Buffer.byteLength(payload) - payload.length);
+    assert.ok(Buffer.byteLength(native) <= 27305);
+    assert.ok(Buffer.byteLength(native) <= 32768);
     assert.throws(() => f.bridge.send(selection(character.repeat(first + 1))), error => transportError(error, 'bound'));
     assert.equal(f.sent.length, 1);
   });
@@ -125,17 +139,90 @@ test('waiting request owns a snapshot independent of caller mutation', () => {
   f.receipt('g', 'o', 1);
   assert.equal(f.sent[0], framed(selection('original'), 'o', 1));
 });
-for (const type of ['context.request', 'surface.capabilities.request', 'surface.select']) {
+test('viewport requests retain framing and accept their exact successful state reply', () => {
+  const request = viewport(), reply = viewportReply(), f = admit(request);
+  assert.equal(f.sent[0], framed(request));
+  assert.equal(f.deliver(reply, maxTicket), true);
+  assert.deepEqual(f.received, [reply]);
+  assert.equal(f.deliver(reply, maxTicket), false);
+});
+
+test('viewport success cannot use a state-free legacy reply or another named request reply', () => {
+  const f = fixture();
+  f.receipt('g', 'o', 1);
+  f.bridge.send(viewport());
+  for (const type of ['context.reply', 'surface.capabilities.reply'])
+    assert.equal(f.deliver(canvas(1, type), 1), false);
+  for (const status of ['ready', 'applied', 'unsupported'])
+    assert.equal(f.deliver(canvas(1, 'surface.reply', { address, revision: 1, status, message: '' }), 1), false);
+  assert.equal(f.deliver(viewportReply(2), 1), false);
+  assert.equal(f.deliver(viewportReply(), 2), false);
+  assert.equal(f.receipt('g', 'o', 2), false);
+  assert.deepEqual(f.received, []);
+  assert.equal(f.deliver(viewportReply(), 1), true);
+});
+
+for (const status of ['stale', 'cancelled', 'unavailable', 'error']) {
+  test(`viewport ${status} uses the existing correlated terminal surface reply`, () => {
+    const f = admit(viewport());
+    const reply = canvas(1, 'surface.reply', { address, revision: 1, status, message: '' });
+    assert.equal(f.deliver(reply, maxTicket), true);
+    assert.deepEqual(f.received, [reply]);
+    assert.equal(f.deliver(viewportReply(), maxTicket), false);
+  });
+}
+
+test('viewport cancellation waits for the real terminal reply after native forwarding', () => {
+  const f = fixture();
+  f.receipt('g', 'o', 1);
+  f.receipt('g', 'x', 2);
+  f.bridge.send(viewport(1, { type: 'pan', x: .2, y: -.1, units: 'viewport' }));
+  f.bridge.send(canvas(1, 'cancel'));
+  assert.equal(f.sent.length, 2);
+  assert.equal(f.receipt('a', 'x', 2), true);
+  assert.deepEqual(f.received, []);
+  assert.equal(f.receipt('g', 'o', 3), false);
+  const reply = canvas(1, 'surface.reply', { address, revision: 1, status: 'cancelled', message: '' });
+  assert.equal(f.deliver(reply, 1), true);
+  assert.deepEqual(f.received, [reply]);
+});
+
+test('viewport admission refusal settles once and the next ordinary request can progress', () => {
+  const f = fixture();
+  f.receipt('g', 'o', 1);
+  f.bridge.send(viewport());
+  f.bridge.send(canvas(2));
+  assert.equal(f.receipt('r', 'o', 1), true);
+  assert.equal(f.received[0].type, 'error.reply');
+  assert.equal(f.received[0].failure.status, 'unavailable');
+  assert.equal(f.deliver(viewportReply(), 1), false);
+  assert.equal(f.receipt('g', 'o', 2), true);
+  assert.equal(f.sent[1], framed(canvas(2), 'o', 2));
+});
+
+test('named successful reply routing does not broaden the ordinary request allowlist', () => {
+  const f = fixture();
+  for (const type of ['surface.unknown.request', 'surface.viewport.other.request', 'surface.viewport.reply'])
+    assert.throws(() => f.bridge.send(canvas(1, type)), error => transportError(error, 'unsupported'));
+  f.receipt('g', 'o', 1);
+  f.bridge.send(canvas(1, 'surface.capabilities.request'));
+  assert.equal(f.deliver(viewportReply(), 1), false);
+  assert.equal(f.deliver(canvas(1, 'surface.reply', { status: 'unavailable' }), 1), false);
+  assert.equal(f.deliver(canvas(1, 'surface.capabilities.reply'), 1), true);
+});
+
+for (const type of ['context.request', 'surface.capabilities.request', 'surface.select', 'surface.viewport.request']) {
   test(`never-forwarded ${type} cancellation withdraws locally`, () => {
-    const f = fixture(), request = type === 'surface.select' ? selection() : canvas(1, type);
+    const f = fixture(), surface = type === 'surface.select' || type === 'surface.viewport.request';
+    const request = type === 'surface.select' ? selection() : type === 'surface.viewport.request' ? viewport() : canvas(1, type);
     f.bridge.send(request);
     f.bridge.send(canvas(1, 'cancel'));
     assert.equal(f.sent.length, 0);
     assert.equal(f.received.length, 1);
     const reply = f.received[0];
-    assert.equal(reply.type, type === 'surface.select' ? 'surface.reply' : 'error.reply');
+    assert.equal(reply.type, surface ? 'surface.reply' : 'error.reply');
     assert.equal(reply.status ?? reply.failure.status, 'cancelled');
-    if (type === 'surface.select') { assert.deepEqual(reply.address, address); assert.equal(reply.revision, 1); }
+    if (surface) { assert.deepEqual(reply.address, address); assert.equal(reply.revision, 1); }
     f.bridge.send(canvas(2));
     f.receipt('g', 'o', 1);
     assert.equal(f.sent[0], framed(canvas(2), 'o', 1));

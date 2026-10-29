@@ -5,7 +5,7 @@
 use super::*;
 use sugarsubstitute_contracts::canvas_surface::{
     CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryRequest, CanvasSurfaceDiscoveryStatus,
-    CanvasSurfaceImageFormat,
+    CanvasSurfaceImageFormat, CanvasSurfaceViewportCommand,
 };
 
 impl NativeSurface {
@@ -21,6 +21,17 @@ impl NativeSurface {
         let available = session.initialized() && self.available(identity);
         let capabilities = CanvasSurfaceCapabilities {
             image_formats: if available { vec![CanvasSurfaceImageFormat::Png] } else { Vec::new() },
+            viewport_commands: if available {
+                vec![
+                    CanvasSurfaceViewportCommand::Fit,
+                    CanvasSurfaceViewportCommand::Native,
+                    CanvasSurfaceViewportCommand::Zoom,
+                    CanvasSurfaceViewportCommand::Pan,
+                ]
+            } else {
+                Vec::new()
+            },
+            viewport_state: available,
             ..Default::default()
         };
         let status = if available {

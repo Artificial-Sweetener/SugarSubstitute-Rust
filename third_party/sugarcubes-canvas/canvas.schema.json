@@ -1484,6 +1484,124 @@
       },
       "required": ["protocol", "version", "session", "requestId", "type", "result"],
       "additionalProperties": false
+    },
+    "CanvasSurfaceViewportCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": { "type": { "const": "read" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "fit" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "native" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "zoom" },
+            "factor": { "type": "number", "minimum": 0.01, "maximum": 100 }
+          },
+          "required": ["type", "factor"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "pan" },
+            "x": { "type": "number", "minimum": -10, "maximum": 10 },
+            "y": { "type": "number", "minimum": -10, "maximum": 10 },
+            "units": { "const": "viewport" }
+          },
+          "required": ["type", "x", "y", "units"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasSurfaceImageDimensions": {
+      "type": "object",
+      "properties": {
+        "width": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      },
+      "required": ["width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceViewportState": {
+      "type": "object",
+      "properties": {
+        "mode": { "enum": ["fit", "native", "custom"] },
+        "physicalScale": { "type": "number", "minimum": 1e-9, "maximum": 16384 },
+        "dimensions": { "$ref": "#/$defs/CanvasSurfaceImageDimensions" }
+      },
+      "required": ["mode", "physicalScale", "dimensions"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceViewportRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.viewport.request" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "command": { "$ref": "#/$defs/CanvasSurfaceViewportCommand" }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "requestId",
+        "type",
+        "address",
+        "revision",
+        "command"
+      ],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceViewportReply": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.viewport.reply" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "status": { "const": "applied" },
+        "message": {
+          "type": "string",
+          "maxLength": 512,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$"
+        },
+        "viewport": { "$ref": "#/$defs/CanvasSurfaceViewportState" }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "requestId",
+        "type",
+        "address",
+        "revision",
+        "status",
+        "message",
+        "viewport"
+      ],
+      "additionalProperties": false
     }
   },
   "oneOf": [
@@ -1539,6 +1657,8 @@
     },
     {
       "$ref": "#/$defs/CanvasSurfaceReply"
-    }
+    },
+    { "$ref": "#/$defs/CanvasSurfaceViewportRequest" },
+    { "$ref": "#/$defs/CanvasSurfaceViewportReply" }
   ]
 }

@@ -19,7 +19,10 @@ pub use document::{
     LayerContent, LayerId, LayerMask,
 };
 pub use error::CanvasError;
-pub use navigation::{CursorIntent, Navigation, NavigationInput, ScrollPhase, ZoomMode};
+pub use navigation::{
+    CursorIntent, Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput,
+    ScrollPhase, ZoomMode,
+};
 pub use presentation::{FrameStamp, RenderRequest};
 pub use projection::ViewProjection;
 pub use tools::{

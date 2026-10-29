@@ -696,9 +696,16 @@ rationale = "The build-manifest tool prints completion after validating matched 
 [[records]]
 path = "tools/local_k1/derive_build.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:1264bfcbd1d9b9195655c2d2ddb7878685b2190f25f45374191a06802051fdc3"
+source_sha256 = "sha256:f85685ac4476f4534a8f86965ebb991dd164638eb0e4f08f6ffd37011fc2d6dd"
 disposition = "developer"
 rationale = "Build identity derivation captures Git metadata and prints the completed public producing-identity artifact."
+
+[[records]]
+path = "tools/local_k1/test_derive_build.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:9c4d9e93a9527ae73cbc04ba7358d4812ed2c090ce79c2fec27c4efb0155d994"
+disposition = "fixture"
+rationale = "Build-input selection tests reference a diagnostic filename to prove that runtime asset directories exclude logs; this fixture name does not create a runtime diagnostic route."
 
 [[records]]
 path = "tools/native_dxgi/build.ps1"

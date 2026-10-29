@@ -39,36 +39,53 @@ fn disconnected_worker_retires_and_a_new_worker_resumes_then_prepares_the_same_p
     ));
     let (server, policy) =
         pipeline.run(8 * 1024 * 1024, move |context| Running::start(exchanges, &context))?;
-    let port = policy.asset("timestamp.json")?.port()?;
-    let mut failed = Worker::new(configuration(&fixture, policy))?;
-    step(&mut pipeline, &mut failed)?;
-    step(&mut pipeline, &mut failed)?;
-    step(&mut pipeline, &mut failed)?;
-    submit(&mut pipeline, &mut failed)?;
-    let observed = pipeline.observe(|| failed.poll())?;
-    assert_eq!(observed.progress, Progress::Failed);
-    assert!(matches!(observed.outcome, JobOutcome::Failure(_)));
-    let cause = observed.failure.ok_or("Lost disconnect cause")?;
-    assert!(cause.to_string().contains("transport"));
-    assert!(failed.take_candidate().is_err());
-    retire(&mut pipeline, &mut failed)?;
-    assert_unlocked(&mut pipeline, &fixture)?;
-    let mut resumed = Worker::new(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(port)?,
-    ))?;
-    step(&mut pipeline, &mut resumed)?;
-    step(&mut pipeline, &mut resumed)?;
-    step(&mut pipeline, &mut resumed)?;
-    assert_eq!(
-        step(&mut pipeline, &mut resumed)?.progress,
-        Progress::Downloading { received: 11, total: total as u64 }
-    );
-    for expected in [Progress::Preparing, Progress::Ready] {
-        assert_eq!(step(&mut pipeline, &mut resumed)?.progress, expected);
-    }
-    server.finish()?;
-    retire(&mut pipeline, &mut resumed)?;
-    assert_unlocked(&mut pipeline, &fixture)?;
-    Ok(())
+    let client = (|| {
+        let port = policy.asset("timestamp.json")?.port()?;
+        let mut failed = Worker::new(configuration(&fixture, policy))?;
+        step(&mut pipeline, &mut failed)?;
+        step(&mut pipeline, &mut failed)?;
+        step(&mut pipeline, &mut failed)?;
+        submit(&mut pipeline, &mut failed)?;
+        let observed = pipeline.observe(|| failed.poll())?;
+        if observed.progress != Progress::Failed
+            || !matches!(observed.outcome, JobOutcome::Failure(_))
+        {
+            return Err("Disconnected worker did not report its failed terminal outcome".into());
+        }
+        let cause = observed.failure.ok_or("Lost disconnect cause")?;
+        if !cause.to_string().contains("transport") {
+            return Err(format!("Disconnect lost its transport cause: {cause}").into());
+        }
+        if failed.take_candidate().is_ok() {
+            return Err("Disconnected worker exposed a preparation candidate".into());
+        }
+        retire(&mut pipeline, &mut failed)?;
+        assert_unlocked(&mut pipeline, &fixture)?;
+        let mut resumed = Worker::new(configuration(
+            &fixture,
+            sugarsubstitute_update::http::Policy::loopback(port)?,
+        ))?;
+        step(&mut pipeline, &mut resumed)?;
+        step(&mut pipeline, &mut resumed)?;
+        step(&mut pipeline, &mut resumed)?;
+        let expected = Progress::Downloading { received: 11, total: total as u64 };
+        let actual = step(&mut pipeline, &mut resumed)?.progress;
+        if actual != expected {
+            return Err(
+                format!("Resumed download progress {actual:?}, expected {expected:?}").into()
+            );
+        }
+        for expected in [Progress::Preparing, Progress::Ready] {
+            let actual = step(&mut pipeline, &mut resumed)?.progress;
+            if actual != expected {
+                return Err(
+                    format!("Resumed worker progress {actual:?}, expected {expected:?}").into()
+                );
+            }
+        }
+        retire(&mut pipeline, &mut resumed)?;
+        assert_unlocked(&mut pipeline, &fixture)?;
+        Ok(())
+    })();
+    server.finish_after(client)
 }

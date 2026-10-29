@@ -35,9 +35,13 @@ fn discovery(
         value["capabilities"]["imageFormats"],
         if expected == "available" { json!(["png"]) } else { json!([]) }
     );
-    assert_eq!(value["capabilities"]["viewportCommands"], json!([]));
+    assert_eq!(
+        value["capabilities"]["viewportCommands"],
+        if expected == "available" { json!(["fit", "native", "zoom", "pan"]) } else { json!([]) }
+    );
+    assert_eq!(value["capabilities"]["viewportState"], expected == "available");
     assert_eq!(value["capabilities"]["previewFormats"], json!([]));
-    for field in ["viewportState", "comparison", "overview"] {
+    for field in ["comparison", "overview"] {
         assert_eq!(value["capabilities"][field], false);
     }
     Ok(())

@@ -6,9 +6,11 @@ mod address;
 mod capabilities;
 mod file_reference;
 mod message;
+mod reply;
 #[cfg(test)]
 #[path = "canvas_surface/tests.rs"]
 mod tests;
+mod viewport;
 #[path = "canvas_surface/wire.rs"]
 mod wire;
 
@@ -24,6 +26,7 @@ pub use message::{
     CanvasSurfaceMessage, CanvasSurfaceMessageError, CanvasSurfaceOperation,
     CanvasSurfaceReplyStatus, CanvasSurfaceRequest, MAX_SURFACE_MESSAGE_BYTES,
 };
+pub use viewport::{CanvasViewportCommand, CanvasViewportMode, CanvasViewportState};
 
 use std::{error::Error, fmt};
 

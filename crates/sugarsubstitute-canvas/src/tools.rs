@@ -6,7 +6,8 @@ mod contract;
 mod pan_zoom;
 use crate::{
     CanvasError, CursorIntent, Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession,
-    EditSessionId, Navigation, NavigationInput, ScrollPhase,
+    EditSessionId, Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput,
+    ScrollPhase,
 };
 pub use context::ToolContext;
 pub use contract::{CanvasTool, ToolButton, ToolCancelReason, ToolId, ToolInput, ToolView};
@@ -88,6 +89,34 @@ impl ToolManager {
     /// Authoritative shared navigation state.
     pub const fn navigation(&self) -> &Navigation {
         &self.navigation
+    }
+    /// Command the shared camera without changing selected tools, staged edits or capture.
+    /// A tool's live gesture retains ownership until its existing input lifecycle completes.
+    /// # Errors
+    /// Preserves navigation parameter, geometry and monotonic-time errors.
+    pub fn navigate(
+        &mut self,
+        command: NavigationCommand,
+        now: Duration,
+    ) -> Result<NavigationCommandOutcome, CanvasError> {
+        if self.captured() || self.edit.is_some() {
+            return Ok(NavigationCommandOutcome::Denied);
+        }
+        self.navigation.command(command, now)
+    }
+    /// Stop a matching semantic camera destination without cancelling a tool or physical gesture.
+    /// # Errors
+    /// Preserves the navigation owner's monotonic-time and geometry failures.
+    pub fn cancel_navigation(
+        &mut self,
+        target: crate::Viewport,
+        mode: crate::ZoomMode,
+        now: Duration,
+    ) -> Result<bool, CanvasError> {
+        if self.captured() || self.edit.is_some() {
+            return Ok(false);
+        }
+        self.navigation.cancel_command(target, mode, now)
     }
     /// Advance motion from the application's injected clock without dispatching tool input.
     /// # Errors

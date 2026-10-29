@@ -10,6 +10,7 @@ mod presentation;
 #[cfg(test)]
 #[path = "surface/replies_tests.rs"]
 mod replies_tests;
+mod viewport;
 
 use super::*;
 #[cfg(test)]
@@ -63,6 +64,7 @@ enum PendingKind {
     Geometry,
     Hide,
     Commit,
+    Viewport { intent: crate::native_canvas::session::CameraIntent, commanded: bool },
 }
 
 struct Pending {
@@ -238,6 +240,9 @@ impl NativeSurface {
         match operation {
             CanvasSurfaceOperation::Prepare => Err("Canvas preparation was not admitted".into()),
             CanvasSurfaceOperation::Release => self.release(identity, request, claim, session),
+            CanvasSurfaceOperation::Viewport(command) => {
+                self.viewport(identity, request, claim, command, session)
+            }
             CanvasSurfaceOperation::Geometry(geometry) => {
                 let Some(allocation) = allocation else {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);

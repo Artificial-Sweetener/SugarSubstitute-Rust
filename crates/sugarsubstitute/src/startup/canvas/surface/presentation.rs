@@ -74,7 +74,7 @@ impl NativeSurface {
                 pending.claim,
             )?;
         }
-        Ok(())
+        self.poll_viewport(session)
     }
 
     /// Borrow the selected current frame only after the attachment requests commit.
@@ -144,7 +144,14 @@ impl NativeSurface {
         if promoting {
             self.retained = None;
         }
-        if !preparing && let Some(pending) = self.pending.take() {
+        let viewport = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| matches!(pending.kind, PendingKind::Viewport { .. }));
+        if !preparing
+            && !viewport
+            && let Some(pending) = self.pending.take()
+        {
             self.reply(
                 pending.identity,
                 &pending.request,
@@ -152,7 +159,7 @@ impl NativeSurface {
                 pending.claim,
             )?;
         }
-        Ok(())
+        self.poll_viewport(session)
     }
 
     /// Resolve hidden geometry only after the main window's native hide completed in composition.

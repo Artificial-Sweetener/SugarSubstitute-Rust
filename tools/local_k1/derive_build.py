@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Artificial Sweetener and contributors
-"""Derive the public compiled local-K1 identity from exact first-party build inputs.
+"""Derive the public compiled local-K1 identity from owned workspace build inputs.
 
 The emitted receipt is reproducibility data. Runtime trust comes from the literal
 public anchor and the detached signature over the actual selected images.
+The inventory covers selected source/configuration and embedded runtime asset
+namespaces from Git's tracked and unignored working-tree paths.
 """
 from __future__ import annotations
 import argparse
@@ -17,16 +19,35 @@ import subprocess
 DOMAIN = b"SugarSubstitute.local-k1.source-build.v1\0"
 DERIVED = "crates/sugarsubstitute-supervision/src/installed_release/local_k1_build.rs"
 ANCHOR_ID = "790bf1193d5cfd7efa58436532b10c09162d5efd5200b40a9d86fc71257753a5"
-SUFFIXES = {".rs", ".toml", ".lock", ".py", ".ps1", ".cs", ".cpp", ".cc", ".c", ".h", ".hpp", ".gn", ".gni", ".json", ".yml", ".yaml"}
+SUFFIXES = {".rs", ".toml", ".lock", ".py", ".ps1", ".cs", ".cpp", ".cc", ".c", ".h", ".hpp", ".gn", ".gni", ".json", ".yml", ".yaml", ".js", ".mjs", ".ts"}
 ROOTS = {"crates", "xtask", "tools", "native", ".cargo", ".github", "governance"}
+EMBEDDED_FILES = {
+    "assets/windows/application.manifest",
+    "assets/brand/wordmark.svg",
+    "crates/sugarsubstitute-desktop/assets/caption/close.coverage",
+}
+EMBEDDED_ASSET_DIRECTORIES = {
+    "crates/sugarsubstitute-ui/assets/fluent": ".svg",
+    "crates/sugarsubstitute-desktop/assets/cursors": ".cur",
+    "crates/sugarsubstitute-splash/assets/caption": ".png",
+    "crates/sugarsubstitute-splash/assets/poses": ".png",
+}
 
 
 def source_input(relative: str) -> bool:
-    """Select checked first-party source/configuration; exclude the derived literal."""
+    """Select owned source/configuration and embedded assets; exclude the derived literal.
+
+    Asset types are restricted to their runtime owner's direct asset directory so
+    screenshots, cursor source images and unrelated output trees stay excluded.
+    Git discovery separately excludes ignored local data and generated outputs.
+    """
     path = Path(relative)
-    return (relative != DERIVED and not path.is_absolute() and ".." not in path.parts
-            and path.suffix in SUFFIXES
-            and (len(path.parts) == 1 or path.parts[0] in ROOTS))
+    if path.as_posix() == DERIVED or path.is_absolute() or ".." in path.parts:
+        return False
+    return (path.as_posix() in EMBEDDED_FILES
+            or EMBEDDED_ASSET_DIRECTORIES.get(path.parent.as_posix()) == path.suffix
+            or (path.suffix in SUFFIXES
+                and (len(path.parts) == 1 or path.parts[0] in ROOTS)))
 
 
 def regular_path(path: Path, *, directory: bool = False) -> Path:

@@ -3443,7 +3443,7 @@ rationale = "Repository tooling build_manifest.py: build manifest Reads declared
 [[records]]
 path = "tools/local_k1/derive_build.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:1264bfcbd1d9b9195655c2d2ddb7878685b2190f25f45374191a06802051fdc3"
+source_sha256 = "sha256:f85685ac4476f4534a8f86965ebb991dd164638eb0e4f08f6ffd37011fc2d6dd"
 capabilities = ["lstat", "open", "pathlib", "read_bytes", "stat"]
 disposition = "tooling"
 rationale = "Repository tooling derive_build.py: derive build Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3507,7 +3507,7 @@ rationale = "Repository tooling test_build_manifest.py: test build manifest Read
 [[records]]
 path = "tools/local_k1/test_derive_build.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:4647c791de9d88b032a210630161733adb197643c4d707dba5176ef8c49c7dd0"
+source_sha256 = "sha256:9c4d9e93a9527ae73cbc04ba7358d4812ed2c090ce79c2fec27c4efb0155d994"
 capabilities = ["TemporaryDirectory", "pathlib", "read_bytes", "read_text", "tempfile", "unlink", "write_bytes", "write_text"]
 disposition = "tooling"
 rationale = "Repository tooling test_derive_build.py: test derive build Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4272,7 +4272,7 @@ rationale = "Owned temporary cache fixtures verify retained encoded originals, a
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:88c277f4e31c04f3107f642b1f4fb04c44d08c0fe320021ed8dccd9d2a7dfaee"
+source_sha256 = "sha256:3ebbae566a2cab325bb0ee945ab2b467312caa7802eda6902c07df5245a384bf"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary cache fixtures exercise canvas source replacement, worker disposal and scoped shutdown without using user data."
@@ -4296,7 +4296,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:6d737569dc2693e936621259ab7d5a59fa5a047a78e420e45eb1f93f63aa58ff"
+source_sha256 = "sha256:d77acb8692a20aefa105bed0f76ce6d74c506ad8aabcaa8768fa4517e97c07b5"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
@@ -4304,10 +4304,18 @@ rationale = "Owned temporary PNG fixtures exercise current output selection and 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:9c2a052523df9bc26c9416b6452f34fcfb1596dbc34ce31154c30d086a99376e"
+source_sha256 = "sha256:62fe007d2b74434e267b5550c6d981df7043711e5f375b314b769718fef8879c"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor exercises backend revocation while the canvas session retains its worker lifetime."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/viewport/fixture.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:9c89990c5c08ae9225cf41883cf9a93a9977d12fa9f72e00dff68d0b96653379"
+capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary PNG fixtures exercise shared viewport commands through real canvas execution and native presentation acknowledgement without accessing user storage."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
@@ -4336,7 +4344,7 @@ rationale = "An owned temporary cache scope qualifies the real loopback output t
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:22618cf80a1f1e5cfd24ace21537d765530f43095e919e99a16743d909a800ff"
+source_sha256 = "sha256:a9d2c4512b48993259d9a5ceff17207f24e83c473efa32f0f3e5fa4876e8cd77"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read only the injected transport source for executable envelope-boundary regression tests."

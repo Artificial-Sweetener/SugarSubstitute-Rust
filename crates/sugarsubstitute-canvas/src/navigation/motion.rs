@@ -76,7 +76,19 @@ impl Navigation {
             let point = target.document_at(anchor)?;
             target.reframe([point[0] - anchor[0] / zoom, point[1] - anchor[1] / zoom], zoom)?;
         }
-        target = self.clamp(target)?;
+        self.transition_target(target, mode, anchor, cadence, now)
+    }
+    /// Share one interpolation policy between physical input and semantic commands.
+    pub(super) fn transition_target(
+        &mut self,
+        target: Viewport,
+        mode: ZoomMode,
+        anchor: Option<[f64; 2]>,
+        cadence: Option<Duration>,
+        now: Duration,
+    ) -> Result<(), CanvasError> {
+        self.mode = mode;
+        let target = self.clamp(target)?;
         let duration = match cadence.map(|time| time.as_secs_f64() * 1000.0) {
             Some(ms) if ms <= 25.0 => 0.0,
             Some(ms) if ms < 160.0 => 20.0 + 60.0 * ((ms - 40.0) / 120.0).clamp(0.0, 1.0),
