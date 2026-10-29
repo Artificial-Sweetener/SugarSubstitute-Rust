@@ -30,94 +30,98 @@ import type {
   CanvasContext,
 } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 
-test('routes finished node output directly to its canvas adapter before the job completes', async () => {
-  const f = fixture(['editor', 'web']);
-  const inserted: CanvasInsertImage[] = [];
-  const context: CanvasContext = {
-    canvas: {
-      id: 'editor',
-      label: 'Editor',
-      capabilities: { displayOutput: false, insertImageLayer: true, positionImageLayer: false },
-    },
-    document: { id: 'captured', geometryRevision: 'geometry', width: 512, height: 384 },
-  };
-  const delivery = f.runtime.canvases;
-  const unregister = delivery.register(
-    documentCanvasAdapter(
-      'editor',
-      {
-        readCanvas: () => context.canvas,
-        readContext: async () => context,
-        insertImage: async (image) => {
-          inserted.push(image);
-          return {
-            status: 'inserted',
-            documentId: image.document.id,
-            layerId: 'layer',
-            left: -128,
-            top: -64,
-            width: 768,
-            height: 512,
-          };
+test.each(['promptId', 'jobId'] as const)(
+  'routes %s previews and finished output directly to its canvas adapter before the job completes',
+  async (field) => {
+    const f = fixture(['editor', 'web']);
+    const inserted: CanvasInsertImage[] = [];
+    const context: CanvasContext = {
+      canvas: {
+        id: 'editor',
+        label: 'Editor',
+        capabilities: { displayOutput: false, insertImageLayer: true, positionImageLayer: false },
+      },
+      document: { id: 'captured', geometryRevision: 'geometry', width: 512, height: 384 },
+    };
+    const delivery = f.runtime.canvases;
+    const unregister = delivery.register(
+      documentCanvasAdapter(
+        'editor',
+        {
+          readCanvas: () => context.canvas,
+          readContext: async () => context,
+          insertImage: async (image) => {
+            inserted.push(image);
+            return {
+              status: 'inserted',
+              documentId: image.document.id,
+              layerId: 'layer',
+              left: -128,
+              top: -64,
+              width: 768,
+              height: 512,
+            };
+          },
         },
+        {
+          load: async () => ({
+            image: { format: 'png', encoding: 'base64', data: 'native-bytes' },
+            position: null,
+          }),
+        },
+        (error) => {
+          f.errors.push(error);
+        },
+      ),
+    );
+    const frames: Blob[] = [];
+    const web = new WebCanvasAdapter<Blob>({
+      wants: () => true,
+      receive: (frame) => {
+        frames.push(frame.bytes);
       },
-      {
-        load: async () => ({
-          image: { format: 'png', encoding: 'base64', data: 'native-bytes' },
-          position: null,
-        }),
-      },
-      (error) => {
-        f.errors.push(error);
-      },
-    ),
-  );
-  const frames: Blob[] = [];
-  const web = new WebCanvasAdapter<Blob>({
-    wants: () => true,
-    receive: (frame) => {
-      frames.push(frame.bytes);
-    },
-  });
-  const unregisterWeb = delivery.register(web.adapter);
-  f.runtime.install();
-  f.bridge.install();
-  const session = f.runtime.sessions.read().active!;
-  await f.api.queuePrompt(0, await f.host.graphToPrompt());
-  const frame = new Blob(['live-frame']);
-  f.api.emit('b_preview_with_metadata', { jobId: 'job-1', nodeId: '42:23', blob: frame });
-  expect(frames).toEqual([frame]);
-  expect(f.runtime.results.read(session.sessionId)?.preview?.promptId).toBe('prompt:job-1');
-  await f.host.loadGraphData({}, true, true, f.b);
-  f.api.emit('executed', {
-    prompt_id: 'job-1',
-    node: '42:23',
-    output: { images: [{ filename: 'generation.png' }] },
-  });
-  await delivery.idle();
-  expect(inserted).toHaveLength(1);
-  expect(inserted[0]).toMatchObject({ document: context.document, layerName: 'generation' });
-  expect(f.api.history.requests).toHaveLength(0);
-  const result = web.read(session.sessionId);
-  expect(
-    result?.outputs.flatMap((output) => output.items.map((item) => item.file.filename)),
-  ).toContain('generation.png');
-  expect(result?.preview).toBeNull();
-  expect(f.runtime.sessions.read().active?.sessionId).not.toBe(session.sessionId);
-  f.api.emit('execution_success', { prompt_id: 'job-1' });
-  f.api.history
-    .request(0)
-    .respond({ 'job-1': { outputs: { '42:23': { images: [{ filename: 'generation.png' }] } } } });
-  await settleWorkflowHistory();
-  await delivery.idle();
-  expect(inserted).toHaveLength(1);
-  f.bridge.dispose();
-  f.runtime.dispose();
-  unregister();
-  unregisterWeb();
-  web.dispose();
-  expect(f.errors).toEqual([]);
-});
+    });
+    const unregisterWeb = delivery.register(web.adapter);
+    f.runtime.install();
+    f.bridge.install();
+    const session = f.runtime.sessions.read().active!;
+    await f.api.queuePrompt(0, await f.host.graphToPrompt());
+    const frame = new Blob(['live-frame']);
+    f.api.emit('b_preview_with_metadata', { [field]: 'job-1', nodeId: '42:23', blob: frame });
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toBe(frame);
+    expect(f.runtime.results.read(session.sessionId)?.preview?.promptId).toBe('prompt:job-1');
+    await f.host.loadGraphData({}, true, true, f.b);
+    f.api.emit('executed', {
+      prompt_id: 'job-1',
+      node: '42:23',
+      output: { images: [{ filename: 'generation.png' }] },
+    });
+    await delivery.idle();
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ document: context.document, layerName: 'generation' });
+    expect(f.api.history.requests).toHaveLength(0);
+    const result = web.read(session.sessionId);
+    expect(
+      result?.outputs.flatMap((output) => output.items.map((item) => item.file.filename)),
+    ).toContain('generation.png');
+    expect(result?.preview).toBeNull();
+    expect(f.runtime.sessions.read().active?.sessionId).not.toBe(session.sessionId);
+    f.api.emit('execution_success', { prompt_id: 'job-1' });
+    f.api.history
+      .request(0)
+      .respond({ 'job-1': { outputs: { '42:23': { images: [{ filename: 'generation.png' }] } } } });
+    await settleWorkflowHistory();
+    await delivery.idle();
+    expect(inserted).toHaveLength(1);
+    f.bridge.dispose();
+    f.runtime.dispose();
+    unregister();
+    unregisterWeb();
+    web.dispose();
+    expect(f.errors).toEqual([]);
+  },
+);
 
 test('keeps the output view and captured document delivery independent by default', async () => {
   const f = fixture();
@@ -173,7 +177,7 @@ test('keeps the output view and captured document delivery independent by defaul
     await f.api.queuePrompt(0, await f.host.graphToPrompt());
     current = { ...captured, document: { ...captured.document!, id: 'other' } };
     const preview = new Blob(['live-frame']);
-    f.api.emit('b_preview_with_metadata', { jobId: 'job-1', nodeId: '42:23', blob: preview });
+    f.api.emit('b_preview_with_metadata', { promptId: 'job-1', nodeId: '42:23', blob: preview });
     expect(frames).toHaveLength(1);
     expect(frames[0]).toBe(preview);
     await f.host.loadGraphData({}, true, true, f.b);
@@ -376,19 +380,20 @@ test('inactive preview consumers receive no bytes and preview projections never 
   await f.host.loadGraphData({}, true, true, f.b);
   f.host.nodePreviewImages = { '42:23': ['blob:foreign'] };
   f.api.emit('b_preview_with_metadata', {
-    jobId: 'job-1',
+    promptId: 'job-1',
     nodeId: '42:23',
     blob: new Blob(['background']),
   });
-  expect(frames).toEqual([]);
+  expect(frames).toHaveLength(0);
   expect(f.runtime.outputs.livePreview('42:23')).toEqual([]);
   await f.host.loadGraphData({}, true, true, f.a);
   const stopProjection = f.runtime.outputs.subscribe(() => undefined);
   expect(f.runtime.outputs.livePreview('42:23')).toEqual([]);
   expect(f.created).toEqual([]);
   const current = new Blob(['current']);
-  f.api.emit('b_preview_with_metadata', { jobId: 'job-1', nodeId: '42:23', blob: current });
-  expect(frames).toEqual([current]);
+  f.api.emit('b_preview_with_metadata', { promptId: 'job-1', nodeId: '42:23', blob: current });
+  expect(frames).toHaveLength(1);
+  expect(frames[0]).toBe(current);
   expect(f.runtime.outputs.livePreview('42:23')).toEqual(['blob:owned-1']);
   stopProjection();
   unsubscribe();
@@ -516,7 +521,7 @@ test('admits one requested cube preview at fifteen frames per second and release
   f.bridge.install();
   await f.api.queuePrompt(0, await f.host.graphToPrompt());
   f.api.emit('b_preview_with_metadata', {
-    jobId: 'job-1',
+    promptId: 'job-1',
     nodeId: '42:23',
     blob: new Blob(['unrequested']),
   });
@@ -528,7 +533,7 @@ test('admits one requested cube preview at fifteen frames per second and release
   f.runtime.outputs.livePreview('42:23');
   for (let i = 0; i < 50; i++)
     f.api.emit('b_preview_with_metadata', {
-      jobId: 'job-1',
+      promptId: 'job-1',
       nodeId: '42:23',
       blob: new Blob([String(i)]),
     });
@@ -537,7 +542,7 @@ test('admits one requested cube preview at fifteen frames per second and release
   expect(refreshes).toBe(1);
   f.clock.advance(67);
   f.api.emit('b_preview_with_metadata', {
-    jobId: 'job-1',
+    promptId: 'job-1',
     nodeId: '42:23',
     blob: new Blob(['next']),
   });
@@ -549,7 +554,7 @@ test('admits one requested cube preview at fifteen frames per second and release
   const suspendedRefreshes = refreshes;
   f.clock.advance(67);
   f.api.emit('b_preview_with_metadata', {
-    jobId: 'job-1',
+    promptId: 'job-1',
     nodeId: '42:23',
     blob: new Blob(['background']),
   });
@@ -560,38 +565,41 @@ test('admits one requested cube preview at fifteen frames per second and release
   f.runtime.dispose();
 });
 
-test('accepts a source final and refuses late preview bytes without allocating a replacement URL', async () => {
-  const f = fixture();
-  f.runtime.install();
-  f.bridge.install();
-  await f.api.queuePrompt(0, await f.host.graphToPrompt());
-  const stop = f.runtime.outputs.subscribe(() => undefined);
-  f.runtime.outputs.livePreview('42:23');
-  f.api.emit('b_preview_with_metadata', {
-    jobId: 'job-1',
-    nodeId: '42:23',
-    blob: new Blob(['frame']),
-  });
-  expect(f.created).toHaveLength(1);
-  f.api.emit('executed', {
-    prompt_id: 'job-1',
-    node: '42:23',
-    output: { images: [{ filename: 'final.png' }] },
-  });
-  expect(f.revoked).toEqual(['blob:owned-1']);
-  f.clock.advance(67);
-  f.api.emit('b_preview_with_metadata', {
-    jobId: 'job-1',
-    nodeId: '42:23',
-    blob: new Blob(['late']),
-  });
-  expect(f.created).toHaveLength(1);
-  expect(f.runtime.outputs.livePreview('42:23')).toEqual([]);
-  expect(f.runtime.outputs.output('42:23')?.items[0]?.file.filename).toBe('final.png');
-  stop();
-  f.bridge.dispose();
-  f.runtime.dispose();
-});
+test.each(['promptId', 'jobId'] as const)(
+  'accepts a source final and refuses late %s preview bytes without allocating a replacement URL',
+  async (field) => {
+    const f = fixture();
+    f.runtime.install();
+    f.bridge.install();
+    await f.api.queuePrompt(0, await f.host.graphToPrompt());
+    const stop = f.runtime.outputs.subscribe(() => undefined);
+    f.runtime.outputs.livePreview('42:23');
+    f.api.emit('b_preview_with_metadata', {
+      [field]: 'job-1',
+      nodeId: '42:23',
+      blob: new Blob(['frame']),
+    });
+    expect(f.created).toHaveLength(1);
+    f.api.emit('executed', {
+      prompt_id: 'job-1',
+      node: '42:23',
+      output: { images: [{ filename: 'final.png' }] },
+    });
+    expect(f.revoked).toEqual(['blob:owned-1']);
+    f.clock.advance(67);
+    f.api.emit('b_preview_with_metadata', {
+      [field]: 'job-1',
+      nodeId: '42:23',
+      blob: new Blob(['late']),
+    });
+    expect(f.created).toHaveLength(1);
+    expect(f.runtime.outputs.livePreview('42:23')).toEqual([]);
+    expect(f.runtime.outputs.output('42:23')?.items[0]?.file.filename).toBe('final.png');
+    stop();
+    f.bridge.dispose();
+    f.runtime.dispose();
+  },
+);
 
 test('closing a workflow cancels its recovery and rejects late events before a fresh reopen', async () => {
   const f = fixture();
@@ -630,7 +638,7 @@ test('releases cube preview bytes when the browser document is hidden and resume
   f.runtime.outputs.livePreview('42:23');
   const emit = () =>
     f.api.emit('b_preview_with_metadata', {
-      jobId: 'job-1',
+      promptId: 'job-1',
       nodeId: '42:23',
       blob: new Blob(['frame']),
     });

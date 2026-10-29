@@ -153,6 +153,45 @@ export type CanvasSurfaceReply = {
   readonly status: 'ready' | 'applied' | 'stale' | 'cancelled' | 'unavailable' | 'error';
   readonly message: string;
 };
+/** Describe the schema-defined CanvasSurfaceViewportCommand wire value. */
+export type CanvasSurfaceViewportCommand =
+  | { readonly type: 'read' }
+  | { readonly type: 'fit' }
+  | { readonly type: 'native' }
+  | { readonly type: 'zoom'; readonly factor: number }
+  | { readonly type: 'pan'; readonly x: number; readonly y: number; readonly units: 'viewport' };
+/** Describe the schema-defined CanvasSurfaceImageDimensions wire value. */
+export type CanvasSurfaceImageDimensions = { readonly width: number; readonly height: number };
+/** Describe the schema-defined CanvasSurfaceViewportState wire value. */
+export type CanvasSurfaceViewportState = {
+  readonly mode: 'fit' | 'native' | 'custom';
+  readonly physicalScale: number;
+  readonly dimensions: CanvasSurfaceImageDimensions;
+};
+/** Describe the schema-defined CanvasSurfaceViewportRequest wire value. */
+export type CanvasSurfaceViewportRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.viewport.request';
+  readonly address: CanvasSurfaceAddress;
+  readonly revision: number;
+  readonly command: CanvasSurfaceViewportCommand;
+};
+/** Describe the schema-defined CanvasSurfaceViewportReply wire value. */
+export type CanvasSurfaceViewportReply = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.viewport.reply';
+  readonly address: CanvasSurfaceAddress;
+  readonly revision: number;
+  readonly status: 'applied';
+  readonly message: string;
+  readonly viewport: CanvasSurfaceViewportState;
+};
 /** Describe the shared canvas surface messages. */
 export type CanvasSurfaceMessage =
   | CanvasSurfaceCapabilitiesRequest
@@ -162,4 +201,6 @@ export type CanvasSurfaceMessage =
   | CanvasSurfaceSelectRequest
   | CanvasSurfaceCommitRequest
   | CanvasSurfaceReleaseRequest
-  | CanvasSurfaceReply;
+  | CanvasSurfaceReply
+  | CanvasSurfaceViewportRequest
+  | CanvasSurfaceViewportReply;

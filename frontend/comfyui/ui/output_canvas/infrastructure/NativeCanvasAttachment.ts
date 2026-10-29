@@ -15,7 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose shared canvas controls over one host-owned native output surface. */
 
-import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/CanvasSurface.js';
+import type {
+  CanvasSurfaceHost,
+  CanvasSurfaceViewportState,
+} from '../../../../../integrations/contracts/CanvasSurface.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import { applyCanvasAction } from '../application/CanvasActions.js';
 import type { CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
@@ -37,10 +40,12 @@ import {
 import type { CanvasAttachmentOptions } from './CanvasAttachmentOptions.js';
 import { CanvasMediaActions } from './CanvasMediaActions.js';
 import { NativeCanvasReadiness } from './NativeCanvasReadiness.js';
+import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.js';
 import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
 import { NativeCanvasActionSurface } from './NativeCanvasActionSurface.js';
+import { nativeCanvasViewportCommands } from './NativeCanvasCapabilities.js';
 import {
   NativeCanvasPresentation,
   type NativeCanvasPresentationStatus,
@@ -67,10 +72,12 @@ export class NativeCanvasAttachment {
   readonly #overlay: MountedCanvasOverlay;
   readonly #stopView: () => void;
   readonly #stopTransfer: () => void;
+  readonly #keyboard: CanvasViewportKeyboard;
   #catalog: CanvasCatalogSnapshot;
   #sources: readonly CanvasSourceSummary[];
   #plan: CanvasDisplayPlan;
   #surface: CanvasSurfaceGeometry | null = null;
+  #viewport: CanvasSurfaceViewportState | null = null;
   #presentation: NativeCanvasPresentationStatus = { state: 'empty', message: '' };
   #ready = false;
   #disposed = false;
@@ -115,7 +122,9 @@ export class NativeCanvasAttachment {
         !this.#disposed && options.accepts() ? { plan: this.#plan, catalog: this.#catalog } : null,
       cells: () => [],
     });
-    const surface = new NativeCanvasActionSurface(this.#media, options.open);
+    const surface = new NativeCanvasActionSurface(this.#media, options.open, (command, scope) =>
+      this.#native.viewport(command, scope),
+    );
     this.port = new CanvasSurfacePort(this.#snapshot(), {
       origin: document.location.origin,
       capabilities: {
@@ -127,6 +136,7 @@ export class NativeCanvasAttachment {
           'batch',
           'follow',
           'open-media',
+          ...nativeCanvasViewportCommands(options.nativeSurface()),
           ...this.#media.commands(),
         ],
       },
@@ -158,16 +168,24 @@ export class NativeCanvasAttachment {
           this.#readiness.fail(new Error(value.message));
         if (this.#ready) this.#status.changed(true);
       },
+      viewport: (value) => {
+        this.#viewport = value;
+        if (this.#ready) this.#status.changed(true);
+      },
       report: (error) => options.report(error, null),
     });
     this.#stopTransfer =
       options.transferChanged?.(() => {
         if (this.#ready) this.#status.changed(true);
       }) ?? (() => {});
+    this.#keyboard = new CanvasViewportKeyboard(this.viewport, this.port, options.report);
+    this.viewport.addEventListener('pointerdown', this.#focusViewport);
     this.#readiness = new NativeCanvasReadiness(options.clock);
     this.ready = this.#readiness.ready;
     const cleanup: (() => void)[] = [
       () => this.#readiness.dispose(),
+      () => this.#keyboard.dispose(),
+      () => this.viewport.removeEventListener('pointerdown', this.#focusViewport),
       () => this.#native.dispose(),
       () => this.#media.dispose(),
       () => this.#status.dispose(),
@@ -251,6 +269,8 @@ export class NativeCanvasAttachment {
     this.#disposed = true;
     this.#ready = false;
     this.#readiness.dispose();
+    this.#keyboard.dispose();
+    this.viewport.removeEventListener('pointerdown', this.#focusViewport);
     this.#stopView();
     this.#stopTransfer();
     this.#status.dispose();
@@ -263,6 +283,12 @@ export class NativeCanvasAttachment {
     this.element.replaceChildren();
     return released;
   }
+
+  /** Give discrete viewer keys focus without capturing or forwarding native pointer gestures. */
+  readonly #focusViewport = (event: PointerEvent): void => {
+    if (event.button === 0 && event.target === this.viewport && this.options.accepts())
+      this.viewport.focus({ preventScroll: true });
+  };
 
   /** Measure hidden candidates without granting them committed control-port authority. */
   #observeGeometry(surface: CanvasSurfaceGeometry): void {
@@ -322,13 +348,9 @@ export class NativeCanvasAttachment {
         preview: false,
         resource,
         secondaryResource: null,
-        zoom: {
-          mode: 'fit',
-          physicalScale: 0,
-          dimensions: null,
-          secondaryPhysicalScale: null,
-          secondaryDimensions: null,
-        },
+        zoom: this.#viewport
+          ? { ...this.#viewport, secondaryPhysicalScale: null, secondaryDimensions: null }
+          : null,
       },
     );
     return Object.freeze({

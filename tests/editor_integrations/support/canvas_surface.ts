@@ -42,6 +42,7 @@ export function negotiatedSurface(client: CanvasClient): CanvasSurfaceHost {
 export async function connectCanvasSurface(
   client: CanvasClient,
   sent: readonly CanvasMessage[],
+  capabilities: CanvasSurfaceCapabilities = selectedPngCapabilities,
 ): Promise<void> {
   const pending = client.readContext();
   const context = sent.at(-1);
@@ -73,7 +74,7 @@ export async function connectCanvasSurface(
     requestId: discovery.requestId,
     type: 'surface.capabilities.reply',
     status: 'available',
-    capabilities: selectedPngCapabilities,
+    capabilities,
     message: '',
   });
   await pending;

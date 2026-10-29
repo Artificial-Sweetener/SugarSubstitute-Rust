@@ -23,6 +23,12 @@ export async function applyCanvasAction(command, owners) {
         return await owners.sources.reveal(command.target, scope);
     if (command.type === 'select-source')
         return await owners.sources.select(command.selection, scope);
+    if (snapshot.preview &&
+        (command.type === 'fit' ||
+            command.type === 'native' ||
+            command.type === 'zoom' ||
+            command.type === 'pan'))
+        return false;
     owners.sources.cancel();
     if (!scope.current())
         return false;

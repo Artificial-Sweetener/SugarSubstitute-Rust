@@ -51,6 +51,42 @@ test('renders an unselected canvas without an empty-state status bar', () => {
   mounted.dispose();
 });
 
+test.each([true, false])(
+  'reports actual displayed preview=%s after the desired plan changes',
+  (preview) => {
+    const initial = canvasSnapshot('displayed-preview');
+    const catalog = canvasCatalogFixture();
+    const view = { ...initial.view, sessionId: catalog.sessionId };
+    const snapshot = browserCanvasSnapshot(
+      initial.address,
+      canvasDisplayPlan(view, catalog, { primary: null, secondary: null }, null),
+      catalog,
+      [
+        {
+          slot: 'primary',
+          frame: {
+            key: 'displayed',
+            runOrder: 1,
+            previewLane: preview ? 'preview:stream' : null,
+            selection: view.selection!,
+            preview,
+            handle: document.createElement('img'),
+            dimensions: { width: 512, height: 288 },
+          },
+          status: { state: 'loading', message: '', canRetry: false, canAdmitLargeImage: false },
+        },
+      ],
+      null,
+      true,
+      true,
+      [],
+      false,
+      null,
+    );
+    expect(snapshot.preview).toBe(preview);
+  },
+);
+
 /** Mount a real reusable overlay with an image decode pending. */
 function loadingOverlay() {
   jest.useFakeTimers();

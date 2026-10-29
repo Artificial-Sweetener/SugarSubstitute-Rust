@@ -143,6 +143,42 @@ test('does not replace prior results when a Run fails before producing any conte
   expect(f.catalog().entries[0]?.items[0]?.file.filename).toBe('1-0.png');
 });
 
+test('opens a new Run preview as one image after leaving manual inspection of an older batch', () => {
+  const f = fixture();
+  f.final(f.run(1), 0, 2);
+  f.selection.apply(f.view, f.catalog(), { type: 'batch', index: 1 });
+  const next = f.run(2);
+  f.results.publishPreview({
+    sessionId: next.session.sessionId,
+    generation: next.session.generation,
+    promptId: next.promptId,
+    sourceId: f.sources[0]!.id,
+    runOrder: next.order,
+    sequence: 1,
+    token: 'new-run-preview',
+    dimensions: null,
+  });
+  const inspected = canvasOutputCatalog(
+    f.catalog().result,
+    f.sources,
+    f.selection.inspection(f.view),
+  );
+  expect(inspected.entries[0]?.items).toHaveLength(2);
+  f.selection.reconcile(f.view, inspected);
+  expect(f.views.read(f.view)).toMatchObject({
+    follow: 'auto',
+    mode: 'image',
+    sourcePreview: true,
+    selection: { sourceId: f.sources[0]!.id, batchIndex: 0 },
+  });
+  const displayed = f.views.read(f.view);
+  f.selection.reconcile(f.view, f.catalog());
+  expect(f.views.read(f.view)).toBe(displayed);
+  f.selection.apply(f.view, f.catalog(), { type: 'overview', enabled: true });
+  f.selection.reconcile(f.view, f.catalog());
+  expect(f.views.read(f.view)).toMatchObject({ mode: 'overview', follow: 'manual' });
+});
+
 test('holds already displayed media until the first generated visual without adding an input mode', () => {
   const f = fixture();
   const source = f.sources[0]!;

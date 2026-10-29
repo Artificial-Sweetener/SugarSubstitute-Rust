@@ -40,11 +40,15 @@ export class CanvasCameraController {
         const camera = this.#transition.read();
         return this.#target && camera ? Object.freeze({ ...this.#target, camera }) : null;
     }
+    /** Only decoded final images admit user camera changes. */
+    navigable() {
+        return !this.#disposed && this.#target?.previewLane === null;
+    }
     /** Fit fresh preview compositions and new Runs; preserve inspection within one asset's updates. */
     show(selection, geometry, runOrder, previewLane) {
         if (this.#disposed)
             return;
-        const freshRun = this.options.inspections.presentRun(this.options.view, runOrder);
+        const freshRun = previewLane === null && this.options.inspections.presentRun(this.options.view, runOrder);
         const displayed = this.read();
         const previous = freshRun || displayed?.previewLane !== previewLane ? null : displayed;
         const sameSlot = previous?.selection.sourceId === selection.sourceId &&
@@ -57,11 +61,13 @@ export class CanvasCameraController {
             previous.geometry.viewport.height === geometry.viewport.height &&
             previous.geometry.density === geometry.density)
             return;
-        const camera = sameSlot && sameImage
-            ? resizeCanvasCamera(previous.camera, previous.geometry, geometry)
-            : this.#comparison && previous
-                ? projectCanvasInspection(captureCanvasInspection(previous.camera, previous.geometry), geometry)
-                : this.options.inspections.camera(this.options.view, selection, geometry, previewLane);
+        const camera = previewLane !== null
+            ? centeredCanvasCamera(geometry)
+            : sameSlot && sameImage
+                ? resizeCanvasCamera(previous.camera, previous.geometry, geometry)
+                : this.#comparison && previous
+                    ? projectCanvasInspection(captureCanvasInspection(previous.camera, previous.geometry), geometry)
+                    : this.options.inspections.camera(this.options.view, selection, geometry, previewLane);
         this.#target = { selection: Object.freeze({ ...selection }), geometry, previewLane };
         this.#transition.set(camera);
     }
@@ -104,7 +110,7 @@ export class CanvasCameraController {
     /** Pan directly without inertia or tweening continuous drag input. */
     pan(delta) {
         const target = this.read();
-        if (!target || this.#disposed)
+        if (!target || !this.navigable())
             return false;
         this.#transition.set(panCanvasCamera(target.camera, delta, target.geometry));
         return true;
@@ -112,7 +118,7 @@ export class CanvasCameraController {
     /** Combine centroid-anchored pinch scale and translation through existing camera constraints. */
     pinch(factor, anchor, delta) {
         const target = this.read();
-        if (!target || this.#disposed)
+        if (!target || !this.navigable())
             return false;
         const zoomed = zoomCanvasCamera(target.camera, factor, anchor, target.geometry);
         this.#transition.set(panCanvasCamera(zoomed, delta, target.geometry));
@@ -146,7 +152,7 @@ export class CanvasCameraController {
     /** Apply an inspection intent independently of content navigation. */
     #move(destination, anchor, wheel = false) {
         const target = this.read();
-        if (!target || this.#disposed)
+        if (!target || !this.navigable())
             return false;
         this.#transition.move(destination(target), target.geometry, anchor, this.options.reducedMotion(), wheel);
         return true;

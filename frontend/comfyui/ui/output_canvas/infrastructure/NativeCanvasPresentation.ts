@@ -15,36 +15,36 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Hand an existing view's selected result to a negotiated native surface. */
 
-import { CanvasCancellation } from '../../core/embedded/CanvasRuntime.js';
+import type { CanvasCommandScope } from '../domain/CanvasViewPort.js';
+import {
+  sendNativeCanvasOperation,
+  releaseNativeCanvasBinding,
+  type NativeCanvasBinding,
+  type NativeCanvasOperation,
+} from './NativeCanvasBinding.js';
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import type {
-  CanvasSurfaceCommand,
   CanvasSurfaceHost,
+  CanvasSurfaceViewportCommand,
+  CanvasSurfaceViewportState,
   CanvasSurfaceResult,
 } from '../../../../../integrations/contracts/CanvasSurface.js';
 
 interface Desired {
   readonly empty: boolean;
-  readonly geometry: CanvasSurfaceGeometry | null;
+  /** Focus updates retain this presentation identity and follow its current operation. */
+  geometry: CanvasSurfaceGeometry | null;
   readonly item: WorkflowOutputItem | null;
   readonly key: string;
 }
 
-interface Binding {
-  readonly host: CanvasSurfaceHost;
-  revision: number;
-  prepared: boolean;
-  committed: boolean;
-  attempted: boolean;
-  geometry: string | null;
-  lastGeometry: CanvasSurfaceGeometry | null;
-  selection: string | null;
-  active: {
-    readonly cancellation: CanvasCancellation;
-    readonly dependsOnView: boolean;
-  } | null;
+interface ViewportIntent {
+  readonly command: CanvasSurfaceViewportCommand;
+  readonly scope: CanvasCommandScope;
+  running: boolean;
+  complete(applied: boolean): void;
 }
 
 export interface NativeCanvasPresentationOptions {
@@ -61,6 +61,8 @@ export interface NativeCanvasPresentationOptions {
   visible(value: boolean): void;
   /** Publish only the current host operation's presentation outcome. */
   status(value: NativeCanvasPresentationStatus): void;
+  /** Publish only authoritative state for the currently presented source and allocation. */
+  viewport(value: CanvasSurfaceViewportState | null): void;
   report(error: unknown): void;
 }
 
@@ -72,7 +74,8 @@ export interface NativeCanvasPresentationStatus {
 
 /** Keep one in-flight operation and coalesce newer view or geometry changes. */
 export class NativeCanvasPresentation {
-  #binding: Binding | null = null;
+  #binding: NativeCanvasBinding | null = null;
+  #viewport: ViewportIntent | null = null;
   #desired: Desired | null = null;
   #running = false;
   #dirty = false;
@@ -100,6 +103,7 @@ export class NativeCanvasPresentation {
           geometry: null,
           lastGeometry: null,
           selection: null,
+          viewportKey: null,
           active: null,
         };
       }
@@ -114,12 +118,20 @@ export class NativeCanvasPresentation {
         ? item
         : null;
     const key = JSON.stringify([
-      geometry,
+      geometry && { ...geometry, focused: false },
       item && [item.id, item.file, item.mediaKind],
       this.options.accepts(),
     ]);
-    if (this.#desired?.key === key) return;
+    if (this.#desired?.key === key) {
+      if (this.#desired.geometry?.focused === geometry?.focused) return;
+      this.#desired.geometry = geometry;
+      this.#dirty = true;
+      this.#start();
+      return;
+    }
     this.#desired = { geometry, item: eligible, key, empty: item?.mediaKind !== 'image' };
+    this.options.viewport(null);
+    if (this.#viewport) this.#cancelViewport(this.#viewport);
     // A previous allocation can no longer be presented after the native window resizes.
     // Cancel its acknowledgement wait so the current geometry can reach the host.
     if (this.#binding?.active?.dependsOnView) this.#binding.active.cancellation.cancel();
@@ -139,6 +151,52 @@ export class NativeCanvasPresentation {
     );
     this.#dirty = true;
     this.#start();
+  }
+
+  /** Admit one discrete intent into the existing presentation stream, replacing only older intent. */
+  viewport(command: CanvasSurfaceViewportCommand, scope: CanvasCommandScope): Promise<boolean> {
+    const binding = this.#binding;
+    if (
+      !binding ||
+      !this.#desired?.item ||
+      !binding.host.capabilities.viewportState ||
+      !scope.current() ||
+      command.type === 'read' ||
+      !binding.host.capabilities.viewportCommands.includes(command.type)
+    )
+      return Promise.resolve(false);
+    const previous = this.#viewport;
+    if (previous) this.#cancelViewport(previous);
+    return new Promise<boolean>((resolve) => {
+      let complete = false;
+      const intent: ViewportIntent = {
+        command,
+        scope,
+        running: false,
+        complete: (applied) => {
+          if (complete) return;
+          complete = true;
+          scope.signal.removeEventListener('abort', cancel);
+          if (this.#viewport === intent) this.#viewport = null;
+          resolve(applied);
+        },
+      };
+      const cancel = () => this.#cancelViewport(intent);
+      this.#viewport = intent;
+      scope.signal.addEventListener('abort', cancel, { once: true });
+      if (!scope.current()) {
+        intent.complete(false);
+        return;
+      }
+      this.#dirty = true;
+      this.#start();
+    });
+  }
+
+  /** Keep a forwarded operation awaiting native acknowledgement; withdraw unsent intent locally. */
+  #cancelViewport(intent: ViewportIntent): void {
+    if (intent.running) this.#binding?.active?.cancellation.cancel();
+    else intent.complete(false);
   }
 
   /** Revoke the exact surface before releasing its transport and late completions. */
@@ -227,59 +285,80 @@ export class NativeCanvasPresentation {
           }
           binding.committed = true;
         }
+        if (!this.#current(binding, desired)) continue;
+        const intent = this.#viewport;
+        if (intent && !intent.scope.current()) intent.complete(false);
+        const admitted = this.#viewport;
+        if (
+          admitted ||
+          (binding.host.capabilities.viewportState && binding.viewportKey !== desired.key)
+        ) {
+          if (admitted) {
+            admitted.running = true;
+            binding.viewportKey = null;
+            this.options.viewport(null);
+          }
+          try {
+            const result = await this.#send(binding, {
+              type: 'surface.viewport.request',
+              command: admitted?.command ?? { type: 'read' },
+            });
+            const current =
+              this.#current(binding, desired) &&
+              (!admitted || (this.#viewport === admitted && admitted.scope.current()));
+            if (current && result.status === 'applied' && 'viewport' in result) {
+              binding.viewportKey = desired.key;
+              this.options.viewport(result.viewport);
+              admitted?.complete(true);
+            } else {
+              const recoverUnavailable =
+                admitted !== null && current && result.status === 'unavailable';
+              admitted?.complete(false);
+              if (
+                admitted &&
+                this.#current(binding, desired) &&
+                (!current || result.status === 'cancelled' || recoverUnavailable)
+              )
+                this.#dirty = true;
+              if (current && result.status !== 'cancelled' && !recoverUnavailable)
+                this.#failed(desired, result);
+              continue;
+            }
+          } catch (error: unknown) {
+            if (
+              this.#current(binding, desired) &&
+              (!admitted || (this.#viewport === admitted && admitted.scope.current()))
+            )
+              throw error;
+            this.options.report(error);
+            continue;
+          } finally {
+            admitted?.complete(false);
+          }
+        }
         if (this.#current(binding, desired)) {
           this.#show(true);
           this.options.status({ state: 'ready', message: '' });
         }
       } catch (error: unknown) {
         if (this.#current(binding, desired)) {
+          this.#failedIntent();
           this.options.status({ state: 'error', message: 'Native canvas presentation failed.' });
-          this.options.report(error);
         }
+        this.options.report(error);
       }
     }
   }
 
-  /** Preserve one ordered revision stream for this attachment and host. */
-  async #send(
-    binding: Binding,
-    operation:
-      | { readonly type: 'surface.prepare' }
-      | { readonly type: 'surface.commit' }
-      | { readonly type: 'surface.geometry'; readonly geometry: CanvasSurfaceGeometry }
-      | {
-          readonly type: 'surface.select';
-          readonly itemId: string;
-          readonly file: WorkflowOutputItem['file'];
-        },
+  /** Delegate through the same binding record for every operation. */
+  #send(
+    binding: NativeCanvasBinding,
+    operation: NativeCanvasOperation,
   ): Promise<CanvasSurfaceResult> {
-    const revision = this.#revision(binding);
-    const cancellation = new CanvasCancellation();
-    binding.active = { cancellation, dependsOnView: operation.type !== 'surface.prepare' };
-    // Cancellation does not roll back an effect already accepted by the native owner.
-    // Reconcile the next desired state even when it returns to the last acknowledged value.
-    if (operation.type === 'surface.geometry') binding.geometry = null;
-    if (operation.type === 'surface.select') binding.selection = null;
-    binding.attempted = true;
-    const command: CanvasSurfaceCommand = {
-      ...operation,
-      address: this.options.address,
-      revision,
-    };
-    try {
-      return await binding.host.execute(command, cancellation);
-    } finally {
-      if (binding.active?.cancellation === cancellation) binding.active = null;
-    }
+    return sendNativeCanvasOperation(binding, this.options.address, operation);
   }
 
-  #revision(binding: Binding): number {
-    if (binding.revision === Number.MAX_SAFE_INTEGER)
-      throw new Error('Canvas surface revision exhausted.');
-    return ++binding.revision;
-  }
-
-  #owns(binding: Binding): boolean {
+  #owns(binding: NativeCanvasBinding): boolean {
     return (
       !this.#disposed &&
       this.#binding === binding &&
@@ -287,12 +366,13 @@ export class NativeCanvasPresentation {
     );
   }
 
-  #current(binding: Binding, desired: Desired): boolean {
+  #current(binding: NativeCanvasBinding, desired: Desired): boolean {
     return this.#owns(binding) && this.#desired === desired;
   }
 
   #failed(desired: Desired, result: CanvasSurfaceResult): void {
     if (this.#desired !== desired) return;
+    this.#failedIntent();
     // A staged sibling temporarily owns native mutation. Its release explicitly refreshes
     // the retained attachment; permit that refresh to reconcile previously rejected geometry.
     if (result.status === 'stale') this.#desired = null;
@@ -307,6 +387,13 @@ export class NativeCanvasPresentation {
       this.options.report(new Error(result.message || 'Native canvas presentation failed.'));
   }
 
+  /** Settle unsent intent when its required presentation fails, without retrying that presentation. */
+  #failedIntent(): void {
+    this.#dirty = false;
+    this.options.viewport(null);
+    if (this.#viewport && !this.#viewport.running) this.#viewport.complete(false);
+  }
+
   #show(visible: boolean): void {
     if (visible === this.#visible) return;
     this.#visible = visible;
@@ -316,27 +403,14 @@ export class NativeCanvasPresentation {
   /** Observe the host's release acknowledgement before allowing another binding to prepare. */
   #retire(): Promise<void> {
     this.#show(false);
+    this.options.viewport(null);
+    if (this.#viewport) this.#cancelViewport(this.#viewport);
     const binding = this.#binding;
     this.#binding = null;
     if (!binding) return this.#retirement ?? Promise.resolve();
     binding.active?.cancellation.cancel();
     if (!binding.attempted) return this.#retirement ?? Promise.resolve();
-    let release: Promise<void>;
-    try {
-      const revision = this.#revision(binding);
-      release = binding.host
-        .execute({ type: 'surface.release', address: this.options.address, revision })
-        .then((result) => {
-          if (result.status !== 'applied' && result.status !== 'stale')
-            throw new Error(result.message || 'Native canvas release failed.');
-        });
-    } catch (error: unknown) {
-      release = Promise.reject(
-        error instanceof Error
-          ? error
-          : new Error('Native canvas release failed.', { cause: error }),
-      );
-    }
+    const release = releaseNativeCanvasBinding(binding, this.options.address);
     const retirement = this.#retirement
       ? Promise.all([this.#retirement, release]).then(() => {})
       : release;

@@ -18,6 +18,11 @@ function canvasContextActions(snapshot, capabilities, send, target = "primary") 
       select: () => send(command)
     });
   }
+  const unavailable = snapshot.preview || state.mode !== "image" || !snapshot.zoom?.dimensions;
+  action("Fit image", { type: "fit" }, unavailable);
+  action("100%", { type: "native" }, unavailable);
+  action("Zoom in", { type: "zoom", factor: 1.25 }, unavailable);
+  action("Zoom out", { type: "zoom", factor: 0.8 }, unavailable);
   action(
     "Compare outputs",
     { type: "comparison", enabled: !comparison },

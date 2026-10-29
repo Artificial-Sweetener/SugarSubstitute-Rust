@@ -18,6 +18,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { format } from 'prettier';
 import { contractArraySchema } from './ContractArraySchema.js';
+import {
+  contractValidationModules,
+  type ContractValidationModule,
+} from './ContractValidationModules.js';
 type Schema = Record<string, unknown>;
 
 /** Narrow authored schema nodes before producing executable bindings. */
@@ -63,18 +67,22 @@ function reference(value: string): string {
 }
 
 /** Emit fail-closed validation directly from the same closed wire schema. */
-function predicate(value: unknown, expression: string): string {
+function predicate(value: unknown, expression: string, references: Set<string>): string {
   const node = record(value);
   if (node.type === 'array') {
     const array = contractArraySchema(node);
-    return `Array.isArray(${expression}) && ${expression}.length <= ${array.maximum} && ${expression}.every((item: unknown) => (${predicate(array.items, 'item')}))`;
+    return `Array.isArray(${expression}) && ${expression}.length <= ${array.maximum} && ${expression}.every((item: unknown) => (${predicate(array.items, 'item', references)}))`;
   }
-  if (typeof node.$ref === 'string') return `is${reference(node.$ref)}(${expression})`;
+  if (typeof node.$ref === 'string') {
+    const name = reference(node.$ref);
+    references.add(name);
+    return `is${name}(${expression})`;
+  }
   if (node.const !== undefined) return `${expression} === ${JSON.stringify(node.const)}`;
   if (Array.isArray(node.enum))
     return `(${node.enum.map((item: unknown) => `${expression} === ${JSON.stringify(item)}`).join(' || ')})`;
   if (Array.isArray(node.oneOf))
-    return `(${node.oneOf.map((item: unknown) => predicate(item, expression)).join(' || ')})`;
+    return `(${node.oneOf.map((item: unknown) => predicate(item, expression, references)).join(' || ')})`;
   if (node.type === 'boolean') return `typeof ${expression} === 'boolean'`;
   if (node.type === 'integer' || node.type === 'number') {
     const minimum = typeof node.minimum === 'number' ? ` && ${expression} >= ${node.minimum}` : '';
@@ -101,7 +109,7 @@ function predicate(value: unknown, expression: string): string {
   }
   if (node.type === 'object') {
     const properties = Object.entries(record(node.properties));
-    return `isRecord(${expression}) && Object.keys(${expression}).length === ${properties.length} && ${properties.map(([key, property]) => `Object.hasOwn(${expression}, ${JSON.stringify(key)}) && (${predicate(property, `${expression}[${JSON.stringify(key)}]`)})`).join(' && ')}`;
+    return `isRecord(${expression}) && Object.keys(${expression}).length === ${properties.length} && ${properties.map(([key, property]) => `Object.hasOwn(${expression}, ${JSON.stringify(key)}) && (${predicate(property, `${expression}[${JSON.stringify(key)}]`, references)})`).join(' && ')}`;
   }
   throw new Error('Unsupported contract validation vocabulary.');
 }
@@ -117,6 +125,8 @@ export interface ContractOutput {
   readonly description: string;
   /** Share a record guard when related generated schemas live in separate modules. */
   readonly recordImport?: string;
+  /** Place related validators in explicitly owned sibling modules; retain public guard exports. */
+  readonly validationModules?: readonly ContractValidationModule[];
   /** Import one separately generated union while keeping a single public root guard. */
   readonly external?: {
     readonly name: string;
@@ -157,15 +167,29 @@ export async function contractBindings(
         `/** Describe the schema-defined ${name} wire value. */\nexport type ${name} = ${binding(node)};`,
     )
     .join('\n');
-  const guards = [...definitions, [options.union, schema] as const]
-    .map(
-      ([name, node]) =>
-        `/** Validate a bounded ${name} payload before dispatch. */\nexport function is${name}(value: unknown): value is Contract.${name} { return ${predicate(node, 'value')}; }`,
-    )
-    .join('\n');
+  const guards = [...definitions, [options.union, schema] as const].map(([name, node]) => {
+    const references = new Set<string>();
+    const body = predicate(node, 'value', references);
+    return {
+      name,
+      references,
+      source: `/** Validate a bounded ${name} payload before dispatch. */\nexport function is${name}(value: unknown): value is Contract.${name} { return ${body}; }`,
+    };
+  });
+  const validationHeader = `${header}/** Generated protocol validation; edit the authoritative ${options.schema}. */\n`;
+  const validators = options.validationModules
+    ? contractValidationModules(guards, options.validationModules, {
+        ...options,
+        header: validationHeader,
+        recordGuard,
+        external: external ? { name: external.name, guard: externalGuard } : undefined,
+      })
+    : {
+        [options.validation]: `${validationHeader}import type * as Contract from '${options.importPath}';\n${externalGuard}${recordGuard}${guards.map(({ source }) => source).join('\n')}`,
+      };
   const sources = {
     [options.types]: `${header}/** Generated from ${options.schema} by ${options.generator}. */\n${externalType}${types}\n/** Describe ${options.description}. */\nexport type ${options.union} = ${binding(schema)};`,
-    [options.validation]: `${header}/** Generated protocol validation; edit the authoritative ${options.schema}. */\nimport type * as Contract from '${options.importPath}';\n${externalGuard}${recordGuard}${guards}`,
+    ...validators,
   };
   const result: Record<string, string> = {};
   for (const [file, source] of Object.entries(sources))

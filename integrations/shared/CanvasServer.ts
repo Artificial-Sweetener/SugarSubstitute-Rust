@@ -98,6 +98,7 @@ export class CanvasServer {
       value.type !== 'surface.geometry' &&
       value.type !== 'surface.select' &&
       value.type !== 'surface.commit' &&
+      value.type !== 'surface.viewport.request' &&
       value.type !== 'surface.release'
     )
       return false;

@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Route deliberate, local image gestures without taking host or browser shortcuts. */
-/** Own pointer capture and keyboard/wheel listeners for one browser image viewport. */
+/** Own pointer capture and wheel listeners for one browser image viewport. */
 export class BrowserCanvasInput {
     element;
     gestures;
@@ -28,9 +28,6 @@ export class BrowserCanvasInput {
     constructor(element, gestures) {
         this.element = element;
         this.gestures = gestures;
-        element.tabIndex = 0;
-        element.setAttribute('role', 'region');
-        element.setAttribute('aria-label', 'Output image viewer');
         element.dataset.captureWheel = 'true';
         this.#listen('pointerdown', (event) => this.#down(event));
         this.#listen('pointermove', (event) => this.#move(event));
@@ -43,11 +40,13 @@ export class BrowserCanvasInput {
                 return;
             event.preventDefault();
             event.stopPropagation();
-            this.gestures.doubleClick(point);
+            if (this.gestures.navigable())
+                this.gestures.doubleClick(point);
         });
         this.#listen('wheel', (event) => {
             event.stopPropagation();
-            if (!this.#engaged ||
+            if ((!this.#engaged &&
+                (this.gestures.navigable() || document.activeElement !== this.element)) ||
                 event.ctrlKey ||
                 event.metaKey ||
                 event.altKey ||
@@ -56,15 +55,15 @@ export class BrowserCanvasInput {
                 ![0, 1, 2].includes(event.deltaMode))
                 return;
             event.preventDefault();
-            this.gestures.wheel(event.deltaY, wheelUnits(event.deltaMode), this.#point(event));
+            if (this.gestures.navigable())
+                this.gestures.wheel(event.deltaY, wheelUnits(event.deltaMode), this.#point(event));
         }, { passive: false });
-        this.#listen('keydown', (event) => this.#key(event));
         this.#listen('focus', () => {
             this.#engaged = true;
         });
         this.#listen('blur', () => this.cancel());
         this.#listen('dragstart', (event) => {
-            if (!this.gestures.outbound?.(event))
+            if (!this.gestures.navigable() || !this.gestures.outbound?.(event))
                 event.preventDefault();
         });
     }
@@ -96,11 +95,16 @@ export class BrowserCanvasInput {
         if (this.#disposed ||
             event.button !== 0 ||
             this.#points.size >= 2 ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.altKey ||
-            event.shiftKey ||
             !this.gestures.contains(point))
+            return;
+        if (!this.gestures.navigable()) {
+            this.#engaged = true;
+            this.element.focus({ preventScroll: true });
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
             return;
         this.#engaged = true;
         this.element.focus({ preventScroll: true });
@@ -126,6 +130,10 @@ export class BrowserCanvasInput {
             return;
         event.preventDefault();
         event.stopPropagation();
+        if (!this.gestures.navigable()) {
+            this.cancel();
+            return;
+        }
         const before = [...this.#points.values()];
         const point = this.#point(event);
         this.#points.set(event.pointerId, point);
@@ -161,7 +169,11 @@ export class BrowserCanvasInput {
             this.element.classList.remove('sc-output-dragging');
         const start = this.#tapStart;
         this.#tapStart = null;
-        if (!completed || !start || event.pointerType !== 'touch' || event.timeStamp - start.time > 300)
+        if (!this.gestures.navigable() ||
+            !completed ||
+            !start ||
+            event.pointerType !== 'touch' ||
+            event.timeStamp - start.time > 300)
             return;
         const point = this.#point(event);
         if (distance(start.point, point) > 8)
@@ -173,32 +185,6 @@ export class BrowserCanvasInput {
         }
         else
             this.#lastTap = { point, time: event.timeStamp };
-    }
-    /** Consume only viewer keys from its own focus, leaving text and modified shortcuts intact. */
-    #key(event) {
-        if (event.target !== this.element || event.ctrlKey || event.metaKey || event.altKey)
-            return;
-        const delta = {
-            ArrowLeft: { x: 40, y: 0 },
-            ArrowRight: { x: -40, y: 0 },
-            ArrowUp: { x: 0, y: 40 },
-            ArrowDown: { x: 0, y: -40 },
-        };
-        const pan = delta[event.key];
-        if (event.key === 'Escape')
-            this.cancel();
-        else if (pan && !event.shiftKey)
-            this.gestures.pan(pan);
-        else if (event.key === '+' || event.key === '=')
-            this.gestures.zoom(1.25);
-        else if (event.key === '-')
-            this.gestures.zoom(0.8);
-        else if (event.key === '0' && !event.shiftKey)
-            this.gestures.fit();
-        else
-            return;
-        event.preventDefault();
-        event.stopPropagation();
     }
     /** Convert input to viewport CSS coordinates without depending on graph transforms. */
     #point(event) {

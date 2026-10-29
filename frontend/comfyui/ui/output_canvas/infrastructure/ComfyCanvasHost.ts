@@ -27,6 +27,7 @@ import { CanvasSessionCoordinator } from '../application/CanvasSessionCoordinato
 import { windowId } from '../domain/CanvasIdentity.js';
 import { isRecord } from '../../types/common.js';
 import { NativeCanvasAttachment } from './NativeCanvasAttachment.js';
+import { nativeCanvasRendererKey } from './NativeCanvasCapabilities.js';
 import type { CanvasAttachmentOptions } from './CanvasAttachmentOptions.js';
 import type { ComfyBrowserCanvasHost } from './ComfyBrowserCanvasHost.js';
 import { ComfyCanvasSourceInventory } from './ComfyCanvasSourceInventory.js';
@@ -172,7 +173,7 @@ export class ComfyCanvasHost {
       coordinator: this.#coordinator,
       element: () => this.#workspace.canvas,
       renderer: () =>
-        `${resolveComfyRendererMode(app, null, document)}:${nativePresenter() ? 'native' : 'browser'}`,
+        `${resolveComfyRendererMode(app, null, document)}:${nativePresenter() ? nativeCanvasRendererKey(execution.canvases.surfaceHost('embedded-document')) : 'browser'}`,
       report,
       mount: (element, address, _catalog, accepts, acceptsPreparation) => {
         const shared: CanvasAttachmentOptions = {

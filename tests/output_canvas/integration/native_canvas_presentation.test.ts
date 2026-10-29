@@ -156,6 +156,7 @@ function fixture() {
     accepts: () => views.accepts(address),
     visible: (value) => visible.push(value),
     status: () => {},
+    viewport: () => {},
     report: (error) => errors.push(error),
   });
   return {

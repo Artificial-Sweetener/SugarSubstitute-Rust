@@ -34,7 +34,6 @@ interface ViewInspection {
   linked: boolean;
   shared: CanvasInspection | null;
   readonly individual: Map<string, CanvasInspection>;
-  readonly previews: Map<string, { readonly lane: string; readonly inspection: CanvasInspection }>;
 }
 
 export interface CanvasInspectionTarget {
@@ -58,14 +57,12 @@ export class CanvasInspectionStore {
         linked: true,
         shared: null,
         individual: new Map(),
-        previews: new Map(),
       };
       this.#views.set(view, record);
     }
     const valid = new Set(slots.map(selectionKey));
     for (const slot of record.individual.keys())
       if (!valid.has(slot)) record.individual.delete(slot);
-    for (const slot of record.previews.keys()) if (!valid.has(slot)) record.previews.delete(slot);
   }
 
   /** Retire previous-Run cameras only when a newer Run's pixels are actually presented. */
@@ -75,7 +72,6 @@ export class CanvasInspectionStore {
     record.presentedRun = runOrder;
     record.shared = null;
     record.individual.clear();
-    record.previews.clear();
     return true;
   }
 
@@ -92,7 +88,7 @@ export class CanvasInspectionStore {
     record.linked = linked;
   }
 
-  /** Save preview inspection within its composition and final inspection within its link group. */
+  /** Save final inspection without allowing preview presentation to replace it. */
   capture(
     view: CanvasViewId,
     slot: CanvasSelection,
@@ -101,10 +97,9 @@ export class CanvasInspectionStore {
     previewLane: string | null,
   ): void {
     const record = this.#require(view);
+    if (previewLane !== null) return;
     const inspection = captureCanvasInspection(camera, geometry);
-    if (previewLane !== null)
-      record.previews.set(selectionKey(slot), { lane: previewLane, inspection });
-    else if (record.linked) record.shared = inspection;
+    if (record.linked) record.shared = inspection;
     else record.individual.set(selectionKey(slot), inspection);
   }
 
@@ -116,15 +111,8 @@ export class CanvasInspectionStore {
     previewLane: string | null,
   ): CanvasCamera {
     const record = this.#require(view);
-    const preview = record.previews.get(selectionKey(slot));
-    const inspection =
-      previewLane !== null
-        ? preview?.lane === previewLane
-          ? preview.inspection
-          : null
-        : record.linked
-          ? record.shared
-          : record.individual.get(selectionKey(slot));
+    if (previewLane !== null) return centeredCanvasCamera(geometry);
+    const inspection = record.linked ? record.shared : record.individual.get(selectionKey(slot));
     return inspection
       ? projectCanvasInspection(inspection, geometry)
       : centeredCanvasCamera(geometry);

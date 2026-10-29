@@ -16,10 +16,20 @@
 /** Dispatch an optional surface operation without coupling it to editable document layers. */
 
 import type { CanvasContext, CanvasMessage } from '../contracts/CanvasProtocol.generated.js';
-import type { CanvasSurfaceReply } from '../contracts/CanvasSurfaceProtocol.generated.js';
+import type {
+  CanvasSurfaceReply,
+  CanvasSurfaceViewportReply,
+} from '../contracts/CanvasSurfaceProtocol.generated.js';
 import type { CanvasSurfaceHost, CanvasSurfaceResult } from '../contracts/CanvasSurface.js';
 import type { CanvasCancellationSource } from '../contracts/CanvasHost.js';
-import { isCanvasSurfaceReply } from './CanvasSurfaceValidation.generated.js';
+import {
+  isCanvasSurfaceReply,
+  isCanvasSurfaceViewportReply,
+} from './CanvasSurfaceValidation.generated.js';
+import {
+  supportsCanvasSurfaceViewport,
+  snapshotCanvasSurfaceViewport,
+} from './CanvasSurfaceViewport.js';
 
 /** The host receives only messages admitted by the shared canvas session and replay owner. */
 export type CanvasSurfaceRequest = Extract<
@@ -30,6 +40,7 @@ export type CanvasSurfaceRequest = Extract<
       | 'surface.geometry'
       | 'surface.select'
       | 'surface.commit'
+      | 'surface.viewport.request'
       | 'surface.release';
   }
 >;
@@ -52,6 +63,8 @@ export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurf
   if (request.type === 'surface.select') {
     return Object.freeze({ ...request, address, file: Object.freeze({ ...request.file }) });
   }
+  if (request.type === 'surface.viewport.request')
+    return Object.freeze({ ...request, address, command: Object.freeze({ ...request.command }) });
   return Object.freeze({ ...request, address });
 }
 
@@ -62,6 +75,7 @@ export function isCanvasSurfaceRequest(message: CanvasMessage): message is Canva
     message.type === 'surface.geometry' ||
     message.type === 'surface.select' ||
     message.type === 'surface.commit' ||
+    message.type === 'surface.viewport.request' ||
     message.type === 'surface.release'
   );
 }
@@ -75,7 +89,7 @@ export async function dispatchCanvasSurface(
     context(): Promise<CanvasContext>;
     report(error: unknown): void;
   },
-): Promise<CanvasSurfaceReply> {
+): Promise<CanvasSurfaceReply | CanvasSurfaceViewportReply> {
   const { protocol, version, session, requestId, ...command } = request;
   const envelope = {
     protocol,
@@ -91,7 +105,9 @@ export async function dispatchCanvasSurface(
     const context = port.surface && !cancellation.cancelled() ? await port.context() : null;
     result = cancellation.cancelled()
       ? { status: 'cancelled', message: 'Canvas surface request cancelled.' }
-      : !port.surface || !context?.canvas.capabilities.displayOutput
+      : !port.surface ||
+          !context?.canvas.capabilities.displayOutput ||
+          !supportsCanvasSurfaceViewport(port.surface.capabilities, command)
         ? { status: 'unavailable', message: 'This canvas does not support an output surface.' }
         : await port.surface.execute(command, cancellation);
     if (cancellation.cancelled())
@@ -104,11 +120,18 @@ export async function dispatchCanvasSurface(
       result = { status: 'error', message: 'The canvas surface operation failed.' };
     }
   }
-  const reply = { ...envelope, ...result };
+  const reply = {
+    ...envelope,
+    ...result,
+    ...('viewport' in result ? { type: 'surface.viewport.reply' as const } : {}),
+  };
+  if (request.type === 'surface.viewport.request' && isCanvasSurfaceViewportReply(reply))
+    return { ...reply, viewport: snapshotCanvasSurfaceViewport(reply.viewport) };
   if (
     !isCanvasSurfaceReply(reply) ||
     (reply.status === 'ready' && request.type !== 'surface.prepare') ||
-    (reply.status === 'applied' && request.type === 'surface.prepare')
+    (reply.status === 'applied' &&
+      (request.type === 'surface.prepare' || request.type === 'surface.viewport.request'))
   ) {
     port.report(new Error('Canvas surface returned an invalid result.'));
     return {

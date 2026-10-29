@@ -32,7 +32,7 @@ export interface CanvasSnapshotPresentation {
   readonly preview: boolean;
   readonly resource: CanvasResourceStatus;
   readonly secondaryResource: CanvasResourceStatus | null;
-  readonly zoom: CanvasZoomStatus;
+  readonly zoom: CanvasZoomStatus | null;
 }
 
 /** Preserve the same workflow and selection authority for every presentation backend. */
@@ -63,6 +63,6 @@ export function canvasViewSnapshot(
     runStatus: catalog.result.runStatus,
     connected,
     mediaActions,
-    zoom: Object.freeze(presentation.zoom),
+    zoom: presentation.zoom ? Object.freeze(presentation.zoom) : null,
   });
 }
