@@ -9,7 +9,7 @@ pub(super) mod bridge;
 mod delivery;
 pub(super) mod ingress;
 mod replies;
-use crate::main_native_delivery::{NativeDelivery, OwnedDelivery};
+use crate::main_native_delivery::{DeliveryCorrelation, NativeDelivery, OwnedDelivery};
 pub(super) use replies::Replies;
 
 impl MainActor {
@@ -26,6 +26,22 @@ impl MainActor {
     pub(crate) fn send_surface(&mut self, reply: crate::SurfaceReply) -> Result<(), DesktopError> {
         self.admit_canvas_reply(reply.identity())?;
         self.canvas_replies.push(NativeDelivery::Surface(reply))
+    }
+
+    /// Retain a full asynchronous snapshot until native capacity returns; stale inputs retire here.
+    pub(crate) fn send_surface_presentation(
+        &mut self,
+        change: crate::SurfacePresentation,
+    ) -> Result<(), DesktopError> {
+        if change.identity() != self.identity()
+            || self.admission.closing()
+            || !self.revealed
+            || self.readiness.as_ref().and_then(MainReadiness::panel_context).is_none()
+        {
+            return Ok(());
+        }
+        self.admit_canvas_reply(change.identity())?;
+        self.canvas_replies.push(NativeDelivery::Presentation(change))
     }
 
     /// Deliver a correlated context reply to the same current document and UI apartment.
@@ -68,6 +84,13 @@ impl MainActor {
 
     /// Submit one retained response when its current document has browser capacity.
     pub(super) fn progress_canvas_reply(&mut self) -> Result<bool, DesktopError> {
+        let current = (self.revealed
+            && !self.admission.closing()
+            && self.readiness.as_ref().and_then(MainReadiness::panel_context).is_some())
+        .then(|| self.identity());
+        if self.canvas_replies.retire_presentations(current)? {
+            return Ok(true);
+        }
         let receivers = self
             .receivers
             .as_ref()
@@ -78,6 +101,14 @@ impl MainActor {
         let revealed = self.revealed;
         let transport = &mut self.panel_transport;
         self.canvas_replies.progress(admitted, |delivery| {
+            if delivery.lane().is_none()
+                && (delivery.identity() != admission.identity()
+                    || admission.closing()
+                    || !revealed
+                    || readiness.as_ref().and_then(MainReadiness::panel_context).is_none())
+            {
+                return Ok(());
+            }
             admission.frontend(delivery.identity())?;
             if !revealed {
                 return Err(DesktopError::message("send_panel", "main is not revealed"));
@@ -86,12 +117,20 @@ impl MainActor {
                 readiness.as_ref().and_then(MainReadiness::panel_context).ok_or_else(|| {
                     DesktopError::message("send_panel", "current top document is absent")
                 })?;
-            let ticket = transport.begin_delivery(&delivery)?;
-            let parameters = match delivery.payload() {
-                Some(payload) => delivery::encode_owned(context, payload, ticket)?,
-                None => delivery::transport(context, "a", delivery.lane(), ticket)?,
+            let (parameters, correlation) = if let Some(lane) = delivery.lane() {
+                let ticket = transport.begin_delivery(&delivery)?;
+                let parameters = match delivery.payload() {
+                    Some(payload) => delivery::encode_owned(context, payload, ticket)?,
+                    None => delivery::transport(context, "a", lane, ticket)?,
+                };
+                (parameters, DeliveryCorrelation::Transport(ticket))
+            } else {
+                let payload = delivery.payload().ok_or_else(|| {
+                    DesktopError::message("send_panel", "notification payload is absent")
+                })?;
+                (delivery::encode(context, payload)?, DeliveryCorrelation::Presentation)
             };
-            receivers.deliver(&parameters, OwnedDelivery { context, ticket, delivery })
+            receivers.deliver(&parameters, OwnedDelivery { context, correlation, delivery })
         })
     }
 

@@ -6,7 +6,9 @@ mod attachment;
 mod capabilities;
 mod ingress;
 mod navigation;
+mod operations;
 mod presentation;
+mod preview;
 #[cfg(test)]
 #[path = "surface/replies_tests.rs"]
 mod replies_tests;
@@ -34,7 +36,6 @@ use sugarsubstitute_desktop::{
     },
 };
 use sugarsubstitute_image_io::CacheReuse;
-#[cfg(test)]
 use sugarsubstitute_image_io::ImageSource;
 
 struct Context {
@@ -52,6 +53,10 @@ struct Binding {
     placement: Option<CanvasPlacement>,
     allocation: Option<WebViewAllocation>,
     selected: bool,
+    selection_revision: u64,
+    source_intent_revision: Option<u64>,
+    presented_selection_revision: u64,
+    presented_viewport: Option<sugarsubstitute_contracts::canvas_surface::CanvasViewportState>,
     committed: bool,
     presented: Option<MainCanvasRetention>,
 }
@@ -64,6 +69,7 @@ enum PendingKind {
     Geometry,
     Hide,
     Commit,
+    EmptyCommit,
     Viewport { intent: crate::native_canvas::session::CameraIntent, commanded: bool },
 }
 
@@ -85,6 +91,7 @@ pub(super) struct NativeSurface {
     pending: Option<Pending>,
     contexts: [Option<Context>; 4],
     replies: [Option<DesktopStartupCommand>; 8],
+    preview: preview::Preview,
     closed: bool,
 }
 
@@ -101,6 +108,7 @@ impl NativeSurface {
             pending: None,
             contexts: std::array::from_fn(|_| None),
             replies: std::array::from_fn(|_| None),
+            preview: preview::Preview::default(),
             closed: false,
         }
     }
@@ -216,7 +224,19 @@ impl NativeSurface {
                 return self.cancel(identity, request_id, claim, Some(session));
             }
             CanvasSurfaceMessage::Request(request) => request,
+            CanvasSurfaceMessage::Presentation(request) => {
+                return self.watch_presentation(identity, request, claim, session);
+            }
         };
+        if matches!(
+            request.operation(),
+            CanvasSurfaceOperation::PreviewBegin(_)
+                | CanvasSurfaceOperation::PreviewChunk(_)
+                | CanvasSurfaceOperation::PreviewEnd(_)
+                | CanvasSurfaceOperation::PreviewWithdraw(_)
+        ) {
+            return self.receive_preview(identity, request, claim, session);
+        }
         if self.pending.is_some() || self.restoring {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
@@ -237,145 +257,7 @@ impl NativeSurface {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Stale, claim);
         }
         binding.revision = request.revision();
-        match operation {
-            CanvasSurfaceOperation::Prepare => Err("Canvas preparation was not admitted".into()),
-            CanvasSurfaceOperation::Release => self.release(identity, request, claim, session),
-            CanvasSurfaceOperation::Viewport(command) => {
-                self.viewport(identity, request, claim, command, session)
-            }
-            CanvasSurfaceOperation::Geometry(geometry) => {
-                let Some(allocation) = allocation else {
-                    return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
-                };
-                let projected = match placement(&geometry, allocation) {
-                    Ok(value) => value,
-                    Err(_) => {
-                        return self.reply(
-                            identity,
-                            &request,
-                            CanvasSurfaceReplyStatus::Error,
-                            claim,
-                        );
-                    }
-                };
-                let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
-                let viewport = match projected {
-                    Some(projected) => Some(projected.viewport),
-                    None if !binding.committed => match preparation_viewport(&geometry, allocation)
-                    {
-                        Ok(viewport) if viewport.width > 0 && viewport.height > 0 => Some(viewport),
-                        Ok(_) => None,
-                        Err(_) => {
-                            return self.reply(
-                                identity,
-                                &request,
-                                CanvasSurfaceReplyStatus::Error,
-                                claim,
-                            );
-                        }
-                    },
-                    None => None,
-                };
-                binding.placement = projected;
-                binding.allocation = Some(allocation);
-                if let Some(viewport) = viewport {
-                    session.resize(Extent::new(viewport.width, viewport.height)?)?;
-                    session.input(Input::Drawable(true))?;
-                } else {
-                    session.input(Input::Drawable(false))?;
-                }
-                if binding.committed && projected.is_none() {
-                    self.pending =
-                        Some(Pending { identity, request, claim, kind: PendingKind::Hide });
-                    return Ok(());
-                }
-                let wait = binding.committed
-                    && binding.selected
-                    && projected.is_some()
-                    && binding.presented.is_none_or(|previous| {
-                        Some(previous.placement) != projected || previous.allocation != allocation
-                    });
-                if wait {
-                    self.pending =
-                        Some(Pending { identity, request, claim, kind: PendingKind::Geometry });
-                    Ok(())
-                } else {
-                    self.reply(identity, &request, CanvasSurfaceReplyStatus::Applied, claim)
-                }
-            }
-            CanvasSurfaceOperation::Select { file, .. } => {
-                let target = match ComfyViewTarget::new(&file) {
-                    Ok(target) => target,
-                    Err(_) => {
-                        return self.reply(
-                            identity,
-                            &request,
-                            CanvasSurfaceReplyStatus::Error,
-                            claim,
-                        );
-                    }
-                };
-                if file.storage() != CanvasFileStorage::Output
-                    || !file.filename().to_ascii_lowercase().ends_with(".png")
-                {
-                    return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
-                }
-                #[cfg(test)]
-                if let Some(output) = &self.fixture_output {
-                    let mut components = Path::new(file.filename()).components();
-                    let leaf = matches!(components.next(), Some(Component::Normal(_)))
-                        && components.next().is_none();
-                    if !file.subfolder().is_empty() || !leaf {
-                        return self.reply(
-                            identity,
-                            &request,
-                            CanvasSurfaceReplyStatus::Error,
-                            claim,
-                        );
-                    }
-                    let mut source = Some(ImageSource::file(output.join(file.filename())));
-                    if !session.offer_source(&mut source, CacheReuse::Compatible, None)? {
-                        return self.reply(
-                            identity,
-                            &request,
-                            CanvasSurfaceReplyStatus::Unavailable,
-                            claim,
-                        );
-                    }
-                } else if !self.offer_comfy(identity, target, session)? {
-                    return self.reply(
-                        identity,
-                        &request,
-                        CanvasSurfaceReplyStatus::Unavailable,
-                        claim,
-                    );
-                }
-                #[cfg(not(test))]
-                if !self.offer_comfy(identity, target, session)? {
-                    return self.reply(
-                        identity,
-                        &request,
-                        CanvasSurfaceReplyStatus::Unavailable,
-                        claim,
-                    );
-                }
-                session.request_host_graphics()?;
-                self.binding.as_mut().ok_or("Canvas binding disappeared")?.selected = true;
-                self.pending =
-                    Some(Pending { identity, request, claim, kind: PendingKind::Select });
-                Ok(())
-            }
-            CanvasSurfaceOperation::Commit => {
-                let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
-                if !binding.selected || binding.placement.is_none() {
-                    return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
-                }
-                binding.committed = true;
-                self.pending =
-                    Some(Pending { identity, request, claim, kind: PendingKind::Commit });
-                Ok(())
-            }
-        }
+        self.apply_operation(identity, request, allocation, claim, operation, session)
     }
 
     fn offer_comfy(
@@ -441,18 +323,27 @@ impl NativeSurface {
 
     /// Transfer the oldest reply with its native admission, keeping vacant slots at the tail.
     pub(super) fn take_command(&mut self) -> Option<DesktopStartupCommand> {
-        let command = self.replies[0].take()?;
-        self.replies.rotate_left(1);
-        Some(command)
+        if let Some(command) = self.replies[0].take() {
+            self.replies.rotate_left(1);
+            Some(command)
+        } else {
+            self.preview.notification.take()
+        }
     }
 
     /// Fence surface operations when the application starts closing.
-    pub(super) fn close(&mut self) {
+    pub(super) fn close(&mut self, session: Option<&mut Session>) -> Result<(), Box<dyn Error>> {
+        if let Some(session) = session {
+            self.fence_previews(session)?;
+        }
         self.closed = true;
         self.binding = None;
         self.retained = None;
         self.pending = None;
         self.contexts = std::array::from_fn(|_| None);
         self.replies = std::array::from_fn(|_| None);
+        self.preview.close_watch();
+        self.preview.close_correlations();
+        Ok(())
     }
 }

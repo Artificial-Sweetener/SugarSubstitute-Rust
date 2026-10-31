@@ -17,6 +17,8 @@ pub enum ImportError {
     Io(io::Error),
     /// Original PNG decoding or integrity error.
     Png(png::DecodingError),
+    /// Original JPEG decoding or integrity error.
+    Jpeg(zune_jpeg::errors::DecodeErrors),
     /// Original image, allocation or execution-admission error.
     Image(ImageError),
 }
@@ -30,6 +32,7 @@ impl fmt::Display for ImportError {
             }
             Self::Io(cause) => write!(formatter, "Image input storage: {cause}"),
             Self::Png(cause) => write!(formatter, "PNG decoding: {cause}"),
+            Self::Jpeg(cause) => write!(formatter, "JPEG decoding: {cause}"),
             Self::Image(cause) => write!(formatter, "Image import: {cause}"),
         }
     }
@@ -41,6 +44,7 @@ impl Error for ImportError {
             Self::Corrupt(cause) => Some(cause),
             Self::Io(cause) => Some(cause),
             Self::Png(cause) => Some(cause),
+            Self::Jpeg(cause) => Some(cause),
             Self::Image(cause) => Some(cause),
         }
     }
@@ -53,6 +57,11 @@ impl From<io::Error> for ImportError {
 impl From<png::DecodingError> for ImportError {
     fn from(cause: png::DecodingError) -> Self {
         Self::Png(cause)
+    }
+}
+impl From<zune_jpeg::errors::DecodeErrors> for ImportError {
+    fn from(cause: zune_jpeg::errors::DecodeErrors) -> Self {
+        Self::Jpeg(cause)
     }
 }
 impl From<ImageError> for ImportError {

@@ -5,6 +5,8 @@ use super::{coverage::BackingTier, work_error::WorkError};
 mod cpu;
 mod display;
 mod gpu;
+#[cfg(feature = "native-composition")]
+pub(super) mod preview;
 pub(super) use display::{
     CpuUnderlay, Draw, DrawInput, DrawPixels, DrawSource, GpuUnderlay, UnderlayEvidence,
 };
@@ -185,7 +187,7 @@ pub(super) fn load(
 ) -> Result<Scene, WorkError> {
     let now = sugarsubstitute_supervision::cache::utc_seconds()?;
     let raster =
-        original.import_png(resources.cache.clone(), reuse, &resources.memory, now, context)?;
+        original.import_image(resources.cache.clone(), reuse, &resources.memory, now, context)?;
     let source = SharedRaster::new(raster, &resources.memory)?;
     let descriptor = source.descriptor();
     let extent = descriptor.layout().extent();

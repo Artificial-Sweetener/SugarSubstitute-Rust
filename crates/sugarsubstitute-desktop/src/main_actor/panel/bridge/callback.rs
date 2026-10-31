@@ -140,7 +140,7 @@ fn decode(action: Action, payload: &str) -> Result<Option<String>, DesktopError>
     struct Script {
         identifier: String,
     }
-    if action == Action::AddScript {
+    if matches!(action, Action::AddScript(_)) {
         let value: Script = serde_json::from_str(payload)
             .map_err(|cause| DesktopError::new("decode_panel_script", cause))?;
         if value.identifier.is_empty()
@@ -163,15 +163,15 @@ mod tests {
     #[test]
     fn registration_completion_keeps_only_a_bounded_exact_script_identifier() {
         assert_eq!(
-            decode(Action::AddScript, r#"{"identifier":"7"}"#).ok().flatten().as_deref(),
+            decode(Action::AddScript(0), r#"{"identifier":"7"}"#).ok().flatten().as_deref(),
             Some("7")
         );
-        assert!(decode(Action::AddScript, r#"{"identifier":""}"#).is_err());
-        assert!(decode(Action::AddScript, r#"{"identifier":"7","extra":true}"#).is_err());
+        assert!(decode(Action::AddScript(0), r#"{"identifier":""}"#).is_err());
+        assert!(decode(Action::AddScript(0), r#"{"identifier":"7","extra":true}"#).is_err());
         assert!(decode(Action::AddBinding, "{}").is_ok());
         assert!(decode(Action::RemoveBinding, r#"{"extra":true}"#).is_err());
         assert!(
-            decode(Action::AddScript, &format!(r#"{{"identifier":"{}"}}"#, "x".repeat(129)))
+            decode(Action::AddScript(0), &format!(r#"{{"identifier":"{}"}}"#, "x".repeat(129)))
                 .is_err()
         );
     }

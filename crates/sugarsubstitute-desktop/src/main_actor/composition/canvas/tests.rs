@@ -92,7 +92,7 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     let viewport = PhysicalRect { x: 8, y: 12, width: 64, height: 48 };
     let placement = CanvasPlacement { viewport, clip: viewport };
     assert_eq!(canvas.present(&frame, placement)?, Some(stamp));
-    assert_eq!(canvas.last, Some((stamp, placement)));
+    assert!(canvas.acknowledgement.retains(stamp, placement));
     assert!(canvas.retains(stamp, placement));
     assert!(!canvas.has_retirements());
     assert!(!canvas.retains(FrameStamp { generation: Generation::new(2)?, ..stamp }, placement));
@@ -106,7 +106,7 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     let moved = CanvasPlacement { viewport: moved_viewport, clip: moved_viewport };
     assert_eq!(canvas.present(&acknowledged, moved)?, Some(stamp));
     assert_eq!(canvas.present(&acknowledged, moved)?, None);
-    assert_eq!(canvas.last, Some((stamp, moved)));
+    assert!(canvas.acknowledgement.retains(stamp, moved));
 
     let resized = Extent::new(80, 60)?;
     let resized_pixels = vec![0xff65_4321; resized.pixels() as usize];
@@ -128,7 +128,7 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     assert_eq!(canvas.present(&resized_frame, resized_placement)?, Some(resized_stamp));
     assert_eq!(canvas.active.as_ref().map(Allocation::extent), Some(resized));
     assert!(canvas.present(&acknowledged, placement).is_err());
-    assert_eq!(canvas.last, Some((resized_stamp, resized_placement)));
+    assert!(canvas.acknowledgement.retains(resized_stamp, resized_placement));
 
     let probe_bytes = 16 * 1024 * 1024 - 8 * 1024 * 1024 - (80 * 60 * 12 + 1024 * 1024);
     assert!(canvas.lease.as_ref().ok_or("Canvas lease absent")?.claim(probe_bytes).is_err());
@@ -176,11 +176,11 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
             )
             .is_err()
     );
-    assert_eq!(canvas.last, Some((stamp, placement)));
+    assert!(canvas.acknowledgement.retains(stamp, placement));
     assert_eq!(canvas.active.as_ref().map(Allocation::extent), Some(extent));
     assert!(canvas.pending.is_none());
     assert!(!canvas.hide()?);
-    assert!(canvas.last.is_none());
+    assert!(!canvas.acknowledgement.retains(stamp, placement));
     assert!(!canvas.retains(stamp, placement));
     assert!(canvas.active.is_none());
     assert!(canvas.has_retirements());

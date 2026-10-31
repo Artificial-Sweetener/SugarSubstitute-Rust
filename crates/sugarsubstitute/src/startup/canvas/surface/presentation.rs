@@ -12,6 +12,16 @@ impl NativeSurface {
         session: &'a Session,
     ) -> sugarsubstitute_desktop::canvas::MainCanvasPresentation<'a> {
         use sugarsubstitute_desktop::canvas::MainCanvasPresentation;
+        if self.preview_restore_requires_hide(session) {
+            return MainCanvasPresentation::Hide;
+        }
+        if self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| matches!(pending.kind, PendingKind::EmptyCommit))
+        {
+            return MainCanvasPresentation::Hide;
+        }
         if let Some(frame) = self.frame(session) {
             return MainCanvasPresentation::Frame(frame);
         }
@@ -39,6 +49,7 @@ impl NativeSurface {
         &mut self,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
+        self.poll_previews(session)?;
         if self.closed {
             return Ok(());
         }
@@ -62,7 +73,10 @@ impl NativeSurface {
             );
         }
         if matches!(pending.kind, PendingKind::Select)
-            && self.binding.as_ref().is_some_and(|binding| !binding.committed)
+            && self.binding.as_ref().is_some_and(|binding| {
+                !binding.committed
+                    && binding.source_intent_revision == Some(session.source_intent_revision())
+            })
             && session.selected_cpu_frame().is_some()
             && session.host_graphics().is_some()
         {
@@ -93,7 +107,9 @@ impl NativeSurface {
         } else {
             self.binding.as_ref()?
         };
-        if !binding.selected || !binding.committed {
+        if (!binding.selected && !self.has_preview_candidate() && !self.has_shown_preview())
+            || !binding.committed
+        {
             return None;
         }
         let (frame, memory) = session.selected_cpu_frame()?;
@@ -116,14 +132,21 @@ impl NativeSurface {
         if self.pending.as_ref().is_some_and(|pending| matches!(pending.kind, PendingKind::Hide)) {
             return Err("Native canvas presented while a hide is pending".into());
         }
-        let (frame, _) =
-            session.selected_cpu_frame().ok_or("Selected canvas frame is unavailable")?;
-        if frame.target != target {
-            return Err("Native canvas acknowledged a stale frame".into());
-        }
-        if frame.pending {
+        if session.preview_frame_acknowledgeable(target) {
             session.did_present_cpu(target)?;
+        } else {
+            let (frame, _) =
+                session.selected_cpu_frame().ok_or("Selected canvas frame is unavailable")?;
+            if frame.target != target {
+                return Err("Native canvas acknowledged a stale frame".into());
+            }
+            if frame.pending {
+                session.did_present_cpu(target)?;
+            }
         }
+        let preview = self.is_preview_frame(target, session);
+        let observed = Self::observed_viewport(session, preview)?;
+        let accepted = session.accepted_camera();
         let preparing = self
             .pending
             .as_ref()
@@ -141,15 +164,27 @@ impl NativeSurface {
             placement: binding.placement.ok_or("Canvas placement disappeared")?,
             allocation: binding.allocation.ok_or("Canvas allocation disappeared")?,
         });
+        let final_selected = !preview
+            && accepted.is_some_and(|camera| {
+                Some(camera.source_revision) == binding.source_intent_revision
+            });
+        if final_selected {
+            binding.presented_selection_revision = binding.selection_revision;
+            binding.presented_viewport = observed;
+        }
         if promoting {
             self.retained = None;
         }
+        self.preview_presented(target, session)?;
         let viewport = self
             .pending
             .as_ref()
             .is_some_and(|pending| matches!(pending.kind, PendingKind::Viewport { .. }));
         if !preparing
             && !viewport
+            && !self.pending.as_ref().is_some_and(|pending| {
+                matches!(pending.kind, PendingKind::Select) && !final_selected
+            })
             && let Some(pending) = self.pending.take()
         {
             self.reply(
@@ -166,13 +201,34 @@ impl NativeSurface {
     pub(in crate::startup::canvas) fn hidden(
         &mut self,
         identity: MainIdentity,
+        session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
+        if !self.binding.as_ref().is_some_and(|binding| binding.identity == identity) {
+            return Ok(());
+        }
         if let Some(binding) = &mut self.binding
             && binding.identity == identity
         {
             binding.presented = None;
+            binding.presented_viewport = None;
         }
+        self.preview_hidden(session)?;
         let Some(pending) = self.pending.as_ref() else { return Ok(()) };
+        if pending.identity == identity && matches!(pending.kind, PendingKind::EmptyCommit) {
+            let binding = self.binding.as_mut().ok_or("Empty canvas binding disappeared")?;
+            if let Some(token) = binding.document {
+                session.promote_empty_document(token)?;
+                binding.document = None;
+            }
+            self.retained = None;
+            let pending = self.pending.take().ok_or("Empty commit disappeared")?;
+            return self.reply(
+                pending.identity,
+                &pending.request,
+                CanvasSurfaceReplyStatus::Applied,
+                pending.claim,
+            );
+        }
         if pending.identity != identity || !matches!(pending.kind, PendingKind::Hide) {
             return Ok(());
         }

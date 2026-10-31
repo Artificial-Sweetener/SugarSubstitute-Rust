@@ -276,3 +276,6 @@ fn overload_is_explicit_and_close_releases_every_retained_reply() -> Result<(), 
     assert!(lease.claim((CAPACITY as u64 + 1) * SurfaceReply::STORAGE_BYTES).is_ok());
     Ok(())
 }
+
+#[path = "replies_presentation_tests.rs"]
+mod presentation;

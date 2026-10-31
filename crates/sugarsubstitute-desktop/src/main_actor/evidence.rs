@@ -106,7 +106,19 @@ impl MainActor {
                     "native context identity changed",
                 ));
             }
-            self.panel_transport.completed(completed.ticket, completed.delivery)?;
+            match completed.correlation {
+                crate::main_native_delivery::DeliveryCorrelation::Transport(ticket) => {
+                    self.panel_transport.completed(ticket, completed.delivery)?;
+                }
+                crate::main_native_delivery::DeliveryCorrelation::Presentation => {
+                    if completed.delivery.lane().is_some() {
+                        return Err(DesktopError::message(
+                            "complete_panel_delivery",
+                            "notification owns transport credit",
+                        ));
+                    }
+                }
+            }
         }
         if !consumed {
             return Ok(EvidenceProgress { consumed: false, observation: None });

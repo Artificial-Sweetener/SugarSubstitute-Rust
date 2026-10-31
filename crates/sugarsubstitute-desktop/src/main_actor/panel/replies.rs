@@ -33,8 +33,22 @@ impl Replies {
         self.reply_after_evidence && !self.is_empty()
     }
 
-    /// Fail explicitly on overload rather than acknowledging a discarded request.
+    /// Coalesce unsent full snapshots by attachment; preserve correlated responses and order.
+    /// Reject independent overload explicitly without acknowledging a discarded request.
     pub(super) fn push(&mut self, reply: NativeDelivery) -> Result<(), DesktopError> {
+        if let NativeDelivery::Presentation(incoming) = &reply {
+            for offset in 0..self.len {
+                let index = (self.first + offset) % CAPACITY;
+                if let Some(NativeDelivery::Presentation(pending)) = &self.slots[index]
+                    && pending.same_target(incoming)
+                {
+                    if incoming.sequence() > pending.sequence() {
+                        self.slots[index] = Some(reply);
+                    }
+                    return Ok(());
+                }
+            }
+        }
         if self.len == CAPACITY {
             return Err(DesktopError::message("canvas_reply_queue", "reply capacity exhausted"));
         }
@@ -42,6 +56,31 @@ impl Replies {
         self.slots[index] = Some(reply);
         self.len += 1;
         Ok(())
+    }
+
+    /// Retire obsolete asynchronous claims even while native callback capacity is occupied.
+    /// Correlated responses remain in order with their original request credit.
+    pub(super) fn retire_presentations(
+        &mut self,
+        current: Option<crate::MainIdentity>,
+    ) -> Result<bool, DesktopError> {
+        let mut retired = false;
+        for _ in 0..self.len {
+            let delivery = self.slots[self.first].take().ok_or_else(|| {
+                DesktopError::message("canvas_reply_queue", "retained reply is missing")
+            })?;
+            self.first = (self.first + 1) % CAPACITY;
+            self.len -= 1;
+            if matches!(&delivery, NativeDelivery::Presentation(value) if current != Some(value.identity()))
+            {
+                retired = true;
+            } else {
+                let tail = (self.first + self.len) % CAPACITY;
+                self.slots[tail] = Some(delivery);
+                self.len += 1;
+            }
+        }
+        Ok(retired)
     }
 
     /// Transfer ownership to the native command slot; submission failures retain custody there.

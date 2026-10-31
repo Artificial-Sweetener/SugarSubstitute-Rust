@@ -5,7 +5,7 @@
 use super::*;
 
 /// Admit real CPU projection pixels and deliver their draw through the session's execution port.
-fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn Error>> {
+pub(super) fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn Error>> {
     let (mut session, clock, directory) = session()?;
     if attached {
         session.attach_cpu_surface()?;
@@ -71,7 +71,12 @@ fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn Error>> {
         Duration::ZERO,
         Duration::ZERO,
     )?;
-    session.displaying = Some(super::super::super::display::Displaying { target, job });
+    session.displaying = Some(super::super::super::display::Displaying {
+        target,
+        document: identity,
+        source_revision: 7,
+        job,
+    });
     Ok((Fixture { session, clock, wake, view, source, _directory: directory }, target))
 }
 

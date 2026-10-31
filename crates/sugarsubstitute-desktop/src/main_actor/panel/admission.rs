@@ -224,7 +224,8 @@ impl Admission {
         &mut self,
         delivery: &NativeDelivery,
     ) -> Result<Ticket, DesktopError> {
-        let slot = &mut self.slots[delivery.lane().index()];
+        let lane = delivery.lane().ok_or_else(|| fault("notification owns no transport lane"))?;
+        let slot = &mut self.slots[lane.index()];
         if slot.phase != Phase::Application || slot.request_id != delivery.request_id() {
             return Err(fault("response does not own an admitted request"));
         }
@@ -238,7 +239,8 @@ impl Admission {
         ticket: Ticket,
         delivery: NativeDelivery,
     ) -> Result<(), DesktopError> {
-        let slot = &mut self.slots[delivery.lane().index()];
+        let lane = delivery.lane().ok_or_else(|| fault("notification owns no transport lane"))?;
+        let slot = &mut self.slots[lane.index()];
         if slot.phase != Phase::Delivering
             || slot.ticket != ticket
             || slot.request_id != delivery.request_id()

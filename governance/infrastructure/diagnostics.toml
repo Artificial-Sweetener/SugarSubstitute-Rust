@@ -703,7 +703,7 @@ rationale = "Build identity derivation captures Git metadata and prints the comp
 [[records]]
 path = "tools/local_k1/test_derive_build.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:9c4d9e93a9527ae73cbc04ba7358d4812ed2c090ce79c2fec27c4efb0155d994"
+source_sha256 = "sha256:83ee6e4936677fb3f227410f74485351123a8b5431c83fe20430aa6924bf5172"
 disposition = "fixture"
 rationale = "Build-input selection tests reference a diagnostic filename to prove that runtime asset directories exclude logs; this fixture name does not create a runtime diagnostic route."
 

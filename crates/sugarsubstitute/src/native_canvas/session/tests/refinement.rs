@@ -3,6 +3,7 @@
 //! Exercise navigation cancellation against genuine owned execution jobs and terminal delivery.
 use super::*;
 use std::sync::{Condvar, Mutex, atomic::AtomicBool};
+mod source_fencing;
 
 #[derive(Default)]
 pub(super) struct Wake {
@@ -62,6 +63,7 @@ impl CpuTask<Packet, WorkError> for PreparationBoundary {
 struct Fixture {
     session: Session,
     wake: Arc<Wake>,
+    release: Arc<AtomicBool>,
     _directory: tempfile::TempDir,
 }
 fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> {
@@ -91,6 +93,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
     let identity = (document.snapshot().identity(), document.snapshot().revision());
     session.document.scene =
         Some(Scene { document, source: None, source_revision: 0, original: None });
+    session.selection = 0;
     let spec = session.spec(
         Operation::FramePrepare,
         JobClass::CpuInteractive,
@@ -106,6 +109,8 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
     let coverage = coverage::detail(session.document.tools.navigation().viewport())?;
     session.rendering = Some(Rendering {
         job,
+        document: identity,
+        source_revision: 0,
         reconstruction,
         tier: BackingTier::Detail,
         coverage,
@@ -121,7 +126,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         document: identity,
         source_revision: 0,
     });
-    Ok(Fixture { session, wake, _directory: directory })
+    Ok(Fixture { session, wake, release, _directory: directory })
 }
 fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
     while session.rendering.is_some() {

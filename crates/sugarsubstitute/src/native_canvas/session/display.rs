@@ -8,6 +8,8 @@ mod admission;
 /// Preserve the submitted frame identity independently of execution-lane replacement metadata.
 pub(super) struct Displaying {
     pub(super) target: FrameStamp,
+    pub(super) document: (u64, u64),
+    pub(super) source_revision: u64,
     pub(super) job: OwnedJob<work::Draw, WorkError>,
 }
 
@@ -231,13 +233,22 @@ impl Session {
         else {
             return Ok(());
         };
-        let Displaying { target, job } =
+        let Displaying { target, document, source_revision, job } =
             self.displaying.take().ok_or("Display execution identity was lost")?;
         Self::observe_terminal(&job, &completion.outcome);
         let now = self.navigation_time();
+        let current_source = self.admitted_source_is_current(document, source_revision);
         match Self::terminal(completion.outcome) {
             Ok(drawing) => {
-                if drawing.target != target || drawing.source.surface != target.surface {
+                if !current_source {
+                    self.pacing.abandoned(target, now)?;
+                    return self.retire(Retired { _drawing: Some(drawing), ..Default::default() });
+                }
+                if drawing.target != target
+                    || drawing.source.surface != target.surface
+                    || drawing.document != document
+                    || drawing.source_revision != source_revision
+                {
                     self.pacing.abandoned(target, now)?;
                     self.retire(Retired { _drawing: Some(drawing), ..Default::default() })?;
                     return Err("Canvas received a foreign completed display identity".into());
@@ -246,17 +257,13 @@ impl Session {
                     && self.drawable
                     && self.pending_open.is_none()
                     && self.loading.is_none()
+                    && current_source
                     && drawing.view.surface()
-                        == self.document.tools.navigation().viewport().surface()
-                    && self.document.scene.as_ref().is_some_and(|scene| {
-                        let doc = scene.document.snapshot();
-                        drawing.document == (doc.identity(), doc.revision())
-                            && drawing.source_revision == scene.source_revision
-                            && drawing.source_revision == self.selection
-                    });
+                        == self.document.tools.navigation().viewport().surface();
                 if !current {
                     self.pacing.abandoned(target, now)?;
                     if !self.closing
+                        && current_source
                         && drawing.view.surface()
                             == self.document.tools.navigation().viewport().surface()
                         && let work::DrawPixels::Cpu(frame) = drawing.pixels
@@ -351,13 +358,8 @@ impl Session {
                 let restoring = self.restoring_document();
                 #[cfg(not(feature = "native-composition"))]
                 let restoring = false;
-                let superseded = self
-                    .document
-                    .scene
-                    .as_ref()
-                    .is_some_and(|scene| scene.source_revision != self.selection);
-                if self.closing || self.pending_open.is_some() || restoring || superseded {
-                    tracing::debug!(operation="canvas_display_stopped", cause=%cause, "Canvas display reached a terminal outcome before replacement");
+                if self.closing || self.pending_open.is_some() || restoring || !current_source {
+                    tracing::debug!(operation="canvas_display_stopped", job_id=job.spec().id.get(), document_id=document.0, document_revision=document.1, source_revision, cause=%cause, "Canvas display reached a terminal outcome before replacement");
                 } else {
                     self.fail(cause);
                 }
@@ -380,12 +382,25 @@ impl Session {
         Ok(())
     }
     /// Only idle pending work needs a cadence timer; running work supplies its completion wake.
+    /// A finished render that `consume_frame` withholds for pacing is idle work too, and may
+    /// precede any selectable backing for a newly selected source.
     pub(super) fn display_deadline(
         &self,
         now: Duration,
     ) -> Result<Option<Duration>, Box<dyn Error>> {
         if !self.drawable {
             return Ok(None);
+        }
+        let paced_completion = self.config.gpu.is_none()
+            && self.presentation.attached()
+            && self.rendering.as_ref().is_some_and(|rendering| {
+                matches!(
+                    rendering.job.status().phase,
+                    sugarsubstitute_contracts::execution::JobPhase::Terminal(_)
+                )
+            });
+        if paced_completion {
+            return Ok(self.pacing.next_deadline(now)?);
         }
         let Some(selection) = self.select_backing()? else {
             return Ok(None);

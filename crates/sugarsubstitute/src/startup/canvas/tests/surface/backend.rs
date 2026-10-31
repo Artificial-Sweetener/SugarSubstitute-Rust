@@ -40,7 +40,10 @@ fn discovery(
         if expected == "available" { json!(["fit", "native", "zoom", "pan"]) } else { json!([]) }
     );
     assert_eq!(value["capabilities"]["viewportState"], expected == "available");
-    assert_eq!(value["capabilities"]["previewFormats"], json!([]));
+    assert_eq!(
+        value["capabilities"]["previewFormats"],
+        if expected == "available" { json!(["jpeg"]) } else { json!([]) }
+    );
     for field in ["comparison", "overview"] {
         assert_eq!(value["capabilities"][field], false);
     }

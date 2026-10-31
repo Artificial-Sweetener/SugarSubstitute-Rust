@@ -8,7 +8,11 @@ mod device;
 use super::{adopt, missing};
 use crate::{
     DesktopError,
-    canvas::{CpuFrame, placement::CanvasPlacement},
+    canvas::{
+        CpuFrame,
+        acknowledgement::{Acknowledgement, FrameEffect, HideEffect},
+        placement::CanvasPlacement,
+    },
 };
 use allocation::Allocation;
 use device::Device;
@@ -159,7 +163,7 @@ pub(super) struct Canvas {
     active: Option<Allocation>,
     pending: Option<Allocation>,
     retirements: [Option<RetiredAllocation>; 2],
-    last: Option<(FrameStamp, CanvasPlacement)>,
+    acknowledgement: Acknowledgement,
     linked: bool,
     retired: bool,
     lease: Option<MemoryLease>,
@@ -168,7 +172,7 @@ pub(super) struct Canvas {
 impl Canvas {
     /// Match actual native custody without treating candidate pixels as displayed.
     fn retains(&self, target: FrameStamp, placement: CanvasPlacement) -> bool {
-        !self.retired && self.active.is_some() && self.last == Some((target, placement))
+        !self.retired && self.active.is_some() && self.acknowledgement.retains(target, placement)
     }
     /// Check actual reservation custody, not merely an equal byte limit.
     pub(super) fn owns_memory(&self, lease: &MemoryLease) -> bool {
@@ -200,7 +204,7 @@ impl Canvas {
             active: None,
             pending: None,
             retirements: [None, None],
-            last: None,
+            acknowledgement: Acknowledgement::default(),
             linked: false,
             retired: false,
             lease: Some(lease),
@@ -224,16 +228,15 @@ impl Canvas {
                 "frame extent differs from viewport",
             ));
         }
-        if self.last.is_some_and(|(current, _)| {
-            current.surface == frame.target.surface && current.generation > frame.target.generation
-        }) {
-            return Err(DesktopError::message("canvas_frame", "frame generation regressed"));
-        }
-        if self.last == Some((frame.target, placement)) {
-            return Ok(frame.pending.then_some(frame.target));
-        }
-        if self.has_retirements() {
-            return Ok(None);
+        match self.acknowledgement.frame(
+            frame.target,
+            placement,
+            frame.pending,
+            self.has_retirements(),
+        )? {
+            FrameEffect::Committed(acknowledged) => return Ok(acknowledged),
+            FrameEffect::AwaitRetirement => return Ok(None),
+            FrameEffect::Commit => {}
         }
         let composition = self.composition.as_ref().ok_or_else(|| missing("canvas_composition"))?;
         let device = self.device.as_mut().ok_or_else(|| missing("canvas_device"))?;
@@ -307,7 +310,7 @@ impl Canvas {
                 });
             }
         }
-        self.last = Some((frame.target, placement));
+        self.acknowledgement.committed(frame.target, placement);
         Ok(Some(frame.target))
     }
 
@@ -324,8 +327,10 @@ impl Canvas {
 
     /// Hide the last committed surface; completion is acknowledged only after its fence.
     pub(super) fn hide(&mut self) -> Result<bool, DesktopError> {
-        if self.last.is_none() {
-            return Ok(!self.has_retirements());
+        match self.acknowledgement.hide(self.has_retirements()) {
+            HideEffect::Hidden => return Ok(true),
+            HideEffect::AwaitRetirement => return Ok(false),
+            HideEffect::Commit => {}
         }
         let visual = self.visual.as_ref().ok_or_else(|| missing("canvas_visual"))?;
         let composition =
@@ -352,7 +357,7 @@ impl Canvas {
                 commit: super::FencedCommit::new(composition),
             });
         }
-        self.last = None;
+        self.acknowledgement.hide_committed();
         Ok(false)
     }
 

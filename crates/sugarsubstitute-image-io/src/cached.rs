@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Import selected original files through existing storage admission and retained cache custody.
-use crate::{ImportError, PngImport, RasterArchive, RasterDescriptor, buffer::Buffer};
+use crate::{
+    ImportError, MAX_ENCODED_SOURCE_BYTES, RasterArchive, RasterDescriptor, buffer::Buffer,
+    image_input::ImageImport,
+};
 use sha2::{Digest, Sha256};
 use std::{
     io::{self, BufReader, Read, Seek},
@@ -14,8 +17,6 @@ use sugarsubstitute_supervision::{
     with_artifact_input,
 };
 
-/// Largest encoded original, in bytes, accepted by the PNG importer.
-pub const MAX_ENCODED_SOURCE_BYTES: u64 = 32 * 1024 * 1024 * 1024;
 const INPUT_BUFFER: usize = 64 * 1024;
 const SOURCE_FILE: &str = "source.raster";
 
@@ -29,15 +30,16 @@ pub enum CacheReuse {
     /// Reimport original bytes into a fresh generation, preserving every preceding generation.
     Rebuild,
 }
-/// Import a caller-selected PNG without retaining an image-sized decoded allocation.
+/// Import a caller-selected supported image through original storage and cache custody.
 /// Run on an execution-owned storage worker with at least 48 MiB transient admission.
+/// PNG streams scanlines; JPEG additionally admits its full RGB frame before decoding.
 /// `resident` is a separate original retained lease for source tables/workspace; `cache` owns
 /// its own original entry admission. Originals are opened read-only and remain outside cache.
 /// Compatible entries validate each chunk lazily; a later `ImportError::Corrupt` asks the
 /// application to schedule `Rebuild`, never to overwrite or discard authored pixels.
 /// # Errors
 /// Preserves original acquisition, decode, disk/memory admission, controls and native failures.
-pub fn import_png(
+pub fn import_image(
     path: &Path,
     cache: RuntimeCache,
     reuse: CacheReuse,
@@ -63,7 +65,7 @@ pub fn import_png(
     })
 }
 
-/// Import a PNG from an already-pinned, read-only cache file without accepting a path.
+/// Import a supported image from an already-pinned, read-only cache file without accepting a path.
 ///
 /// The caller retains the encoded input pin through this operation and any later rebuild.
 /// Run on an execution-owned storage worker with at least 48 MiB transient admission.
@@ -73,7 +75,7 @@ pub fn import_png(
 /// # Errors
 /// Rejects oversized, changed, truncated or malformed input, cancellation and expired work;
 /// preserves decoding, admission, storage and final source-validation failures.
-pub fn import_cached_png(
+pub fn import_cached_image(
     input: &mut CacheReader<'_>,
     cache: RuntimeCache,
     reuse: CacheReuse,
@@ -144,7 +146,8 @@ fn prepare_stream(
     let content = hash_original(input, context)?;
     input.rewind()?;
     let _buffer = context.memory().claim(INPUT_BUFFER as u64 + 128)?;
-    let import = PngImport::open(BufReader::with_capacity(INPUT_BUFFER, input), content, context)?;
+    let import =
+        ImageImport::open(BufReader::with_capacity(INPUT_BUFFER, input), content, context)?;
     let descriptor = import.descriptor();
     let key = storage_key(&descriptor.asset().0);
     if reuse == CacheReuse::Compatible

@@ -19,7 +19,7 @@ mod document;
 #[cfg(feature = "native-composition")]
 mod document_transaction;
 #[cfg(feature = "native-composition")]
-pub(crate) use document_transaction::DocumentToken;
+pub(crate) use document_transaction::{DocumentToken, PreviewOffer, PreviewStatus, PreviewToken};
 mod gpu;
 #[cfg(all(windows, feature = "native-composition"))]
 mod host_graphics;
@@ -78,7 +78,7 @@ impl OpenSource {
     /// Retain source custody until a storage worker can dispose it.
     fn requires_worker_retirement(&self) -> bool {
         match self {
-            Self::Image(source) => source.retains_native_storage(),
+            Self::Image(source) => source.requires_worker_retirement(),
             #[cfg(feature = "native-composition")]
             Self::Acquired(_) => true,
         }
@@ -100,6 +100,8 @@ struct Retired {
     _document: Option<Box<document::DocumentState>>,
     #[cfg(feature = "native-composition")]
     _retained_document: Option<document_transaction::RetainedDocument>,
+    #[cfg(feature = "native-composition")]
+    _preview: Option<document_transaction::PreviewRetired>,
     _packet: Option<Packet>,
     _resources: Option<Resources>,
     _front: Option<Arc<CpuSurface>>,
@@ -115,6 +117,8 @@ struct Retired {
 /// The original admitted request and its quality remain paired through cancellation acknowledgement.
 struct Rendering {
     job: OwnedJob<Packet, WorkError>,
+    document: (u64, u64),
+    source_revision: u64,
     reconstruction: Reconstruction,
     tier: BackingTier,
     coverage: BackingCoverage,
@@ -180,6 +184,8 @@ pub(crate) struct Session {
     document_sequence: u64,
     #[cfg(feature = "native-composition")]
     document_transaction: Option<document_transaction::Transaction>,
+    #[cfg(feature = "native-composition")]
+    preview: document_transaction::PreviewState,
     #[cfg(feature = "native-composition")]
     document_suspended: bool,
     rendering: Option<Rendering>,
@@ -275,6 +281,8 @@ impl Session {
             document_sequence: 0,
             #[cfg(feature = "native-composition")]
             document_transaction: None,
+            #[cfg(feature = "native-composition")]
+            preview: document_transaction::PreviewState::default(),
             #[cfg(feature = "native-composition")]
             document_suspended: false,
             rendering: None,

@@ -7,8 +7,10 @@ use sugarsubstitute_image_ops::{Extent, Pixel, RasterSource, Region};
 #[cfg(windows)]
 mod cached;
 pub(crate) mod harness;
+mod jpeg;
 mod png;
 mod samples;
+mod write;
 
 #[test]
 fn adaptive_chunks_cover_exact_file_offsets_without_unbounded_stripe_memory()

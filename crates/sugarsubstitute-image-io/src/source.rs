@@ -2,13 +2,15 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain the exact original input needed to reconstruct a displayed raster.
 
-use crate::{CacheReuse, CachedRaster, ImportError, import_cached_png, import_png};
+use crate::{CacheReuse, CachedRaster, ImportError, import_cached_image, import_image};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex, TryLockError},
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
 use sugarsubstitute_supervision::cache::{CacheReader, RuntimeCache};
+mod memory;
+use memory::MemoryOriginal;
 
 #[cfg(test)]
 mod tests;
@@ -19,7 +21,7 @@ struct Encoded {
     _memory: MemoryClaim,
 }
 
-/// An explicit local file or an already-owned encoded cache stream.
+/// An explicit local file, pinned encoded cache stream or already-admitted immutable bytes.
 ///
 /// Clones retain the same original, including its native cache pin. Import and final release
 /// of a retained stream belong on admitted storage workers, never the native UI thread.
@@ -33,6 +35,7 @@ pub struct ImageSource {
 enum Original {
     File(PathBuf),
     Encoded(Arc<Encoded>),
+    Memory(MemoryOriginal),
 }
 
 impl ImageSource {
@@ -65,9 +68,24 @@ impl ImageSource {
         })
     }
 
-    /// Whether disposal retains a native cache stream and must run on a storage worker.
-    pub fn retains_native_storage(&self) -> bool {
-        matches!(&self.inner, Original::Encoded(_))
+    /// Transfer already-admitted encoded bytes without copying or replacing their original charge.
+    ///
+    /// `input` retains its Vec and claim unchanged on validation or metadata-admission failure.
+    /// The transferred claim must cover actual Vec capacity plus 128 bytes; `resident` admits
+    /// shared metadata separately. Clones share immutable bytes. Import, rebuild and final
+    /// disposal belong on execution-owned storage workers, including memory originals.
+    /// # Errors
+    /// Rejects absent, empty, oversized or underfunded input; preserves metadata admission failure.
+    pub fn memory(
+        input: &mut Option<(Vec<u8>, MemoryClaim)>,
+        resident: &MemoryLease,
+    ) -> Result<Self, ImportError> {
+        Ok(Self { inner: Original::Memory(MemoryOriginal::new(input, resident)?) })
+    }
+
+    /// Whether final original disposal must run on an admitted worker.
+    pub fn requires_worker_retirement(&self) -> bool {
+        matches!(&self.inner, Original::Encoded(_) | Original::Memory(_))
     }
 
     /// Import this original through the same hashing and derived-cache policy.
@@ -78,7 +96,7 @@ impl ImageSource {
     /// # Errors
     /// Returns `ImportError::Busy` without waiting for another import of the same stream.
     /// Preserves acquisition, image, admission, cancellation and native storage failures.
-    pub fn import_png(
+    pub fn import_image(
         &self,
         cache: RuntimeCache,
         reuse: CacheReuse,
@@ -88,7 +106,15 @@ impl ImageSource {
     ) -> Result<CachedRaster, ImportError> {
         crate::check(context)?;
         match &self.inner {
-            Original::File(path) => import_png(path, cache, reuse, resident, now, context),
+            Original::File(path) => import_image(path, cache, reuse, resident, now, context),
+            Original::Memory(original) => crate::cached::import_encoded(
+                &mut std::io::Cursor::new(original.bytes()?),
+                cache,
+                reuse,
+                resident,
+                now,
+                context,
+            ),
             Original::Encoded(encoded) => {
                 let mut reader = encoded.reader.try_lock().map_err(|cause| match cause {
                     TryLockError::WouldBlock => ImportError::Busy,
@@ -96,7 +122,7 @@ impl ImageSource {
                         ImportError::Invalid("Encoded original reader failed")
                     }
                 })?;
-                import_cached_png(&mut reader, cache, reuse, resident, now, context)
+                import_cached_image(&mut reader, cache, reuse, resident, now, context)
             }
         }
     }

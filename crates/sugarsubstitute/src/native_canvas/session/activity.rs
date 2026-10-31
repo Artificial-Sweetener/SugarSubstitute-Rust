@@ -7,6 +7,8 @@ use sugarsubstitute_execution::OwnedInputError;
 impl Session {
     /// Consume typed completions before submitting the latest application intent.
     pub(super) fn advance(&mut self) -> Result<(), Box<dyn Error>> {
+        #[cfg(feature = "native-composition")]
+        self.consume_preview_poll_request();
         self.document.tools.advance(self.navigation_time())?;
         self.cancel_obsolete_refinement()?;
         if let Some(runtime) = &self.runtime {
@@ -23,7 +25,11 @@ impl Session {
         if self.deferred_retirement.is_none() {
             self.consume_host_graphics()?;
         }
-        if self.deferred_retirement.is_none() {
+        #[cfg(feature = "native-composition")]
+        let restoring_preview = self.preview_restoring();
+        #[cfg(not(feature = "native-composition"))]
+        let restoring_preview = false;
+        if self.deferred_retirement.is_none() && !restoring_preview {
             self.consume_load()?;
         }
         #[cfg(feature = "native-composition")]
@@ -46,11 +52,17 @@ impl Session {
                 self.retirement_deadline = self.deferred_retirement_deadline.take();
             }
         }
+        #[cfg(feature = "native-composition")]
+        if self.deferred_retirement.is_none() {
+            self.advance_preview_resize()?;
+        }
+        #[cfg(feature = "native-composition")]
+        self.advance_preview()?;
         if self.closing {
             self.advance_close()?;
         }
         #[cfg(feature = "native-composition")]
-        let restoring = self.advance_document_transaction()?;
+        let restoring = self.advance_document_transaction()? || self.preview_restoring();
         #[cfg(not(feature = "native-composition"))]
         let restoring = false;
         self.submit_retirement()?;
@@ -106,6 +118,10 @@ impl Session {
             self.submit_display()?;
         }
         if self.loading.is_none() && self.rendering.is_none() && self.failed.is_none() {
+            #[cfg(feature = "native-composition")]
+            if self.preview_shown() {
+                return Ok(());
+            }
             if self.gpu_presentation_pending() {
                 return Ok(());
             }
@@ -177,6 +193,10 @@ impl Session {
         let acquisition_pending = self.acquisition_retirement.is_some();
         #[cfg(not(feature = "native-composition"))]
         let acquisition_pending = false;
+        #[cfg(feature = "native-composition")]
+        let preview_pending = self.preview_pending();
+        #[cfg(not(feature = "native-composition"))]
+        let preview_pending = false;
         if self.initializing.is_some()
             || self.device_job.is_some()
             || graphics_in_flight
@@ -188,6 +208,7 @@ impl Session {
             || self.deferred_retirement.is_some()
             || self.retirement.is_some()
             || acquisition_pending
+            || preview_pending
         {
             return Ok(());
         }

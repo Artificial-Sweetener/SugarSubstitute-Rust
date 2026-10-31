@@ -20,6 +20,10 @@ pub(super) fn drain(
         else {
             return Ok(());
         };
+        if session.closing && matches!(&command, DesktopStartupCommand::SendSurfacePresentation(_))
+        {
+            continue;
+        }
         if session.closing
             && !matches!(
                 command,
@@ -161,6 +165,18 @@ pub(super) fn drain(
             }
             DesktopStartupCommand::SendSurface(reply) => {
                 main_operation(session, content, |owner| owner.send_surface(reply).map(|()| None))?;
+            }
+            DesktopStartupCommand::SendSurfacePresentation(change) => {
+                if content.main_identity() != Some(change.identity())
+                    || session.main.as_ref().is_none_or(|owner| {
+                        owner.identity() != change.identity() || owner.retired()
+                    })
+                {
+                    continue;
+                }
+                main_operation(session, content, |owner| {
+                    owner.send_surface_presentation(change).map(|()| None)
+                })?;
             }
             DesktopStartupCommand::CompletePanelIngress(receipt) => {
                 main_operation(session, content, |owner| {

@@ -3,6 +3,7 @@
 //! Exercise candidate rollback and exact native promotion with real image workers.
 
 use super::*;
+mod previews;
 
 impl Fixture {
     /// Observe shared worker settlement until the session transfers the preceding document.
@@ -43,7 +44,14 @@ impl Fixture {
         self.session.resize(Extent::new(8, 8)?)?;
         self.session.input(Input::Drawable(true))?;
         self.clock.0.fetch_add(1_000_000_000, Ordering::SeqCst);
-        Ok(self.pending_frame()?.0)
+        let prepared = self.pending_frame().map_err(|cause| {
+            let state = self.session.runtime.as_ref().map(|runtime| runtime.scope.snapshot());
+            format!("Final frame preparation scope={state:?}, pending_open={}, load={}, render={}, display={}, retirement={}, source={}: {cause}",
+                self.session.pending_open.is_some(), self.session.loading.is_some(),
+                self.session.rendering.is_some(), self.session.displaying.is_some(),
+                self.session.retirement.is_some(), self.session.selection)
+        })?;
+        Ok(prepared.0)
     }
 }
 

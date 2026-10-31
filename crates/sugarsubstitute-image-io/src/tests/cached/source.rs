@@ -41,17 +41,22 @@ fn retained_encoded_original_rebuilds_the_same_image_and_survives_each_clone() -
 
         let source = ImageSource::encoded(&mut input, context.memory())?;
         assert!(input.is_none());
-        assert!(source.retains_native_storage());
+        assert!(source.requires_worker_retirement());
         let other = source.clone();
-        let mut first = source.import_png(
+        let mut first = source.import_image(
             cache.clone(),
             CacheReuse::Compatible,
             context.memory(),
             10,
             context,
         )?;
-        let mut rebuilt =
-            other.import_png(cache.clone(), CacheReuse::Rebuild, context.memory(), 11, context)?;
+        let mut rebuilt = other.import_image(
+            cache.clone(),
+            CacheReuse::Rebuild,
+            context.memory(),
+            11,
+            context,
+        )?;
         assert_eq!(first.descriptor().asset(), rebuilt.descriptor().asset());
         assert_eq!(pixels(&mut first, context)?, pixels(&mut rebuilt, context)?);
         let writer = std::fs::OpenOptions::new().write(true).open(&original_path);
@@ -63,7 +68,7 @@ fn retained_encoded_original_rebuilds_the_same_image_and_survives_each_clone() -
         assert!(
             cache.maintain(11 + Namespace::ImageSources.retention(), context)?.removed_entries >= 1
         );
-        assert!(!ImageSource::file(root.path().join("local.png")).retains_native_storage());
+        assert!(!ImageSource::file(root.path().join("local.png")).requires_worker_retirement());
         Ok(())
     })
 }

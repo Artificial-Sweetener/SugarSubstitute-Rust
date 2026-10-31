@@ -118,6 +118,24 @@ impl ToolManager {
         }
         self.navigation.cancel_command(target, mode, now)
     }
+    /// Park this document at its qualified native-accepted camera and retire active gestures.
+    /// The caller supplies evidence for the current document/source. Capture, temporary tools
+    /// and uncommitted edits follow the existing document-change cancellation lifecycle.
+    ///
+    /// # Errors
+    /// Rejects camera/time before cancellation and preserves tool reactivation failures.
+    pub fn freeze_at(
+        &mut self,
+        accepted: crate::Viewport,
+        document: Option<&Document>,
+        now: Duration,
+    ) -> Result<(), CanvasError> {
+        let mut navigation = self.navigation;
+        navigation.freeze_at(accepted, now)?;
+        self.cancel(ToolCancelReason::DocumentChanged, document, now)?;
+        self.navigation = navigation;
+        Ok(())
+    }
     /// Advance motion from the application's injected clock without dispatching tool input.
     /// # Errors
     /// Rejects backward time and preserves camera errors.

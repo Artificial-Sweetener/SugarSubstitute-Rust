@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:fdfaf12261eaa85da3e219eb9db30f70f2185aee8523f98a4dcf8f26b131b66d"
+source_sha256 = "sha256:8c3930177b1a144afdb063f71cdbdc599b776e5ae78e77e63c0e97a1c6a31abf"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -444,7 +444,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:edd33f46db048adbc7e31ac7fa01cb498499e682b731ec3fa84c15d852d9b473"
+source_sha256 = "sha256:2f69d2102e28ab9734279f1797fa39734d77f2752aa28da425fd4f6951e81154"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -708,6 +708,18 @@ rationale = "Hidden native picker lifecycle fixtures preserve original paths and
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js"
-source_sha256 = "sha256:2db51ed5f9111e1262beff7bbc8784bcf67d9a3afce73d046792e546e66af7f0"
+source_sha256 = "sha256:a880ed0fd5831f2622dee0c3b60cd8731912ef9d44b800793ff5118b14e92ffb"
 kind = "native"
 rationale = "The bounded WebView transport defines technical JavaScript properties and error diagnostics; it does not construct product-facing text or select a locale."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
+source_sha256 = "sha256:803f8ad43fadd12973d022910770d333afc5c9fa3afb42c868cd8671f7e440ca"
+kind = "native"
+rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
+source_sha256 = "sha256:e7d7653ea00a805e72ea6b3cb36324982198050ecd6d558f9fa8f896aca00956"
+kind = "fixture"
+rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."

@@ -134,6 +134,12 @@ impl EmbeddedCanvas {
             session.poll(Duration::ZERO)?;
             #[cfg(feature = "native-composition")]
             self.surface.poll(session)?;
+            #[cfg(feature = "native-composition")]
+            if let Some(cutoff) = self.cutoff
+                && self.surface.preview_custody_settled()
+            {
+                session.close_until(cutoff)?;
+            }
             if !self.reported_ready && session.initialized() {
                 self.reported_ready = true;
                 tracing::info!(
@@ -237,12 +243,25 @@ impl EmbeddedCanvas {
         &mut self,
         identity: sugarsubstitute_contracts::startup::MainIdentity,
     ) -> Result<(), Box<dyn Error>> {
-        self.surface.hidden(identity)
+        match self.session.as_mut() {
+            Some(session) => self.surface.hidden(identity, session),
+            None => Ok(()),
+        }
     }
 
     /// Borrow its actual refinement deadline without creating a timer.
     pub(super) fn next_deadline(&self) -> Option<Instant> {
-        self.session.as_ref().and_then(Lifetime::next_deadline)
+        let native = self.session.as_ref().and_then(Lifetime::next_deadline);
+        #[cfg(feature = "native-composition")]
+        {
+            let preview = self.surface.preview_deadline(self.clock.now());
+            match (native, preview) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            }
+        }
+        #[cfg(not(feature = "native-composition"))]
+        native
     }
 
     /// Fence the session under the same original shutdown budget as the application.
@@ -250,10 +269,19 @@ impl EmbeddedCanvas {
         if self.cutoff.is_some_and(|original| original <= cutoff) {
             return Ok(());
         }
+        #[cfg(feature = "native-composition")]
+        let cutoff = self
+            .session
+            .as_mut()
+            .map_or(cutoff, |session| session.adopt_preview_retirement_cutoff(cutoff));
         self.cutoff = Some(cutoff);
         #[cfg(feature = "native-composition")]
-        self.surface.close();
+        self.surface.close(self.session.as_mut())?;
         if let Some(session) = &mut self.session {
+            #[cfg(feature = "native-composition")]
+            if !self.surface.preview_custody_settled() {
+                return Ok(());
+            }
             session.close_until(cutoff)?;
         }
         Ok(())
@@ -261,6 +289,16 @@ impl EmbeddedCanvas {
 
     /// A requested cancellation is not settlement; retain all work until it actually stops.
     pub(super) fn settled(&mut self) -> Result<bool, Box<dyn Error>> {
+        #[cfg(feature = "native-composition")]
+        if let Some(session) = &mut self.session
+            && let Some(cutoff) = self.cutoff
+        {
+            self.surface.poll(session)?;
+            if !self.surface.preview_custody_settled() {
+                return Ok(false);
+            }
+            session.close_until(cutoff)?;
+        }
         match &mut self.session {
             None => Ok(true),
             Some(_) if self.cutoff.is_none() => Ok(false),

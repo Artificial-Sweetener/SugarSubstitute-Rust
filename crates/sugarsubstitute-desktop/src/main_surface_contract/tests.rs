@@ -137,3 +137,101 @@ fn viewport_response_rejects_foreign_navigation_and_unadmitted_storage()
     assert!(lease.claim(SurfaceReply::STORAGE_BYTES).is_ok());
     Ok(())
 }
+
+#[test]
+fn watch_reply_uses_its_original_request_claim_and_rejects_foreign_navigation()
+-> Result<(), Box<dyn Error>> {
+    let identity = identity()?;
+    let session = PanelSession::for_main(identity)?;
+    let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&serde_json::json!({
+        "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
+        "requestId":7, "type":"surface.presentation.request", "schema":1, "enabled":true,
+    }))?)?;
+    let CanvasSurfaceMessage::Presentation(request) = message else {
+        return Err("Missing watch request".into());
+    };
+    let lease = MemoryLease::new(SurfaceReply::STORAGE_BYTES, Box::new(Release));
+    let reply = SurfaceReply::presentation(
+        identity,
+        &request,
+        CanvasSurfaceDiscoveryStatus::Available,
+        true,
+        "",
+        lease.claim(SurfaceReply::STORAGE_BYTES)?,
+    )?;
+    let payload: serde_json::Value = serde_json::from_slice(reply.payload())?;
+    assert_eq!(payload["type"], "surface.presentation.reply");
+    assert_eq!(payload["enabled"], true);
+    assert_eq!(reply.request_id(), 7);
+    assert!(lease.claim(1).is_err());
+    drop(reply.into_claim());
+    let foreign = MainIdentity { navigation: Generation::new(2)?, ..identity };
+    assert!(matches!(
+        SurfaceReply::presentation(
+            foreign,
+            &request,
+            CanvasSurfaceDiscoveryStatus::Available,
+            true,
+            "",
+            lease.claim(SurfaceReply::STORAGE_BYTES)?
+        ),
+        Err(SurfaceReplyError::ForeignNavigation)
+    ));
+    assert!(matches!(
+        SurfaceReply::presentation(
+            identity,
+            &request,
+            CanvasSurfaceDiscoveryStatus::Available,
+            true,
+            "",
+            lease.claim(1)?
+        ),
+        Err(SurfaceReplyError::Storage)
+    ));
+    assert!(lease.claim(SurfaceReply::STORAGE_BYTES).is_ok());
+    Ok(())
+}
+
+#[test]
+fn asynchronous_snapshot_owns_independent_storage_and_derives_its_exact_main_session()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::canvas_surface::{
+        CanvasSurfaceAddress, CanvasSurfacePresentationChange, CanvasSurfacePresentationDisplay,
+        CanvasSurfacePresentationStatus,
+    };
+    let identity = identity()?;
+    let lease = MemoryLease::new(SurfacePresentation::STORAGE_BYTES, Box::new(Release));
+    let address = CanvasSurfaceAddress::decode(br#"{"sessionId":"canvas:w","viewId":"view:a","windowId":"window:a","attachmentId":"attachment:a","generation":1}"#)?;
+    let change = CanvasSurfacePresentationChange::new(
+        address.clone(),
+        9,
+        "preview:one".into(),
+        1,
+        CanvasSurfacePresentationStatus::Failed,
+        CanvasSurfacePresentationDisplay::Empty,
+        "".into(),
+    )?;
+    assert!(matches!(
+        SurfacePresentation::new(identity, &change, lease.claim(1)?),
+        Err(SurfaceReplyError::Storage)
+    ));
+    let notification = SurfacePresentation::new(
+        identity,
+        &change,
+        lease.claim(SurfacePresentation::STORAGE_BYTES)?,
+    )?;
+    assert_eq!(notification.identity(), identity);
+    assert_eq!(notification.sequence(), 9);
+    assert_eq!(notification.address(), &address);
+    let payload: serde_json::Value = serde_json::from_slice(notification.payload())?;
+    assert_eq!(payload["session"], PanelSession::for_main(identity)?.as_str());
+    assert_eq!(payload["requestId"], 0);
+    assert_eq!(payload["type"], "surface.presentation.changed");
+    assert_eq!(payload["change"]["sequence"], 9);
+    assert!(lease.claim(1).is_err());
+    let claim = notification.into_claim();
+    assert!(lease.claim(1).is_err());
+    drop(claim);
+    assert!(lease.claim(SurfacePresentation::STORAGE_BYTES).is_ok());
+    Ok(())
+}

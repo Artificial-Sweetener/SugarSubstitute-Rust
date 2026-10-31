@@ -6,7 +6,7 @@ use super::*;
 use crate::native_canvas::session::{AcceptedCamera, CameraCommandResult};
 use sugarsubstitute_canvas::FrameStamp;
 
-mod fixture;
+pub(super) mod fixture;
 use fixture::Fixture;
 
 fn snapshot(value: &Value, id: u64, mode: &str, scale: f64, dimensions: [u32; 2]) {

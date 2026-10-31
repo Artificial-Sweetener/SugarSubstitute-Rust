@@ -3,7 +3,7 @@
 //! Transpose bounded scanline stripes into sequential hashed chunks through shared storage.
 use crate::{ImportError, RasterDescriptor, buffer::Buffer};
 use sha2::{Digest, Sha256};
-use std::io::Write;
+use std::io::{self, Write};
 use sugarsubstitute_contracts::execution::JobContext;
 
 /// Encode an archive from exact top-to-bottom straight RGBA scanlines.
@@ -11,6 +11,7 @@ use sugarsubstitute_contracts::execution::JobContext;
 /// This operation packs original decoded samples; image processing belongs to the DAG.
 /// At most one 8 MiB stripe and one 128x128 chunk are retained, regardless of source height.
 /// The storage owner grants and stages the output; this function opens no files or cache.
+/// Partial writes and transient interruptions retain the original job's cancellation/deadline.
 /// # Errors
 /// Preserves decoder, storage, allocation, admission and control failures. The caller must
 /// never publish an incomplete output stream as a complete cache entry.
@@ -27,7 +28,7 @@ pub fn write_raster(
     let mut stripe = Buffer::new(layout.stripe_bytes(), 0, context.memory())?;
     let mut chunk =
         Buffer::new(layout.region(0, 0)?.pixels() as usize * stride, 0, context.memory())?;
-    output.write_all(&descriptor.header())?;
+    write_complete(output, &descriptor.header(), context)?;
     for index in 0..layout.stripes() {
         let first = layout.region(0, index)?;
         for offset in 0..first.height() {
@@ -46,8 +47,33 @@ pub fn write_raster(
             }
             let data = &chunk.data[..region.pixels() as usize * stride];
             let hash: [u8; 32] = Sha256::digest(data).into();
-            output.write_all(&hash)?;
-            output.write_all(data)?;
+            write_complete(output, &hash, context)?;
+            write_complete(output, data, context)?;
+        }
+    }
+    crate::check(context)
+}
+
+/// Finish one sequential span while checking controls before every interrupted-write retry.
+/// Native failures keep their original causes; exhausted writers retain standard WriteZero.
+fn write_complete(
+    output: &mut dyn Write,
+    mut bytes: &[u8],
+    context: &JobContext,
+) -> Result<(), ImportError> {
+    while !bytes.is_empty() {
+        crate::check(context)?;
+        match output.write(bytes) {
+            Ok(0) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::WriteZero,
+                    "Image archive output stopped before the complete span",
+                )
+                .into());
+            }
+            Ok(count) => bytes = &bytes[count..],
+            Err(cause) if cause.kind() == io::ErrorKind::Interrupted => {}
+            Err(cause) => return Err(cause.into()),
         }
     }
     crate::check(context)

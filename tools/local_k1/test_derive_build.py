@@ -44,6 +44,7 @@ class IdentityTests(unittest.TestCase):
     def test_embedded_scripts_and_runtime_assets_are_selected(self):
         for relative in [
             "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js",
+            "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js",
             "crates/sugarsubstitute-desktop/src/main_actor/render_preview/downloads.js",
             "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs",
             "crates/sugarsubstitute-networking/worker/http.ts",
@@ -113,6 +114,7 @@ class InventoryTests(unittest.TestCase):
     def test_embedded_script_and_asset_edits_change_the_actual_git_inventory_identity(self):
         names = [
             "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js",
+            "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js",
             "crates/sugarsubstitute-desktop/src/main_actor/render_preview/downloads.js",
             "assets/windows/application.manifest", "assets/brand/wordmark.svg",
             "crates/sugarsubstitute-ui/assets/fluent/Language.svg",

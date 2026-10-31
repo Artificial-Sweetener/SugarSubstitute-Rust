@@ -3,6 +3,14 @@
 //! Stage one document on shared workers while retaining the preceding document for rollback.
 
 use super::*;
+mod preview;
+mod preview_custody;
+mod preview_demand;
+mod preview_handoff;
+mod preview_resize;
+mod preview_work;
+pub(crate) use preview::{PreviewOffer, PreviewStatus, PreviewToken};
+pub(super) use preview::{PreviewRetired, PreviewState};
 
 /// Session-local identity of one staged document; neither a source nor a native frame identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -41,7 +49,9 @@ impl Session {
             return Err("Canvas document preparation is unavailable".into());
         }
         self.document_suspended = true;
+        self.withdraw_preview()?;
         if self.resources.is_none()
+            || self.preview_pending()
             || self.document_transaction.is_some()
             || !self.document_work_settled()
         {
@@ -88,6 +98,38 @@ impl Session {
             })
         {
             return Err("Staged document promotion lacks exact native evidence".into());
+        }
+        transaction.phase = Phase::Promoted;
+        Ok(())
+    }
+
+    /// Promote an empty staged attachment after the desktop acknowledged hiding its native peer.
+    /// The composing adapter owns that acknowledgement; an empty attachment has no pixel target.
+    ///
+    /// # Errors
+    /// Rejects foreign/canceled tokens, authored content, retained pixels or unobserved work.
+    pub(crate) fn promote_empty_document(
+        &mut self,
+        token: DocumentToken,
+    ) -> Result<(), Box<dyn Error>> {
+        let empty = self.document.scene.as_ref().is_none_or(|scene| {
+            scene.source.is_none()
+                && scene.original.is_none()
+                && scene.document.snapshot().layers().is_empty()
+        }) && self.document.front.is_none()
+            && self.document.fallback_front.is_none()
+            && self.document.navigation_front.is_none()
+            && self.document.gpu_front.is_none()
+            && self.document.fallback_gpu_front.is_none()
+            && self.document.navigation_gpu_front.is_none()
+            && self.document.cpu_projection.is_none()
+            && self.document.native_presented.is_none();
+        if !empty || !self.document_work_settled() {
+            return Err("Empty document promotion retains content or pending work".into());
+        }
+        let transaction = self.document_transaction.as_mut().ok_or("No staged document")?;
+        if transaction.token != token || transaction.phase != Phase::Preparing {
+            return Err("Empty document promotion does not own the candidate".into());
         }
         transaction.phase = Phase::Promoted;
         Ok(())

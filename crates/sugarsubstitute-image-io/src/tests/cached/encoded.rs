@@ -34,7 +34,7 @@ fn retained_encoded_cache_input_uses_the_same_raster_identity_without_a_source_p
         entry.write("output.png", &bytes, context)?;
         entry.publish(context)?;
         let mut encoded = entry.into_file_reader("output.png", context)?;
-        let mut output = import_cached_png(
+        let mut output = import_cached_image(
             &mut encoded,
             cache.clone(),
             CacheReuse::Compatible,
@@ -42,7 +42,7 @@ fn retained_encoded_cache_input_uses_the_same_raster_identity_without_a_source_p
             10,
             context,
         )?;
-        let original = import_png(
+        let original = import_image(
             &path,
             cache.clone(),
             CacheReuse::Compatible,
@@ -162,7 +162,7 @@ fn malformed_retained_png_keeps_its_original_and_publishes_no_raster() -> harnes
         entry.publish(context)?;
         let mut original = entry.into_file_reader("output.png", context)?;
         assert!(
-            import_cached_png(
+            import_cached_image(
                 &mut original,
                 cache.clone(),
                 CacheReuse::Compatible,

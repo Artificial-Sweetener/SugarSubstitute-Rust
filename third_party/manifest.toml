@@ -15,6 +15,8 @@ files = [
   "third_party/sugarcubes-canvas/context_vectors.json",
   "third_party/sugarcubes-canvas/discovery_vectors.json",
   "third_party/sugarcubes-canvas/viewport_vectors.json",
+  "third_party/sugarcubes-canvas/preview_admission_vectors.json",
+  "third_party/sugarcubes-canvas/preview_vectors.json",
   "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs",
   "crates/sugarsubstitute-contracts/src/canvas_context/wire.rs",
 ]

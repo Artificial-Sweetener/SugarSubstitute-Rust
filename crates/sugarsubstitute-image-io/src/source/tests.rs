@@ -5,6 +5,7 @@
 use super::*;
 use crate::tests::harness;
 use sugarsubstitute_supervision::cache::{CachePolicy, Namespace, storage_key};
+mod memory;
 
 #[test]
 fn concurrent_import_is_a_typed_busy_result_and_the_original_remains_usable() -> harness::TestResult
@@ -36,12 +37,18 @@ fn concurrent_import_is_a_typed_busy_result_and_the_original_remains_usable() ->
         };
         let held = encoded.reader.lock().map_err(|_| ImportError::Invalid("Test reader failed"))?;
         assert!(matches!(
-            source.import_png(cache.clone(), CacheReuse::Compatible, context.memory(), 10, context),
+            source.import_image(
+                cache.clone(),
+                CacheReuse::Compatible,
+                context.memory(),
+                10,
+                context
+            ),
             Err(ImportError::Busy)
         ));
         drop(held);
         let raster =
-            source.import_png(cache, CacheReuse::Compatible, context.memory(), 10, context)?;
+            source.import_image(cache, CacheReuse::Compatible, context.memory(), 10, context)?;
         assert_eq!(raster.descriptor().layout().extent().width(), 1);
         Ok(())
     })

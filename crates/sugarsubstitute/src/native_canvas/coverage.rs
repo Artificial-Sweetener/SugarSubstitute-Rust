@@ -26,16 +26,23 @@ pub(super) enum BackingTier {
 }
 
 /// Construct bounded whole-document coverage while preserving document aspect ratio.
-pub(super) fn fallback(document: Extent) -> Result<BackingCoverage, Box<dyn std::error::Error>> {
+/// # Errors
+/// Preserves checked extent, Fit-camera and guard-coverage geometry failures.
+pub(super) fn fallback(
+    document: Extent,
+) -> Result<BackingCoverage, sugarsubstitute_canvas::CanvasError> {
     let longest = document.width().max(document.height());
     let edge = longest.min(FALLBACK_INTERIOR_MAX_EDGE);
     let scaled = |value: u32| {
         u32::try_from((u64::from(value) * u64::from(edge)).div_ceil(u64::from(longest)).max(1))
+            .map_err(|_| {
+                sugarsubstitute_canvas::CanvasError::Invalid("Fallback dimension overflow")
+            })
     };
     let surface = Extent::new(scaled(document.width())?, scaled(document.height())?)?;
     let mut view = Viewport::new(surface)?;
     view.fit(document)?;
-    Ok(BackingCoverage::new(view, [1; 2])?)
+    BackingCoverage::new(view, [1; 2])
 }
 
 /// Construct overscanned detail coverage centered on the requested camera.

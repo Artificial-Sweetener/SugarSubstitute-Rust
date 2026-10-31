@@ -267,7 +267,12 @@ fn native_display_prepares_while_reconstruction_retains_the_cpu_interactive_slot
     let now = fixture.session.pacing.next_deadline(Duration::ZERO)?.unwrap_or(Duration::ZERO);
     fixture.clock.0.store(u64::try_from(now.as_nanos())?, Ordering::SeqCst);
     fixture.session.pacing.submitted(target, PresentationMode::Projected, now, now)?;
-    fixture.session.displaying = Some(super::super::super::display::Displaying { target, job });
+    fixture.session.displaying = Some(super::super::super::display::Displaying {
+        target,
+        document: previous.document,
+        source_revision: previous.source_revision,
+        job,
+    });
     consume(&mut fixture.session, &fixture.wake)?;
     assert_eq!(
         fixture.session.document.display_evidence.ok_or("Missing prepared display")?.target,

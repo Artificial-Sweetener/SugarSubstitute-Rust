@@ -160,6 +160,7 @@ impl ClientMessage {
             Self::Panel(_) => None,
             Self::Surface(CanvasSurfaceMessage::Request(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Discovery(value)) => Some(value.request_id()),
+            Self::Surface(CanvasSurfaceMessage::Presentation(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Cancel { request_id, .. }) => Some(*request_id),
             Self::Context(value) => Some(value.request_id()),
         }

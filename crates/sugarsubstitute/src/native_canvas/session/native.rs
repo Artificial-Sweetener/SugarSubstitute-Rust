@@ -16,6 +16,9 @@ impl Session {
     pub(crate) fn selected_cpu_frame(
         &self,
     ) -> Option<(CpuFrame<'_>, &sugarsubstitute_contracts::execution::MemoryLease)> {
+        if let Some(frame) = self.preview_cpu_frame() {
+            return Some(frame);
+        }
         if self.closing
             || self.failed.is_some()
             || self.pending_open.is_some()
@@ -85,6 +88,10 @@ impl Lifetime for Session {
         Ok(())
     }
     fn did_present_cpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
+        #[cfg(feature = "native-composition")]
+        if self.accept_preview_cpu(target)? {
+            return Ok(());
+        }
         if self.document.cpu_pending != Some(target) {
             return Err("Canvas received a foreign CPU presentation acknowledgement".into());
         }
@@ -131,6 +138,8 @@ impl Lifetime for Session {
         self.start_owned(spec)
     }
     fn resize(&mut self, extent: Extent) -> Result<(), Box<dyn Error>> {
+        #[cfg(feature = "native-composition")]
+        self.resize_preview_candidate(extent)?;
         let previous = self.document.tools.navigation().viewport().surface();
         let now = self.navigation_time();
         if previous != extent {
@@ -235,6 +244,10 @@ impl Lifetime for Session {
         if self.config.gpu.is_some() {
             return None;
         }
+        #[cfg(feature = "native-composition")]
+        if let Some((frame, _)) = self.preview_cpu_frame() {
+            return Some(frame);
+        }
         self.document.cpu_frame()
     }
 
@@ -269,6 +282,21 @@ impl Lifetime for Session {
                     tracing::error!(operation="canvas_display_deadline", cause=%cause, "Canvas display selection is invalid");
                     None
                 }
+            }
+        };
+        #[cfg(feature = "native-composition")]
+        let presentation = {
+            let preview = match self.preview_deadline(now) {
+                Ok(deadline) => deadline
+                    .and_then(|deadline| native_now.checked_add(deadline.saturating_sub(now))),
+                Err(cause) => {
+                    tracing::error!(operation="canvas_preview_deadline", cause=%cause, "Canvas preview pacing is invalid");
+                    None
+                }
+            };
+            match (presentation, preview) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
             }
         };
         match (motion, presentation) {

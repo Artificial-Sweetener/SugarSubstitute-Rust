@@ -2,12 +2,15 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Carry surface messages with their current native identity and allocation custody.
 
+mod presentation;
+pub use presentation::SurfacePresentation;
+
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::{
     canvas_surface::{
         CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryRequest, CanvasSurfaceDiscoveryStatus,
-        CanvasSurfaceMessage, CanvasSurfaceMessageError, CanvasSurfaceReplyStatus,
-        CanvasSurfaceRequest, CanvasViewportState,
+        CanvasSurfaceMessage, CanvasSurfaceMessageError, CanvasSurfacePresentationRequest,
+        CanvasSurfaceReplyStatus, CanvasSurfaceRequest, CanvasViewportState,
     },
     execution::{MemoryClaim, MemoryLease},
     panel::{PanelError, PanelSession},
@@ -160,6 +163,29 @@ impl SurfaceReply {
         Self::validate_custody(identity, request.session(), &claim)?;
         let payload =
             request.reply(status, capabilities, message).map_err(SurfaceReplyError::Encode)?;
+        Ok(Self {
+            identity,
+            #[cfg(any(target_os = "windows", test))]
+            request_id: request.request_id(),
+            payload,
+            _claim: claim,
+        })
+    }
+
+    /// Encode a correlated watch outcome while retaining the ordinary request's allocation.
+    ///
+    /// # Errors
+    /// Rejects insufficient storage, foreign navigation, or invalid shared watch data.
+    pub fn presentation(
+        identity: MainIdentity,
+        request: &CanvasSurfacePresentationRequest,
+        status: CanvasSurfaceDiscoveryStatus,
+        enabled: bool,
+        message: &str,
+        claim: MemoryClaim,
+    ) -> Result<Self, SurfaceReplyError> {
+        Self::validate_custody(identity, request.session(), &claim)?;
+        let payload = request.reply(status, enabled, message).map_err(SurfaceReplyError::Encode)?;
         Ok(Self {
             identity,
             #[cfg(any(target_os = "windows", test))]

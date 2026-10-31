@@ -12,6 +12,7 @@ use sugarsubstitute_canvas::{
 use sugarsubstitute_image_ops::{
     AssetId, DisplaySample, Extent, RasterSource, Reconstruction, Region, bilinear_display_pixel,
 };
+mod reidentification;
 
 struct TestSource {
     extent: Extent,

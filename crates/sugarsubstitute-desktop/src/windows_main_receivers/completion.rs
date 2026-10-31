@@ -210,7 +210,9 @@ mod tests {
         };
         Ok(OwnedDelivery {
             context: 17,
-            ticket: crate::main_panel_ingress::Ticket(1),
+            correlation: crate::main_native_delivery::DeliveryCorrelation::Transport(
+                crate::main_panel_ingress::Ticket(1),
+            ),
             delivery: crate::main_native_delivery::NativeDelivery::Ingress(
                 crate::PanelIngressReceipt::control(identity, lease.claim(64 * 1024)?)?,
             ),
@@ -333,3 +335,7 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "completion/presentation_tests.rs"]
+mod presentation_tests;

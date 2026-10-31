@@ -171,7 +171,9 @@ pub use main_canvas_context::{
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};
 pub use main_panel_contract::{PanelCommand, PanelObservation};
 pub use main_panel_ingress_receipt::{PanelIngressReceipt, PanelIngressReceiptError};
-pub use main_surface_contract::{SurfaceObservation, SurfaceReply, SurfaceReplyError};
+pub use main_surface_contract::{
+    SurfaceObservation, SurfacePresentation, SurfaceReply, SurfaceReplyError,
+};
 
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]

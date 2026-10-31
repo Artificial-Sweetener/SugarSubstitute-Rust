@@ -312,3 +312,57 @@ fn invalid_ordinary_request_uses_one_terminal_refusal_and_preserves_its_original
     assert!(lease.claim(1).is_err());
     Ok(())
 }
+
+#[test]
+fn asynchronous_presentation_cannot_begin_or_complete_an_ordinary_credit()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::canvas_surface::{
+        CanvasSurfaceAddress, CanvasSurfacePresentationChange, CanvasSurfacePresentationDisplay,
+        CanvasSurfacePresentationStatus,
+    };
+    let lease = MemoryLease::new(4 * STORAGE_BYTES, Box::new(Release));
+    let notification_lease = MemoryLease::new(STORAGE_BYTES, Box::new(Release));
+    let mut owner = Admission::new(&lease)?;
+    owner.synchronize(Some(17));
+    let mut ordinary = None;
+    for _ in LANES {
+        let action = owner.action()?.ok_or("Missing grant")?;
+        owner.action_completed(17, action)?;
+        if action.lane == Lane::Ordinary {
+            ordinary = Some(action);
+        }
+    }
+    let ordinary = ordinary.ok_or("Missing ordinary grant")?;
+    let claim = owner
+        .consume(17, Lane::Ordinary, ordinary.ticket, Some(1))?
+        .ok_or("Missing ordinary claim")?;
+    let address = CanvasSurfaceAddress::decode(br#"{"sessionId":"canvas:w","viewId":"view:a","windowId":"window:a","attachmentId":"attachment:a","generation":1}"#)?;
+    let change = CanvasSurfacePresentationChange::new(
+        address,
+        1,
+        "preview:one".into(),
+        1,
+        CanvasSurfacePresentationStatus::Failed,
+        CanvasSurfacePresentationDisplay::Empty,
+        "".into(),
+    )?;
+    let notification = NativeDelivery::Presentation(crate::SurfacePresentation::new(
+        identity()?,
+        &change,
+        notification_lease.claim(STORAGE_BYTES)?,
+    )?);
+    assert_eq!(notification.lane(), None);
+    assert_eq!(notification.request_id(), None);
+    assert!(owner.begin_delivery(&notification).is_err());
+    assert!(owner.completed(ordinary.ticket, notification).is_err());
+    assert!(notification_lease.claim(STORAGE_BYTES).is_ok());
+    assert!(owner.action()?.is_none());
+    let reply = ordinary_reply(1, claim)?;
+    let ticket = owner.begin_delivery(&reply)?;
+    assert_eq!(ticket, ordinary.ticket);
+    owner.completed(ticket, reply)?;
+    let next = owner.action()?.ok_or("Missing renewed ordinary credit")?;
+    assert_eq!(next.lane, Lane::Ordinary);
+    assert_ne!(next.ticket, ordinary.ticket);
+    Ok(())
+}

@@ -211,7 +211,7 @@ impl CanvasSurfacePreviewFormat {
 
 impl CanvasSurfaceDiscoveryStatus {
     /// Return the shared schema's discovery outcome token.
-    const fn as_str(self) -> &'static str {
+    pub(super) const fn as_str(self) -> &'static str {
         match self {
             Self::Available => "available",
             Self::Unsupported => "unsupported",

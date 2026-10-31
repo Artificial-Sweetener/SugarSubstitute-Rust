@@ -6,6 +6,8 @@ mod address;
 mod capabilities;
 mod file_reference;
 mod message;
+mod presentation;
+mod preview;
 mod reply;
 #[cfg(test)]
 #[path = "canvas_surface/tests.rs"]
@@ -25,6 +27,15 @@ pub use file_reference::{
 pub use message::{
     CanvasSurfaceMessage, CanvasSurfaceMessageError, CanvasSurfaceOperation,
     CanvasSurfaceReplyStatus, CanvasSurfaceRequest, MAX_SURFACE_MESSAGE_BYTES,
+};
+pub use presentation::{
+    CanvasSurfacePresentationChange, CanvasSurfacePresentationDisplay,
+    CanvasSurfacePresentationRequest, CanvasSurfacePresentationStatus,
+};
+pub use preview::{
+    CanvasSurfacePreviewBegin, CanvasSurfacePreviewChunk, CanvasSurfacePreviewIdentity,
+    CanvasSurfacePreviewLease, MAX_SURFACE_PREVIEW_BYTES, MAX_SURFACE_PREVIEW_CHUNK_BYTES,
+    SURFACE_PREVIEW_LEASE_MILLISECONDS,
 };
 pub use viewport::{CanvasViewportCommand, CanvasViewportMode, CanvasViewportState};
 

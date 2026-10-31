@@ -5,7 +5,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { Script, createContext } from 'node:vm';
-const source = readFileSync(process.argv[2] ?? new URL('../src/main_actor/panel/bridge.js', import.meta.url), 'utf8');
+const sourcePath = process.argv[2] ?? new URL('../src/main_actor/panel/bridge.js', import.meta.url);
+const source = readFileSync(sourcePath, 'utf8');
+const policySource = readFileSync(new URL('../src/main_actor/panel/bridge_protocol.js', import.meta.url), 'utf8');
+const sources = [policySource, source];
 const binding = '__sugarcubes_substitute_send_v3';
 const host = 'ai.artificialsweetener.sugarsubstitute';
 const session = 'session-12345678';
@@ -27,17 +30,17 @@ function transportError(error, code) {
   assert.equal(error.cause.code, `panel.transport.${code}`);
   return true;
 }
-function fixture(post) {
+function fixture(post, scripts = sources) {
   const sent = [], received = [], events = new Map(), window = {};
   window.top = window;
   const context = createContext({ window, URLSearchParams, TextEncoder,
     location: { search: `?sc-panel-host=${host}&sc-panel-session=${session}&sc-panel-transport=native` },
     [binding]: payload => { if (post) post(payload); sent.push(payload); },
     addEventListener: (name, listener) => events.set(name, listener) });
-  new Script(source).runInContext(context);
+  for (const script of scripts) new Script(script).runInContext(context);
   const bridge = context.sugarcubesPanelHost;
-  bridge.subscribe(value => received.push(normalize(value)));
-  return { bridge, sent, received, events, receipt: context.__sugarcubes_substitute_transport_v1, deliver: context.__sugarcubes_substitute_deliver_v3 };
+  bridge?.subscribe(value => received.push(normalize(value)));
+  return { context, bridge, sent, received, events, receipt: context.__sugarcubes_substitute_transport_v1, deliver: context.__sugarcubes_substitute_deliver_v3 };
 }
 function envelope(payload) {
   return JSON.stringify({ name: binding, payload, executionContextId: 0 }).replace('"executionContextId":0', '"executionContextId":-9223372036854775808');
@@ -50,8 +53,8 @@ function admit(message, lane = 'o') {
   return f;
 }
 
-test('script fits the unchanged native registration command', () => {
-  assert.ok(Buffer.byteLength(JSON.stringify({ source })) <= 8192);
+test('each bootstrap script fits the unchanged native registration command', () => {
+  for (const source of sources) assert.ok(Buffer.byteLength(JSON.stringify({ source })) <= 8192);
 });
 test('escaped selection refuses before custody and permits a later small request', () => {
   const f = fixture(), request = selection('\\'.repeat(3800));
@@ -111,14 +114,39 @@ test('control grant is independent and configure can start context before applie
   f.receipt('g', 'o', 1);
   assert.equal(f.sent[2], framed(canvas(), 'o', 1));
 });
-test('one active plus one waiting ordinary rejects duplicate identities and overload', () => {
+test('one active plus eight waiting ordinary rejects duplicate identities and overload', () => {
   const f = admit(canvas());
-  f.bridge.send(canvas(2));
-  for (const id of [1, 2]) assert.throws(() => f.bridge.send(canvas(id)), error => transportError(error, 'duplicate'));
-  assert.throws(() => f.bridge.send(canvas(3)), error => transportError(error, 'capacity'));
+  for (let id = 2; id <= 9; id++) f.bridge.send(canvas(id));
+  for (const id of [1, 5, 9]) assert.throws(() => f.bridge.send(canvas(id)), error => transportError(error, 'duplicate'));
+  assert.throws(() => f.bridge.send(canvas(10)), error => transportError(error, 'capacity'));
   assert.equal(f.sent.length, 1);
   assert.equal(f.receipt('g', 'o', maxTicket - 1), false);
   assert.equal(f.receipt('a', 'o', maxTicket), false);
+});
+test('concurrent owners queue in order and a cancelled middle request leaves the rest intact', () => {
+  const f = fixture();
+  f.receipt('g', 'o', 1);
+  f.bridge.send(canvas(1, 'surface.capabilities.request', { schema: 1 }));
+  f.bridge.send(canvas(2, 'surface.presentation.request', { schema: 1, enabled: true }));
+  f.bridge.send({ ...selection(), requestId: 3 });
+  f.bridge.send(canvas(4, 'surface.presentation.request', { schema: 1, enabled: true }));
+  f.bridge.send(canvas(2, 'cancel'));
+  assert.deepEqual(f.received.map(value => [value.requestId, value.type, value.failure?.status]),
+    [[2, 'error.reply', 'cancelled']]);
+  f.deliver(canvas(1, 'surface.capabilities.reply', { status: 'available', capabilities: {}, message: '' }), 1);
+  f.receipt('g', 'o', 2);
+  f.deliver(canvas(3, 'surface.reply', { address, revision: 1, status: 'applied', message: '' }), 2);
+  f.receipt('g', 'o', 3);
+  assert.deepEqual(f.sent.map(payload => JSON.parse(payload.slice(payload.indexOf('{'))).type),
+    ['surface.capabilities.request', 'surface.select', 'surface.presentation.request']);
+});
+test('a failed native binding answers every queued ordinary request', () => {
+  const f = fixture(() => { throw new Error('binding failed'); });
+  for (const id of [1, 2, 3]) f.bridge.send(canvas(id));
+  assert.equal(f.receipt('g', 'o', 1), false);
+  assert.deepEqual(f.received.map(value => [value.requestId, value.failure.status]),
+    [[1, 'unavailable'], [2, 'unavailable'], [3, 'unavailable']]);
+  assert.throws(() => f.bridge.send(canvas(4)), error => transportError(error, 'closed'));
 });
 test('terminal delivery retains custody until native grant including reentrant sends', () => {
   const f = fixture();
@@ -522,4 +550,157 @@ test('literal delivery, subscriptions and page retirement retain their exact lif
   assert.throws(() => f.bridge.subscribe(() => {}), error => transportError(error, 'subscription'));
   assert.equal(f.received.length, 1);
   assert.equal(f.sent.length, 0);
+});
+
+const watch = (requestId = 1, enabled = true) =>
+  canvas(requestId, 'surface.presentation.request', { schema: 1, enabled });
+const previewRequest = (step, requestId = 1, data = Buffer.alloc(8192).toString('base64')) => {
+  const extra = step === 'begin' ? {
+    preview: { generation: 1, promptId: 'prompt:one', sourceId: 'source:one',
+      runOrder: 1, sequence: 1, token: 'preview:one' }, byteLength: 8192, format: 'jpeg',
+  } : { token: 'preview:one', leaseRevision: 1, ...(step === 'chunk' ? { offset: 0, data } : {}) };
+  return canvas(requestId, `surface.preview.${step}`, { address, revision: 1, ...extra });
+};
+const presentation = () => canvas(0, 'surface.presentation.changed', { schema: 1, change: {
+  address, sequence: 1, token: 'preview:one', leaseRevision: 1, status: 'presented',
+  displayed: { type: 'preview', token: 'preview:one', leaseRevision: 1,
+    viewport: viewportReply().viewport }, message: '',
+} });
+
+for (const scripts of [sources, [...sources].reverse()]) {
+  test(`bootstrap installs once with ${scripts === sources ? 'policy' : 'transport'} evaluated first`, () => {
+    const f = fixture(undefined, scripts), bridge = f.bridge;
+    for (let count = 0; count < 2; count++)
+      new Script('globalThis.__sugarcubes_substitute_install_v3()').runInContext(f.context);
+    assert.equal(f.context.sugarcubesPanelHost, bridge);
+    assert.equal(f.events.size, 1);
+    f.receipt('g', 'o', 1);
+    bridge.send(watch());
+    assert.deepEqual(f.sent, [framed(watch(), 'o', 1)]);
+    f.events.get('pagehide')();
+    new Script('globalThis.__sugarcubes_substitute_install_v3()').runInContext(f.context);
+    assert.throws(() => bridge.send(watch(2)), error => transportError(error, 'closed'));
+  });
+}
+
+test('either missing bootstrap keeps the public bridge absent', () => {
+  for (const script of sources) {
+    const f = fixture(undefined, [script]);
+    assert.equal(f.bridge, undefined);
+    assert.equal(f.receipt, undefined);
+    assert.equal(f.events.size, 0);
+  }
+});
+
+test('presentation watch requires its named reply and retires only on the native ticket', () => {
+  const request = watch(), f = admit(request);
+  assert.deepEqual(f.sent, [framed(request)]);
+  for (const type of ['surface.reply', 'surface.presentation.changed', 'surface.capabilities.reply'])
+    assert.equal(f.deliver(canvas(1, type), maxTicket), false);
+  assert.equal(f.deliver(canvas(1, 'surface.presentation.reply'), maxTicket), true);
+  assert.equal(f.deliver(canvas(1, 'surface.presentation.reply'), maxTicket), false);
+});
+
+for (const step of ['begin', 'chunk', 'end', 'withdraw']) {
+  test(`preview ${step} preserves ordinary custody and accepts only the shared surface reply`, () => {
+    const request = previewRequest(step), f = admit(request);
+    assert.deepEqual(f.sent, [framed(request)]);
+    for (const type of [`surface.preview.reply`, `surface.preview.${step}.reply`, 'surface.presentation.reply'])
+      assert.equal(f.deliver(canvas(1, type), maxTicket), false);
+    const reply = canvas(1, 'surface.reply', { address, revision: 1, status: 'applied', message: '' });
+    assert.equal(f.deliver(reply, maxTicket), true);
+    assert.equal(f.deliver(reply, maxTicket), false);
+  });
+
+  test(`queued preview ${step} cancellation keeps its addressed terminal reply`, () => {
+    const f = fixture();
+    f.bridge.send(previewRequest(step));
+    f.bridge.send(canvas(1, 'cancel'));
+    assert.deepEqual(f.sent, []);
+    assert.deepEqual(f.received, [canvas(1, 'surface.reply', {
+      address, revision: 1, status: 'cancelled', message: '',
+    })]);
+    f.receipt('g', 'o', 1);
+    f.bridge.send(viewport(2));
+    assert.deepEqual(f.sent, [framed(viewport(2), 'o', 1)]);
+  });
+}
+
+test('queued watch cancellation emits the address-free shared error shape', () => {
+  const f = fixture();
+  f.bridge.send(watch());
+  f.bridge.send(canvas(1, 'cancel'));
+  assert.deepEqual(f.sent, []);
+  assert.deepEqual(f.received, [canvas(1, 'error.reply', { failure: { status: 'cancelled', message: '' } })]);
+  f.bridge.send(watch(2, false));
+  f.receipt('g', 'o', 1);
+  assert.deepEqual(f.sent, [framed(watch(2, false), 'o', 1)]);
+});
+
+for (const request of [watch(), previewRequest('chunk')]) {
+  test(`forwarded ${request.type} cancellation waits for its actual ordinary terminal`, () => {
+    const f = fixture();
+    f.receipt('g', 'o', 1);
+    f.receipt('g', 'x', 1);
+    f.bridge.send(request);
+    f.bridge.send(canvas(1, 'cancel'));
+    assert.equal(f.receipt('a', 'x', 1), true);
+    assert.deepEqual(f.received, []);
+    assert.equal(f.receipt('g', 'o', 2), false);
+    const reply = canvas(1, 'error.reply', { failure: { status: 'cancelled', message: '' } });
+    assert.equal(f.deliver(reply, 1), true);
+    assert.equal(f.receipt('g', 'o', 2), true);
+  });
+}
+
+test('maximum preview chunk fits both public bounds and oversized encoded bytes refuse before custody', () => {
+  const request = previewRequest('chunk'), f = fixture();
+  assert.equal(request.data.length, 10924);
+  f.receipt('g', 'o', 1);
+  f.bridge.send(request);
+  assert.equal(f.sent[0], framed(request, 'o', 1));
+  assert.ok(Buffer.byteLength(JSON.stringify(request)) <= 16384);
+  assert.ok(envelope(f.sent[0]).length + 1 <= 16384);
+  const oversized = previewRequest('chunk', 2, Buffer.alloc(16384).toString('base64'));
+  assert.throws(() => f.bridge.send(oversized), error => transportError(error, 'bound'));
+  assert.equal(f.sent.length, 1);
+  const reply = canvas(1, 'surface.reply', { address, revision: 1, status: 'applied', message: '' });
+  assert.equal(f.deliver(reply, 1), true);
+  f.receipt('g', 'o', 2);
+  f.bridge.send(viewport(2));
+  assert.equal(f.sent[1], framed(viewport(2), 'o', 2));
+});
+
+test('presentation notifications interleave preview bytes and final viewport without releasing custody', () => {
+  const f = fixture(), notification = presentation();
+  f.receipt('g', 'o', 1);
+  f.bridge.send(previewRequest('chunk'));
+  f.bridge.send(viewport(2));
+  assert.equal(f.deliver(notification), true);
+  assert.deepEqual(f.received, [notification]);
+  assert.equal(f.receipt('g', 'o', 2), false);
+  assert.equal(f.sent.length, 1);
+  assert.equal(f.deliver(notification, 1), false);
+  assert.equal(f.deliver(canvas(1, 'surface.reply', { address, revision: 1, status: 'applied', message: '' }), 1), true);
+  assert.equal(f.receipt('g', 'o', 2), true);
+  assert.equal(f.sent[1], framed(viewport(2), 'o', 2));
+  assert.equal(f.deliver(notification), true);
+  assert.equal(f.receipt('g', 'o', 3), false);
+  assert.equal(f.deliver(viewportReply(2), 2), true);
+  assert.equal(f.receipt('g', 'o', 3), true);
+});
+
+test('unsolicited canvas delivery admits only exact current-session zero-id presentation notifications', () => {
+  const f = fixture(), notification = presentation();
+  f.receipt('g', 'o', 1);
+  for (const value of [canvas(0, 'surface.reply'), canvas(0, 'surface.presentation.reply'),
+    canvas(0, 'context.reply'), canvas(1, 'surface.presentation.changed'),
+    { ...notification, requestId: undefined }, { ...notification, version: 2 },
+    { ...notification, session: 'another-session' }, { ...notification, protocol: 'other' }])
+    assert.equal(f.deliver(value), false);
+  assert.deepEqual(f.received, []);
+  assert.equal(f.deliver(notification), true);
+  f.bridge.send(watch());
+  assert.deepEqual(f.sent, [framed(watch(), 'o', 1)]);
+  assert.equal(f.receipt('g', 'o', 2), false);
 });

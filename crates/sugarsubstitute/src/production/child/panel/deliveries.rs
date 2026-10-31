@@ -140,6 +140,14 @@ impl Deliveries {
                 "",
                 claim,
             )?,
+            CanvasSurfaceMessage::Presentation(request) => SurfaceReply::presentation(
+                identity,
+                &request,
+                CanvasSurfaceDiscoveryStatus::Unsupported,
+                false,
+                "",
+                claim,
+            )?,
             CanvasSurfaceMessage::Cancel { .. } => {
                 return Err("Panel cancellation escaped its dedicated delivery lane".into());
             }

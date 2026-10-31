@@ -10,8 +10,9 @@ impl NativeSurface {
     pub(in crate::startup::canvas) fn retire_navigation(
         &mut self,
         identity: MainIdentity,
-        session: Option<&mut Session>,
+        mut session: Option<&mut Session>,
     ) -> Result<(), Box<dyn Error>> {
+        self.retire_preview_navigation(identity, session.as_deref_mut())?;
         let retained = self.retained.as_ref().is_some_and(|binding| binding.identity == identity);
         let current = self.binding.as_ref().is_some_and(|binding| binding.identity == identity);
         if retained && self.binding.as_ref().is_some_and(|binding| binding.identity != identity) {
@@ -37,6 +38,7 @@ impl NativeSurface {
                 let owner = match command {
                     DesktopStartupCommand::SendSurface(reply) => Some(reply.identity()),
                     DesktopStartupCommand::SendCanvasContext(reply) => Some(reply.identity()),
+                    DesktopStartupCommand::SendSurfacePresentation(reply) => Some(reply.identity()),
                     DesktopStartupCommand::CompletePanelIngress(receipt) => {
                         Some(receipt.identity())
                     }

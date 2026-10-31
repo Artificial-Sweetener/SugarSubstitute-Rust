@@ -257,6 +257,8 @@ impl Session {
             Ok(job) => {
                 self.rendering = Some(Rendering {
                     job,
+                    document: identity,
+                    source_revision,
                     reconstruction,
                     tier,
                     coverage,

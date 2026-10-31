@@ -5,6 +5,28 @@
 use super::*;
 
 impl Navigation {
+    /// Stop gestures and motion at a camera already accepted by the presentation owner.
+    /// The caller qualifies this camera against the current document and source before use.
+    /// Coordinates are document pixels and scale is physical pixels per document pixel.
+    /// A completed destination retains its semantic mode; an interrupted destination is Custom.
+    /// No elapsed motion is sampled beyond the supplied accepted camera.
+    ///
+    /// # Errors
+    /// Rejects absent content, foreign physical bounds or backward time without mutation.
+    pub fn freeze_at(&mut self, accepted: Viewport, now: Duration) -> Result<(), CanvasError> {
+        if self.content.is_none() || accepted.surface() != self.view.surface() {
+            return Err(CanvasError::Invalid("Accepted camera does not match navigation content"));
+        }
+        let mut next = *self;
+        next.observe_time(now)?;
+        let mode = if next.target_viewport() == accepted { next.mode } else { ZoomMode::Custom };
+        next.cancel();
+        next.view = accepted;
+        next.mode = mode;
+        *self = next;
+        Ok(())
+    }
+
     /// Stop only a matching semantic destination at its currently sampled camera.
     /// Physical capture/wheel gestures retain ownership, and a newer destination is untouched.
     /// Already sampled motion is preserved; stopping partway through a stop becomes Custom.

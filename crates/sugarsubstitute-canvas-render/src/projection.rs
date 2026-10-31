@@ -182,6 +182,39 @@ impl ProjectionBuffer {
     }
 }
 impl CpuProjection {
+    /// Consume these immutable display pixels under a newer presentation identity on the same
+    /// surface. Source identities, cameras, physical pixel storage and its memory claim are moved
+    /// unchanged in constant time, without allocation or image evaluation.
+    /// The application assigns a target newer than every frame already accepted for the surface;
+    /// this operation only compares against this projection's preceding target.
+    /// Call where releasing this projection's storage on rejection is permitted.
+    /// # Errors
+    /// Returns [`RenderError::Invalid`] for a different surface and
+    /// [`RenderError::StaleTarget`] for an equal or regressed generation. Rejection consumes and
+    /// releases this projection and its exclusive allocation.
+    pub fn reidentify(mut self, target: FrameStamp) -> Result<Self, RenderError> {
+        self.reidentify_in_place(target)?;
+        Ok(self)
+    }
+    /// Assign a newer presentation identity on the same surface while retaining exclusive custody.
+    /// Source identities, cameras, physical pixels and their memory claim remain unchanged.
+    /// This constant-time operation performs no allocation, evaluation or storage release.
+    /// The application assigns a target newer than every frame already accepted for the surface;
+    /// validation only compares against this projection's preceding target.
+    /// # Errors
+    /// Returns [`RenderError::Invalid`] for a different surface and
+    /// [`RenderError::StaleTarget`] for an equal or regressed generation. Every error preserves
+    /// the preceding target and complete pixel allocation for publication or worker retirement.
+    pub fn reidentify_in_place(&mut self, target: FrameStamp) -> Result<(), RenderError> {
+        if target.surface != self.target.surface {
+            return Err(RenderError::Invalid("Projection target surface differs"));
+        }
+        if target.generation <= self.target.generation {
+            return Err(RenderError::StaleTarget);
+        }
+        self.target = target;
+        Ok(())
+    }
     /// Consume the display identity and recover only its exclusive allocation for worker reuse.
     pub fn into_buffer(self) -> ProjectionBuffer {
         self.buffer

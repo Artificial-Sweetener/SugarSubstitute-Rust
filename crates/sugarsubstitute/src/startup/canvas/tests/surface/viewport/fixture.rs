@@ -4,14 +4,25 @@
 
 use super::*;
 
-pub(super) struct Fixture {
-    pub(super) canvas: EmbeddedCanvas,
-    pub(super) clock: Arc<ClockValue>,
-    pub(super) panel: PanelSession,
-    pub(super) memory: MemoryLease,
-    pub(super) identity: MainIdentity,
-    client: ExecutionClient,
-    wake: Arc<Wake>,
+/// Execution progress observed between host-loop turns.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::startup::canvas::tests::surface) enum Execution {
+    /// Admitted work is queued or running; its completion supplies a wake.
+    Running,
+    /// A terminal completion has not been taken by its owner; its wake may still be in flight.
+    Delivering,
+    /// No admitted work remains, so only host input or a reported deadline can make progress.
+    Idle,
+}
+
+pub(in crate::startup::canvas::tests::surface) struct Fixture {
+    pub(in crate::startup::canvas::tests::surface) canvas: EmbeddedCanvas,
+    pub(in crate::startup::canvas::tests::surface) clock: Arc<ClockValue>,
+    pub(in crate::startup::canvas::tests::surface) panel: PanelSession,
+    pub(in crate::startup::canvas::tests::surface) memory: MemoryLease,
+    pub(in crate::startup::canvas::tests::surface) identity: MainIdentity,
+    pub(in crate::startup::canvas::tests::surface) client: ExecutionClient,
+    pub(in crate::startup::canvas::tests::surface) wake: Arc<Wake>,
     owner: ExecutionOwner,
     allocation: WebViewAllocation,
     _directory: tempfile::TempDir,
@@ -19,12 +30,24 @@ pub(super) struct Fixture {
 
 impl Fixture {
     /// Select an actual source on a prepared visible attachment, leaving commit to each test.
-    pub(super) fn new() -> Result<Self, Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn new() -> Result<Self, Box<dyn Error>> {
         Self::with_density(1.0)
     }
 
     /// Project CSS geometry through the same trusted desktop allocation density as production.
-    pub(super) fn with_density(density: f64) -> Result<Self, Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn with_density(
+        density: f64,
+    ) -> Result<Self, Box<dyn Error>> {
+        Self::with_options(density, true)
+    }
+
+    /// Prepare visible geometry without selecting any final result.
+    pub(in crate::startup::canvas::tests::surface) fn empty() -> Result<Self, Box<dyn Error>> {
+        Self::with_options(1.0, false)
+    }
+
+    /// Share actual execution and attachment setup across final and first-preview qualification.
+    fn with_options(density: f64, select: bool) -> Result<Self, Box<dyn Error>> {
         let directory = tempfile::tempdir()?;
         let output = directory.path().join("canvas-qualification-output");
         std::fs::create_dir(&output)?;
@@ -69,13 +92,20 @@ impl Fixture {
         wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 1, "ready")?;
         fixture.geometry(2, 80, 40)?;
         fixture.take(2, "applied")?;
-        fixture.select(3, "wide.png")?;
-        wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+        if select {
+            fixture.select(3, "wide.png")?;
+            wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+        }
         Ok(fixture)
     }
 
     /// Submit the same closed public envelope used by the shared canvas client.
-    pub(super) fn send(&mut self, id: u64, kind: &str, extra: Value) -> Result<(), Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn send(
+        &mut self,
+        id: u64,
+        kind: &str,
+        extra: Value,
+    ) -> Result<(), Box<dyn Error>> {
         self.canvas.surface(
             self.identity,
             request(&self.panel, id, kind, extra)?,
@@ -84,11 +114,15 @@ impl Fixture {
         )
     }
 
-    pub(super) fn viewport(&mut self, id: u64, command: Value) -> Result<(), Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn viewport(
+        &mut self,
+        id: u64,
+        command: Value,
+    ) -> Result<(), Box<dyn Error>> {
         self.send(id, "surface.viewport.request", json!({"command":command}))
     }
 
-    pub(super) fn geometry(
+    pub(in crate::startup::canvas::tests::surface) fn geometry(
         &mut self,
         id: u64,
         width: u32,
@@ -107,7 +141,11 @@ impl Fixture {
         )
     }
 
-    pub(super) fn select(&mut self, id: u64, filename: &str) -> Result<(), Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn select(
+        &mut self,
+        id: u64,
+        filename: &str,
+    ) -> Result<(), Box<dyn Error>> {
         self.send(
             id,
             "surface.select",
@@ -118,7 +156,10 @@ impl Fixture {
         )
     }
 
-    pub(super) fn cancel(&mut self, id: u64) -> Result<(), Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn cancel(
+        &mut self,
+        id: u64,
+    ) -> Result<(), Box<dyn Error>> {
         let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
             "protocol":"sugarcubes.canvas", "version":3, "session":self.panel.as_str(),
             "requestId":id, "type":"cancel"
@@ -126,15 +167,56 @@ impl Fixture {
         self.canvas.surface(self.identity, message, None, self.memory.claim(64 * 1024)?)
     }
 
-    pub(super) fn advance(&self, milliseconds: u64) {
+    pub(in crate::startup::canvas::tests::surface) fn advance(&self, milliseconds: u64) {
         self.clock.0.fetch_add(milliseconds * 1_000_000, Ordering::SeqCst);
     }
 
-    pub(super) fn pump(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn pump(
+        &mut self,
+    ) -> Result<(), Box<dyn Error>> {
         pump(&mut self.canvas, &self.client)
     }
 
-    pub(super) fn accepted(&self) -> Result<AcceptedCamera, Box<dyn Error>> {
+    /// Observe real worker progress before advancing injected presentation cadence.
+    pub(in crate::startup::canvas::tests::surface) fn wait_preview_progress(
+        &self,
+        observed: u64,
+    ) -> Result<(), Box<dyn Error>> {
+        let progress = self.owner.poll_shutdown()?;
+        let terminal = progress.unresolved_jobs.iter().any(|job| {
+            !job.acknowledged
+                && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
+        });
+        if progress.running + progress.queued > 0 && !terminal {
+            self.wake.wait_after(observed).map_err(|cause| {
+                format!("Preview worker progress stopped: {cause}; {progress:?}")
+            })?;
+        } else if self.canvas.next_deadline().is_some() {
+            self.advance(100);
+        } else if !terminal {
+            return Err("Preview has no worker or presentation deadline to advance".into());
+        }
+        Ok(())
+    }
+
+    /// Classify actual execution progress that can still arrive without new host input.
+    pub(in crate::startup::canvas::tests::surface) fn execution(
+        &self,
+    ) -> Result<Execution, Box<dyn Error>> {
+        let progress = self.owner.poll_shutdown()?;
+        if progress.running + progress.queued > 0 {
+            return Ok(Execution::Running);
+        }
+        let delivering = progress.unresolved_jobs.iter().any(|job| {
+            !job.acknowledged
+                && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
+        });
+        Ok(if delivering { Execution::Delivering } else { Execution::Idle })
+    }
+
+    pub(in crate::startup::canvas::tests::surface) fn accepted(
+        &self,
+    ) -> Result<AcceptedCamera, Box<dyn Error>> {
         self.canvas
             .session
             .as_ref()
@@ -143,7 +225,9 @@ impl Fixture {
     }
 
     /// Borrow only an actual pending frame; acknowledged retained frames cannot free a new slot.
-    pub(super) fn pending(&mut self) -> Result<FrameStamp, Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn pending(
+        &mut self,
+    ) -> Result<FrameStamp, Box<dyn Error>> {
         loop {
             let observed = self.wake.revision();
             self.pump()?;
@@ -154,7 +238,10 @@ impl Fixture {
         }
     }
 
-    pub(super) fn commit(&mut self, id: u64) -> Result<AcceptedCamera, Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn commit(
+        &mut self,
+        id: u64,
+    ) -> Result<AcceptedCamera, Box<dyn Error>> {
         self.send(id, "surface.commit", json!({}))?;
         let target = self.pending()?;
         self.canvas.presented(target)?;
@@ -162,7 +249,11 @@ impl Fixture {
         self.accepted()
     }
 
-    pub(super) fn take(&mut self, id: u64, status: &str) -> Result<Value, Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn take(
+        &mut self,
+        id: u64,
+        status: &str,
+    ) -> Result<Value, Box<dyn Error>> {
         let command = self.canvas.take_command().ok_or("Surface response absent")?;
         self.decode(command, id, status)
     }
@@ -186,7 +277,10 @@ impl Fixture {
 
     /// Advance injected display time while actual completions and native uploads release custody.
     /// Check for no-op completion before demanding a frame that need not be allocated.
-    pub(super) fn complete(&mut self, id: u64) -> Result<Value, Box<dyn Error>> {
+    pub(in crate::startup::canvas::tests::surface) fn complete(
+        &mut self,
+        id: u64,
+    ) -> Result<Value, Box<dyn Error>> {
         loop {
             if let Some(command) = self.canvas.take_command() {
                 return self.decode(command, id, "applied");
@@ -209,26 +303,54 @@ impl Fixture {
     }
 
     /// Retire the canvas scope and join its original execution owner under one finite cutoff.
-    pub(super) fn finish(self) -> Result<(), Box<dyn Error>> {
-        self.finish_observing(None)
+    pub(in crate::startup::canvas::tests::surface) fn finish(self) -> Result<(), Box<dyn Error>> {
+        self.finish_observing(None, None)
+    }
+
+    /// Require every resident allocation claim to retire before releasing its final observation.
+    pub(in crate::startup::canvas::tests::surface) fn finish_resident(
+        self,
+        memory: MemoryLease,
+    ) -> Result<(), Box<dyn Error>> {
+        self.finish_observing(None, Some(memory))
     }
 
     /// Require the retained original native failure to survive scope settlement and final release.
-    pub(super) fn finish_failed(self, expected_code: i32) -> Result<(), Box<dyn Error>> {
-        self.finish_observing(Some(expected_code))
+    pub(in crate::startup::canvas::tests::surface) fn finish_failed(
+        self,
+        expected_code: i32,
+    ) -> Result<(), Box<dyn Error>> {
+        self.finish_observing(Some(expected_code), None)
     }
 
-    fn finish_observing(mut self, expected_code: Option<i32>) -> Result<(), Box<dyn Error>> {
+    fn finish_observing(
+        mut self,
+        expected_code: Option<i32>,
+        mut resident: Option<MemoryLease>,
+    ) -> Result<(), Box<dyn Error>> {
         assert!(self.canvas.take_command().is_none());
         let cutoff = self.clock.now().checked_add(Duration::from_secs(5))?;
         self.canvas.close_until(cutoff)?;
         loop {
             let observed = self.wake.revision();
             self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if self.canvas.settled()? {
+            let settled = self.canvas.settled()?;
+            if let Some(memory) = &resident
+                && let Ok(claim) = memory.claim(memory.bytes())
+            {
+                drop(claim);
+                resident = None;
+                continue;
+            }
+            if settled {
+                if resident.is_some() {
+                    return Err("Closed preview retains resident allocation claims".into());
+                }
                 break;
             }
-            self.wake.wait_after(observed)?;
+            self.wake.wait_after(observed).map_err(|cause| {
+                format!("Canvas close progress stopped: {cause}; {:?}", self.owner.poll_shutdown())
+            })?;
         }
         let canvas_result = self.canvas.finish();
         self.owner.request_shutdown(cutoff);

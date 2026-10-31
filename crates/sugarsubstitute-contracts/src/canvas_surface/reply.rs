@@ -81,7 +81,7 @@ impl CanvasSurfaceRequest {
 }
 
 /// Retain the complete surface-message byte bound after serialization.
-fn encode(value: &impl serde::Serialize) -> Result<Vec<u8>, CanvasSurfaceMessageError> {
+pub(super) fn encode(value: &impl serde::Serialize) -> Result<Vec<u8>, CanvasSurfaceMessageError> {
     let bytes = serde_json::to_vec(value).map_err(CanvasSurfaceMessageError::Malformed)?;
     if bytes.len() > MAX_SURFACE_MESSAGE_BYTES {
         return Err(CanvasSurfaceMessageError::TooLarge);

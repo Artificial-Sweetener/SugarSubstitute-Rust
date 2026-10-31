@@ -23,6 +23,8 @@ use sugarsubstitute_desktop::{
 
 mod backend;
 mod cancellation;
+mod preview;
+mod reattachment;
 mod replacement;
 mod viewport;
 

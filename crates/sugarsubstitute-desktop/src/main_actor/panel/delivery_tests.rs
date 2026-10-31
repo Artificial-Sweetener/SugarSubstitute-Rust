@@ -86,3 +86,56 @@ fn final_parameters_admit_the_exact_byte_boundary_and_refuse_the_next_byte()
     assert!(encode(17, &vec![b' '; MAX_PAYLOAD_BYTES + 1]).is_err());
     Ok(())
 }
+
+#[test]
+fn full_presentation_snapshots_fit_the_actual_no_ticket_command_at_shared_field_bounds()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::{
+        canvas_surface::{
+            CanvasSurfaceAddress, CanvasSurfacePresentationChange,
+            CanvasSurfacePresentationDisplay, CanvasSurfacePresentationStatus, CanvasViewportMode,
+            CanvasViewportState,
+        },
+        panel::PanelSession,
+    };
+    for character in ["\\", "\u{1f642}"] {
+        let address = CanvasSurfaceAddress::decode(&serde_json::to_vec(&json!({
+            "sessionId": format!("canvas:{}", character.repeat(249)),
+            "viewId": format!("view:{}", character.repeat(123)),
+            "windowId": format!("window:{}", character.repeat(121)),
+            "attachmentId": format!("attachment:{}", character.repeat(117)),
+            "generation": 9007199254740991_u64,
+        }))?)?;
+        for message in ["\0".repeat(512), "\u{1f642}".repeat(512), "\\".repeat(512)] {
+            let token = "t".repeat(24);
+            let viewport = CanvasViewportState::new(CanvasViewportMode::Fit, 1.0, 8192, 8192)?;
+            let change = CanvasSurfacePresentationChange::new(
+                address.clone(),
+                9007199254740991,
+                token.clone(),
+                9007199254740991,
+                CanvasSurfacePresentationStatus::Failed,
+                CanvasSurfacePresentationDisplay::Preview {
+                    token,
+                    lease_revision: 9007199254740991,
+                    viewport,
+                },
+                message,
+            )?;
+            let payload = change.encode(&PanelSession::new("s".repeat(80))?)?;
+            let parameters = encode(i64::MAX, &payload)?;
+            assert!(parameters.len() <= MAX_PARAMETERS_BYTES);
+            let parameters: Value = serde_json::from_str(&parameters)?;
+            let expression = parameters["expression"].as_str().ok_or("Missing expression")?;
+            let argument = expression
+                .strip_prefix(PREFIX)
+                .and_then(|value| value.strip_suffix(')'))
+                .ok_or("Missing no-ticket notification")?;
+            let actual: Value = serde_json::from_str(argument)?;
+            assert_eq!(actual, serde_json::from_slice::<Value>(&payload)?);
+            assert_eq!(actual["requestId"], 0);
+            assert_eq!(actual["type"], "surface.presentation.changed");
+        }
+    }
+    Ok(())
+}

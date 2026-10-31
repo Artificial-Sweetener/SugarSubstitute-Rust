@@ -11,6 +11,10 @@ use sugarsubstitute_image_ops::Extent;
 /// Convert validated web geometry into bounded native client coordinates.
 pub mod placement;
 
+/// Main-window canvas acknowledgement rules shared by the compositor and application tests.
+#[cfg(feature = "native-composition")]
+pub mod acknowledgement;
+
 #[cfg(all(windows, feature = "native-composition"))]
 #[allow(unsafe_code)]
 mod graphics;

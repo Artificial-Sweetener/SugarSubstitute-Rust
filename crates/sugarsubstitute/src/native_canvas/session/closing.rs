@@ -31,15 +31,9 @@ impl Drop for CloseFailures {
 }
 
 impl Session {
-    /// Stop canvas work under the composing owner's original, nonrenewable cutoff.
-    /// Repeated requests may tighten this deadline but cannot grant more time.
-    /// The cutoff is in the injected execution clock's epoch.
-    ///
-    /// # Errors
-    /// Preserves pacing and tool-cancellation failures while retaining outstanding jobs.
-    pub(crate) fn close_until(&mut self, cutoff: Moment) -> Result<(), Box<dyn Error>> {
-        #[cfg(feature = "native-composition")]
-        let first_close = !self.closing;
+    /// Adopt the composing application's original cutoff before transferring external preview custody.
+    /// This only tightens disposal metadata; the desktop closes the session after its raw stage moves.
+    pub(crate) fn adopt_preview_retirement_cutoff(&mut self, cutoff: Moment) -> Moment {
         let cutoff = self.shutdown_deadline.map_or(cutoff, |original| original.min(cutoff));
         self.shutdown_deadline = Some(cutoff);
         self.retirement_deadline = self.retirement_deadline.map(|deadline| deadline.min(cutoff));
@@ -51,6 +45,19 @@ impl Session {
         if self.deferred_retirement.is_some() && self.deferred_retirement_deadline.is_none() {
             self.deferred_retirement_deadline = Some(cutoff);
         }
+        cutoff
+    }
+
+    /// Stop canvas work under the composing owner's original, nonrenewable cutoff.
+    /// Repeated requests may tighten this deadline but cannot grant more time.
+    /// The cutoff is in the injected execution clock's epoch.
+    ///
+    /// # Errors
+    /// Preserves pacing and tool-cancellation failures while retaining outstanding jobs.
+    pub(crate) fn close_until(&mut self, cutoff: Moment) -> Result<(), Box<dyn Error>> {
+        #[cfg(feature = "native-composition")]
+        let first_close = !self.closing;
+        let cutoff = self.adopt_preview_retirement_cutoff(cutoff);
         if self.shutdown_started
             && let Some(runtime) = &mut self.runtime
         {
@@ -62,6 +69,8 @@ impl Session {
             owner.request_shutdown(cutoff);
         }
         self.closing = true;
+        #[cfg(feature = "native-composition")]
+        self.withdraw_preview()?;
         #[cfg(feature = "native-composition")]
         self.close_acquirer_retirement(cutoff, first_close);
         self.initialization_pending = false;

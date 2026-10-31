@@ -5,6 +5,8 @@
 use super::*;
 #[path = "tests/lanes.rs"]
 mod lanes;
+#[path = "tests/presentation.rs"]
+mod presentation;
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},

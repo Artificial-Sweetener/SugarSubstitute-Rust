@@ -92,6 +92,16 @@ impl NativeSurface {
                     claim,
                 )?))
             }
+            CanvasSurfaceMessage::Presentation(request) => {
+                self.enqueue(DesktopStartupCommand::SendSurface(SurfaceReply::presentation(
+                    identity,
+                    &request,
+                    CanvasSurfaceDiscoveryStatus::Unavailable,
+                    false,
+                    "",
+                    claim,
+                )?))
+            }
         }
     }
 

@@ -50,7 +50,7 @@ fn surface_replies_reject_overload_without_displacing_older_commands() -> Result
     assert_eq!(delivered(&mut surface)?, 10);
     assert!(surface.take_command().is_none());
     surface.enqueue(command(11)?)?;
-    surface.close();
+    surface.close(None)?;
     assert!(surface.take_command().is_none());
     Ok(())
 }

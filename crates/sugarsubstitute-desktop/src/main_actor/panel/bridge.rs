@@ -11,14 +11,14 @@ use std::rc::Rc;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
 
-const SCRIPT: &str = include_str!("bridge.js");
+const SCRIPTS: [&str; 2] = [include_str!("bridge_protocol.js"), include_str!("bridge.js")];
 
 /// Own every setup callback, script identifier and registration until checked removal.
 pub(in crate::main_actor) struct Bridge {
     core: ICoreWebView2,
     shared: Rc<callback::Shared>,
     ledger: Ledger,
-    script: Option<String>,
+    scripts: [Option<String>; SCRIPTS.len()],
     _claim: MemoryClaim,
 }
 
@@ -35,8 +35,8 @@ impl Bridge {
         Ok(Self {
             core,
             shared: callback::Shared::new(events)?,
-            ledger: Ledger::new(),
-            script: None,
+            ledger: Ledger::new(SCRIPTS.len()),
+            scripts: std::array::from_fn(|_| None),
             _claim: claim,
         })
     }
@@ -51,7 +51,7 @@ impl Bridge {
     pub(in crate::main_actor) fn install_step(&mut self) -> Result<bool, DesktopError> {
         self.complete_callback()?;
         match self.ledger.next() {
-            Next::Effect(action @ (Action::AddBinding | Action::AddScript)) => {
+            Next::Effect(action @ (Action::AddBinding | Action::AddScript(_))) => {
                 self.submit(action)?;
                 Ok(false)
             }
@@ -64,12 +64,12 @@ impl Bridge {
         }
     }
 
-    /// Fence setup and remove the exact script before its binding; wait for actual callbacks.
+    /// Fence setup and remove every known script before its binding; wait for actual callbacks.
     pub(in crate::main_actor) fn retire_step(&mut self) -> Result<bool, DesktopError> {
         self.ledger.close();
         self.complete_callback()?;
         match self.ledger.next() {
-            Next::Effect(action @ (Action::RemoveScript | Action::RemoveBinding)) => {
+            Next::Effect(action @ (Action::RemoveScript(_) | Action::RemoveBinding)) => {
                 self.submit(action)?;
                 Ok(false)
             }
@@ -95,8 +95,8 @@ impl Bridge {
         }
         let identifier = result?;
         match action {
-            Action::AddScript => self.script = identifier,
-            Action::RemoveScript => self.script = None,
+            Action::AddScript(index) => self.scripts[index] = identifier,
+            Action::RemoveScript(index) => self.scripts[index] = None,
             Action::AddBinding | Action::RemoveBinding => {}
         }
         Ok(())
@@ -109,12 +109,13 @@ impl Bridge {
                 "Runtime.addBinding",
                 serde_json::json!({"name": crate::main_panel_ingress::BINDING_NAME}),
             ),
-            Action::AddScript => {
-                ("Page.addScriptToEvaluateOnNewDocument", serde_json::json!({"source": SCRIPT}))
-            }
-            Action::RemoveScript => (
+            Action::AddScript(index) => (
+                "Page.addScriptToEvaluateOnNewDocument",
+                serde_json::json!({"source": SCRIPTS[index]}),
+            ),
+            Action::RemoveScript(index) => (
                 "Page.removeScriptToEvaluateOnNewDocument",
-                serde_json::json!({"identifier": self.script.as_deref().ok_or_else(|| DesktopError::message("retire_panel_bridge", "script identifier absent"))?}),
+                serde_json::json!({"identifier": self.scripts[index].as_deref().ok_or_else(|| DesktopError::message("retire_panel_bridge", "script identifier absent"))?}),
             ),
             Action::RemoveBinding => (
                 "Runtime.removeBinding",

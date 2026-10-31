@@ -4,7 +4,8 @@
 
 use super::{
     CanvasFileReference, CanvasSurfaceAddress, CanvasSurfaceDiscoveryRequest,
-    CanvasSurfaceGeometry, CanvasViewportCommand, wire,
+    CanvasSurfaceGeometry, CanvasSurfacePresentationRequest, CanvasSurfacePreviewBegin,
+    CanvasSurfacePreviewChunk, CanvasSurfacePreviewLease, CanvasViewportCommand, wire,
 };
 use crate::panel::PanelSession;
 use serde::Deserialize;
@@ -18,6 +19,8 @@ pub const MAX_SURFACE_MESSAGE_BYTES: usize = 32 * 1024;
 pub enum CanvasSurfaceMessage {
     /// Discover the runtime's advertised surface contract without creating an attachment.
     Discovery(CanvasSurfaceDiscoveryRequest),
+    /// Enable or disable observed presentation changes for the current panel session.
+    Presentation(CanvasSurfacePresentationRequest),
     /// One attachment operation, still requiring native navigation and revision authority.
     Request(Box<CanvasSurfaceRequest>),
     /// Cancel a previously admitted request in the same panel session.
@@ -55,6 +58,14 @@ pub enum CanvasSurfaceOperation {
     },
     /// Inspect or change the committed image viewport in attachment revision order.
     Viewport(CanvasViewportCommand),
+    /// Admit one attributed, bounded JPEG transfer under this request's revision lease.
+    PreviewBegin(CanvasSurfacePreviewBegin),
+    /// Supply a bounded base64 chunk to an existing preview lease.
+    PreviewChunk(CanvasSurfacePreviewChunk),
+    /// Complete the addressed preview transfer without changing its original lease.
+    PreviewEnd(CanvasSurfacePreviewLease),
+    /// Withdraw only the identified preview lease and restore its final presentation.
+    PreviewWithdraw(CanvasSurfacePreviewLease),
     /// Commit a prepared candidate as the current attachment.
     Commit,
     /// Release only the addressed candidate or committed attachment.
@@ -100,6 +111,14 @@ impl CanvasSurfaceMessage {
                 return CanvasSurfaceDiscoveryRequest::from_wire(parse(bytes)?)
                     .map(Self::Discovery);
             }
+            "surface.presentation.request" => {
+                return CanvasSurfacePresentationRequest::from_wire(parse(bytes)?)
+                    .map(Self::Presentation);
+            }
+            "surface.preview.begin"
+            | "surface.preview.chunk"
+            | "surface.preview.end"
+            | "surface.preview.withdraw" => super::preview::decode_request(&kind.kind, bytes)?,
             "surface.prepare" => {
                 let value: wire::CanvasSurfacePrepareRequest = parse(bytes)?;
                 if !value.valid() {
@@ -204,6 +223,7 @@ impl CanvasSurfaceMessage {
     pub fn session(&self) -> &PanelSession {
         match self {
             Self::Discovery(request) => request.session(),
+            Self::Presentation(request) => request.session(),
             Self::Request(request) => &request.session,
             Self::Cancel { session, .. } => session,
         }
@@ -212,7 +232,7 @@ impl CanvasSurfaceMessage {
 
 impl CanvasSurfaceRequest {
     /// Adopt only schema-valid correlation data; callers still enforce actual ownership.
-    fn new(
+    pub(super) fn new(
         session: String,
         request_id: u64,
         address: wire::CanvasSurfaceAddress,
@@ -298,7 +318,9 @@ impl Error for CanvasSurfaceMessageError {
 }
 
 /// Preserve each concrete JSON decoder error at the boundary.
-fn parse<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, CanvasSurfaceMessageError> {
+pub(super) fn parse<T: serde::de::DeserializeOwned>(
+    bytes: &[u8],
+) -> Result<T, CanvasSurfaceMessageError> {
     serde_json::from_slice(bytes).map_err(CanvasSurfaceMessageError::Malformed)
 }
 

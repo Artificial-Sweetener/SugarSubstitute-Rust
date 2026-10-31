@@ -4,6 +4,7 @@
 use super::*;
 use std::io::Read;
 mod encoded;
+mod jpeg;
 mod source;
 use sugarsubstitute_supervision::cache::{CachePolicy, Namespace, RuntimeCache, storage_key};
 
@@ -40,7 +41,7 @@ fn selected_original_remains_authored_while_cache_readers_reuse_and_retain_one_g
             CachePolicy { total_bytes: 1024 * 1024 },
             context,
         )?;
-        let mut first = import_png(
+        let mut first = import_image(
             &path,
             cache.clone(),
             CacheReuse::Compatible,
@@ -48,7 +49,7 @@ fn selected_original_remains_authored_while_cache_readers_reuse_and_retain_one_g
             10,
             context,
         )?;
-        let second = import_png(
+        let second = import_image(
             &path,
             cache.clone(),
             CacheReuse::Compatible,
@@ -84,7 +85,7 @@ fn replacing_an_original_path_cannot_mutate_an_already_pinned_source_asset() -> 
             CachePolicy { total_bytes: 1024 * 1024 },
             context,
         )?;
-        let mut first = import_png(
+        let mut first = import_image(
             &path,
             cache.clone(),
             CacheReuse::Compatible,
@@ -94,7 +95,7 @@ fn replacing_an_original_path_cannot_mutate_an_already_pinned_source_asset() -> 
         )?;
         std::fs::write(&path, encoded(&[0, 0, 255, 255, 255, 255])?)?;
         let mut second =
-            import_png(&path, cache, CacheReuse::Compatible, context.memory(), 11, context)?;
+            import_image(&path, cache, CacheReuse::Compatible, context.memory(), 11, context)?;
         assert_ne!(first.descriptor().asset(), second.descriptor().asset());
         assert_eq!(pixels(&mut first, context)?[0], Pixel::linear(1.0, 0.0, 0.0, 1.0)?);
         assert_eq!(pixels(&mut second, context)?[0], Pixel::linear(0.0, 0.0, 1.0, 1.0)?);
@@ -114,7 +115,7 @@ fn corrupt_header_is_an_observable_miss_and_replacement_preserves_the_old_genera
             CachePolicy { total_bytes: 1024 * 1024 },
             context,
         )?;
-        let original = import_png(
+        let original = import_image(
             &path,
             cache.clone(),
             CacheReuse::Compatible,
@@ -135,7 +136,7 @@ fn corrupt_header_is_an_observable_miss_and_replacement_preserves_the_old_genera
         bad.write("source.raster", b"corrupt", context)?;
         bad.publish(context)?;
         let mut preserved = bad.into_file_reader("source.raster", context)?;
-        let mut recovered = import_png(
+        let mut recovered = import_image(
             &path,
             cache.clone(),
             CacheReuse::Compatible,
@@ -168,7 +169,7 @@ fn lazy_chunk_corruption_requests_explicit_rebuild_from_the_unchanged_original()
             CachePolicy { total_bytes: 1024 * 1024 },
             context,
         )?;
-        let original = import_png(
+        let original = import_image(
             &path,
             cache.clone(),
             CacheReuse::Compatible,
@@ -194,7 +195,7 @@ fn lazy_chunk_corruption_requests_explicit_rebuild_from_the_unchanged_original()
         bad.write("source.raster", &bytes, context)?;
         bad.publish(context)?;
         drop(bad);
-        let mut source = import_png(
+        let mut source = import_image(
             &path,
             cache.clone(),
             CacheReuse::Compatible,
@@ -208,7 +209,7 @@ fn lazy_chunk_corruption_requests_explicit_rebuild_from_the_unchanged_original()
         assert!(std::error::Error::source(&failure).is_some());
         drop(source);
         let mut rebuilt =
-            import_png(&path, cache, CacheReuse::Rebuild, context.memory(), 13, context)?;
+            import_image(&path, cache, CacheReuse::Rebuild, context.memory(), 13, context)?;
         assert_eq!(pixels(&mut rebuilt, context)?[0], Pixel::linear(1.0, 0.0, 0.0, 1.0)?);
         assert_eq!(std::fs::read(path)?, encoded);
         Ok(())

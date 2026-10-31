@@ -5,6 +5,20 @@ use super::*;
 use sugarsubstitute_image_io::ImportError;
 
 impl Session {
+    /// Match an admitted authored snapshot and source to the selected document before publication
+    /// or failure handling. Camera changes do not retire work for the same authored source.
+    pub(super) fn admitted_source_is_current(
+        &self,
+        document: (u64, u64),
+        source_revision: u64,
+    ) -> bool {
+        source_revision == self.selection
+            && self.document.scene.as_ref().is_some_and(|scene| {
+                let snapshot = scene.document.snapshot();
+                document == (snapshot.identity(), snapshot.revision())
+                    && source_revision == scene.source_revision
+            })
+    }
     /// Retain actual initialization results or transfer their complete custody to owned cleanup.
     pub(super) fn consume_initialization(&mut self) -> Result<(), Box<dyn Error>> {
         let Some(outcome) = Self::take(&mut self.initializing) else {
@@ -103,7 +117,11 @@ impl Session {
     /// A current accepted camera request may finish while later camera intent is coalesced.
     /// Its pixels are always labelled with their actual camera and current authored revision.
     pub(super) fn consume_frame(&mut self) -> Result<(), Box<dyn Error>> {
+        let current_source = self.rendering.as_ref().is_some_and(|rendering| {
+            self.admitted_source_is_current(rendering.document, rendering.source_revision)
+        });
         if !self.closing
+            && current_source
             && self.drawable
             && self.pending_open.is_none()
             && self.loading.is_none()
@@ -135,6 +153,7 @@ impl Session {
                     .is_some_and(|front| Arc::strong_count(front) > 1),
             });
         if self.config.gpu.is_none()
+            && current_source
             && !self.closing
             && self.drawable
             && self.pending_open.is_none()
@@ -153,6 +172,17 @@ impl Session {
         };
         let rendering = self.rendering.take().ok_or("Canvas rendering identity was lost")?;
         Self::observe_terminal(&rendering.job, &completion.outcome);
+        if !current_source {
+            match Self::terminal(completion.outcome) {
+                Ok(packet) => {
+                    self.retire(Retired { _packet: Some(packet), ..Default::default() })?
+                }
+                Err(cause) => {
+                    tracing::debug!(operation="canvas_frame_stopped", job_id=rendering.job.spec().id.get(), document_id=rendering.document.0, document_revision=rendering.document.1, source_revision=rendering.source_revision, cause=%cause, "Retired canvas source reached its actual terminal outcome");
+                }
+            }
+            return Ok(());
+        }
         if rendering.superseded {
             match completion.outcome {
                 JobOutcome::Success(packet) => {
@@ -171,6 +201,8 @@ impl Session {
         match Self::terminal(completion.outcome) {
             Ok(mut packet) => {
                 if packet.tier != rendering.tier
+                    || packet.document != rendering.document
+                    || packet.source_revision != rendering.source_revision
                     || packet.reconstruction != rendering.reconstruction
                     || packet.view != rendering.coverage.viewport()
                     || !packet.sampling_scale.is_finite()

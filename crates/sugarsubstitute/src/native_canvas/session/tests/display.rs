@@ -4,6 +4,7 @@
 mod activity;
 mod composite;
 mod presentation;
+mod source_fencing;
 mod surface;
 use super::refinement::Wake;
 use super::*;
@@ -86,6 +87,10 @@ struct Fixture {
 }
 /// Construct original document custody on a worker before faking only the native draw result.
 fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
+    pending_draw_outcome(false, false)
+}
+/// Deliver failure or a forged source identity through the real owned completion boundary.
+fn pending_draw_outcome(failure: bool, foreign_payload: bool) -> Result<Fixture, Box<dyn Error>> {
     let (mut session, clock, directory) = session()?;
     session.config.gpu = Some("vulkan:8086:a780".parse()?);
     let wake = Arc::new(Wake::default());
@@ -126,21 +131,30 @@ fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
         coverage,
         projection,
         pixels: work::DrawPixels::Gpu(None),
-        document: identity,
+        document: if foreign_payload { (identity.0 + 1, identity.1) } else { identity },
         source_revision: 7,
         verified: true,
     });
-    let job =
-        client.submit_blocking_owned_input(&runtime.scope, spec, &mut drawing, |drawing, _| {
-            Ok::<_, WorkError>(drawing)
-        })?;
+    let job = client.submit_blocking_owned_input(
+        &runtime.scope,
+        spec,
+        &mut drawing,
+        move |drawing, _| {
+            if failure { Err(WorkError::invalid("Display boundary failure")) } else { Ok(drawing) }
+        },
+    )?;
     session.pacing.submitted(
         target,
         PresentationMode::Canonical,
         Duration::ZERO,
         Duration::ZERO,
     )?;
-    session.displaying = Some(super::super::display::Displaying { target, job });
+    session.displaying = Some(super::super::display::Displaying {
+        target,
+        document: identity,
+        source_revision: 7,
+        job,
+    });
     session.runtime = Some(runtime);
     Ok(Fixture { session, clock, wake, view, source, _directory: directory })
 }

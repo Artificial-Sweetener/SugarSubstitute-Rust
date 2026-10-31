@@ -4,6 +4,48 @@
 
 use super::*;
 
+#[test]
+fn freezing_keeps_accepted_pixels_instead_of_sampling_later_motion() -> TestResult {
+    let mut nav = navigation()?;
+    target(nav.command(NavigationCommand::OneToOne, time(0))?)?;
+    nav.advance(time(20))?;
+    let accepted = nav.viewport();
+    nav.advance(time(40))?;
+    assert_ne!(nav.viewport(), accepted);
+    nav.freeze_at(accepted, time(60))?;
+    assert_eq!(nav.viewport(), accepted);
+    assert_eq!(nav.target_viewport(), accepted);
+    assert_eq!(nav.zoom_mode(), ZoomMode::Custom);
+    assert!(!nav.interacting());
+    assert_eq!(nav.next_deadline(time(60)), None);
+    nav.advance(time(1000))?;
+    assert_eq!(nav.viewport(), accepted);
+    Ok(())
+}
+
+#[test]
+fn freezing_preserves_completed_modes_and_rejects_foreign_geometry_and_time() -> TestResult {
+    let mut nav = navigation()?;
+    for (command, mode, start) in [
+        (NavigationCommand::OneToOne, ZoomMode::OneToOne, 0),
+        (NavigationCommand::Fit, ZoomMode::Fit, 100),
+    ] {
+        target(nav.command(command, time(start))?)?;
+        nav.advance(time(start + 80))?;
+        let accepted = nav.viewport();
+        nav.freeze_at(accepted, time(start + 90))?;
+        assert_eq!(nav.zoom_mode(), mode);
+        let foreign = Viewport::new(Extent::new(12, 13)?)?;
+        assert!(nav.freeze_at(foreign, time(start + 90)).is_err());
+        assert!(nav.freeze_at(accepted, time(start + 89)).is_err());
+        assert_eq!(nav.viewport(), accepted);
+        assert_eq!(nav.zoom_mode(), mode);
+    }
+    let mut empty = Navigation::new(nav.viewport());
+    assert!(empty.freeze_at(nav.viewport(), time(0)).is_err());
+    Ok(())
+}
+
 fn target(outcome: NavigationCommandOutcome) -> Result<Viewport, CanvasError> {
     match outcome {
         NavigationCommandOutcome::Applied { target } => Ok(target),

@@ -23,6 +23,7 @@ impl NativeSurface {
         {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
+        self.fence_previews(session)?;
         session.input(Input::Drawable(false))?;
         self.retained = self.binding.take();
         self.binding = Some(Binding {
@@ -34,6 +35,10 @@ impl NativeSurface {
             placement: None,
             allocation: None,
             selected: false,
+            selection_revision: 0,
+            source_intent_revision: None,
+            presented_selection_revision: 0,
+            presented_viewport: None,
             committed: false,
             presented: None,
         });
@@ -50,6 +55,7 @@ impl NativeSurface {
         claim: MemoryClaim,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
+        self.fence_previews(session)?;
         if let Some(token) = self.binding.as_ref().and_then(|binding| binding.document) {
             session.restore_document(token)?;
             self.restoring = true;
@@ -125,6 +131,7 @@ impl NativeSurface {
         session: Option<&mut Session>,
     ) -> Result<(), Box<dyn Error>> {
         if let Some(session) = session {
+            self.fence_previews(session)?;
             if let Some(token) = self.binding.as_ref().and_then(|binding| binding.document) {
                 session.restore_document(token)?;
             } else {

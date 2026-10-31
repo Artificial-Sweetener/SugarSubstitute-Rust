@@ -21,7 +21,9 @@ impl NativeSurface {
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
         if !self.binding.as_ref().is_some_and(|binding| {
-            binding.committed && binding.selected && binding.placement.is_some()
+            binding.committed
+                && (binding.selected || self.has_shown_preview())
+                && binding.placement.is_some()
         }) {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
