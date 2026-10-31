@@ -123,6 +123,20 @@ fn paint(
     Ok(())
 }
 
+/// Compare one row span of RGBA pixels starting at device column `x`.
+/// Whole-span byte equality keeps unoptimized test builds fast; a mismatch reports its first pixel.
+fn assert_pixels(actual: &[u8], expected: &[u8], x: u32, y: u32, label: &str) {
+    if actual == expected {
+        return;
+    }
+    assert_eq!(actual.len(), expected.len(), "{label} row {y} span lengths");
+    for (offset, (actual, expected)) in
+        actual.chunks_exact(4).zip(expected.chunks_exact(4)).enumerate()
+    {
+        assert_eq!(actual, expected, "{label} at ({},{y})", x + offset as u32);
+    }
+}
+
 /// Clip every label over prepainted pixels without changing interior native glyph coverage.
 #[test]
 fn all_labels_preserve_pixels_outside_status_widget() -> Result<(), Box<dyn std::error::Error>> {
@@ -156,29 +170,44 @@ fn all_labels_preserve_pixels_outside_status_widget() -> Result<(), Box<dyn std:
                     }
                     paint(&mut text, &mut target, message, theme, scale)?;
                     let mut visible = false;
-                    for (index, ((actual, original), expected)) in target
+                    let label = format!("{} {theme:?} scale {scale} for {message:?}", locale.id);
+                    let row_bytes = size as usize * 4;
+                    let [left, top, right, bottom] = bounds;
+                    let interior = left as usize * 4..right as usize * 4;
+                    for (y, ((actual, original), expected)) in target
                         .data()
-                        .chunks_exact(4)
-                        .zip(before.chunks_exact(4))
-                        .zip(unclipped.data().chunks_exact(4))
+                        .chunks_exact(row_bytes)
+                        .zip(before.chunks_exact(row_bytes))
+                        .zip(unclipped.data().chunks_exact(row_bytes))
                         .enumerate()
                     {
-                        let x = index as u32 % size;
-                        let y = index as u32 / size;
-                        if x < bounds[0] || y < bounds[1] || x >= bounds[2] || y >= bounds[3] {
-                            assert_eq!(
-                                actual, original,
-                                "{} {theme:?} scale {scale} at ({x},{y}) for {message:?}",
-                                locale.id
-                            );
-                        } else {
-                            assert_eq!(
-                                actual, expected,
-                                "{} {theme:?} scale {scale} at ({x},{y}) for {message:?}",
-                                locale.id
-                            );
-                            visible |= actual != original;
+                        let y = y as u32;
+                        if y < top || y >= bottom {
+                            assert_pixels(actual, original, 0, y, &label);
+                            continue;
                         }
+                        assert_pixels(
+                            &actual[..interior.start],
+                            &original[..interior.start],
+                            0,
+                            y,
+                            &label,
+                        );
+                        assert_pixels(
+                            &actual[interior.end..],
+                            &original[interior.end..],
+                            right,
+                            y,
+                            &label,
+                        );
+                        assert_pixels(
+                            &actual[interior.clone()],
+                            &expected[interior.clone()],
+                            left,
+                            y,
+                            &label,
+                        );
+                        visible |= actual[interior.clone()] != original[interior.clone()];
                     }
                     assert!(
                         visible,
