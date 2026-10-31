@@ -35,6 +35,7 @@ import {
   supportsCanvasSurfaceOverview,
   validCanvasSurfaceOverview,
 } from './CanvasSurfaceOverview.js';
+import { supportsCanvasSurfaceOcclusion } from './CanvasSurfaceOcclusion.js';
 import {
   isCanvasPreviewCommand,
   supportsCanvasSurfacePreview,
@@ -72,6 +73,13 @@ export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurf
         origin: Object.freeze({ ...request.geometry.origin }),
         viewport: Object.freeze({ ...request.geometry.viewport }),
         clip: Object.freeze({ ...request.geometry.clip }),
+        ...(request.geometry.occlusions
+          ? {
+              occlusions: Object.freeze(
+                request.geometry.occlusions.map((rect) => Object.freeze({ ...rect })),
+              ),
+            }
+          : {}),
       }),
     });
   }
@@ -160,6 +168,7 @@ export async function dispatchCanvasSurface(
           !supportsCanvasSurfaceComparison(port.surface.capabilities, command) ||
           !supportsCanvasSurfaceOverview(port.surface.capabilities, command) ||
           !validCanvasSurfaceOverview(command) ||
+          !supportsCanvasSurfaceOcclusion(port.surface.capabilities, command) ||
           !supportsCanvasSurfacePreview(port.surface.capabilities, command) ||
           !validCanvasPreviewCommand(command) ||
           (isCanvasPreviewCommand(command) &&

@@ -69,6 +69,7 @@ export function nativePreviewHost(preview = true) {
       viewportState: true,
       comparison: false,
       overview: false,
+      input: false,
     },
     presentation: {
       subscribe: (listener) => {

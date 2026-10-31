@@ -49,6 +49,14 @@ interface Frame {
   stop: (() => void) | null;
 }
 
+/** Describe the absence of local preview custody, matching the shape of active diagnostics. */
+export const IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS = Object.freeze({
+  queuedInputs: 0,
+  previewDrops: 0,
+  estimatedBytes: 0,
+  activeDeadlines: 0,
+});
+
 /** One custody operation offered to the existing presentation loop. */
 export interface NativeCanvasPreviewStep {
   readonly operation: PreviewOperation;

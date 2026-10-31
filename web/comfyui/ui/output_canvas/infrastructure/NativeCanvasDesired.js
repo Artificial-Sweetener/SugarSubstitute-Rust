@@ -36,7 +36,8 @@ export function nativeCanvasDesired(geometry, item, comparison, overview, accept
         comparison: pair,
         overview: grid,
         key: JSON.stringify([
-            geometry && { ...geometry, focused: false },
+            // Focus, gesture occlusions and the modal flag follow a presentation without replacing it.
+            geometry && { ...geometry, focused: false, occlusions: undefined, modal: undefined },
             item && [item.id, item.file, item.mediaKind],
             accepts,
             ...(pair ? [[pair.item.id, pair.item.file]] : []),
@@ -46,6 +47,16 @@ export function nativeCanvasDesired(geometry, item, comparison, overview, accept
         previewable: !grid && item === null,
         shown: eligible !== null || (grid?.length ?? 0) > 0,
     };
+}
+/**
+ * Report whether the host shows a navigable final camera: the selected final, or the final it
+ * retains while a live-preview lane awaits pixels. Accepted preview pixels lock navigation to Fit,
+ * and an overview grid has no camera.
+ */
+export function nativeCanvasNavigable(desired, preview, selectionRevision) {
+    return (!preview?.displayed &&
+        (!!desired?.item ||
+            (!!desired?.previewable && !!preview?.observing && selectionRevision !== null)));
 }
 /** Identify the painted overview layout independently of the identity that entered overview. */
 export function nativeCanvasOverviewKey(overview) {

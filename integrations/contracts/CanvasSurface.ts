@@ -37,6 +37,7 @@ import type {
 
 export type {
   CanvasSurfaceCapabilities,
+  CanvasSurfaceOcclusion,
   CanvasSurfaceOverviewCell,
   CanvasSurfaceViewportCommand,
   CanvasSurfaceViewportState,
@@ -112,6 +113,12 @@ export interface CanvasSurfaceHost {
    * a selection it fences preview custody and becomes the displayed selection revision. The grid
    * has no camera, so viewport requests are unavailable while it is shown; a later selection
    * leaves it. An encoded overview message must fit the 32 KiB native surface message ceiling.
+   * The input capability declares that the host routes native canvas gestures from the OS
+   * against page-published occlusions. Only such a host receives geometry `occlusions`: up to 64
+   * possibly overlapping rects, in CSS pixels relative to the geometry origin, where web content
+   * (toolbars, tab strips, menus, popups, dialogs, overlays) covers the native viewport; and
+   * `modal`, true while a modal dialog or overlay blocks the whole canvas. Occlusion changes
+   * travel as ordinary acknowledged geometry updates.
    */
   execute(
     command: CanvasSurfaceCommand,

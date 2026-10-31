@@ -21,7 +21,8 @@
       "viewportState": false,
       "previewFormats": [],
       "comparison": false,
-      "overview": false
+      "overview": false,
+      "input": false
     },
     "message": ""
   },
@@ -39,7 +40,8 @@
       "viewportState": false,
       "previewFormats": [],
       "comparison": false,
-      "overview": false
+      "overview": false,
+      "input": false
     },
     "message": ""
   },
@@ -101,7 +103,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -119,7 +122,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": "",
       "other": true
@@ -138,7 +142,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -156,7 +161,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -174,7 +180,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -192,7 +199,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -210,7 +218,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -228,7 +237,8 @@
         "viewportState": null,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -246,7 +256,8 @@
         "viewportState": false,
         "previewFormats": ["webp"],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -264,7 +275,8 @@
         "viewportState": false,
         "previewFormats": ["png", "png", "png"],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -282,7 +294,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": 0,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -300,7 +313,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": "yes"
+        "overview": "yes",
+        "input": false
       },
       "message": ""
     },
@@ -317,7 +331,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -334,7 +349,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -351,7 +367,8 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -368,7 +385,8 @@
         "viewportCommands": [],
         "previewFormats": [],
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -385,7 +403,8 @@
         "viewportCommands": [],
         "viewportState": false,
         "comparison": false,
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -402,7 +421,8 @@
         "viewportCommands": [],
         "viewportState": false,
         "previewFormats": [],
-        "overview": false
+        "overview": false,
+        "input": false
       },
       "message": ""
     },
@@ -419,7 +439,8 @@
         "viewportCommands": [],
         "viewportState": false,
         "previewFormats": [],
-        "comparison": false
+        "comparison": false,
+        "input": false
       },
       "message": ""
     },
@@ -437,7 +458,45 @@
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 1,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
         "overview": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 1,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": "yes"
       },
       "message": ""
     }
@@ -456,7 +515,27 @@
       "viewportState": true,
       "previewFormats": [],
       "comparison": true,
-      "overview": false
+      "overview": false,
+      "input": false
+    },
+    "message": ""
+  },
+  "input": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.reply",
+    "status": "available",
+    "capabilities": {
+      "schema": 1,
+      "imageFormats": ["png"],
+      "viewportCommands": ["fit", "native", "zoom", "pan", "wipe"],
+      "viewportState": true,
+      "previewFormats": [],
+      "comparison": true,
+      "overview": false,
+      "input": true
     },
     "message": ""
   }

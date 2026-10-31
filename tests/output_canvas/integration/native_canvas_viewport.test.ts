@@ -88,6 +88,7 @@ function fixture(
       previewFormats: [],
       comparison: false,
       overview: false,
+      input: false,
     },
     execute(command: CanvasSurfaceCommand, cancellation?: CanvasCancellationSource) {
       calls.push(command);

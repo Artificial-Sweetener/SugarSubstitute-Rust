@@ -37,6 +37,11 @@ export function nativeCanvasOverview(host: CanvasSurfaceHost | null): boolean {
   return host?.capabilities.overview === true;
 }
 
+/** Report whether the host routes native canvas gestures against page-published occlusions. */
+export function nativeCanvasInput(host: CanvasSurfaceHost | null): boolean {
+  return host?.capabilities.input === true;
+}
+
 /**
  * Advertise camera commands only with the viewport-state contract required by their shared
  * proxy, the shared comparison commands only with a negotiated pair-and-divider host, and the

@@ -29,6 +29,8 @@ document_observer_owners = [
   "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
   "frontend/comfyui/ui/surface/ComfyRendererPresenceObserver.ts",
   "frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.ts",
+  # Invalidates native gesture-occlusion measurement only; it never discovers graphs or surfaces.
+  "frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasOverlayObserver.ts",
 ]
 mutation_observer_owners = [
   # Native editor-local drag copies and paint: these observers never discover host graphs or surfaces.
@@ -53,6 +55,7 @@ mutation_observer_owners = [
   "frontend/comfyui/ui/surface/appearance/NativeToggleRows.ts",
   "frontend/comfyui/ui/surface/appearance/NativeBooleanSegments.ts",
   "frontend/comfyui/ui/model_library/ModelPickerAppearance.ts",
+  "frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasOverlayObserver.ts",
 ]
 
 [structure]

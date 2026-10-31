@@ -23,9 +23,13 @@ import {
   CanvasPrimarySurface,
   type PrimaryCanvasAttachment,
 } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasPrimarySurface.js';
+import {
+  canvasRevealTarget,
+  type CanvasRevealTarget,
+} from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasReveal.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 
-function fixture() {
+function fixture(initialRenderer = 'browser') {
   const catalog = canvasCatalogFixture();
   let key = 0;
   const views = new CanvasViewRegistry(() => String(++key));
@@ -38,7 +42,7 @@ function fixture() {
   } as unknown as CanvasSessionCoordinator;
   const element = document.createElement('div');
   document.body.append(element);
-  let renderer = 'browser';
+  let renderer = initialRenderer;
   let resolve!: () => void;
   let reject!: (error: Error) => void;
   let resolveMount!: () => void;
@@ -53,6 +57,7 @@ function fixture() {
     accepts: () => boolean;
     acceptsPreparation: () => boolean;
     dispose: ReturnType<typeof jest.fn<() => void | Promise<void>>>;
+    reveal: ReturnType<typeof jest.fn<(target: CanvasRevealTarget) => Promise<boolean>>>;
   }[] = [];
   const report = jest.fn<(error: unknown) => void>();
   const primary = new CanvasPrimarySurface({
@@ -65,7 +70,8 @@ function fixture() {
     report,
     mount: (root, address, _catalog, accepts, acceptsPreparation) => {
       const dispose = jest.fn<() => void | Promise<void>>();
-      attachments.push({ address, element: root, accepts, acceptsPreparation, dispose });
+      const reveal = jest.fn(async (_target: CanvasRevealTarget) => true);
+      attachments.push({ address, element: root, accepts, acceptsPreparation, dispose, reveal });
       const attachment: PrimaryCanvasAttachment & { ready?: Promise<void> } = {
         ...(renderer === 'native' ? { ready } : {}),
         diagnostics: () => ({
@@ -81,6 +87,7 @@ function fixture() {
         refresh: () => {},
         wants: () => false,
         receive: () => {},
+        reveal,
         dispose,
       };
       if (renderer === 'deferred')
@@ -93,6 +100,8 @@ function fixture() {
   primary.setup();
   return {
     primary,
+    view,
+    target: canvasRevealTarget(catalog.entries[0]!.items[0]!),
     views,
     attachments,
     report,
@@ -315,6 +324,27 @@ test('reports failed release and does not mount over uncertain native custody', 
     f.renderer('another');
     for (let turn = 0; turn < 8; turn++) await Promise.resolve();
     expect(f.attachments).toHaveLength(2);
+  } finally {
+    f.dispose();
+  }
+});
+
+test('routes a reveal to the preparing candidate until a surface is committed for the view', async () => {
+  const f = fixture('native');
+  try {
+    const candidate = f.attachments[0]!;
+    expect(f.primary.diagnostics().address).toBeNull();
+    expect(candidate.acceptsPreparation()).toBe(true);
+    expect(await f.primary.destination(f.view)?.reveal(f.target)).toBe(true);
+    expect(candidate.reveal).toHaveBeenCalledWith(f.target);
+    f.resolve();
+    await Promise.resolve();
+    expect(f.primary.diagnostics().address).toEqual(candidate.address);
+    await f.primary.destination(f.view)?.reveal(f.target);
+    expect(candidate.reveal).toHaveBeenCalledTimes(2);
+    f.deactivate();
+    expect(f.primary.destination(f.view)).toBeNull();
+    expect(f.report).not.toHaveBeenCalled();
   } finally {
     f.dispose();
   }

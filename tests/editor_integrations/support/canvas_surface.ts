@@ -29,6 +29,7 @@ export const selectedPngCapabilities: CanvasSurfaceCapabilities = {
   previewFormats: [],
   comparison: false,
   overview: false,
+  input: false,
 };
 
 /** Read a published surface without hiding a failed negotiation behind a type assertion. */

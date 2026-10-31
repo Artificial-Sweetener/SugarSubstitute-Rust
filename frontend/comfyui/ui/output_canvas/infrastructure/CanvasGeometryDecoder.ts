@@ -20,7 +20,12 @@ import { isRecord } from '../../types/common.js';
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import { authorizeCanvasMessage, type CanvasMessageAuthority } from './CanvasMessageAuthority.js';
 
-/** Accept only authorized, finite, bounded geometry with explicit density and visibility. */
+/**
+ * Accept only authorized, finite, bounded geometry with explicit density and visibility.
+ *
+ * Gesture occlusions and the modal flag are retained only when present, so geometry without
+ * them keeps its exact wire shape for hosts that do not route native input.
+ */
 export function decodeCanvasSurfaceGeometry(
   message: unknown,
   origin: unknown,
@@ -39,6 +44,18 @@ export function decodeCanvasSurfaceGeometry(
     physicalPixelsPerCssPixel: raw.physicalPixelsPerCssPixel,
     visible: raw.visible,
     focused: raw.focused,
+    ...(Object.hasOwn(raw, 'occlusions')
+      ? {
+          occlusions: Array.isArray(raw.occlusions)
+            ? raw.occlusions.map((rect: unknown) =>
+                isRecord(rect)
+                  ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+                  : rect,
+              )
+            : raw.occlusions,
+        }
+      : {}),
+    ...(Object.hasOwn(raw, 'modal') ? { modal: raw.modal } : {}),
   };
   if (!isCanvasSurfaceGeometry(value)) return null;
   const position = value.origin;
@@ -53,5 +70,9 @@ export function decodeCanvasSurfaceGeometry(
     physicalPixelsPerCssPixel: value.physicalPixelsPerCssPixel,
     visible: value.visible,
     focused: value.focused,
+    ...(value.occlusions
+      ? { occlusions: Object.freeze(value.occlusions.map((rect) => Object.freeze({ ...rect }))) }
+      : {}),
+    ...(value.modal === undefined ? {} : { modal: value.modal }),
   });
 }

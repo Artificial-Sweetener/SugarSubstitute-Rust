@@ -34,13 +34,21 @@ export class CanvasPrimarySurface {
             resources: this.#current?.attachment.diagnostics() ?? null,
         };
     }
-    /** Return only the active attachment's renderer-neutral inspection destination. */
+    /**
+     * Return the view's committed attachment as its renderer-neutral inspection destination, or
+     * the staged candidate still preparing for that view when none is committed. A candidate
+     * decides itself whether it can retain a reveal until it commits.
+     */
     destination(view) {
         this.reconcile();
-        const current = this.#current;
-        if (current?.view !== view || !current.attachment.reveal)
+        const attachment = this.#current?.view === view
+            ? this.#current.attachment
+            : this.#pending?.view === view
+                ? this.#pending.attachment
+                : null;
+        if (!attachment?.reveal)
             return null;
-        const reveal = current.attachment.reveal.bind(current.attachment);
+        const reveal = attachment.reveal.bind(attachment);
         return { reveal };
     }
     /** Observe scoped catalog boundaries and document visibility without another execution event listener. */

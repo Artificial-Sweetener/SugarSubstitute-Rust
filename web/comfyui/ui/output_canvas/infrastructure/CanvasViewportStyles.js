@@ -14,7 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Style the shared viewport allocation independently of its pixel presenter. */
-/** Install the geometry and native transparency rules shared by output surfaces. */
+/**
+ * Install the geometry, native transparency and native navigation cursor rules shared by output
+ * surfaces. A host that routes native gestures shows the browser canvas's grab cursor.
+ */
 export function ensureCanvasViewportStyles(document) {
     if (document.getElementById('sugarcubes-output-viewport-styles'))
         return;
@@ -27,6 +30,7 @@ export function ensureCanvasViewportStyles(document) {
     .sc-output-viewport:focus-visible { outline:2px solid var(--p-primary-color,var(--ring,#df258e)); outline-offset:-2px; }
     .sc-output-workspace-pane:has(.sc-output-viewport.sc-output-native),
     .sc-output-viewport.sc-output-native { background:transparent; }
+    .sc-output-viewport.sc-output-native-input { cursor:grab; }
   `;
     document.head.append(style);
 }
