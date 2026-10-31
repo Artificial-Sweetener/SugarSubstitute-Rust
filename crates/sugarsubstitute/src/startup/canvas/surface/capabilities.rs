@@ -20,7 +20,11 @@ impl NativeSurface {
     ) -> Result<(), Box<dyn Error>> {
         let available = session.initialized() && self.available(identity);
         let capabilities = CanvasSurfaceCapabilities {
-            image_formats: if available { vec![CanvasSurfaceImageFormat::Png] } else { Vec::new() },
+            image_formats: if available {
+                vec![CanvasSurfaceImageFormat::Png, CanvasSurfaceImageFormat::Jpeg]
+            } else {
+                Vec::new()
+            },
             viewport_commands: if available {
                 vec![
                     CanvasSurfaceViewportCommand::Fit,

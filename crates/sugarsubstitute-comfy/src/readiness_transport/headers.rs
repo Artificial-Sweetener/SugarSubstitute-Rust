@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Validate complete bounded response framing independently of native transport custody.
 use super::{probe::Endpoint, types::ReadinessTransportError};
+use crate::output_media::ComfyOutputFormat;
 pub(super) fn parse_headers(
     text: &str,
     endpoint: Endpoint<'_>,
@@ -20,19 +21,26 @@ pub(super) fn parse_headers(
     headers.length(endpoint.maximum())
 }
 
-/// Require the exact bounded PNG size before admitting a cache stream.
-pub(crate) fn parse_png_length(text: &str, maximum: u64) -> Result<u64, ReadinessTransportError> {
+/// Require the format's exact media type and bounded size before admitting a cache stream.
+/// The declared length must lie between the format's minimum and `maximum` bytes.
+pub(crate) fn parse_media_length(
+    text: &str,
+    format: ComfyOutputFormat,
+    maximum: u64,
+) -> Result<u64, ReadinessTransportError> {
     let headers = Headers::parse(text)?;
     headers.check_encoding()?;
     if headers.transfer.is_some()
-        || !headers.content_type.is_some_and(|value| value.eq_ignore_ascii_case("image/png"))
+        || !headers
+            .content_type
+            .is_some_and(|value| value.eq_ignore_ascii_case(format.content_type()))
     {
-        return Err(ReadinessTransportError::invalid("http_png_framing"));
+        return Err(ReadinessTransportError::invalid("http_media_framing"));
     }
     headers
         .length(maximum)?
-        .filter(|length| *length >= 33)
-        .ok_or_else(|| ReadinessTransportError::invalid("http_png_length"))
+        .filter(|length| *length >= format.minimum_bytes())
+        .ok_or_else(|| ReadinessTransportError::invalid("http_media_length"))
 }
 
 struct Headers<'a> {

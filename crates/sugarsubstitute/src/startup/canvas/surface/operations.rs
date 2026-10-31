@@ -192,11 +192,10 @@ impl NativeSurface {
     }
 }
 
-/// Admit only a PNG Comfy output reference that the backend adapter may fetch.
+/// Admit only a Comfy output-storage reference that the backend adapter may fetch; the view
+/// target owns the closed PNG/JPEG filename rule.
 pub(super) fn admitted_output(file: &CanvasFileReference) -> Option<ComfyViewTarget> {
-    if file.storage() != CanvasFileStorage::Output
-        || !file.filename().to_ascii_lowercase().ends_with(".png")
-    {
+    if file.storage() != CanvasFileStorage::Output {
         return None;
     }
     ComfyViewTarget::new(file).ok()

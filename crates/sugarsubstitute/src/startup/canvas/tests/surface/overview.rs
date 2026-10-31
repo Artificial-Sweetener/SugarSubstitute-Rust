@@ -77,7 +77,7 @@ fn selecting_one_result_leaves_the_overview_and_restores_navigation() -> Result<
 }
 
 #[test]
-fn an_overview_cell_must_be_a_png_output() -> Result<(), Box<dyn Error>> {
+fn an_overview_cell_must_be_a_png_or_jpeg_output() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;
     fixture.send(
         3,

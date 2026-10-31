@@ -4296,7 +4296,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:50416d74caeeda1992abaf0ac17aeb0e33ccbc84741f3d0c053ec6d0af9b7575"
+source_sha256 = "sha256:2b25113cbea70dd9af855f56c1af44a786e8ee103effa60bb21bf65ffdaf6dba"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
@@ -4304,7 +4304,7 @@ rationale = "Owned temporary PNG fixtures exercise current output selection and 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:02edd7dc03b99512797ad04500a1ab5c27ddcb6944bd8c6451c85ffc99376660"
+source_sha256 = "sha256:05d55483ad80afc7483b03b378847b478cd0b047a300e8f3ddbcd0208f42aaa0"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor exercises backend revocation while the canvas session retains its worker lifetime."
@@ -4312,10 +4312,10 @@ rationale = "An owned temporary cache anchor exercises backend revocation while 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/viewport/fixture.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:049e529eb92cf56ca163d7243da2c17dc401e81462e97f322531036d9725af49"
+source_sha256 = "sha256:b435270cc0b8b0e338b294fa55f09caf01b3455bf77134b552adc098e6a8a1d1"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
-rationale = "Owned temporary PNG fixtures exercise shared viewport commands through real canvas execution and native presentation acknowledgement without accessing user storage."
+rationale = "Owned temporary PNG and JPEG fixtures exercise shared viewport commands through real canvas execution and native presentation acknowledgement without accessing user storage."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
@@ -4336,7 +4336,7 @@ rationale = "An owned temporary cache fixture verifies nonblocking contention an
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/output_media/transfer/tests/native_http.rs"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:ca50ff9fb5a4c2adb43e53ab64cfab8c3b25fbf3936b17c3c8eb539fcb81abc9"
+source_sha256 = "sha256:04d60a481eb94dcb438346c2de08746ca9f6eecaf4fa865458fe1f904709945b"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache scope qualifies the real loopback output transfer, peer identity checks and worker retirement without accessing user data."
@@ -4360,7 +4360,7 @@ rationale = "Owned temporary cache roots verify immutable admitted byte original
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/tests/cached/jpeg.rs"
 owner = "sugarsubstitute-image-io"
-source_sha256 = "sha256:80879143868c95ad8c45c1670b7c669bcf2d421a7973a8dcdfedf7802cd2a612"
+source_sha256 = "sha256:6b29ded07414d2d5e85d9eb5ef3c5ebe1934515f4173734a974eba3d254df98d"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary cache roots verify supported JPEG import, original retention, independent rebuild and malformed-input publication rejection through the real cache owner."

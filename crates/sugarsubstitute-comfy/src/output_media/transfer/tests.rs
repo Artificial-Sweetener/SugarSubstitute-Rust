@@ -3,6 +3,7 @@
 //! Exercise peer matching and inert admission before native output effects.
 
 use super::*;
+use crate::output_media::ComfyOutputFormat;
 use sugarsubstitute_contracts::canvas_surface::CanvasFileReference;
 
 mod native_http;
@@ -26,37 +27,75 @@ fn connected_peer_must_match_both_parent_granted_process_coordinates() -> Result
 }
 
 #[test]
-fn transfer_rejects_a_limit_smaller_than_a_png_before_any_native_effect()
+fn transfer_rejects_a_limit_smaller_than_its_format_before_any_native_effect()
 -> Result<(), Box<dyn Error>> {
-    let reference =
-        CanvasFileReference::decode(br#"{"filename":"image.png","subfolder":"","type":"output"}"#)?;
-    let target = ComfyViewTarget::new(&reference)?;
     let origin = LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?;
-    assert!(ComfyOutputTransfer::new(origin, target.clone(), peer()?, 32).is_err());
-    let transfer = ComfyOutputTransfer::new(origin, target, peer()?, 33)?;
-    assert!(!transfer.settled());
+    for (filename, minimum) in [("image.png", 33), ("image.jpg", 27), ("image.jpeg", 27)] {
+        let reference = CanvasFileReference::decode(
+            format!(r#"{{"filename":"{filename}","subfolder":"","type":"output"}}"#).as_bytes(),
+        )?;
+        let target = ComfyViewTarget::new(&reference)?;
+        assert!(ComfyOutputTransfer::new(origin, target.clone(), peer()?, minimum - 1).is_err());
+        let transfer = ComfyOutputTransfer::new(origin, target, peer()?, minimum)?;
+        assert!(!transfer.settled());
+    }
     Ok(())
+}
+
+/// Copy `bytes` as a declared `length` body of `format` through the bounded media copier.
+fn copy(format: ComfyOutputFormat, length: u64, bytes: &[u8]) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut input = std::io::Cursor::new(bytes);
+    let mut output = Vec::new();
+    native::copy_media(format, length, &mut output, |buffer| input.read(buffer))?;
+    Ok(output)
 }
 
 #[test]
 fn output_stream_rejects_truncation_excess_and_non_png_bytes() -> Result<(), Box<dyn Error>> {
-    use std::io::Read;
     let mut valid = b"\x89PNG\r\n\x1a\n".to_vec();
     valid.extend([0x42; 32]);
-    let mut output = Vec::new();
-    let mut input = std::io::Cursor::new(&valid);
-    native::copy_png(valid.len() as u64, &mut output, |buffer| input.read(buffer))?;
-    assert_eq!(output, valid);
+    assert_eq!(copy(ComfyOutputFormat::Png, valid.len() as u64, &valid)?, valid);
+    let mut jpeg = vec![0xff, 0xd8, 0xff, 0xe0];
+    jpeg.extend([0x42; 36]);
     for (length, bytes) in [
         (valid.len() as u64 + 1, valid.clone()),
         (valid.len() as u64 - 1, valid.clone()),
         (valid.len() as u64, vec![0x42; valid.len()]),
+        (jpeg.len() as u64, jpeg),
     ] {
-        let mut input = std::io::Cursor::new(bytes);
-        let mut output = Vec::new();
-        assert!(native::copy_png(length, &mut output, |buffer| input.read(buffer)).is_err());
+        assert!(copy(ComfyOutputFormat::Png, length, &bytes).is_err());
     }
     let mut output = Vec::new();
-    assert!(native::copy_png(u64::MAX, &mut output, |buffer| Ok(buffer.len() + 1)).is_err());
+    assert!(
+        native::copy_media(ComfyOutputFormat::Png, u64::MAX, &mut output, |buffer| Ok(buffer
+            .len()
+            + 1))
+        .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn output_stream_requires_the_jpeg_signature_and_exact_declared_length()
+-> Result<(), Box<dyn Error>> {
+    let valid = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../sugarsubstitute-image-io/src/tests/jpeg/fixtures/444.jpg"
+    ));
+    assert_eq!(copy(ComfyOutputFormat::Jpeg, valid.len() as u64, valid)?, valid);
+    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    png.extend([0x42; 32]);
+    let mut marker_only = valid.to_vec();
+    marker_only[2] = 0x00;
+    for (length, bytes) in [
+        (valid.len() as u64 + 1, valid.to_vec()),
+        (valid.len() as u64 - 1, valid.to_vec()),
+        (valid.len() as u64, marker_only),
+        (png.len() as u64, png),
+        (2, vec![0xff, 0xd8]),
+    ] {
+        assert!(copy(ComfyOutputFormat::Jpeg, length, &bytes).is_err(), "length={length}");
+    }
     Ok(())
 }

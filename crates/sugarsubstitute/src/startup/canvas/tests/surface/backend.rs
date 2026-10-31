@@ -33,7 +33,7 @@ fn discovery(
     assert_eq!(value["capabilities"]["schema"], 1);
     assert_eq!(
         value["capabilities"]["imageFormats"],
-        if expected == "available" { json!(["png"]) } else { json!([]) }
+        if expected == "available" { json!(["png", "jpeg"]) } else { json!([]) }
     );
     assert_eq!(
         value["capabilities"]["viewportCommands"],

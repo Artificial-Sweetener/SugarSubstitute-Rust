@@ -33,6 +33,66 @@ fn actual_comfy_sequential_jpeg_imports_through_the_existing_cache_owner() -> ha
     })
 }
 
+/// Retain `bytes` as the Comfy transfer does and import it through the encoded-original owner.
+fn import_retained_comfy_output(
+    cache: &RuntimeCache,
+    bytes: &[u8],
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> Result<CachedRaster, ImportError> {
+    let mut entry = cache.clone().fresh(
+        Namespace::ComfyOutputs,
+        &storage_key(bytes),
+        bytes.len() as u64,
+        10,
+        context,
+    )?;
+    entry.write("output.jpg", bytes, context)?;
+    entry.publish(context)?;
+    let mut input = Some(entry.into_file_reader("output.jpg", context)?);
+    let original = ImageSource::encoded(&mut input, context.memory())?;
+    original.import_image(cache.clone(), CacheReuse::Compatible, context.memory(), 10, context)
+}
+
+#[test]
+fn retained_comfy_jpeg_final_imports_through_its_encoded_original() -> harness::TestResult {
+    harness::run_storage(48 * 1024 * 1024, |context| {
+        let root = tempfile::tempdir()?;
+        let cache = RuntimeCache::open(
+            &root.path().join("cache"),
+            CachePolicy { total_bytes: 16 * 1024 * 1024 },
+            context,
+        )?;
+        let bytes = include_bytes!("../jpeg/fixtures/comfy-512.jpg");
+        let mut raster = import_retained_comfy_output(&cache, bytes, context)?;
+        let descriptor = raster.descriptor();
+        assert_eq!(descriptor.layout().extent(), Extent::new(512, 512)?);
+        assert_eq!(descriptor.original_hash(), Sha256::digest(bytes).as_slice());
+        let mut pixel = [Pixel::TRANSPARENT];
+        raster.read(descriptor.asset(), Region::new(511, 511, 1, 1)?, &mut pixel, context)?;
+        assert_eq!(pixel[0].channels()[3], 1.0);
+        Ok(())
+    })
+}
+
+#[test]
+fn retained_progressive_comfy_jpeg_fails_explicitly_without_a_raster() -> harness::TestResult {
+    harness::run_storage(48 * 1024 * 1024, |context| {
+        let root = tempfile::tempdir()?;
+        let cache = RuntimeCache::open(
+            &root.path().join("cache"),
+            CachePolicy { total_bytes: 1024 * 1024 },
+            context,
+        )?;
+        let bytes = include_bytes!("../jpeg/fixtures/progressive.jpg");
+        let failure = import_retained_comfy_output(&cache, bytes, context)
+            .err()
+            .ok_or(ImportError::Invalid("Progressive JPEG was imported"))?;
+        assert!(!matches!(failure, ImportError::Io(_)), "{failure:?}");
+        let report = cache.maintain(11 + Namespace::ImageSources.retention(), context)?;
+        assert_eq!((report.pinned_entries, report.removed_entries), (0, 1));
+        Ok(())
+    })
+}
 #[test]
 fn jpeg_retained_original_clones_rebuild_the_same_asset_without_mutating_prior_generations()
 -> harness::TestResult {

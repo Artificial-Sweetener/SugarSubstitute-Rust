@@ -24,6 +24,7 @@ use sugarsubstitute_desktop::{
 mod backend;
 mod cancellation;
 mod comparison;
+mod jpeg;
 mod overview;
 mod preview;
 mod reattachment;

@@ -49,17 +49,19 @@ struct State {
 
 impl ComfyOutputTransfer {
     /// Prepare an inert transfer to the caller's selected, independently authorized backend.
-    /// `maximum` is the caller's encoded-source byte limit and must include the PNG header.
+    /// `maximum` is the caller's encoded-source byte limit and must admit the smallest image
+    /// of the target's encoded format.
     ///
     /// # Errors
-    /// Rejects a maximum too small to contain a PNG before any native operation.
+    /// Rejects a maximum too small to contain an image of the target's format before any
+    /// native operation.
     pub fn new(
         origin: LoopbackOrigin,
         target: ComfyViewTarget,
         peer: BackendPeer,
         maximum: u64,
     ) -> Result<Self, OutputTransferError> {
-        if maximum < 33 {
+        if maximum < target.format().minimum_bytes() {
             return Err(OutputTransferError::invalid("output_limit"));
         }
         Ok(Self {
@@ -79,7 +81,9 @@ impl ComfyOutputTransfer {
         })
     }
 
-    /// Fetch and pin one complete PNG on an execution-owned ordinary storage worker.
+    /// Fetch and pin one complete PNG or JPEG, as the target's filename names, on an
+    /// execution-owned ordinary storage worker. Content type, length and leading signature
+    /// must match that format; the image decoder validates the remaining stream.
     /// The connected peer is checked against the parent-granted PID and creation time
     /// before and after the bounded body. `now` is Unix UTC seconds for cache retention.
     /// The returned reader and its final release remain storage-worker responsibilities.

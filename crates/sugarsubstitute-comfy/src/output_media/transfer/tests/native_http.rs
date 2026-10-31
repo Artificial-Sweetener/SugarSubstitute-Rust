@@ -31,6 +31,12 @@ const PNG: &[u8] = &[
     0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
+const JPEG: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../sugarsubstitute-image-io/src/tests/jpeg/fixtures/444.jpg"
+));
+const JPEG_TARGET: &str = "/view?filename=image.jpg&subfolder=&type=output";
+
 #[derive(Default)]
 struct Wake(Mutex<u64>, Condvar);
 
@@ -159,6 +165,8 @@ struct Fixture {
     peer: BackendPeer,
     valid_port: u16,
     rejected_port: u16,
+    jpeg_port: u16,
+    mislabeled_port: u16,
     cache: RuntimeCache,
 }
 
@@ -180,38 +188,78 @@ fn setup(
         start_server(&client, &scope, &context, exchange(target_path, "image/png", PNG), 3)?;
     let (rejected_server, rejected_port) =
         start_server(&client, &scope, &context, exchange(target_path, "image/png", PNG), 4)?;
+    let (jpeg_server, jpeg_port) =
+        start_server(&client, &scope, &context, exchange(JPEG_TARGET, "image/jpeg", JPEG), 6)?;
+    let (mislabeled_server, mislabeled_port) =
+        start_server(&client, &scope, &context, exchange(JPEG_TARGET, "image/png", JPEG), 7)?;
     let peer = qualified_peer(identity_port, &context)?;
     assert_eq!(peer.process_id.get(), std::process::id());
     let cache = RuntimeCache::open(&anchor, CachePolicy::default(), &context)?;
     Ok(Fixture {
-        servers: vec![identity_server, valid_server, rejected_server],
+        servers: vec![
+            identity_server,
+            valid_server,
+            rejected_server,
+            jpeg_server,
+            mislabeled_server,
+        ],
         peer,
         valid_port,
         rejected_port,
+        jpeg_port,
+        mislabeled_port,
         cache,
     })
 }
 
-fn exercise(context: JobContext, fixture: Fixture) -> Exercise {
-    let Fixture { servers, peer, valid_port, rejected_port, cache } = fixture;
-    let result = (|| -> io::Result<()> {
-        let origin = LoopbackOrigin::parse(&format!("http://127.0.0.1:{valid_port}"), valid_port)
-            .map_err(io::Error::other)?;
-        let reference = CanvasFileReference::decode(
-            br#"{"filename":"image.png","subfolder":"","type":"output"}"#,
-        )
+/// Bind one admitted output filename to the fixture server on `port` with the granted `peer`.
+fn bound(port: u16, filename: &str, peer: BackendPeer) -> io::Result<ComfyOutputTransfer> {
+    let origin = LoopbackOrigin::parse(&format!("http://127.0.0.1:{port}"), port)
         .map_err(io::Error::other)?;
-        let target = ComfyViewTarget::new(&reference).map_err(io::Error::other)?;
-        let valid = ComfyOutputTransfer::new(origin, target.clone(), peer, 1024)
-            .map_err(io::Error::other)?;
-        let mut reader =
-            valid.fetch(cache.clone(), utc_seconds()?, &context).map_err(io::Error::other)?;
-        let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes)?;
-        assert_eq!(bytes, PNG);
-        drop(reader);
-        assert!(valid.settled());
+    let reference = CanvasFileReference::decode(
+        format!(r#"{{"filename":"{filename}","subfolder":"","type":"output"}}"#).as_bytes(),
+    )
+    .map_err(io::Error::other)?;
+    let target = ComfyViewTarget::new(&reference).map_err(io::Error::other)?;
+    ComfyOutputTransfer::new(origin, target, peer, 1024).map_err(io::Error::other)
+}
 
+/// Fetch through `transfer` and return the retained bytes after its handles settle.
+fn fetched(
+    transfer: &ComfyOutputTransfer,
+    cache: &RuntimeCache,
+    context: &JobContext,
+) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    transfer
+        .fetch(cache.clone(), utc_seconds()?, context)
+        .map_err(io::Error::other)?
+        .read_to_end(&mut bytes)?;
+    assert!(transfer.settled());
+    Ok(bytes)
+}
+
+/// Require `transfer` to fail at `stage` and still retire its handles.
+fn rejected_at(
+    transfer: &ComfyOutputTransfer,
+    cache: &RuntimeCache,
+    context: &JobContext,
+    stage: &str,
+) -> io::Result<()> {
+    let cause = transfer
+        .fetch(cache.clone(), utc_seconds()?, context)
+        .err()
+        .ok_or_else(|| io::Error::other(format!("Transfer passed {stage}")))?;
+    assert_eq!(cause.stage, stage);
+    assert!(transfer.settled());
+    Ok(())
+}
+
+fn exercise(context: JobContext, fixture: Fixture) -> Exercise {
+    let Fixture { servers, peer, valid_port, rejected_port, jpeg_port, mislabeled_port, cache } =
+        fixture;
+    let result = (|| -> io::Result<()> {
+        assert_eq!(fetched(&bound(valid_port, "image.png", peer)?, &cache, &context)?, PNG);
         let changed = BackendPeer {
             creation_time_100ns: NonZeroU64::new(
                 peer.creation_time_100ns
@@ -222,20 +270,13 @@ fn exercise(context: JobContext, fixture: Fixture) -> Exercise {
             .ok_or_else(|| io::Error::other("Birth"))?,
             ..peer
         };
-        let origin =
-            LoopbackOrigin::parse(&format!("http://127.0.0.1:{rejected_port}"), rejected_port)
-                .map_err(io::Error::other)?;
-        let rejected = ComfyOutputTransfer::new(origin, target.clone(), changed, 1024)
-            .map_err(io::Error::other)?;
-        let cause = rejected
-            .fetch(cache, utc_seconds()?, &context)
-            .err()
-            .ok_or_else(|| io::Error::other("Changed peer was accepted"))?;
-        assert_eq!(cause.stage, "output_peer_changed");
-        assert!(rejected.settled());
+        let changed = bound(rejected_port, "image.png", changed)?;
+        rejected_at(&changed, &cache, &context, "output_peer_changed")?;
+        assert_eq!(fetched(&bound(jpeg_port, "image.jpg", peer)?, &cache, &context)?, JPEG);
+        let mislabeled = bound(mislabeled_port, "image.jpg", peer)?;
+        rejected_at(&mislabeled, &cache, &context, "output_headers")?;
 
-        let poisoned =
-            ComfyOutputTransfer::new(origin, target, peer, 1024).map_err(io::Error::other)?;
+        let poisoned = bound(rejected_port, "image.png", peer)?;
         let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _guard = poisoned.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             std::panic::resume_unwind(Box::new("test poison"));
@@ -268,7 +309,8 @@ fn actual_http_transfer_requires_the_granted_process_birth_and_retires_its_handl
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
             deadline: Some(client.now()?.checked_add(Duration::from_secs(20))?),
-            reservation_bytes: 32 * 1024 * 1024,
+            // Five fixture servers claim 5 MiB each beside the TCP owner workspace.
+            reservation_bytes: 48 * 1024 * 1024,
             replacement: None,
         },
         move |context| setup(context, worker_client, worker_scope, anchor),
@@ -282,7 +324,7 @@ fn actual_http_transfer_requires_the_granted_process_birth_and_retires_its_handl
     let mut task = client.submit_blocking_owned_input(
         &scope,
         JobSpec {
-            id: JobId::new(5)?,
+            id: JobId::new(8)?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
             deadline: Some(client.now()?.checked_add(Duration::from_secs(15))?),
@@ -302,10 +344,10 @@ fn actual_http_transfer_requires_the_granted_process_birth_and_retires_its_handl
         server.cancel();
     }
     let mut fixture = Vec::new();
-    for server in &mut servers {
+    for (index, server) in servers.iter_mut().enumerate() {
         fixture.push(match take(&client, &wake, server)?.outcome {
             JobOutcome::Success(()) | JobOutcome::Cancelled => Ok(()),
-            JobOutcome::Failure(cause) => Err(format!("HTTP fixture failed: {cause}")),
+            JobOutcome::Failure(cause) => Err(format!("HTTP fixture {index} failed: {cause}")),
             other => Err(format!("HTTP fixture stopped: {:?}", other.kind())),
         });
     }

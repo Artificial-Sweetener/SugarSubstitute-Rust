@@ -55,7 +55,35 @@ fn rejects_traversal_absolute_paths_root_overrides_and_oversized_targets()
     ] {
         assert!(ComfyViewTarget::new(&reference(json)?).is_err(), "accepted {json}");
     }
-    let huge = format!(r#"{{"filename":"{}","subfolder":"","type":"output"}}"#, "🌈".repeat(2048));
+    let huge =
+        format!(r#"{{"filename":"{}.png","subfolder":"","type":"output"}}"#, "🌈".repeat(2048));
     assert_eq!(ComfyViewTarget::new(&reference(&huge)?), Err(ComfyViewError::TooLarge));
+    Ok(())
+}
+
+#[test]
+fn filename_extension_selects_one_closed_encoded_format() -> Result<(), Box<dyn Error>> {
+    for (filename, format) in [
+        ("image.png", ComfyOutputFormat::Png),
+        ("batch/IMAGE.PNG", ComfyOutputFormat::Png),
+        ("image.jpg", ComfyOutputFormat::Jpeg),
+        ("image.JPG", ComfyOutputFormat::Jpeg),
+        ("nested/image.Jpeg", ComfyOutputFormat::Jpeg),
+        ("archive.tar.jpeg", ComfyOutputFormat::Jpeg),
+    ] {
+        let json = format!(r#"{{"filename":"{filename}","subfolder":"","type":"output"}}"#);
+        assert_eq!(ComfyViewTarget::new(&reference(&json)?)?.format(), format, "{filename}");
+    }
+    for filename in ["image.webp", "image", "image.png.txt", ".png", "image.jpe", "image.gif"] {
+        let json = format!(r#"{{"filename":"{filename}","subfolder":"","type":"output"}}"#);
+        assert_eq!(
+            ComfyViewTarget::new(&reference(&json)?),
+            Err(ComfyViewError::Format),
+            "{filename}"
+        );
+    }
+    assert_eq!(ComfyOutputFormat::Png.content_type(), "image/png");
+    assert_eq!(ComfyOutputFormat::Jpeg.content_type(), "image/jpeg");
+    assert_eq!(ComfyOutputFormat::Jpeg.signature(), [0xff, 0xd8, 0xff]);
     Ok(())
 }

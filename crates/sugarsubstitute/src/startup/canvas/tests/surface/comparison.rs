@@ -73,9 +73,9 @@ fn a_single_selection_refuses_wipes_and_reports_no_comparison() -> Result<(), Bo
 }
 
 #[test]
-fn a_comparison_must_be_a_png_output_like_the_primary() -> Result<(), Box<dyn Error>> {
+fn a_comparison_must_be_a_png_or_jpeg_output_like_the_primary() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;
-    select_pair(&mut fixture, 3, "tall.jpg")?;
+    select_pair(&mut fixture, 3, "tall.webp")?;
     fixture.take(3, "error")?;
     fixture.finish()
 }

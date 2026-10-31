@@ -4,6 +4,17 @@
 
 use super::*;
 
+/// Baseline JFIF 4:4:4 sample of flat sRGB `(128, 64, 32)`, 19x17 pixels.
+const FLAT_JPEG: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../sugarsubstitute-image-io/src/tests/jpeg/fixtures/444.jpg"
+));
+/// Progressive JPEG, outside the decoder's baseline single-scan subset.
+const PROGRESSIVE_JPEG: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../sugarsubstitute-image-io/src/tests/jpeg/fixtures/progressive.jpg"
+));
+
 /// Execution progress observed between host-loop turns.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::startup::canvas::tests::surface) enum Execution {
@@ -53,6 +64,9 @@ impl Fixture {
         std::fs::create_dir(&output)?;
         image(&output.join("wide.png"), 320, 160, [255, 0, 0])?;
         image(&output.join("tall.png"), 160, 320, [0, 0, 255])?;
+        for (filename, bytes) in [("flat.jpg", FLAT_JPEG), ("progressive.jpg", PROGRESSIVE_JPEG)] {
+            std::io::Write::write_all(&mut std::fs::File::create(output.join(filename))?, bytes)?;
+        }
         let clock = Arc::new(ClockValue(AtomicU64::new(0)));
         let wake = Arc::new(Wake::default());
         let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;

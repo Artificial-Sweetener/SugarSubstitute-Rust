@@ -2,26 +2,50 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reject hostile HTTP framing at the complete-header boundary without live networking.
 use super::{
-    headers::{parse_headers, parse_png_length},
+    headers::{parse_headers, parse_media_length},
     probe::Endpoint,
 };
+use crate::output_media::ComfyOutputFormat;
 mod verification;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn png_output_requires_one_bounded_exact_length_and_identity_encoding() -> TestResult {
     let valid = "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: 42\r\n\r\n";
-    assert_eq!(parse_png_length(valid, 42)?, 42);
+    assert_eq!(parse_media_length(valid, ComfyOutputFormat::Png, 42)?, 42);
+    assert_eq!(parse_media_length(&valid.replace("42", "33"), ComfyOutputFormat::Png, 42)?, 33);
     for invalid in [
         valid.replace("42", "32"),
         valid.replace("42", "43"),
         valid.replace("image/png", "image/jpeg"),
+        valid.replace("image/png", "image/png; charset=binary"),
+        valid.replace("Content-Type: image/png\r\n", ""),
         valid.replace("Content-Length: 42\r\n", "Transfer-Encoding: chunked\r\n"),
         valid.replace("Content-Length: 42", "Content-Length: 42\r\nContent-Length: 42"),
         valid.replace("Content-Length: 42", "Content-Length: 42\r\nContent-Encoding: gzip"),
     ] {
-        assert!(parse_png_length(&invalid, 42).is_err());
+        assert!(parse_media_length(&invalid, ComfyOutputFormat::Png, 42).is_err(), "{invalid}");
     }
+    Ok(())
+}
+
+#[test]
+fn jpeg_output_requires_its_own_media_type_and_minimum_length() -> TestResult {
+    let valid = "HTTP/1.1 200 OK\r\nContent-Type: Image/JPEG\r\nContent-Length: 27\r\n\r\n";
+    assert_eq!(parse_media_length(valid, ComfyOutputFormat::Jpeg, 42)?, 27);
+    for invalid in [
+        valid.replace("27", "26"),
+        valid.replace("27", "43"),
+        valid.replace("Image/JPEG", "image/png"),
+        valid.replace("Image/JPEG", "image/jpg"),
+        valid.replace("Image/JPEG", "image/webp"),
+        valid.replace("Content-Length: 27\r\n", "Transfer-Encoding: chunked\r\n"),
+    ] {
+        assert!(parse_media_length(&invalid, ComfyOutputFormat::Jpeg, 42).is_err(), "{invalid}");
+    }
+    let png = valid.replace("Image/JPEG", "image/png");
+    assert!(parse_media_length(&png, ComfyOutputFormat::Png, 42).is_err());
+    assert_eq!(parse_media_length(&png.replace("27", "33"), ComfyOutputFormat::Png, 42)?, 33);
     Ok(())
 }
 #[test]

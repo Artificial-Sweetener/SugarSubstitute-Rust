@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Stream a bounded PNG from the exact connected Comfy peer into retained cache custody.
+//! Stream a bounded PNG or JPEG from the exact connected Comfy peer into retained cache custody.
 
 use super::*;
+use crate::output_media::ComfyOutputFormat;
 use std::io::{self, Write};
 use sugarsubstitute_supervision::{
     backend_listener::ConnectedLoopback,
@@ -55,9 +56,13 @@ pub(super) fn fetch(
             io::Error::other(format!("Comfy returned HTTP {}", response.status)),
         ));
     }
-    let length =
-        crate::readiness_transport::headers::parse_png_length(&response.headers, transfer.maximum)
-            .map_err(|cause| OutputTransferError::new("output_headers", cause))?;
+    let format = transfer.target.format();
+    let length = crate::readiness_transport::headers::parse_media_length(
+        &response.headers,
+        format,
+        transfer.maximum,
+    )
+    .map_err(|cause| OutputTransferError::new("output_headers", cause))?;
     let identity = format!(
         "comfy-output-v1:{}:{}:{}:{}",
         port,
@@ -70,8 +75,8 @@ pub(super) fn fetch(
         .fresh(Namespace::ComfyOutputs, &key, length, now, context)
         .map_err(|cause| OutputTransferError::new("output_cache_admission", cause))?;
     entry
-        .write_with("output.png", length, context, |output| {
-            copy_png(length, output, |buffer| {
+        .write_with(entry_name(format), length, context, |output| {
+            copy_media(format, length, output, |buffer| {
                 state.http.read(buffer, context).map_err(io::Error::other)
             })
         })
@@ -83,18 +88,29 @@ pub(super) fn fetch(
     qualify(state, after, transfer.peer, context)?;
     entry.publish(context).map_err(|cause| OutputTransferError::new("output_publish", cause))?;
     let reader = entry
-        .into_file_reader("output.png", context)
+        .into_file_reader(entry_name(format), context)
         .map_err(|cause| OutputTransferError::new("output_pin", cause))?;
     tracing::info!(
         operation = "comfy_output_acquired",
         peer_process_id = transfer.peer.process_id.get(),
         encoded_bytes = length,
+        encoded_format = ?format,
         "Selected Comfy output acquired from the verified peer"
     );
     Ok(reader)
 }
 
-pub(super) fn copy_png(
+/// Name the retained original by format; the cache key already binds the exact view target.
+fn entry_name(format: ComfyOutputFormat) -> &'static str {
+    match format {
+        ComfyOutputFormat::Png => "output.png",
+        ComfyOutputFormat::Jpeg => "output.jpg",
+    }
+}
+
+/// Copy exactly `length` body bytes and require the format's leading signature.
+pub(super) fn copy_media(
+    format: ComfyOutputFormat,
     length: u64,
     output: &mut dyn Write,
     mut read: impl FnMut(&mut [u8]) -> io::Result<usize>,
@@ -128,10 +144,11 @@ pub(super) fn copy_png(
         output.write_all(&scratch[..count])?;
         total = next;
     }
-    if total != length || signature != *b"\x89PNG\r\n\x1a\n" {
+    let expected = format.signature();
+    if total != length || !signature.starts_with(expected) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "Comfy output is truncated or not PNG",
+            "Comfy output is truncated or does not match its format",
         ));
     }
     Ok(())
