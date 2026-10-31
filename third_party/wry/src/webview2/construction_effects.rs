@@ -30,6 +30,7 @@ pub(super) fn advance(driver: &mut Driver) -> Result<ConstructionProgress> {
         shared.parent.get(),
         attrs,
         driver.config.is_child,
+        driver.config.composition,
       )?;
       {
         let mut state = shared.native.borrow_mut();

@@ -287,3 +287,45 @@ fn owned_zero_last_error_is_an_actionable_failure() {
     _ => panic!("missing original Windows cause"),
   }
 }
+
+/// A hidden real parent observes the container's own hit test without showing a window.
+#[test]
+fn composition_container_passes_hit_tests_to_its_host_parent() -> Result<()> {
+  let module = unsafe { GetModuleHandleW(PCWSTR::null())? };
+  let parent = unsafe {
+    CreateWindowExW(
+      WINDOW_EX_STYLE::default(),
+      w!("STATIC"),
+      PCWSTR::null(),
+      WS_OVERLAPPED,
+      0,
+      0,
+      64,
+      64,
+      None,
+      None,
+      Some(module.into()),
+      None,
+    )?
+  };
+  let hit = |composition| -> Result<isize> {
+    let attributes = WebViewAttributes {
+      visible: false,
+      ..Default::default()
+    };
+    let container =
+      InnerWebView::create_container_hwnd_raw(parent, &attributes, false, composition)?;
+    let mut rect = RECT::default();
+    unsafe { GetWindowRect(container, &mut rect)? };
+    let center = ((rect.top + rect.bottom) / 2) << 16 | ((rect.left + rect.right) / 2) & 0xffff;
+    let result =
+      unsafe { SendMessageW(container, WM_NCHITTEST, None, Some(LPARAM(center as isize))) };
+    unsafe { DestroyWindow(container)? };
+    Ok(result.0)
+  };
+  let results = (hit(true), hit(false));
+  unsafe { DestroyWindow(parent)? };
+  assert_eq!(results.0?, HTTRANSPARENT as isize);
+  assert_eq!(results.1?, HTCLIENT as isize);
+  Ok(())
+}

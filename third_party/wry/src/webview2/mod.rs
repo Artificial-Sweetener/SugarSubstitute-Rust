@@ -176,10 +176,16 @@ impl InnerWebView {
     construction::legacy(parent, config)
   }
 
+  /// Create the container that parents the controller.
+  ///
+  /// A composition controller draws only into the host's visual tree, and the host window
+  /// beneath receives and forwards its spatial input; its container is therefore transparent to
+  /// hit testing so every mouse message reaches that same-thread parent.
   fn create_container_hwnd_raw(
     parent: HWND,
     attributes: &WebViewAttributes,
     is_child: bool,
+    composition: bool,
   ) -> Result<HWND> {
     unsafe extern "system" fn default_window_proc(
       hwnd: HWND,
@@ -200,13 +206,30 @@ impl InnerWebView {
       DefWindowProcW(hwnd, msg, wparam, lparam)
     }
 
-    let class_name = w!("WRY_WEBVIEW");
+    unsafe extern "system" fn composition_window_proc(
+      hwnd: HWND,
+      msg: u32,
+      wparam: WPARAM,
+      lparam: LPARAM,
+    ) -> LRESULT {
+      // HTTRANSPARENT passes the hit test to the underlying window of this same UI thread.
+      if msg == WM_NCHITTEST {
+        return LRESULT(HTTRANSPARENT as isize);
+      }
+      default_window_proc(hwnd, msg, wparam, lparam)
+    }
+
+    let (class_name, procedure): (PCWSTR, WNDPROC) = if composition {
+      (w!("WRY_COMPOSITION_WEBVIEW"), Some(composition_window_proc))
+    } else {
+      (w!("WRY_WEBVIEW"), Some(default_window_proc))
+    };
     let module = unsafe { GetModuleHandleW(PCWSTR::null())? };
 
     let class = WNDCLASSEXW {
       cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
       style: CS_HREDRAW | CS_VREDRAW,
-      lpfnWndProc: Some(default_window_proc),
+      lpfnWndProc: procedure,
       cbClsExtra: 0,
       cbWndExtra: 0,
       hInstance: HINSTANCE(module.0),
