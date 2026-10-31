@@ -270,6 +270,8 @@ test.each([
   { viewportCommands: ['comparison'] },
   { previewFormats: ['webp'] },
   { viewportState: null },
+  { input: 'yes' },
+  { input: null },
 ])('rejects malformed capability descriptors %#', (patch) => {
   const request = {
     protocol: 'sugarcubes.canvas',
@@ -296,6 +298,7 @@ test('accepts shared valid discovery vectors and rejects each malformed variant'
     available: unknown;
     unsupported: unknown;
     comparison: unknown;
+    input: unknown;
     invalidRequests: unknown[];
     invalidReplies: unknown[];
   };
@@ -304,6 +307,7 @@ test('accepts shared valid discovery vectors and rejects each malformed variant'
     vectors.available,
     vectors.unsupported,
     vectors.comparison,
+    vectors.input,
   ])
     expect(isCanvasMessage(message)).toBe(true);
   for (const message of [...vectors.invalidRequests, ...vectors.invalidReplies])

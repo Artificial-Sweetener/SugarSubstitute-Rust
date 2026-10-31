@@ -123,15 +123,33 @@ test('emits a present-only Rust option that delegates to the referenced validato
   );
 });
 
-test('refuses an optional Rust member without a named definition', () => {
+test('emits present-only Rust lists of a named definition and present-only booleans', () => {
+  const source = rust({
+    properties: {
+      primary: { $ref: '#/$defs/FixtureSize' },
+      sizes: { type: 'array', items: { $ref: '#/$defs/FixtureSize' }, maxItems: 4 },
+      blocked: { type: 'boolean' },
+    },
+  });
+  expect(source).toContain('pub(super) sizes: Option<Vec<FixtureSize>>,');
+  expect(source).toContain('pub(super) blocked: Option<bool>,');
+  expect(source).toContain('valid_fixture_state_sizes(self.sizes.as_deref())');
+  expect(source).toContain(
+    'fn valid_fixture_state_sizes(value: Option<&[FixtureSize]>) -> bool {\n' +
+      '    value.is_none_or(|items| items.len() <= 4 && items.iter().all(FixtureSize::valid))\n}',
+  );
+  expect(source.match(/deserialize_with = "deserialize_present_option"/g)).toHaveLength(2);
+});
+
+test.each([
+  { type: 'integer', minimum: 1, maximum: 10 },
+  { type: 'boolean', default: false },
+  { type: 'array', items: { type: 'integer', minimum: 1, maximum: 10 }, maxItems: 4 },
+  { type: 'array', items: { $ref: '#/$defs/FixtureUnknown' }, maxItems: 4 },
+])('refuses an optional Rust member outside the named, listed or boolean forms %#', (secondary) => {
   expect(() =>
-    rust({
-      properties: {
-        primary: { $ref: '#/$defs/FixtureSize' },
-        secondary: { type: 'integer', minimum: 1, maximum: 10 },
-      },
-    }),
-  ).toThrow('optional members must reference a named definition');
+    rust({ properties: { primary: { $ref: '#/$defs/FixtureSize' }, secondary } }),
+  ).toThrow('optional members must reference a named definition, list one, or be boolean');
 });
 
 test.each([

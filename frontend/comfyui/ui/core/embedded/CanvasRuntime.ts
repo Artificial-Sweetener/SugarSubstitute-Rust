@@ -34,6 +34,10 @@ export {
 export { CanvasCancellation } from '../../../../../integrations/shared/CanvasCancellation.js';
 export { negotiatesCanvasSurfaceComparison } from '../../../../../integrations/shared/CanvasSurfaceComparison.js';
 export { fittingCanvasSurfaceOverviewCells } from '../../../../../integrations/shared/CanvasSurfaceOverview.js';
+export {
+  CANVAS_SURFACE_OCCLUSIONS,
+  CANVAS_SURFACE_OCCLUSION_EXTENT,
+} from '../../../../../integrations/shared/CanvasSurfaceOcclusion.js';
 export { WEB_CANVAS } from '../../../../../integrations/contracts/CanvasHost.js';
 export { CanvasMaskClient } from '../../../../../integrations/shared/CanvasMaskClient.js';
 export {

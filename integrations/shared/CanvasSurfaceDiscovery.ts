@@ -26,6 +26,7 @@ import { isCanvasSurfaceCapabilities } from './CanvasSurfaceValidation.generated
 import { supportsCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
 import { supportsCanvasSurfaceComparison } from './CanvasSurfaceComparison.js';
 import { supportsCanvasSurfaceOverview } from './CanvasSurfaceOverview.js';
+import { supportsCanvasSurfaceOcclusion } from './CanvasSurfaceOcclusion.js';
 import type { CanvasChangeObservation } from '../contracts/CanvasChangeObservation.js';
 import type { CanvasSurfacePresentationChange } from '../contracts/CanvasSurface.js';
 import { isCanvasPreviewCommand, supportsCanvasSurfacePreview } from './CanvasSurfacePreview.js';
@@ -39,6 +40,7 @@ export const EMPTY_CANVAS_SURFACE_CAPABILITIES: CanvasSurfaceCapabilities = Obje
   previewFormats: Object.freeze([]),
   comparison: false,
   overview: false,
+  input: false,
 });
 
 /** Reject advertised operations accompanying a refusal. */
@@ -49,7 +51,8 @@ export function emptyCanvasSurfaceCapabilities(value: CanvasSurfaceCapabilities)
     !value.viewportState &&
     value.previewFormats.length === 0 &&
     !value.comparison &&
-    !value.overview
+    !value.overview &&
+    !value.input
   );
 }
 
@@ -156,6 +159,7 @@ export async function discoverCanvasSurface(port: {
           ? supportsCanvasSurfaceViewport(host.capabilities, command) &&
             supportsCanvasSurfaceComparison(host.capabilities, command) &&
             supportsCanvasSurfaceOverview(host.capabilities, command) &&
+            supportsCanvasSurfaceOcclusion(host.capabilities, command) &&
             supportsCanvasSurfacePreview(host.capabilities, command) &&
             (!isCanvasPreviewCommand(command) ||
               command.type === 'surface.preview.withdraw' ||

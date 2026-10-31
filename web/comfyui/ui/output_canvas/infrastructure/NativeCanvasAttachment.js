@@ -26,7 +26,9 @@ import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.j
 import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
 import { NativeCanvasActionSurface } from './NativeCanvasActionSurface.js';
-import { nativeCanvasCommands, nativeCanvasComparison, nativeCanvasOverview, } from './NativeCanvasCapabilities.js';
+import { nativeCanvasCommands, nativeCanvasComparison, nativeCanvasInput, nativeCanvasOverview, } from './NativeCanvasCapabilities.js';
+import { NativeCanvasOcclusions } from './NativeCanvasOcclusions.js';
+import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
 import { NativeCanvasPresentation, } from './NativeCanvasPresentation.js';
@@ -51,6 +53,7 @@ export class NativeCanvasAttachment {
     #comparison;
     /** Present only for a host that paints overview cells; fixed like the comparison flag. */
     #overview;
+    #reveal;
     #catalog;
     #sources;
     #plan;
@@ -81,6 +84,7 @@ export class NativeCanvasAttachment {
         overlay.className = 'sc-output-overlay-root';
         element.append(this.viewport, overlay);
         const host = options.nativeSurface();
+        this.viewport.classList.toggle('sc-output-native-input', nativeCanvasInput(host));
         this.#overview =
             host && nativeCanvasOverview(host)
                 ? new NativeCanvasOverview(element, {
@@ -177,6 +181,11 @@ export class NativeCanvasAttachment {
                 if (this.#ready)
                     this.#status.changed(true);
             }) ?? (() => { });
+        this.#reveal = new NativeCanvasPendingReveal({
+            dispatch: (target) => this.#dispatchReveal(target),
+            revision: () => options.views.read(options.address.viewId).revision,
+            report: (error) => options.report(error, null),
+        });
         this.#keyboard = new CanvasViewportKeyboard(this.viewport, this.port, options.report);
         this.viewport.addEventListener('pointerdown', this.#focusViewport);
         this.#readiness = new NativeCanvasReadiness(options.clock);
@@ -184,6 +193,7 @@ export class NativeCanvasAttachment {
         const cleanup = [
             () => this.#readiness.dispose(),
             () => this.#keyboard.dispose(),
+            () => this.#reveal.drop(),
             () => this.viewport.removeEventListener('pointerdown', this.#focusViewport),
             () => this.#native.dispose(),
             () => this.#overview?.dispose(),
@@ -195,7 +205,9 @@ export class NativeCanvasAttachment {
         try {
             this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element);
             cleanup.push(() => this.#overlay.dispose());
-            this.#geometry = new CanvasSurfaceGeometryObserver(this.viewport, options.frames, (geometry) => this.#observeGeometry(geometry));
+            this.#geometry = new CanvasSurfaceGeometryObserver(this.viewport, options.frames, (geometry) => this.#observeGeometry(geometry), 
+            // The host routes OS gestures itself, around the web content the page reports covering it.
+            nativeCanvasInput(host) ? new NativeCanvasOcclusions(element, this.viewport) : null);
             cleanup.push(() => this.#geometry.dispose());
             this.#stopView = options.views.subscribe(options.address.viewId, () => this.refresh());
             cleanup.push(this.#stopView);
@@ -213,12 +225,20 @@ export class NativeCanvasAttachment {
             throw error;
         }
     }
-    /** Navigate graph-thumbnail inspection through the same shared selection authority. */
+    /**
+     * Navigate graph-thumbnail inspection through the same shared selection authority.
+     *
+     * A staged candidate cannot accept commands until it commits, so it retains the latest reveal
+     * and applies it once it accepts, like a browser attachment awaiting source preparation.
+     */
     async reveal(target) {
-        if (this.#disposed || !this.options.accepts())
+        if (this.#disposed)
             return false;
-        const request = this.port.createRequest({ type: 'reveal', target }, this.port.read().revision);
-        return (await this.port.dispatch(request)).status === 'applied';
+        if (this.options.accepts())
+            return await this.#dispatchReveal(target);
+        if (!this.options.acceptsPreparation())
+            return false;
+        return await this.#reveal.retain(target);
     }
     /** Reconcile the current workflow and its selected native output. */
     refresh() {
@@ -239,6 +259,8 @@ export class NativeCanvasAttachment {
         this.#overview?.reconcile(catalog, this.#plan.view, overview);
         this.#present();
         this.#status.changed(true);
+        if (this.options.accepts())
+            this.#reveal.apply();
     }
     /** Admit bytes only for this visible, committed view's authoritative source/run interest. */
     wants(session, generation, source) {
@@ -273,6 +295,7 @@ export class NativeCanvasAttachment {
         this.#ready = false;
         this.#readiness.dispose();
         this.#keyboard.dispose();
+        this.#reveal.drop();
         this.viewport.removeEventListener('pointerdown', this.#focusViewport);
         this.#stopView();
         this.#stopTransfer();
@@ -288,7 +311,12 @@ export class NativeCanvasAttachment {
         this.element.classList.remove('sc-output-overview-mode');
         return released;
     }
-    /** Give discrete viewer keys focus without capturing or forwarding native pointer gestures. */
+    /** Dispatch a reveal through the shared command port, which requires committed acceptance. */
+    async #dispatchReveal(target) {
+        const request = this.port.createRequest({ type: 'reveal', target }, this.port.read().revision);
+        return (await this.port.dispatch(request)).status === 'applied';
+    }
+    /** Give discrete viewer keys focus; the host routes native pointer gestures itself. */
     #focusViewport = (event) => {
         if (event.button === 0 && event.target === this.viewport && this.options.accepts())
             this.viewport.focus({ preventScroll: true });
@@ -302,6 +330,9 @@ export class NativeCanvasAttachment {
     }
     /** Forward qualified geometry without constructing a browser drawing surface. */
     #resize(surface) {
+        // Unchanged measurements (e.g. a remeasure after the attachment's own render) are idle.
+        if (this.#surface && JSON.stringify(this.#surface) === JSON.stringify(surface))
+            return;
         this.#surface = surface;
         this.#overview?.resize();
         this.#present();

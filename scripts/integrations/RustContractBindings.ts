@@ -359,27 +359,69 @@ ${condition.length <= 100 ? condition : `        if !matches!(\n            item
   throw new Error('Unsupported Rust contract schema property.');
 }
 
+/** Resolve a node that is exactly a reference to a named definition of this module. */
+function namedReference(node: Schema, names: ReadonlySet<string>): string | undefined {
+  const reference =
+    Object.keys(node).join() === '$ref' && typeof node.$ref === 'string'
+      ? /^#\/\$defs\/([A-Za-z]+)$/.exec(node.$ref)?.[1]
+      : undefined;
+  return reference && names.has(reference) ? reference : undefined;
+}
+
+/** Emit a present-only bounded list check as a helper, wrapped the way rustfmt lays it out. */
+function optionalListHelper(
+  name: string,
+  element: string,
+  minimum: number,
+  maximum: number,
+): string {
+  const parameter = `value: Option<&[${element}]>`;
+  const single = `fn ${name}(${parameter}) -> bool {`;
+  const signature = single.length <= 100 ? single : `fn ${name}(\n    ${parameter},\n) -> bool {`;
+  const size = `${minimum ? `items.len() >= ${minimum} && ` : ''}items.len() <= ${maximum}`;
+  const condition = `${size} && items.iter().all(${element}::valid)`;
+  const inline = `    value.is_none_or(|items| ${condition})`;
+  const body =
+    inline.length <= 100 ? inline : `    value.is_none_or(|items| {\n        ${condition}\n    })`;
+  return `${signature}\n${body}\n}`;
+}
+
 /**
- * Compile an omitted-or-present member. Only named definitions may be optional, so validation
- * delegates to the referenced type instead of reinterpreting inline bounds for a wrapped value.
+ * Compile an omitted-or-present member: a named definition, a bounded list of a named
+ * definition, or a boolean. Validation delegates to the referenced type instead of
+ * reinterpreting inline bounds for a wrapped value; other inline shapes stay refused.
  */
 function optionalProperty(
   value: unknown,
   field: string,
   names: ReadonlySet<string>,
-): { type: string; valid: readonly string[]; attribute: string } {
+  owner: string,
+): { type: string; valid: readonly string[]; attribute: string; helper?: string } {
   const node = record(value);
-  const reference =
-    Object.keys(node).join() === '$ref' && typeof node.$ref === 'string'
-      ? /^#\/\$defs\/([A-Za-z]+)$/.exec(node.$ref)?.[1]
-      : undefined;
-  if (!reference || !names.has(reference))
-    throw new Error('Rust contract optional members must reference a named definition.');
-  return {
-    type: `Option<${reference}>`,
-    valid: [`self.${field}.as_ref().is_none_or(${reference}::valid)`],
-    attribute: OPTIONAL_MEMBER_ATTRIBUTE,
-  };
+  const reference = namedReference(node, names);
+  if (reference)
+    return {
+      type: `Option<${reference}>`,
+      valid: [`self.${field}.as_ref().is_none_or(${reference}::valid)`],
+      attribute: OPTIONAL_MEMBER_ATTRIBUTE,
+    };
+  if (node.type === 'boolean' && Object.keys(node).join() === 'type')
+    return { type: 'Option<bool>', valid: [], attribute: OPTIONAL_MEMBER_ATTRIBUTE };
+  const element =
+    node.type === 'array' ? namedReference(contractArraySchema(node).items, names) : undefined;
+  if (element) {
+    const array = contractArraySchema(node);
+    const helperName = `valid_${owner.replace(/[A-Z]/g, (letter, index) => `${index ? '_' : ''}${letter.toLowerCase()}`)}_${field.replace(/^r#/, '')}`;
+    return {
+      type: `Option<Vec<${element}>>`,
+      valid: [`${helperName}(self.${field}.as_deref())`],
+      attribute: OPTIONAL_MEMBER_ATTRIBUTE,
+      helper: optionalListHelper(helperName, element, array.minimum, array.maximum),
+    };
+  }
+  throw new Error(
+    'Rust contract optional members must reference a named definition, list one, or be boolean.',
+  );
 }
 
 /** Compile only closed objects; admission and navigation authority remain host-owned. */
@@ -420,7 +462,9 @@ export function rustContractBindings(
       const field = rustName(key);
       if (optional) {
         optionalMember = true;
-        return { field, ...optionalProperty(item, field, names) };
+        const result = optionalProperty(item, field, names, name);
+        if (result.helper) helpers.add(result.helper);
+        return { field, ...result };
       }
       const result = property(item, field, names, name);
       requiredOption ||= result.requiredOption === true;

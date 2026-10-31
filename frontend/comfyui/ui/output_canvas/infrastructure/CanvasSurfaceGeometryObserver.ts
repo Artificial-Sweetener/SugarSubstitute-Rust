@@ -21,6 +21,22 @@ import type { CanvasFrameClock } from '../application/CanvasCameraTransition.js'
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import { canvasGeometryAncestry, canvasVisibleClip } from './CanvasVisibleClip.js';
 
+/**
+ * Contribute host input-routing members to measured geometry.
+ *
+ * Only a host that routes native gestures receives these members, so an observer without a
+ * routing source keeps the exact geometry shape older hosts accept.
+ */
+export interface CanvasSurfaceRouting {
+  /** Request remeasurement whenever the routing members may have changed; returns its release. */
+  observe(changed: () => void): () => void;
+  /** Measure occlusions and the modal flag against the viewport allocation. */
+  read(
+    origin: CanvasSurfaceGeometry['origin'],
+    viewport: CanvasSurfaceGeometry['viewport'],
+  ): Pick<CanvasSurfaceGeometry, 'occlusions' | 'modal'>;
+}
+
 /** Coalesce layout, visibility, scrolling, and density changes within the attachment's document. */
 export class CanvasSurfaceGeometryObserver {
   readonly #resize: ResizeObserver | null;
@@ -39,6 +55,7 @@ export class CanvasSurfaceGeometryObserver {
     private readonly element: HTMLElement,
     private readonly frames: CanvasFrameClock,
     private readonly changed: (geometry: CanvasSurfaceGeometry) => void,
+    private readonly routing: CanvasSurfaceRouting | null = null,
   ) {
     const document = element.ownerDocument;
     const window = document.defaultView;
@@ -71,6 +88,7 @@ export class CanvasSurfaceGeometryObserver {
       () => element.removeEventListener('focusin', schedule),
       () => element.removeEventListener('focusout', schedule),
     );
+    if (routing) this.#stops.push(routing.observe(schedule));
     this.#density();
   }
 
@@ -93,18 +111,27 @@ export class CanvasSurfaceGeometryObserver {
       density > 0 &&
       density <= 64;
     const measured = valid ? canvasVisibleClip(this.element, bounds) : null;
+    const origin = Object.freeze({ x: valid ? bounds.left : 0, y: valid ? bounds.top : 0 });
+    const viewport = Object.freeze({
+      width: valid ? bounds.width : 0,
+      height: valid ? bounds.height : 0,
+    });
+    const routing = this.routing?.read(origin, viewport);
     return Object.freeze({
       coordinateSpace: 'client',
       units: 'css-pixels',
-      origin: Object.freeze({ x: valid ? bounds.left : 0, y: valid ? bounds.top : 0 }),
-      viewport: Object.freeze({
-        width: valid ? bounds.width : 0,
-        height: valid ? bounds.height : 0,
-      }),
+      origin,
+      viewport,
       clip: measured?.clip ?? Object.freeze({ x: 0, y: 0, width: 0, height: 0 }),
       physicalPixelsPerCssPixel: valid ? density : 1,
       visible: measured?.visible ?? false,
       focused: this.element.contains(document.activeElement),
+      ...(routing
+        ? {
+            occlusions: Object.freeze(routing.occlusions?.map((rect) => Object.freeze(rect)) ?? []),
+            modal: routing.modal ?? false,
+          }
+        : {}),
     });
   }
 

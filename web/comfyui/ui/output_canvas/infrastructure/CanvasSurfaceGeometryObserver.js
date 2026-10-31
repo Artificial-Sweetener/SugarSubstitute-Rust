@@ -22,6 +22,7 @@ export class CanvasSurfaceGeometryObserver {
     element;
     frames;
     changed;
+    routing;
     #resize;
     #ancestry;
     #presence = null;
@@ -33,10 +34,11 @@ export class CanvasSurfaceGeometryObserver {
     #frame = null;
     #disposed = false;
     /** Bind explicit document/window geometry and release observer/listener ownership together. */
-    constructor(element, frames, changed) {
+    constructor(element, frames, changed, routing = null) {
         this.element = element;
         this.frames = frames;
         this.changed = changed;
+        this.routing = routing;
         const document = element.ownerDocument;
         const window = document.defaultView;
         if (!window)
@@ -60,6 +62,8 @@ export class CanvasSurfaceGeometryObserver {
         element.addEventListener('focusin', schedule);
         element.addEventListener('focusout', schedule);
         this.#stops.push(() => window.removeEventListener('resize', schedule), () => window.removeEventListener('scroll', schedule), () => document.removeEventListener('scroll', schedule, true), () => document.removeEventListener('visibilitychange', schedule), () => window.visualViewport?.removeEventListener('resize', schedule), () => window.visualViewport?.removeEventListener('scroll', schedule), () => element.removeEventListener('focusin', schedule), () => element.removeEventListener('focusout', schedule));
+        if (routing)
+            this.#stops.push(routing.observe(schedule));
         this.#density();
     }
     /** Read CSS allocation and display density without traversing the workflow graph. */
@@ -78,18 +82,27 @@ export class CanvasSurfaceGeometryObserver {
             density > 0 &&
             density <= 64;
         const measured = valid ? canvasVisibleClip(this.element, bounds) : null;
+        const origin = Object.freeze({ x: valid ? bounds.left : 0, y: valid ? bounds.top : 0 });
+        const viewport = Object.freeze({
+            width: valid ? bounds.width : 0,
+            height: valid ? bounds.height : 0,
+        });
+        const routing = this.routing?.read(origin, viewport);
         return Object.freeze({
             coordinateSpace: 'client',
             units: 'css-pixels',
-            origin: Object.freeze({ x: valid ? bounds.left : 0, y: valid ? bounds.top : 0 }),
-            viewport: Object.freeze({
-                width: valid ? bounds.width : 0,
-                height: valid ? bounds.height : 0,
-            }),
+            origin,
+            viewport,
             clip: measured?.clip ?? Object.freeze({ x: 0, y: 0, width: 0, height: 0 }),
             physicalPixelsPerCssPixel: valid ? density : 1,
             visible: measured?.visible ?? false,
             focused: this.element.contains(document.activeElement),
+            ...(routing
+                ? {
+                    occlusions: Object.freeze(routing.occlusions?.map((rect) => Object.freeze(rect)) ?? []),
+                    modal: routing.modal ?? false,
+                }
+                : {}),
         });
     }
     /** Stop geometry delivery before the viewport is detached. */

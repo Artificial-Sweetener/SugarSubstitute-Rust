@@ -143,11 +143,39 @@ export function isCanvasSurfaceClip(value: unknown): value is Contract.CanvasSur
     value['height'] <= 1000000
   );
 }
+/** Validate a bounded CanvasSurfaceOcclusion payload before dispatch. */
+export function isCanvasSurfaceOcclusion(value: unknown): value is Contract.CanvasSurfaceOcclusion {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 4 &&
+    Object.hasOwn(value, 'x') &&
+    typeof value['x'] === 'number' &&
+    Number.isFinite(value['x']) &&
+    value['x'] >= -1000000 &&
+    value['x'] <= 1000000 &&
+    Object.hasOwn(value, 'y') &&
+    typeof value['y'] === 'number' &&
+    Number.isFinite(value['y']) &&
+    value['y'] >= -1000000 &&
+    value['y'] <= 1000000 &&
+    Object.hasOwn(value, 'width') &&
+    typeof value['width'] === 'number' &&
+    Number.isFinite(value['width']) &&
+    value['width'] > 0 &&
+    value['width'] <= 1000000 &&
+    Object.hasOwn(value, 'height') &&
+    typeof value['height'] === 'number' &&
+    Number.isFinite(value['height']) &&
+    value['height'] > 0 &&
+    value['height'] <= 1000000
+  );
+}
 /** Validate a bounded CanvasSurfaceGeometry payload before dispatch. */
 export function isCanvasSurfaceGeometry(value: unknown): value is Contract.CanvasSurfaceGeometry {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 8 &&
+    Object.keys(value).length ===
+      8 + (Object.hasOwn(value, 'occlusions') ? 1 : 0) + (Object.hasOwn(value, 'modal') ? 1 : 0) &&
     Object.hasOwn(value, 'coordinateSpace') &&
     value['coordinateSpace'] === 'client' &&
     Object.hasOwn(value, 'units') &&
@@ -166,6 +194,11 @@ export function isCanvasSurfaceGeometry(value: unknown): value is Contract.Canva
     Object.hasOwn(value, 'visible') &&
     typeof value['visible'] === 'boolean' &&
     Object.hasOwn(value, 'focused') &&
-    typeof value['focused'] === 'boolean'
+    typeof value['focused'] === 'boolean' &&
+    (!Object.hasOwn(value, 'occlusions') ||
+      (Array.isArray(value['occlusions']) &&
+        value['occlusions'].length <= 64 &&
+        value['occlusions'].every((item: unknown) => isCanvasSurfaceOcclusion(item)))) &&
+    (!Object.hasOwn(value, 'modal') || typeof value['modal'] === 'boolean')
   );
 }

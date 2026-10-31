@@ -41,7 +41,7 @@ export function isCanvasSurfaceCapabilities(
 ): value is Contract.CanvasSurfaceCapabilities {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 7 &&
+    Object.keys(value).length === 8 &&
     Object.hasOwn(value, 'schema') &&
     value['schema'] === 1 &&
     Object.hasOwn(value, 'imageFormats') &&
@@ -66,7 +66,9 @@ export function isCanvasSurfaceCapabilities(
     Object.hasOwn(value, 'comparison') &&
     typeof value['comparison'] === 'boolean' &&
     Object.hasOwn(value, 'overview') &&
-    typeof value['overview'] === 'boolean'
+    typeof value['overview'] === 'boolean' &&
+    Object.hasOwn(value, 'input') &&
+    typeof value['input'] === 'boolean'
   );
 }
 /** Validate a bounded CanvasSurfaceCapabilitiesRequest payload before dispatch. */
@@ -426,6 +428,7 @@ export {
   isCanvasSurfacePoint,
   isCanvasSurfaceSize,
   isCanvasSurfaceClip,
+  isCanvasSurfaceOcclusion,
   isCanvasSurfaceGeometry,
 } from './CanvasSurfaceGeometryValidation.generated.js';
 export {

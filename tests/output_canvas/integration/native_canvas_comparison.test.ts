@@ -51,6 +51,7 @@ const comparing: CanvasSurfaceCapabilities = {
   previewFormats: [],
   comparison: true,
   overview: false,
+  input: false,
 };
 const pairViewport: CanvasSurfaceViewportState = {
   mode: 'fit',

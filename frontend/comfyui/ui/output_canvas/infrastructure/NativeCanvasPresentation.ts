@@ -26,7 +26,10 @@ import {
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
-import { NativeCanvasPreview } from './NativeCanvasPreview.js';
+import {
+  IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS,
+  NativeCanvasPreview,
+} from './NativeCanvasPreview.js';
 import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
 import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
 import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
@@ -41,6 +44,7 @@ import type {
 } from '../../../../../integrations/contracts/CanvasSurface.js';
 import {
   nativeCanvasDesired,
+  nativeCanvasNavigable,
   nativeCanvasOverviewKey,
   nativeCanvasSelection,
   nativeCanvasWipe,
@@ -125,10 +129,7 @@ export class NativeCanvasPresentation {
           clock: this.options.clock,
           active: () => this.#owns(binding) && this.options.accepts(),
           finalRevision: () => binding.selectionRevision,
-          changed: () => {
-            this.#dirty = true;
-            this.#start();
-          },
+          changed: () => this.#wake(),
           cancelOperation: () => {
             if (binding.active?.type.startsWith('surface.preview.'))
               binding.active.cancellation.cancel();
@@ -149,19 +150,17 @@ export class NativeCanvasPresentation {
       preparing,
     );
     if (this.#desired?.key === desired.key) {
-      const focused = this.#desired.geometry?.focused !== geometry?.focused;
+      // Focus and gesture occlusions change routing, never the presented allocation.
+      const routing = JSON.stringify(this.#desired.geometry) !== JSON.stringify(geometry);
       const divider =
         nativeCanvasWipeKey(this.#desired.comparison) !== nativeCanvasWipeKey(desired.comparison);
       const layout =
         nativeCanvasOverviewKey(this.#desired.overview) !==
         nativeCanvasOverviewKey(desired.overview);
-      if (focused) this.#desired.geometry = geometry;
+      if (routing) this.#desired.geometry = geometry;
       this.#desired.comparison = desired.comparison;
       this.#desired.overview = desired.overview;
-      if (focused || divider || layout || previewChanged) {
-        this.#dirty = true;
-        this.#start();
-      }
+      if (routing || divider || layout || previewChanged) this.#wake();
       return;
     }
     const retainedFinal =
@@ -190,8 +189,7 @@ export class NativeCanvasPresentation {
           : { state: 'unavailable', message: 'The native canvas is unavailable.' }
         : { state: 'empty', message: '' },
     );
-    this.#dirty = true;
-    this.#start();
+    this.#wake();
   }
 
   /** Refuse preview bytes until a committed, observed binding owns the logical interest. */
@@ -206,14 +204,7 @@ export class NativeCanvasPresentation {
 
   /** Expose only local encoded custody; native decoded pixels remain host-owned. */
   diagnostics() {
-    return (
-      this.#preview?.diagnostics() ?? {
-        queuedInputs: 0,
-        previewDrops: 0,
-        estimatedBytes: 0,
-        activeDeadlines: 0,
-      }
-    );
+    return this.#preview?.diagnostics() ?? IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS;
   }
 
   /** Report implemented live preview support independently of whether pixels have arrived. */
@@ -226,13 +217,7 @@ export class NativeCanvasPresentation {
     const binding = this.#binding;
     if (
       !binding ||
-      this.#preview?.displayed ||
-      (!this.#desired?.item &&
-        !(
-          this.#desired?.previewable &&
-          this.#preview?.observing &&
-          binding.selectionRevision !== null
-        )) ||
+      !nativeCanvasNavigable(this.#desired, this.#preview, binding.selectionRevision) ||
       !binding.host.capabilities.viewportState ||
       !scope.current() ||
       command.type === 'read' ||
@@ -251,10 +236,7 @@ export class NativeCanvasPresentation {
     );
     this.#viewport = intent;
     intent.observe();
-    if (this.#viewport === intent) {
-      this.#dirty = true;
-      this.#start();
-    }
+    if (this.#viewport === intent) this.#wake();
     return intent.result;
   }
 
@@ -270,6 +252,12 @@ export class NativeCanvasPresentation {
     this.#disposed = true;
     this.#desired = null;
     return this.#retire();
+  }
+
+  /** Mark the desired state changed and resume the operation stream if it is idle. */
+  #wake(): void {
+    this.#dirty = true;
+    this.#start();
   }
 
   #start(): void {

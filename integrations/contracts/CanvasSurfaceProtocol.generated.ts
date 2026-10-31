@@ -23,6 +23,7 @@ export type CanvasSurfaceCapabilities = {
   readonly previewFormats: readonly ('png' | 'jpeg')[];
   readonly comparison: boolean;
   readonly overview: boolean;
+  readonly input: boolean;
 };
 /** Describe the schema-defined CanvasSurfaceCapabilitiesRequest wire value. */
 export type CanvasSurfaceCapabilitiesRequest = {
@@ -69,6 +70,13 @@ export type CanvasSurfaceClip = {
   readonly width: number;
   readonly height: number;
 };
+/** Describe the schema-defined CanvasSurfaceOcclusion wire value. */
+export type CanvasSurfaceOcclusion = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
 /** Describe the schema-defined CanvasSurfaceGeometry wire value. */
 export type CanvasSurfaceGeometry = {
   readonly coordinateSpace: 'client';
@@ -79,6 +87,8 @@ export type CanvasSurfaceGeometry = {
   readonly physicalPixelsPerCssPixel: number;
   readonly visible: boolean;
   readonly focused: boolean;
+  readonly occlusions?: readonly CanvasSurfaceOcclusion[];
+  readonly modal?: boolean;
 };
 /** Describe the schema-defined CanvasSurfacePrepareRequest wire value. */
 export type CanvasSurfacePrepareRequest = {

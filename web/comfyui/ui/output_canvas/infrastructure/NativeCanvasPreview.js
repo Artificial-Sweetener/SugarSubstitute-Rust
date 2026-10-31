@@ -1,5 +1,12 @@
 import { CANVAS_PREVIEW_CHUNK_BYTES, CANVAS_PREVIEW_LEASE_MILLISECONDS, MAX_CANVAS_IMAGE_BYTES, encodeCanvasBytes, } from '../../core/embedded/CanvasRuntime.js';
 import { canvasPreviewLane } from '../application/CanvasDisplayPlan.js';
+/** Describe the absence of local preview custody, matching the shape of active diagnostics. */
+export const IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS = Object.freeze({
+    queuedInputs: 0,
+    previewDrops: 0,
+    estimatedBytes: 0,
+    activeDeadlines: 0,
+});
 /** Own one active transfer, its latest pending Blob, and one host observation lifetime. */
 export class NativeCanvasPreview {
     options;
