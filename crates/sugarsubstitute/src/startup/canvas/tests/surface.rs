@@ -29,6 +29,7 @@ mod inspection;
 mod jpeg;
 mod overview;
 mod preview;
+mod reattached_overview;
 mod reattachment;
 mod replacement;
 mod viewport;

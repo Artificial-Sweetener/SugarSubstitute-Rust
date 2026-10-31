@@ -36,7 +36,18 @@ pub(in crate::startup::canvas::tests::surface) struct Fixture {
     pub(in crate::startup::canvas::tests::surface) wake: Arc<Wake>,
     owner: ExecutionOwner,
     allocation: WebViewAllocation,
-    _directory: tempfile::TempDir,
+    directory: tempfile::TempDir,
+}
+
+/// Admitted work of one execution scope, independent of other scopes sharing the owner.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::startup::canvas::tests::surface) struct ScopeWork {
+    /// Accepted work that has not started; it may wait behind another scope's lane.
+    pub(in crate::startup::canvas::tests::surface) queued: usize,
+    /// Started work whose terminal outcome supplies a wake.
+    pub(in crate::startup::canvas::tests::surface) running: usize,
+    /// Terminal outcomes that their owner has not taken.
+    pub(in crate::startup::canvas::tests::surface) undelivered: usize,
 }
 
 impl Fixture {
@@ -104,7 +115,7 @@ impl Fixture {
                 bounds: PhysicalRect { x: 0, y: 0, width: 300, height: 150 },
                 physical_pixels_per_css_pixel: density,
             },
-            _directory: directory,
+            directory,
         };
         fixture.send(1, "surface.prepare", json!({}))?;
         wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 1, "ready")?;
@@ -230,6 +241,62 @@ impl Fixture {
                 && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
         });
         Ok(if delivering { Execution::Delivering } else { Execution::Idle })
+    }
+
+    /// Classify one scope's admitted work, so other scopes sharing this owner can hold its lanes.
+    pub(in crate::startup::canvas::tests::surface) fn scope_work(
+        &self,
+        scope: ScopeId,
+    ) -> Result<ScopeWork, Box<dyn Error>> {
+        let progress = self.owner.poll_shutdown()?;
+        let mut work = ScopeWork::default();
+        for job in progress.unresolved_jobs.iter().filter(|job| job.scope == scope) {
+            match job.phase {
+                sugarsubstitute_contracts::execution::JobPhase::Queued => work.queued += 1,
+                sugarsubstitute_contracts::execution::JobPhase::Running => work.running += 1,
+                sugarsubstitute_contracts::execution::JobPhase::Terminal(_)
+                    if !job.acknowledged =>
+                {
+                    work.undelivered += 1;
+                }
+                sugarsubstitute_contracts::execution::JobPhase::Terminal(_) => {}
+            }
+        }
+        Ok(work)
+    }
+
+    /// Describe one scope's unresolved jobs for a stall diagnostic.
+    pub(in crate::startup::canvas::tests::surface) fn scope_jobs(
+        &self,
+        scope: ScopeId,
+    ) -> Result<String, Box<dyn Error>> {
+        let progress = self.owner.poll_shutdown()?;
+        Ok(progress
+            .unresolved_jobs
+            .iter()
+            .filter(|job| job.scope == scope)
+            .map(|job| {
+                format!(
+                    "{:?}/{:?}/{:?}/ack={}/{}B",
+                    job.spec.operation,
+                    job.spec.class,
+                    job.phase,
+                    job.acknowledged,
+                    job.spec.reservation_bytes
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", "))
+    }
+
+    /// Report later geometry inside a different trusted web view allocation.
+    pub(in crate::startup::canvas::tests::surface) fn reallocate(&mut self, bounds: PhysicalRect) {
+        self.allocation.bounds = bounds;
+    }
+
+    /// Write another qualification output beside the fixture's images.
+    pub(in crate::startup::canvas::tests::surface) fn output(&self, filename: &str) -> PathBuf {
+        self.directory.path().join("canvas-qualification-output").join(filename)
     }
 
     /// Present every pending frame until the shown native pixels satisfy `accept`, given the
@@ -433,7 +500,8 @@ impl Fixture {
     }
 }
 
-fn image(
+/// Write a flat sRGB PNG output of the given size.
+pub(in crate::startup::canvas::tests::surface) fn image(
     path: &std::path::Path,
     width: u32,
     height: u32,
