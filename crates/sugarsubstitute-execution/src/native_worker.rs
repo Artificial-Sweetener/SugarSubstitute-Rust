@@ -8,6 +8,7 @@ use crate::{
     admission::Core,
     scope::lock,
     task::{self, QueuedJob, Work},
+    worker_exit::{WorkerExit, WorkerKind},
 };
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -251,14 +252,12 @@ impl NativeWorker {
             )));
         }
         let worker_core = core.clone();
+        let exit = WorkerExit::enlist(&core, WorkerKind::Native);
         let handle = thread::Builder::new()
             .name("sugarsubstitute-native-retirement".into())
-            .spawn(move || worker(worker_core, active))
+            .spawn(move || worker(exit, worker_core, active))
             .map_err(crate::runtime::error)?;
         Ok(Self { core, handle: Some(handle) })
-    }
-    pub(crate) fn is_finished(&self) -> bool {
-        self.handle.as_ref().is_none_or(JoinHandle::is_finished)
     }
     pub(crate) fn finish(mut self) -> Result<(), ExecutionError> {
         self.join()
@@ -304,7 +303,8 @@ fn owner_panicked(
 
 const NATIVE_ACTIVE_LIMIT: usize = 512 + 48;
 
-fn worker(core: Arc<Core>, mut active: Vec<Active>) {
+/// The exit guard is the first parameter, so it drops after every retained owner.
+fn worker(_exit: WorkerExit, core: Arc<Core>, mut active: Vec<Active>) {
     if core.native_thread.set(thread::current()).is_err() {
         core.mailbox.record_failure(crate::runtime::error(std::io::Error::other(
             "Native worker identity installed twice",

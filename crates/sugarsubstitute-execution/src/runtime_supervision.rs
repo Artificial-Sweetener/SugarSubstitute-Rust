@@ -7,6 +7,7 @@ use crate::{
     admission::{Core, State},
     scope::lock,
     task::{self, Work},
+    worker_exit::WorkerExit,
 };
 use std::{future::Future, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobClass, JobPhase, Moment};
@@ -20,7 +21,8 @@ struct Running {
     receiving: Option<(sugarsubstitute_contracts::execution::JobContext, Arc<dyn task::ErasedJob>)>,
 }
 
-pub(super) async fn supervise(core: Arc<Core>) {
+/// The exit guard is the first parameter, so it drops after every retained join.
+pub(super) async fn supervise(_exit: WorkerExit, core: Arc<Core>) {
     let mut running: Vec<Running> = Vec::with_capacity(14);
     loop {
         let notified = core.notify.notified();

@@ -100,14 +100,19 @@ impl ExecutionLimits {
     }
 }
 
-/// Observe actual termination of the adapter's retained worker facilities.
+/// Observe loop return of the adapter's retained worker facilities.
+///
+/// A worker is finished once its loop has returned and released every value it owned;
+/// its OS thread may still be exiting, and `finish_shutdown` joins it. When the last
+/// worker finishes, the owner delivers exactly one completion wake, ordered after this
+/// status is visible, so an observer woken by it reads every field as finished.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WorkerStatus {
-    /// The native registration/retirement worker has actually returned after quiescence.
+    /// The native registration/retirement worker loop has returned after quiescence.
     pub native_finished: bool,
-    /// Every asynchronous supervisor/job join has actually completed.
+    /// The asynchronous supervisor has returned after every retained job join completed.
     pub async_finished: bool,
-    /// Every retained CPU thread has actually returned.
+    /// Every retained CPU lane loop has returned.
     pub cpu_finished: bool,
 }
 
@@ -145,7 +150,8 @@ pub struct ShutdownProgress {
     /// Nonzero original symbol output custody retained independently of job ACK.
     pub native_output_custody: Vec<NativeOutputCustody>,
     /// Every admitted job is transferred or disposed and cancellation callbacks have returned.
-    /// Every retained supervisor/job join, CPU worker and native worker has stopped.
+    /// Every retained supervisor/job join, CPU worker and native worker loop has returned.
+    /// The last returning worker delivers one completion wake after its return is observable.
     /// Runtime facilities are destroyed by `finish_shutdown` after this observation.
     pub settled: bool,
     /// Effective shutdown deadline has elapsed while work remains owned.

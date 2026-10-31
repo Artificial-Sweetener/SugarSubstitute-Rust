@@ -7,6 +7,7 @@ use crate::{
     admission::Core,
     scope::lock,
     task::{Job, QueuedJob, Stop, Work, panic_cause, retire, stop_queued, stop_reason},
+    worker_exit::{WorkerExit, WorkerKind},
 };
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -181,9 +182,10 @@ impl CpuPool {
         let mut handles = Vec::with_capacity(lanes.len());
         for lane in lanes {
             let worker_core = core.clone();
+            let exit = WorkerExit::enlist(&core, WorkerKind::Cpu);
             match thread::Builder::new()
                 .name("sugarsubstitute-cpu".into())
-                .spawn(move || worker(worker_core, lane))
+                .spawn(move || worker(exit, worker_core, lane))
             {
                 Ok(handle) => handles.push(handle),
                 Err(error) => {
@@ -202,10 +204,6 @@ impl CpuPool {
             }
         }
         Ok(Self { core, handles })
-    }
-    /// Observe thread return without relinquishing owned handles.
-    pub(crate) fn is_finished(&self) -> bool {
-        self.handles.iter().all(JoinHandle::is_finished)
     }
     /// Join all workers and retain every failure after all handles have been observed.
     pub(crate) fn finish(mut self) -> Result<(), ExecutionError> {
@@ -289,7 +287,8 @@ fn cleanup(core: &Core, lane: CpuLane, retired_first: bool) -> bool {
 }
 
 /// Hold each class slot across yields and grant both active classes one step per round.
-fn worker(core: Arc<Core>, lane: CpuLane) {
+/// The exit guard is the first parameter, so it drops after every owned slot and announces return.
+fn worker(_exit: WorkerExit, core: Arc<Core>, lane: CpuLane) {
     let mut interactive: Option<Box<dyn CpuWork>> = None;
     let mut decode: Option<Box<dyn CpuWork>> = None;
     loop {

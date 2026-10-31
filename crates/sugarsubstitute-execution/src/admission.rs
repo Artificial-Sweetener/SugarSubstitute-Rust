@@ -249,6 +249,7 @@ pub(crate) struct Core {
     pub(crate) mailbox: Mailbox,
     pub(crate) notify: Arc<Notify>,
     pub(crate) cpu_changed: Condvar,
+    pub(crate) workers: crate::worker_exit::WorkerCensus,
 }
 
 fn ordinary(class: JobClass) -> bool {
@@ -293,6 +294,7 @@ impl Core {
             mailbox,
             notify,
             cpu_changed: Condvar::new(),
+            workers: crate::worker_exit::WorkerCensus::default(),
         })
     }
 

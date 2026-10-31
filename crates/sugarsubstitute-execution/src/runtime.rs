@@ -8,6 +8,7 @@ use crate::{
     cpu::CpuPool,
     scope::lock,
     task::{self, Job, JobHandle, QueuedJob, Work},
+    worker_exit::{WorkerExit, WorkerKind},
 };
 use std::{
     future::Future,
@@ -159,7 +160,8 @@ impl ExecutionOwner {
                 return Err(aggregate_errors(failures));
             }
         };
-        let supervisor = runtime.spawn(supervise(core.clone()));
+        let exit = WorkerExit::enlist(&core, WorkerKind::Async);
+        let supervisor = runtime.spawn(supervise(exit, core.clone()));
         Ok(Self {
             #[cfg(any(windows, test))]
             native: Some(native),
@@ -197,6 +199,7 @@ impl ExecutionOwner {
     /// Stop admission and request cancellation without waiting on any worker.
     ///
     /// Repeated requests retain the earliest deadline. Expiry never detaches work.
+    /// Workers return once settled; the last return delivers exactly one completion wake.
     pub fn request_shutdown(&mut self, deadline: Moment) {
         self.shutdown_deadline = crate::scope::earliest(self.shutdown_deadline, Some(deadline));
         self.core.shutdown();
@@ -205,6 +208,8 @@ impl ExecutionOwner {
     /// Inspect actual job/worker settlement without blocking the UI thread.
     ///
     /// Untransferred results and pending disposal/notification work prevent settlement.
+    /// Worker return is announced by a completion wake, so callers may wait on their wake
+    /// instead of polling; that wake is ordered after every worker's return is observable.
     /// Returns observed native-wake, cancellation-waker or disposal failure causes.
     pub fn poll_shutdown(&self) -> Result<ShutdownProgress, ExecutionError> {
         if let Some(error) = self.core.mailbox.take_failure() {
@@ -233,20 +238,7 @@ impl ExecutionOwner {
         let queued = state.jobs.values().filter(|record| record.phase == JobPhase::Queued).count();
         let running =
             state.jobs.values().filter(|record| record.phase == JobPhase::Running).count();
-        let workers = WorkerStatus {
-            async_finished: self.supervisor.as_ref().is_none_or(JoinHandle::is_finished),
-            cpu_finished: self.cpu.as_ref().is_none_or(CpuPool::is_finished),
-            native_finished: {
-                #[cfg(any(windows, test))]
-                {
-                    self.native.as_ref().is_none_or(crate::native::NativeWorker::is_finished)
-                }
-                #[cfg(not(any(windows, test)))]
-                {
-                    true
-                }
-            },
-        };
+        let workers = self.core.workers.status();
         let entry_environment_custody = state
             .jobs
             .values()

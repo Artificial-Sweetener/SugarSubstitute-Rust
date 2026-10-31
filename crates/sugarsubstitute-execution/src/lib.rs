@@ -108,6 +108,7 @@ mod output;
 mod runtime;
 mod scope;
 mod task;
+mod worker_exit;
 
 #[cfg(windows)]
 #[allow(unsafe_code)]

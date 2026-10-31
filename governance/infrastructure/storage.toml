@@ -573,7 +573,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/native_worker.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:da81d28165985a722074ad52e058b51cbe5f280638e1e9aa2f0be3c4b26d0e3e"
+source_sha256 = "sha256:f56e0d65bf5886fcc66f134ae9434665a5058d994f4dc642a3b336614ca87209"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Own one bounded process-registration retirement thread through its actual join. This receiver does not inspect filesystem state."
@@ -690,7 +690,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/runtime.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:a9fe4a2417269a5651d63ec2b4b5b46740f3b704dab0429624b4ce2422a1857d"
+source_sha256 = "sha256:9c59639f69ec7f090f9c24c69d01986f68b33039a112a7d35a4dfb73efc6c5b7"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Compose the sole private scheduler and retain every worker through actual shutdown. This receiver does not inspect filesystem state."

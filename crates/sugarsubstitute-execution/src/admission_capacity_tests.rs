@@ -210,9 +210,11 @@ fn impossible_request_and_post_shutdown_guards_do_not_wake() -> TestResult {
     let before = rig.wake.count();
     rig.owner.request_shutdown(Moment::from_nanos(0));
     drop(rig.owner);
+    // Worker return is the only shutdown wake; released capacity afterwards stays silent.
+    assert_eq!(rig.wake.count(), before + 1);
     rig.wake.fail.store(true, std::sync::atomic::Ordering::Release);
     drop(original);
-    assert_eq!(rig.wake.count(), before);
+    assert_eq!(rig.wake.count(), before + 1);
     assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
     assert!(rig.client.drain_completions(NonZeroUsize::MIN)?.notifications.is_empty());
     Ok(())

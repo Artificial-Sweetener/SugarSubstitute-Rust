@@ -67,7 +67,8 @@ fn terminal_context_release_and_entered_capacity_wake_remain_owned_through_shutd
     assert!(client.drain_completions(NonZeroUsize::MIN)?.notifications.is_empty());
     wake.release[1].open();
     drop(owner);
-    assert_eq!(wake.calls.load(Ordering::Acquire), 2);
+    // Terminal and capacity wakes, then the single worker-return wake.
+    assert_eq!(wake.calls.load(Ordering::Acquire), 3);
     assert!(client.core_for_test().settled());
     Ok(())
 }
@@ -85,7 +86,10 @@ fn shutdown_suppresses_a_capacity_wake_already_selected_for_outside_lock_deliver
     rig.wake.fail.store(true, Ordering::Release);
     core.deliver_capacity_wake(selected);
     assert_eq!(rig.wake.count(), 0);
+    // The suppressed capacity wake stays undelivered; worker return then wakes exactly once.
+    rig.wake.fail.store(false, Ordering::Release);
     drop(rig.owner);
+    assert_eq!(rig.wake.count(), 1);
     assert!(rig.client.drain_completions(NonZeroUsize::MIN)?.notifications.is_empty());
     assert!(core.settled());
     Ok(())
