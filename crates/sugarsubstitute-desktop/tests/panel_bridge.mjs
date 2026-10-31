@@ -715,6 +715,16 @@ test('unsolicited canvas delivery admits only exact current-session zero-id pres
   assert.deepEqual(f.sent, [framed(watch(), 'o', 1)]);
   assert.equal(f.receipt('g', 'o', 2), false);
 });
+test('settled camera notifications share the zero-id presentation admission', () => {
+  const f = fixture(), camera = canvas(0, 'surface.camera.changed', { schema: 1, change: {
+    address, sequence: 2, selectionRevision: 1, viewport: viewportReply().viewport,
+  } });
+  f.receipt('g', 'o', 1);
+  for (const value of [canvas(1, 'surface.camera.changed'), { ...camera, session: 'another-session' },
+    { ...camera, version: 2 }])
+    assert.equal(f.deliver(value), false);
+  assert.equal(f.deliver(camera), true);
+});
 test('every shared surface and context request type is admitted by the bridge policy', () => {
   const schema = JSON.parse(readFileSync(
     new URL('../../../third_party/sugarcubes-canvas/canvas.schema.json', import.meta.url), 'utf8'));

@@ -63,6 +63,7 @@ impl NativeSurface {
             self.binding.as_ref().is_some_and(|binding| binding.identity == input.identity);
         if current && input.gesture == MainCanvasGesture::Cancel {
             session.input(Input::Unfocused)?;
+            self.await_settled_gesture();
             return Ok(RoutedInput::Applied);
         }
         let Some(origin) =
@@ -83,6 +84,10 @@ impl NativeSurface {
             MainCanvasGesture::Cancel => return Ok(RoutedInput::Refused),
         };
         session.input(Input::Tool(tool))?;
+        // Hover moves never change the camera; a held drag stays pending until its release.
+        if !matches!(input.gesture, MainCanvasGesture::Pointer(_)) {
+            self.await_settled_gesture();
+        }
         Ok(RoutedInput::Applied)
     }
 }

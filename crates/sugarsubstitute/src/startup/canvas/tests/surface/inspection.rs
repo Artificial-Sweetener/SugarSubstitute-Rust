@@ -3,7 +3,8 @@
 //! Restore image-relative cameras on selection and on the shown image, reporting their centers.
 
 use super::*;
-use viewport::fixture::Fixture;
+use sugarsubstitute_desktop::canvas::{MainCanvasButton, MainCanvasGesture, MainCanvasInput};
+use viewport::fixture::{Execution, Fixture};
 
 /// An inspection at `zoom` physical pixels per pixel of the 320x160 `wide.png` output.
 fn inspection(center: [f64; 2], zoom: f64) -> Value {
@@ -85,5 +86,133 @@ fn inspection_requires_a_committed_final() -> Result<(), Box<dyn Error>> {
     fixture.commit(5)?;
     fixture.viewport(6, json!({"type":"read"}))?;
     assert_camera(&fixture.complete(6)?["viewport"], "fit", 0.25, [0.5, 0.5]);
+    fixture.finish()
+}
+
+/// Route gestures through the same entry point as the main-loop observation route.
+fn route(fixture: &mut Fixture, gestures: &[MainCanvasGesture]) -> Result<(), Box<dyn Error>> {
+    for gesture in gestures {
+        fixture.canvas.input(MainCanvasInput { identity: fixture.identity, gesture: *gesture })?;
+    }
+    Ok(())
+}
+
+fn button(pressed: bool) -> MainCanvasGesture {
+    MainCanvasGesture::Button { button: MainCanvasButton::Primary, pressed }
+}
+
+/// Advance injected time, present every frame and return the settled-camera notifications.
+fn settle(fixture: &mut Fixture) -> Result<Vec<Value>, Box<dyn Error>> {
+    let mut cameras = Vec::new();
+    for _ in 0..40 {
+        while let Some(command) = fixture.canvas.take_command() {
+            let DesktopStartupCommand::SendSurfacePresentation(change) = command else {
+                return Err("Unexpected ordinary reply while settling".into());
+            };
+            let value: Value = serde_json::from_slice(change.payload())?;
+            if value["type"] == "surface.camera.changed" {
+                cameras.push(value);
+            }
+        }
+        let observed = fixture.wake.revision();
+        fixture.advance(100);
+        fixture.pump()?;
+        if let Some(target) = prepared_frame(&fixture.canvas)
+            .filter(|frame| frame.frame.pending)
+            .map(|frame| frame.frame.target)
+        {
+            fixture.canvas.presented(target)?;
+        } else if fixture.execution()? == Execution::Running {
+            fixture.wake.wait_after(observed)?;
+        }
+    }
+    Ok(cameras)
+}
+
+/// Commit the selected final and observe presentation like the page's preview owner.
+fn watched() -> Result<Fixture, Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    preview::watch(&mut fixture, 5, true)?;
+    assert!(settle(&mut fixture)?.is_empty());
+    Ok(fixture)
+}
+
+#[test]
+fn a_settled_wheel_gesture_publishes_its_camera_exactly_once() -> Result<(), Box<dyn Error>> {
+    let mut fixture = watched()?;
+    route(
+        &mut fixture,
+        &[MainCanvasGesture::Pointer([30.0, 30.0]), MainCanvasGesture::Wheel(1.0)],
+    )?;
+    let cameras = settle(&mut fixture)?;
+    assert_eq!(cameras.len(), 1, "{cameras:?}");
+    let change = &cameras[0]["change"];
+    assert_eq!(cameras[0]["requestId"], 0);
+    assert_eq!(change["selectionRevision"], 3);
+    assert_eq!(change["viewport"]["mode"], "custom");
+    let zoom = fixture.accepted()?.viewport.zoom();
+    assert!(zoom > 0.25 && close(&change["viewport"]["physicalScale"], zoom), "{change}");
+    fixture.viewport(6, json!({"type":"read"}))?;
+    assert_eq!(fixture.complete(6)?["viewport"], change["viewport"]);
+    assert!(settle(&mut fixture)?.is_empty());
+    fixture.finish()
+}
+
+#[test]
+fn a_drag_publishes_only_after_its_release() -> Result<(), Box<dyn Error>> {
+    let mut fixture = watched()?;
+    fixture.viewport(6, json!({"type":"zoom","factor":4}))?;
+    fixture.complete(6)?;
+    assert!(settle(&mut fixture)?.is_empty());
+    route(
+        &mut fixture,
+        &[
+            MainCanvasGesture::Pointer([50.0, 40.0]),
+            button(true),
+            MainCanvasGesture::Pointer([60.0, 44.0]),
+        ],
+    )?;
+    assert!(settle(&mut fixture)?.is_empty());
+    route(&mut fixture, &[button(false)])?;
+    let cameras = settle(&mut fixture)?;
+    assert_eq!(cameras.len(), 1, "{cameras:?}");
+    let viewport = &cameras[0]["change"]["viewport"];
+    assert_eq!(viewport["mode"], "custom");
+    assert!(close(&viewport["physicalScale"], 1.0), "{viewport}");
+    assert!(!close(&viewport["center"]["x"], 0.5), "{viewport}");
+    route(&mut fixture, &[MainCanvasGesture::Pointer([20.0, 25.0])])?;
+    assert!(settle(&mut fixture)?.is_empty());
+    fixture.finish()
+}
+
+#[test]
+fn cancelling_a_held_drag_publishes_its_final_camera() -> Result<(), Box<dyn Error>> {
+    let mut fixture = watched()?;
+    fixture.viewport(6, json!({"type":"zoom","factor":4}))?;
+    fixture.complete(6)?;
+    route(&mut fixture, &[MainCanvasGesture::Pointer([50.0, 40.0]), button(true)])?;
+    route(&mut fixture, &[MainCanvasGesture::Pointer([40.0, 35.0])])?;
+    assert!(settle(&mut fixture)?.is_empty());
+    route(&mut fixture, &[MainCanvasGesture::Cancel])?;
+    let cameras = settle(&mut fixture)?;
+    assert_eq!(cameras.len(), 1, "{cameras:?}");
+    let zoom = fixture.accepted()?.viewport.zoom();
+    assert!(close(&cameras[0]["change"]["viewport"]["physicalScale"], zoom));
+    fixture.finish()
+}
+
+#[test]
+fn a_shown_preview_publishes_no_gesture_camera() -> Result<(), Box<dyn Error>> {
+    let mut fixture = watched()?;
+    fixture.viewport(6, json!({"type":"zoom","factor":4}))?;
+    fixture.complete(6)?;
+    route(&mut fixture, &[MainCanvasGesture::Pointer([50.0, 40.0]), button(true)])?;
+    preview::transfer(&mut fixture, 200, "preview:1", preview::JPEG)?;
+    let target = preview::wait_frame(&mut fixture)?;
+    fixture.canvas.presented(target)?;
+    route(&mut fixture, &[button(false)])?;
+    assert!(settle(&mut fixture)?.is_empty());
+    preview::drain(&mut fixture)?;
     fixture.finish()
 }

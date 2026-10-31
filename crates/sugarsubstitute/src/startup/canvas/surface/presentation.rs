@@ -53,6 +53,7 @@ impl NativeSurface {
         if self.closed {
             return Ok(());
         }
+        self.publish_settled_gesture(session)?;
         if self.poll_attachment(session)? {
             return Ok(());
         }
@@ -177,6 +178,7 @@ impl NativeSurface {
             self.retained = None;
         }
         self.preview_presented(target, session)?;
+        self.publish_settled_gesture(session)?;
         let viewport = self
             .pending
             .as_ref()

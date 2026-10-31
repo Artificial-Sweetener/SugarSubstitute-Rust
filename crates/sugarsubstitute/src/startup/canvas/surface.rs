@@ -359,7 +359,7 @@ impl NativeSurface {
             self.replies.rotate_left(1);
             Some(command)
         } else {
-            self.preview.notification.take()
+            self.preview.notification.take().or_else(|| self.preview.camera.take())
         }
     }
 

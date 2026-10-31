@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain bounded preview transfer custody independently of ordinary camera request settlement.
 mod assembly;
+mod camera;
 mod receive;
 mod status;
 use super::*;
@@ -70,6 +71,10 @@ pub(super) struct Preview {
     sequence: u64,
     pending_change: Option<(MainIdentity, CanvasSurfacePresentationChange)>,
     pub(super) notification: Option<DesktopStartupCommand>,
+    /// A host-routed gesture awaits its settled camera publication.
+    gesture: bool,
+    /// The latest settled gesture camera, delivered independently of presentation snapshots.
+    pub(super) camera: Option<DesktopStartupCommand>,
 }
 
 impl Preview {
@@ -78,6 +83,8 @@ impl Preview {
         self.watch = None;
         self.pending_change = None;
         self.notification = None;
+        self.gesture = false;
+        self.camera = None;
     }
 
     /// Release small resident-backed labels before the session waits for complete scope custody.

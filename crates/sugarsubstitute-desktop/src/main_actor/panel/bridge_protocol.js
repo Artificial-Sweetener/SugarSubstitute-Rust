@@ -41,7 +41,7 @@
     },
     notification: value => value.protocol === 'sugarcubes.panel' ||
       value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
-      value.type === 'surface.presentation.changed',
+      ['surface.presentation.changed', 'surface.camera.changed'].includes(value.type),
   });
   Object.defineProperty(globalThis, '__sugarcubes_substitute_policy_v3', { value: policy });
   globalThis.__sugarcubes_substitute_install_v3?.();

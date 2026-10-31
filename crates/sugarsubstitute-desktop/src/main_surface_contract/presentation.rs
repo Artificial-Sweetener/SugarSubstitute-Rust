@@ -4,7 +4,9 @@
 
 use super::{SurfaceReply, SurfaceReplyError};
 use sugarsubstitute_contracts::{
-    canvas_surface::{CanvasSurfaceAddress, CanvasSurfacePresentationChange},
+    canvas_surface::{
+        CanvasSurfaceAddress, CanvasSurfaceCameraChange, CanvasSurfacePresentationChange,
+    },
     execution::MemoryClaim,
     panel::PanelSession,
     startup::MainIdentity,
@@ -14,6 +16,8 @@ use sugarsubstitute_contracts::{
 /// It owns no ordinary transport ticket and cannot complete or replenish a request lane.
 pub struct SurfacePresentation {
     identity: MainIdentity,
+    /// Settled cameras coalesce only with settled cameras, never with full presentation state.
+    camera: bool,
     address: CanvasSurfaceAddress,
     sequence: u64,
     payload: Vec<u8>,
@@ -41,6 +45,32 @@ impl SurfacePresentation {
         let payload = change.encode(&session).map_err(SurfaceReplyError::Encode)?;
         Ok(Self {
             identity,
+            camera: false,
+            address: change.address().clone(),
+            sequence: change.sequence(),
+            payload,
+            _claim: claim,
+        })
+    }
+
+    /// Qualify a settled host-routed camera with the exact current main session.
+    ///
+    /// It shares presentation transport and sequence but coalesces only with other cameras.
+    /// # Errors
+    /// Rejects inadequate storage, invalid native identity, or shared encoding failure.
+    pub fn camera(
+        identity: MainIdentity,
+        change: &CanvasSurfaceCameraChange,
+        claim: MemoryClaim,
+    ) -> Result<Self, SurfaceReplyError> {
+        if claim.bytes() < Self::STORAGE_BYTES {
+            return Err(SurfaceReplyError::Storage);
+        }
+        let session = PanelSession::for_main(identity).map_err(SurfaceReplyError::Identity)?;
+        let payload = change.encode(&session).map_err(SurfaceReplyError::Encode)?;
+        Ok(Self {
+            identity,
+            camera: true,
             address: change.address().clone(),
             sequence: change.sequence(),
             payload,
@@ -66,7 +96,9 @@ impl SurfacePresentation {
     /// Compare only exact native navigation and attachment identities for pending coalescing.
     #[cfg(any(target_os = "windows", test))]
     pub(crate) fn same_target(&self, other: &Self) -> bool {
-        self.identity == other.identity && self.address == other.address
+        self.identity == other.identity
+            && self.address == other.address
+            && self.camera == other.camera
     }
 
     /// Return the authoritative increasing sequence; pending snapshot delivery may skip values.

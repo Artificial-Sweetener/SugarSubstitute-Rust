@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): 7a01c5d17f795be940d016ee2e9aa490acc6c19d7671b93a30ac6a428d477572
+// Schema SHA-256 (LF): 544b95bbf3d38668bb17ed80fc2458f292e3a1cbce50013080e1e95cd19f63a3
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -625,6 +625,50 @@ impl CanvasSurfaceViewportState {
             && self.dimensions.valid()
             && self.secondary_dimensions.as_ref().is_none_or(CanvasSurfaceImageDimensions::valid)
             && self.center.as_ref().is_none_or(CanvasSurfaceViewportCenter::valid)
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceCameraChange data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceCameraChange {
+    pub(super) address: CanvasSurfaceAddress,
+    pub(super) sequence: u64,
+    pub(super) selection_revision: u64,
+    pub(super) viewport: CanvasSurfaceViewportState,
+}
+impl CanvasSurfaceCameraChange {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.address.valid()
+            && (1..=9007199254740991).contains(&self.sequence)
+            && (1..=9007199254740991).contains(&self.selection_revision)
+            && self.viewport.valid()
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceCameraChanged data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceCameraChanged {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+    pub(super) schema: u64,
+    pub(super) change: CanvasSurfaceCameraChange,
+}
+impl CanvasSurfaceCameraChanged {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && self.request_id == 0
+            && self.r#type == "surface.camera.changed"
+            && self.schema == 1
+            && self.change.valid()
     }
 }
 
