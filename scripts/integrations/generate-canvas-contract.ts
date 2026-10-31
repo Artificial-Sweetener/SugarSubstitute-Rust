@@ -105,6 +105,16 @@ export async function canvasBindings(
     'CanvasSurfaceViewportState',
     'CanvasSurfaceViewportRequest',
     'CanvasSurfaceViewportReply',
+    'CanvasSurfacePreviewIdentity',
+    'CanvasSurfacePreviewBeginRequest',
+    'CanvasSurfacePreviewChunkRequest',
+    'CanvasSurfacePreviewEndRequest',
+    'CanvasSurfacePreviewWithdrawRequest',
+    'CanvasSurfacePresentationRequest',
+    'CanvasSurfacePresentationReply',
+    'CanvasSurfacePresentationDisplay',
+    'CanvasSurfacePresentationChange',
+    'CanvasSurfacePresentationChanged',
   ];
   for (const name of surfaceNames) {
     if (!(name in schema.$defs)) throw new Error(`Missing canvas surface definition: ${name}`);
@@ -113,7 +123,7 @@ export async function canvasBindings(
   const surfaceMessages = schema.oneOf.filter(({ $ref }) =>
     surfaceNames.some((name) => $ref === `#/$defs/${name}`),
   );
-  if (surfaceMessages.length !== 10) throw new Error('Canvas surface message union changed.');
+  if (surfaceMessages.length !== 17) throw new Error('Canvas surface message union changed.');
   const ordinaryDefinitions = Object.fromEntries(
     Object.entries(schema.$defs).filter(([name]) => !surfaceNames.includes(name)),
   );
@@ -153,6 +163,21 @@ export async function canvasBindings(
       recordImport: './ContractRecord.js',
       description: 'the shared canvas surface messages',
       validationModules: [
+        {
+          file: 'integrations/shared/CanvasSurfacePreviewValidation.generated.ts',
+          definitions: [
+            'CanvasSurfacePreviewIdentity',
+            'CanvasSurfacePreviewBeginRequest',
+            'CanvasSurfacePreviewChunkRequest',
+            'CanvasSurfacePreviewEndRequest',
+            'CanvasSurfacePreviewWithdrawRequest',
+            'CanvasSurfacePresentationRequest',
+            'CanvasSurfacePresentationReply',
+            'CanvasSurfacePresentationDisplay',
+            'CanvasSurfacePresentationChange',
+            'CanvasSurfacePresentationChanged',
+          ],
+        },
         {
           file: 'integrations/shared/CanvasSurfaceGeometryValidation.generated.ts',
           definitions: [

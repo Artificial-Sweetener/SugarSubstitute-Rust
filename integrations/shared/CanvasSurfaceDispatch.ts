@@ -30,6 +30,11 @@ import {
   supportsCanvasSurfaceViewport,
   snapshotCanvasSurfaceViewport,
 } from './CanvasSurfaceViewport.js';
+import {
+  isCanvasPreviewCommand,
+  supportsCanvasSurfacePreview,
+  validCanvasPreviewCommand,
+} from './CanvasSurfacePreview.js';
 
 /** The host receives only messages admitted by the shared canvas session and replay owner. */
 export type CanvasSurfaceRequest = Extract<
@@ -41,6 +46,10 @@ export type CanvasSurfaceRequest = Extract<
       | 'surface.select'
       | 'surface.commit'
       | 'surface.viewport.request'
+      | 'surface.preview.begin'
+      | 'surface.preview.chunk'
+      | 'surface.preview.end'
+      | 'surface.preview.withdraw'
       | 'surface.release';
   }
 >;
@@ -65,6 +74,8 @@ export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurf
   }
   if (request.type === 'surface.viewport.request')
     return Object.freeze({ ...request, address, command: Object.freeze({ ...request.command }) });
+  if (request.type === 'surface.preview.begin')
+    return Object.freeze({ ...request, address, preview: Object.freeze({ ...request.preview }) });
   return Object.freeze({ ...request, address });
 }
 
@@ -76,6 +87,10 @@ export function isCanvasSurfaceRequest(message: CanvasMessage): message is Canva
     message.type === 'surface.select' ||
     message.type === 'surface.commit' ||
     message.type === 'surface.viewport.request' ||
+    message.type === 'surface.preview.begin' ||
+    message.type === 'surface.preview.chunk' ||
+    message.type === 'surface.preview.end' ||
+    message.type === 'surface.preview.withdraw' ||
     message.type === 'surface.release'
   );
 }
@@ -107,7 +122,12 @@ export async function dispatchCanvasSurface(
       ? { status: 'cancelled', message: 'Canvas surface request cancelled.' }
       : !port.surface ||
           !context?.canvas.capabilities.displayOutput ||
-          !supportsCanvasSurfaceViewport(port.surface.capabilities, command)
+          !supportsCanvasSurfaceViewport(port.surface.capabilities, command) ||
+          !supportsCanvasSurfacePreview(port.surface.capabilities, command) ||
+          !validCanvasPreviewCommand(command) ||
+          (isCanvasPreviewCommand(command) &&
+            command.type !== 'surface.preview.withdraw' &&
+            !port.surface.presentation)
         ? { status: 'unavailable', message: 'This canvas does not support an output surface.' }
         : await port.surface.execute(command, cancellation);
     if (cancellation.cancelled())

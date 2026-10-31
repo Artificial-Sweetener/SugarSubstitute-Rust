@@ -26,6 +26,15 @@ import type {
 import type { CanvasSourceHost } from '../contracts/CanvasSources.js';
 import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
 import type { CanvasSurfaceHost } from '../contracts/CanvasSurface.js';
+import type { CanvasSurfacePresentationChange } from '../contracts/CanvasSurface.js';
+import type { CanvasSurfacePresentationRequest } from '../contracts/CanvasSurfaceProtocol.generated.js';
+import { isCanvasSurfacePresentationChange } from './CanvasSurfaceValidation.generated.js';
+import {
+  canvasPreviewMessageFits,
+  isCanvasPreviewCommand,
+  snapshotCanvasSurfacePresentation,
+  validCanvasSurfacePresentation,
+} from './CanvasSurfacePreview.js';
 import { dispatchCanvasSurfaceDiscovery } from './CanvasSurfaceDiscovery.js';
 import type {
   CanvasGeometryRequest,
@@ -65,6 +74,7 @@ export class CanvasServer {
   #disposed = false;
   #retainedCharacters = 0;
   readonly #sourceChanges: CanvasChangeRelay<CanvasSourceChange>;
+  readonly #presentationChanges: CanvasChangeRelay<CanvasSurfacePresentationChange>;
   /** Bind one navigation's session and its capability implementation. */
   constructor(
     private readonly session: string,
@@ -80,6 +90,24 @@ export class CanvasServer {
         change,
       });
     });
+    this.#presentationChanges = new CanvasChangeRelay(
+      this.port.surface?.presentation ?? null,
+      (change) => {
+        if (!isCanvasSurfacePresentationChange(change) || !validCanvasSurfacePresentation(change)) {
+          this.port.report(
+            new Error('Canvas surface supplied an invalid presentation observation.'),
+          );
+          return;
+        }
+        this.#send({
+          ...this.#envelope(0),
+          requestId: 0,
+          type: 'surface.presentation.changed',
+          schema: 1,
+          change: snapshotCanvasSurfacePresentation(change),
+        });
+      },
+    );
   }
   /** Validate before dispatch, including duplicate payload identity and cancellation ownership. */
   receive(value: unknown): boolean {
@@ -94,33 +122,48 @@ export class CanvasServer {
       value.type !== 'geometry.request' &&
       value.type !== 'source.request' &&
       value.type !== 'surface.capabilities.request' &&
+      value.type !== 'surface.presentation.request' &&
       value.type !== 'surface.prepare' &&
       value.type !== 'surface.geometry' &&
       value.type !== 'surface.select' &&
       value.type !== 'surface.commit' &&
       value.type !== 'surface.viewport.request' &&
+      value.type !== 'surface.preview.begin' &&
+      value.type !== 'surface.preview.chunk' &&
+      value.type !== 'surface.preview.end' &&
+      value.type !== 'surface.preview.withdraw' &&
       value.type !== 'surface.release'
     )
       return false;
     const surface = isCanvasSurfaceRequest(value) ? snapshotCanvasSurface(value) : null;
+    if (surface && isCanvasPreviewCommand(surface) && !canvasPreviewMessageFits(value)) {
+      this.#failure(
+        value.requestId,
+        'stale',
+        'Canvas preview request exceeds the native transport bounds.',
+      );
+      return true;
+    }
     const fingerprint =
       value.type === 'context.request' || value.type === 'surface.capabilities.request'
         ? value.type
-        : value.type === 'source.request' || value.type === 'geometry.request'
-          ? JSON.stringify([value.type, value.command])
-          : value.type === 'image.insert'
-            ? JSON.stringify([
-                value.type,
-                value.image.document.id,
-                value.image.document.geometryRevision,
-                value.image.document.width,
-                value.image.document.height,
-                value.image.image.format,
-                value.image.image.encoding,
-                value.image.layerName,
-                value.image.position ?? null,
-              ])
-            : JSON.stringify(surface);
+        : value.type === 'surface.presentation.request'
+          ? JSON.stringify([value.type, value.schema, value.enabled])
+          : value.type === 'source.request' || value.type === 'geometry.request'
+            ? JSON.stringify([value.type, value.command])
+            : value.type === 'image.insert'
+              ? JSON.stringify([
+                  value.type,
+                  value.image.document.id,
+                  value.image.document.geometryRevision,
+                  value.image.document.width,
+                  value.image.document.height,
+                  value.image.image.format,
+                  value.image.image.encoding,
+                  value.image.layerName,
+                  value.image.position ?? null,
+                ])
+              : JSON.stringify(surface);
     const existing = this.#entries.get(value.requestId);
     const imageData = value.type === 'image.insert' ? value.image.image.data : '';
     if (existing) {
@@ -155,6 +198,7 @@ export class CanvasServer {
       void dispatchCanvasSurfaceDiscovery(value, entry.cancellation, this.port).then((reply) => {
         this.#reply(entry, reply);
       });
+    else if (value.type === 'surface.presentation.request') void this.#presentation(value, entry);
     else if (value.type === 'geometry.request') void this.#geometry(value, entry);
     else if (value.type === 'source.request') void this.#source(value, entry);
     else if (value.type === 'image.insert') void this.#insert(value, entry);
@@ -163,6 +207,21 @@ export class CanvasServer {
   }
   /** Reuse the session's replay, admission and cancellation owner for surface operations. */
   async #surface(request: CanvasSurfaceRequest, entry: Entry): Promise<void> {
+    if (
+      isCanvasPreviewCommand(request) &&
+      request.type !== 'surface.preview.withdraw' &&
+      !this.#presentationChanges.observing
+    ) {
+      this.#reply(entry, {
+        ...this.#envelope(request.requestId),
+        type: 'surface.reply',
+        address: request.address,
+        revision: request.revision,
+        status: 'unavailable',
+        message: 'Canvas preview presentation is not observed.',
+      });
+      return;
+    }
     const reply = await dispatchCanvasSurface(request, entry.cancellation, this.port);
     this.#reply(entry, reply);
   }
@@ -170,9 +229,37 @@ export class CanvasServer {
   dispose(): void {
     this.#disposed = true;
     this.#sourceChanges.dispose();
+    this.#presentationChanges.dispose();
     for (const entry of this.#entries.values()) entry.cancellation.cancel();
     this.#entries.clear();
     this.#retainedCharacters = 0;
+  }
+  /** Negotiate observation independently of attachment mutation and stop through the existing relay. */
+  async #presentation(request: CanvasSurfacePresentationRequest, entry: Entry): Promise<void> {
+    let status: 'available' | 'unsupported' | 'unavailable' | 'error' = 'unsupported';
+    try {
+      const surface = this.port.surface;
+      const supported = surface && surface.capabilities.previewFormats.length > 0;
+      if (!request.enabled || supported) {
+        const result = await this.#presentationChanges.watch(request.enabled);
+        status = result === 'observing' ? 'available' : result;
+      }
+      if (entry.cancellation.cancelled() && status === 'available') {
+        await this.#presentationChanges.watch(false);
+        status = 'unavailable';
+      }
+    } catch (error: unknown) {
+      this.port.report(error);
+      status = 'error';
+    }
+    this.#reply(entry, {
+      ...this.#envelope(request.requestId),
+      type: 'surface.presentation.reply',
+      schema: 1,
+      enabled: request.enabled,
+      status,
+      message: '',
+    });
   }
   /** Dispatch negotiated document geometry with the same replay and cancellation ownership as insertion. */
   async #geometry(request: CanvasGeometryRequest, entry: Entry): Promise<void> {

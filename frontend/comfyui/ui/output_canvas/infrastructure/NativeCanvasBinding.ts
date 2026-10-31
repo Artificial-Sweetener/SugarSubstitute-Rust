@@ -37,8 +37,30 @@ export interface NativeCanvasBinding {
   geometry: string | null;
   lastGeometry: CanvasSurfaceGeometry | null;
   selection: string | null;
+  selectionRevision: number | null;
   viewportKey: string | null;
-  active: { readonly cancellation: CanvasCancellation; readonly dependsOnView: boolean } | null;
+  active: {
+    readonly cancellation: CanvasCancellation;
+    readonly dependsOnView: boolean;
+    readonly type: CanvasSurfaceCommand['type'];
+  } | null;
+}
+
+/** Initialize every revision, acknowledgement and cancellation fact under the binding owner. */
+export function createNativeCanvasBinding(host: CanvasSurfaceHost): NativeCanvasBinding {
+  return {
+    host,
+    revision: 0,
+    prepared: false,
+    committed: false,
+    attempted: false,
+    geometry: null,
+    lastGeometry: null,
+    selection: null,
+    selectionRevision: null,
+    viewportKey: null,
+    active: null,
+  };
 }
 
 /** Allocate once across preparation, presentation, viewport commands and release. */
@@ -53,16 +75,23 @@ export async function sendNativeCanvasOperation(
   binding: NativeCanvasBinding,
   address: CanvasAttachmentAddress,
   operation: NativeCanvasOperation,
+  assigned?: (revision: number) => void,
 ): Promise<CanvasSurfaceResult> {
   const next = revision(binding);
   const cancellation = new CanvasCancellation();
-  binding.active = { cancellation, dependsOnView: operation.type !== 'surface.prepare' };
+  binding.active = {
+    cancellation,
+    dependsOnView:
+      operation.type !== 'surface.prepare' && !operation.type.startsWith('surface.preview.'),
+    type: operation.type,
+  };
   if (operation.type === 'surface.geometry') binding.geometry = null;
   if (operation.type === 'surface.select') binding.selection = null;
   // Presentation keys already fence physical geometry; focus-only updates preserve the camera.
   if (operation.type === 'surface.select') binding.viewportKey = null;
   binding.attempted = true;
   try {
+    assigned?.(next);
     return await binding.host.execute({ ...operation, address, revision: next }, cancellation);
   } finally {
     if (binding.active?.cancellation === cancellation) binding.active = null;

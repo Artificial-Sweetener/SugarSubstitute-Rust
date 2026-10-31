@@ -54,6 +54,58 @@ function isCanvasSurfaceViewportReply(value) {
   ) && Object.hasOwn(value, "viewport") && isCanvasSurfaceViewportState(value["viewport"]);
 }
 
+// integrations/shared/CanvasSurfacePreviewValidation.generated.ts
+function isCanvasSurfacePreviewIdentity(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "generation") && typeof value["generation"] === "number" && Number.isSafeInteger(value["generation"]) && value["generation"] >= 0 && value["generation"] <= 9007199254740991 && Object.hasOwn(value, "promptId") && typeof value["promptId"] === "string" && value["promptId"].length <= 512 && Array.from(value["promptId"]).length <= 256 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["promptId"]
+  ) && Object.hasOwn(value, "sourceId") && typeof value["sourceId"] === "string" && value["sourceId"].length <= 8192 && Array.from(value["sourceId"]).length <= 4096 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["sourceId"]
+  ) && Object.hasOwn(value, "runOrder") && typeof value["runOrder"] === "number" && Number.isSafeInteger(value["runOrder"]) && value["runOrder"] >= 1 && value["runOrder"] <= 9007199254740991 && Object.hasOwn(value, "sequence") && typeof value["sequence"] === "number" && Number.isSafeInteger(value["sequence"]) && value["sequence"] >= 1 && value["sequence"] <= 9007199254740991 && Object.hasOwn(value, "token") && typeof value["token"] === "string" && value["token"].length <= 48 && Array.from(value["token"]).length <= 24 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(value["token"]);
+}
+function isCanvasSurfacePreviewBeginRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 10 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.preview.begin" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "preview") && isCanvasSurfacePreviewIdentity(value["preview"]) && Object.hasOwn(value, "byteLength") && typeof value["byteLength"] === "number" && Number.isSafeInteger(value["byteLength"]) && value["byteLength"] >= 1 && value["byteLength"] <= 67108864 && Object.hasOwn(value, "format") && (value["format"] === "png" || value["format"] === "jpeg");
+}
+function isCanvasSurfacePreviewChunkRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 11 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.preview.chunk" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "token") && typeof value["token"] === "string" && value["token"].length <= 48 && Array.from(value["token"]).length <= 24 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["token"]
+  ) && Object.hasOwn(value, "leaseRevision") && typeof value["leaseRevision"] === "number" && Number.isSafeInteger(value["leaseRevision"]) && value["leaseRevision"] >= 1 && value["leaseRevision"] <= 9007199254740991 && Object.hasOwn(value, "offset") && typeof value["offset"] === "number" && Number.isSafeInteger(value["offset"]) && value["offset"] >= 0 && value["offset"] <= 67108863 && Object.hasOwn(value, "data") && typeof value["data"] === "string" && value["data"].length <= 10924 && new RegExp("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\\s\\S])").test(
+    value["data"]
+  );
+}
+function isCanvasSurfacePreviewEndRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 9 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.preview.end" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "token") && typeof value["token"] === "string" && value["token"].length <= 48 && Array.from(value["token"]).length <= 24 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["token"]
+  ) && Object.hasOwn(value, "leaseRevision") && typeof value["leaseRevision"] === "number" && Number.isSafeInteger(value["leaseRevision"]) && value["leaseRevision"] >= 1 && value["leaseRevision"] <= 9007199254740991;
+}
+function isCanvasSurfacePreviewWithdrawRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 9 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.preview.withdraw" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "token") && typeof value["token"] === "string" && value["token"].length <= 48 && Array.from(value["token"]).length <= 24 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["token"]
+  ) && Object.hasOwn(value, "leaseRevision") && typeof value["leaseRevision"] === "number" && Number.isSafeInteger(value["leaseRevision"]) && value["leaseRevision"] >= 1 && value["leaseRevision"] <= 9007199254740991;
+}
+function isCanvasSurfacePresentationRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.presentation.request" && Object.hasOwn(value, "schema") && value["schema"] === 1 && Object.hasOwn(value, "enabled") && typeof value["enabled"] === "boolean";
+}
+function isCanvasSurfacePresentationReply(value) {
+  return isRecord(value) && Object.keys(value).length === 9 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.presentation.reply" && Object.hasOwn(value, "schema") && value["schema"] === 1 && Object.hasOwn(value, "enabled") && typeof value["enabled"] === "boolean" && Object.hasOwn(value, "status") && (value["status"] === "available" || value["status"] === "unsupported" || value["status"] === "unavailable" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 1024 && Array.from(value["message"]).length <= 512 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["message"]
+  );
+}
+function isCanvasSurfacePresentationDisplay(value) {
+  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "empty" || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "type") && value["type"] === "preview" && Object.hasOwn(value, "token") && typeof value["token"] === "string" && value["token"].length <= 48 && Array.from(value["token"]).length <= 24 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["token"]
+  ) && Object.hasOwn(value, "leaseRevision") && typeof value["leaseRevision"] === "number" && Number.isSafeInteger(value["leaseRevision"]) && value["leaseRevision"] >= 1 && value["leaseRevision"] <= 9007199254740991 && Object.hasOwn(value, "viewport") && isCanvasSurfaceViewportState(value["viewport"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "final" && Object.hasOwn(value, "selectionRevision") && typeof value["selectionRevision"] === "number" && Number.isSafeInteger(value["selectionRevision"]) && value["selectionRevision"] >= 1 && value["selectionRevision"] <= 9007199254740991 && Object.hasOwn(value, "viewport") && isCanvasSurfaceViewportState(value["viewport"]);
+}
+function isCanvasSurfacePresentationChange(value) {
+  return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "sequence") && typeof value["sequence"] === "number" && Number.isSafeInteger(value["sequence"]) && value["sequence"] >= 1 && value["sequence"] <= 9007199254740991 && Object.hasOwn(value, "token") && typeof value["token"] === "string" && value["token"].length <= 48 && Array.from(value["token"]).length <= 24 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["token"]
+  ) && Object.hasOwn(value, "leaseRevision") && typeof value["leaseRevision"] === "number" && Number.isSafeInteger(value["leaseRevision"]) && value["leaseRevision"] >= 1 && value["leaseRevision"] <= 9007199254740991 && Object.hasOwn(value, "status") && (value["status"] === "presented" || value["status"] === "failed" || value["status"] === "cancelled") && Object.hasOwn(value, "displayed") && isCanvasSurfacePresentationDisplay(value["displayed"]) && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 1024 && Array.from(value["message"]).length <= 512 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
+    value["message"]
+  );
+}
+function isCanvasSurfacePresentationChanged(value) {
+  return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && value["requestId"] === 0 && Object.hasOwn(value, "type") && value["type"] === "surface.presentation.changed" && Object.hasOwn(value, "schema") && value["schema"] === 1 && Object.hasOwn(value, "change") && isCanvasSurfacePresentationChange(value["change"]);
+}
+
 // integrations/shared/CanvasSurfaceValidation.generated.ts
 function isCanvasSurfaceCapabilities(value) {
   return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "schema") && value["schema"] === 1 && Object.hasOwn(value, "imageFormats") && Array.isArray(value["imageFormats"]) && value["imageFormats"].length <= 3 && value["imageFormats"].every(
@@ -93,7 +145,7 @@ function isCanvasSurfaceReply(value) {
   );
 }
 function isCanvasSurfaceMessage(value) {
-  return isCanvasSurfaceCapabilitiesRequest(value) || isCanvasSurfaceCapabilitiesReply(value) || isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value) || isCanvasSurfaceViewportRequest(value) || isCanvasSurfaceViewportReply(value);
+  return isCanvasSurfacePreviewBeginRequest(value) || isCanvasSurfacePreviewChunkRequest(value) || isCanvasSurfacePreviewEndRequest(value) || isCanvasSurfacePreviewWithdrawRequest(value) || isCanvasSurfacePresentationRequest(value) || isCanvasSurfacePresentationReply(value) || isCanvasSurfacePresentationChanged(value) || isCanvasSurfaceCapabilitiesRequest(value) || isCanvasSurfaceCapabilitiesReply(value) || isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value) || isCanvasSurfaceViewportRequest(value) || isCanvasSurfaceViewportReply(value);
 }
 
 // integrations/shared/CanvasValidation.generated.ts
@@ -226,6 +278,10 @@ var CanvasRemoteChanges = class {
   #overflow = false;
   #watchSent = false;
   #disposed = false;
+  /** Read accepted observation authority without exposing listeners or its negotiation epoch. */
+  get observing() {
+    return !this.#disposed && this.#accepted;
+  }
   /** Register before starting the watch so synchronous native notifications cannot escape the lease. */
   subscribe(listener) {
     if (this.#disposed) return { ready: Promise.resolve("unavailable"), stop: () => {
@@ -304,7 +360,11 @@ var CanvasRemoteChanges = class {
   }
   /** Notify only consumers still mounted in the current observation lifetime. */
   #publish(change) {
-    for (const listener of this.#listeners) listener(change);
+    const epoch = this.#epoch;
+    for (const listener of [...this.#listeners]) {
+      if (!this.#owns(epoch)) break;
+      if (this.#listeners.has(listener)) listener(change);
+    }
   }
   /** Re-read ownership after consumer callbacks may dispose or replace the observation lifetime. */
   #owns(epoch) {
@@ -395,14 +455,114 @@ function snapshotCanvasSurfaceViewport(viewport) {
   return Object.freeze({ ...viewport, dimensions: Object.freeze({ ...viewport.dimensions }) });
 }
 
+// integrations/shared/CanvasByteEncoding.ts
+var ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function encodeCanvasBytes(bytes) {
+  const blocks = [];
+  let block = "";
+  for (let index = 0; index < bytes.length; index += 3) {
+    const first = bytes[index] ?? 0, second = bytes[index + 1] ?? 0, third = bytes[index + 2] ?? 0;
+    block += ALPHABET.charAt(first >> 2) + ALPHABET.charAt((first & 3) << 4 | second >> 4) + (index + 1 < bytes.length ? ALPHABET.charAt((second & 15) << 2 | third >> 6) : "=") + (index + 2 < bytes.length ? ALPHABET.charAt(third & 63) : "=");
+    if (block.length >= 16384) {
+      blocks.push(block);
+      block = "";
+    }
+  }
+  blocks.push(block);
+  return blocks.join("");
+}
+function decodeCanvasBytes(data, maximumBytes) {
+  if (!data.length || data.length > Math.ceil(maximumBytes / 3) * 4 || data.length % 4 !== 0)
+    throw new Error("Invalid canvas byte encoding.");
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  const size = data.length / 4 * 3 - padding;
+  if (size > maximumBytes) throw new Error("Canvas image transfer exceeds its byte budget.");
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    const a = ALPHABET.indexOf(data.charAt(index)), b = ALPHABET.indexOf(data.charAt(index + 1));
+    const c = ALPHABET.indexOf(data.charAt(index + 2)), d = ALPHABET.indexOf(data.charAt(index + 3));
+    const final = index + 4 === data.length;
+    if (a < 0 || b < 0 || !final && (c < 0 || d < 0) || final && (padding === 0 ? c < 0 || d < 0 : padding === 1 ? c < 0 || d !== -1 || (c & 3) !== 0 : c !== -1 || d !== -1 || (b & 15) !== 0))
+      throw new Error("Invalid canvas byte encoding.");
+    bytes[offset++] = a << 2 | b >> 4;
+    if (offset < size) bytes[offset++] = (b & 15) << 4 | c >> 2;
+    if (offset < size) bytes[offset++] = (c & 3) << 6 | d;
+  }
+  return bytes;
+}
+
+// integrations/shared/CanvasImagePolicy.ts
+var MAX_CANVAS_IMAGE_BYTES = 64 * 1024 * 1024;
+var MAX_CANVAS_IMAGE_PIXELS = 64 * 1024 * 1024;
+function canvasPngDimensions(bytes) {
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 33 || bytes.length > MAX_CANVAS_IMAGE_BYTES || signature.some((byte, index) => bytes[index] !== byte) || bytes[12] !== 73 || bytes[13] !== 72 || bytes[14] !== 68 || bytes[15] !== 82)
+    throw new Error("Canvas insertion requires a valid bounded PNG image.");
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16, false), height = view.getUint32(20, false);
+  if (width < 1 || height < 1 || width > 3e4 || height > 3e4 || width * height > MAX_CANVAS_IMAGE_PIXELS)
+    throw new Error("This image exceeds the canvas insertion pixel budget.");
+  return Object.freeze({ width, height });
+}
+
+// integrations/shared/CanvasSurfacePreview.ts
+var CANVAS_PREVIEW_CHUNK_BYTES = 8192;
+var CANVAS_PREVIEW_LEASE_MILLISECONDS = 3e4;
+var CANVAS_PREVIEW_MESSAGE_BYTES = 16384;
+function isCanvasPreviewCommand(command) {
+  return command.type.startsWith("surface.preview.");
+}
+function supportsCanvasSurfacePreview(capabilities, command) {
+  if (!isCanvasPreviewCommand(command)) return true;
+  return command.type === "surface.preview.begin" ? capabilities.previewFormats.includes(command.format) : capabilities.previewFormats.length > 0;
+}
+function validCanvasPreviewCommand(command) {
+  if (command.type === "surface.preview.begin") {
+    const preview = command.preview;
+    return command.byteLength > 0 && command.byteLength <= MAX_CANVAS_IMAGE_BYTES && preview.token === `preview:${String(preview.sequence)}` && preview.promptId.startsWith("prompt:") && preview.promptId.length > 7 && preview.sourceId.startsWith("source:") && preview.sourceId.length > 7 && !/[\u0000-\u001f\u007f-\u009f]/.test(preview.promptId + preview.sourceId);
+  }
+  if (command.type === "surface.preview.chunk") {
+    try {
+      return decodeCanvasBytes(command.data, CANVAS_PREVIEW_CHUNK_BYTES).length > 0;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+function canvasPreviewMessageFits(message) {
+  const encoded = JSON.stringify(message);
+  let bytes = 0;
+  for (const character of encoded) {
+    const point = character.codePointAt(0) ?? 0;
+    bytes += point <= 127 ? 1 : point <= 2047 ? 2 : point <= 65535 ? 3 : 4;
+    if (bytes > CANVAS_PREVIEW_MESSAGE_BYTES) return false;
+  }
+  return true;
+}
+function snapshotCanvasSurfacePresentation(change) {
+  const displayed = change.displayed.type === "empty" ? Object.freeze({ ...change.displayed }) : Object.freeze({
+    ...change.displayed,
+    viewport: snapshotCanvasSurfaceViewport(change.displayed.viewport)
+  });
+  return Object.freeze({ ...change, address: Object.freeze({ ...change.address }), displayed });
+}
+function validCanvasSurfacePresentation(change) {
+  if (change.displayed.type === "preview" && change.displayed.viewport.mode !== "fit") return false;
+  return change.status !== "presented" || change.displayed.type === "preview" && change.displayed.token === change.token && change.displayed.leaseRevision === change.leaseRevision && change.displayed.viewport.mode === "fit";
+}
+
 // integrations/shared/CanvasSurfaceClient.ts
 async function requestCanvasSurface(command, cancellation, request) {
   if (cancellation?.cancelled())
     return { status: "cancelled", message: "Canvas surface request cancelled." };
+  if (!validCanvasPreviewCommand(command))
+    return { status: "error", message: "Canvas preview request is invalid." };
   const address = Object.freeze({ ...command.address });
   const revision = command.revision;
   const type = command.type;
-  const admitted = command.type === "surface.viewport.request" ? { ...command, address, command: Object.freeze({ ...command.command }) } : { ...command, address };
+  const admitted = command.type === "surface.viewport.request" ? { ...command, address, command: Object.freeze({ ...command.command }) } : command.type === "surface.preview.begin" ? { ...command, address, preview: Object.freeze({ ...command.preview }) } : { ...command, address };
   const reply = await request(admitted, cancellation);
   if (reply.type === "surface.viewport.reply") {
     if (type !== "surface.viewport.request" || reply.revision !== revision || !sameSurface(reply.address, address))
@@ -419,6 +579,26 @@ async function requestCanvasSurface(command, cancellation, request) {
 }
 function sameSurface(left, right) {
   return left.sessionId === right.sessionId && left.viewId === right.viewId && left.windowId === right.windowId && left.attachmentId === right.attachmentId && left.generation === right.generation;
+}
+
+// integrations/shared/CanvasSurfacePresentation.ts
+function canvasSurfacePresentation(port) {
+  return new CanvasRemoteChanges({
+    listen: (listener) => port.listen(listener),
+    watch: async (enabled) => {
+      if (enabled && !port.current()) return false;
+      const reply = await port.watch(enabled);
+      if (reply.enabled !== enabled)
+        throw new Error("Canvas presentation watch reply does not match its request.");
+      const available = reply.status === "available";
+      if (reply.status === "unavailable" || reply.status === "error")
+        throw new Error(reply.message || "Canvas presentation observation is unavailable.");
+      return available;
+    },
+    report: (error) => {
+      port.report(error);
+    }
+  });
 }
 
 // integrations/shared/CanvasSurfaceDiscovery.ts
@@ -457,7 +637,11 @@ async function discoverCanvasSurface(port) {
     }
     const host = Object.freeze({
       capabilities: snapshotCanvasSurfaceCapabilities(reply.capabilities),
-      execute: (command, cancellation) => command.type === "surface.release" || port.current() && port.owns(host) ? supportsCanvasSurfaceViewport(host.capabilities, command) ? port.execute(command, cancellation) : Promise.resolve({ status: "unavailable", message: "Canvas viewport is unavailable." }) : Promise.resolve({ status: "unavailable", message: "The canvas context changed." })
+      ...port.presentation && reply.capabilities.previewFormats.length ? { presentation: port.presentation } : {},
+      execute: (command, cancellation) => command.type === "surface.release" || command.type === "surface.preview.withdraw" || port.current() && port.owns(host) ? supportsCanvasSurfaceViewport(host.capabilities, command) && supportsCanvasSurfacePreview(host.capabilities, command) && (!isCanvasPreviewCommand(command) || command.type === "surface.preview.withdraw" || port.observesPresentation?.()) ? port.execute(command, cancellation) : Promise.resolve({
+        status: "unavailable",
+        message: "Canvas surface operation is unavailable."
+      }) : Promise.resolve({ status: "unavailable", message: "The canvas context changed." })
     });
     return host;
   } catch (error) {
@@ -498,6 +682,9 @@ var CanvasClient = class {
   #surface = null;
   #pending = /* @__PURE__ */ new Map();
   #sourceListeners = /* @__PURE__ */ new Set();
+  #presentationListeners = /* @__PURE__ */ new Set();
+  #presentation = null;
+  #presentationSequence = 0;
   #next = 0;
   #context = null;
   #contextRevision = {};
@@ -514,6 +701,8 @@ var CanvasClient = class {
   async readContext() {
     const revision = {};
     this.#contextRevision = revision;
+    this.#presentation?.dispose();
+    this.#presentation = null;
     this.#surface = null;
     const reply = await this.#request({ type: "context.request" }, "context.reply");
     if (reply.type !== "context.reply") throw new Error("Invalid canvas context reply.");
@@ -521,6 +710,28 @@ var CanvasClient = class {
     if (revision === this.#contextRevision) {
       this.#context = reply.context;
       if (reply.context.canvas.capabilities.displayOutput) {
+        const presentation = canvasSurfacePresentation({
+          current: () => !this.#disposed && revision === this.#contextRevision,
+          listen: (listener) => {
+            this.#presentationListeners.add(listener);
+            return () => {
+              this.#presentationListeners.delete(listener);
+            };
+          },
+          watch: async (enabled) => {
+            const observed = await this.#request(
+              { type: "surface.presentation.request", schema: 1, enabled },
+              "surface.presentation.reply"
+            );
+            if (observed.type !== "surface.presentation.reply")
+              throw new Error("Invalid canvas presentation observation reply.");
+            return observed;
+          },
+          report: (error) => {
+            this.port.report(error);
+          }
+        });
+        this.#presentation = presentation;
         const surface = await discoverCanvasSurface({
           read: () => this.#request(
             { type: "surface.capabilities.request", schema: 1 },
@@ -528,6 +739,8 @@ var CanvasClient = class {
           ),
           current: () => !this.#disposed && revision === this.#contextRevision,
           owns: (host) => this.#surface === host,
+          presentation,
+          observesPresentation: () => presentation.observing,
           execute: (command, cancellation) => requestCanvasSurface(
             command,
             cancellation,
@@ -566,6 +779,15 @@ var CanvasClient = class {
       for (const listener of this.#sourceListeners) listener(value.change);
       return true;
     }
+    if (value.type === "surface.presentation.changed") {
+      if (!validCanvasSurfacePresentation(value.change) || value.change.sequence <= this.#presentationSequence)
+        return false;
+      this.#presentationSequence = value.change.sequence;
+      const change = snapshotCanvasSurfacePresentation(value.change);
+      for (const listener of [...this.#presentationListeners])
+        if (this.#presentationListeners.has(listener)) listener(change);
+      return this.#presentationListeners.size > 0;
+    }
     const pending = this.#pending.get(value.requestId);
     const viewportFailure = pending?.type === "surface.viewport.reply" && value.type === "surface.reply" && value.status !== "applied" && value.status !== "ready";
     if (!pending || pending.type !== value.type && value.type !== "error.reply" && !viewportFailure)
@@ -593,10 +815,12 @@ var CanvasClient = class {
   dispose() {
     if (this.#disposed) return;
     this.sources.dispose();
+    this.#presentation?.dispose();
+    this.#presentation = null;
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();
-      if (pending.type === "context.reply" || pending.type === "image.reply" || pending.type === "geometry.reply" || pending.type === "surface.reply" || pending.type === "surface.viewport.reply" || pending.type === "surface.capabilities.reply")
+      if (pending.type === "context.reply" || pending.type === "image.reply" || pending.type === "geometry.reply" || pending.type === "surface.reply" || pending.type === "surface.viewport.reply" || pending.type === "surface.presentation.reply" || pending.type === "surface.capabilities.reply")
         pending.cancel();
       pending.reject(new Error("Canvas connection closed."));
     }
@@ -604,6 +828,7 @@ var CanvasClient = class {
     this.#context = null;
     this.#surface = null;
     this.#sourceListeners.clear();
+    this.#presentationListeners.clear();
   }
   /** Translate source query failures without introducing another transport or request sequence. */
   async #sourceRequest(command) {
@@ -720,6 +945,8 @@ var CanvasClient = class {
         const message = { ...envelope, ...request };
         if (request.type.startsWith("surface.") && !isCanvasMessage(message))
           throw new Error("Canvas surface request is invalid.");
+        if (isSurfaceRequest(request) && isCanvasPreviewCommand(request) && !canvasPreviewMessageFits(message))
+          throw new Error("Canvas preview request exceeds the native transport bounds.");
         transportOwned = true;
         this.port.send(message);
       } catch (error) {
@@ -747,7 +974,7 @@ var CanvasClient = class {
   }
 };
 function isSurfaceRequest(request) {
-  return request.type.startsWith("surface.") && request.type !== "surface.capabilities.request";
+  return request.type.startsWith("surface.") && request.type !== "surface.capabilities.request" && request.type !== "surface.presentation.request";
 }
 function snapshotCanvasContext(context) {
   return Object.freeze({
@@ -757,57 +984,6 @@ function snapshotCanvasContext(context) {
     }),
     document: context.document ? Object.freeze({ ...context.document }) : null
   });
-}
-
-// integrations/shared/CanvasImagePolicy.ts
-var MAX_CANVAS_IMAGE_BYTES = 64 * 1024 * 1024;
-var MAX_CANVAS_IMAGE_PIXELS = 64 * 1024 * 1024;
-function canvasPngDimensions(bytes) {
-  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
-  if (bytes.length < 33 || bytes.length > MAX_CANVAS_IMAGE_BYTES || signature.some((byte, index) => bytes[index] !== byte) || bytes[12] !== 73 || bytes[13] !== 72 || bytes[14] !== 68 || bytes[15] !== 82)
-    throw new Error("Canvas insertion requires a valid bounded PNG image.");
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const width = view.getUint32(16, false), height = view.getUint32(20, false);
-  if (width < 1 || height < 1 || width > 3e4 || height > 3e4 || width * height > MAX_CANVAS_IMAGE_PIXELS)
-    throw new Error("This image exceeds the canvas insertion pixel budget.");
-  return Object.freeze({ width, height });
-}
-
-// integrations/shared/CanvasByteEncoding.ts
-var ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-function encodeCanvasBytes(bytes) {
-  const blocks = [];
-  let block = "";
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index] ?? 0, second = bytes[index + 1] ?? 0, third = bytes[index + 2] ?? 0;
-    block += ALPHABET.charAt(first >> 2) + ALPHABET.charAt((first & 3) << 4 | second >> 4) + (index + 1 < bytes.length ? ALPHABET.charAt((second & 15) << 2 | third >> 6) : "=") + (index + 2 < bytes.length ? ALPHABET.charAt(third & 63) : "=");
-    if (block.length >= 16384) {
-      blocks.push(block);
-      block = "";
-    }
-  }
-  blocks.push(block);
-  return blocks.join("");
-}
-function decodeCanvasBytes(data, maximumBytes) {
-  if (!data.length || data.length > Math.ceil(maximumBytes / 3) * 4 || data.length % 4 !== 0)
-    throw new Error("Invalid canvas byte encoding.");
-  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-  const size = data.length / 4 * 3 - padding;
-  if (size > maximumBytes) throw new Error("Canvas image transfer exceeds its byte budget.");
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (let index = 0; index < data.length; index += 4) {
-    const a = ALPHABET.indexOf(data.charAt(index)), b = ALPHABET.indexOf(data.charAt(index + 1));
-    const c = ALPHABET.indexOf(data.charAt(index + 2)), d = ALPHABET.indexOf(data.charAt(index + 3));
-    const final = index + 4 === data.length;
-    if (a < 0 || b < 0 || !final && (c < 0 || d < 0) || final && (padding === 0 ? c < 0 || d < 0 : padding === 1 ? c < 0 || d !== -1 || (c & 3) !== 0 : c !== -1 || d !== -1 || (b & 15) !== 0))
-      throw new Error("Invalid canvas byte encoding.");
-    bytes[offset++] = a << 2 | b >> 4;
-    if (offset < size) bytes[offset++] = (b & 15) << 4 | c >> 2;
-    if (offset < size) bytes[offset++] = (c & 3) << 6 | d;
-  }
-  return bytes;
 }
 
 // integrations/shared/CanvasImageEncoding.ts
@@ -1259,6 +1435,8 @@ function canvasSizingProposal(request, scale = request.scale) {
   };
 }
 export {
+  CANVAS_PREVIEW_CHUNK_BYTES,
+  CANVAS_PREVIEW_LEASE_MILLISECONDS,
   CanvasCancellation,
   CanvasClient,
   CanvasMaskClient,
@@ -1275,6 +1453,7 @@ export {
   cropCanvasImageRegion,
   decodeCanvasRaster,
   decodeMaskPixels,
+  encodeCanvasBytes,
   encodeCanvasImage,
   encodeCanvasRaster,
   encodeMaskPixels,

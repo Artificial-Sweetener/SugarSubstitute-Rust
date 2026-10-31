@@ -51,6 +51,7 @@ export class NativeCanvasAttachment {
     #plan;
     #surface = null;
     #viewport = null;
+    #preview = false;
     #presentation = { state: 'empty', message: '' };
     #ready = false;
     #disposed = false;
@@ -119,6 +120,7 @@ export class NativeCanvasAttachment {
         });
         this.#native = new NativeCanvasPresentation({
             address: options.address,
+            clock: options.clock,
             acceptsPreparation: () => !this.#disposed && options.acceptsPreparation(),
             prepared: () => this.#readiness.complete(),
             host: options.nativeSurface,
@@ -133,6 +135,11 @@ export class NativeCanvasAttachment {
             },
             viewport: (value) => {
                 this.#viewport = value;
+                if (this.#ready)
+                    this.#status.changed(true);
+            },
+            preview: (value) => {
+                this.#preview = value;
                 if (this.#ready)
                     this.#status.changed(true);
             },
@@ -199,26 +206,32 @@ export class NativeCanvasAttachment {
         this.#catalog = catalog;
         this.#sources = Object.freeze(catalog.entries.map((entry) => entry.summary));
         this.#plan = this.#projection.project(catalog);
-        this.#native.update(this.#surface, this.#plan.primary?.item ?? null);
+        this.#native.update(this.#surface, this.#plan.primary?.item ?? null, this.#plan.preview);
         this.#status.changed(true);
     }
-    /** Refuse preview bytes until the native host exposes preview presentation. */
-    wants() {
-        return false;
+    /** Admit bytes only for this visible, committed view's authoritative source/run interest. */
+    wants(session, generation, source) {
+        return (!this.#disposed &&
+            this.#surface?.visible === true &&
+            this.options.accepts() &&
+            this.#catalog.result.context.sessionId === session &&
+            this.#catalog.generation === generation &&
+            this.options.selection.allowsSourcePreview(this.options.address.viewId, this.#catalog, source) &&
+            this.#native.wants());
     }
-    /** Preview delivery is disabled by the admission decision above. */
-    receive(_preview, _blob) { }
+    /** Preserve original token/Blob custody while native transfer remains independent of browser decoding. */
+    receive(preview, blob) {
+        if (this.wants(preview.sessionId, preview.generation, preview.sourceId))
+            this.#native.receive(preview, blob);
+    }
     /** Report zero browser image allocations for this attachment. */
     diagnostics() {
         return {
             displayed: 0,
             pendingDecodes: 0,
-            queuedInputs: 0,
-            previewDrops: 0,
-            estimatedBytes: 0,
             unknownLoads: 0,
-            activeDeadlines: 0,
             renderFrames: 0,
+            ...this.#native.diagnostics(),
         };
     }
     /** Release the native surface and shared controls before retiring their view lease. */
@@ -257,7 +270,7 @@ export class NativeCanvasAttachment {
     /** Forward qualified geometry without constructing a browser drawing surface. */
     #resize(surface) {
         this.#surface = surface;
-        this.#native.update(surface, this.#plan.primary?.item ?? null);
+        this.#native.update(surface, this.#plan.primary?.item ?? null, this.#plan.preview);
     }
     /** Publish selection and actual native readiness to the shared overlay. */
     #publish() {
@@ -281,14 +294,17 @@ export class NativeCanvasAttachment {
                 message: 'Open this media in the host viewer.',
             };
         }
-        else if (!item && this.#plan.preview) {
+        else if (!item && this.#plan.preview && !this.#native?.previewAvailable) {
             resource = {
                 ...resource,
                 state: 'unavailable',
                 message: 'Live previews are not available on this surface.',
             };
         }
-        else if (this.#plan.primary && !item) {
+        else if (this.#plan.primary &&
+            !item &&
+            resource.state !== 'ready' &&
+            !(this.#plan.preview && this.#native?.previewAvailable)) {
             resource = {
                 ...resource,
                 state: 'unavailable',
@@ -297,7 +313,7 @@ export class NativeCanvasAttachment {
         }
         const snapshot = canvasViewSnapshot(this.options.address, this.#plan, this.#catalog, this.#sources, this.options.connected(), this.#media.profile(), {
             comparisonAvailable: false,
-            preview: false,
+            preview: this.#preview,
             resource,
             secondaryResource: null,
             zoom: this.#viewport

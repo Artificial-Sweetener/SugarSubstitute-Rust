@@ -34,6 +34,15 @@ import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
 import type { CanvasSurfaceCommand, CanvasSurfaceHost } from '../contracts/CanvasSurface.js';
 import { requestCanvasSurface } from './CanvasSurfaceClient.js';
 import { snapshotCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
+import { canvasSurfacePresentation } from './CanvasSurfacePresentation.js';
+import {
+  canvasPreviewMessageFits,
+  isCanvasPreviewCommand,
+  snapshotCanvasSurfacePresentation,
+  validCanvasSurfacePresentation,
+} from './CanvasSurfacePreview.js';
+import type { CanvasSurfacePresentationChange } from '../contracts/CanvasSurface.js';
+import type { CanvasRemoteChanges } from './CanvasRemoteChanges.js';
 import {
   snapshotCanvasSurfaceCapabilities,
   discoverCanvasSurface,
@@ -57,6 +66,7 @@ interface Pending {
     | 'geometry.reply'
     | 'surface.capabilities.reply'
     | 'surface.viewport.reply'
+    | 'surface.presentation.reply'
     | 'surface.reply';
   accept(message: CanvasMessage): void;
   reject(error: Error): void;
@@ -69,6 +79,7 @@ type Request =
   | Pick<CanvasSourceRequest, 'type' | 'command'>
   | Pick<CanvasGeometryRequest, 'type' | 'command'>
   | { readonly type: 'surface.capabilities.request'; readonly schema: 1 }
+  | { readonly type: 'surface.presentation.request'; readonly schema: 1; readonly enabled: boolean }
   | CanvasSurfaceCommand;
 /** Retain one correlated client for a validated host session; never replay mutations after reconnect. */
 export class CanvasClient implements CanvasLayerHost {
@@ -77,6 +88,9 @@ export class CanvasClient implements CanvasLayerHost {
   #surface: CanvasSurfaceHost | null = null;
   readonly #pending = new Map<number, Pending>();
   readonly #sourceListeners = new Set<(change: CanvasSourceChange) => void>();
+  readonly #presentationListeners = new Set<(change: CanvasSurfacePresentationChange) => void>();
+  #presentation: CanvasRemoteChanges<CanvasSurfacePresentationChange> | null = null;
+  #presentationSequence = 0;
   #next = 0;
   #context: CanvasContext | null = null;
   #contextRevision: object = {};
@@ -119,6 +133,8 @@ export class CanvasClient implements CanvasLayerHost {
   async readContext(): Promise<CanvasContext> {
     const revision = {};
     this.#contextRevision = revision;
+    this.#presentation?.dispose();
+    this.#presentation = null;
     this.#surface = null;
     const reply = await this.#request({ type: 'context.request' }, 'context.reply');
     if (reply.type !== 'context.reply') throw new Error('Invalid canvas context reply.');
@@ -126,6 +142,28 @@ export class CanvasClient implements CanvasLayerHost {
     if (revision === this.#contextRevision) {
       this.#context = reply.context;
       if (reply.context.canvas.capabilities.displayOutput) {
+        const presentation = canvasSurfacePresentation({
+          current: () => !this.#disposed && revision === this.#contextRevision,
+          listen: (listener) => {
+            this.#presentationListeners.add(listener);
+            return () => {
+              this.#presentationListeners.delete(listener);
+            };
+          },
+          watch: async (enabled) => {
+            const observed = await this.#request(
+              { type: 'surface.presentation.request', schema: 1, enabled },
+              'surface.presentation.reply',
+            );
+            if (observed.type !== 'surface.presentation.reply')
+              throw new Error('Invalid canvas presentation observation reply.');
+            return observed;
+          },
+          report: (error) => {
+            this.port.report(error);
+          },
+        });
+        this.#presentation = presentation;
         const surface = await discoverCanvasSurface({
           read: () =>
             this.#request(
@@ -134,6 +172,8 @@ export class CanvasClient implements CanvasLayerHost {
             ),
           current: () => !this.#disposed && revision === this.#contextRevision,
           owns: (host) => this.#surface === host,
+          presentation,
+          observesPresentation: () => presentation.observing,
           execute: (command, cancellation) =>
             requestCanvasSurface(command, cancellation, (admitted, scope) =>
               this.#request(
@@ -176,6 +216,18 @@ export class CanvasClient implements CanvasLayerHost {
       for (const listener of this.#sourceListeners) listener(value.change);
       return true;
     }
+    if (value.type === 'surface.presentation.changed') {
+      if (
+        !validCanvasSurfacePresentation(value.change) ||
+        value.change.sequence <= this.#presentationSequence
+      )
+        return false;
+      this.#presentationSequence = value.change.sequence;
+      const change = snapshotCanvasSurfacePresentation(value.change);
+      for (const listener of [...this.#presentationListeners])
+        if (this.#presentationListeners.has(listener)) listener(change);
+      return this.#presentationListeners.size > 0;
+    }
     const pending = this.#pending.get(value.requestId);
     const viewportFailure =
       pending?.type === 'surface.viewport.reply' &&
@@ -210,6 +262,8 @@ export class CanvasClient implements CanvasLayerHost {
   dispose(): void {
     if (this.#disposed) return;
     this.sources.dispose();
+    this.#presentation?.dispose();
+    this.#presentation = null;
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();
@@ -219,6 +273,7 @@ export class CanvasClient implements CanvasLayerHost {
         pending.type === 'geometry.reply' ||
         pending.type === 'surface.reply' ||
         pending.type === 'surface.viewport.reply' ||
+        pending.type === 'surface.presentation.reply' ||
         pending.type === 'surface.capabilities.reply'
       )
         pending.cancel();
@@ -228,6 +283,7 @@ export class CanvasClient implements CanvasLayerHost {
     this.#context = null;
     this.#surface = null;
     this.#sourceListeners.clear();
+    this.#presentationListeners.clear();
   }
   /** Translate source query failures without introducing another transport or request sequence. */
   async #sourceRequest(command: CanvasSourceCommand): Promise<CanvasSourceResult> {
@@ -355,6 +411,12 @@ export class CanvasClient implements CanvasLayerHost {
         const message = { ...envelope, ...request };
         if (request.type.startsWith('surface.') && !isCanvasMessage(message))
           throw new Error('Canvas surface request is invalid.');
+        if (
+          isSurfaceRequest(request) &&
+          isCanvasPreviewCommand(request) &&
+          !canvasPreviewMessageFits(message)
+        )
+          throw new Error('Canvas preview request exceeds the native transport bounds.');
         transportOwned = true;
         this.port.send(message);
       } catch (error: unknown) {
@@ -384,7 +446,11 @@ export class CanvasClient implements CanvasLayerHost {
 
 /** Distinguish requests whose cancellation completion is acknowledged by the native surface. */
 function isSurfaceRequest(request: Request): request is CanvasSurfaceCommand {
-  return request.type.startsWith('surface.') && request.type !== 'surface.capabilities.request';
+  return (
+    request.type.startsWith('surface.') &&
+    request.type !== 'surface.capabilities.request' &&
+    request.type !== 'surface.presentation.request'
+  );
 }
 
 /** Retain admitted context metadata before an asynchronous consumer can observe caller mutation. */

@@ -192,8 +192,131 @@ export type CanvasSurfaceViewportReply = {
   readonly message: string;
   readonly viewport: CanvasSurfaceViewportState;
 };
+/** Describe the schema-defined CanvasSurfacePreviewIdentity wire value. */
+export type CanvasSurfacePreviewIdentity = {
+  readonly generation: number;
+  readonly promptId: string;
+  readonly sourceId: string;
+  readonly runOrder: number;
+  readonly sequence: number;
+  readonly token: string;
+};
+/** Describe the schema-defined CanvasSurfacePreviewBeginRequest wire value. */
+export type CanvasSurfacePreviewBeginRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.preview.begin';
+  readonly address: CanvasSurfaceAddress;
+  readonly revision: number;
+  readonly preview: CanvasSurfacePreviewIdentity;
+  readonly byteLength: number;
+  readonly format: 'png' | 'jpeg';
+};
+/** Describe the schema-defined CanvasSurfacePreviewChunkRequest wire value. */
+export type CanvasSurfacePreviewChunkRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.preview.chunk';
+  readonly address: CanvasSurfaceAddress;
+  readonly revision: number;
+  readonly token: string;
+  readonly leaseRevision: number;
+  readonly offset: number;
+  readonly data: string;
+};
+/** Describe the schema-defined CanvasSurfacePreviewEndRequest wire value. */
+export type CanvasSurfacePreviewEndRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.preview.end';
+  readonly address: CanvasSurfaceAddress;
+  readonly revision: number;
+  readonly token: string;
+  readonly leaseRevision: number;
+};
+/** Describe the schema-defined CanvasSurfacePreviewWithdrawRequest wire value. */
+export type CanvasSurfacePreviewWithdrawRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.preview.withdraw';
+  readonly address: CanvasSurfaceAddress;
+  readonly revision: number;
+  readonly token: string;
+  readonly leaseRevision: number;
+};
+/** Describe the schema-defined CanvasSurfacePresentationRequest wire value. */
+export type CanvasSurfacePresentationRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.presentation.request';
+  readonly schema: 1;
+  readonly enabled: boolean;
+};
+/** Describe the schema-defined CanvasSurfacePresentationReply wire value. */
+export type CanvasSurfacePresentationReply = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.presentation.reply';
+  readonly schema: 1;
+  readonly enabled: boolean;
+  readonly status: 'available' | 'unsupported' | 'unavailable' | 'error';
+  readonly message: string;
+};
+/** Describe the schema-defined CanvasSurfacePresentationDisplay wire value. */
+export type CanvasSurfacePresentationDisplay =
+  | { readonly type: 'empty' }
+  | {
+      readonly type: 'preview';
+      readonly token: string;
+      readonly leaseRevision: number;
+      readonly viewport: CanvasSurfaceViewportState;
+    }
+  | {
+      readonly type: 'final';
+      readonly selectionRevision: number;
+      readonly viewport: CanvasSurfaceViewportState;
+    };
+/** Describe the schema-defined CanvasSurfacePresentationChange wire value. */
+export type CanvasSurfacePresentationChange = {
+  readonly address: CanvasSurfaceAddress;
+  readonly sequence: number;
+  readonly token: string;
+  readonly leaseRevision: number;
+  readonly status: 'presented' | 'failed' | 'cancelled';
+  readonly displayed: CanvasSurfacePresentationDisplay;
+  readonly message: string;
+};
+/** Describe the schema-defined CanvasSurfacePresentationChanged wire value. */
+export type CanvasSurfacePresentationChanged = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: 0;
+  readonly type: 'surface.presentation.changed';
+  readonly schema: 1;
+  readonly change: CanvasSurfacePresentationChange;
+};
 /** Describe the shared canvas surface messages. */
 export type CanvasSurfaceMessage =
+  | CanvasSurfacePreviewBeginRequest
+  | CanvasSurfacePreviewChunkRequest
+  | CanvasSurfacePreviewEndRequest
+  | CanvasSurfacePreviewWithdrawRequest
+  | CanvasSurfacePresentationRequest
+  | CanvasSurfacePresentationReply
+  | CanvasSurfacePresentationChanged
   | CanvasSurfaceCapabilitiesRequest
   | CanvasSurfaceCapabilitiesReply
   | CanvasSurfacePrepareRequest

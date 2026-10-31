@@ -39,12 +39,17 @@ export function nativeCanvasChanges<Change>(
 export class CanvasChangeRelay<Change> {
   #lease: CanvasChangeSubscription | null = null;
   #epoch = 0;
+  #accepted = false;
   #disposed = false;
   /** Keep native capability and wire envelope translation with their existing adapter owners. */
   constructor(
     private readonly observation: CanvasChangeObservation<Change> | null,
     private readonly publish: (change: Change) => void,
   ) {}
+  /** Read only the current subscription's accepted observation authority. */
+  get observing(): boolean {
+    return !this.#disposed && this.#accepted;
+  }
   /** Negotiate actual observation support independently of source or mask capture support. */
   async watch(enabled: boolean): Promise<CanvasObservationStatus> {
     if (this.#disposed) return 'unavailable';
@@ -59,17 +64,33 @@ export class CanvasChangeRelay<Change> {
         if (!this.#disposed && epoch === this.#epoch) this.publish(change);
       });
     }
-    return await this.#lease.ready;
+    const epoch = this.#epoch;
+    try {
+      const status = await this.#lease.ready;
+      if (!this.#owns(epoch)) return 'unavailable';
+      this.#accepted = status === 'observing';
+      return status;
+    } catch (error: unknown) {
+      if (!this.#owns(epoch)) return 'unavailable';
+      this.#release();
+      throw error;
+    }
   }
   /** Release native resources without allowing callbacks into a retired navigation. */
   dispose(): void {
     this.#disposed = true;
     this.#release();
   }
+  /** Re-read ownership after a native acknowledgement can outlive a stop or replacement. */
+  #owns(epoch: number): boolean {
+    return !this.#disposed && epoch === this.#epoch;
+  }
   /** Fence first so a native unsubscribe callback cannot publish during cleanup. */
   #release(): void {
     this.#epoch++;
-    this.#lease?.stop();
+    this.#accepted = false;
+    const lease = this.#lease;
     this.#lease = null;
+    lease?.stop();
   }
 }

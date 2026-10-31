@@ -599,7 +599,13 @@ describe('composed browser canvas attachment', () => {
     });
     f.drawable(surface);
     expect(surface.port.read().resource.state).toBe('unavailable');
-    expect(surface.wants()).toBe(false);
+    expect(
+      surface.wants(
+        f.catalog.result.context.sessionId,
+        f.catalog.generation,
+        f.catalog.sources[0]!.id,
+      ),
+    ).toBe(false);
     expect(f.loader.requests).toHaveLength(0);
     expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
     const calls: CanvasSurfaceCommand[] = [];
