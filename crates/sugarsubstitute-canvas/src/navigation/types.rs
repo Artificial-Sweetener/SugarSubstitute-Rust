@@ -17,6 +17,20 @@ pub enum NavigationCommand {
     /// Move content by fractions of the physical viewport width and height.
     /// Each component is in the inclusive range -10 to 10; positive moves right/down.
     Pan([f64; 2]),
+    /// Show an image-relative camera immediately, without interpolation.
+    ///
+    /// center is the document point at the viewport center, normalized to the inclusive range
+    /// 0 to 1 of the content on each axis. span is the normalized content distance per
+    /// physical viewport pixel on each axis, greater than 0 and at most 1e9, so the camera is
+    /// independent of viewport extent. The scale is contained across differing aspect ratios,
+    /// bounded like zoom while keeping Fit reachable, and an exact Fit or one-to-one scale
+    /// becomes that semantic mode; pan bounds apply as for every destination.
+    Frame {
+        /// Normalized content point at the viewport center.
+        center: [f64; 2],
+        /// Normalized content distance per physical viewport pixel.
+        span: [f64; 2],
+    },
 }
 
 /// Admission of a semantic operation by the existing navigation authority.

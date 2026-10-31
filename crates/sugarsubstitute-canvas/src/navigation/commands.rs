@@ -77,6 +77,16 @@ impl Navigation {
             {
                 return Err(CanvasError::Invalid("Semantic pan exceeds viewport bounds"));
             }
+            NavigationCommand::Frame { center, span }
+                if center
+                    .iter()
+                    .any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
+                    || span.iter().any(|value| {
+                        !value.is_finite() || *value <= 0.0 || *value > MAXIMUM_FRAME_SPAN
+                    }) =>
+            {
+                return Err(CanvasError::Invalid("Semantic frame exceeds camera bounds"));
+            }
             _ => {}
         }
         let mut next = *self;
@@ -93,6 +103,12 @@ impl Navigation {
         };
         let previous_mode = next.mode;
         next.cancel();
+        if let NavigationCommand::Frame { center, span } = command {
+            next.frame(target, content, center, span)?;
+            let target = next.target_viewport();
+            *self = next;
+            return Ok(NavigationCommandOutcome::Applied { target });
+        }
         let mode = match command {
             NavigationCommand::Fit => {
                 target.fit(content)?;
@@ -130,10 +146,68 @@ impl Navigation {
                 ])?;
                 previous_mode
             }
+            NavigationCommand::Frame { .. } => {
+                return Err(CanvasError::Invalid("Semantic frame bypassed its immediate owner"));
+            }
         };
         next.transition_target(target, mode, None, None, now)?;
         let target = next.target_viewport();
         *self = next;
         Ok(NavigationCommandOutcome::Applied { target })
     }
+}
+
+/// The inclusive span ceiling: one content extent per physical pixel at the smallest scale.
+const MAXIMUM_FRAME_SPAN: f64 = 1e9;
+
+impl Navigation {
+    /// Place an image-relative camera with no transition, snapping exact Fit/one-to-one scales.
+    /// The caller has already cancelled gestures and motion and validated the parameters.
+    fn frame(
+        &mut self,
+        mut target: Viewport,
+        content: Extent,
+        center: [f64; 2],
+        span: [f64; 2],
+    ) -> Result<(), CanvasError> {
+        let image = [f64::from(content.width()), f64::from(content.height())];
+        let mut fitted = target;
+        fitted.fit(content)?;
+        let fit = fitted.zoom();
+        let requested = (1.0 / (image[0] * span[0])).min(1.0 / (image[1] * span[1]));
+        let bounded = self.wheel_scale(requested).max(requested.min(fit)).min(requested.max(fit));
+        let zoom = if same_scale(bounded, fit) {
+            fit
+        } else if same_scale(bounded, 1.0) {
+            1.0
+        } else {
+            bounded
+        };
+        self.mode = if zoom == fit {
+            ZoomMode::Fit
+        } else if zoom == 1.0 {
+            ZoomMode::OneToOne
+        } else {
+            ZoomMode::Custom
+        };
+        if self.mode == ZoomMode::Fit {
+            target = fitted;
+        } else {
+            let panel = [
+                f64::from(target.surface().width()) * 0.5,
+                f64::from(target.surface().height()) * 0.5,
+            ];
+            target.reframe(
+                [center[0] * image[0] - panel[0] / zoom, center[1] * image[1] - panel[1] / zoom],
+                zoom,
+            )?;
+        }
+        self.view = self.clamp(target)?;
+        Ok(())
+    }
+}
+
+/// Compare scales without making exact semantic modes depend on normalization rounding.
+fn same_scale(left: f64, right: f64) -> bool {
+    (left - right).abs() <= left.max(right).max(f64::EPSILON) * 1e-8
 }

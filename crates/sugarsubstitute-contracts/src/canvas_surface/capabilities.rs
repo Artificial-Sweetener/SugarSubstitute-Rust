@@ -13,7 +13,7 @@ use crate::panel::PanelSession;
 pub struct CanvasSurfaceCapabilities {
     /// Admitted selected-image encodings, bounded to three entries by the shared schema.
     pub image_formats: Vec<CanvasSurfaceImageFormat>,
-    /// Supported viewport intents, bounded to five entries by the shared schema.
+    /// Supported viewport intents, bounded to six entries by the shared schema.
     pub viewport_commands: Vec<CanvasSurfaceViewportCommand>,
     /// Whether the surface publishes observable viewport state.
     pub viewport_state: bool,
@@ -52,6 +52,9 @@ pub enum CanvasSurfaceViewportCommand {
     Pan,
     /// Move the comparison wipe divider; offered only with comparison.
     Wipe,
+    /// Restore image-relative cameras on selection and on the shown image, reporting each
+    /// viewport state's normalized center.
+    Inspect,
 }
 
 /// Preview encoding supported independently of selected-image presentation.
@@ -152,7 +155,7 @@ impl CanvasSurfaceCapabilities {
     /// Bound collection allocation before translating the public descriptor to schema data.
     fn to_wire(&self) -> Result<wire::CanvasSurfaceCapabilities, CanvasSurfaceMessageError> {
         if self.image_formats.len() > 3
-            || self.viewport_commands.len() > 5
+            || self.viewport_commands.len() > 6
             || self.preview_formats.len() > 2
         {
             return Err(CanvasSurfaceMessageError::Invalid);
@@ -202,6 +205,7 @@ impl CanvasSurfaceViewportCommand {
             Self::Zoom => "zoom",
             Self::Pan => "pan",
             Self::Wipe => "wipe",
+            Self::Inspect => "inspect",
         }
     }
 }

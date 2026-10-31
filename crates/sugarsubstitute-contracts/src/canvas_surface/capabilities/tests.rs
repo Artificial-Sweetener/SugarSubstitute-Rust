@@ -81,6 +81,8 @@ fn discovery_preserves_each_typed_capability_without_enabling_others() -> Result
             CanvasSurfaceViewportCommand::Native,
             CanvasSurfaceViewportCommand::Zoom,
             CanvasSurfaceViewportCommand::Pan,
+            CanvasSurfaceViewportCommand::Wipe,
+            CanvasSurfaceViewportCommand::Inspect,
         ],
         viewport_state: true,
         preview_formats: vec![CanvasSurfacePreviewFormat::Png, CanvasSurfacePreviewFormat::Jpeg],
@@ -99,7 +101,7 @@ fn discovery_preserves_each_typed_capability_without_enabling_others() -> Result
         json!({
             "schema": 1,
             "imageFormats": ["png", "jpeg", "webp"],
-            "viewportCommands": ["fit", "native", "zoom", "pan"],
+            "viewportCommands": ["fit", "native", "zoom", "pan", "wipe", "inspect"],
             "viewportState": true,
             "previewFormats": ["png", "jpeg"],
             "comparison": true,
@@ -169,7 +171,7 @@ fn discovery_rejects_nonempty_failure_descriptors_and_oversized_lists() -> Resul
             ..Default::default()
         },
         CanvasSurfaceCapabilities {
-            viewport_commands: vec![CanvasSurfaceViewportCommand::Fit; 6],
+            viewport_commands: vec![CanvasSurfaceViewportCommand::Fit; 7],
             ..Default::default()
         },
         CanvasSurfaceCapabilities {

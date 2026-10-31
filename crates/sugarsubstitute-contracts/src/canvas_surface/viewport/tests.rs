@@ -47,6 +47,7 @@ fn shared_viewport_request_vectors_match_the_web_boundary() -> Result<(), Box<dy
                 },
                 split: value["command"]["split"].as_f64().ok_or("Missing split")?,
             },
+            "inspect" => return Err("Inspection belongs to its own shared vectors".into()),
             _ => return Err("Unknown fixture command".into()),
         };
         assert_eq!(decoded.operation(), &CanvasSurfaceOperation::Viewport(expected));
@@ -152,5 +153,78 @@ fn viewport_snapshots_reject_nonfinite_scales_and_invalid_dimensions() -> Result
         };
         assert!(request.reply(status, "").is_ok());
     }
+    Ok(())
+}
+
+fn inspection_vectors() -> Result<Value, Box<dyn Error>> {
+    Ok(serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../third_party/sugarcubes-canvas/inspection_vectors.json"
+    )))?)
+}
+
+/// Read a vector inspection as its normalized `[center, span]` axis pairs.
+fn pairs(value: &Value) -> Result<([f64; 2], [f64; 2]), Box<dyn Error>> {
+    let axis = |name: &str, key: &str| value[name][key].as_f64().ok_or("Missing inspection axis");
+    Ok(([axis("center", "x")?, axis("center", "y")?], [axis("span", "x")?, axis("span", "y")?]))
+}
+
+#[test]
+fn shared_inspection_vectors_decode_selection_and_inspect_cameras() -> Result<(), Box<dyn Error>> {
+    let vectors = inspection_vectors()?;
+    for vector in vectors["validRequests"].as_array().ok_or("Missing valid requests")? {
+        let value = &vector["value"];
+        let decoded = request(value)?;
+        let (inspection, expected) = match decoded.operation() {
+            CanvasSurfaceOperation::Select { inspection: Some(inspection), comparison, .. } => {
+                assert_eq!(comparison.is_some(), value.get("comparison").is_some());
+                (inspection, pairs(&value["inspection"])?)
+            }
+            CanvasSurfaceOperation::Viewport(CanvasViewportCommand::Inspect(inspection)) => {
+                (inspection, pairs(&value["command"]["inspection"])?)
+            }
+            operation => {
+                return Err(format!("Unexpected inspection operation {operation:?}").into());
+            }
+        };
+        assert_eq!((inspection.center(), inspection.span()), expected, "{}", vector["name"]);
+    }
+    for vector in vectors["invalidRequests"].as_array().ok_or("Missing invalid requests")? {
+        let bytes = serde_json::to_vec(&vector["value"])?;
+        assert!(CanvasSurfaceMessage::decode(&bytes).is_err(), "{}", vector["name"]);
+    }
+    for vector in vectors["validReplies"].as_array().ok_or("Missing valid replies")? {
+        let decoded: wire::CanvasSurfaceViewportReply =
+            serde_json::from_value(vector["value"].clone())?;
+        assert!(decoded.valid(), "{}", vector["name"]);
+    }
+    for vector in vectors["invalidReplies"].as_array().ok_or("Missing invalid replies")? {
+        let decoded =
+            serde_json::from_value::<wire::CanvasSurfaceViewportReply>(vector["value"].clone());
+        assert!(!decoded.is_ok_and(|reply| reply.valid()), "{}", vector["name"]);
+    }
+    let discovery: wire::CanvasSurfaceCapabilitiesReply =
+        serde_json::from_value(vectors["capabilities"].clone())?;
+    assert!(discovery.valid());
+    Ok(())
+}
+
+#[test]
+fn viewport_centers_are_bounded_normalized_points_in_the_reply() -> Result<(), Box<dyn Error>> {
+    let vectors = vectors()?;
+    let request = request(&vectors["validRequests"][0])?;
+    let state = CanvasViewportState::new(CanvasViewportMode::Custom, 2.0, 1000, 800)?;
+    assert_eq!(state.center(), None);
+    for center in [[0.0, 1.0], [0.25, 0.75], [1.0, 0.0]] {
+        let centered = state.with_center(center[0], center[1])?;
+        assert_eq!(centered.center(), Some(center));
+        let reply: Value = serde_json::from_slice(&request.viewport_reply(&centered, "")?)?;
+        assert_eq!(reply["viewport"]["center"], json!({"x":center[0], "y":center[1]}));
+    }
+    for (x, y) in [(-0.01, 0.5), (0.5, 1.01), (f64::NAN, 0.5), (0.5, f64::INFINITY)] {
+        assert!(state.with_center(x, y).is_err());
+    }
+    let reply: Value = serde_json::from_slice(&request.viewport_reply(&state, "")?)?;
+    assert!(reply["viewport"].get("center").is_none());
     Ok(())
 }

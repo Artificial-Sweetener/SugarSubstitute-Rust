@@ -5,7 +5,7 @@
 use super::*;
 use crate::native_canvas::session::{CameraCommandResult, CameraSettlement};
 use sugarsubstitute_canvas::WipeOrientation;
-use sugarsubstitute_canvas::{NavigationCommand, ZoomMode};
+use sugarsubstitute_canvas::{NavigationCommand, Viewport, ZoomMode};
 use sugarsubstitute_contracts::canvas_surface::{
     CanvasViewportCommand, CanvasViewportMode, CanvasViewportState, CanvasWipeOrientation,
 };
@@ -56,6 +56,10 @@ impl NativeSurface {
             CanvasViewportCommand::Native => Some(NavigationCommand::OneToOne),
             CanvasViewportCommand::Zoom { factor } => Some(NavigationCommand::Zoom(factor)),
             CanvasViewportCommand::Pan { x, y } => Some(NavigationCommand::Pan([x, y])),
+            CanvasViewportCommand::Inspect(inspection) => Some(NavigationCommand::Frame {
+                center: inspection.center(),
+                span: inspection.span(),
+            }),
         };
         let admitted = match navigation {
             Some(command) => session.navigate(command)?,
@@ -98,11 +102,15 @@ impl NativeSurface {
                     ZoomMode::Custom => CanvasViewportMode::Custom,
                 };
                 Some(with_comparison(
-                    CanvasViewportState::new(
-                        mode,
-                        camera.viewport.zoom(),
-                        camera.extent.width(),
-                        camera.extent.height(),
+                    with_center(
+                        CanvasViewportState::new(
+                            mode,
+                            camera.viewport.zoom(),
+                            camera.extent.width(),
+                            camera.extent.height(),
+                        )?,
+                        camera.viewport,
+                        camera.extent,
                     )?,
                     session,
                 )?)
@@ -127,6 +135,22 @@ impl NativeSurface {
             ),
         }
     }
+}
+
+/// Report the image point at the accepted viewport's center, normalized to the image extent,
+/// so the web inspection owner can record this camera and restore it later.
+/// iewport is the native-accepted camera and image the presented image's extent.
+pub(in crate::startup::canvas::surface) fn with_center(
+    state: CanvasViewportState,
+    viewport: Viewport,
+    image: Extent,
+) -> Result<CanvasViewportState, Box<dyn Error>> {
+    let surface = viewport.surface();
+    let point = viewport
+        .document_at([f64::from(surface.width()) * 0.5, f64::from(surface.height()) * 0.5])?;
+    let normalized = |value: f64, extent: u32| (value / f64::from(extent)).clamp(0.0, 1.0);
+    Ok(state
+        .with_center(normalized(point[0], image.width()), normalized(point[1], image.height()))?)
 }
 
 /// Report a loaded comparison original's extent beside the primary image's state.

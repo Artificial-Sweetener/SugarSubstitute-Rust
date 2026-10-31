@@ -193,6 +193,8 @@ pub(crate) struct Session {
     pending_first_image: Option<(u64, Duration)>,
     /// Intent-through-native-queue acceptance, including import/load but excluding scanout.
     first_image_queue_latency: Option<Duration>,
+    /// Camera the first frame of this source intent presents instead of Fit.
+    initial_frame: Option<(u64, sugarsubstitute_canvas::NavigationCommand)>,
     selection: u64,
     source_sequence: u64,
     #[cfg(feature = "native-composition")]
@@ -291,6 +293,7 @@ impl Session {
             pending_open: None,
             pending_first_image: None,
             first_image_queue_latency: None,
+            initial_frame: None,
             selection: 1,
             source_sequence: 1,
             #[cfg(feature = "native-composition")]

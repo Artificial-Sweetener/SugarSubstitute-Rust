@@ -32,6 +32,7 @@ impl NativeSurface {
                     CanvasSurfaceViewportCommand::Zoom,
                     CanvasSurfaceViewportCommand::Pan,
                     CanvasSurfaceViewportCommand::Wipe,
+                    CanvasSurfaceViewportCommand::Inspect,
                 ]
             } else {
                 Vec::new()

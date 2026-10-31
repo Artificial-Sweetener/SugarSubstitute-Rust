@@ -195,7 +195,7 @@
       "capabilities": {
         "schema": 1,
         "imageFormats": ["png"],
-        "viewportCommands": ["fit", "fit", "fit", "fit", "fit", "fit"],
+        "viewportCommands": ["fit", "fit", "fit", "fit", "fit", "fit", "fit"],
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,

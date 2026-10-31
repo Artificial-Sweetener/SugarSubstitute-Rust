@@ -25,6 +25,7 @@ mod backend;
 mod cancellation;
 mod comparison;
 mod input;
+mod inspection;
 mod jpeg;
 mod overview;
 mod preview;

@@ -56,10 +56,13 @@ fn selected_output_reply_retains_original_attachment_and_revision() -> Result<()
     assert_eq!(request.request_id(), 1);
     assert_eq!(request.revision(), 1);
     assert_eq!(request.address().view_id(), "view:one");
-    let CanvasSurfaceOperation::Select { item_id, file, comparison } = request.operation() else {
+    let CanvasSurfaceOperation::Select { item_id, file, comparison, inspection } =
+        request.operation()
+    else {
         return Err("Expected selected output".into());
     };
     assert!(comparison.is_none());
+    assert!(inspection.is_none());
     assert_eq!(item_id, "result:one");
     assert_eq!(file.filename(), "résumé🌈.png");
     let reply: Value =

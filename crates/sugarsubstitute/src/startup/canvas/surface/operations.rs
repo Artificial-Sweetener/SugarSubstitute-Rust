@@ -4,6 +4,7 @@
 use super::*;
 #[cfg(test)]
 use crate::native_canvas::session::SelectedOriginals;
+use sugarsubstitute_canvas::NavigationCommand;
 use sugarsubstitute_contracts::canvas_surface::CanvasFileReference;
 
 impl NativeSurface {
@@ -103,7 +104,7 @@ impl NativeSurface {
                     self.reply(identity, &request, CanvasSurfaceReplyStatus::Applied, claim)
                 }
             }
-            CanvasSurfaceOperation::Select { file, comparison, .. } => {
+            CanvasSurfaceOperation::Select { file, comparison, inspection, .. } => {
                 let compared = comparison.as_ref().map(|comparison| &comparison.file);
                 let Some(target) = admitted_output(&file) else {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
@@ -157,6 +158,10 @@ impl NativeSurface {
                         claim,
                     );
                 }
+                session.frame_selection(inspection.map(|inspection| NavigationCommand::Frame {
+                    center: inspection.center(),
+                    span: inspection.span(),
+                }));
                 self.await_selection(identity, request, claim, false, session)
             }
             CanvasSurfaceOperation::Commit => {

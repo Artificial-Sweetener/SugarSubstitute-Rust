@@ -38,7 +38,7 @@ fn discovery(
     assert_eq!(
         value["capabilities"]["viewportCommands"],
         if expected == "available" {
-            json!(["fit", "native", "zoom", "pan", "wipe"])
+            json!(["fit", "native", "zoom", "pan", "wipe", "inspect"])
         } else {
             json!([])
         }

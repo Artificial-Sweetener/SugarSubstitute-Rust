@@ -36,6 +36,20 @@ pub enum CanvasViewportCommand {
         /// Leading viewport fraction, from 0 through 1, that reveals the comparison image.
         split: f64,
     },
+    /// Show the current image at an image-relative camera immediately, without motion.
+    Inspect(CanvasViewportInspection),
+}
+
+/// A schema-validated image-relative camera that a native owner can restore on any image.
+///
+/// center is the image point shown at the viewport center, normalized from 0 through 1 on
+/// each axis. span is the normalized image distance per physical display pixel on each axis,
+/// greater than 0 and at most 1e9, so it is independent of the viewport extent. Receivers
+/// contain the span across differing aspect ratios and apply their own scale and pan bounds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CanvasViewportInspection {
+    center: [f64; 2],
+    span: [f64; 2],
 }
 
 /// Axis of a comparison wipe divider.
@@ -66,6 +80,7 @@ pub struct CanvasViewportState {
     width: u32,
     height: u32,
     secondary: Option<(u32, u32)>,
+    center: Option<[f64; 2]>,
 }
 
 impl CanvasViewportCommand {
@@ -85,7 +100,27 @@ impl CanvasViewportCommand {
                 },
                 split,
             },
+            wire::CanvasSurfaceViewportCommand::Inspect { inspection } => {
+                Self::Inspect(CanvasViewportInspection::from_wire(inspection))
+            }
         }
+    }
+}
+
+impl CanvasViewportInspection {
+    /// Adopt an inspection only after its enclosing generated message passed validation.
+    pub(super) fn from_wire(value: wire::CanvasSurfaceInspection) -> Self {
+        Self { center: [value.center.x, value.center.y], span: [value.span.x, value.span.y] }
+    }
+
+    /// Return the normalized image point at the viewport center, each axis from 0 through 1.
+    pub const fn center(&self) -> [f64; 2] {
+        self.center
+    }
+
+    /// Return the normalized image distance per physical display pixel on each axis.
+    pub const fn span(&self) -> [f64; 2] {
+        self.span
     }
 }
 
@@ -102,7 +137,7 @@ impl CanvasViewportState {
         width: u32,
         height: u32,
     ) -> Result<Self, CanvasSurfaceMessageError> {
-        let value = Self { mode, physical_scale, width, height, secondary: None };
+        let value = Self { mode, physical_scale, width, height, secondary: None, center: None };
         if !value.to_wire().valid() {
             return Err(CanvasSurfaceMessageError::Invalid);
         }
@@ -144,6 +179,23 @@ impl CanvasViewportState {
         self.secondary
     }
 
+    /// Report the image point at the viewport center, normalized from 0 through 1 per axis.
+    /// Inspection-capable owners report it so the web owner can record the camera.
+    /// # Errors
+    /// Rejects nonfinite or out-of-range coordinates.
+    pub fn with_center(self, x: f64, y: f64) -> Result<Self, CanvasSurfaceMessageError> {
+        let value = Self { center: Some([x, y]), ..self };
+        if !value.to_wire().valid() {
+            return Err(CanvasSurfaceMessageError::Invalid);
+        }
+        Ok(value)
+    }
+
+    /// Return the normalized image point at the viewport center, if reported.
+    pub const fn center(&self) -> Option<[f64; 2]> {
+        self.center
+    }
+
     /// Translate validated owned state to the exact shared response shape.
     pub(super) fn to_wire(self) -> wire::CanvasSurfaceViewportState {
         wire::CanvasSurfaceViewportState {
@@ -164,6 +216,7 @@ impl CanvasViewportState {
                     height: u64::from(height),
                 }
             }),
+            center: self.center.map(|[x, y]| wire::CanvasSurfaceViewportCenter { x, y }),
         }
     }
 }

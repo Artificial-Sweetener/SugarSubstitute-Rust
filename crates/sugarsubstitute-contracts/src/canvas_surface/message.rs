@@ -5,7 +5,8 @@
 use super::{
     CanvasFileReference, CanvasSurfaceAddress, CanvasSurfaceDiscoveryRequest,
     CanvasSurfaceGeometry, CanvasSurfacePresentationRequest, CanvasSurfacePreviewBegin,
-    CanvasSurfacePreviewChunk, CanvasSurfacePreviewLease, CanvasViewportCommand, wire,
+    CanvasSurfacePreviewChunk, CanvasSurfacePreviewLease, CanvasViewportCommand,
+    CanvasViewportInspection, wire,
 };
 use crate::panel::PanelSession;
 use serde::Deserialize;
@@ -57,6 +58,8 @@ pub enum CanvasSurfaceOperation {
         file: CanvasFileReference,
         /// An optional second result shown through a wipe under the same revision.
         comparison: Option<CanvasSurfaceComparison>,
+        /// An optional camera that the selection's first frame presents instead of Fit.
+        inspection: Option<CanvasViewportInspection>,
     },
     /// Present the page-laid-out visible cells of an overview grid as one native composition.
     Overview(Vec<CanvasSurfaceOverviewCell>),
@@ -190,12 +193,18 @@ impl CanvasSurfaceMessage {
                             .ok_or(CanvasSurfaceMessageError::Invalid)
                     })
                     .transpose()?;
+                let inspection = value.inspection.map(CanvasViewportInspection::from_wire);
                 CanvasSurfaceRequest::new(
                     value.session,
                     value.request_id,
                     value.address,
                     value.revision,
-                    CanvasSurfaceOperation::Select { item_id: value.item_id, file, comparison },
+                    CanvasSurfaceOperation::Select {
+                        item_id: value.item_id,
+                        file,
+                        comparison,
+                        inspection,
+                    },
                 )?
             }
             "surface.overview" => {

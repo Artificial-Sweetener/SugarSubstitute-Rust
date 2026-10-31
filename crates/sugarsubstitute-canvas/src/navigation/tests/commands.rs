@@ -179,3 +179,87 @@ fn semantic_cancellation_samples_visible_motion_and_preserves_newer_targets_and_
     assert!(nav.captured());
     Ok(())
 }
+
+/// Frame the 2000x1000 fixture content in its 1000x500 viewport from normalized parameters.
+fn frame(center: [f64; 2], zoom: [f64; 2]) -> NavigationCommand {
+    NavigationCommand::Frame { center, span: [1.0 / (2000.0 * zoom[0]), 1.0 / (1000.0 * zoom[1])] }
+}
+
+/// Compare normalized-camera results without depending on reciprocal rounding.
+fn close(actual: [f64; 2], expected: [f64; 2]) -> bool {
+    (0..2).all(|axis| (actual[axis] - expected[axis]).abs() <= 1e-9 * expected[axis].abs().max(1.0))
+}
+
+#[test]
+fn framing_places_a_normalized_camera_immediately_without_motion() -> TestResult {
+    let mut nav = navigation()?;
+    target(nav.command(NavigationCommand::OneToOne, time(0))?)?;
+    assert!(nav.interacting());
+    let framed = target(nav.command(frame([0.25, 0.75], [2.0, 2.0]), time(10))?)?;
+    assert_eq!(nav.viewport(), framed);
+    assert!(!nav.interacting());
+    assert_eq!(nav.next_deadline(time(10)), None);
+    assert_eq!(nav.zoom_mode(), ZoomMode::Custom);
+    assert!(close([framed.zoom(); 2], [2.0; 2]));
+    assert!(close(framed.document_at([500.0, 250.0])?, [500.0, 750.0]));
+    nav.advance(time(1000))?;
+    assert_eq!(nav.viewport(), framed);
+    let contained = target(nav.command(frame([0.5, 0.5], [3.0, 5.0]), time(1000))?)?;
+    assert!(close([contained.zoom(); 2], [3.0; 2]));
+    assert!(close(contained.document_at([500.0, 250.0])?, [1000.0, 500.0]));
+    Ok(())
+}
+
+#[test]
+fn framing_snaps_exact_semantic_scales_and_keeps_navigation_bounds() -> TestResult {
+    let mut nav = navigation()?;
+    target(nav.command(frame([0.1, 0.1], [2.0, 2.0]), time(0))?)?;
+    let fit = target(nav.command(frame([0.9, 0.2], [0.5 * (1.0 + 1e-12), 0.5]), time(0))?)?;
+    assert_eq!(nav.zoom_mode(), ZoomMode::Fit);
+    assert_eq!((fit.zoom(), fit.origin()), (0.5, [0.0; 2]));
+    let native = target(nav.command(frame([0.5, 0.5], [1.0 - 1e-12, 1.0]), time(0))?)?;
+    assert_eq!(nav.zoom_mode(), ZoomMode::OneToOne);
+    assert_eq!((native.zoom(), native.origin()), (1.0, [500.0, 250.0]));
+    let closest = target(nav.command(frame([0.5, 0.5], [1e6, 1e6]), time(0))?)?;
+    assert_eq!(closest.zoom(), 10.0);
+    let farthest = target(nav.command(frame([0.5, 0.5], [1e-6, 1e-6]), time(0))?)?;
+    assert_eq!(farthest.zoom(), 0.064);
+    let corner = target(nav.command(frame([0.0, 0.0], [2.0, 2.0]), time(0))?)?;
+    assert!(close(corner.device_at([0.0, 0.0])?, [200.0, 100.0]));
+    let mut small = Navigation::new(Viewport::new(Extent::new(1000, 500)?)?);
+    small.set_content(Some(Extent::new(20, 10)?), time(0))?;
+    let fitted = small.viewport();
+    let framed = target(
+        small.command(NavigationCommand::Frame { center: [0.5; 2], span: [1e-9; 2] }, time(0))?,
+    )?;
+    assert_eq!(framed, fitted);
+    assert_eq!(small.zoom_mode(), ZoomMode::Fit);
+    Ok(())
+}
+
+#[test]
+fn framing_rejects_out_of_range_parameters_atomically_and_respects_ownership() -> TestResult {
+    let mut nav = navigation()?;
+    target(nav.command(NavigationCommand::OneToOne, time(0))?)?;
+    let before = (nav.viewport(), nav.target_viewport(), nav.zoom_mode());
+    for (center, span) in [
+        ([1.000_001, 0.5], [0.001; 2]),
+        ([0.5, -0.1], [0.001; 2]),
+        ([f64::NAN, 0.5], [0.001; 2]),
+        ([0.5; 2], [0.0, 0.001]),
+        ([0.5; 2], [0.001, -1.0]),
+        ([0.5; 2], [1.000_000_001e9, 0.001]),
+        ([0.5; 2], [f64::INFINITY, 0.001]),
+    ] {
+        assert!(nav.command(NavigationCommand::Frame { center, span }, time(10)).is_err());
+        assert_eq!((nav.viewport(), nav.target_viewport(), nav.zoom_mode()), before);
+    }
+    nav.set_policy(true, false);
+    assert_eq!(nav.command(frame([0.5; 2], [2.0; 2]), time(10))?, NavigationCommandOutcome::Denied);
+    let mut empty = Navigation::new(Viewport::new(Extent::new(1000, 500)?)?);
+    assert_eq!(
+        empty.command(frame([0.5; 2], [2.0; 2]), time(0))?,
+        NavigationCommandOutcome::NoContent
+    );
+    Ok(())
+}

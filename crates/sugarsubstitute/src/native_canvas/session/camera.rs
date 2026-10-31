@@ -97,6 +97,12 @@ impl Session {
         }
     }
 
+    /// Present the latest offered source's first frame at rame instead of Fit, or at Fit.
+    /// The camera applies when that exact source intent loads; a newer offer replaces it.
+    pub(crate) fn frame_selection(&mut self, frame: Option<NavigationCommand>) {
+        self.initial_frame = frame.map(|frame| (self.selection, frame));
+    }
+
     /// Qualify the current navigation destination for a read without moving or cancelling it.
     /// The application waits for this intent's native evidence just as for a camera command.
     pub(crate) fn camera_intent(&self) -> CameraCommandResult {

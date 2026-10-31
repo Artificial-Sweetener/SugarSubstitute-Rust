@@ -39,7 +39,8 @@ pub use preview::{
     SURFACE_PREVIEW_LEASE_MILLISECONDS,
 };
 pub use viewport::{
-    CanvasViewportCommand, CanvasViewportMode, CanvasViewportState, CanvasWipeOrientation,
+    CanvasViewportCommand, CanvasViewportInspection, CanvasViewportMode, CanvasViewportState,
+    CanvasWipeOrientation,
 };
 
 use std::{error::Error, fmt};

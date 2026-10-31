@@ -101,11 +101,15 @@ impl NativeSurface {
         if preview && mode != CanvasViewportMode::Fit {
             return Err("Native-accepted preview camera is not in Fit mode".into());
         }
-        let state = CanvasViewportState::new(
-            mode,
-            camera.viewport.zoom(),
-            camera.extent.width(),
-            camera.extent.height(),
+        let state = super::super::viewport::with_center(
+            CanvasViewportState::new(
+                mode,
+                camera.viewport.zoom(),
+                camera.extent.width(),
+                camera.extent.height(),
+            )?,
+            camera.viewport,
+            camera.extent,
         )?;
         if preview {
             return Ok(Some(state));
