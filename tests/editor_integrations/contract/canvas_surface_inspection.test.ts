@@ -26,6 +26,7 @@ import {
 import { negotiatesCanvasSurfaceInspection } from '../../../integrations/shared/CanvasSurfaceViewport.js';
 import type { CanvasMessage } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 import type {
+  CanvasSurfaceCameraChange,
   CanvasSurfaceCapabilities,
   CanvasSurfaceCommand,
   CanvasSurfaceInspection,
@@ -48,6 +49,7 @@ const vectors: {
   validReplies: Vector[];
   invalidReplies: Vector[];
   capabilities: Record<string, unknown>;
+  cameraChanges: { valid: Vector[]; invalid: Vector[] };
 } = JSON.parse(
   readFileSync(
     new URL('../support/canvas_surface_inspection_vectors.json', import.meta.url),
@@ -252,5 +254,51 @@ test('host dispatch receives an immutable inspection copy and refuses it when un
     } finally {
       server.dispose();
     }
+  }
+});
+
+test.each(vectors.cameraChanges.valid)('admits camera vector: $name', ({ value }) => {
+  expect(isCanvasMessage(value)).toBe(true);
+});
+
+test.each(vectors.cameraChanges.invalid)('refuses malformed camera vector: $name', ({ value }) => {
+  expect(isCanvasMessage(value)).toBe(false);
+});
+
+/** Address a settled camera notification to the fixture session at one shared sequence. */
+function cameraChanged(sequence: number) {
+  const [vector] = vectors.cameraChanges.valid;
+  if (!vector) throw new Error('Missing camera vector.');
+  const value: unknown = JSON.parse(JSON.stringify(vector.value));
+  if (!isCanvasMessage(value) || value.type !== 'surface.camera.changed')
+    throw new Error('Invalid camera vector.');
+  return { ...value, session, change: { ...value.change, sequence } };
+}
+
+test('delivers settled cameras only to inspection hosts, frozen and sequence-fenced', async () => {
+  const plain = await fixture(selectedPngCapabilities);
+  expect(negotiatedSurface(plain.client).camera).toBeUndefined();
+  plain.client.dispose();
+  const f = await fixture(inspecting);
+  try {
+    const camera = negotiatedSurface(f.client).camera;
+    if (!camera) throw new Error('Missing camera observation.');
+    expect(f.client.receive(cameraChanged(2))).toBe(false);
+    const received: CanvasSurfaceCameraChange[] = [];
+    const stop = camera.listen((change) => received.push(change));
+    const message = cameraChanged(3);
+    expect(f.client.receive(message)).toBe(true);
+    expect(f.client.receive(cameraChanged(3))).toBe(false);
+    expect(f.client.receive(cameraChanged(1))).toBe(false);
+    Object.assign(message.change.viewport, { physicalScale: 9 });
+    expect(received).toHaveLength(1);
+    expect(received[0]?.viewport.physicalScale).toBe(2);
+    expect(Object.isFrozen(received[0]?.viewport)).toBe(true);
+    expect(Object.isFrozen(received[0]?.address)).toBe(true);
+    stop();
+    expect(f.client.receive(cameraChanged(4))).toBe(false);
+    expect(received).toHaveLength(1);
+  } finally {
+    f.client.dispose();
   }
 });

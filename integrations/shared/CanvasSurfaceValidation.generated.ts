@@ -24,6 +24,7 @@ import {
   isCanvasSurfaceInspection,
   isCanvasSurfaceViewportRequest,
   isCanvasSurfaceViewportReply,
+  isCanvasSurfaceCameraChanged,
 } from './CanvasSurfaceViewportValidation.generated.js';
 import {
   isCanvasSurfacePreviewBeginRequest,
@@ -417,7 +418,8 @@ export function isCanvasSurfaceMessage(value: unknown): value is Contract.Canvas
     isCanvasSurfaceReleaseRequest(value) ||
     isCanvasSurfaceReply(value) ||
     isCanvasSurfaceViewportRequest(value) ||
-    isCanvasSurfaceViewportReply(value)
+    isCanvasSurfaceViewportReply(value) ||
+    isCanvasSurfaceCameraChanged(value)
   );
 }
 export {
@@ -453,6 +455,8 @@ export {
   isCanvasSurfaceInspectionSpan,
   isCanvasSurfaceInspection,
   isCanvasSurfaceViewportState,
+  isCanvasSurfaceCameraChange,
+  isCanvasSurfaceCameraChanged,
   isCanvasSurfaceViewportRequest,
   isCanvasSurfaceViewportReply,
 } from './CanvasSurfaceViewportValidation.generated.js';

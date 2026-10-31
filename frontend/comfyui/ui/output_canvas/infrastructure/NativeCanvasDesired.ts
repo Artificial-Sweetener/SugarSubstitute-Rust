@@ -16,9 +16,11 @@
 /** Derive the native presentation requested by the view owners, independent of host progress. */
 
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
+import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import type { CanvasComparison } from '../domain/CanvasViewState.js';
 import type {
+  CanvasSurfaceCameraChange,
   CanvasSurfaceInspection,
   CanvasSurfaceOverviewCell,
   CanvasSurfaceViewportCommand,
@@ -108,6 +110,16 @@ export function nativeCanvasNavigable(
     !preview?.displayed &&
     (!!desired?.item ||
       (!!desired?.previewable && !!preview?.observing && selectionRevision !== null))
+  );
+}
+
+/** Report whether a host observation names exactly this attachment. */
+export function nativeCanvasAddressed(
+  attachment: CanvasAttachmentAddress,
+  observed: CanvasSurfaceCameraChange['address'],
+): boolean {
+  return (['sessionId', 'viewId', 'windowId', 'attachmentId', 'generation'] as const).every(
+    (key) => observed[key] === attachment[key],
   );
 }
 

@@ -33,6 +33,7 @@ import type {
   CanvasSurfacePreviewEndRequest,
   CanvasSurfacePreviewWithdrawRequest,
   CanvasSurfacePresentationChange,
+  CanvasSurfaceCameraChange,
 } from './CanvasSurfaceProtocol.generated.js';
 
 export type {
@@ -42,6 +43,7 @@ export type {
   CanvasSurfaceViewportCommand,
   CanvasSurfaceViewportState,
   CanvasSurfaceInspection,
+  CanvasSurfaceCameraChange,
   CanvasSurfacePreviewIdentity,
   CanvasSurfacePresentationChange,
   CanvasSurfacePresentationDisplay,
@@ -68,6 +70,11 @@ export type CanvasSurfaceResult =
   | Pick<CanvasSurfaceReply, 'status' | 'message'>
   | Pick<CanvasSurfaceViewportReply, 'status' | 'message' | 'viewport'>;
 
+/** Deliver settled host-routed gesture cameras to listeners until each one unsubscribes. */
+export interface CanvasSurfaceCameraObservation {
+  listen(listener: (change: CanvasSurfaceCameraChange) => void): () => void;
+}
+
 /** Negotiate and operate an optional presentation surface using the existing canvas session. */
 export interface CanvasSurfaceHost {
   /** Describe implemented presentation operations; this declaration grants no native authority. */
@@ -79,6 +86,14 @@ export interface CanvasSurfaceHost {
    * Older hosts omit this capability. Notifications grant no native authority.
    */
   readonly presentation?: CanvasChangeObservation<CanvasSurfacePresentationChange>;
+  /**
+   * Observe the settled camera after a gesture the host routed to its own navigation tool.
+   * Requires the declared inspect command and arrives only while presentation is observed:
+   * once per settled or cancelled gesture, never per move, and never for previews or overview
+   * grids. Its sequence shares the presentation sequence; selectionRevision names the shown
+   * final selection. Notifications grant no native authority.
+   */
+  readonly camera?: CanvasSurfaceCameraObservation;
   /**
    * Prepare a hidden candidate, select its output, commit it, update geometry or release it.
    * A successful selection on a committed surface, or a successful commit, acknowledges that

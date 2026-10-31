@@ -24,6 +24,7 @@ import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/Canv
 import type { CanvasCatalogSnapshot } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasCatalog.js';
 import type { CanvasCommand } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
 import type {
+  CanvasSurfaceCameraChange,
   CanvasSurfaceCapabilities,
   CanvasSurfaceCommand,
   CanvasSurfaceInspection,
@@ -103,9 +104,17 @@ function workspace() {
         const root = document.createElement('section');
         document.body.append(root);
         const native = nativePreviewHost(false);
+        const cameras = new Set<(change: CanvasSurfaceCameraChange) => void>();
+        let cameraSequence = 1000;
         const host = {
           ...native.host,
           capabilities: { ...native.host.capabilities, ...capabilities },
+          camera: {
+            listen: (listener: (change: CanvasSurfaceCameraChange) => void) => {
+              cameras.add(listener);
+              return () => cameras.delete(listener);
+            },
+          },
         };
         const errors: unknown[] = [];
         let camera = fit();
@@ -141,6 +150,7 @@ function workspace() {
         retirements.push(retire);
         return {
           native,
+          address,
           surface,
           errors,
           retire,
@@ -165,6 +175,21 @@ function workspace() {
               surface.port.createRequest(command, surface.port.read().revision),
             );
             return (await outcome).status;
+          },
+          /** Settle a host-routed gesture at the given viewport, by default for the shown selection. */
+          gesture(
+            viewport: CanvasSurfaceViewportState,
+            change: Partial<CanvasSurfaceCameraChange> = {},
+          ): void {
+            const selectionRevision = this.selections().at(-1)?.revision ?? 1;
+            for (const listener of [...cameras])
+              listener({
+                address,
+                sequence: ++cameraSequence,
+                selectionRevision,
+                viewport,
+                ...change,
+              });
           },
           selections(): Extract<CanvasSurfaceCommand, { type: 'surface.select' }>[] {
             return native.calls.flatMap((call) => (call.type === 'surface.select' ? [call] : []));
@@ -298,4 +323,52 @@ test('a host without the inspect command keeps selections at Fit and withholds l
   expect(f.surface.port.capabilities.commands).not.toContain('link');
   expect(f.selections().every((selection) => !('inspection' in selection))).toBe(true);
   expect(f.errors).toEqual([]);
+});
+
+test('a settled host gesture refreshes the zoom display and is restored like a command', async () => {
+  const workflow = workspace().workflow('gesture');
+  const f = workflow.mount();
+  await f.drain();
+  expect(f.surface.port.read().zoom?.mode).toBe('fit');
+  const settled = zoomed(0.3, 0.6, 3);
+  f.gesture(settled);
+  expect(f.surface.port.read().zoom).toMatchObject({ mode: 'custom', physicalScale: 3 });
+  await apply(f, slot(workflow.catalog, 1));
+  expect(f.selections().at(-1)?.inspection).toEqual(restored(settled));
+  expect(f.errors).toEqual([]);
+});
+
+test('stale settled gestures are ignored', async () => {
+  const workflow = workspace().workflow('stale');
+  const f = workflow.mount();
+  await f.drain();
+  const revision = f.selections().at(-1)?.revision ?? 0;
+  f.gesture(zoomed(0.3, 0.6, 3), { selectionRevision: revision + 100 });
+  f.gesture(zoomed(0.3, 0.6, 3), { address: { ...f.address, attachmentId: 'attachment:other' } });
+  expect(f.surface.port.read().zoom?.mode).toBe('fit');
+  await apply(f, slot(workflow.catalog, 1));
+  expect(f.selections().at(-1)).not.toHaveProperty('inspection');
+  expect(f.errors).toEqual([]);
+});
+
+test('gesture-only cameras are restored per workflow when its tab returns', async () => {
+  const shared = workspace();
+  const first = shared.workflow('first-gesture');
+  const second = shared.workflow('second-gesture');
+  const a = first.mount();
+  await a.drain();
+  a.gesture(zoomed(0.2, 0.8, 3));
+  await a.retire();
+  const b = second.mount();
+  await b.drain();
+  b.gesture(zoomed(0.7, 0.4, 5));
+  await b.retire();
+  const returned = first.mount();
+  await returned.drain();
+  expect(returned.selections().at(-1)?.inspection).toEqual(restored(zoomed(0.2, 0.8, 3)));
+  await returned.retire();
+  const back = second.mount();
+  await back.drain();
+  expect(back.selections().at(-1)?.inspection).toEqual(restored(zoomed(0.7, 0.4, 5)));
+  expect([...a.errors, ...b.errors, ...returned.errors, ...back.errors]).toEqual([]);
 });

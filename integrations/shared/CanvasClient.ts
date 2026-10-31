@@ -33,7 +33,10 @@ import { CanvasSourceConnection } from './CanvasSourceConnection.js';
 import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
 import type { CanvasSurfaceCommand, CanvasSurfaceHost } from '../contracts/CanvasSurface.js';
 import { requestCanvasSurface } from './CanvasSurfaceClient.js';
-import { snapshotCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
+import {
+  snapshotCanvasSurfaceCameraChange,
+  snapshotCanvasSurfaceViewport,
+} from './CanvasSurfaceViewport.js';
 import { canvasSurfacePresentation } from './CanvasSurfacePresentation.js';
 import {
   canvasPreviewMessageFits,
@@ -41,7 +44,10 @@ import {
   snapshotCanvasSurfacePresentation,
   validCanvasSurfacePresentation,
 } from './CanvasSurfacePreview.js';
-import type { CanvasSurfacePresentationChange } from '../contracts/CanvasSurface.js';
+import type {
+  CanvasSurfaceCameraChange,
+  CanvasSurfacePresentationChange,
+} from '../contracts/CanvasSurface.js';
 import type { CanvasRemoteChanges } from './CanvasRemoteChanges.js';
 import { canvasSurfaceOverviewMessageFits } from './CanvasSurfaceOverview.js';
 import {
@@ -90,6 +96,7 @@ export class CanvasClient implements CanvasLayerHost {
   readonly #pending = new Map<number, Pending>();
   readonly #sourceListeners = new Set<(change: CanvasSourceChange) => void>();
   readonly #presentationListeners = new Set<(change: CanvasSurfacePresentationChange) => void>();
+  readonly #cameraListeners = new Set<(change: CanvasSurfaceCameraChange) => void>();
   #presentation: CanvasRemoteChanges<CanvasSurfacePresentationChange> | null = null;
   #presentationSequence = 0;
   #next = 0;
@@ -174,6 +181,14 @@ export class CanvasClient implements CanvasLayerHost {
           current: () => !this.#disposed && revision === this.#contextRevision,
           owns: (host) => this.#surface === host,
           presentation,
+          camera: {
+            listen: (listener) => {
+              this.#cameraListeners.add(listener);
+              return () => {
+                this.#cameraListeners.delete(listener);
+              };
+            },
+          },
           observesPresentation: () => presentation.observing,
           execute: (command, cancellation) =>
             requestCanvasSurface(command, cancellation, (admitted, scope) =>
@@ -228,6 +243,15 @@ export class CanvasClient implements CanvasLayerHost {
       for (const listener of [...this.#presentationListeners])
         if (this.#presentationListeners.has(listener)) listener(change);
       return this.#presentationListeners.size > 0;
+    }
+    if (value.type === 'surface.camera.changed') {
+      // Camera notifications share the presentation sequence, so either kind fences the other.
+      if (value.change.sequence <= this.#presentationSequence) return false;
+      this.#presentationSequence = value.change.sequence;
+      const change = snapshotCanvasSurfaceCameraChange(value.change);
+      for (const listener of [...this.#cameraListeners])
+        if (this.#cameraListeners.has(listener)) listener(change);
+      return this.#cameraListeners.size > 0;
     }
     const pending = this.#pending.get(value.requestId);
     const viewportFailure =

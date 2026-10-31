@@ -58,6 +58,10 @@ export function nativeCanvasNavigable(desired, preview, selectionRevision) {
         (!!desired?.item ||
             (!!desired?.previewable && !!preview?.observing && selectionRevision !== null)));
 }
+/** Report whether a host observation names exactly this attachment. */
+export function nativeCanvasAddressed(attachment, observed) {
+    return ['sessionId', 'viewId', 'windowId', 'attachmentId', 'generation'].every((key) => observed[key] === attachment[key]);
+}
 /** Identify the painted overview layout independently of the identity that entered overview. */
 export function nativeCanvasOverviewKey(overview) {
     return overview && JSON.stringify(overview);
