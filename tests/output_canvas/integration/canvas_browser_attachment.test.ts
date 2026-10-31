@@ -469,11 +469,22 @@ describe('composed browser canvas attachment', () => {
         expect(f.views.accepts(candidate)).toBe(false);
         selected({ status: outcome, message: outcome === 'error' ? 'Candidate failed.' : '' });
         if (outcome === 'error') {
-          await expect(preparation).rejects.toThrow('Candidate failed.');
-          f.views.cancelAttachment(candidate);
-          surface.dispose();
-          expect(f.views.accepts(f.address)).toBe(true);
-          expect(calls.at(-1)).toMatchObject({ type: 'surface.release', address: candidate });
+          // A result the host cannot present leaves the prepared surface usable: the candidate
+          // becomes ready and shows the load error rather than being released.
+          await preparation;
+          expect(calls.some((call) => call.type === 'surface.release')).toBe(false);
+          expect(surface.viewport.classList.contains('sc-output-native')).toBe(false);
+          f.views.commitAttachment(candidate);
+          f.root.style.visibility = '';
+          surface.refresh();
+          for (let index = 0; index < 24; index++) await Promise.resolve();
+          selected({ status: 'error', message: 'Candidate failed.' });
+          for (let index = 0; index < 24; index++) await Promise.resolve();
+          expect(surface.port.read().resource).toMatchObject({
+            state: 'error',
+            message: 'The image could not be loaded.',
+          });
+          expect(calls.some((call) => call.type === 'surface.release')).toBe(false);
         } else {
           await preparation;
           expect(calls.some((call) => call.type === 'surface.commit')).toBe(false);

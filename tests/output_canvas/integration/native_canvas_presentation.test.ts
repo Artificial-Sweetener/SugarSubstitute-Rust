@@ -637,7 +637,7 @@ test('does not present unsupported media through the native surface', async () =
   f.surface.dispose();
 });
 
-test('keeps acknowledged native pixels visible when a replacement fails, then hides on host loss', async () => {
+test('keeps acknowledged pixels while a replacement loads and hides them when it fails', async () => {
   const f = fixture();
   const native = clientHostFixture();
   await revealClientSurface(f, native);
@@ -648,7 +648,8 @@ test('keeps acknowledged native pixels visible when a replacement fails, then hi
     throw new Error('Replacement selection is missing.');
   expect(native.respond(selection, 'error')).toBe(true);
   await settle();
-  expect(f.visible).toEqual([true]);
+  // Like a browser load error, the failed result never shows the previous image.
+  expect(f.visible).toEqual([true, false]);
   expect(f.errors).toHaveLength(1);
   f.setHost(null);
   f.surface.update(geometry, f.second);

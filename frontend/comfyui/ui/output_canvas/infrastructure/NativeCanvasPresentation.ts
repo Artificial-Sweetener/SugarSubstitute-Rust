@@ -53,6 +53,9 @@ import {
   type NativeCanvasDesired as Desired,
 } from './NativeCanvasDesired.js';
 
+/** The load-error text for a selected result the host cannot present. */
+const NATIVE_CANVAS_RESULT_FAILURE = 'The image could not be loaded.';
+
 export interface NativeCanvasPresentationOptions {
   readonly address: CanvasAttachmentAddress;
   readonly clock: ExecutionClock;
@@ -334,6 +337,14 @@ export class NativeCanvasPresentation {
             selectionRevision = revision;
           }).finally(() => preview?.selectionFinished());
           if (!this.#owns(binding)) return;
+          if (result.status === 'error') {
+            // The host could not present this result, e.g. an undecodable file. The prepared
+            // surface stays usable: complete readiness, hide stale pixels, show the load error.
+            this.options.prepared();
+            this.#show(false);
+            this.#failed(desired, result, NATIVE_CANVAS_RESULT_FAILURE);
+            continue;
+          }
           if (result.status !== 'applied') {
             this.#failed(desired, result);
             continue;
@@ -525,7 +536,8 @@ export class NativeCanvasPresentation {
     return this.#owns(binding) && this.#desired === desired;
   }
 
-  #failed(desired: Desired, result: CanvasSurfaceResult): void {
+  /** Publish a failed operation, using `message` instead of the host's when it names the result. */
+  #failed(desired: Desired, result: CanvasSurfaceResult, message?: string): void {
     if (this.#desired !== desired) return;
     this.#failedIntent();
     // A staged sibling temporarily owns native mutation. Its release explicitly refreshes
@@ -535,6 +547,7 @@ export class NativeCanvasPresentation {
     this.options.status({
       state: error ? 'error' : 'unavailable',
       message:
+        message ||
         result.message ||
         (error ? 'Native canvas presentation failed.' : 'The native canvas is unavailable.'),
     });
