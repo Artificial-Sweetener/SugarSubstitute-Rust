@@ -155,6 +155,7 @@ export class NativeCanvasAttachment {
             acceptsPreparation: () => !this.#disposed && options.acceptsPreparation(),
             prepared: () => this.#readiness.complete(),
             host: options.nativeSurface,
+            surfacePending: () => this.options.surfacePending?.() ?? false,
             accepts: () => !this.#disposed && options.accepts(),
             visible: (value) => this.viewport.classList.toggle('sc-output-native', value),
             status: (value) => {

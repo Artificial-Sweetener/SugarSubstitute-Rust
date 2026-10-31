@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the embedded document adapter with the common canvas coordinator. */
 import type { CanvasLayerHost } from '../../core/embedded/CanvasRuntime.js';
+import type { NativeSurfaceDiscovery } from '../../core/embedded/EmbeddedCanvasConnection.js';
 import type { WorkflowCanvasCoordinator } from '../application/WorkflowCanvasCoordinator.js';
 import { documentCanvasAdapter } from './DocumentCanvasAdapter.js';
 import { BrowserCanvasGenerationImages } from './BrowserCanvasGenerationImages.js';
@@ -25,7 +26,7 @@ export class ComfyDocumentCanvasHost {
   /** Translate document-host primitives into the same capability contract as other canvases. */
   constructor(
     canvases: WorkflowCanvasCoordinator<Blob>,
-    private readonly canvas: CanvasLayerHost,
+    private readonly canvas: CanvasLayerHost & NativeSurfaceDiscovery,
     private readonly window: Window,
     logger: Pick<Console, 'error'>,
     notify: (message: string) => void,
@@ -48,6 +49,10 @@ export class ComfyDocumentCanvasHost {
   /** Select this destination only while the authenticated document host advertises insertion. */
   get available(): boolean {
     return this.canvas.readCanvas()?.capabilities.insertImageLayer ?? false;
+  }
+  /** Report whether the document host concluded its native output discovery. */
+  get surfaceDiscovered(): boolean {
+    return this.canvas.surfaceDiscovered;
   }
   /** Retire this adapter while leaving other canvases registered. */
   readonly dispose = (): void => {

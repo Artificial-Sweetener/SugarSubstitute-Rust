@@ -109,7 +109,9 @@ export class NativeCanvasPresentation {
         this.options.status(desired.shown
             ? host
                 ? { state: 'loading', message: 'Loading the selected image.' }
-                : { state: 'unavailable', message: 'The native canvas is unavailable.' }
+                : this.options.surfacePending?.()
+                    ? { state: 'loading', message: '' }
+                    : { state: 'unavailable', message: 'The native canvas is unavailable.' }
             : { state: 'empty', message: '' });
         this.#wake();
     }

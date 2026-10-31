@@ -63,6 +63,8 @@ import {
 /** Supply the negotiated host through the existing canvas capability registry. */
 export interface NativeCanvasAttachmentOptions extends CanvasAttachmentOptions {
   nativeSurface(): CanvasSurfaceHost | null;
+  /** Report that the host's first native discovery is still pending; absent means concluded. */
+  surfacePending?(): boolean;
   /** Check the staged registry lease without granting active control or preview authority. */
   acceptsPreparation(): boolean;
 }
@@ -198,6 +200,7 @@ export class NativeCanvasAttachment {
       acceptsPreparation: () => !this.#disposed && options.acceptsPreparation(),
       prepared: () => this.#readiness.complete(),
       host: options.nativeSurface,
+      surfacePending: () => this.options.surfacePending?.() ?? false,
       accepts: () => !this.#disposed && options.accepts(),
       visible: (value) => this.viewport.classList.toggle('sc-output-native', value),
       status: (value) => {

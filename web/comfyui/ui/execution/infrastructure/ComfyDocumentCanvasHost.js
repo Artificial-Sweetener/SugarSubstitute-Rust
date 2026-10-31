@@ -19,6 +19,10 @@ export class ComfyDocumentCanvasHost {
     get available() {
         return this.canvas.readCanvas()?.capabilities.insertImageLayer ?? false;
     }
+    /** Report whether the document host concluded its native output discovery. */
+    get surfaceDiscovered() {
+        return this.canvas.surfaceDiscovered;
+    }
     /** Retire this adapter while leaving other canvases registered. */
     dispose = () => {
         this.window.removeEventListener('pagehide', this.dispose);
