@@ -66,6 +66,19 @@ undocumented_unsafe_blocks = "deny"
 unimplemented = "deny"
 unwrap_used = "deny"
 
+# Third-party code keeps line tables for backtraces; full variable info stays with workspace crates.
+[profile.dev.package."*"]
+debug = "line-tables-only"
+
+[profile.dev.package.sugarsubstitute-xtask]
+opt-level = 3
+
+[profile.dev.package.syn]
+opt-level = 3
+
+[profile.dev.package.proc-macro2]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 debug = "line-tables-only"

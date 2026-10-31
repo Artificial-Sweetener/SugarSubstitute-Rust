@@ -1,5 +1,2 @@
 [alias]
 xtask = "run --locked --package sugarsubstitute-xtask --"
-
-[build]
-jobs = 8
