@@ -28,8 +28,14 @@ import {
 import type { BrowserPanelTransport } from './BrowserPanelTransport.js';
 import type { CanvasGeometryHost } from '../../../../../integrations/contracts/CanvasGeometry.js';
 import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/CanvasSurface.js';
+/** Report whether native output discovery has concluded, without exposing the canvas session. */
+export interface NativeSurfaceDiscovery {
+  /** True once this page's native canvas session settled at least one context and surface discovery. */
+  readonly surfaceDiscovered: boolean;
+}
+
 /** Keep the optional native canvas unavailable until the panel has authenticated and negotiated it. */
-export class EmbeddedCanvasConnection implements CanvasLayerHost {
+export class EmbeddedCanvasConnection implements CanvasLayerHost, NativeSurfaceDiscovery {
   /** Negotiate output presentation through this same canvas session. */
   get surface(): CanvasSurfaceHost | null {
     return this.#client?.surface ?? null;
@@ -54,7 +60,12 @@ export class EmbeddedCanvasConnection implements CanvasLayerHost {
   #read: object = {};
   #refreshing: Promise<void> | null = null;
   #refreshAgain = false;
+  #surfaceDiscovered = false;
   #disposed = false;
+  /** Report settled discovery, including a refused, unavailable or failed first context read. */
+  get surfaceDiscovered(): boolean {
+    return this.#surfaceDiscovered;
+  }
   /** Read context and optional surface capabilities before publishing panel readiness. */
   connect(
     transport: BrowserPanelTransport,
@@ -126,7 +137,16 @@ export class EmbeddedCanvasConnection implements CanvasLayerHost {
     if (!client) throw new Error('The native canvas is unavailable.');
     const read = {};
     this.#read = read;
-    const context = await client.readContext();
+    let context: CanvasContext;
+    try {
+      context = await client.readContext();
+    } finally {
+      // Discovery concludes whether the host offered, refused or failed to describe a surface.
+      if (this.#client === client && this.#read === read) {
+        this.#surfaceDiscovered = true;
+        this.#window?.document.dispatchEvent(new Event('sugarcubes-canvas-discovered'));
+      }
+    }
     if (this.#client === client && this.#read === read)
       this.#window?.document.dispatchEvent(new Event('sugarcubes-canvas-ready'));
     return context;

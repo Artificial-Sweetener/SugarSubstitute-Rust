@@ -61,6 +61,8 @@ export interface NativeCanvasPresentationOptions {
   readonly clock: ExecutionClock;
   /** Resolve the negotiated surface through the shared canvas registry. */
   host(): CanvasSurfaceHost | null;
+  /** Report that no surface exists yet because the host's first discovery has not concluded. */
+  surfacePending?(): boolean;
   /** The view registry and active workflow remain the attachment authority. */
   accepts(): boolean;
   /** Authorize preparation before the view registry commits this exact candidate. */
@@ -189,7 +191,9 @@ export class NativeCanvasPresentation {
       desired.shown
         ? host
           ? { state: 'loading', message: 'Loading the selected image.' }
-          : { state: 'unavailable', message: 'The native canvas is unavailable.' }
+          : this.options.surfacePending?.()
+            ? { state: 'loading', message: '' }
+            : { state: 'unavailable', message: 'The native canvas is unavailable.' }
         : { state: 'empty', message: '' },
     );
     this.#wake();

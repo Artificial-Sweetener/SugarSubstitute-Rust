@@ -28,6 +28,7 @@ import { WorkflowGenerationEvents } from '../application/WorkflowGenerationEvent
 import { ComfyDocumentCanvasHost } from './ComfyDocumentCanvasHost.js';
 import { WorkflowCanvasCoordinator } from '../application/WorkflowCanvasCoordinator.js';
 import type { CanvasLayerHost } from '../../core/embedded/CanvasRuntime.js';
+import type { NativeSurfaceDiscovery } from '../../core/embedded/EmbeddedCanvasConnection.js';
 import { ComfyWorkflowSessionAdapter } from './ComfyWorkflowSessionAdapter.js';
 import { ComfyWorkflowEventAdapter } from './ComfyWorkflowEventAdapter.js';
 import { ComfyWorkflowHistoryAdapter } from './ComfyWorkflowHistoryAdapter.js';
@@ -210,7 +211,11 @@ export class ComfyWorkflowExecutionRuntime {
   }
 
   /** Bind a supported canvas directly to generation without acquiring any output-viewer authority. */
-  bindCanvas(canvas: CanvasLayerHost, window: Window, notify: (message: string) => void): void {
+  bindCanvas(
+    canvas: CanvasLayerHost & NativeSurfaceDiscovery,
+    window: Window,
+    notify: (message: string) => void,
+  ): void {
     if (this.#disposed || this.#canvasDelivery)
       throw new Error('Canvas delivery is already bound or disposed.');
     this.#canvasDelivery = new ComfyDocumentCanvasHost(
@@ -220,6 +225,11 @@ export class ComfyWorkflowExecutionRuntime {
       this.options.logger,
       notify,
     );
+  }
+
+  /** Report whether the bound document canvas concluded native output discovery. */
+  get canvasSurfaceDiscovered(): boolean {
+    return this.#canvasDelivery?.surfaceDiscovered ?? false;
   }
 
   /** Read submission intent through the shared run registry, including outstanding queue receipts. */

@@ -18,6 +18,7 @@
 import type { ComfyWorkflowExecutionRuntime } from '../../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { resolveComfyRendererMode } from '../../core/ComfyRendererMode.js';
 import { prefersNativeOutputSurface } from '../../core/embedded/NativePanelTransport.js';
+import { OutputPresenterSelection } from '../application/OutputPresenterSelection.js';
 import { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
 import { CanvasSourceInventory } from '../application/CanvasSourceInventory.js';
 import { CanvasSelectionController } from '../application/CanvasSelectionController.js';
@@ -163,9 +164,12 @@ export class ComfyCanvasHost {
       report,
       options.presentation,
     );
-    const nativePresenter = (): boolean =>
-      prefersNativeOutputSurface(window) ||
-      execution.canvases.surfaceHost('embedded-document') !== null;
+    const presenter = new OutputPresenterSelection({
+      prefersNative: () => prefersNativeOutputSurface(window),
+      surface: () => execution.canvases.surfaceHost('embedded-document'),
+      discovered: () => execution.canvasSurfaceDiscovered,
+    });
+    const nativePresenter = (): boolean => presenter.current() !== 'browser';
     this.#primary = new CanvasPrimarySurface({
       document,
       window: windowId(nextKey()),
@@ -206,6 +210,7 @@ export class ComfyCanvasHost {
             ...shared,
             acceptsPreparation,
             nativeSurface: () => execution.canvases.surfaceHost('embedded-document'),
+            surfacePending: () => presenter.current() === 'pending',
           });
         return import('./ComfyBrowserCanvasHost.js').then(({ ComfyBrowserCanvasHost }) => {
           if (!acceptsPreparation()) return null;
@@ -281,7 +286,10 @@ export class ComfyCanvasHost {
       this.#imageActions.setup();
       this.#saving?.setup();
       this.#stops.push(this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
-      this.options.document.addEventListener('sugarcubes-canvas-ready', this.#canvasReady);
+      this.options.document.addEventListener(
+        'sugarcubes-canvas-discovered',
+        this.#canvasDiscovered,
+      );
       this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
     } catch (error: unknown) {
       this.dispose();
@@ -316,7 +324,10 @@ export class ComfyCanvasHost {
     if (this.#disposed) return;
     this.#disposed = true;
     this.options.document.defaultView?.removeEventListener('pagehide', this.#pagehide);
-    this.options.document.removeEventListener('sugarcubes-canvas-ready', this.#canvasReady);
+    this.options.document.removeEventListener(
+      'sugarcubes-canvas-discovered',
+      this.#canvasDiscovered,
+    );
     this.#primary.dispose();
     this.#imageActions.dispose();
     this.#saving?.dispose();
@@ -333,5 +344,6 @@ export class ComfyCanvasHost {
 
   /** Honor actual page teardown without introducing a recurring visibility or frame loop. */
   readonly #pagehide = (): void => this.dispose();
-  readonly #canvasReady = (): void => this.#primary.reconcile();
+  /** Reselect the presenter and surface after every concluded native discovery. */
+  readonly #canvasDiscovered = (): void => this.#primary.reconcile();
 }

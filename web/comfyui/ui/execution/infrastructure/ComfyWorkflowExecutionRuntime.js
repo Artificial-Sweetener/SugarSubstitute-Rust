@@ -165,6 +165,10 @@ export class ComfyWorkflowExecutionRuntime {
             throw new Error('Canvas delivery is already bound or disposed.');
         this.#canvasDelivery = new ComfyDocumentCanvasHost(this.canvases, canvas, window, this.options.logger, notify);
     }
+    /** Report whether the bound document canvas concluded native output discovery. */
+    get canvasSurfaceDiscovered() {
+        return this.#canvasDelivery?.surfaceDiscovered ?? false;
+    }
     /** Read submission intent through the shared run registry, including outstanding queue receipts. */
     latestSubmissionOrder(session) {
         return this.#runs.latestOrder(session);

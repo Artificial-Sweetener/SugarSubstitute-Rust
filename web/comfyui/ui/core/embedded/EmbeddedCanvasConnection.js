@@ -41,7 +41,12 @@ export class EmbeddedCanvasConnection {
     #read = {};
     #refreshing = null;
     #refreshAgain = false;
+    #surfaceDiscovered = false;
     #disposed = false;
+    /** Report settled discovery, including a refused, unavailable or failed first context read. */
+    get surfaceDiscovered() {
+        return this.#surfaceDiscovered;
+    }
     /** Read context and optional surface capabilities before publishing panel readiness. */
     connect(transport, window, report) {
         if (this.#disposed)
@@ -108,7 +113,17 @@ export class EmbeddedCanvasConnection {
             throw new Error('The native canvas is unavailable.');
         const read = {};
         this.#read = read;
-        const context = await client.readContext();
+        let context;
+        try {
+            context = await client.readContext();
+        }
+        finally {
+            // Discovery concludes whether the host offered, refused or failed to describe a surface.
+            if (this.#client === client && this.#read === read) {
+                this.#surfaceDiscovered = true;
+                this.#window?.document.dispatchEvent(new Event('sugarcubes-canvas-discovered'));
+            }
+        }
         if (this.#client === client && this.#read === read)
             this.#window?.document.dispatchEvent(new Event('sugarcubes-canvas-ready'));
         return context;

@@ -149,6 +149,7 @@ test('keeps the output view and captured document delivery independent by defaul
   });
   f.runtime.bindCanvas(
     {
+      surfaceDiscovered: true,
       readCanvas: () => current.canvas,
       readContext: async () => current,
       insertImage: async (image) => {
