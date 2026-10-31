@@ -51,9 +51,10 @@ export function isCanvasSurfaceCapabilities(
     ) &&
     Object.hasOwn(value, 'viewportCommands') &&
     Array.isArray(value['viewportCommands']) &&
-    value['viewportCommands'].length <= 4 &&
+    value['viewportCommands'].length <= 5 &&
     value['viewportCommands'].every(
-      (item: unknown) => item === 'fit' || item === 'native' || item === 'zoom' || item === 'pan',
+      (item: unknown) =>
+        item === 'fit' || item === 'native' || item === 'zoom' || item === 'pan' || item === 'wipe',
     ) &&
     Object.hasOwn(value, 'viewportState') &&
     typeof value['viewportState'] === 'boolean' &&
@@ -195,13 +196,31 @@ export function isCanvasSurfaceGeometryRequest(
     isCanvasSurfaceGeometry(value['geometry'])
   );
 }
+/** Validate a bounded CanvasSurfaceComparison payload before dispatch. */
+export function isCanvasSurfaceComparison(
+  value: unknown,
+): value is Contract.CanvasSurfaceComparison {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 2 &&
+    Object.hasOwn(value, 'itemId') &&
+    typeof value['itemId'] === 'string' &&
+    value['itemId'].length <= 8192 &&
+    Array.from(value['itemId']).length <= 4096 &&
+    new RegExp(
+      '^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])',
+    ).test(value['itemId']) &&
+    Object.hasOwn(value, 'file') &&
+    isCanvasSurfaceFileReference(value['file'])
+  );
+}
 /** Validate a bounded CanvasSurfaceSelectRequest payload before dispatch. */
 export function isCanvasSurfaceSelectRequest(
   value: unknown,
 ): value is Contract.CanvasSurfaceSelectRequest {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 9 &&
+    Object.keys(value).length === 9 + (Object.hasOwn(value, 'comparison') ? 1 : 0) &&
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
@@ -232,7 +251,8 @@ export function isCanvasSurfaceSelectRequest(
       '^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])',
     ).test(value['itemId']) &&
     Object.hasOwn(value, 'file') &&
-    isCanvasSurfaceFileReference(value['file'])
+    isCanvasSurfaceFileReference(value['file']) &&
+    (!Object.hasOwn(value, 'comparison') || isCanvasSurfaceComparison(value['comparison']))
   );
 }
 /** Validate a bounded CanvasSurfaceCommitRequest payload before dispatch. */

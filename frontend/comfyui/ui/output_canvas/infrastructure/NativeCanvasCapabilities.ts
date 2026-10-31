@@ -15,13 +15,32 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project negotiated native support into one immutable staged attachment identity. */
 import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/CanvasSurface.js';
+import { negotiatesCanvasSurfaceComparison } from '../../core/embedded/CanvasRuntime.js';
+import type { CanvasCommand } from '../domain/CanvasViewPort.js';
+
+const CAMERA_COMMANDS = ['fit', 'native', 'zoom', 'pan'] as const;
+type CameraCommand = (typeof CAMERA_COMMANDS)[number];
+const COMPARISON_COMMANDS = ['comparison', 'select-comparison', 'swap', 'wipe'] as const;
 
 /** Rebuild a staged attachment when discovery changes its immutable command capabilities. */
 export function nativeCanvasRendererKey(host: CanvasSurfaceHost | null): string {
   return `native:${JSON.stringify(host?.capabilities ?? null)}`;
 }
 
-/** Advertise commands only with the viewport-state contract required by their shared proxy. */
-export function nativeCanvasViewportCommands(host: CanvasSurfaceHost | null) {
-  return host?.capabilities.viewportState ? host.capabilities.viewportCommands : [];
+/** Report whether the host can present an A/B pair and place its divider. */
+export function nativeCanvasComparison(host: CanvasSurfaceHost | null): boolean {
+  return host !== null && negotiatesCanvasSurfaceComparison(host.capabilities);
+}
+
+/**
+ * Advertise camera commands only with the viewport-state contract required by their shared
+ * proxy, and the shared comparison commands only with a negotiated pair-and-divider host.
+ */
+export function nativeCanvasCommands(host: CanvasSurfaceHost | null): CanvasCommand['type'][] {
+  const camera = host?.capabilities.viewportState
+    ? host.capabilities.viewportCommands.filter((command): command is CameraCommand =>
+        CAMERA_COMMANDS.some((name) => name === command),
+      )
+    : [];
+  return [...camera, ...(nativeCanvasComparison(host) ? COMPARISON_COMMANDS : [])];
 }

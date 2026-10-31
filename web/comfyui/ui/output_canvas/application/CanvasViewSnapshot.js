@@ -37,3 +37,29 @@ export function canvasViewSnapshot(address, plan, catalog, sources, connected, m
         zoom: presentation.zoom ? Object.freeze(presentation.zoom) : null,
     });
 }
+/** Describe a presenter outcome that offers no retry or large-image admission. */
+export function canvasResourceStatus(state, message) {
+    return { state, message, canRetry: false, canAdmitLargeImage: false };
+}
+/**
+ * Describe image B for an active comparison from the presenter's loaded B status.
+ *
+ * Unresolved or non-image selections are unavailable regardless of presenter progress; an
+ * active comparison without a chosen B asks for one. No comparison has no B status.
+ */
+export function canvasSecondaryResource(plan, loaded) {
+    if (plan.secondary && (!plan.secondary.sourcePresent || !plan.secondary.item))
+        return canvasResourceStatus('unavailable', 'The selected B image is unavailable.');
+    if (plan.secondary?.item && plan.secondary.item.mediaKind !== 'image')
+        return canvasResourceStatus('unavailable', 'Open B in the host viewer.');
+    return plan.view.comparison
+        ? (loaded ?? canvasResourceStatus('empty', 'Choose an output for B.'))
+        : null;
+}
+/** Express B's physical scale per axis while B is stretched into A's image rectangle. */
+export function canvasSecondaryPhysicalScale(physicalScale, primary, secondary) {
+    return Object.freeze({
+        x: (physicalScale * primary.width) / secondary.width,
+        y: (physicalScale * primary.height) / secondary.height,
+    });
+}

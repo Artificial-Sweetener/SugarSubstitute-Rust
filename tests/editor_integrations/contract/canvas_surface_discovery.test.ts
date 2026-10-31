@@ -295,10 +295,16 @@ test('accepts shared valid discovery vectors and rejects each malformed variant'
     request: unknown;
     available: unknown;
     unsupported: unknown;
+    comparison: unknown;
     invalidRequests: unknown[];
     invalidReplies: unknown[];
   };
-  for (const message of [vectors.request, vectors.available, vectors.unsupported])
+  for (const message of [
+    vectors.request,
+    vectors.available,
+    vectors.unsupported,
+    vectors.comparison,
+  ])
     expect(isCanvasMessage(message)).toBe(true);
   for (const message of [...vectors.invalidRequests, ...vectors.invalidReplies])
     expect(isCanvasMessage(message)).toBe(false);

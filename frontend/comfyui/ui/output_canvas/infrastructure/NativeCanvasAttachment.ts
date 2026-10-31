@@ -29,14 +29,9 @@ import type { CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
 import { CanvasSourceNavigation } from '../application/CanvasSourceNavigation.js';
 import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
 import { CanvasViewProjection } from '../application/CanvasViewProjection.js';
-import { canvasViewSnapshot } from '../application/CanvasViewSnapshot.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
-import type {
-  CanvasResourceStatus,
-  CanvasSourceSummary,
-  CanvasSurfaceGeometry,
-} from '../domain/CanvasViewPort.js';
+import type { CanvasSourceSummary, CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import {
   mountCanvasOverlay,
   type MountedCanvasOverlay,
@@ -49,7 +44,9 @@ import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.j
 import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
 import { NativeCanvasActionSurface } from './NativeCanvasActionSurface.js';
-import { nativeCanvasViewportCommands } from './NativeCanvasCapabilities.js';
+import { nativeCanvasCommands, nativeCanvasComparison } from './NativeCanvasCapabilities.js';
+import type { NativeCanvasComparison } from './NativeCanvasDesired.js';
+import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
 import {
   NativeCanvasPresentation,
   type NativeCanvasPresentationStatus,
@@ -77,6 +74,8 @@ export class NativeCanvasAttachment {
   readonly #stopView: () => void;
   readonly #stopTransfer: () => void;
   readonly #keyboard: CanvasViewportKeyboard;
+  /** Fixed per attachment; changed host capabilities rebuild the attachment. */
+  readonly #comparison: boolean;
   #catalog: CanvasCatalogSnapshot;
   #sources: readonly CanvasSourceSummary[];
   #plan: CanvasDisplayPlan;
@@ -104,6 +103,7 @@ export class NativeCanvasAttachment {
       options.inspections,
     );
     this.#plan = this.#projection.project(catalog);
+    this.#comparison = nativeCanvasComparison(options.nativeSurface());
     const document = element.ownerDocument;
     ensureCanvasViewportStyles(document);
     this.viewport = document.createElement('div');
@@ -141,7 +141,7 @@ export class NativeCanvasAttachment {
           'batch',
           'follow',
           'open-media',
-          ...nativeCanvasViewportCommands(options.nativeSurface()),
+          ...nativeCanvasCommands(options.nativeSurface()),
           ...this.#media.commands(),
         ],
       },
@@ -247,7 +247,7 @@ export class NativeCanvasAttachment {
     this.#catalog = catalog;
     this.#sources = Object.freeze(catalog.entries.map((entry) => entry.summary));
     this.#plan = this.#projection.project(catalog);
-    this.#native.update(this.#surface, this.#plan.primary?.item ?? null, this.#plan.preview);
+    this.#present();
     this.#status.changed(true);
   }
 
@@ -321,7 +321,18 @@ export class NativeCanvasAttachment {
   /** Forward qualified geometry without constructing a browser drawing surface. */
   #resize(surface: CanvasSurfaceGeometry): void {
     this.#surface = surface;
-    this.#native.update(surface, this.#plan.primary?.item ?? null, this.#plan.preview);
+    this.#present();
+  }
+
+  /** Hand the current plan's A, optional B and divider to the native presentation owner. */
+  #present(): void {
+    const comparison = this.#comparison ? this.#plan.view.comparison : null;
+    const secondary = this.#plan.secondary?.item;
+    const pair: NativeCanvasComparison | null =
+      comparison && secondary
+        ? { item: secondary, orientation: comparison.orientation, split: comparison.split }
+        : null;
+    this.#native.update(this.#surface, this.#plan.primary?.item ?? null, this.#plan.preview, pair);
   }
 
   /** Publish selection and actual native readiness to the shared overlay. */
@@ -333,58 +344,19 @@ export class NativeCanvasAttachment {
 
   /** Describe only capabilities and state supported by the current native surface. */
   #snapshot() {
-    const item = this.#plan.primary?.item;
-    let resource: CanvasResourceStatus = {
-      ...this.#presentation,
-      canRetry: false,
-      canAdmitLargeImage: false,
-    };
-    if (item && item.mediaKind !== 'image') {
-      resource = {
-        ...resource,
-        state: 'unavailable',
-        message: 'Open this media in the host viewer.',
-      };
-    } else if (!item && this.#plan.preview && !this.#native?.previewAvailable) {
-      resource = {
-        ...resource,
-        state: 'unavailable',
-        message: 'Live previews are not available on this surface.',
-      };
-    } else if (
-      this.#plan.primary &&
-      !item &&
-      resource.state !== 'ready' &&
-      !(this.#plan.preview && this.#native?.previewAvailable)
-    ) {
-      resource = {
-        ...resource,
-        state: 'unavailable',
-        message: 'The selected workflow output is unavailable.',
-      };
-    }
-    const snapshot = canvasViewSnapshot(
-      this.options.address,
-      this.#plan,
-      this.#catalog,
-      this.#sources,
-      this.options.connected(),
-      this.#media.profile(),
-      {
-        comparisonAvailable: false,
-        preview: this.#preview,
-        resource,
-        secondaryResource: null,
-        zoom: this.#viewport
-          ? { ...this.#viewport, secondaryPhysicalScale: null, secondaryDimensions: null }
-          : null,
-      },
-    );
-    return Object.freeze({
-      ...snapshot,
-      secondary: null,
-      grid: Object.freeze([]),
-      view: Object.freeze({ ...snapshot.view, mode: 'image' as const, comparison: null }),
+    return nativeCanvasSnapshot({
+      address: this.options.address,
+      plan: this.#plan,
+      catalog: this.#catalog,
+      sources: this.#sources,
+      connected: this.options.connected(),
+      mediaActions: this.#media.profile(),
+      presentation: this.#presentation,
+      viewport: this.#viewport,
+      preview: this.#preview,
+      // Shared controls read a first snapshot before the native presentation owner exists.
+      previewAvailable: this.#native?.previewAvailable ?? false,
+      comparison: this.#comparison,
     });
   }
 }

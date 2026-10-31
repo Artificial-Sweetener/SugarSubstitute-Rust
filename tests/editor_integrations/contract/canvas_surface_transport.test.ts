@@ -52,7 +52,7 @@ const geometry = {
 } as const;
 
 /** Exercise real client/server correlation while faking only the native surface. */
-function fixture(capable: boolean) {
+function fixture(capable: boolean, capabilities = selectedPngCapabilities) {
   const sent: CanvasMessage[] = [];
   const errors: unknown[] = [];
   const execute = jest.fn(
@@ -62,7 +62,7 @@ function fixture(capable: boolean) {
     }),
   );
   const server = new CanvasServer(session, {
-    ...(capable ? { surface: { capabilities: selectedPngCapabilities, execute } } : {}),
+    ...(capable ? { surface: { capabilities, execute } } : {}),
     context: async () => ({
       canvas: {
         id: 'native',
@@ -170,6 +170,55 @@ test.each([
   await expect(pending).rejects.toThrow('does not match');
   client.dispose();
 });
+
+test.each([true, false])(
+  'carries an immutable comparison pair only to a host declaring comparison: %s',
+  async (comparison) => {
+    const f = fixture(true, {
+      ...selectedPngCapabilities,
+      viewportCommands: comparison ? ['wipe'] : [],
+      viewportState: comparison,
+      comparison,
+    });
+    try {
+      await f.client.readContext();
+      const select = {
+        type: 'surface.select',
+        address,
+        revision: 1,
+        itemId: 'result:one',
+        file: { filename: 'a.png', subfolder: '', type: 'output' },
+        comparison: {
+          itemId: 'result:two',
+          file: { filename: 'b.png', subfolder: 'batch', type: 'temp' },
+        },
+      } as const;
+      const result = await negotiatedSurface(f.client).execute(select);
+      expect(result.status).toBe(comparison ? 'applied' : 'unavailable');
+      // A client that ignores negotiation is refused by the receiving surface owner as well.
+      f.server.receive({
+        protocol: 'sugarcubes.canvas',
+        version: 3,
+        session,
+        requestId: 9,
+        ...select,
+      });
+      for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+      const calls = f.execute.mock.calls.map(([command]) => command);
+      expect(calls).toEqual(comparison ? [select, select] : []);
+      for (const command of calls) {
+        if (command.type !== 'surface.select' || !command.comparison)
+          throw new Error('Missing comparison pair.');
+        expect(Object.isFrozen(command.comparison)).toBe(true);
+        expect(Object.isFrozen(command.comparison.file)).toBe(true);
+      }
+      expect(f.errors).toEqual([]);
+    } finally {
+      f.client.dispose();
+      f.server.dispose();
+    }
+  },
+);
 
 test('surface cancellation waits for the correlated host acknowledgement', async () => {
   const sent: CanvasMessage[] = [];

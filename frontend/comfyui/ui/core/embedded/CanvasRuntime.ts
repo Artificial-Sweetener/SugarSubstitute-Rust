@@ -32,6 +32,7 @@ export {
   resolveCanvasImageRegion,
 } from '../../../../../integrations/shared/CanvasImageRegionCrop.js';
 export { CanvasCancellation } from '../../../../../integrations/shared/CanvasCancellation.js';
+export { negotiatesCanvasSurfaceComparison } from '../../../../../integrations/shared/CanvasSurfaceComparison.js';
 export { WEB_CANVAS } from '../../../../../integrations/contracts/CanvasHost.js';
 export { CanvasMaskClient } from '../../../../../integrations/shared/CanvasMaskClient.js';
 export {

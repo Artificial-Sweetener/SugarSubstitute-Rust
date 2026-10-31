@@ -17,12 +17,19 @@
 
 import { createHash } from 'node:crypto';
 import { contractArrayEnum, contractArraySchema } from './ContractArraySchema.js';
+import { contractObjectProperties } from './ContractObjectSchema.js';
 import { rustTaggedUnion } from './RustTaggedUnion.js';
 
 type Schema = Record<string, unknown>;
 const WELL_FORMED_TEXT = '^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$';
 const SURFACE_IDENTITY_TAIL =
   '(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])';
+const REQUIRED_OPTION_ATTRIBUTE = '#[serde(deserialize_with = "deserialize_required_option")]';
+const OPTIONAL_MEMBER_ATTRIBUTE = `#[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]`;
 const SESSION_PATTERN = '^[a-zA-Z0-9-]{16,80}$';
 const COLOR_PATTERN = '^#[a-fA-F0-9]{6}$';
 const BASE64_PATTERN =
@@ -332,7 +339,30 @@ ${condition.length <= 100 ? condition : `        if !matches!(\n            item
   throw new Error('Unsupported Rust contract schema property.');
 }
 
-/** Compile only closed required objects; admission and navigation authority remain host-owned. */
+/**
+ * Compile an omitted-or-present member. Only named definitions may be optional, so validation
+ * delegates to the referenced type instead of reinterpreting inline bounds for a wrapped value.
+ */
+function optionalProperty(
+  value: unknown,
+  field: string,
+  names: ReadonlySet<string>,
+): { type: string; valid: readonly string[]; attribute: string } {
+  const node = record(value);
+  const reference =
+    Object.keys(node).join() === '$ref' && typeof node.$ref === 'string'
+      ? /^#\/\$defs\/([A-Za-z]+)$/.exec(node.$ref)?.[1]
+      : undefined;
+  if (!reference || !names.has(reference))
+    throw new Error('Rust contract optional members must reference a named definition.');
+  return {
+    type: `Option<${reference}>`,
+    valid: [`self.${field}.as_ref().is_none_or(${reference}::valid)`],
+    attribute: OPTIONAL_MEMBER_ATTRIBUTE,
+  };
+}
+
+/** Compile only closed objects; admission and navigation authority remain host-owned. */
 export function rustContractBindings(
   definitions: Schema,
   schemaText: string,
@@ -347,6 +377,7 @@ export function rustContractBindings(
   const names = new Set(Object.keys(definitions));
   const helpers = new Set<string>();
   let requiredOption = false;
+  let optionalMember = false;
   const sourceHash = createHash('sha256').update(schemaText.replaceAll('\r\n', '\n')).digest('hex');
   const header = `// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
@@ -365,19 +396,20 @@ export function rustContractBindings(
         return { field, ...result };
       });
     keys(node, ['type', 'properties', 'required', 'additionalProperties']);
-    const properties = Object.entries(record(node.properties));
-    if (
-      node.type !== 'object' ||
-      node.additionalProperties !== false ||
-      JSON.stringify(node.required) !== JSON.stringify(properties.map(([key]) => key))
-    )
-      throw new Error('Rust contract objects must be closed and fully required.');
-    const fields = properties.map(([key, item]) => {
+    const fields = contractObjectProperties(node).map(({ key, value: item, optional }) => {
       const field = rustName(key);
+      if (optional) {
+        optionalMember = true;
+        return { field, ...optionalProperty(item, field, names) };
+      }
       const result = property(item, field, names, name);
       requiredOption ||= result.requiredOption === true;
       if (result.helper) helpers.add(result.helper);
-      return { field, ...result };
+      return {
+        field,
+        ...result,
+        attribute: result.requiredOption ? REQUIRED_OPTION_ATTRIBUTE : null,
+      };
     });
     const checks = fields.flatMap(({ valid }) => valid);
     const inline = checks.join(' && ');
@@ -390,7 +422,7 @@ export function rustContractBindings(
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(super) struct ${name} {
-${fields.map(({ field, type, requiredOption }) => `${requiredOption ? '    #[serde(deserialize_with = "deserialize_required_option")]\n' : ''}    pub(super) ${field}: ${type},`).join('\n')}
+${fields.map(({ field, type, attribute }) => `${attribute ? `    ${attribute}\n` : ''}    pub(super) ${field}: ${type},`).join('\n')}
 }
 impl ${name} {
     /// Reject values outside the exact schema-defined bounds.
@@ -407,5 +439,13 @@ fn deserialize_required_option<'de, D: serde::Deserializer<'de>>(
     serde::Deserialize::deserialize(deserializer)
 }\n`
     : '';
-  return `${header}\n${values.join('\n\n')}\n${helpers.size ? `\n${[...helpers].join('\n\n')}\n` : ''}${helper}`;
+  const present = optionalMember
+    ? `\n/// Decode an optional member only when present, rejecting an explicit null.
+fn deserialize_present_option<'de, D: serde::Deserializer<'de>, T: serde::Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(deserializer).map(Some)
+}\n`
+    : '';
+  return `${header}\n${values.join('\n\n')}\n${helpers.size ? `\n${[...helpers].join('\n\n')}\n` : ''}${helper}${present}`;
 }
