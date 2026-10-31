@@ -7,9 +7,9 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-      - id: sugarsubstitute-verification
-        name: Verify SugarSubstitute governance and Rust workspace
-        entry: cargo xtask verify
+      - id: sugarsubstitute-check
+        name: Check SugarSubstitute governance, formatting and lints
+        entry: cargo xtask check
         language: system
         pass_filenames: false
         exclude: '\.md$'

@@ -235,12 +235,15 @@ implementation plans, or workstation configuration.
 - `cargo xtask verify`: the same checks plus workspace tests and warning-free Rustdoc.
 - Focused tests: `cargo test --locked -p <package> <test_filter>`. Verify that the
   intended tests actually ran. Use focused checks during normal implementation.
-- Before ending an implementation turn, run changed-behavior/blast-area tests,
-  governance, formatting, and strict lint/type checks for affected crates. Before
-  a non-documentation commit, run `cargo xtask verify` for the exact contents.
-- The pre-commit configuration and three-platform CI invoke the same verify command
-  for changes containing non-Markdown files.
-  Hooks are opt-in via pre-commit; repository setup does not install global hooks.
+- Before ending an implementation turn or making a non-documentation commit, run
+  `cargo xtask check` and the tests of each changed crate and of the crates that
+  consume its changed public API, for the exact contents.
+- Run `cargo xtask verify` locally only when the blast area is the whole workspace:
+  workspace manifests, lints, profiles or toolchain; governance tooling; or Rustdoc
+  that other crates link to. Three-platform CI runs it on pushed changes containing
+  non-Markdown files.
+- The opt-in pre-commit configuration runs `cargo xtask check`; repository setup
+  does not install global hooks.
 - Documentation-only changes modify Markdown and nothing else. Inspect the diff,
   rendered content, and `git diff --check`; they do not require Rust compilation.
 - Reuse successful exact-content checks; repeat affected gates after changes.
