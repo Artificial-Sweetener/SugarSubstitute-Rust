@@ -9,6 +9,8 @@ mod composition;
 mod construction;
 mod evidence;
 mod frame;
+#[cfg(feature = "native-composition")]
+mod hosting;
 mod panel;
 mod probe_diagnostics;
 mod recovery;
@@ -38,6 +40,9 @@ enum ConstructionStage {
     Window,
     Presenter,
     Controls,
+    /// Fix composition or windowed hosting before the browser exists.
+    #[cfg(feature = "native-composition")]
+    Hosting,
     Begin,
     Native,
     PausedEnvironment,
@@ -62,6 +67,10 @@ pub(crate) struct MainActor {
     composition: Option<composition::Composition>,
     #[cfg(feature = "native-composition")]
     composition_registered: bool,
+    #[cfg(feature = "native-composition")]
+    hosting: hosting::HostingSelection,
+    #[cfg(feature = "native-composition")]
+    composition_device: composition::DeviceSource,
     panel_bridge: Option<panel::bridge::Bridge>,
     canvas_replies: panel::Replies,
     panel_transport: panel::admission::Admission,
@@ -124,6 +133,10 @@ impl MainActor {
             composition: None,
             #[cfg(feature = "native-composition")]
             composition_registered: false,
+            #[cfg(feature = "native-composition")]
+            hosting: hosting::HostingSelection::new(),
+            #[cfg(feature = "native-composition")]
+            composition_device: composition::DeviceSource::System,
             panel_bridge: None,
             canvas_replies: panel::Replies::new(),
             panel_transport,
@@ -166,6 +179,17 @@ impl MainActor {
     }
     pub(crate) fn navigations(&self) -> u64 {
         self.navigations
+    }
+    /// Return the selected browser hosting; an undecided lifetime is never composition-hosted.
+    pub(crate) fn hosting(&self) -> crate::MainHosting {
+        #[cfg(feature = "native-composition")]
+        {
+            self.hosting.selected().unwrap_or(crate::MainHosting::Windowed)
+        }
+        #[cfg(not(feature = "native-composition"))]
+        {
+            crate::MainHosting::Windowed
+        }
     }
     /// Native cadence advances finite construction/retirement without a separate scheduler.
     pub(crate) fn needs_progress(&self) -> bool {

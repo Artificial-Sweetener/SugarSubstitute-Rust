@@ -8,7 +8,10 @@ import { Script, createContext } from 'node:vm';
 const sourcePath = process.argv[2] ?? new URL('../src/main_actor/panel/bridge.js', import.meta.url);
 const source = readFileSync(sourcePath, 'utf8');
 const policySource = readFileSync(new URL('../src/main_actor/panel/bridge_protocol.js', import.meta.url), 'utf8');
-const sources = [policySource, source];
+// Match the host's composition: the protocol expression receives the output surface preference.
+const policyFor = preference => `${policySource.trimEnd()}(${preference});\n`;
+const sources = [policyFor("'host'"), source];
+const windowedSources = [policyFor('undefined'), source];
 const binding = '__sugarcubes_substitute_send_v3';
 const host = 'ai.artificialsweetener.sugarsubstitute';
 const session = 'session-12345678';
@@ -54,7 +57,15 @@ function admit(message, lane = 'o') {
 }
 
 test('each bootstrap script fits the unchanged native registration command', () => {
-  for (const source of sources) assert.ok(Buffer.byteLength(JSON.stringify({ source })) <= 8192);
+  for (const source of [...sources, ...windowedSources])
+    assert.ok(Buffer.byteLength(JSON.stringify({ source })) <= 8192);
+});
+test('only a composition-hosted browser advertises host output presentation', () => {
+  assert.equal(fixture().bridge.outputSurfacePreference, 'host');
+  const windowed = fixture(undefined, windowedSources).bridge;
+  assert.ok(windowed);
+  assert.equal(Object.hasOwn(windowed, 'outputSurfacePreference'), false);
+  assert.equal(windowed.preferencePolicy, 'saved');
 });
 test('escaped selection refuses before custody and permits a later small request', () => {
   const f = fixture(), request = selection('\\'.repeat(3800));
@@ -708,7 +719,7 @@ test('every shared surface and context request type is admitted by the bridge po
   const schema = JSON.parse(readFileSync(
     new URL('../../../third_party/sugarcubes-canvas/canvas.schema.json', import.meta.url), 'utf8'));
   const context = createContext({});
-  new Script(policySource).runInContext(context);
+  new Script(policyFor("'host'")).runInContext(context);
   const policy = context.__sugarcubes_substitute_policy_v3;
   const sharedTypes = Object.entries(schema.definitions ?? schema.$defs ?? {})
     .filter(([name, definition]) => name.endsWith('Request') && definition.properties?.type?.const)

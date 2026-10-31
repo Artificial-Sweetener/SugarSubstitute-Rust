@@ -10,7 +10,7 @@ publish.workspace = true
 default-run = "sugarsubstitute"
 
 [features]
-default = ["windows-native-host"]
+default = ["windows-native-host", "native-composition"]
 windows-native-host = []
 k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification", "sugarsubstitute-desktop/k1-native-qualification", "sugarsubstitute-supervision/k1-native-qualification"]
 native-composition = ["sugarsubstitute-desktop/native-composition"]

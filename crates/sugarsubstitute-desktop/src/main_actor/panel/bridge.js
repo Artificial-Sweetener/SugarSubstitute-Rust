@@ -70,7 +70,8 @@
       flush('x', true);
     }
     const bridge = Object.freeze({
-      host, session, preferencePolicy: 'saved', outputSurfacePreference: 'host',
+      host, session, preferencePolicy: 'saved',
+      ...(policy.outputSurfacePreference === 'host' ? { outputSurfacePreference: 'host' } : {}),
       send(input) {
         const encoded = JSON.stringify(input);
         if (typeof encoded !== 'string' ||

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Match transport custody to the shared canvas protocol; payloads remain native-owned.
-(() => {
+// The host invokes this expression with 'host' only while its main browser is composition-hosted.
+((outputSurfacePreference) => {
   const host = 'ai.artificialsweetener.sugarsubstitute';
   const controls = ['ready', 'applied', 'pong', 'rejected'];
   const requestTypes = ['context.request', 'surface.capabilities.request', 'surface.viewport.request',
@@ -10,6 +11,7 @@
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
   const policy = Object.freeze({
     host,
+    outputSurfacePreference: outputSurfacePreference === 'host' ? 'host' : undefined,
     session(search) {
       const query = new URLSearchParams(search);
       const session = query.get('sc-panel-session');
@@ -43,4 +45,4 @@
   });
   Object.defineProperty(globalThis, '__sugarcubes_substitute_policy_v3', { value: policy });
   globalThis.__sugarcubes_substitute_install_v3?.();
-})();
+})

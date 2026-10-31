@@ -136,7 +136,9 @@ impl<B: StartupBackend> StartupHost<B> {
                                 == sugarsubstitute_application::startup::StartupPhase::Running
                         });
                     match observation {
-                        DesktopStartupObservation::SurfaceMessage(observed) if accepts => {
+                        DesktopStartupObservation::SurfaceMessage(observed)
+                            if grants_native_canvas(accepts, observed.hosting()) =>
+                        {
                             let allocation = observed.allocation();
                             let (identity, message, lease, claim) = observed.into_parts();
                             if self.child.admits_canvas(identity, &lease) {
@@ -167,7 +169,9 @@ impl<B: StartupBackend> StartupHost<B> {
                             }
                             return Ok(());
                         }
-                        DesktopStartupObservation::CanvasContextMessage(observed) if accepts => {
+                        DesktopStartupObservation::CanvasContextMessage(observed)
+                            if grants_native_canvas(accepts, observed.hosting()) =>
+                        {
                             let (identity, request, lease, claim) = observed.into_parts();
                             if self.child.admits_canvas(identity, &lease) {
                                 let backend = self.child.canvas_backend(identity);
@@ -251,6 +255,14 @@ impl<B: StartupBackend> StartupHost<B> {
             .transpose()?;
         Ok(())
     }
+}
+
+/// Grant native canvas operations only while the application runs and the sending main lifetime
+/// is composition-hosted. Other canvas messages reach the child, whose refusal owner reports the
+/// native surface as unsupported so the page presents its canvas itself.
+#[cfg(all(windows, feature = "native-composition"))]
+fn grants_native_canvas(running: bool, hosting: sugarsubstitute_desktop::MainHosting) -> bool {
+    running && hosting.presents_native_canvas()
 }
 
 /// Advance both authorization generations before mutating a settled attempt.

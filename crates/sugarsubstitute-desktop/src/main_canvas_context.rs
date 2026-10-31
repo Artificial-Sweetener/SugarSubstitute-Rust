@@ -16,6 +16,7 @@ pub struct CanvasContextObservation {
     request: CanvasContextRequest,
     lease: MemoryLease,
     claim: MemoryClaim,
+    hosting: crate::MainHosting,
 }
 
 /// An encoded context reply and its original native delivery allocation.
@@ -62,20 +63,26 @@ impl Error for CanvasContextReplyError {
 }
 
 impl CanvasContextObservation {
-    /// Retain the attributed request and its original bounded parse allocation.
+    /// Retain the attributed request, its bounded parse allocation and the lifetime's hosting.
     #[cfg(any(target_os = "windows", test))]
     pub(crate) fn new(
         identity: MainIdentity,
         request: CanvasContextRequest,
         lease: MemoryLease,
         claim: MemoryClaim,
+        hosting: crate::MainHosting,
     ) -> Self {
-        Self { identity, request, lease, claim }
+        Self { identity, request, lease, claim, hosting }
     }
 
     /// Borrow the native navigation that supplied this request.
     pub const fn identity(&self) -> MainIdentity {
         self.identity
+    }
+
+    /// Return the browser hosting of the main lifetime that supplied this request.
+    pub const fn hosting(&self) -> crate::MainHosting {
+        self.hosting
     }
 
     /// Transfer the original request and admitted allocation to the application owner.

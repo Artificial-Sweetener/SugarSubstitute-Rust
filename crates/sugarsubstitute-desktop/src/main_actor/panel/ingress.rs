@@ -58,16 +58,23 @@ impl MainActor {
             }
         };
         let lease = self.request()?.storage_lease().clone();
+        let hosting = self.hosting();
         Ok(Some(match message {
             crate::main_panel_ingress::ClientMessage::Panel(message) => {
                 Ingress::Panel(crate::PanelObservation::new(self.identity(), message, lease, claim))
             }
             crate::main_panel_ingress::ClientMessage::Surface(message) => Ingress::Surface(
-                crate::SurfaceObservation::new(self.identity(), message, lease, claim),
+                crate::SurfaceObservation::new(self.identity(), message, lease, claim, hosting),
             ),
-            crate::main_panel_ingress::ClientMessage::Context(request) => Ingress::Context(
-                crate::CanvasContextObservation::new(self.identity(), request, lease, claim),
-            ),
+            crate::main_panel_ingress::ClientMessage::Context(request) => {
+                Ingress::Context(crate::CanvasContextObservation::new(
+                    self.identity(),
+                    request,
+                    lease,
+                    claim,
+                    hosting,
+                ))
+            }
         }))
     }
 
@@ -82,7 +89,8 @@ impl MainActor {
                 #[cfg(feature = "native-composition")]
                 let mut observation = observation;
                 #[cfg(feature = "native-composition")]
-                if matches!(observation.message(), sugarsubstitute_contracts::canvas_surface::CanvasSurfaceMessage::Request(request)
+                if observation.hosting().presents_native_canvas()
+                    && matches!(observation.message(), sugarsubstitute_contracts::canvas_surface::CanvasSurfaceMessage::Request(request)
                     if matches!(request.operation(), sugarsubstitute_contracts::canvas_surface::CanvasSurfaceOperation::Geometry(_)))
                 {
                     match self.canvas_allocation() {

@@ -35,6 +35,7 @@ mod main_canvas_context;
 #[cfg(any(target_os = "windows", test))]
 mod main_downloads;
 mod main_environment;
+mod main_hosting;
 #[cfg(target_os = "windows")]
 mod main_native_delivery;
 mod main_navigation;
@@ -169,6 +170,7 @@ pub use main_canvas_context::{
     CanvasContextObservation, CanvasContextReply, CanvasContextReplyError,
 };
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};
+pub use main_hosting::MainHosting;
 pub use main_panel_contract::{PanelCommand, PanelObservation};
 pub use main_panel_ingress_receipt::{PanelIngressReceipt, PanelIngressReceiptError};
 pub use main_surface_contract::{

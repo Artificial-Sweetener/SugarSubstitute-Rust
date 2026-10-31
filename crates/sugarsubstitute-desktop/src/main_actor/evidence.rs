@@ -156,6 +156,7 @@ impl MainActor {
                         self.view()?.webview(),
                         self.events()?.clone(),
                         self.request()?.storage_lease(),
+                        self.hosting(),
                     )?);
                     None
                 } else {

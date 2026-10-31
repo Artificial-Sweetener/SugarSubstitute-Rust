@@ -11,7 +11,7 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:fd93f7423ba97cafd7042a1dbe2c6bddbca941839fe074c972b1e2cd3a6473e4"
+source_sha256 = "sha256:360aa0c51fbd72425812566b3f1bdafcc55dcd03eaef13c4a7fdf3bbf827275d"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -4344,7 +4344,7 @@ rationale = "An owned temporary cache scope qualifies the real loopback output t
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:2d5b546c858de8edaf5f9a654989da422c49be20686a55c99f3e34553b0b97f8"
+source_sha256 = "sha256:16d97faecbe3b37a6343a7f40982c0c5c8d61633b3279d659d58a85f6706f68f"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."

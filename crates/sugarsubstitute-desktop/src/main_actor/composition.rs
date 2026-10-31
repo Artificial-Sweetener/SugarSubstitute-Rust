@@ -58,6 +58,30 @@ enum Retire {
     Release,
 }
 
+/// Produce the DirectComposition device; tests substitute a deterministic native failure.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum DeviceSource {
+    /// The system compositor, which fails under unsupported sessions or drivers.
+    System,
+    /// A native creation failure with this status and no transferred device.
+    #[cfg(test)]
+    Failing(HRESULT),
+}
+
+impl DeviceSource {
+    /// Request one device, writing any transferred reference into `raw` before reporting status.
+    fn create(self, raw: &mut *mut c_void) -> HRESULT {
+        match self {
+            // SAFETY: The requested IID and writable output match the adopted interface.
+            Self::System => unsafe {
+                DCompositionCreateDevice2(std::ptr::null_mut(), &IDCompositionDevice::IID, raw)
+            },
+            #[cfg(test)]
+            Self::Failing(status) => status,
+        }
+    }
+}
+
 /// Preserve uncertainty when a native mutation fails after potentially taking effect.
 #[derive(Default)]
 struct Ledger {
@@ -108,6 +132,7 @@ impl Ledger {
 
 /// This owner's original HWND, controller, COM outputs and memory claim remain UI-affine.
 pub(super) struct Composition {
+    source: DeviceSource,
     window: Option<Rc<Window>>,
     controller: Option<ICoreWebView2Controller>,
     composition: Option<ICoreWebView2CompositionController>,
@@ -125,10 +150,13 @@ pub(super) struct Composition {
 }
 
 impl Composition {
-    fn new(window: Rc<Window>, controller: ICoreWebView2Controller, claim: MemoryClaim) -> Self {
+    /// Retain the parent and claim before any native composition effect.
+    /// The browser controller is attached only after the composition surface exists.
+    fn new(window: Rc<Window>, claim: MemoryClaim, source: DeviceSource) -> Self {
         Self {
+            source,
             window: Some(window),
-            controller: Some(controller),
+            controller: None,
             composition: None,
             device: None,
             target: None,
@@ -149,14 +177,7 @@ impl Composition {
         match self.stage {
             Stage::Device => {
                 let mut raw = std::ptr::null_mut();
-                // SAFETY: The requested IID and writable output match the adopted interface.
-                let status = unsafe {
-                    DCompositionCreateDevice2(
-                        std::ptr::null_mut(),
-                        &IDCompositionDevice::IID,
-                        &mut raw,
-                    )
-                };
+                let status = self.source.create(&mut raw);
                 // SAFETY: The call requested IDCompositionDevice, including on partial failure.
                 unsafe { adopt(&mut self.device, raw, status, "create_composition_device")? };
                 self.stage = Stage::Target;
@@ -335,6 +356,26 @@ impl Composition {
             self.retired = true;
         }
         Ok(released)
+    }
+
+    /// Report whether the device, target and visual tree exist and await the browser.
+    fn surface_ready(&self) -> bool {
+        self.stage == Stage::Controller
+    }
+
+    /// Adopt the composition-hosted browser controller once its surface exists.
+    fn attach_controller(
+        &mut self,
+        controller: ICoreWebView2Controller,
+    ) -> Result<(), DesktopError> {
+        if self.controller.is_some() || !self.surface_ready() {
+            return Err(DesktopError::message(
+                "attach_browser_controller",
+                "composition surface is not awaiting a browser",
+            ));
+        }
+        self.controller = Some(controller);
+        Ok(())
     }
 
     fn device(&self) -> Result<&IDCompositionDevice, DesktopError> {

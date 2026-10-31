@@ -67,3 +67,13 @@ fn retry_identity_exhaustion_never_wraps_either_generation() -> Result {
     );
     Ok(())
 }
+
+#[cfg(all(windows, feature = "native-composition"))]
+#[test]
+fn only_a_running_composition_hosted_sender_receives_native_canvas_operations() {
+    use sugarsubstitute_desktop::MainHosting;
+    assert!(super::grants_native_canvas(true, MainHosting::Composition));
+    assert!(!super::grants_native_canvas(true, MainHosting::Windowed));
+    assert!(!super::grants_native_canvas(false, MainHosting::Composition));
+    assert!(!super::grants_native_canvas(false, MainHosting::Windowed));
+}

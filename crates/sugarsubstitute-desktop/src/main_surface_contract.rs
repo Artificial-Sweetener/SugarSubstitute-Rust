@@ -23,6 +23,7 @@ pub struct SurfaceObservation {
     message: CanvasSurfaceMessage,
     lease: MemoryLease,
     claim: MemoryClaim,
+    hosting: crate::MainHosting,
     #[cfg(feature = "native-composition")]
     allocation: Option<crate::canvas::placement::WebViewAllocation>,
 }
@@ -71,19 +72,21 @@ impl Error for SurfaceReplyError {
 }
 
 impl SurfaceObservation {
-    /// Retain the native ingress claim alongside the decoded message.
+    /// Retain the native ingress claim and the sending lifetime's hosting alongside the message.
     #[cfg(any(target_os = "windows", test))]
     pub(crate) fn new(
         identity: MainIdentity,
         message: CanvasSurfaceMessage,
         lease: MemoryLease,
         claim: MemoryClaim,
+        hosting: crate::MainHosting,
     ) -> Self {
         Self {
             identity,
             message,
             lease,
             claim,
+            hosting,
             #[cfg(feature = "native-composition")]
             allocation: None,
         }
@@ -92,6 +95,11 @@ impl SurfaceObservation {
     /// Borrow the identity that supplied this observation.
     pub const fn identity(&self) -> MainIdentity {
         self.identity
+    }
+
+    /// Return the browser hosting of the main lifetime that supplied this observation.
+    pub const fn hosting(&self) -> crate::MainHosting {
+        self.hosting
     }
 
     /// Borrow the untrusted operation before projecting its geometry against the native view.

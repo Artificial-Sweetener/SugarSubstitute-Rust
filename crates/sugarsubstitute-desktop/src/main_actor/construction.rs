@@ -108,7 +108,20 @@ impl MainActor {
                     })?
                     .initialize()?;
                 self.present_recovery_control()?;
-                self.stage = ConstructionStage::Begin;
+                #[cfg(feature = "native-composition")]
+                {
+                    self.stage = ConstructionStage::Hosting;
+                }
+                #[cfg(not(feature = "native-composition"))]
+                {
+                    self.stage = ConstructionStage::Begin;
+                }
+            }
+            #[cfg(feature = "native-composition")]
+            ConstructionStage::Hosting => {
+                if self.select_hosting()? {
+                    self.stage = ConstructionStage::Begin;
+                }
             }
             ConstructionStage::Begin => {
                 let mut context =
@@ -128,10 +141,14 @@ impl MainActor {
                                 "Native construction wake failed");
                     }
                 };
-                #[cfg(feature = "native-composition")]
-                let begun = builder.begin_owned_as_composition_child(self.window()?.as_ref(), wake);
-                #[cfg(not(feature = "native-composition"))]
-                let begun = builder.begin_owned_as_child(self.window()?.as_ref(), wake);
+                let begun = match self.hosting() {
+                    crate::MainHosting::Composition => {
+                        builder.begin_owned_as_composition_child(self.window()?.as_ref(), wake)
+                    }
+                    crate::MainHosting::Windowed => {
+                        builder.begin_owned_as_child(self.window()?.as_ref(), wake)
+                    }
+                };
                 match begun {
                     Ok(constructor) => self.constructor = Some(constructor),
                     Err(failure) => {
@@ -220,7 +237,7 @@ impl MainActor {
             }
             ConstructionStage::Browser => {
                 #[cfg(feature = "native-composition")]
-                if !self.prepare_composition()? {
+                if self.hosting().presents_native_canvas() && !self.prepare_composition()? {
                     return Ok(None);
                 }
                 if self.receivers.is_none() {

@@ -5,20 +5,33 @@
 mod callback;
 mod ledger;
 
-use crate::{DesktopError, main_events::Events};
+use crate::{DesktopError, MainHosting, main_events::Events};
 use ledger::{Action, Ledger, Next};
 use std::rc::Rc;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
 
-const SCRIPTS: [&str; 2] = [include_str!("bridge_protocol.js"), include_str!("bridge.js")];
+const PROTOCOL_SCRIPT: &str = include_str!("bridge_protocol.js");
+const TRANSPORT_SCRIPT: &str = include_str!("bridge.js");
+const SCRIPT_COUNT: usize = 2;
+
+/// Compose the document-start scripts for one browser lifetime.
+///
+/// The protocol script is a function expression invoked with the page's output surface
+/// preference. Only a composition-hosted browser advertises host presentation; a windowed
+/// browser leaves the preference absent so the page presents its canvas itself.
+fn scripts(hosting: MainHosting) -> [String; SCRIPT_COUNT] {
+    let preference = if hosting.presents_native_canvas() { "'host'" } else { "undefined" };
+    [format!("{}({preference});\n", PROTOCOL_SCRIPT.trim_end()), TRANSPORT_SCRIPT.to_owned()]
+}
 
 /// Own every setup callback, script identifier and registration until checked removal.
 pub(in crate::main_actor) struct Bridge {
     core: ICoreWebView2,
     shared: Rc<callback::Shared>,
     ledger: Ledger,
-    scripts: [Option<String>; SCRIPTS.len()],
+    sources: [String; SCRIPT_COUNT],
+    scripts: [Option<String>; SCRIPT_COUNT],
     _claim: MemoryClaim,
 }
 
@@ -28,6 +41,7 @@ impl Bridge {
         core: ICoreWebView2,
         events: Rc<Events>,
         lease: &MemoryLease,
+        hosting: MainHosting,
     ) -> Result<Self, DesktopError> {
         let claim = lease
             .claim(64 * 1024)
@@ -35,7 +49,8 @@ impl Bridge {
         Ok(Self {
             core,
             shared: callback::Shared::new(events)?,
-            ledger: Ledger::new(SCRIPTS.len()),
+            ledger: Ledger::new(SCRIPT_COUNT),
+            sources: scripts(hosting),
             scripts: std::array::from_fn(|_| None),
             _claim: claim,
         })
@@ -111,7 +126,7 @@ impl Bridge {
             ),
             Action::AddScript(index) => (
                 "Page.addScriptToEvaluateOnNewDocument",
-                serde_json::json!({"source": SCRIPTS[index]}),
+                serde_json::json!({"source": self.sources[index]}),
             ),
             Action::RemoveScript(index) => (
                 "Page.removeScriptToEvaluateOnNewDocument",
@@ -130,3 +145,7 @@ impl Bridge {
         callback::submit(&self.core, &self.shared, action, method, &parameters)
     }
 }
+
+#[cfg(test)]
+#[path = "bridge_tests.rs"]
+mod tests;
