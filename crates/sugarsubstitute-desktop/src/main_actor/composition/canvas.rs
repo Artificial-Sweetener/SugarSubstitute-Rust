@@ -139,7 +139,13 @@ impl super::MainActor {
         &mut self,
         region: Option<crate::canvas::MainCanvasInputRegion<'_>>,
     ) -> Result<(), DesktopError> {
-        let Some(input) = self.composition.as_ref().and_then(|tree| tree.input.as_ref()) else {
+        // A windowed browser never publishes a region, so the page alone receives its input.
+        let Some(input) = self
+            .composition
+            .as_ref()
+            .and_then(|tree| tree.input.as_ref())
+            .filter(|_| self.hosting().presents_native_canvas())
+        else {
             return Ok(());
         };
         let current = match region {
