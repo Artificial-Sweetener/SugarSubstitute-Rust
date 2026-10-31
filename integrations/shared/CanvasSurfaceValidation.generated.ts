@@ -21,6 +21,11 @@ import {
   isCanvasSurfaceFileReference,
 } from './CanvasSurfaceGeometryValidation.generated.js';
 import {
+  isCanvasSurfaceInspection,
+  isCanvasSurfaceViewportRequest,
+  isCanvasSurfaceViewportReply,
+} from './CanvasSurfaceViewportValidation.generated.js';
+import {
   isCanvasSurfacePreviewBeginRequest,
   isCanvasSurfacePreviewChunkRequest,
   isCanvasSurfacePreviewEndRequest,
@@ -30,10 +35,6 @@ import {
   isCanvasSurfacePresentationChanged,
 } from './CanvasSurfacePreviewValidation.generated.js';
 import { isCanvasSurfaceOverviewRequest } from './CanvasSurfaceOverviewValidation.generated.js';
-import {
-  isCanvasSurfaceViewportRequest,
-  isCanvasSurfaceViewportReply,
-} from './CanvasSurfaceViewportValidation.generated.js';
 import { isRecord } from './ContractRecord.js';
 /** Validate a bounded CanvasSurfaceCapabilities payload before dispatch. */
 export function isCanvasSurfaceCapabilities(
@@ -52,10 +53,15 @@ export function isCanvasSurfaceCapabilities(
     ) &&
     Object.hasOwn(value, 'viewportCommands') &&
     Array.isArray(value['viewportCommands']) &&
-    value['viewportCommands'].length <= 5 &&
+    value['viewportCommands'].length <= 6 &&
     value['viewportCommands'].every(
       (item: unknown) =>
-        item === 'fit' || item === 'native' || item === 'zoom' || item === 'pan' || item === 'wipe',
+        item === 'fit' ||
+        item === 'native' ||
+        item === 'zoom' ||
+        item === 'pan' ||
+        item === 'wipe' ||
+        item === 'inspect',
     ) &&
     Object.hasOwn(value, 'viewportState') &&
     typeof value['viewportState'] === 'boolean' &&
@@ -223,7 +229,10 @@ export function isCanvasSurfaceSelectRequest(
 ): value is Contract.CanvasSurfaceSelectRequest {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 9 + (Object.hasOwn(value, 'comparison') ? 1 : 0) &&
+    Object.keys(value).length ===
+      9 +
+        (Object.hasOwn(value, 'comparison') ? 1 : 0) +
+        (Object.hasOwn(value, 'inspection') ? 1 : 0) &&
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
@@ -255,7 +264,8 @@ export function isCanvasSurfaceSelectRequest(
     ).test(value['itemId']) &&
     Object.hasOwn(value, 'file') &&
     isCanvasSurfaceFileReference(value['file']) &&
-    (!Object.hasOwn(value, 'comparison') || isCanvasSurfaceComparison(value['comparison']))
+    (!Object.hasOwn(value, 'comparison') || isCanvasSurfaceComparison(value['comparison'])) &&
+    (!Object.hasOwn(value, 'inspection') || isCanvasSurfaceInspection(value['inspection']))
   );
 }
 /** Validate a bounded CanvasSurfaceCommitRequest payload before dispatch. */
@@ -439,6 +449,9 @@ export {
 export {
   isCanvasSurfaceViewportCommand,
   isCanvasSurfaceImageDimensions,
+  isCanvasSurfaceViewportCenter,
+  isCanvasSurfaceInspectionSpan,
+  isCanvasSurfaceInspection,
   isCanvasSurfaceViewportState,
   isCanvasSurfaceViewportRequest,
   isCanvasSurfaceViewportReply,

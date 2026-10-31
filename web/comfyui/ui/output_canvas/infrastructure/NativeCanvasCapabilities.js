@@ -1,4 +1,4 @@
-import { negotiatesCanvasSurfaceComparison } from '../../core/embedded/CanvasRuntime.js';
+import { negotiatesCanvasSurfaceComparison, negotiatesCanvasSurfaceInspection, } from '../../core/embedded/CanvasRuntime.js';
 const CAMERA_COMMANDS = ['fit', 'native', 'zoom', 'pan'];
 const COMPARISON_COMMANDS = ['comparison', 'select-comparison', 'swap', 'wipe'];
 /** Rebuild a staged attachment when discovery changes its immutable command capabilities. */
@@ -20,7 +20,8 @@ export function nativeCanvasInput(host) {
 /**
  * Advertise camera commands only with the viewport-state contract required by their shared
  * proxy, the shared comparison commands only with a negotiated pair-and-divider host, and the
- * overview grid only with a host that paints it.
+ * overview grid only with a host that paints it. Linked inspection requires a host that
+ * restores image-relative cameras.
  */
 export function nativeCanvasCommands(host) {
     const camera = host?.capabilities.viewportState
@@ -30,5 +31,10 @@ export function nativeCanvasCommands(host) {
         ...camera,
         ...(nativeCanvasComparison(host) ? COMPARISON_COMMANDS : []),
         ...(nativeCanvasOverview(host) ? ['overview'] : []),
+        ...(nativeCanvasInspection(host) ? ['link'] : []),
     ];
+}
+/** Report whether the host restores image-relative cameras and reports their centers. */
+export function nativeCanvasInspection(host) {
+    return host !== null && negotiatesCanvasSurfaceInspection(host.capabilities);
 }

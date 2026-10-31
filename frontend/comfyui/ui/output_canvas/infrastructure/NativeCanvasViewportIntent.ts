@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Settle one scoped viewport intent without owning a native operation queue or transport. */
 import type { CanvasSurfaceViewportCommand } from '../../../../../integrations/contracts/CanvasSurface.js';
-import type { CanvasCommandScope } from '../domain/CanvasViewPort.js';
+import type { CanvasOperationScope } from '../domain/CanvasViewPort.js';
 
 /** Keep promise settlement and abort-listener custody independent of native stream sequencing. */
 export class NativeCanvasViewportIntent {
@@ -27,7 +27,7 @@ export class NativeCanvasViewportIntent {
   /** Retain exactly one caller scope while the presentation owner decides when to forward it. */
   constructor(
     readonly command: CanvasSurfaceViewportCommand,
-    readonly scope: CanvasCommandScope,
+    readonly scope: CanvasOperationScope,
     private readonly cancel: (intent: NativeCanvasViewportIntent) => void,
     private readonly finished: (intent: NativeCanvasViewportIntent) => void,
   ) {

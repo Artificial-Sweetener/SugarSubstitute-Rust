@@ -79,7 +79,13 @@ export class CanvasCameraController {
     link(enabled) {
         if (this.#disposed)
             return;
-        this.options.inspections.setLinked(this.options.view, enabled, this.read());
+        const current = this.read();
+        this.options.inspections.setLinked(this.options.view, enabled, current && current.previewLane === null
+            ? {
+                selection: current.selection,
+                inspection: captureCanvasInspection(current.camera, current.geometry),
+            }
+            : null);
         const target = this.#target;
         if (target)
             this.#transition.set(this.options.inspections.camera(this.options.view, target.selection, target.geometry, target.previewLane));

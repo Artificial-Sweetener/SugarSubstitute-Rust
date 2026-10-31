@@ -26,7 +26,8 @@ import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.j
 import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
 import { NativeCanvasActionSurface } from './NativeCanvasActionSurface.js';
-import { nativeCanvasCommands, nativeCanvasComparison, nativeCanvasInput, nativeCanvasOverview, } from './NativeCanvasCapabilities.js';
+import { nativeCanvasCommands, nativeCanvasComparison, nativeCanvasInput, nativeCanvasInspection, nativeCanvasOverview, } from './NativeCanvasCapabilities.js';
+import { NativeCanvasInspection } from './NativeCanvasInspection.js';
 import { NativeCanvasOcclusions } from './NativeCanvasOcclusions.js';
 import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
@@ -44,6 +45,7 @@ export class NativeCanvasAttachment {
     #status;
     #media;
     #native;
+    #inspection;
     #geometry;
     #overlay;
     #stopView;
@@ -167,6 +169,7 @@ export class NativeCanvasAttachment {
             },
             viewport: (value) => {
                 this.#viewport = value;
+                this.#inspection.observe(this.#plan, value, this.#preview);
                 if (this.#ready)
                     this.#status.changed(true);
             },
@@ -175,7 +178,15 @@ export class NativeCanvasAttachment {
                 if (this.#ready)
                     this.#status.changed(true);
             },
+            inspection: (item, compared) => this.#inspection.restore(item, compared),
             report: (error) => options.report(error, null),
+        });
+        this.#inspection = new NativeCanvasInspection({
+            view: options.address.viewId,
+            inspections: options.inspections,
+            enabled: nativeCanvasInspection(host),
+            viewport: (command, scope) => this.#native.viewport(command, scope),
+            accepts: () => !this.#disposed && options.accepts(),
         });
         this.#stopTransfer =
             options.transferChanged?.(() => {
@@ -197,6 +208,7 @@ export class NativeCanvasAttachment {
             () => this.#reveal.drop(),
             () => this.viewport.removeEventListener('pointerdown', this.#focusViewport),
             () => this.#native.dispose(),
+            () => this.#inspection.dispose(),
             () => this.#overview?.dispose(),
             () => this.#media.dispose(),
             () => this.#status.dispose(),
@@ -255,6 +267,7 @@ export class NativeCanvasAttachment {
         this.#catalog = catalog;
         this.#sources = Object.freeze(catalog.entries.map((entry) => entry.summary));
         this.#plan = this.#projection.project(catalog);
+        this.#inspection.link(this.#plan);
         const overview = this.#overview !== null && this.#plan.view.mode === 'overview';
         this.element.classList.toggle('sc-output-overview-mode', overview);
         this.#overview?.reconcile(catalog, this.#plan.view, overview);
@@ -306,6 +319,7 @@ export class NativeCanvasAttachment {
         this.#overlay.dispose();
         this.#media.dispose();
         const released = this.#native.dispose();
+        this.#inspection.dispose();
         this.#overview?.dispose();
         this.options.views.releaseAttachment(this.options.address);
         this.element.replaceChildren();

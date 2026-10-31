@@ -126,7 +126,17 @@ export class CanvasCameraController {
   /** Reconcile a link preference through the existing inspection owner, preserving independent slot state. */
   link(enabled: boolean): void {
     if (this.#disposed) return;
-    this.options.inspections.setLinked(this.options.view, enabled, this.read());
+    const current = this.read();
+    this.options.inspections.setLinked(
+      this.options.view,
+      enabled,
+      current && current.previewLane === null
+        ? {
+            selection: current.selection,
+            inspection: captureCanvasInspection(current.camera, current.geometry),
+          }
+        : null,
+    );
     const target = this.#target;
     if (target)
       this.#transition.set(

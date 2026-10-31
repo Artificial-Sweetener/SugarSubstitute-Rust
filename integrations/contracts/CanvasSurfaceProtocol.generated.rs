@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): 9de8e36cfb787762a195ae46d24faaddada1c30d1973856ecd82986cdf8037f8
+// Schema SHA-256 (LF): 7a01c5d17f795be940d016ee2e9aa490acc6c19d7671b93a30ac6a428d477572
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -306,6 +306,12 @@ pub(super) struct CanvasSurfaceSelectRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub(super) comparison: Option<CanvasSurfaceComparison>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) inspection: Option<CanvasSurfaceInspection>,
 }
 impl CanvasSurfaceSelectRequest {
     /// Reject values outside the exact schema-defined bounds.
@@ -320,6 +326,7 @@ impl CanvasSurfaceSelectRequest {
             && valid_surface_identity(&self.item_id, "result:", 4096)
             && self.file.valid()
             && self.comparison.as_ref().is_none_or(CanvasSurfaceComparison::valid)
+            && self.inspection.as_ref().is_none_or(CanvasSurfaceInspection::valid)
     }
 }
 
@@ -506,6 +513,8 @@ pub(super) enum CanvasSurfaceViewportCommand {
     Pan { x: f64, y: f64, units: String },
     #[serde(rename = "wipe")]
     Wipe { orientation: String, split: f64 },
+    #[serde(rename = "inspect")]
+    Inspect { inspection: CanvasSurfaceInspection },
 }
 impl CanvasSurfaceViewportCommand {
     /// Reject values outside the exact schema-defined bounds.
@@ -524,6 +533,7 @@ impl CanvasSurfaceViewportCommand {
                 matches!(orientation.as_str(), "vertical" | "horizontal")
                     && (0.0..=1.0).contains(split)
             }
+            Self::Inspect { inspection } => inspection.valid(),
         }
     }
 }
@@ -542,6 +552,51 @@ impl CanvasSurfaceImageDimensions {
     }
 }
 
+/// Schema-defined untrusted CanvasSurfaceViewportCenter data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceViewportCenter {
+    pub(super) x: f64,
+    pub(super) y: f64,
+}
+impl CanvasSurfaceViewportCenter {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        (0.0..=1.0).contains(&self.x) && (0.0..=1.0).contains(&self.y)
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceInspectionSpan data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceInspectionSpan {
+    pub(super) x: f64,
+    pub(super) y: f64,
+}
+impl CanvasSurfaceInspectionSpan {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        (0.0..=1000000000.0).contains(&self.x)
+            && self.x > 0.0
+            && (0.0..=1000000000.0).contains(&self.y)
+            && self.y > 0.0
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceInspection data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceInspection {
+    pub(super) center: CanvasSurfaceViewportCenter,
+    pub(super) span: CanvasSurfaceInspectionSpan,
+}
+impl CanvasSurfaceInspection {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.center.valid() && self.span.valid()
+    }
+}
+
 /// Schema-defined untrusted CanvasSurfaceViewportState data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -555,6 +610,12 @@ pub(super) struct CanvasSurfaceViewportState {
         skip_serializing_if = "Option::is_none"
     )]
     pub(super) secondary_dimensions: Option<CanvasSurfaceImageDimensions>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) center: Option<CanvasSurfaceViewportCenter>,
 }
 impl CanvasSurfaceViewportState {
     /// Reject values outside the exact schema-defined bounds.
@@ -563,6 +624,7 @@ impl CanvasSurfaceViewportState {
             && (1e-9..=16384.0).contains(&self.physical_scale)
             && self.dimensions.valid()
             && self.secondary_dimensions.as_ref().is_none_or(CanvasSurfaceImageDimensions::valid)
+            && self.center.as_ref().is_none_or(CanvasSurfaceViewportCenter::valid)
     }
 }
 
@@ -917,11 +979,11 @@ fn valid_canvas_surface_capabilities_image_formats(value: &[String]) -> bool {
 }
 
 fn valid_canvas_surface_capabilities_viewport_commands(value: &[String]) -> bool {
-    if value.len() > 5 {
+    if value.len() > 6 {
         return false;
     }
     for item in value {
-        if !matches!(item.as_str(), "fit" | "native" | "zoom" | "pan" | "wipe") {
+        if !matches!(item.as_str(), "fit" | "native" | "zoom" | "pan" | "wipe" | "inspect") {
             return false;
         }
     }

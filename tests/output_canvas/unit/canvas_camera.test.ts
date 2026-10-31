@@ -247,7 +247,10 @@ describe('browser canvas camera', () => {
     store.capture(a, first, native, g, null);
     expect(store.camera(a, second, g, null)).toEqual(native);
     expect(store.camera(b, first, g, null).mode).toBe('fit');
-    store.setLinked(a, false, { selection: first, camera: native, geometry: g, previewLane: null });
+    store.setLinked(a, false, {
+      selection: first,
+      inspection: captureCanvasInspection(native, g),
+    });
     expect(store.camera(a, second, g, null).mode).toBe('fit');
     store.capture(a, first, native, g, null);
     expect(store.camera(a, first, g, null)).toEqual(native);

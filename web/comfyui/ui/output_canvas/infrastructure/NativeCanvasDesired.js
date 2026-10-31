@@ -72,8 +72,10 @@ export function nativeCanvasWipeKey(comparison) {
  *
  * An overview is the displayed selection while shown: its key never equals an image key, so a
  * later image selection is always sent, and each newer layout is sent behind the one in flight.
+ * An image selection carries the inspection its first frame restores; that camera is not part
+ * of the key, so a changed saved camera never re-sends the shown selection.
  */
-export function nativeCanvasSelection(desired) {
+export function nativeCanvasSelection(desired, inspection) {
     const { item, comparison, overview } = desired;
     if (overview?.length)
         return {
@@ -82,6 +84,7 @@ export function nativeCanvasSelection(desired) {
         };
     if (!item)
         return null;
+    const restored = inspection?.(item, comparison !== null);
     return {
         key: JSON.stringify(comparison
             ? [item.id, item.file, comparison.item.id, comparison.item.file]
@@ -93,6 +96,7 @@ export function nativeCanvasSelection(desired) {
             ...(comparison
                 ? { comparison: { itemId: comparison.item.id, file: comparison.item.file } }
                 : {}),
+            ...(restored ? { inspection: restored } : {}),
         },
     };
 }

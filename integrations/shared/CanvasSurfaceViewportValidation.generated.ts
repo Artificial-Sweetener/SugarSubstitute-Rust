@@ -69,7 +69,13 @@ export function isCanvasSurfaceViewportCommand(
       typeof value['split'] === 'number' &&
       Number.isFinite(value['split']) &&
       value['split'] >= 0 &&
-      value['split'] <= 1)
+      value['split'] <= 1) ||
+    (isRecord(value) &&
+      Object.keys(value).length === 2 &&
+      Object.hasOwn(value, 'type') &&
+      value['type'] === 'inspect' &&
+      Object.hasOwn(value, 'inspection') &&
+      isCanvasSurfaceInspection(value['inspection']))
   );
 }
 /** Validate a bounded CanvasSurfaceImageDimensions payload before dispatch. */
@@ -91,13 +97,67 @@ export function isCanvasSurfaceImageDimensions(
     value['height'] <= 2147483647
   );
 }
+/** Validate a bounded CanvasSurfaceViewportCenter payload before dispatch. */
+export function isCanvasSurfaceViewportCenter(
+  value: unknown,
+): value is Contract.CanvasSurfaceViewportCenter {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 2 &&
+    Object.hasOwn(value, 'x') &&
+    typeof value['x'] === 'number' &&
+    Number.isFinite(value['x']) &&
+    value['x'] >= 0 &&
+    value['x'] <= 1 &&
+    Object.hasOwn(value, 'y') &&
+    typeof value['y'] === 'number' &&
+    Number.isFinite(value['y']) &&
+    value['y'] >= 0 &&
+    value['y'] <= 1
+  );
+}
+/** Validate a bounded CanvasSurfaceInspectionSpan payload before dispatch. */
+export function isCanvasSurfaceInspectionSpan(
+  value: unknown,
+): value is Contract.CanvasSurfaceInspectionSpan {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 2 &&
+    Object.hasOwn(value, 'x') &&
+    typeof value['x'] === 'number' &&
+    Number.isFinite(value['x']) &&
+    value['x'] > 0 &&
+    value['x'] <= 1000000000 &&
+    Object.hasOwn(value, 'y') &&
+    typeof value['y'] === 'number' &&
+    Number.isFinite(value['y']) &&
+    value['y'] > 0 &&
+    value['y'] <= 1000000000
+  );
+}
+/** Validate a bounded CanvasSurfaceInspection payload before dispatch. */
+export function isCanvasSurfaceInspection(
+  value: unknown,
+): value is Contract.CanvasSurfaceInspection {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 2 &&
+    Object.hasOwn(value, 'center') &&
+    isCanvasSurfaceViewportCenter(value['center']) &&
+    Object.hasOwn(value, 'span') &&
+    isCanvasSurfaceInspectionSpan(value['span'])
+  );
+}
 /** Validate a bounded CanvasSurfaceViewportState payload before dispatch. */
 export function isCanvasSurfaceViewportState(
   value: unknown,
 ): value is Contract.CanvasSurfaceViewportState {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 3 + (Object.hasOwn(value, 'secondaryDimensions') ? 1 : 0) &&
+    Object.keys(value).length ===
+      3 +
+        (Object.hasOwn(value, 'secondaryDimensions') ? 1 : 0) +
+        (Object.hasOwn(value, 'center') ? 1 : 0) &&
     Object.hasOwn(value, 'mode') &&
     (value['mode'] === 'fit' || value['mode'] === 'native' || value['mode'] === 'custom') &&
     Object.hasOwn(value, 'physicalScale') &&
@@ -108,7 +168,8 @@ export function isCanvasSurfaceViewportState(
     Object.hasOwn(value, 'dimensions') &&
     isCanvasSurfaceImageDimensions(value['dimensions']) &&
     (!Object.hasOwn(value, 'secondaryDimensions') ||
-      isCanvasSurfaceImageDimensions(value['secondaryDimensions']))
+      isCanvasSurfaceImageDimensions(value['secondaryDimensions'])) &&
+    (!Object.hasOwn(value, 'center') || isCanvasSurfaceViewportCenter(value['center']))
   );
 }
 /** Validate a bounded CanvasSurfaceViewportRequest payload before dispatch. */
