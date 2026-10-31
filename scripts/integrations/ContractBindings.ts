@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { format } from 'prettier';
 import { contractArraySchema } from './ContractArraySchema.js';
+import { contractObjectProperties } from './ContractObjectSchema.js';
 import {
   contractValidationModules,
   type ContractValidationModule,
@@ -45,17 +46,12 @@ function binding(value: unknown): string {
   if (Array.isArray(node.oneOf)) return node.oneOf.map(binding).join(' | ');
   if (node.type === 'boolean' || node.type === 'string') return node.type;
   if (node.type === 'integer' || node.type === 'number') return 'number';
-  if (node.type === 'object') {
-    const properties = record(node.properties);
-    if (
-      node.additionalProperties !== false ||
-      JSON.stringify(node.required) !== JSON.stringify(Object.keys(properties))
-    )
-      throw new Error('Contract objects must be closed with every property required.');
-    return `{ ${Object.entries(properties)
-      .map(([key, property]) => `readonly ${key}: ${binding(property)};`)
+  if (node.type === 'object')
+    return `{ ${contractObjectProperties(node)
+      .map(
+        ({ key, value, optional }) => `readonly ${key}${optional ? '?' : ''}: ${binding(value)};`,
+      )
       .join(' ')} }`;
-  }
   throw new Error('Unsupported contract schema vocabulary.');
 }
 
@@ -108,8 +104,20 @@ function predicate(value: unknown, expression: string, references: Set<string>):
     return `typeof ${expression} === 'string' && ${length}${typeof node.pattern === 'string' ? ` && new RegExp(${JSON.stringify(node.pattern)}).test(${expression})` : ''}`;
   }
   if (node.type === 'object') {
-    const properties = Object.entries(record(node.properties));
-    return `isRecord(${expression}) && Object.keys(${expression}).length === ${properties.length} && ${properties.map(([key, property]) => `Object.hasOwn(${expression}, ${JSON.stringify(key)}) && (${predicate(property, `${expression}[${JSON.stringify(key)}]`, references)})`).join(' && ')}`;
+    const properties = contractObjectProperties(node);
+    const member = (key: string) => `Object.hasOwn(${expression}, ${JSON.stringify(key)})`;
+    const required = properties.filter(({ optional }) => !optional).length;
+    // Counting only declared members keeps the object closed while optional members vary.
+    const count = [
+      String(required),
+      ...properties.filter(({ optional }) => optional).map(({ key }) => `(${member(key)} ? 1 : 0)`),
+    ].join(' + ');
+    return `isRecord(${expression}) && Object.keys(${expression}).length === ${count} && ${properties
+      .map(({ key, value, optional }) => {
+        const valid = predicate(value, `${expression}[${JSON.stringify(key)}]`, references);
+        return optional ? `(!${member(key)} || (${valid}))` : `${member(key)} && (${valid})`;
+      })
+      .join(' && ')}`;
   }
   throw new Error('Unsupported contract validation vocabulary.');
 }

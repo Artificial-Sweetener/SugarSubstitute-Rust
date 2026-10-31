@@ -30,6 +30,7 @@ import {
   supportsCanvasSurfaceViewport,
   snapshotCanvasSurfaceViewport,
 } from './CanvasSurfaceViewport.js';
+import { supportsCanvasSurfaceComparison } from './CanvasSurfaceComparison.js';
 import {
   isCanvasPreviewCommand,
   supportsCanvasSurfacePreview,
@@ -70,7 +71,20 @@ export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurf
     });
   }
   if (request.type === 'surface.select') {
-    return Object.freeze({ ...request, address, file: Object.freeze({ ...request.file }) });
+    const { comparison, ...selection } = request;
+    return Object.freeze({
+      ...selection,
+      address,
+      file: Object.freeze({ ...request.file }),
+      ...(comparison
+        ? {
+            comparison: Object.freeze({
+              ...comparison,
+              file: Object.freeze({ ...comparison.file }),
+            }),
+          }
+        : {}),
+    });
   }
   if (request.type === 'surface.viewport.request')
     return Object.freeze({ ...request, address, command: Object.freeze({ ...request.command }) });
@@ -123,6 +137,7 @@ export async function dispatchCanvasSurface(
       : !port.surface ||
           !context?.canvas.capabilities.displayOutput ||
           !supportsCanvasSurfaceViewport(port.surface.capabilities, command) ||
+          !supportsCanvasSurfaceComparison(port.surface.capabilities, command) ||
           !supportsCanvasSurfacePreview(port.surface.capabilities, command) ||
           !validCanvasPreviewCommand(command) ||
           (isCanvasPreviewCommand(command) &&

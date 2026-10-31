@@ -17,6 +17,8 @@
 import { sendNativeCanvasOperation, releaseNativeCanvasBinding, createNativeCanvasBinding, } from './NativeCanvasBinding.js';
 import { NativeCanvasPreview } from './NativeCanvasPreview.js';
 import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
+import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
+import { nativeCanvasDesired, nativeCanvasSelection, nativeCanvasWipe, nativeCanvasWipeKey, } from './NativeCanvasDesired.js';
 /** Keep one in-flight operation and coalesce newer view or geometry changes. */
 export class NativeCanvasPresentation {
     options;
@@ -34,8 +36,12 @@ export class NativeCanvasPresentation {
     constructor(options) {
         this.options = options;
     }
-    /** Reconcile only the selection and geometry already chosen by the view owners. */
-    update(geometry, item, preview = null) {
+    /**
+     * Reconcile only the selection, comparison and geometry already chosen by the view owners.
+     * A divider-only comparison change keeps the presented pair and its camera; the newest
+     * divider follows any in-flight placement rather than cancelling it.
+     */
+    update(geometry, item, preview = null, comparison = null) {
         if (this.#disposed)
             return;
         this.#viewportRecovery = null;
@@ -67,42 +73,24 @@ export class NativeCanvasPresentation {
             this.#desired = null;
         }
         const previewChanged = this.#preview?.update(preview) ?? false;
-        const eligible = geometry &&
-            geometry.viewport.width > 0 &&
-            geometry.viewport.height > 0 &&
-            (preparing || (geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0)) &&
-            item?.mediaKind === 'image'
-            ? item
-            : null;
-        const key = JSON.stringify([
-            geometry && { ...geometry, focused: false },
-            item && [item.id, item.file, item.mediaKind],
-            this.options.accepts(),
-        ]);
-        if (this.#desired?.key === key) {
-            if (this.#desired.geometry?.focused === geometry?.focused) {
-                if (previewChanged) {
-                    this.#dirty = true;
-                    this.#start();
-                }
-                return;
+        const desired = nativeCanvasDesired(geometry, item, nativeCanvasComparison(host) ? comparison : null, this.options.accepts(), preparing);
+        if (this.#desired?.key === desired.key) {
+            const focused = this.#desired.geometry?.focused !== geometry?.focused;
+            const divider = nativeCanvasWipeKey(this.#desired.comparison) !== nativeCanvasWipeKey(desired.comparison);
+            if (focused)
+                this.#desired.geometry = geometry;
+            this.#desired.comparison = desired.comparison;
+            if (focused || divider || previewChanged) {
+                this.#dirty = true;
+                this.#start();
             }
-            this.#desired.geometry = geometry;
-            this.#dirty = true;
-            this.#start();
             return;
         }
         const retainedFinal = !item &&
             this.#preview?.observing &&
             this.#binding?.selectionRevision !== null &&
             this.#binding?.geometry === JSON.stringify(geometry);
-        this.#desired = {
-            geometry,
-            item: eligible,
-            key,
-            empty: item?.mediaKind !== 'image',
-            previewable: item === null,
-        };
+        this.#desired = desired;
         if (!retainedFinal)
             this.options.viewport(null);
         if (this.#viewport && !retainedFinal)
@@ -112,11 +100,11 @@ export class NativeCanvasPresentation {
         if (this.#binding?.active?.dependsOnView && !retainedFinal)
             this.#binding.active.cancellation.cancel();
         // The native owner retains acknowledged pixels while a same-allocation replacement loads.
-        if ((!eligible && !(item === null && this.#preview?.observing)) ||
+        if ((!desired.item && !(item === null && this.#preview?.observing)) ||
             !this.#binding?.committed ||
             this.#binding.geometry !== JSON.stringify(geometry))
             this.#show(false);
-        this.options.status(eligible
+        this.options.status(desired.item
             ? host
                 ? { state: 'loading', message: 'Loading the selected image.' }
                 : { state: 'unavailable', message: 'The native canvas is unavailable.' }
@@ -201,8 +189,10 @@ export class NativeCanvasPresentation {
     }
     /**
      * Converge the bound surface on the newest desired state, one native mutation at a time.
-     * Each pass prepares, places, selects and commits in order, then serves viewport intent and
-     * finally one preview transfer step; a change during any await marks the run dirty again.
+     * Each pass prepares, places, selects and commits in order, then places a comparison divider,
+     * serves viewport intent and finally one preview transfer step; a change during any await
+     * marks the run dirty again. A newer divider never cancels an in-flight placement, so one
+     * placement is in flight and only the newest value waits behind it.
      */
     async #run() {
         while (this.#dirty && !this.#disposed) {
@@ -256,18 +246,12 @@ export class NativeCanvasPresentation {
                         continue;
                     }
                 }
-                const selection = desired.item
-                    ? JSON.stringify([desired.item.id, desired.item.file])
-                    : null;
-                if (desired.item && selection !== binding.selection) {
+                const selection = nativeCanvasSelection(desired);
+                if (selection && selection.key !== binding.selection) {
                     const preview = this.#preview;
                     preview?.selecting();
                     let selectionRevision = 0;
-                    const result = await this.#send(binding, {
-                        type: 'surface.select',
-                        itemId: desired.item.id,
-                        file: desired.item.file,
-                    }, (revision) => {
+                    const result = await this.#send(binding, selection.operation, (revision) => {
                         selectionRevision = revision;
                     }).finally(() => preview?.selectionFinished());
                     if (!this.#owns(binding))
@@ -276,7 +260,7 @@ export class NativeCanvasPresentation {
                         this.#failed(desired, result);
                         continue;
                     }
-                    binding.selection = selection;
+                    binding.selection = selection.key;
                     binding.selectionRevision = selectionRevision;
                     preview?.selected();
                 }
@@ -297,6 +281,30 @@ export class NativeCanvasPresentation {
                 }
                 if (!this.#current(binding, desired))
                     continue;
+                const wipe = nativeCanvasWipe(desired);
+                if (wipe && wipe.key !== binding.wipe) {
+                    const result = await this.#send(binding, {
+                        type: 'surface.viewport.request',
+                        command: wipe.command,
+                    });
+                    if (!this.#owns(binding))
+                        return;
+                    const current = this.#current(binding, desired);
+                    if (result.status === 'applied' && 'viewport' in result) {
+                        // The host placed this divider even when a newer one is now pending behind it.
+                        binding.wipe = wipe.key;
+                        if (current) {
+                            binding.viewportKey = desired.key;
+                            this.options.viewport(result.viewport);
+                        }
+                    }
+                    else if (result.status === 'cancelled')
+                        this.#dirty ||= current;
+                    else
+                        this.#failed(desired, result);
+                    if (!current || binding.wipe !== wipe.key)
+                        continue;
+                }
                 const intent = this.#viewport;
                 if (intent && !intent.scope.current())
                     intent.complete(false);

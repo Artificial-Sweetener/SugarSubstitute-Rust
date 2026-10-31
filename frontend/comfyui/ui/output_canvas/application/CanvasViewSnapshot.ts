@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Assemble shared output controls from renderer-owned presentation status. */
 
+import type { ImageDimensions } from '../../execution/domain/WorkflowOutput.js';
 import type { OutputMediaProfile } from '../../output_saving/domain/OutputMedia.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
@@ -64,5 +65,44 @@ export function canvasViewSnapshot(
     connected,
     mediaActions,
     zoom: presentation.zoom ? Object.freeze(presentation.zoom) : null,
+  });
+}
+
+/** Describe a presenter outcome that offers no retry or large-image admission. */
+export function canvasResourceStatus(
+  state: CanvasResourceStatus['state'],
+  message: string,
+): CanvasResourceStatus {
+  return { state, message, canRetry: false, canAdmitLargeImage: false };
+}
+
+/**
+ * Describe image B for an active comparison from the presenter's loaded B status.
+ *
+ * Unresolved or non-image selections are unavailable regardless of presenter progress; an
+ * active comparison without a chosen B asks for one. No comparison has no B status.
+ */
+export function canvasSecondaryResource(
+  plan: CanvasDisplayPlan,
+  loaded: CanvasResourceStatus | undefined,
+): CanvasResourceStatus | null {
+  if (plan.secondary && (!plan.secondary.sourcePresent || !plan.secondary.item))
+    return canvasResourceStatus('unavailable', 'The selected B image is unavailable.');
+  if (plan.secondary?.item && plan.secondary.item.mediaKind !== 'image')
+    return canvasResourceStatus('unavailable', 'Open B in the host viewer.');
+  return plan.view.comparison
+    ? (loaded ?? canvasResourceStatus('empty', 'Choose an output for B.'))
+    : null;
+}
+
+/** Express B's physical scale per axis while B is stretched into A's image rectangle. */
+export function canvasSecondaryPhysicalScale(
+  physicalScale: number,
+  primary: ImageDimensions,
+  secondary: ImageDimensions,
+): { readonly x: number; readonly y: number } {
+  return Object.freeze({
+    x: (physicalScale * primary.width) / secondary.width,
+    y: (physicalScale * primary.height) / secondary.height,
   });
 }

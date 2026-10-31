@@ -58,7 +58,18 @@ export function isCanvasSurfaceViewportCommand(
       value['y'] >= -10 &&
       value['y'] <= 10 &&
       Object.hasOwn(value, 'units') &&
-      value['units'] === 'viewport')
+      value['units'] === 'viewport') ||
+    (isRecord(value) &&
+      Object.keys(value).length === 3 &&
+      Object.hasOwn(value, 'type') &&
+      value['type'] === 'wipe' &&
+      Object.hasOwn(value, 'orientation') &&
+      (value['orientation'] === 'vertical' || value['orientation'] === 'horizontal') &&
+      Object.hasOwn(value, 'split') &&
+      typeof value['split'] === 'number' &&
+      Number.isFinite(value['split']) &&
+      value['split'] >= 0 &&
+      value['split'] <= 1)
   );
 }
 /** Validate a bounded CanvasSurfaceImageDimensions payload before dispatch. */
@@ -86,7 +97,7 @@ export function isCanvasSurfaceViewportState(
 ): value is Contract.CanvasSurfaceViewportState {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 3 &&
+    Object.keys(value).length === 3 + (Object.hasOwn(value, 'secondaryDimensions') ? 1 : 0) &&
     Object.hasOwn(value, 'mode') &&
     (value['mode'] === 'fit' || value['mode'] === 'native' || value['mode'] === 'custom') &&
     Object.hasOwn(value, 'physicalScale') &&
@@ -95,7 +106,9 @@ export function isCanvasSurfaceViewportState(
     value['physicalScale'] >= 1e-9 &&
     value['physicalScale'] <= 16384 &&
     Object.hasOwn(value, 'dimensions') &&
-    isCanvasSurfaceImageDimensions(value['dimensions'])
+    isCanvasSurfaceImageDimensions(value['dimensions']) &&
+    (!Object.hasOwn(value, 'secondaryDimensions') ||
+      isCanvasSurfaceImageDimensions(value['secondaryDimensions']))
   );
 }
 /** Validate a bounded CanvasSurfaceViewportRequest payload before dispatch. */

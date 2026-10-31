@@ -95,6 +95,7 @@ export async function canvasBindings(
     'CanvasSurfaceGeometry',
     'CanvasSurfacePrepareRequest',
     'CanvasSurfaceGeometryRequest',
+    'CanvasSurfaceComparison',
     'CanvasSurfaceSelectRequest',
     'CanvasSurfaceCommitRequest',
     'CanvasSurfaceReleaseRequest',

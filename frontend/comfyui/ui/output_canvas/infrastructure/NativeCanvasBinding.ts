@@ -39,6 +39,8 @@ export interface NativeCanvasBinding {
   selection: string | null;
   selectionRevision: number | null;
   viewportKey: string | null;
+  /** The divider acknowledged for the currently selected comparison pair. */
+  wipe: string | null;
   active: {
     readonly cancellation: CanvasCancellation;
     readonly dependsOnView: boolean;
@@ -59,6 +61,7 @@ export function createNativeCanvasBinding(host: CanvasSurfaceHost): NativeCanvas
     selection: null,
     selectionRevision: null,
     viewportKey: null,
+    wipe: null,
     active: null,
   };
 }
@@ -86,9 +89,13 @@ export async function sendNativeCanvasOperation(
     type: operation.type,
   };
   if (operation.type === 'surface.geometry') binding.geometry = null;
-  if (operation.type === 'surface.select') binding.selection = null;
-  // Presentation keys already fence physical geometry; focus-only updates preserve the camera.
-  if (operation.type === 'surface.select') binding.viewportKey = null;
+  if (operation.type === 'surface.select') {
+    binding.selection = null;
+    // Presentation keys already fence physical geometry; focus-only updates preserve the camera.
+    binding.viewportKey = null;
+    // A replacement pair carries no host divider until the page places it again.
+    binding.wipe = null;
+  }
   binding.attempted = true;
   try {
     assigned?.(next);

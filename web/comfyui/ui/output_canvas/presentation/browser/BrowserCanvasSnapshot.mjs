@@ -15,20 +15,20 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe actual displayed image fidelity and loading state for reusable overlay controls. */
 import { canvasComparisonAvailable } from '../../application/CanvasComparisonSelection.js';
-import { canvasViewSnapshot } from '../../application/CanvasViewSnapshot.js';
+import { canvasResourceStatus, canvasSecondaryPhysicalScale, canvasSecondaryResource, canvasViewSnapshot, } from '../../application/CanvasViewSnapshot.js';
 /** Project only lightweight status, keeping DOM handles out of the renderer-independent port. */
 export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources, preparing, mediaActions, detail = null) {
     const primary = images.find((slot) => slot.slot === 'primary');
     const secondary = images.find((slot) => slot.slot === 'secondary');
     const frame = primary?.frame;
     const preview = Boolean(frame?.preview);
-    let resource = primary?.status ?? status('empty', '');
+    let resource = primary?.status ?? canvasResourceStatus('empty', '');
     if (plan.primary && !plan.primary.sourcePresent)
-        resource = status('unavailable', 'The selected workflow output is unavailable.');
+        resource = canvasResourceStatus('unavailable', 'The selected workflow output is unavailable.');
     else if (plan.primary?.item && plan.primary.item.mediaKind !== 'image')
-        resource = detail ?? status('unavailable', 'Open this media in the host viewer.');
+        resource = detail ?? canvasResourceStatus('unavailable', 'Open this media in the host viewer.');
     else if (plan.preview && !previewStarted)
-        resource = status('loading', frame
+        resource = canvasResourceStatus('loading', frame
             ? 'Waiting for a fresh source preview; showing the final image.'
             : 'Waiting for a fresh source preview.');
     else if (plan.preview && resource.state === 'error')
@@ -38,7 +38,7 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
             message: 'The source preview failed. Waiting for a fresh frame.',
         };
     else if (plan.primary && !plan.primary.item && !plan.preview)
-        resource = status('unavailable', 'The requested batch image is unavailable.');
+        resource = canvasResourceStatus('unavailable', 'The requested batch image is unavailable.');
     else if (frame &&
         !frame.preview &&
         frame.key !== plan.primary?.item?.id &&
@@ -46,19 +46,13 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
         resource = { ...resource, message: 'Loading the selected image; showing the previous image.' };
     const physicalScale = camera ? camera.camera.scale * camera.geometry.density : 0;
     const b = secondary?.frame;
-    let secondaryResource = plan.view.comparison
-        ? (secondary?.status ?? status('empty', 'Choose an output for B.'))
-        : null;
-    if (plan.secondary && (!plan.secondary.sourcePresent || !plan.secondary.item))
-        secondaryResource = status('unavailable', 'The selected B image is unavailable.');
-    else if (plan.secondary?.item && plan.secondary.item.mediaKind !== 'image')
-        secondaryResource = status('unavailable', 'Open B in the host viewer.');
+    const secondaryResource = canvasSecondaryResource(plan, secondary?.status);
     if (!frame && b)
         resource = { ...resource, message: `${resource.message} Showing B.` };
     if (plan.view.mode === 'overview')
-        resource = status('empty', '');
+        resource = canvasResourceStatus('empty', '');
     if (preparing)
-        resource = status('loading', 'Loading workflow output…');
+        resource = canvasResourceStatus('loading', 'Loading workflow output…');
     return canvasViewSnapshot(address, plan, catalog, sources, connected, mediaActions, {
         comparisonAvailable: canvasComparisonAvailable(catalog),
         preview,
@@ -69,16 +63,9 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
             physicalScale,
             dimensions: camera?.geometry.image ?? null,
             secondaryPhysicalScale: b && camera
-                ? Object.freeze({
-                    x: (physicalScale * camera.geometry.image.width) / b.dimensions.width,
-                    y: (physicalScale * camera.geometry.image.height) / b.dimensions.height,
-                })
+                ? canvasSecondaryPhysicalScale(physicalScale, camera.geometry.image, b.dimensions)
                 : null,
             secondaryDimensions: b?.dimensions ?? null,
         }),
     });
-}
-/** Describe unallocated/unsupported media without creating image resources or retry promises. */
-function status(state, message) {
-    return { state, message, canRetry: false, canAdmitLargeImage: false };
 }

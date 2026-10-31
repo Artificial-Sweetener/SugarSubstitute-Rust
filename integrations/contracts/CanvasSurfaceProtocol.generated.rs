@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): d5a712b0e68d1df579761a5a224bcbc3a6a62c70163ae418c849b3efaa225159
+// Schema SHA-256 (LF): 86f02235ba6da821878249cd376aaf4e0400249cbc557692ad8277b3fc6daa01
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -238,6 +238,20 @@ impl CanvasSurfaceGeometryRequest {
     }
 }
 
+/// Schema-defined untrusted CanvasSurfaceComparison data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceComparison {
+    pub(super) item_id: String,
+    pub(super) file: CanvasSurfaceFileReference,
+}
+impl CanvasSurfaceComparison {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        valid_surface_identity(&self.item_id, "result:", 4096) && self.file.valid()
+    }
+}
+
 /// Schema-defined untrusted CanvasSurfaceSelectRequest data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -251,6 +265,12 @@ pub(super) struct CanvasSurfaceSelectRequest {
     pub(super) revision: u64,
     pub(super) item_id: String,
     pub(super) file: CanvasSurfaceFileReference,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) comparison: Option<CanvasSurfaceComparison>,
 }
 impl CanvasSurfaceSelectRequest {
     /// Reject values outside the exact schema-defined bounds.
@@ -264,6 +284,7 @@ impl CanvasSurfaceSelectRequest {
             && (1..=9007199254740991).contains(&self.revision)
             && valid_surface_identity(&self.item_id, "result:", 4096)
             && self.file.valid()
+            && self.comparison.as_ref().is_none_or(CanvasSurfaceComparison::valid)
     }
 }
 
@@ -381,6 +402,8 @@ pub(super) enum CanvasSurfaceViewportCommand {
     Zoom { factor: f64 },
     #[serde(rename = "pan")]
     Pan { x: f64, y: f64, units: String },
+    #[serde(rename = "wipe")]
+    Wipe { orientation: String, split: f64 },
 }
 impl CanvasSurfaceViewportCommand {
     /// Reject values outside the exact schema-defined bounds.
@@ -394,6 +417,10 @@ impl CanvasSurfaceViewportCommand {
                 (-10.0..=10.0).contains(x)
                     && (-10.0..=10.0).contains(y)
                     && units.as_str() == "viewport"
+            }
+            Self::Wipe { orientation, split } => {
+                matches!(orientation.as_str(), "vertical" | "horizontal")
+                    && (0.0..=1.0).contains(split)
             }
         }
     }
@@ -420,6 +447,12 @@ pub(super) struct CanvasSurfaceViewportState {
     pub(super) mode: String,
     pub(super) physical_scale: f64,
     pub(super) dimensions: CanvasSurfaceImageDimensions,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) secondary_dimensions: Option<CanvasSurfaceImageDimensions>,
 }
 impl CanvasSurfaceViewportState {
     /// Reject values outside the exact schema-defined bounds.
@@ -427,6 +460,7 @@ impl CanvasSurfaceViewportState {
         matches!(self.mode.as_str(), "fit" | "native" | "custom")
             && (1e-9..=16384.0).contains(&self.physical_scale)
             && self.dimensions.valid()
+            && self.secondary_dimensions.as_ref().is_none_or(CanvasSurfaceImageDimensions::valid)
     }
 }
 
@@ -776,11 +810,11 @@ fn valid_canvas_surface_capabilities_image_formats(value: &[String]) -> bool {
 }
 
 fn valid_canvas_surface_capabilities_viewport_commands(value: &[String]) -> bool {
-    if value.len() > 4 {
+    if value.len() > 5 {
         return false;
     }
     for item in value {
-        if !matches!(item.as_str(), "fit" | "native" | "zoom" | "pan") {
+        if !matches!(item.as_str(), "fit" | "native" | "zoom" | "pan" | "wipe") {
             return false;
         }
     }
@@ -832,4 +866,11 @@ fn valid_bounded_base64(value: &str, maximum: usize) -> bool {
 
 fn valid_canvas_surface_presentation_reply_status(value: &str) -> bool {
     matches!(value, "available" | "unsupported" | "unavailable" | "error")
+}
+
+/// Decode an optional member only when present, rejecting an explicit null.
+fn deserialize_present_option<'de, D: serde::Deserializer<'de>, T: serde::Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(deserializer).map(Some)
 }

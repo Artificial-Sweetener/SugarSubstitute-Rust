@@ -33,9 +33,16 @@ export function supportsCanvasSurfaceViewport(
   );
 }
 
-/** Retain a native observation without creating a second mutable camera authority. */
+/** Retain a native observation, including a shown comparison's B size, as one frozen value. */
 export function snapshotCanvasSurfaceViewport(
   viewport: CanvasSurfaceViewportState,
 ): CanvasSurfaceViewportState {
-  return Object.freeze({ ...viewport, dimensions: Object.freeze({ ...viewport.dimensions }) });
+  const { secondaryDimensions, ...state } = viewport;
+  return Object.freeze({
+    ...state,
+    dimensions: Object.freeze({ ...viewport.dimensions }),
+    ...(secondaryDimensions
+      ? { secondaryDimensions: Object.freeze({ ...secondaryDimensions }) }
+      : {}),
+  });
 }

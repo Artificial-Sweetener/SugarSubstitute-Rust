@@ -28,6 +28,7 @@ export function createNativeCanvasBinding(host) {
         selection: null,
         selectionRevision: null,
         viewportKey: null,
+        wipe: null,
         active: null,
     };
 }
@@ -48,11 +49,13 @@ export async function sendNativeCanvasOperation(binding, address, operation, ass
     };
     if (operation.type === 'surface.geometry')
         binding.geometry = null;
-    if (operation.type === 'surface.select')
+    if (operation.type === 'surface.select') {
         binding.selection = null;
-    // Presentation keys already fence physical geometry; focus-only updates preserve the camera.
-    if (operation.type === 'surface.select')
+        // Presentation keys already fence physical geometry; focus-only updates preserve the camera.
         binding.viewportKey = null;
+        // A replacement pair carries no host divider until the page places it again.
+        binding.wipe = null;
+    }
     binding.attempted = true;
     try {
         assigned?.(next);

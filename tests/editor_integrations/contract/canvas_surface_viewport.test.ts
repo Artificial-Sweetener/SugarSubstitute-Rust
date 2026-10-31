@@ -47,8 +47,9 @@ const address = {
 } as const;
 const capabilities: CanvasSurfaceCapabilities = {
   ...selectedPngCapabilities,
-  viewportCommands: ['fit', 'native', 'zoom', 'pan'],
+  viewportCommands: ['fit', 'native', 'zoom', 'pan', 'wipe'],
   viewportState: true,
+  comparison: true,
 };
 const viewport = {
   mode: 'fit',
@@ -125,8 +126,11 @@ test('accepts every shared viewport vector and rejects malformed bounded shapes'
     expect(isCanvasMessage(value)).toBe(false);
   const valid = vectors.validRequests[0];
   if (!isCanvasSurfaceViewportRequest(valid)) throw new Error('Missing vector.');
-  for (const factor of [NaN, Infinity, -Infinity])
+  for (const factor of [NaN, Infinity, -Infinity]) {
     expect(isCanvasMessage({ ...valid, command: { type: 'zoom', factor } })).toBe(false);
+    const wipe = { type: 'wipe', orientation: 'vertical', split: factor };
+    expect(isCanvasMessage({ ...valid, command: wipe })).toBe(false);
+  }
 });
 
 test.each(vectors.validRequests)(
@@ -159,6 +163,34 @@ test.each([
   } finally {
     f.client.dispose();
   }
+});
+
+test.each([
+  { ...capabilities, comparison: false },
+  { ...capabilities, viewportCommands: ['fit', 'native', 'zoom', 'pan'] as const },
+])('refuses a wipe without negotiated comparison and divider support %#', async (declared) => {
+  const f = await fixture(declared);
+  try {
+    const wipe = { type: 'wipe', orientation: 'horizontal', split: 0.25 } as const;
+    await expect(request(f, wipe)).resolves.toMatchObject({ status: 'unavailable' });
+    expect(f.sent).toEqual([]);
+  } finally {
+    f.client.dispose();
+  }
+});
+
+test('retains a shown comparison size as immutable native state', async () => {
+  const f = await fixture();
+  const pending = request(f, { type: 'wipe', orientation: 'vertical', split: 0.5 });
+  const value = reply(f);
+  const secondaryDimensions = { width: 320, height: 240 };
+  f.client.receive({ ...value, viewport: { ...value.viewport, secondaryDimensions } });
+  Object.assign(secondaryDimensions, { width: 1 });
+  const result = await pending;
+  if (!('viewport' in result)) throw new Error('Missing native observation.');
+  expect(result.viewport.secondaryDimensions).toEqual({ width: 320, height: 240 });
+  expect(Object.isFrozen(result.viewport.secondaryDimensions)).toBe(true);
+  f.client.dispose();
 });
 
 test('permits state reads independently of individual command support', async () => {

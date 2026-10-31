@@ -173,6 +173,66 @@
         "y": -10,
         "units": "viewport"
       }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "vertical",
+        "split": 0
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "horizontal",
+        "split": 0.5
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "vertical",
+        "split": 1
+      }
     }
   ],
   "validReplies": [
@@ -273,6 +333,35 @@
         "dimensions": {
           "width": 2147483647,
           "height": 1
+        }
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.reply",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "status": "applied",
+      "message": "",
+      "viewport": {
+        "mode": "fit",
+        "physicalScale": 0.5,
+        "dimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "secondaryDimensions": {
+          "width": 512,
+          "height": 2147483647
         }
       }
     }
@@ -577,6 +666,165 @@
       "revision": 3,
       "command": {
         "type": "read"
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "vertical",
+        "split": -0.001
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "vertical",
+        "split": 1.001
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "vertical",
+        "split": "0.5"
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "vertical",
+        "split": null
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "diagonal",
+        "split": 0.5
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "split": 0.5
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "vertical"
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.request",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "command": {
+        "type": "wipe",
+        "orientation": "vertical",
+        "split": 0.5,
+        "extra": true
       }
     }
   ],
@@ -939,6 +1187,207 @@
       "revision": 3,
       "status": "applied",
       "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.reply",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "status": "applied",
+      "message": "",
+      "viewport": {
+        "mode": "fit",
+        "physicalScale": 0.5,
+        "dimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "secondaryDimensions": null
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.reply",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "status": "applied",
+      "message": "",
+      "viewport": {
+        "mode": "fit",
+        "physicalScale": 0.5,
+        "dimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "secondaryDimensions": {
+          "width": 0,
+          "height": 480
+        }
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.reply",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "status": "applied",
+      "message": "",
+      "viewport": {
+        "mode": "fit",
+        "physicalScale": 0.5,
+        "dimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "secondaryDimensions": {
+          "width": 640.5,
+          "height": 480
+        }
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.reply",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "status": "applied",
+      "message": "",
+      "viewport": {
+        "mode": "fit",
+        "physicalScale": 0.5,
+        "dimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "secondaryDimensions": {
+          "width": 640,
+          "height": 2147483648
+        }
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.reply",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "status": "applied",
+      "message": "",
+      "viewport": {
+        "mode": "fit",
+        "physicalScale": 0.5,
+        "dimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "secondaryDimensions": {
+          "width": 640
+        }
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.reply",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "status": "applied",
+      "message": "",
+      "viewport": {
+        "mode": "fit",
+        "physicalScale": 0.5,
+        "dimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "secondaryDimensions": {
+          "width": 640,
+          "height": 480,
+          "depth": 1
+        }
+      }
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "viewport-contract-session",
+      "requestId": 7,
+      "type": "surface.viewport.reply",
+      "address": {
+        "sessionId": "canvas:workflow",
+        "viewId": "view:one",
+        "windowId": "window:one",
+        "attachmentId": "attachment:one",
+        "generation": 1
+      },
+      "revision": 3,
+      "status": "applied",
+      "message": "",
+      "viewport": {
+        "mode": "fit",
+        "physicalScale": 0.5,
+        "dimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "secondaryDimensions": {
+          "width": 640,
+          "height": 480
+        },
+        "extra": true
+      }
     }
   ],
   "invalidRequestJson": [

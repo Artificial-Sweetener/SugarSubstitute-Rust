@@ -37,13 +37,13 @@ function isCanvasSurfaceGeometry(value) {
 
 // integrations/shared/CanvasSurfaceViewportValidation.generated.ts
 function isCanvasSurfaceViewportCommand(value) {
-  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "read" || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "fit" || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "native" || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "zoom" && Object.hasOwn(value, "factor") && typeof value["factor"] === "number" && Number.isFinite(value["factor"]) && value["factor"] >= 0.01 && value["factor"] <= 100 || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "type") && value["type"] === "pan" && Object.hasOwn(value, "x") && typeof value["x"] === "number" && Number.isFinite(value["x"]) && value["x"] >= -10 && value["x"] <= 10 && Object.hasOwn(value, "y") && typeof value["y"] === "number" && Number.isFinite(value["y"]) && value["y"] >= -10 && value["y"] <= 10 && Object.hasOwn(value, "units") && value["units"] === "viewport";
+  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "read" || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "fit" || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "native" || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "zoom" && Object.hasOwn(value, "factor") && typeof value["factor"] === "number" && Number.isFinite(value["factor"]) && value["factor"] >= 0.01 && value["factor"] <= 100 || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "type") && value["type"] === "pan" && Object.hasOwn(value, "x") && typeof value["x"] === "number" && Number.isFinite(value["x"]) && value["x"] >= -10 && value["x"] <= 10 && Object.hasOwn(value, "y") && typeof value["y"] === "number" && Number.isFinite(value["y"]) && value["y"] >= -10 && value["y"] <= 10 && Object.hasOwn(value, "units") && value["units"] === "viewport" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "wipe" && Object.hasOwn(value, "orientation") && (value["orientation"] === "vertical" || value["orientation"] === "horizontal") && Object.hasOwn(value, "split") && typeof value["split"] === "number" && Number.isFinite(value["split"]) && value["split"] >= 0 && value["split"] <= 1;
 }
 function isCanvasSurfaceImageDimensions(value) {
   return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 2147483647 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 2147483647;
 }
 function isCanvasSurfaceViewportState(value) {
-  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "mode") && (value["mode"] === "fit" || value["mode"] === "native" || value["mode"] === "custom") && Object.hasOwn(value, "physicalScale") && typeof value["physicalScale"] === "number" && Number.isFinite(value["physicalScale"]) && value["physicalScale"] >= 1e-9 && value["physicalScale"] <= 16384 && Object.hasOwn(value, "dimensions") && isCanvasSurfaceImageDimensions(value["dimensions"]);
+  return isRecord(value) && Object.keys(value).length === 3 + (Object.hasOwn(value, "secondaryDimensions") ? 1 : 0) && Object.hasOwn(value, "mode") && (value["mode"] === "fit" || value["mode"] === "native" || value["mode"] === "custom") && Object.hasOwn(value, "physicalScale") && typeof value["physicalScale"] === "number" && Number.isFinite(value["physicalScale"]) && value["physicalScale"] >= 1e-9 && value["physicalScale"] <= 16384 && Object.hasOwn(value, "dimensions") && isCanvasSurfaceImageDimensions(value["dimensions"]) && (!Object.hasOwn(value, "secondaryDimensions") || isCanvasSurfaceImageDimensions(value["secondaryDimensions"]));
 }
 function isCanvasSurfaceViewportRequest(value) {
   return isRecord(value) && Object.keys(value).length === 8 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.viewport.request" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "command") && isCanvasSurfaceViewportCommand(value["command"]);
@@ -110,8 +110,8 @@ function isCanvasSurfacePresentationChanged(value) {
 function isCanvasSurfaceCapabilities(value) {
   return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "schema") && value["schema"] === 1 && Object.hasOwn(value, "imageFormats") && Array.isArray(value["imageFormats"]) && value["imageFormats"].length <= 3 && value["imageFormats"].every(
     (item) => item === "png" || item === "jpeg" || item === "webp"
-  ) && Object.hasOwn(value, "viewportCommands") && Array.isArray(value["viewportCommands"]) && value["viewportCommands"].length <= 4 && value["viewportCommands"].every(
-    (item) => item === "fit" || item === "native" || item === "zoom" || item === "pan"
+  ) && Object.hasOwn(value, "viewportCommands") && Array.isArray(value["viewportCommands"]) && value["viewportCommands"].length <= 5 && value["viewportCommands"].every(
+    (item) => item === "fit" || item === "native" || item === "zoom" || item === "pan" || item === "wipe"
   ) && Object.hasOwn(value, "viewportState") && typeof value["viewportState"] === "boolean" && Object.hasOwn(value, "previewFormats") && Array.isArray(value["previewFormats"]) && value["previewFormats"].length <= 2 && value["previewFormats"].every((item) => item === "png" || item === "jpeg") && Object.hasOwn(value, "comparison") && typeof value["comparison"] === "boolean" && Object.hasOwn(value, "overview") && typeof value["overview"] === "boolean";
 }
 function isCanvasSurfaceCapabilitiesRequest(value) {
@@ -128,10 +128,15 @@ function isCanvasSurfacePrepareRequest(value) {
 function isCanvasSurfaceGeometryRequest(value) {
   return isRecord(value) && Object.keys(value).length === 8 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.geometry" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "geometry") && isCanvasSurfaceGeometry(value["geometry"]);
 }
-function isCanvasSurfaceSelectRequest(value) {
-  return isRecord(value) && Object.keys(value).length === 9 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.select" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "itemId") && typeof value["itemId"] === "string" && value["itemId"].length <= 8192 && Array.from(value["itemId"]).length <= 4096 && new RegExp(
+function isCanvasSurfaceComparison(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "itemId") && typeof value["itemId"] === "string" && value["itemId"].length <= 8192 && Array.from(value["itemId"]).length <= 4096 && new RegExp(
     "^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
   ).test(value["itemId"]) && Object.hasOwn(value, "file") && isCanvasSurfaceFileReference(value["file"]);
+}
+function isCanvasSurfaceSelectRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 9 + (Object.hasOwn(value, "comparison") ? 1 : 0) && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.select" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "itemId") && typeof value["itemId"] === "string" && value["itemId"].length <= 8192 && Array.from(value["itemId"]).length <= 4096 && new RegExp(
+    "^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+  ).test(value["itemId"]) && Object.hasOwn(value, "file") && isCanvasSurfaceFileReference(value["file"]) && (!Object.hasOwn(value, "comparison") || isCanvasSurfaceComparison(value["comparison"]));
 }
 function isCanvasSurfaceCommitRequest(value) {
   return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.commit" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991;
@@ -452,7 +457,12 @@ function supportsCanvasSurfaceViewport(capabilities, command) {
   return command.type !== "surface.viewport.request" || capabilities.viewportState && (command.command.type === "read" || capabilities.viewportCommands.includes(command.command.type));
 }
 function snapshotCanvasSurfaceViewport(viewport) {
-  return Object.freeze({ ...viewport, dimensions: Object.freeze({ ...viewport.dimensions }) });
+  const { secondaryDimensions, ...state } = viewport;
+  return Object.freeze({
+    ...state,
+    dimensions: Object.freeze({ ...viewport.dimensions }),
+    ...secondaryDimensions ? { secondaryDimensions: Object.freeze({ ...secondaryDimensions }) } : {}
+  });
 }
 
 // integrations/shared/CanvasByteEncoding.ts
@@ -601,6 +611,15 @@ function canvasSurfacePresentation(port) {
   });
 }
 
+// integrations/shared/CanvasSurfaceComparison.ts
+function supportsCanvasSurfaceComparison(capabilities, command) {
+  const comparison = command.type === "surface.select" && command.comparison !== void 0 || command.type === "surface.viewport.request" && command.command.type === "wipe";
+  return !comparison || capabilities.comparison;
+}
+function negotiatesCanvasSurfaceComparison(capabilities) {
+  return capabilities.comparison && capabilities.viewportState && capabilities.viewportCommands.includes("wipe");
+}
+
 // integrations/shared/CanvasSurfaceDiscovery.ts
 var EMPTY_CANVAS_SURFACE_CAPABILITIES = Object.freeze({
   schema: 1,
@@ -638,7 +657,7 @@ async function discoverCanvasSurface(port) {
     const host = Object.freeze({
       capabilities: snapshotCanvasSurfaceCapabilities(reply.capabilities),
       ...port.presentation && reply.capabilities.previewFormats.length ? { presentation: port.presentation } : {},
-      execute: (command, cancellation) => command.type === "surface.release" || command.type === "surface.preview.withdraw" || port.current() && port.owns(host) ? supportsCanvasSurfaceViewport(host.capabilities, command) && supportsCanvasSurfacePreview(host.capabilities, command) && (!isCanvasPreviewCommand(command) || command.type === "surface.preview.withdraw" || port.observesPresentation?.()) ? port.execute(command, cancellation) : Promise.resolve({
+      execute: (command, cancellation) => command.type === "surface.release" || command.type === "surface.preview.withdraw" || port.current() && port.owns(host) ? supportsCanvasSurfaceViewport(host.capabilities, command) && supportsCanvasSurfaceComparison(host.capabilities, command) && supportsCanvasSurfacePreview(host.capabilities, command) && (!isCanvasPreviewCommand(command) || command.type === "surface.preview.withdraw" || port.observesPresentation?.()) ? port.execute(command, cancellation) : Promise.resolve({
         status: "unavailable",
         message: "Canvas surface operation is unavailable."
       }) : Promise.resolve({ status: "unavailable", message: "The canvas context changed." })
@@ -1462,6 +1481,7 @@ export {
   isCanvasMaskReference,
   isCanvasPixelRaster,
   isCanvasSurfaceGeometry,
+  negotiatesCanvasSurfaceComparison,
   prepareCanvasImagePatch,
   resolveCanvasImageRegion,
   sameCanvasSourceDocument

@@ -18,7 +18,7 @@
 export type CanvasSurfaceCapabilities = {
   readonly schema: 1;
   readonly imageFormats: readonly ('png' | 'jpeg' | 'webp')[];
-  readonly viewportCommands: readonly ('fit' | 'native' | 'zoom' | 'pan')[];
+  readonly viewportCommands: readonly ('fit' | 'native' | 'zoom' | 'pan' | 'wipe')[];
   readonly viewportState: boolean;
   readonly previewFormats: readonly ('png' | 'jpeg')[];
   readonly comparison: boolean;
@@ -101,6 +101,11 @@ export type CanvasSurfaceGeometryRequest = {
   readonly revision: number;
   readonly geometry: CanvasSurfaceGeometry;
 };
+/** Describe the schema-defined CanvasSurfaceComparison wire value. */
+export type CanvasSurfaceComparison = {
+  readonly itemId: string;
+  readonly file: CanvasSurfaceFileReference;
+};
 /** Describe the schema-defined CanvasSurfaceSelectRequest wire value. */
 export type CanvasSurfaceSelectRequest = {
   readonly protocol: 'sugarcubes.canvas';
@@ -112,6 +117,7 @@ export type CanvasSurfaceSelectRequest = {
   readonly revision: number;
   readonly itemId: string;
   readonly file: CanvasSurfaceFileReference;
+  readonly comparison?: CanvasSurfaceComparison;
 };
 /** Describe the schema-defined CanvasSurfaceCommitRequest wire value. */
 export type CanvasSurfaceCommitRequest = {
@@ -159,7 +165,12 @@ export type CanvasSurfaceViewportCommand =
   | { readonly type: 'fit' }
   | { readonly type: 'native' }
   | { readonly type: 'zoom'; readonly factor: number }
-  | { readonly type: 'pan'; readonly x: number; readonly y: number; readonly units: 'viewport' };
+  | { readonly type: 'pan'; readonly x: number; readonly y: number; readonly units: 'viewport' }
+  | {
+      readonly type: 'wipe';
+      readonly orientation: 'vertical' | 'horizontal';
+      readonly split: number;
+    };
 /** Describe the schema-defined CanvasSurfaceImageDimensions wire value. */
 export type CanvasSurfaceImageDimensions = { readonly width: number; readonly height: number };
 /** Describe the schema-defined CanvasSurfaceViewportState wire value. */
@@ -167,6 +178,7 @@ export type CanvasSurfaceViewportState = {
   readonly mode: 'fit' | 'native' | 'custom';
   readonly physicalScale: number;
   readonly dimensions: CanvasSurfaceImageDimensions;
+  readonly secondaryDimensions?: CanvasSurfaceImageDimensions;
 };
 /** Describe the schema-defined CanvasSurfaceViewportRequest wire value. */
 export type CanvasSurfaceViewportRequest = {

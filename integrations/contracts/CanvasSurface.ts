@@ -96,6 +96,12 @@ export interface CanvasSurfaceHost {
    * Preview-capable hosts can commit a prepared empty surface, acknowledging empty native state.
    * A first preview needs no selected final. Only accepted preview pixels lock navigation to Fit;
    * the final remains navigable while preview bytes and pixels are being prepared.
+   * Comparison requires the declared comparison capability and the wipe viewport command. A
+   * selection carrying `comparison` presents A and B together under that selection's one
+   * revision; omitting it presents A alone. B is stretched into A's image rectangle and shares
+   * its camera. Wipe shows B within the left (vertical) or top (horizontal) 0..1 `split`
+   * fraction of the viewport, and is unavailable without a shown comparison.
+   * Viewport state carries B's dimensions only while a comparison is shown.
    */
   execute(
     command: CanvasSurfaceCommand,

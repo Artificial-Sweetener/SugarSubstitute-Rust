@@ -188,7 +188,7 @@
       "capabilities": {
         "schema": 1,
         "imageFormats": ["png"],
-        "viewportCommands": ["fit", "fit", "fit", "fit", "fit"],
+        "viewportCommands": ["fit", "fit", "fit", "fit", "fit", "fit"],
         "viewportState": false,
         "previewFormats": [],
         "comparison": false,
@@ -422,6 +422,42 @@
         "comparison": false
       },
       "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 1,
+        "imageFormats": ["png"],
+        "viewportCommands": ["wipe", "swap"],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false
+      },
+      "message": ""
     }
-  ]
+  ],
+  "comparison": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.reply",
+    "status": "available",
+    "capabilities": {
+      "schema": 1,
+      "imageFormats": ["png"],
+      "viewportCommands": ["fit", "native", "zoom", "pan", "wipe"],
+      "viewportState": true,
+      "previewFormats": [],
+      "comparison": true,
+      "overview": false
+    },
+    "message": ""
+  }
 }
