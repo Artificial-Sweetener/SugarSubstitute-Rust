@@ -170,6 +170,7 @@ impl NativeSurface {
             });
         if final_selected {
             binding.presented_selection_revision = binding.selection_revision;
+            binding.presented_overview = binding.overview;
             binding.presented_viewport = observed;
         }
         if promoting {

@@ -7,7 +7,7 @@
   const requestTypes = ['context.request', 'surface.capabilities.request', 'surface.viewport.request',
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
-    'surface.preview.end', 'surface.preview.withdraw'];
+    'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
   const policy = Object.freeze({
     host,
     session(search) {

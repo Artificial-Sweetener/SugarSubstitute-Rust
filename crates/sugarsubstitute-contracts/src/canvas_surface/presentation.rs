@@ -48,6 +48,11 @@ pub enum CanvasSurfacePresentationDisplay {
         /// Actual viewport state for the displayed image.
         viewport: CanvasViewportState,
     },
+    /// A composed overview grid is displayed.
+    Overview {
+        /// The overview operation revision identifying the displayed grid.
+        selection_revision: u64,
+    },
 }
 
 /// A validated immutable change; encoding allocates no request identity and grants no authority.
@@ -188,7 +193,8 @@ impl CanvasSurfacePresentationChange {
                         || (token == &self.token && lease_revision == &self.lease_revision))
             }
             CanvasSurfacePresentationDisplay::Empty
-            | CanvasSurfacePresentationDisplay::Final { .. } => {
+            | CanvasSurfacePresentationDisplay::Final { .. }
+            | CanvasSurfacePresentationDisplay::Overview { .. } => {
                 self.status != CanvasSurfacePresentationStatus::Presented
             }
         }
@@ -224,6 +230,11 @@ impl CanvasSurfacePresentationDisplay {
                 wire::CanvasSurfacePresentationDisplay::Final {
                     selection_revision: *selection_revision,
                     viewport: viewport.to_wire(),
+                }
+            }
+            Self::Overview { selection_revision } => {
+                wire::CanvasSurfacePresentationDisplay::Overview {
+                    selection_revision: *selection_revision,
                 }
             }
         }

@@ -5,6 +5,7 @@ use super::*;
 mod comparison;
 mod coverage;
 mod phase;
+mod placement;
 mod progressive;
 mod reconstruction;
 mod translucency;

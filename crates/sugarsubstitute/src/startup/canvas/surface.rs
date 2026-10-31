@@ -7,6 +7,7 @@ mod capabilities;
 mod ingress;
 mod navigation;
 mod operations;
+mod overview;
 mod presentation;
 mod preview;
 #[cfg(test)]
@@ -57,6 +58,10 @@ struct Binding {
     source_intent_revision: Option<u64>,
     presented_selection_revision: u64,
     presented_viewport: Option<sugarsubstitute_contracts::canvas_surface::CanvasViewportState>,
+    /// The current selection is a composed overview grid, whose camera stays at Fit.
+    overview: bool,
+    /// The presented selection was an overview grid.
+    presented_overview: bool,
     committed: bool,
     presented: Option<MainCanvasRetention>,
 }
@@ -272,6 +277,23 @@ impl NativeSurface {
             .filter(|backend| backend.identity == identity)
             .ok_or("Canvas backend grant disappeared")?;
         let owner = super::comfy_source::ComfySource::new(backend, target, compared)?;
+        let mut source: Option<
+            Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
+        > = Some(Arc::new(owner));
+        session.offer_acquirer(&mut source, CacheReuse::Compatible)
+    }
+
+    fn offer_comfy_overview(
+        &mut self,
+        identity: MainIdentity,
+        selection: crate::native_canvas::session::OverviewSelection<ComfyViewTarget>,
+        session: &mut Session,
+    ) -> Result<bool, Box<dyn Error>> {
+        let backend = self
+            .backend
+            .filter(|backend| backend.identity == identity)
+            .ok_or("Canvas backend grant disappeared")?;
+        let owner = super::comfy_source::ComfySource::overview(backend, selection)?;
         let mut source: Option<
             Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
         > = Some(Arc::new(owner));

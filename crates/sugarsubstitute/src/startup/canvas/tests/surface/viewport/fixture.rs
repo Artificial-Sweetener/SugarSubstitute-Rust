@@ -214,6 +214,37 @@ impl Fixture {
         Ok(if delivering { Execution::Delivering } else { Execution::Idle })
     }
 
+    /// Present every pending frame until the shown native pixels satisfy `accept`, given the
+    /// row-major pixels and frame width; returns the accepted pixels.
+    pub(in crate::startup::canvas::tests::surface) fn settle_pixels(
+        &mut self,
+        accept: impl Fn(&[u32], u32) -> bool,
+    ) -> Result<Vec<u32>, Box<dyn Error>> {
+        let mut last = Vec::new();
+        for _ in 0..500 {
+            let observed = self.wake.revision();
+            self.advance(100);
+            self.pump()?;
+            if let Some(frame) = prepared_frame(&self.canvas) {
+                let width = frame.placement.viewport.width;
+                let target = frame.frame.target;
+                let pending = frame.frame.pending;
+                last = frame.frame.pixels.to_vec();
+                if pending {
+                    // Acknowledge, then re-read the same frame before waiting for further work.
+                    self.canvas.presented(target)?;
+                    continue;
+                }
+                if accept(&last, width) {
+                    return Ok(last);
+                }
+            }
+            self.wait_preview_progress(observed).map_err(|cause| {
+                format!("{cause}; last row {:x?}", last.get(..80).unwrap_or_default())
+            })?;
+        }
+        Err(format!("Native pixels never settled; last row {:x?}", last.get(..80)).into())
+    }
     pub(in crate::startup::canvas::tests::surface) fn accepted(
         &self,
     ) -> Result<AcceptedCamera, Box<dyn Error>> {

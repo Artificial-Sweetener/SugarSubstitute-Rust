@@ -58,6 +58,8 @@ pub enum CanvasSurfaceOperation {
         /// An optional second result shown through a wipe under the same revision.
         comparison: Option<CanvasSurfaceComparison>,
     },
+    /// Present the page-laid-out visible cells of an overview grid as one native composition.
+    Overview(Vec<CanvasSurfaceOverviewCell>),
     /// Inspect or change the committed image viewport in attachment revision order.
     Viewport(CanvasViewportCommand),
     /// Admit one attributed, bounded JPEG transfer under this request's revision lease.
@@ -81,6 +83,18 @@ pub struct CanvasSurfaceComparison {
     pub item_id: String,
     /// Structured, untrusted reference the Comfy adapter validates like the primary file.
     pub file: CanvasFileReference,
+}
+
+/// One visible overview cell with unique result identity.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CanvasSurfaceOverviewCell {
+    /// SugarCubes' result identity, unique within one overview request.
+    pub item_id: String,
+    /// Structured, untrusted reference validated like a selected file.
+    pub file: CanvasFileReference,
+    /// CSS-pixel `[x, y, width, height]` relative to the surface geometry origin; width and
+    /// height are positive.
+    pub rect: [f64; 4],
 }
 
 /// Stable host outcomes; successful preparation is distinct from applied operations.
@@ -182,6 +196,30 @@ impl CanvasSurfaceMessage {
                     value.address,
                     value.revision,
                     CanvasSurfaceOperation::Select { item_id: value.item_id, file, comparison },
+                )?
+            }
+            "surface.overview" => {
+                let value: wire::CanvasSurfaceOverviewRequest = parse(bytes)?;
+                if !value.valid() {
+                    return Err(CanvasSurfaceMessageError::Invalid);
+                }
+                let mut cells: Vec<CanvasSurfaceOverviewCell> =
+                    Vec::with_capacity(value.cells.len());
+                for cell in value.cells {
+                    if cells.iter().any(|existing| existing.item_id == cell.item_id) {
+                        return Err(CanvasSurfaceMessageError::Invalid);
+                    }
+                    let file = CanvasFileReference::from_wire(cell.file)
+                        .ok_or(CanvasSurfaceMessageError::Invalid)?;
+                    let rect = [cell.rect.x, cell.rect.y, cell.rect.width, cell.rect.height];
+                    cells.push(CanvasSurfaceOverviewCell { item_id: cell.item_id, file, rect });
+                }
+                CanvasSurfaceRequest::new(
+                    value.session,
+                    value.request_id,
+                    value.address,
+                    value.revision,
+                    CanvasSurfaceOperation::Overview(cells),
                 )?
             }
             "surface.commit" => {

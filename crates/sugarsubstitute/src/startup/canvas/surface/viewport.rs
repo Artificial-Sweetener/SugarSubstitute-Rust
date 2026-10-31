@@ -28,6 +28,9 @@ impl NativeSurface {
         }) {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
+        if self.showing_overview() {
+            return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
+        }
         if let CanvasViewportCommand::Wipe { orientation, split } = command {
             if session.compared_extent().is_none() {
                 return self.reply(

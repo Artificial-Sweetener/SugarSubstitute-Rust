@@ -49,7 +49,7 @@ fn discovery(
         if expected == "available" { json!(["jpeg"]) } else { json!([]) }
     );
     assert_eq!(value["capabilities"]["comparison"], expected == "available");
-    assert_eq!(value["capabilities"]["overview"], false);
+    assert_eq!(value["capabilities"]["overview"], expected == "available");
     Ok(())
 }
 

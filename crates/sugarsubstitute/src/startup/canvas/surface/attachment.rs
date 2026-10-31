@@ -39,6 +39,8 @@ impl NativeSurface {
             source_intent_revision: None,
             presented_selection_revision: 0,
             presented_viewport: None,
+            overview: false,
+            presented_overview: false,
             committed: false,
             presented: None,
         });

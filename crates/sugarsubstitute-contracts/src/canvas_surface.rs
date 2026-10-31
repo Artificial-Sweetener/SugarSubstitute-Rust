@@ -26,8 +26,8 @@ pub use file_reference::{
 };
 pub use message::{
     CanvasSurfaceComparison, CanvasSurfaceMessage, CanvasSurfaceMessageError,
-    CanvasSurfaceOperation, CanvasSurfaceReplyStatus, CanvasSurfaceRequest,
-    MAX_SURFACE_MESSAGE_BYTES,
+    CanvasSurfaceOperation, CanvasSurfaceOverviewCell, CanvasSurfaceReplyStatus,
+    CanvasSurfaceRequest, MAX_SURFACE_MESSAGE_BYTES,
 };
 pub use presentation::{
     CanvasSurfacePresentationChange, CanvasSurfacePresentationDisplay,

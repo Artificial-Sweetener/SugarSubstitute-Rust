@@ -40,6 +40,7 @@ fn first_image_latency_requires_matching_ack_and_is_recorded_only_once()
         source_revision: 7,
         original: None,
         compared: None,
+        placed: Vec::new(),
     });
     session.selection = 8;
     session.pending_first_image = Some((8, Duration::from_millis(10)));

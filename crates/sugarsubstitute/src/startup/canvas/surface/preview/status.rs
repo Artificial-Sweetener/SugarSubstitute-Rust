@@ -16,6 +16,11 @@ impl NativeSurface {
             .filter(|binding| binding.presented_viewport.is_some())
             .or(self.retained.as_ref())
             .and_then(|binding| {
+                if binding.presented_overview {
+                    return Some(CanvasSurfacePresentationDisplay::Overview {
+                        selection_revision: binding.presented_selection_revision,
+                    });
+                }
                 Some(CanvasSurfacePresentationDisplay::Final {
                     selection_revision: binding.presented_selection_revision,
                     viewport: binding.presented_viewport?,

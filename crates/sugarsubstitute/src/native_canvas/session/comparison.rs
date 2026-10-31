@@ -20,6 +20,12 @@ impl Session {
         Ok(())
     }
 
+    /// Physical extent of the drawable surface the session currently prepares frames for.
+    #[cfg(feature = "native-composition")]
+    pub(crate) fn surface_extent(&self) -> sugarsubstitute_image_ops::Extent {
+        self.document.tools.navigation().viewport().surface()
+    }
+
     /// Return the selected comparison original's own extent, if one is loaded.
     #[cfg(feature = "native-composition")]
     pub(crate) fn compared_extent(&self) -> Option<sugarsubstitute_image_ops::Extent> {

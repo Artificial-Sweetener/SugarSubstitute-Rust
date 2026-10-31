@@ -14,7 +14,7 @@ type PyramidAvailability<'a> =
     Option<&'a dyn Fn(&Graph, NodeId, Region) -> Result<bool, ImageError>>;
 
 mod raster;
-use raster::{RasterGrid, raster_node};
+use raster::{RasterGrid, RasterPlacement, raster_node};
 
 /// One immutable image graph for a document revision and physical evaluation grid.
 /// Source pyramids use canonical content keys; vectors rasterize at the requested device resolution.
@@ -121,7 +121,15 @@ impl DocumentSnapshot {
                         LayerContent::Raster { asset, .. } => raster_node(
                             &mut graph,
                             asset,
-                            document,
+                            RasterPlacement::document(document, document),
+                            raster,
+                            true,
+                            &mut sampling_scale,
+                        )?,
+                        LayerContent::PlacedRaster { asset, extent, bounds } => raster_node(
+                            &mut graph,
+                            asset,
+                            RasterPlacement { source: extent, bounds },
                             raster,
                             true,
                             &mut sampling_scale,
@@ -155,7 +163,7 @@ impl DocumentSnapshot {
             let compared = raster_node(
                 &mut graph,
                 comparison.asset(),
-                comparison.extent(),
+                RasterPlacement::document(comparison.extent(), document),
                 raster,
                 true,
                 &mut sampling_scale,
@@ -189,6 +197,8 @@ fn graph_capacity(document: &DocumentSnapshot, comparison: Option<Comparison>) -
             content => {
                 capacity += match content {
                     LayerContent::Raster { .. } => sampled + 2,
+                    // Its own pyramid, resample, placement clip and its mask.
+                    LayerContent::PlacedRaster { extent, .. } => reductions(extent) + 5,
                     _ => 1,
                 };
                 capacity += 1;
@@ -211,9 +221,14 @@ fn mask_node(
     sampling_scale: &mut f64,
 ) -> Result<NodeId, CanvasError> {
     match mask {
-        Some(LayerMask::Raster { asset, .. }) => {
-            raster_node(graph, asset, grid.document, grid, false, sampling_scale)
-        }
+        Some(LayerMask::Raster { asset, .. }) => raster_node(
+            graph,
+            asset,
+            RasterPlacement::document(grid.document, grid.document),
+            grid,
+            false,
+            sampling_scale,
+        ),
         Some(LayerMask::VectorRectangle(shape)) => {
             vector_node(graph, shape, grid.document, grid.view)
         }

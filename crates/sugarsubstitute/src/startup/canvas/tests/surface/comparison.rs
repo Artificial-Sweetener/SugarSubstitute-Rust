@@ -27,45 +27,18 @@ fn wipe(fixture: &mut Fixture, id: u64, split: f64) -> Result<(), Box<dyn Error>
     fixture.viewport(id, json!({"type":"wipe","orientation":"vertical","split":split}))
 }
 
-/// Present every pending frame until the shown native pixels match `expected`.
+/// Settle until every pixel equals `expected` for its column.
 fn settle_pixels(
     fixture: &mut Fixture,
     expected: impl Fn(u32) -> u32,
 ) -> Result<(), Box<dyn Error>> {
-    let mut last = Vec::new();
-    for _ in 0..500 {
-        let observed = fixture.wake.revision();
-        fixture.advance(100);
-        fixture.pump()?;
-        if let Some(frame) = prepared_frame(&fixture.canvas) {
-            let width = frame.placement.viewport.width;
-            let target = frame.frame.target;
-            let pending = frame.frame.pending;
-            last = frame.frame.pixels.to_vec();
-            if pending {
-                // Acknowledge, then re-read the same frame before waiting for further work.
-                fixture.canvas.presented(target)?;
-                continue;
-            }
-            if last.iter().enumerate().all(|(index, &pixel)| {
-                pixel == expected(u32::try_from(index).unwrap_or(u32::MAX) % width)
-            }) {
-                return Ok(());
-            }
-        }
-        fixture.wait_preview_progress(observed).map_err(|cause| {
-            let session = fixture.canvas.session.as_ref();
-            format!(
-                "{cause}; failed={:?} compared={:?}; last row {:x?}",
-                session.map(Session::source_failed),
-                session.and_then(Session::compared_extent),
-                last.get(..80).unwrap_or_default()
-            )
-        })?;
-    }
-    Err(format!("Native comparison pixels never settled; last row {:x?}", &last[..80]).into())
+    fixture.settle_pixels(|pixels, width| {
+        pixels.iter().enumerate().all(|(index, &pixel)| {
+            pixel == expected(u32::try_from(index).unwrap_or(u32::MAX) % width)
+        })
+    })?;
+    Ok(())
 }
-
 #[test]
 fn a_selected_pair_reports_both_extents_and_wipes_in_native_pixels() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;

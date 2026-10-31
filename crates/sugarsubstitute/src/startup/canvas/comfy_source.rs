@@ -3,7 +3,7 @@
 //! Adapt authorized Comfy outputs to the canvas's retained-original acquisition port.
 
 use crate::{
-    native_canvas::session::{SelectedOriginals, acquisition::SourceAcquirer},
+    native_canvas::session::{OverviewSelection, SelectedOriginals, acquisition::SourceAcquirer},
     startup::CanvasBackend,
 };
 use std::{
@@ -15,12 +15,22 @@ use sugarsubstitute_comfy::output_media::{
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
 use sugarsubstitute_image_io::{ImageSource, MAX_ENCODED_SOURCE_BYTES};
+use sugarsubstitute_image_ops::Extent;
 use sugarsubstitute_supervision::cache::{RuntimeCache, utc_seconds};
 
-/// One current backend grant with the selected and optional comparison Comfy media references.
+/// Further outputs composed with the primary into one overview document.
+struct OverviewTransfers {
+    extent: Extent,
+    primary_cell: [f64; 4],
+    cells: Vec<(ComfyOutputTransfer, [f64; 4])>,
+}
+
+/// One current backend grant with the selected Comfy media reference and either an optional
+/// comparison reference or the further cells of an overview grid.
 pub(super) struct ComfySource {
     transfer: ComfyOutputTransfer,
     compared: Option<ComfyOutputTransfer>,
+    overview: Option<OverviewTransfers>,
     cancelled: AtomicBool,
 }
 
@@ -31,13 +41,29 @@ impl ComfySource {
         target: ComfyViewTarget,
         compared: Option<ComfyViewTarget>,
     ) -> io::Result<Self> {
-        let transfer = |target| {
-            ComfyOutputTransfer::new(backend.origin, target, backend.peer, MAX_ENCODED_SOURCE_BYTES)
-                .map_err(io::Error::other)
-        };
         Ok(Self {
-            transfer: transfer(target)?,
-            compared: compared.map(transfer).transpose()?,
+            transfer: transfer(backend, target)?,
+            compared: compared.map(|target| transfer(backend, target)).transpose()?,
+            overview: None,
+            cancelled: AtomicBool::new(false),
+        })
+    }
+
+    /// Bind an overview whose first cell is the primary output; cells are physical-pixel
+    /// `[left, top, width, height]` rectangles inside a document of `extent`.
+    pub(super) fn overview(
+        backend: CanvasBackend,
+        selection: OverviewSelection<ComfyViewTarget>,
+    ) -> io::Result<Self> {
+        let OverviewSelection { extent, primary: (target, primary_cell), cells } = selection;
+        let cells = cells
+            .into_iter()
+            .map(|(target, cell)| Ok((transfer(backend, target)?, cell)))
+            .collect::<io::Result<_>>()?;
+        Ok(Self {
+            transfer: transfer(backend, target)?,
+            compared: None,
+            overview: Some(OverviewTransfers { extent, primary_cell, cells }),
             cancelled: AtomicBool::new(false),
         })
     }
@@ -66,6 +92,19 @@ impl ComfySource {
         }
         Ok(())
     }
+
+    /// Every transfer this acquisition owns, for retirement and settlement.
+    fn transfers(&self) -> impl Iterator<Item = &ComfyOutputTransfer> {
+        std::iter::once(&self.transfer).chain(&self.compared).chain(
+            self.overview.iter().flat_map(|overview| overview.cells.iter().map(|(cell, _)| cell)),
+        )
+    }
+}
+
+/// Bind one structured output reference to the verified backend peer.
+fn transfer(backend: CanvasBackend, target: ComfyViewTarget) -> io::Result<ComfyOutputTransfer> {
+    ComfyOutputTransfer::new(backend.origin, target, backend.peer, MAX_ENCODED_SOURCE_BYTES)
+        .map_err(io::Error::other)
 }
 
 impl SourceAcquirer for ComfySource {
@@ -81,10 +120,24 @@ impl SourceAcquirer for ComfySource {
     ) -> io::Result<SelectedOriginals> {
         let primary = self.fetch(&self.transfer, cache.clone(), resident, context)?;
         let compared = match &self.compared {
-            Some(transfer) => Some(self.fetch(transfer, cache, resident, context)?),
+            Some(transfer) => Some(self.fetch(transfer, cache.clone(), resident, context)?),
             None => None,
         };
-        Ok(SelectedOriginals { primary, compared })
+        let overview = match &self.overview {
+            Some(overview) => Some(crate::native_canvas::session::OverviewOriginals {
+                extent: overview.extent,
+                primary_cell: overview.primary_cell,
+                cells: overview
+                    .cells
+                    .iter()
+                    .map(|(transfer, cell)| {
+                        Ok((self.fetch(transfer, cache.clone(), resident, context)?, *cell))
+                    })
+                    .collect::<io::Result<_>>()?,
+            }),
+            None => None,
+        };
+        Ok(SelectedOriginals { primary, compared, overview })
     }
 
     fn cancel(&self) {
@@ -92,15 +145,15 @@ impl SourceAcquirer for ComfySource {
     }
 
     fn retire(&self, context: &JobContext) -> io::Result<()> {
-        let primary = self.transfer.retire(context).map_err(io::Error::other);
-        let compared = self
-            .compared
-            .as_ref()
-            .map_or(Ok(()), |transfer| transfer.retire(context).map_err(io::Error::other));
-        primary.and(compared)
+        let mut outcome = Ok(());
+        for transfer in self.transfers() {
+            let retired = transfer.retire(context).map_err(io::Error::other);
+            outcome = outcome.and(retired);
+        }
+        outcome
     }
 
     fn settled(&self) -> bool {
-        self.transfer.settled() && self.compared.as_ref().is_none_or(ComfyOutputTransfer::settled)
+        self.transfers().all(ComfyOutputTransfer::settled)
     }
 }

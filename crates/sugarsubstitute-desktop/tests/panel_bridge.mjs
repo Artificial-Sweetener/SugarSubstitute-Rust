@@ -704,3 +704,18 @@ test('unsolicited canvas delivery admits only exact current-session zero-id pres
   assert.deepEqual(f.sent, [framed(watch(), 'o', 1)]);
   assert.equal(f.receipt('g', 'o', 2), false);
 });
+test('every shared surface and context request type is admitted by the bridge policy', () => {
+  const schema = JSON.parse(readFileSync(
+    new URL('../../../third_party/sugarcubes-canvas/canvas.schema.json', import.meta.url), 'utf8'));
+  const context = createContext({});
+  new Script(policySource).runInContext(context);
+  const policy = context.__sugarcubes_substitute_policy_v3;
+  const sharedTypes = Object.entries(schema.definitions ?? schema.$defs ?? {})
+    .filter(([name, definition]) => name.endsWith('Request') && definition.properties?.type?.const)
+    .map(([, definition]) => definition.properties.type.const)
+    // The panel bridge carries surface and context requests; editor requests use other hosts,
+    // and cancellation travels the bridge's separate cancel lane.
+    .filter(type => type.startsWith('surface.') || type === 'context.request');
+  assert.ok(sharedTypes.includes('surface.overview') && sharedTypes.includes('surface.select'));
+  for (const type of sharedTypes) assert.ok(policy.request(type), `${type} is not admitted`);
+});

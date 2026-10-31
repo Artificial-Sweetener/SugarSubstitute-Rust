@@ -46,14 +46,17 @@ pub(super) struct Scene {
     pub(super) source_revision: u64,
     pub(super) original: Option<ImageSource>,
     /// Inspection-only comparison original loaded with this source revision; never authored.
-    pub(super) compared: Option<Box<Compared>>,
+    pub(super) compared: Option<Box<Companion>>,
+    /// Further originals referenced by placed overview layers, beside the primary `source`.
+    pub(super) placed: Vec<Companion>,
 }
-/// A comparison original retained beside the document source for the same selection.
-pub(super) struct Compared {
+/// A further original retained beside the document source for the same selection, for a
+/// comparison or one placed overview cell.
+pub(super) struct Companion {
     pub(super) source: Source,
     pub(super) _original: ImageSource,
 }
-impl Compared {
+impl Companion {
     /// Describe the comparison raster for a document-space wipe boundary.
     pub(super) fn comparison(
         &self,
@@ -64,21 +67,54 @@ impl Compared {
         Comparison::new(descriptor.asset(), descriptor.layout().extent(), orientation, boundary)
     }
 }
-/// One selected original and an optional comparison original, admitted and loaded together.
+/// One selected original with an optional comparison original or overview grid, admitted and
+/// loaded together as one selection.
 pub(crate) struct Originals {
     pub(crate) primary: ImageSource,
     pub(crate) compared: Option<ImageSource>,
+    pub(crate) overview: Option<OverviewOriginals>,
+}
+/// Originals composed into one document of the viewport's physical extent. Each cell is a
+/// physical-pixel `[left, top, width, height]` rectangle; its image is fitted inside, centered.
+pub(crate) struct OverviewOriginals {
+    pub(crate) extent: Extent,
+    pub(crate) primary_cell: [f64; 4],
+    pub(crate) cells: Vec<(ImageSource, [f64; 4])>,
 }
 impl Originals {
     /// Select one original without a comparison.
     pub(crate) const fn single(primary: ImageSource) -> Self {
-        Self { primary, compared: None }
+        Self { primary, compared: None, overview: None }
     }
-    /// Retain both originals until a storage worker can dispose of either one.
+    /// Retain every original until a storage worker can dispose of any one of them.
     pub(super) fn requires_worker_retirement(&self) -> bool {
         self.primary.requires_worker_retirement()
             || self.compared.as_ref().is_some_and(ImageSource::requires_worker_retirement)
+            || self.overview.as_ref().is_some_and(|overview| {
+                overview.cells.iter().any(|(original, _)| original.requires_worker_retirement())
+            })
     }
+}
+/// Host-identified overview cells before acquisition: the first cell is the primary selection.
+/// Cells are physical-pixel `[left, top, width, height]` rectangles inside `extent`.
+#[cfg(feature = "native-composition")]
+pub(crate) struct OverviewSelection<T> {
+    pub(crate) extent: Extent,
+    pub(crate) primary: (T, [f64; 4]),
+    pub(crate) cells: Vec<(T, [f64; 4])>,
+}
+/// Fit `image` inside `cell` without cropping, centered, as the web overview's `contain` does.
+fn contain(image: Extent, cell: [f64; 4]) -> [f64; 4] {
+    let [left, top, width, height] = cell;
+    let (image_width, image_height) = (f64::from(image.width()), f64::from(image.height()));
+    let scale = (width / image_width).min(height / image_height);
+    let (fitted_width, fitted_height) = (image_width * scale, image_height * scale);
+    [
+        left + (width - fitted_width) / 2.0,
+        top + (height - fitted_height) / 2.0,
+        fitted_width,
+        fitted_height,
+    ]
 }
 /// Original retained admission is shared by cache custody, source data, DAG reuse and UI buffers.
 pub(super) struct Resources {
@@ -208,11 +244,19 @@ pub(super) fn initialize(
             capture,
             verify_native,
         },
-        Scene { document, source: None, source_revision: 0, original: None, compared: None },
+        Scene {
+            document,
+            source: None,
+            source_revision: 0,
+            original: None,
+            compared: None,
+            placed: Vec::new(),
+        },
     ))
 }
 /// Hash/decode explicit originals; image storage never becomes authoritative document data.
-/// A comparison original is imported under the same admission and becomes inspection state only.
+/// A comparison original or further overview cells are imported under the same admission;
+/// a comparison stays inspection state and overview cells become placed layers.
 pub(super) fn load(
     originals: Originals,
     revision: u64,
@@ -221,23 +265,27 @@ pub(super) fn load(
     context: &JobContext,
 ) -> Result<Scene, WorkError> {
     let now = sugarsubstitute_supervision::cache::utc_seconds()?;
-    let Originals { primary: original, compared } = originals;
-    let raster =
-        original.import_image(resources.cache.clone(), reuse, &resources.memory, now, context)?;
-    let source = SharedRaster::new(raster, &resources.memory)?;
+    let Originals { primary: original, compared, overview } = originals;
+    let import = |original: &ImageSource| -> Result<Source, WorkError> {
+        let raster = original.import_image(
+            resources.cache.clone(),
+            reuse,
+            &resources.memory,
+            now,
+            context,
+        )?;
+        Ok(SharedRaster::new(raster, &resources.memory)?)
+    };
+    let source = import(&original)?;
+    if let Some(overview) = overview {
+        if compared.is_some() {
+            return Err(WorkError::invalid("An overview cannot also carry a comparison"));
+        }
+        return overview_scene(source, original, overview, revision, &import, resources);
+    }
     let compared = match compared {
         Some(compared) => {
-            let raster = compared.import_image(
-                resources.cache.clone(),
-                reuse,
-                &resources.memory,
-                now,
-                context,
-            )?;
-            Some(Box::new(Compared {
-                source: SharedRaster::new(raster, &resources.memory)?,
-                _original: compared,
-            }))
+            Some(Box::new(Companion { source: import(&compared)?, _original: compared }))
         }
         None => None,
     };
@@ -253,7 +301,58 @@ pub(super) fn load(
         source_revision: revision,
         original: Some(original),
         compared,
+        placed: Vec::new(),
     })
+}
+/// Compose the primary and every further cell original into one viewport-sized document of
+/// placed layers; each original keeps its own pixels and is fitted inside its cell.
+fn overview_scene(
+    source: Source,
+    original: ImageSource,
+    overview: OverviewOriginals,
+    revision: u64,
+    import: &dyn Fn(&ImageSource) -> Result<Source, WorkError>,
+    resources: &Resources,
+) -> Result<Scene, WorkError> {
+    let OverviewOriginals { extent, primary_cell, cells } = overview;
+    let mut document = Document::new(revision, extent, &resources.memory)?;
+    place(&mut document, 0, &source, primary_cell)?;
+    let mut placed = Vec::with_capacity(cells.len());
+    for (index, (cell_original, cell)) in cells.into_iter().enumerate() {
+        let cell_source = import(&cell_original)?;
+        place(&mut document, index + 1, &cell_source, cell)?;
+        placed.push(Companion { source: cell_source, _original: cell_original });
+    }
+    Ok(Scene {
+        document,
+        source: Some(source),
+        source_revision: revision,
+        original: Some(original),
+        compared: None,
+        placed,
+    })
+}
+
+/// Insert one original fitted inside its cell as the next placed layer.
+fn place(
+    document: &mut Document,
+    index: usize,
+    source: &Source,
+    cell: [f64; 4],
+) -> Result<(), WorkError> {
+    let descriptor = source.descriptor();
+    let image = descriptor.layout().extent();
+    let id = u64::try_from(index + 1).map_err(|_| WorkError::invalid("Overview cell identity"))?;
+    let layer = Layer::new(
+        LayerId::new(id)?,
+        LayerContent::PlacedRaster {
+            asset: descriptor.asset(),
+            extent: image,
+            bounds: contain(image, cell),
+        },
+    )?;
+    document.apply(DocumentEdit::Insert { index, layer })?;
+    Ok(())
 }
 /// One immutable prepared request plus optional newly admitted UI backing for physical resize.
 pub(super) struct Packet {
@@ -291,6 +390,7 @@ pub(super) struct Prepare {
     pub(super) document: DocumentSnapshot,
     pub(super) source: Option<Source>,
     pub(super) compared: Option<Source>,
+    pub(super) placed: Vec<Source>,
     pub(super) comparison: Option<Comparison>,
     pub(super) source_revision: u64,
     pub(super) view: Viewport,
@@ -322,14 +422,28 @@ impl CpuTask<Packet, WorkError> for Prepare {
         if engine.source_revision != Some(self.source_revision) {
             let renderer = match &engine.device {
                 Some(device) => Renderer::Gpu(Box::new(GpuRenderer::new(
-                    SourcePort(self.source.iter().chain(&self.compared).cloned().collect()),
+                    SourcePort(
+                        self.source
+                            .iter()
+                            .chain(&self.compared)
+                            .chain(&self.placed)
+                            .cloned()
+                            .collect(),
+                    ),
                     512,
                     device.clone(),
                     &self.resources.memory,
                     context,
                 )?)),
                 None => Renderer::Cpu(Box::new(CpuRenderer::new(
-                    SourcePort(self.source.iter().chain(&self.compared).cloned().collect()),
+                    SourcePort(
+                        self.source
+                            .iter()
+                            .chain(&self.compared)
+                            .chain(&self.placed)
+                            .cloned()
+                            .collect(),
+                    ),
                     512,
                     &self.resources.memory,
                 )?)),

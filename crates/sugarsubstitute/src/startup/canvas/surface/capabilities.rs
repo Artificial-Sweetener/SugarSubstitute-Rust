@@ -39,7 +39,7 @@ impl NativeSurface {
                 Vec::new()
             },
             comparison: available,
-            ..Default::default()
+            overview: available,
         };
         let status = if available {
             CanvasSurfaceDiscoveryStatus::Available

@@ -714,12 +714,12 @@ rationale = "The bounded WebView transport defines technical JavaScript properti
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:803f8ad43fadd12973d022910770d333afc5c9fa3afb42c868cd8671f7e440ca"
+source_sha256 = "sha256:6b69373f798af893cfac8e1a712433567e8a58753bd1134e139a3c9ab47fb56a"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:e7d7653ea00a805e72ea6b3cb36324982198050ecd6d558f9fa8f896aca00956"
+source_sha256 = "sha256:2d5b546c858de8edaf5f9a654989da422c49be20686a55c99f3e34553b0b97f8"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."

@@ -12,18 +12,37 @@ pub(super) struct RasterGrid<'a> {
     pub(super) ready: PyramidAvailability<'a>,
 }
 
+/// Where a raster's own pixels land: its extent stretched into document-space `bounds`.
+#[derive(Clone, Copy)]
+pub(super) struct RasterPlacement {
+    pub(super) source: Extent,
+    /// Document-space `[left, top, width, height]` with positive finite dimensions.
+    pub(super) bounds: [f64; 4],
+}
+
+impl RasterPlacement {
+    /// Stretch `source` over the whole document rectangle.
+    pub(super) fn document(source: Extent, document: Extent) -> Self {
+        Self {
+            source,
+            bounds: [0.0, 0.0, f64::from(document.width()), f64::from(document.height())],
+        }
+    }
+}
+
 /// Select the nearest permitted ready pyramid and preserve the exact requested output mapping.
-/// `source` is the raster's own extent; per-axis ratios stretch it into the document rectangle.
+/// Per-axis ratios stretch the raster's own extent into its placement rectangle.
 pub(super) fn raster_node(
     graph: &mut Graph,
     asset: AssetId,
-    source: Extent,
+    placement: RasterPlacement,
     grid: RasterGrid<'_>,
     clip: bool,
     sampling_scale: &mut f64,
 ) -> Result<NodeId, CanvasError> {
     let RasterGrid { document, view, reconstruction, ready } = grid;
-    let source = graph.add(Operation::Raster { asset, extent: source })?;
+    let [_, _, width, height] = placement.bounds;
+    let source = graph.add(Operation::Raster { asset, extent: placement.source })?;
     let mut selected = source;
     if reconstruction.uses_canonical_pyramid() {
         let pyramid = graph.pyramid(source)?;
@@ -34,8 +53,8 @@ pub(super) fn raster_node(
                 break;
             }
             let scales = [
-                f64::from(extent.width()) / (f64::from(document.width()) * view.zoom()),
-                f64::from(extent.height()) / (f64::from(document.height()) * view.zoom()),
+                f64::from(extent.width()) / (width * view.zoom()),
+                f64::from(extent.height()) / (height * view.zoom()),
             ];
             let mut active = 0.0_f64;
             if extent.width() > 1 {
@@ -55,7 +74,7 @@ pub(super) fn raster_node(
             let required = selected;
             for &level in pyramid.levels().iter().skip_while(|&&level| level != required) {
                 let extent = graph.extent(level)?;
-                let footprint = raster_sampling(document, extent, view, reconstruction)?
+                let footprint = raster_sampling(placement.bounds, extent, view, reconstruction)?
                     .required_input(extent, view.surface().region())?;
                 if ready(graph, level, footprint)? {
                     selected = level;
@@ -66,16 +85,17 @@ pub(super) fn raster_node(
     }
     let extent = graph.extent(selected)?;
     *sampling_scale = sampling_scale
-        .min(f64::from(extent.width()) / f64::from(document.width()))
-        .min(f64::from(extent.height()) / f64::from(document.height()));
-    let sampling = raster_sampling(document, extent, view, reconstruction)?;
+        .min(f64::from(extent.width()) / width)
+        .min(f64::from(extent.height()) / height);
+    let sampling = raster_sampling(placement.bounds, extent, view, reconstruction)?;
     let sampled =
         graph.add(Operation::Resample { input: selected, extent: view.surface(), sampling })?;
     if !clip {
         return Ok(sampled);
     }
+    let [left, top, width, height] = placement.bounds;
     let shape = VectorRectangle::new(
-        [0.0, 0.0, f64::from(document.width()), f64::from(document.height())],
+        [left, top, left + width, top + height],
         Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
     )?;
     let mask = vector_node(graph, shape, document, view)?;
@@ -83,18 +103,17 @@ pub(super) fn raster_node(
 }
 
 fn raster_sampling(
-    document: Extent,
+    bounds: [f64; 4],
     extent: Extent,
     view: Viewport,
     reconstruction: Reconstruction,
 ) -> Result<Sampling, ImageError> {
-    let ratios = [
-        f64::from(extent.width()) / f64::from(document.width()),
-        f64::from(extent.height()) / f64::from(document.height()),
-    ];
+    let [left, top, width, height] = bounds;
+    let ratios = [f64::from(extent.width()) / width, f64::from(extent.height()) / height];
+    let origin = view.untranslated().origin();
     Ok(Sampling::new(
         [ratios[0] / view.zoom(), ratios[1] / view.zoom()],
-        [view.untranslated().origin()[0] * ratios[0], view.untranslated().origin()[1] * ratios[1]],
+        [(origin[0] - left) * ratios[0], (origin[1] - top) * ratios[1]],
     )?
     .with_filter(reconstruction.filter())
     .with_output_translation(view.pixel_translation()))

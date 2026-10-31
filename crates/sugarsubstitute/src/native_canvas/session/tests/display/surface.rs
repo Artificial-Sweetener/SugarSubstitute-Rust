@@ -35,6 +35,7 @@ pub(super) fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn 
         source_revision: 7,
         original: None,
         compared: None,
+        placed: Vec::new(),
     });
     session.selection = 7;
     session.source_sequence = 7;

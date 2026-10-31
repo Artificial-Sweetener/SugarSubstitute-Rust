@@ -230,6 +230,7 @@ impl Session {
             self.resources.as_ref().ok_or("Canvas preparation resources are unavailable")?.clone();
         let source = scene.source.clone();
         let compared = scene.compared.as_ref().map(|compared| compared.source.clone());
+        let placed = scene.placed.iter().map(|cell| cell.source.clone()).collect();
         let source_revision = scene.source_revision;
         let gpu_surface = match tier {
             BackingTier::Fallback => self.document.fallback_gpu_front.clone(),
@@ -244,6 +245,7 @@ impl Session {
             document,
             source,
             compared,
+            placed,
             comparison,
             source_revision,
             view,

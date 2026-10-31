@@ -139,3 +139,40 @@ fn duplicate_fields_and_oversized_messages_are_rejected() -> Result<(), Box<dyn 
     ));
     Ok(())
 }
+
+#[test]
+fn overview_requests_match_the_shared_vectors_including_identity_and_size_bounds()
+-> Result<(), Box<dyn Error>> {
+    let vectors: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../third_party/sugarcubes-canvas/overview_vectors.json"
+    )))?;
+    assert_eq!(vectors["messageBytes"], MAX_SURFACE_MESSAGE_BYTES);
+    for case in vectors["validRequests"].as_array().ok_or("Missing valid requests")? {
+        let name = case["name"].as_str().ok_or("Missing vector name")?;
+        let CanvasSurfaceMessage::Request(request) =
+            CanvasSurfaceMessage::decode(&serde_json::to_vec(&case["value"])?)?
+        else {
+            return Err(format!("{name}: expected an overview request").into());
+        };
+        let CanvasSurfaceOperation::Overview(cells) = request.operation() else {
+            return Err(format!("{name}: expected overview cells").into());
+        };
+        let expected = case["value"]["cells"].as_array().ok_or("Missing cells")?;
+        assert_eq!(cells.len(), expected.len(), "{name}");
+        for (cell, wire) in cells.iter().zip(expected) {
+            assert_eq!(cell.item_id, wire["itemId"].as_str().ok_or("Missing item")?, "{name}");
+            assert_eq!(cell.rect[2], wire["rect"]["width"].as_f64().ok_or("Missing width")?);
+        }
+    }
+    for section in ["invalidRequests", "semanticallyInvalidRequests", "oversizedRequests"] {
+        for case in vectors[section].as_array().ok_or("Missing rejected requests")? {
+            let name = case["name"].as_str().ok_or("Missing vector name")?;
+            assert!(
+                CanvasSurfaceMessage::decode(&serde_json::to_vec(&case["value"])?).is_err(),
+                "{section}: {name}"
+            );
+        }
+    }
+    Ok(())
+}

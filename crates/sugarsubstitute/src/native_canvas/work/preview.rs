@@ -132,6 +132,7 @@ impl PreparePreview {
         let resources = active.preview_cpu()?;
         let prepare = Prepare {
             compared: None,
+            placed: Vec::new(),
             comparison: None,
             tier: BackingTier::Fallback,
             reconstruction: Reconstruction::Finished(Filter::Lanczos3),

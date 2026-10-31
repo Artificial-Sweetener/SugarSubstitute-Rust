@@ -20,6 +20,13 @@ impl NativeSurface {
         match operation {
             CanvasSurfaceOperation::Prepare => Err("Canvas preparation was not admitted".into()),
             CanvasSurfaceOperation::Release => self.release(identity, request, claim, session),
+            CanvasSurfaceOperation::Overview(cells) => {
+                let cells = cells
+                    .into_iter()
+                    .map(|cell| super::overview::OverviewCell { file: cell.file, rect: cell.rect })
+                    .collect();
+                self.overview(identity, request, claim, cells, session)
+            }
             CanvasSurfaceOperation::Viewport(command) => {
                 self.viewport(identity, request, claim, command, session)
             }
@@ -113,6 +120,7 @@ impl NativeSurface {
                     let mut originals = Some(SelectedOriginals {
                         primary: ImageSource::file(primary),
                         compared: compared.map(ImageSource::file),
+                        overview: None,
                     });
                     if !session.offer_originals(&mut originals, CacheReuse::Compatible, None)? {
                         return self.reply(
@@ -139,15 +147,7 @@ impl NativeSurface {
                         claim,
                     );
                 }
-                session.request_host_graphics()?;
-                self.binding.as_mut().ok_or("Canvas binding disappeared")?.selected = true;
-                self.binding.as_mut().ok_or("Canvas binding disappeared")?.selection_revision =
-                    request.revision();
-                self.binding.as_mut().ok_or("Canvas binding disappeared")?.source_intent_revision =
-                    Some(session.source_intent_revision());
-                self.pending =
-                    Some(Pending { identity, request, claim, kind: PendingKind::Select });
-                Ok(())
+                self.await_selection(identity, request, claim, false, session)
             }
             CanvasSurfaceOperation::Commit => {
                 let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
@@ -170,8 +170,30 @@ impl NativeSurface {
     }
 }
 
+impl NativeSurface {
+    /// Hold an offered selection until its first matching native frame; an overview selection
+    /// also locks the camera, while an ordinary selection releases that lock.
+    pub(super) fn await_selection(
+        &mut self,
+        identity: MainIdentity,
+        request: Box<CanvasSurfaceRequest>,
+        claim: MemoryClaim,
+        overview: bool,
+        session: &mut Session,
+    ) -> Result<(), Box<dyn Error>> {
+        session.request_host_graphics()?;
+        let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
+        binding.selected = true;
+        binding.overview = overview;
+        binding.selection_revision = request.revision();
+        binding.source_intent_revision = Some(session.source_intent_revision());
+        self.pending = Some(Pending { identity, request, claim, kind: PendingKind::Select });
+        Ok(())
+    }
+}
+
 /// Admit only a PNG Comfy output reference that the backend adapter may fetch.
-fn admitted_output(file: &CanvasFileReference) -> Option<ComfyViewTarget> {
+pub(super) fn admitted_output(file: &CanvasFileReference) -> Option<ComfyViewTarget> {
     if file.storage() != CanvasFileStorage::Output
         || !file.filename().to_ascii_lowercase().ends_with(".png")
     {
@@ -182,7 +204,7 @@ fn admitted_output(file: &CanvasFileReference) -> Option<ComfyViewTarget> {
 
 /// Resolve a deterministic qualification fixture by leaf name inside its owned output folder.
 #[cfg(test)]
-fn fixture_file(output: &Path, file: &CanvasFileReference) -> Option<PathBuf> {
+pub(super) fn fixture_file(output: &Path, file: &CanvasFileReference) -> Option<PathBuf> {
     let mut components = Path::new(file.filename()).components();
     let leaf =
         matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none();

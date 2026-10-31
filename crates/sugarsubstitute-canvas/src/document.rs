@@ -40,6 +40,16 @@ pub enum LayerContent {
         /// Original pixel dimensions.
         extent: Extent,
     },
+    /// Immutable original image stretched into a document-space rectangle, such as one cell of
+    /// a composed overview; the asset keeps its own pixel extent.
+    PlacedRaster {
+        /// Content-bound asset identity.
+        asset: AssetId,
+        /// Original pixel dimensions.
+        extent: Extent,
+        /// Document-space `[left, top, width, height]`; width and height are positive.
+        bounds: [f64; 4],
+    },
     /// Continuous document-space geometry, never replaced by a rasterized cache entry.
     VectorRectangle(VectorRectangle),
     /// Non-destructive linear-light exposure of the composite beneath this layer.
@@ -298,6 +308,13 @@ fn validate_layer(layer: Layer, extent: Extent) -> Result<(), CanvasError> {
         && source != extent
     {
         return Err(CanvasError::Invalid("Raster layer extent differs from document extent"));
+    }
+    if let LayerContent::PlacedRaster { bounds: [left, top, width, height], .. } = layer.content
+        && !([left, top, width, height].iter().all(|value| value.is_finite())
+            && width > 0.0
+            && height > 0.0)
+    {
+        return Err(CanvasError::Invalid("Placed raster bounds must be finite and nonempty"));
     }
     if let Some(LayerMask::Raster { extent: source, .. }) = layer.mask
         && source != extent

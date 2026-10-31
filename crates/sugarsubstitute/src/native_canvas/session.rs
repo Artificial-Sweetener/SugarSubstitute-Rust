@@ -20,7 +20,9 @@ mod document;
 #[cfg(feature = "native-composition")]
 mod document_transaction;
 #[cfg(feature = "native-composition")]
-pub(crate) use super::work::Originals as SelectedOriginals;
+pub(crate) use super::work::{
+    Originals as SelectedOriginals, OverviewOriginals, OverviewSelection,
+};
 #[cfg(feature = "native-composition")]
 pub(crate) use document_transaction::{DocumentToken, PreviewOffer, PreviewStatus, PreviewToken};
 mod gpu;
