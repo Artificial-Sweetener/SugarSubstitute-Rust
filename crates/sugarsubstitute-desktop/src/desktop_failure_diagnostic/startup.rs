@@ -45,6 +45,8 @@ pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> &'sta
         DesktopStartupObservation::MainRevealed(_) => "MainRevealed",
         DesktopStartupObservation::PanelMessage(_) => "PanelMessage",
         DesktopStartupObservation::SurfaceMessage(_) => "SurfaceMessage",
+        #[cfg(feature = "native-composition")]
+        DesktopStartupObservation::CanvasInput(_) => "CanvasInput",
         DesktopStartupObservation::CanvasContextMessage(_) => "CanvasContextMessage",
         DesktopStartupObservation::MainReloadRequested { .. } => "MainReloadRequested",
         #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]

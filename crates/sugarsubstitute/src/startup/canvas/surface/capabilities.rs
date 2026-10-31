@@ -44,6 +44,7 @@ impl NativeSurface {
             },
             comparison: available,
             overview: available,
+            input: available,
         };
         let status = if available {
             CanvasSurfaceDiscoveryStatus::Available

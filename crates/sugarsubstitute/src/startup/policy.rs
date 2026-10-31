@@ -139,6 +139,8 @@ impl StartupPolicy {
                 | DesktopStartupObservation::NavigationStarted(_)
                 | DesktopStartupObservation::FrontendReceipt { .. }
                 | DesktopStartupObservation::MainRevealed(_) => StartupRoute::None,
+                #[cfg(feature = "native-composition")]
+                DesktopStartupObservation::CanvasInput(_) => StartupRoute::None,
                 other => StartupRoute::Native(other),
             });
         }
@@ -189,6 +191,10 @@ impl StartupPolicy {
             }
             DesktopStartupObservation::CanvasContextMessage(observed) => {
                 session.is_some_and(|session| observed.identity() == self.identity(session))
+            }
+            #[cfg(feature = "native-composition")]
+            DesktopStartupObservation::CanvasInput(input) => {
+                session.is_some_and(|session| input.identity == self.identity(session))
             }
             DesktopStartupObservation::NativeActivity { run, .. }
             | DesktopStartupObservation::NativeRetired(run) => *run == self.run,

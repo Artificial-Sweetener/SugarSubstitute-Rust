@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Host the composed browser's native pointer: mouse messages, cursor and drag-and-drop.
+//!
+//! Every mouse message is routed against the canvas owner's published input region before
+//! WebView2 receives it; gestures assigned to native navigation wait in the routing queue for
+//! the main loop, so the UI thread never waits on canvas work.
 
 use super::callbacks::{CallbackFence, retire_when_quiet};
-use super::cursor::{self, Pointer, Subscription};
+use super::cursor::{self, Hands, Pointer, Subscription};
 use super::drop_target::DropTarget;
+use super::routing::{Button, ClickRule, Message, Routing};
 use super::*;
+use crate::canvas::{MainCanvasGesture, placement::PhysicalRect};
 use crate::windows_subclass::{self, Registration};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_MOUSE_EVENT_KIND, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS,
 };
@@ -16,19 +22,25 @@ use windows::Win32::{
     Graphics::Gdi::ScreenToClient,
     UI::{
         Controls::WM_MOUSELEAVE,
-        Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent},
+        HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+        Input::KeyboardAndMouse::{
+            GetDoubleClickTime, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+        },
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN,
-            WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY,
-            WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_XBUTTONDBLCLK,
-            WM_XBUTTONDOWN, WM_XBUTTONUP,
+            GetMessageTime, SM_CXDOUBLECLK, SM_CYDOUBLECLK, WA_INACTIVE, WM_ACTIVATE,
+            WM_CANCELMODE, WM_CAPTURECHANGED, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
+            WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
+            WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP,
+            WM_SETCURSOR, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
         },
     },
 };
 
 /// WebView2 accepts the seven Win32 mouse-button, shift and control key bits.
 const MOUSE_KEYS: u16 = 0x7f;
+/// `MK_LBUTTON | MK_RBUTTON | MK_MBUTTON | MK_XBUTTON1 | MK_XBUTTON2`.
+const BUTTON_KEYS: u16 = 0x73;
 
 /// These values remain borrowed from the original native message until synchronous delivery.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,6 +109,8 @@ struct State {
     events: Rc<Events>,
     active: Cell<bool>,
     pointer: Pointer,
+    routing: RefCell<Routing>,
+    hands: Hands,
     callbacks: CallbackFence,
 }
 
@@ -128,6 +142,11 @@ impl State {
                 ));
             }
         }
+        let forward = self.route(message, [point.x, point.y]);
+        self.present_cursor()?;
+        if !forward {
+            return Ok(());
+        }
         // SAFETY: The controller is retained on its creating UI apartment until subclass removal.
         unsafe {
             self.controller.SendMouseInput(
@@ -138,6 +157,71 @@ impl State {
             )
         }
         .map_err(|cause| DesktopError::new("send_composed_browser_mouse", cause))
+    }
+
+    /// Route one message in client pixels; returns whether WebView2 also receives it.
+    fn route(&self, message: Mouse, point: [i32; 2]) -> bool {
+        let held = message.keys & BUTTON_KEYS != 0;
+        let routed = match message.kind {
+            WM_MOUSEMOVE => Message::Move { point, held },
+            WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => self.press(Button::Primary, point),
+            WM_MBUTTONDOWN | WM_MBUTTONDBLCLK => self.press(Button::Middle, point),
+            WM_RBUTTONDOWN | WM_RBUTTONDBLCLK => self.press(Button::Secondary, point),
+            WM_XBUTTONDOWN | WM_XBUTTONDBLCLK => self.press(Button::Extra, point),
+            WM_LBUTTONUP => Message::Release { button: Button::Primary, point, held },
+            WM_MBUTTONUP => Message::Release { button: Button::Middle, point, held },
+            WM_RBUTTONUP => Message::Release { button: Button::Secondary, point, held },
+            WM_XBUTTONUP => Message::Release { button: Button::Extra, point, held },
+            // The decoder stores the signed wheel delta in the low 16 bits.
+            WM_MOUSEWHEEL => Message::Wheel { point, delta: message.data as u16 as i16 },
+            WM_MOUSELEAVE => Message::Leave,
+            _ => Message::Other,
+        };
+        self.update_routing(|routing| routing.route(routed))
+    }
+
+    /// Mutate routing and wake the main loop when its gesture queue stops being empty.
+    fn update_routing<T>(&self, update: impl FnOnce(&mut Routing) -> T) -> T {
+        let mut routing = self.routing.borrow_mut();
+        let idle = routing.pending() == 0;
+        let result = update(&mut routing);
+        if idle && routing.pending() != 0 {
+            self.events.wake();
+        }
+        result
+    }
+
+    /// Sample the user's double-click rule with the press's own message time and DPI.
+    fn press(&self, button: Button, point: [i32; 2]) -> Message {
+        // SAFETY: These reads copy this UI thread's message time, the live window's DPI and
+        // the matching system metrics without retaining any handle.
+        let rule = unsafe {
+            let dpi = GetDpiForWindow(self.window);
+            ClickRule {
+                time: GetMessageTime() as u32,
+                bounds: [
+                    GetSystemMetricsForDpi(SM_CXDOUBLECLK, dpi),
+                    GetSystemMetricsForDpi(SM_CYDOUBLECLK, dpi),
+                ],
+                limit: GetDoubleClickTime(),
+            }
+        };
+        Message::Press { button, point, rule }
+    }
+
+    /// End a captured native gesture after capture or activation loss.
+    fn cancel_native(&self) {
+        self.update_routing(Routing::cancel);
+        if let Err(cause) = self.present_cursor() {
+            self.events.fail(cause);
+        }
+    }
+
+    /// Show the routed hand, or the browser cursor once routing no longer names one.
+    fn present_cursor(&self) -> Result<(), DesktopError> {
+        let native = self.routing.borrow().cursor();
+        let present = self.pointer.present(cursor::captured(self.window));
+        self.hands.apply(self.window, native, self.pointer.cursor(), present)
     }
 
     fn admits(&self) -> bool {
@@ -156,7 +240,9 @@ impl State {
         };
         match cursor::resolve(&self.controller) {
             Ok(resolved) => {
-                if let Some(now) = self.pointer.change(resolved, cursor::captured(self.window)) {
+                if let Some(now) = self.pointer.change(resolved, cursor::captured(self.window))
+                    && self.routing.borrow().cursor().is_none()
+                {
                     cursor::select(now);
                 }
             }
@@ -187,6 +273,8 @@ impl Input {
             events,
             active: Cell::new(true),
             pointer: Pointer::default(),
+            routing: RefCell::new(Routing::new()?),
+            hands: Hands::new(window)?,
             callbacks: CallbackFence::default(),
         });
         let callback = Rc::new(state.clone());
@@ -210,9 +298,25 @@ impl Input {
         Ok(())
     }
 
+    /// Install the canvas owner's current input region, or withdraw routing with `None`.
+    /// The region is the shown clip in physical client pixels and its occlusions.
+    pub(super) fn publish(&self, region: Option<(PhysicalRect, &[PhysicalRect])>) {
+        let region = region.filter(|_| self.state.admits());
+        self.state.update_routing(|routing| routing.publish(region));
+        if let Err(cause) = self.state.present_cursor() {
+            self.state.events.fail(cause);
+        }
+    }
+
+    /// Take the oldest gesture routed to native navigation.
+    pub(super) fn take(&self) -> Option<MainCanvasGesture> {
+        self.state.routing.borrow_mut().take()
+    }
+
     /// Fence further browser input before any asynchronous main-window retirement.
     pub(super) fn suspend(&self) {
         self.state.active.set(false);
+        self.state.routing.borrow_mut().publish(None);
         if let Some(drop_target) = &self.drop_target {
             drop_target.suspend();
         }
@@ -229,9 +333,13 @@ impl Input {
             self.drop_target = None;
         }
         self.cursor.retire(&self.state.controller)?;
-        retire_when_quiet(&self.state.callbacks, || {
+        let removed = retire_when_quiet(&self.state.callbacks, || {
             windows_subclass::remove(self.state.window, Some(procedure), &self.registration)
-        })
+        })?;
+        if removed {
+            self.state.hands.retire();
+        }
+        Ok(removed)
     }
 }
 
@@ -247,6 +355,7 @@ unsafe extern "system" fn procedure(
     let state = unsafe { windows_subclass::callback::<Rc<State>>(data) }.clone();
     if message == WM_NCDESTROY {
         state.active.set(false);
+        state.hands.retire();
         // SAFETY: The final callback returns this exact native registration after chaining.
         return unsafe {
             windows_subclass::destroy_callback::<Rc<State>>(
@@ -258,13 +367,28 @@ unsafe extern "system" fn procedure(
             )
         };
     }
-    if message == WM_SETCURSOR
-        && state.admits()
-        && cursor::claims(window, wparam, lparam)
-        && let Some(current) = state.pointer.cursor()
-    {
-        cursor::select(current);
-        return LRESULT(1);
+    if message == WM_SETCURSOR && state.admits() && cursor::claims(window, wparam, lparam) {
+        let native = state.routing.borrow().cursor();
+        let selected = match cursor::shown(native, state.pointer.cursor()) {
+            Some(cursor::Shown::Native(_)) => state.hands.routed(),
+            Some(cursor::Shown::Browser(current)) => Some(current),
+            None => None,
+        };
+        if let Some(current) = selected {
+            cursor::select(current);
+            return LRESULT(1);
+        }
+    }
+    // Tao releases its own capture inside a forwarded button-up, after routing ended that
+    // gesture; any other capture or activation loss cancels a native drag.
+    let lost = match message {
+        WM_CAPTURECHANGED => lparam.0 != window.0 as isize,
+        WM_CANCELMODE => true,
+        WM_ACTIVATE => wparam.0 & 0xffff == WA_INACTIVE as usize,
+        _ => false,
+    };
+    if lost && state.admits() {
+        state.cancel_native();
     }
     if state.admits()
         && let Some(message) = mouse(message, wparam, lparam)

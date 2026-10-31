@@ -94,7 +94,11 @@ impl Drop for BoundaryGuard {
 struct PreparationBoundary(Arc<Boundary>);
 impl CpuTask<Packet, WorkError> for PreparationBoundary {
     fn step(&mut self, _: &JobContext) -> Result<CpuStep<Packet>, WorkError> {
-        let state = self.0.state.lock().map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
+        let state = self
+            .0
+            .state
+            .lock()
+            .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
         let state = self
             .0
             .changed

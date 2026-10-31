@@ -215,6 +215,7 @@ pub(super) fn dispatch(
                         DesktopError::boxed("acknowledge_main_canvas_hide", cause)
                     })?;
                 }
+                route_canvas_input(session, content)?;
             }
             #[cfg(all(windows, feature = "native-composition"))]
             if composition_registered && let Some(main) = &mut session.main {
@@ -242,6 +243,23 @@ pub(super) fn dispatch(
     }
     if let Some(cause) = session.splash.state.failure.take() {
         return Err(cause);
+    }
+    Ok(())
+}
+
+/// Install the canvas owner's input region, then deliver the gestures routed so far.
+/// The bounded routing queue holds at most one turn of gestures; none waits for canvas work.
+#[cfg(feature = "native-composition")]
+fn route_canvas_input(
+    session: &mut Session,
+    content: &mut impl StartupWindowContent,
+) -> Result<(), DesktopError> {
+    let Some(main) = &mut session.main else { return Ok(()) };
+    if let Err(cause) = main.publish_canvas_input(content.main_canvas_input_region()) {
+        return fail_main(session, content, cause);
+    }
+    while let Some(observation) = session.main.as_ref().and_then(MainActor::take_canvas_input) {
+        session.observe(content, observation)?;
     }
     Ok(())
 }

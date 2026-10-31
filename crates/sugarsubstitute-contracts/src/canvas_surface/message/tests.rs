@@ -176,3 +176,47 @@ fn overview_requests_match_the_shared_vectors_including_identity_and_size_bounds
     }
     Ok(())
 }
+
+#[test]
+fn geometry_occlusion_requests_match_the_shared_vectors() -> Result<(), Box<dyn Error>> {
+    let vectors: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../third_party/sugarcubes-canvas/occlusion_vectors.json"
+    )))?;
+    assert_eq!(vectors["maxOcclusions"], crate::canvas_surface::MAX_GEOMETRY_OCCLUSIONS);
+    for case in vectors["validRequests"].as_array().ok_or("Missing valid requests")? {
+        let name = case["name"].as_str().ok_or("Missing vector name")?;
+        let CanvasSurfaceMessage::Request(request) =
+            CanvasSurfaceMessage::decode(&serde_json::to_vec(&case["value"])?)?
+        else {
+            return Err(format!("{name}: expected a geometry request").into());
+        };
+        let CanvasSurfaceOperation::Geometry(geometry) = request.operation() else {
+            return Err(format!("{name}: expected geometry").into());
+        };
+        let wire = &case["value"]["geometry"];
+        let expected: Vec<_> = wire["occlusions"]
+            .as_array()
+            .map(|rects| {
+                rects
+                    .iter()
+                    .map(|rect| {
+                        ["x", "y", "width", "height"]
+                            .map(|key| rect[key].as_f64().unwrap_or(f64::NAN))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let decoded: Vec<_> = geometry.occlusions().map(|(x, y, w, h)| [x, y, w, h]).collect();
+        assert_eq!(decoded, expected, "{name}");
+        assert_eq!(geometry.modal(), wire["modal"].as_bool().unwrap_or(false), "{name}");
+    }
+    for case in vectors["invalidRequests"].as_array().ok_or("Missing invalid requests")? {
+        let name = case["name"].as_str().ok_or("Missing vector name")?;
+        assert!(
+            CanvasSurfaceMessage::decode(&serde_json::to_vec(&case["value"])?).is_err(),
+            "{name}"
+        );
+    }
+    Ok(())
+}

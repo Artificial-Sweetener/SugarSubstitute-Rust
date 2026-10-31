@@ -227,7 +227,7 @@ fn discovery_without_a_session_returns_unavailable_with_its_original_terminal_cr
         value["capabilities"],
         json!({
             "schema":1, "imageFormats":[], "viewportCommands":[], "viewportState":false,
-            "previewFormats":[], "comparison":false, "overview":false
+            "previewFormats":[], "comparison":false, "overview":false, "input":false
         })
     );
     assert!(memory.claim(1).is_err());

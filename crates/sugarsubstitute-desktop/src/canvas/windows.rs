@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Pump native canvas input, borrowed presentation and actual application teardown on one UI STA.
 mod activity;
-mod cursor;
+pub(crate) mod cursor;
 mod display;
 mod input;
 mod retirement;

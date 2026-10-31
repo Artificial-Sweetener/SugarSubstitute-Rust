@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): f3cc344bc371d8eadc99c6601da0b447eea4d97872ffb93283594558613882bc
+// Schema SHA-256 (LF): 9de8e36cfb787762a195ae46d24faaddada1c30d1973856ecd82986cdf8037f8
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -14,6 +14,7 @@ pub(super) struct CanvasSurfaceCapabilities {
     pub(super) preview_formats: Vec<String>,
     pub(super) comparison: bool,
     pub(super) overview: bool,
+    pub(super) input: bool,
 }
 impl CanvasSurfaceCapabilities {
     /// Reject values outside the exact schema-defined bounds.
@@ -160,6 +161,27 @@ impl CanvasSurfaceClip {
     }
 }
 
+/// Schema-defined untrusted CanvasSurfaceOcclusion data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceOcclusion {
+    pub(super) x: f64,
+    pub(super) y: f64,
+    pub(super) width: f64,
+    pub(super) height: f64,
+}
+impl CanvasSurfaceOcclusion {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        (-1000000.0..=1000000.0).contains(&self.x)
+            && (-1000000.0..=1000000.0).contains(&self.y)
+            && (0.0..=1000000.0).contains(&self.width)
+            && self.width > 0.0
+            && (0.0..=1000000.0).contains(&self.height)
+            && self.height > 0.0
+    }
+}
+
 /// Schema-defined untrusted CanvasSurfaceGeometry data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -172,6 +194,18 @@ pub(super) struct CanvasSurfaceGeometry {
     pub(super) physical_pixels_per_css_pixel: f64,
     pub(super) visible: bool,
     pub(super) focused: bool,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) occlusions: Option<Vec<CanvasSurfaceOcclusion>>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) modal: Option<bool>,
 }
 impl CanvasSurfaceGeometry {
     /// Reject values outside the exact schema-defined bounds.
@@ -183,6 +217,7 @@ impl CanvasSurfaceGeometry {
             && self.clip.valid()
             && (0.0..=64.0).contains(&self.physical_pixels_per_css_pixel)
             && self.physical_pixels_per_css_pixel > 0.0
+            && valid_canvas_surface_geometry_occlusions(self.occlusions.as_deref())
     }
 }
 
@@ -919,6 +954,10 @@ fn valid_surface_identity(value: &str, prefix: &str, maximum: usize) -> bool {
         .strip_prefix(prefix)
         .is_some_and(|tail| !tail.is_empty() && !tail.chars().any(char::is_control))
         && value.chars().count() <= maximum
+}
+
+fn valid_canvas_surface_geometry_occlusions(value: Option<&[CanvasSurfaceOcclusion]>) -> bool {
+    value.is_none_or(|items| items.len() <= 64 && items.iter().all(CanvasSurfaceOcclusion::valid))
 }
 
 fn valid_canvas_surface_reply_status(value: &str) -> bool {

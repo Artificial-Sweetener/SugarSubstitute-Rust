@@ -17,7 +17,7 @@ fn cell(filename: &str, rect: [f64; 4]) -> Value {
 }
 
 /// Show the 320x160 red and 160x320 blue outputs side by side in two 40x40 CSS cells.
-fn present_grid(fixture: &mut Fixture, id: u64) -> Result<(), Box<dyn Error>> {
+pub(super) fn present_grid(fixture: &mut Fixture, id: u64) -> Result<(), Box<dyn Error>> {
     fixture.send(
         id,
         "surface.overview",
@@ -30,7 +30,7 @@ fn present_grid(fixture: &mut Fixture, id: u64) -> Result<(), Box<dyn Error>> {
 
 /// Each output is fitted inside its cell: red fills 40x20 at rows 10..30, blue 20x40 at
 /// columns 50..70; everything else is the matte.
-fn grid_pixels(pixels: &[u32], width: u32) -> bool {
+pub(super) fn grid_pixels(pixels: &[u32], width: u32) -> bool {
     pixels.iter().enumerate().all(|(index, &pixel)| {
         let (x, y) = (index as u32 % width, index as u32 / width);
         if x < 40 && (10..30).contains(&y) {

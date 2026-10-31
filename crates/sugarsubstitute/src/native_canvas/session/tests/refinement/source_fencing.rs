@@ -63,7 +63,8 @@ fn changed_authored_revision_retires_render_failure_for_the_same_raster_source()
 fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
 -> Result<(), Box<dyn Error>> {
     for foreign_document in [false, true] {
-        let Fixture { mut session, wake, boundary, _directory } = preparing(Reconstruction::Preview)?;
+        let Fixture { mut session, wake, boundary, _directory } =
+            preparing(Reconstruction::Preview)?;
         let rendering = session.rendering.as_mut().ok_or("Missing preparation")?;
         rendering.superseded = true;
         rendering.job.cancel();

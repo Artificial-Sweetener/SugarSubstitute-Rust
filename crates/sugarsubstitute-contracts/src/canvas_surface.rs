@@ -45,7 +45,11 @@ pub use viewport::{
 use std::{error::Error, fmt};
 
 /// Maximum serialized geometry size before JSON decoding, in UTF-8 bytes.
-pub const MAX_GEOMETRY_BYTES: usize = 2048;
+/// This admits the full 64-rectangle occlusion list at full numeric precision.
+pub const MAX_GEOMETRY_BYTES: usize = 16 * 1024;
+
+/// Maximum page-published occlusion rectangles in one geometry snapshot.
+pub const MAX_GEOMETRY_OCCLUSIONS: usize = 64;
 
 /// A schema-valid geometry snapshot; it grants no navigation or host authority.
 #[derive(Clone, Debug, PartialEq)]
@@ -101,6 +105,25 @@ impl CanvasSurfaceGeometry {
     /// Return the page's reported focus, independent of native focus.
     pub const fn focused(&self) -> bool {
         self.0.focused
+    }
+
+    /// Return the rectangles where web content covers the viewport, as x, y, width and height.
+    ///
+    /// Coordinates are CSS pixels relative to [`Self::origin`]; widths and heights are positive.
+    /// At most [`MAX_GEOMETRY_OCCLUSIONS`] rectangles exist. An omitted list is empty. Pages
+    /// publish occlusions only to hosts that declared native gesture routing.
+    pub fn occlusions(&self) -> impl ExactSizeIterator<Item = (f64, f64, f64, f64)> + '_ {
+        self.0
+            .occlusions
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|rect| (rect.x, rect.y, rect.width, rect.height))
+    }
+
+    /// Return whether a modal dialog or overlay blocks the whole viewport; omitted means false.
+    pub fn modal(&self) -> bool {
+        self.0.modal.unwrap_or(false)
     }
 }
 

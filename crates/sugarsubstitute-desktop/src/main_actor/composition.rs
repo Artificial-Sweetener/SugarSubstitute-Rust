@@ -9,6 +9,7 @@ mod cursor;
 mod drop_target;
 mod input;
 mod retirement;
+mod routing;
 
 use super::*;
 use retirement::FencedCommit;

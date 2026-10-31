@@ -5,6 +5,7 @@
 mod attachment;
 mod capabilities;
 mod ingress;
+mod input;
 mod navigation;
 mod operations;
 mod overview;
@@ -16,6 +17,7 @@ mod replies_tests;
 mod viewport;
 
 use super::*;
+pub(in crate::startup) use input::RoutedInput;
 #[cfg(test)]
 use std::path::{Component, Path};
 use sugarsubstitute_canvas::FrameStamp;
@@ -33,7 +35,10 @@ use sugarsubstitute_desktop::{
     CanvasContextReply, DesktopStartupCommand, SurfaceReply,
     canvas::{
         MainCanvasFrame, MainCanvasRetention,
-        placement::{CanvasPlacement, WebViewAllocation, placement, preparation_viewport},
+        placement::{
+            CanvasPlacement, PhysicalRect, WebViewAllocation, occlusions, placement,
+            preparation_viewport,
+        },
     },
 };
 use sugarsubstitute_image_io::CacheReuse;
@@ -53,6 +58,10 @@ struct Binding {
     revision: u64,
     placement: Option<CanvasPlacement>,
     allocation: Option<WebViewAllocation>,
+    /// Page-published web content above the viewport, in physical client pixels.
+    occlusions: Vec<PhysicalRect>,
+    /// A page modal blocks the whole viewport, so no native input region is published.
+    modal: bool,
     selected: bool,
     selection_revision: u64,
     source_intent_revision: Option<u64>,

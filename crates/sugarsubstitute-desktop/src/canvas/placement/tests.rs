@@ -86,3 +86,31 @@ fn rejects_oversized_viewports_and_unrepresentable_native_origins() -> Result<()
     );
     Ok(())
 }
+
+#[test]
+fn occlusions_round_outward_from_the_geometry_origin_and_reject_stale_scale()
+-> Result<(), Box<dyn Error>> {
+    let allocation = WebViewAllocation {
+        bounds: PhysicalRect { x: 4, y: 8, width: 800, height: 600 },
+        physical_pixels_per_css_pixel: 1.5,
+    };
+    let value = CanvasSurfaceGeometry::decode(&serde_json::to_vec(&json!({
+        "coordinateSpace": "client", "units": "css-pixels",
+        "origin": {"x": 10.0, "y": 20.0}, "viewport": {"width": 200.0, "height": 100.0},
+        "clip": {"x": 10.0, "y": 20.0, "width": 200.0, "height": 100.0},
+        "physicalPixelsPerCssPixel": 1.5, "visible": true, "focused": false,
+        "occlusions": [{"x": 0.5, "y": -2.0, "width": 3.0, "height": 1.1}, {"x": 190.0, "y": 90.0, "width": 40.0, "height": 40.0}]
+    }))?)?;
+    assert_eq!(
+        occlusions(&value, allocation)?,
+        [
+            PhysicalRect { x: 19, y: 35, width: 6, height: 2 },
+            PhysicalRect { x: 304, y: 173, width: 60, height: 60 },
+        ]
+    );
+    let plain = geometry((0.0, 0.0), (10.0, 10.0), (0.0, 0.0, 10.0, 10.0), 1.5, true)?;
+    assert_eq!(occlusions(&plain, allocation)?, []);
+    let stale = geometry((0.0, 0.0), (10.0, 10.0), (0.0, 0.0, 10.0, 10.0), 2.0, true)?;
+    assert_eq!(occlusions(&stale, allocation), Err(PlacementError::ScaleMismatch));
+    Ok(())
+}

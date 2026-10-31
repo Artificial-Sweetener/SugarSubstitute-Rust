@@ -132,6 +132,46 @@ impl super::MainActor {
         Ok(false)
     }
 
+    /// Route pointer input against the canvas owner's region only while it describes this
+    /// revealed lifetime, the current WebView allocation and native pixels at its placement.
+    /// Anything else withdraws the region, so every message reaches WebView2 alone.
+    pub(crate) fn publish_canvas_input(
+        &mut self,
+        region: Option<crate::canvas::MainCanvasInputRegion<'_>>,
+    ) -> Result<(), DesktopError> {
+        let Some(input) = self.composition.as_ref().and_then(|tree| tree.input.as_ref()) else {
+            return Ok(());
+        };
+        let current = match region {
+            Some(region)
+                if region.identity == self.identity()
+                    && self.revealed
+                    && !self.admission.closing()
+                    && region.occlusions.len() <= crate::canvas::MAX_INPUT_OCCLUSIONS =>
+            {
+                let shown = self
+                    .composition
+                    .as_ref()
+                    .and_then(|tree| tree.canvas.as_ref())
+                    .is_some_and(|canvas| canvas.shows(region.placement));
+                (shown && self.canvas_allocation()? == region.allocation)
+                    .then_some((region.placement.clip, region.occlusions))
+            }
+            _ => None,
+        };
+        input.publish(current);
+        Ok(())
+    }
+
+    /// Take one routed gesture as an observation for this exact main lifetime.
+    pub(crate) fn take_canvas_input(&self) -> Option<crate::DesktopStartupObservation> {
+        let gesture = self.composition.as_ref()?.input.as_ref()?.take()?;
+        Some(crate::DesktopStartupObservation::CanvasInput(crate::canvas::MainCanvasInput {
+            identity: self.identity(),
+            gesture,
+        }))
+    }
+
     /// Keep acknowledged pixels only while their native lifetime and geometry remain exact.
     /// No upload, allocation or replacement acknowledgement occurs on this path.
     pub(crate) fn retain_canvas(
@@ -170,6 +210,11 @@ pub(super) struct Canvas {
 }
 
 impl Canvas {
+    /// Whether committed native pixels occupy this placement, whichever frame they show.
+    fn shows(&self, placement: CanvasPlacement) -> bool {
+        !self.retired && self.active.is_some() && self.acknowledgement.shows(placement)
+    }
+
     /// Match actual native custody without treating candidate pixels as displayed.
     fn retains(&self, target: FrameStamp, placement: CanvasPlacement) -> bool {
         !self.retired && self.active.is_some() && self.acknowledgement.retains(target, placement)

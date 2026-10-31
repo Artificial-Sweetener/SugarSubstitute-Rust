@@ -25,6 +25,8 @@ use sugarsubstitute_image_ops::Extent;
 mod comfy_source;
 #[cfg(feature = "native-composition")]
 mod surface;
+#[cfg(feature = "native-composition")]
+pub(super) use surface::RoutedInput;
 #[cfg(test)]
 mod tests;
 
@@ -225,6 +227,27 @@ impl EmbeddedCanvas {
             .map_or(sugarsubstitute_desktop::canvas::MainCanvasPresentation::Hide, |session| {
                 self.surface.presentation(session)
             })
+    }
+
+    /// Describe where routed native gestures may reach the shown final image.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn input_region(
+        &self,
+    ) -> Option<sugarsubstitute_desktop::canvas::MainCanvasInputRegion<'_>> {
+        self.session.as_ref()?;
+        self.surface.input_region()
+    }
+
+    /// Apply one gesture the desktop routed into the published native input region.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn input(
+        &mut self,
+        input: sugarsubstitute_desktop::canvas::MainCanvasInput,
+    ) -> Result<surface::RoutedInput, Box<dyn Error>> {
+        match self.session.as_mut() {
+            Some(session) => self.surface.routed_input(input, session),
+            None => Ok(surface::RoutedInput::Refused),
+        }
     }
 
     /// Accept the exact native frame and resolve the matching shared operation.

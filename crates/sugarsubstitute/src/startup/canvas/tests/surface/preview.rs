@@ -8,12 +8,12 @@ mod closing;
 mod restoration;
 mod transactions;
 
-const JPEG: &[u8] = include_bytes!(concat!(
+pub(super) const JPEG: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../sugarsubstitute-image-io/src/tests/jpeg/fixtures/420.jpg"
 ));
 
-fn watch(fixture: &mut Fixture, id: u64, enabled: bool) -> Result<(), Box<dyn Error>> {
+pub(super) fn watch(fixture: &mut Fixture, id: u64, enabled: bool) -> Result<(), Box<dyn Error>> {
     let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(
         &json!({"protocol":"sugarcubes.canvas","version":3,"session":fixture.panel.as_str(),"requestId":id,"type":"surface.presentation.request","schema":1,"enabled":enabled}),
     )?)?;
@@ -47,7 +47,7 @@ fn begin(fixture: &mut Fixture, id: u64, token: &str, length: usize) -> Result<(
     fixture.take(id, "applied")?;
     Ok(())
 }
-fn transfer(
+pub(super) fn transfer(
     fixture: &mut Fixture,
     id: u64,
     token: &str,
@@ -77,7 +77,7 @@ fn change(fixture: &mut Fixture) -> Result<Option<Value>, Box<dyn Error>> {
         _ => Err("Unexpected preview command".into()),
     }
 }
-fn wait_frame(fixture: &mut Fixture) -> Result<FrameStamp, Box<dyn Error>> {
+pub(super) fn wait_frame(fixture: &mut Fixture) -> Result<FrameStamp, Box<dyn Error>> {
     for _ in 0..500 {
         let observed = fixture.wake.revision();
         fixture.advance(100);
@@ -98,7 +98,7 @@ fn wait_frame(fixture: &mut Fixture) -> Result<FrameStamp, Box<dyn Error>> {
     }
     Err("Preview never reached native presentation custody".into())
 }
-fn wait_change(fixture: &mut Fixture, status: &str) -> Result<Value, Box<dyn Error>> {
+pub(super) fn wait_change(fixture: &mut Fixture, status: &str) -> Result<Value, Box<dyn Error>> {
     for _ in 0..500 {
         let observed = fixture.wake.revision();
         fixture.pump()?;
@@ -111,7 +111,7 @@ fn wait_change(fixture: &mut Fixture, status: &str) -> Result<Value, Box<dyn Err
     }
     Err("Preview did not publish its expected terminal observation".into())
 }
-fn drain(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
+pub(super) fn drain(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
     while change(fixture)?.is_some() {}
     Ok(())
 }

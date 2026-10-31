@@ -23,6 +23,9 @@ pub struct CanvasSurfaceCapabilities {
     pub comparison: bool,
     /// Whether the surface presents an image overview.
     pub overview: bool,
+    /// Whether the host routes pointer and wheel gestures against page-published occlusions.
+    /// Only such a host accepts geometry occlusions and the modal flag.
+    pub input: bool,
 }
 
 /// Selected-image encoding supported by a surface runtime.
@@ -170,6 +173,7 @@ impl CanvasSurfaceCapabilities {
                 .collect(),
             comparison: self.comparison,
             overview: self.overview,
+            input: self.input,
         };
         if !value.valid() {
             return Err(CanvasSurfaceMessageError::Invalid);

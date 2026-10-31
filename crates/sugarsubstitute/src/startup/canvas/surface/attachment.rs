@@ -34,6 +34,8 @@ impl NativeSurface {
             revision: request.revision(),
             placement: None,
             allocation: None,
+            occlusions: Vec::new(),
+            modal: false,
             selected: false,
             selection_revision: 0,
             source_intent_revision: None,

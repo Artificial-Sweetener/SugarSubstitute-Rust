@@ -86,6 +86,7 @@ fn discovery_preserves_each_typed_capability_without_enabling_others() -> Result
         preview_formats: vec![CanvasSurfacePreviewFormat::Png, CanvasSurfacePreviewFormat::Jpeg],
         comparison: true,
         overview: true,
+        input: true,
     };
     let bytes = request()?.reply(
         CanvasSurfaceDiscoveryStatus::Available,
@@ -103,6 +104,7 @@ fn discovery_preserves_each_typed_capability_without_enabling_others() -> Result
             "previewFormats": ["png", "jpeg"],
             "comparison": true,
             "overview": true,
+            "input": true,
         })
     );
     assert_eq!(value["message"].as_str().ok_or("Missing reply text")?.chars().count(), 512);
@@ -143,6 +145,7 @@ fn discovery_rejects_nonempty_failure_descriptors_and_oversized_lists() -> Resul
         },
         CanvasSurfaceCapabilities { comparison: true, ..Default::default() },
         CanvasSurfaceCapabilities { overview: true, ..Default::default() },
+        CanvasSurfaceCapabilities { input: true, ..Default::default() },
     ];
     for status in [
         CanvasSurfaceDiscoveryStatus::Unsupported,

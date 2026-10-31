@@ -15,6 +15,14 @@ pub mod placement;
 #[cfg(feature = "native-composition")]
 pub mod acknowledgement;
 
+#[cfg(feature = "native-composition")]
+mod gesture;
+#[cfg(feature = "native-composition")]
+pub use gesture::{
+    MAX_INPUT_OCCLUSIONS, MainCanvasButton, MainCanvasGesture, MainCanvasInput,
+    MainCanvasInputRegion,
+};
+
 #[cfg(all(windows, feature = "native-composition"))]
 #[allow(unsafe_code)]
 mod graphics;
@@ -49,6 +57,8 @@ pub struct GpuPresentation {
     pub receipt: WindowPresentation,
 }
 
+#[cfg(windows)]
+pub(crate) mod click;
 #[cfg(any(windows, test))]
 mod feedback;
 #[cfg(any(windows, test))]
@@ -60,7 +70,7 @@ mod paint;
 pub(crate) mod test_harness;
 #[cfg(windows)]
 #[allow(unsafe_code)]
-mod windows;
+pub(crate) mod windows;
 #[cfg(windows)]
 pub use windows::run;
 

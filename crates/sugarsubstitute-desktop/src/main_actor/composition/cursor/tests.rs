@@ -91,3 +91,18 @@ fn changed_cursors_apply_immediately_only_inside_or_under_capture() {
     assert_eq!(pointer.change(Some(handle(4)), false), None);
     assert!(pointer.enter());
 }
+
+#[test]
+fn routed_canvas_hands_win_over_the_browser_cursor() {
+    assert_eq!(shown(None, None), None);
+    assert_eq!(shown(None, Some(handle(5))), Some(Shown::Browser(handle(5))));
+    for intent in [CursorIntent::OpenHand, CursorIntent::ClosedHand] {
+        assert_eq!(shown(Some(intent), Some(handle(5))), Some(Shown::Native(intent)));
+        assert_eq!(shown(Some(intent), None), Some(Shown::Native(intent)));
+    }
+    let pointer = Pointer::default();
+    assert!(!pointer.present(false));
+    assert!(pointer.present(true));
+    pointer.enter();
+    assert!(pointer.present(false));
+}

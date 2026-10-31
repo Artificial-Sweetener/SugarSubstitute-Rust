@@ -84,6 +84,11 @@ impl Acknowledgement {
         self.last = None;
     }
 
+    /// Whether some committed native frame currently occupies exactly this placement.
+    pub fn shows(&self, placement: CanvasPlacement) -> bool {
+        self.last.is_some_and(|(_, shown)| shown == placement)
+    }
+
     /// Whether this exact frame and placement are the committed native content.
     pub fn retains(&self, target: FrameStamp, placement: CanvasPlacement) -> bool {
         self.last == Some((target, placement))

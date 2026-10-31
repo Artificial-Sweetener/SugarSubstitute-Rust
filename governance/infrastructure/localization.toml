@@ -420,7 +420,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:9455ada3699c2be4f8fb5ba7237835e5b8ce240dcf095476e52809660307778e"
+source_sha256 = "sha256:af5c4069cb66db3bb73986da9cdb6e6caaa82f349b54ee0f50da339aa82e759a"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -450,7 +450,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:2f69d2102e28ab9734279f1797fa39734d77f2752aa28da425fd4f6951e81154"
+source_sha256 = "sha256:303ef96fd3c2c57d1ca5edea40774913f11489155e7ecf6a98d779ec99c63494"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -696,7 +696,7 @@ rationale = "The upstream derivative compares numeric HTTP statusCode framing an
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/canvas/windows.rs"
-source_sha256 = "sha256:ee8d3dbcea348e7e85975953f58c004133f916f3920a185159354bd3322b4318"
+source_sha256 = "sha256:5fed584d3d5e8bb363ba28040c1727b1a78f6e37d82ddf892c99ee8b2393880b"
 kind = "native"
 rationale = "Native canvas window consumes catalog-owned titles/status from the application lifetime; input observations preserve authored source paths without constructing product copy."
 

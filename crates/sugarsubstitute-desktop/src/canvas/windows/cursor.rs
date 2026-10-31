@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Own DPI-sized Qt hand cursors and the shared Windows arrow for one native canvas peer.
+//! Own DPI-sized Qt hand cursors and the shared Windows arrow for one native window.
+//!
+//! The standalone canvas peer and the composed main window each own one cache.
 
 use super::*;
 use ::windows::Win32::UI::{
@@ -20,11 +22,11 @@ const OPEN_HAND: &[u8] = include_bytes!("../../../assets/cursors/qt-open-hand.cu
 const CLOSED_HAND: &[u8] = include_bytes!("../../../assets/cursors/qt-closed-hand.cur");
 
 /// Private native cursor; its final owner must release it only after native selection ends.
-pub(super) struct OwnedCursor(HCURSOR);
+pub(crate) struct OwnedCursor(HCURSOR);
 
 impl OwnedCursor {
     /// Borrow the handle without transferring native ownership.
-    pub(super) const fn handle(&self) -> HCURSOR {
+    pub(crate) const fn handle(&self) -> HCURSOR {
         self.0
     }
 }
@@ -42,14 +44,14 @@ impl Drop for OwnedCursor {
 
 #[derive(Clone)]
 /// Shared OS cursor or retained private cursor, confined to the peer's native thread.
-pub(super) enum CursorResource {
+pub(crate) enum CursorResource {
     Shared(HCURSOR),
     Owned(Rc<OwnedCursor>),
 }
 
 impl CursorResource {
     /// Borrow the handle for synchronous Windows cursor selection.
-    pub(super) fn handle(&self) -> HCURSOR {
+    pub(crate) fn handle(&self) -> HCURSOR {
         match self {
             Self::Shared(cursor) => *cursor,
             Self::Owned(cursor) => cursor.handle(),
@@ -57,14 +59,14 @@ impl CursorResource {
     }
 
     /// Retain private cursor custody across cache refresh and native selection changes.
-    pub(super) fn owned(&self) -> Option<Rc<OwnedCursor>> {
+    pub(crate) fn owned(&self) -> Option<Rc<OwnedCursor>> {
         match self {
             Self::Shared(_) => None,
             Self::Owned(cursor) => Some(cursor.clone()),
         }
     }
     /// Reassert this resource only after an actual native override, retaining private custody.
-    pub(super) fn select(&self) -> Option<Rc<OwnedCursor>> {
+    pub(crate) fn select(&self) -> Option<Rc<OwnedCursor>> {
         let desired = self.handle();
         // SAFETY: Read and selection are synchronous on the native window's owning UI thread.
         select_when_changed(
@@ -103,13 +105,13 @@ struct Cache {
     pair: Option<CursorPair>,
 }
 
-/// One current-DPI custom pair plus the shared system arrow for a native canvas peer.
-pub(super) struct Cursors(RefCell<Cache>);
+/// One current-DPI custom pair plus the shared system arrow for one native window.
+pub(crate) struct Cursors(RefCell<Cache>);
 
 impl Cursors {
     /// Create the shared arrow and private hands using this live peer's physical DPI.
     /// Errors preserve native metric/resource failures; call on the peer's owning thread.
-    pub(super) fn new(window: HWND) -> Result<Self, Box<dyn Error>> {
+    pub(crate) fn new(window: HWND) -> Result<Self, Box<dyn Error>> {
         // SAFETY: IDC_ARROW requests a shared Windows cursor that callers never destroy.
         let arrow = unsafe { LoadCursorW(None, IDC_ARROW)? };
         let size = cursor_size(window)?;
@@ -119,7 +121,7 @@ impl Cursors {
 
     /// Resolve an intent, refreshing size if DPI changed; retain the returned private resource.
     /// Errors preserve native resource failures. Coordinates and dimensions are physical pixels.
-    pub(super) fn get(
+    pub(crate) fn get(
         &self,
         window: HWND,
         intent: CursorIntent,
@@ -152,12 +154,12 @@ impl Cursors {
     }
 
     /// Borrow the Windows-owned arrow for final private-cursor deselection.
-    pub(super) fn arrow(&self) -> HCURSOR {
+    pub(crate) fn arrow(&self) -> HCURSOR {
         self.0.borrow().arrow
     }
 
     /// Release cached hands after the peer's selected and desired resources have retired.
-    pub(super) fn retire_custom(&self) {
+    pub(crate) fn retire_custom(&self) {
         self.0.borrow_mut().pair = None;
     }
 }

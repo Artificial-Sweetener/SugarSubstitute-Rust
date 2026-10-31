@@ -409,6 +409,10 @@ pub enum DesktopStartupObservation {
     SurfaceMessage(crate::SurfaceObservation),
     /// A bounded canvas context request from the current native top-document context.
     CanvasContextMessage(crate::CanvasContextObservation),
+    /// A pointer or wheel gesture the main window routed to the native canvas input region.
+    /// It is delivered after the UI-thread message returned and never waits for canvas work.
+    #[cfg(feature = "native-composition")]
+    CanvasInput(crate::canvas::MainCanvasInput),
     /// A native callback requested replacement of the exact already revealed document.
     MainReloadRequested {
         /// Full current run, launch and navigation; stale callbacks cannot select another Main.
@@ -501,6 +505,14 @@ pub trait StartupWindowContent: WindowContent {
     #[cfg(feature = "native-composition")]
     fn main_canvas_presentation(&self) -> crate::canvas::MainCanvasPresentation<'_> {
         crate::canvas::MainCanvasPresentation::Hide
+    }
+
+    /// Publish where routed native gestures may reach the shown final image, or `None`.
+    /// Called on every main-loop turn after presentation; the desktop withdraws the region when
+    /// its identity, allocation or acknowledged placement no longer matches native state.
+    #[cfg(feature = "native-composition")]
+    fn main_canvas_input_region(&self) -> Option<crate::canvas::MainCanvasInputRegion<'_>> {
+        None
     }
 
     /// Acknowledge a matching frame only after native upload and composition commit succeed.

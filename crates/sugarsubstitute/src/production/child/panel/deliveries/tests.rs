@@ -102,7 +102,7 @@ fn limited_panel_discovery_is_explicit_and_keeps_native_custody() -> Result<()> 
         value["capabilities"],
         serde_json::json!({
             "schema":1, "imageFormats":[], "viewportCommands":[], "viewportState":false,
-            "previewFormats":[], "comparison":false, "overview":false
+            "previewFormats":[], "comparison":false, "overview":false, "input":false
         })
     );
     let other = MemoryLease::new(reserved, Box::new(Release(Arc::default())));

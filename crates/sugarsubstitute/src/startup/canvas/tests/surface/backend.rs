@@ -50,6 +50,7 @@ fn discovery(
     );
     assert_eq!(value["capabilities"]["comparison"], expected == "available");
     assert_eq!(value["capabilities"]["overview"], expected == "available");
+    assert_eq!(value["capabilities"]["input"], expected == "available");
     Ok(())
 }
 

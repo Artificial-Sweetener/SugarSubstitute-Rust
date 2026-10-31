@@ -20,7 +20,8 @@
         "viewportState": { "type": "boolean" },
         "previewFormats": { "type": "array", "items": { "enum": ["png", "jpeg"] }, "maxItems": 2 },
         "comparison": { "type": "boolean" },
-        "overview": { "type": "boolean" }
+        "overview": { "type": "boolean" },
+        "input": { "type": "boolean" }
       },
       "required": [
         "schema",
@@ -29,7 +30,8 @@
         "viewportState",
         "previewFormats",
         "comparison",
-        "overview"
+        "overview",
+        "input"
       ],
       "additionalProperties": false
     },
@@ -156,6 +158,17 @@
       "required": ["x", "y", "width", "height"],
       "additionalProperties": false
     },
+    "CanvasSurfaceOcclusion": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 }
+      },
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false
+    },
     "CanvasSurfaceGeometry": {
       "type": "object",
       "properties": {
@@ -166,7 +179,13 @@
         "clip": { "$ref": "#/$defs/CanvasSurfaceClip" },
         "physicalPixelsPerCssPixel": { "type": "number", "exclusiveMinimum": 0, "maximum": 64 },
         "visible": { "type": "boolean" },
-        "focused": { "type": "boolean" }
+        "focused": { "type": "boolean" },
+        "occlusions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CanvasSurfaceOcclusion" },
+          "maxItems": 64
+        },
+        "modal": { "type": "boolean" }
       },
       "required": [
         "coordinateSpace",

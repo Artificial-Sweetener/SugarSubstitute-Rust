@@ -34,7 +34,14 @@ impl NativeSurface {
                 let Some(allocation) = allocation else {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
                 };
-                let projected = match placement(&geometry, allocation) {
+                let projected = match placement(&geometry, allocation).and_then(|projected| {
+                    // Hidden geometry routes nothing, so only a shown viewport projects them.
+                    let occluded = match projected {
+                        Some(_) => occlusions(&geometry, allocation)?,
+                        None => Vec::new(),
+                    };
+                    Ok((projected, occluded))
+                }) {
                     Ok(value) => value,
                     Err(_) => {
                         return self.reply(
@@ -45,8 +52,11 @@ impl NativeSurface {
                         );
                     }
                 };
+                let (projected, occlusions) = projected;
                 let preview_shown = self.has_shown_preview();
                 let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
+                binding.occlusions = occlusions;
+                binding.modal = geometry.modal();
                 let viewport = match projected {
                     Some(projected) => Some(projected.viewport),
                     None if !binding.committed => match preparation_viewport(&geometry, allocation)

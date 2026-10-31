@@ -5,10 +5,13 @@
 //! A composition-hosted WebView2 owns no HWND, so Windows never asks it for a cursor. The host
 //! selects the browser's cursor on client-area `WM_SETCURSOR` and immediately after
 //! `CursorChanged` while the pointer is inside or captured, because Windows sends no
-//! `WM_SETCURSOR` for a change without movement or while capture is held.
+//! `WM_SETCURSOR` for a change without movement or while capture is held. Over the native
+//! canvas input region the routed hand cursor wins over the browser's.
 
 use super::*;
-use std::cell::Cell;
+use crate::canvas::windows::cursor::{CursorResource, Cursors};
+use std::cell::{Cell, RefCell};
+use sugarsubstitute_canvas::CursorIntent;
 use webview2_com::{
     CursorChangedEventHandler, Microsoft::Web::WebView2::Win32::ICoreWebView2CompositionController2,
 };
@@ -17,7 +20,7 @@ use windows::{
         Foundation::{E_NOINTERFACE, LPARAM, WPARAM},
         UI::{
             Input::KeyboardAndMouse::GetCapture,
-            WindowsAndMessaging::{HCURSOR, HTCLIENT, LoadCursorW, SetCursor},
+            WindowsAndMessaging::{GetCursor, HCURSOR, HTCLIENT, LoadCursorW, SetCursor},
         },
     },
     core::PCWSTR,
@@ -51,8 +54,27 @@ impl Pointer {
     /// Retain the browser's new cursor and return it when it must be selected immediately.
     pub(super) fn change(&self, cursor: Option<HCURSOR>, captured: bool) -> Option<HCURSOR> {
         self.cursor.set(cursor);
-        cursor.filter(|_| self.inside.get() || captured)
+        cursor.filter(|_| self.present(captured))
     }
+
+    /// Whether a cursor change must be selected now: the pointer is inside or captured.
+    pub(super) fn present(&self, captured: bool) -> bool {
+        self.inside.get() || captured
+    }
+}
+
+/// The cursor the composed window shows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Shown {
+    /// The routed native canvas hand, which wins inside the input region and during a drag.
+    Native(CursorIntent),
+    /// The browser's latest cursor.
+    Browser(HCURSOR),
+}
+
+/// Choose the native canvas cursor when routing names one, otherwise the browser's.
+pub(super) fn shown(native: Option<CursorIntent>, browser: Option<HCURSOR>) -> Option<Shown> {
+    native.map(Shown::Native).or(browser.map(Shown::Browser))
 }
 
 /// Claim `WM_SETCURSOR` only for this window's own client area.
@@ -122,6 +144,79 @@ pub(super) fn captured(window: HWND) -> bool {
     // SAFETY: Read-only observation of the calling UI thread's capture window.
     let capture = unsafe { GetCapture() };
     capture == window
+}
+
+/// Own the composed window's DPI-sized hand cursors and the hand currently routed.
+///
+/// Private hands are destroyed only by the shared cursor cache; retirement first restores the
+/// shared arrow when a routed hand is still the selected Windows cursor.
+pub(super) struct Hands {
+    cursors: Cursors,
+    routed: RefCell<Option<CursorResource>>,
+}
+
+impl Hands {
+    /// Load the hands at this window's current DPI on its UI thread.
+    pub(super) fn new(window: HWND) -> Result<Self, DesktopError> {
+        let cursors = Cursors::new(window)
+            .map_err(|cause| DesktopError::boxed("load_composed_canvas_cursors", cause))?;
+        Ok(Self { cursors, routed: RefCell::new(None) })
+    }
+
+    /// The routed hand for the next client-area `WM_SETCURSOR`.
+    pub(super) fn routed(&self) -> Option<HCURSOR> {
+        self.routed.borrow().as_ref().map(CursorResource::handle)
+    }
+
+    /// Follow routing: select a newly routed hand, or the browser cursor after a hand ends.
+    /// `present` reports whether the pointer is inside the client area or captured.
+    pub(super) fn apply(
+        &self,
+        window: HWND,
+        native: Option<CursorIntent>,
+        browser: Option<HCURSOR>,
+        present: bool,
+    ) -> Result<(), DesktopError> {
+        match shown(native, browser) {
+            Some(Shown::Native(intent)) => {
+                let resource = self
+                    .cursors
+                    .get(window, intent)
+                    .map_err(|cause| DesktopError::boxed("select_composed_canvas_cursor", cause))?;
+                if present && self.routed() != Some(resource.handle()) {
+                    select(resource.handle());
+                }
+                *self.routed.borrow_mut() = Some(resource);
+            }
+            other => {
+                let Some(previous) = self.routed.borrow_mut().take() else { return Ok(()) };
+                if present {
+                    select(match other {
+                        Some(Shown::Browser(cursor)) => cursor,
+                        _ => self.cursors.arrow(),
+                    });
+                } else {
+                    self.deselect(previous.handle());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Restore the shared arrow over a still-selected hand, then release every private hand.
+    pub(super) fn retire(&self) {
+        if let Some(routed) = self.routed.borrow_mut().take() {
+            self.deselect(routed.handle());
+        }
+        self.cursors.retire_custom();
+    }
+
+    fn deselect(&self, hand: HCURSOR) {
+        // SAFETY: Read-only observation of this UI thread's selected cursor.
+        if unsafe { GetCursor() } == hand {
+            select(self.cursors.arrow());
+        }
+    }
 }
 
 /// Own one `CursorChanged` registration on the retained composition controller.

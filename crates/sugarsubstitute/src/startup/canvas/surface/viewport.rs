@@ -13,6 +13,8 @@ use sugarsubstitute_contracts::canvas_surface::{
 impl NativeSurface {
     /// Admit commands only on the selected, committed and visible attachment already authorized.
     /// A read uses the same revision stream and waits for settled presentation without moving it.
+    /// A camera command is refused with `unavailable` while a routed native gesture holds
+    /// capture; the navigation tool owns the camera until that gesture's release or cancel.
     pub(super) fn viewport(
         &mut self,
         identity: MainIdentity,

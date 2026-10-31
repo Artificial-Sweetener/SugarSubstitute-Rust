@@ -374,6 +374,18 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     }
 
     #[cfg(all(windows, feature = "native-composition"))]
+    fn main_canvas_input_region(
+        &self,
+    ) -> Option<sugarsubstitute_desktop::canvas::MainCanvasInputRegion<'_>> {
+        let canvas = self.canvas.as_ref()?;
+        let region = canvas.input_region()?;
+        self.child
+            .canvas_backend(region.identity)
+            .is_some_and(|backend| canvas.matches_backend(backend))
+            .then_some(region)
+    }
+
+    #[cfg(all(windows, feature = "native-composition"))]
     fn main_canvas_presented(
         &mut self,
         target: sugarsubstitute_canvas::FrameStamp,

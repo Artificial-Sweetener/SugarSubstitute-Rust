@@ -138,3 +138,35 @@ fn geometry_is_bounded_closed_and_preserves_validated_units() -> Result<(), Box<
     ));
     Ok(())
 }
+
+/// Decode one geometry snapshot whose base fields are valid, with extra fields merged in.
+fn geometry_with(extra: Value) -> Result<CanvasSurfaceGeometry, GeometryError> {
+    let mut value = serde_json::json!({
+        "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":10,"y":20},
+        "viewport":{"width":400,"height":300}, "clip":{"x":10,"y":20,"width":400,"height":300},
+        "physicalPixelsPerCssPixel":1.5, "visible":true, "focused":true
+    });
+    if let (Some(object), Some(extra)) = (value.as_object_mut(), extra.as_object()) {
+        object.extend(extra.clone());
+    }
+    let bytes = serde_json::to_vec(&value).map_err(GeometryError::Malformed)?;
+    CanvasSurfaceGeometry::decode(&bytes)
+}
+
+#[test]
+fn occlusion_accessors_preserve_order_units_and_default_to_unoccluded() -> Result<(), Box<dyn Error>>
+{
+    let plain = geometry_with(serde_json::json!({}))?;
+    assert_eq!(plain.occlusions().len(), 0);
+    assert!(!plain.modal());
+    let covered = geometry_with(serde_json::json!({
+        "occlusions":[{"x":-5,"y":4.5,"width":20,"height":0.25},{"x":100,"y":0,"width":3,"height":7}],
+        "modal":true
+    }))?;
+    assert_eq!(
+        covered.occlusions().collect::<Vec<_>>(),
+        [(-5.0, 4.5, 20.0, 0.25), (100.0, 0.0, 3.0, 7.0)]
+    );
+    assert!(covered.modal());
+    Ok(())
+}

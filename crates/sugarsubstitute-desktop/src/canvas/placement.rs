@@ -65,7 +65,7 @@ impl Error for PlacementError {}
 /// The allocation must come from the current native WebView and include its actual zoom.
 /// `None` means the reported viewport is hidden or has no fully covered physical pixels.
 /// Clip edges round inward so fractional layout cannot expose native pixels outside the
-/// reported rectangle. A separate web-occlusion owner must decide input routing.
+/// reported rectangle. Input routing additionally subtracts [`occlusions`].
 ///
 /// # Errors
 /// Rejects stale density, invalid native observations, overflow and unsupported extents.
@@ -127,6 +127,32 @@ pub fn preparation_viewport(
         return Err(PlacementError::ViewportTooLarge);
     }
     Ok(viewport)
+}
+
+/// Project page-published occlusions into physical client rectangles for input routing.
+///
+/// Occlusions are CSS pixels relative to the geometry origin. Edges round outward, so web
+/// content keeps every partially covered physical pixel. A modal flag is not represented here;
+/// the caller withdraws the whole native region instead.
+///
+/// # Errors
+/// Rejects stale density, invalid native observations and unrepresentable coordinates.
+pub fn occlusions(
+    geometry: &CanvasSurfaceGeometry,
+    allocation: WebViewAllocation,
+) -> Result<Vec<PhysicalRect>, PlacementError> {
+    preparation_viewport(geometry, allocation)?;
+    let scale = allocation.physical_pixels_per_css_pixel;
+    let (x, y) = geometry.origin();
+    let mut projected = Vec::new();
+    projected
+        .try_reserve_exact(geometry.occlusions().len())
+        .map_err(|_| PlacementError::InvalidAllocation)?;
+    for (left, top, width, height) in geometry.occlusions() {
+        let edges = [x + left, y + top, x + left + width, y + top + height];
+        projected.push(rect(edges, scale, allocation.bounds, false)?);
+    }
+    Ok(projected)
 }
 
 /// Round outer viewport edges out and clip edges in before adding the native allocation origin.

@@ -153,6 +153,20 @@ impl<B: StartupBackend> StartupHost<B> {
                             }
                             return Ok(());
                         }
+                        DesktopStartupObservation::CanvasInput(input) if accepts => {
+                            let canvas =
+                                self.canvas.as_mut().ok_or("Application canvas disappeared")?;
+                            if self
+                                .child
+                                .canvas_backend(input.identity)
+                                .is_some_and(|backend| canvas.matches_backend(backend))
+                                && canvas.input(input)? == canvas::RoutedInput::Refused
+                            {
+                                tracing::debug!(operation = "canvas_input_refused", identity = ?input.identity,
+                                    "Routed canvas gesture arrived after its region stopped qualifying");
+                            }
+                            return Ok(());
+                        }
                         DesktopStartupObservation::CanvasContextMessage(observed) if accepts => {
                             let (identity, request, lease, claim) = observed.into_parts();
                             if self.child.admits_canvas(identity, &lease) {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve hardware wheel units and native interaction lifetimes before Tao's scroll scaling.
+use super::super::click::{Click, double_click};
 use super::super::feedback::FeedbackTarget;
 use super::super::latency::InputDelay;
 use super::cursor::{CursorResource, Cursors, OwnedCursor};
@@ -40,11 +41,6 @@ pub(super) enum NativeEvent {
     DoubleClick([f64; 2]),
     CaptureLost,
     DisplayChanged,
-}
-#[derive(Clone, Copy)]
-struct Click {
-    time: u32,
-    point: [i32; 2],
 }
 struct State {
     input_delay: Cell<InputDelay>,
@@ -288,15 +284,6 @@ fn point(value: LPARAM) -> [i32; 2] {
 fn wheel_steps(value: WPARAM) -> f64 {
     f64::from((value.0 >> 16) as u16 as i16) / 120.0
 }
-/// Match physical double-click bounds and the native wrapping 32-bit message timestamp.
-fn double_click(previous: Click, current: Click, bounds: [i32; 2], limit: u32) -> bool {
-    bounds.iter().all(|bound| *bound > 0)
-        && current.time.wrapping_sub(previous.time) <= limit
-        && (0..2).all(|axis| {
-            (i64::from(current.point[axis]) - i64::from(previous.point[axis])).abs() * 2
-                <= i64::from(bounds[axis])
-        })
-}
 unsafe extern "system" fn procedure(
     window: HWND,
     message: u32,
@@ -435,13 +422,5 @@ mod tests {
             assert_eq!(wheel_steps(WPARAM((usize::from(native as u16) << 16) | 7)), expected);
         }
         assert_eq!(point(LPARAM(0xfffd_fffe_u32 as isize)), [-2, -3]);
-    }
-    #[test]
-    fn double_click_matches_native_time_and_physical_distance_including_timestamp_wrap() {
-        let previous = Click { time: u32::MAX - 50, point: [20, -30] };
-        assert!(double_click(previous, Click { time: 25, point: [22, -28] }, [4, 4], 100));
-        assert!(!double_click(previous, Click { time: 25, point: [23, -28] }, [4, 4], 100));
-        assert!(!double_click(previous, Click { time: 50, point: [20, -30] }, [4, 4], 100));
-        assert!(!double_click(previous, Click { time: 25, point: [20, -30] }, [0, 0], 100));
     }
 }
