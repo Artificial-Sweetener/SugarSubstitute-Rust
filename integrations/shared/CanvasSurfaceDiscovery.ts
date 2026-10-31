@@ -25,6 +25,7 @@ import type { CanvasSurfaceCommand, CanvasSurfaceResult } from '../contracts/Can
 import { isCanvasSurfaceCapabilities } from './CanvasSurfaceValidation.generated.js';
 import { supportsCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
 import { supportsCanvasSurfaceComparison } from './CanvasSurfaceComparison.js';
+import { supportsCanvasSurfaceOverview } from './CanvasSurfaceOverview.js';
 import type { CanvasChangeObservation } from '../contracts/CanvasChangeObservation.js';
 import type { CanvasSurfacePresentationChange } from '../contracts/CanvasSurface.js';
 import { isCanvasPreviewCommand, supportsCanvasSurfacePreview } from './CanvasSurfacePreview.js';
@@ -154,6 +155,7 @@ export async function discoverCanvasSurface(port: {
         (port.current() && port.owns(host))
           ? supportsCanvasSurfaceViewport(host.capabilities, command) &&
             supportsCanvasSurfaceComparison(host.capabilities, command) &&
+            supportsCanvasSurfaceOverview(host.capabilities, command) &&
             supportsCanvasSurfacePreview(host.capabilities, command) &&
             (!isCanvasPreviewCommand(command) ||
               command.type === 'surface.preview.withdraw' ||

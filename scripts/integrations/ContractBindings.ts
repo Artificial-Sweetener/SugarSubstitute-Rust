@@ -67,7 +67,8 @@ function predicate(value: unknown, expression: string, references: Set<string>):
   const node = record(value);
   if (node.type === 'array') {
     const array = contractArraySchema(node);
-    return `Array.isArray(${expression}) && ${expression}.length <= ${array.maximum} && ${expression}.every((item: unknown) => (${predicate(array.items, 'item', references)}))`;
+    const minimum = array.minimum ? `${expression}.length >= ${array.minimum} && ` : '';
+    return `Array.isArray(${expression}) && ${minimum}${expression}.length <= ${array.maximum} && ${expression}.every((item: unknown) => (${predicate(array.items, 'item', references)}))`;
   }
   if (typeof node.$ref === 'string') {
     const name = reference(node.$ref);

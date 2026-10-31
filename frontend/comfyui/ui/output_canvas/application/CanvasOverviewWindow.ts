@@ -40,6 +40,50 @@ export interface CanvasOverviewWindow {
   readonly width: number;
   readonly cellHeight: number;
   readonly gap: number;
+  /** The scroll position the window was laid out for, clamped to its finite track. */
+  readonly scroll: number;
+}
+
+/** Locate one laid-out cell in the overview's visible box, in CSS pixels. */
+export interface CanvasOverviewPlacement {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  /** Horizontal offset centering a partial final packed row, already included in `x`. */
+  readonly shift: number;
+}
+
+/**
+ * Place each window cell exactly as the overview grid lays it out.
+ *
+ * Cells fill rows of equal-width columns separated by the window gap; a partial final row of a
+ * packed batch is centered. Coordinates are relative to the overview's visible top-left, so a
+ * partially scrolled row can start above zero.
+ */
+export function canvasOverviewPlacements(
+  window: CanvasOverviewWindow,
+): readonly CanvasOverviewPlacement[] {
+  const columnWidth = (window.width - (window.columns - 1) * window.gap) / window.columns;
+  const finalCount = window.count % window.columns;
+  return Object.freeze(
+    window.cells.map((_, index) => {
+      const finalRow = window.count <= 8 && finalCount > 0 && index >= window.count - finalCount;
+      const shift = finalRow
+        ? ((window.columns - finalCount) * (window.width + window.gap)) / window.columns / 2
+        : 0;
+      return Object.freeze({
+        x: window.left + (index % window.columns) * (columnWidth + window.gap) + shift,
+        y:
+          window.offset -
+          window.scroll +
+          Math.floor(index / window.columns) * (window.cellHeight + window.gap),
+        width: columnWidth,
+        height: window.cellHeight,
+        shift,
+      });
+    }),
+  );
 }
 
 /** Fit up to eight images together; bound larger batches to eight intersecting cells. */
@@ -122,5 +166,6 @@ export function canvasOverviewWindow(
     width: packed?.width ?? width,
     cellHeight: packed?.cellHeight ?? rowHeight,
     gap: packed?.gap ?? 0,
+    scroll,
   });
 }

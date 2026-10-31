@@ -9,13 +9,22 @@ export function nativeCanvasRendererKey(host) {
 export function nativeCanvasComparison(host) {
     return host !== null && negotiatesCanvasSurfaceComparison(host.capabilities);
 }
+/** Report whether the host can paint the shared overview grid's cells. */
+export function nativeCanvasOverview(host) {
+    return host?.capabilities.overview === true;
+}
 /**
  * Advertise camera commands only with the viewport-state contract required by their shared
- * proxy, and the shared comparison commands only with a negotiated pair-and-divider host.
+ * proxy, the shared comparison commands only with a negotiated pair-and-divider host, and the
+ * overview grid only with a host that paints it.
  */
 export function nativeCanvasCommands(host) {
     const camera = host?.capabilities.viewportState
         ? host.capabilities.viewportCommands.filter((command) => CAMERA_COMMANDS.some((name) => name === command))
         : [];
-    return [...camera, ...(nativeCanvasComparison(host) ? COMPARISON_COMMANDS : [])];
+    return [
+        ...camera,
+        ...(nativeCanvasComparison(host) ? COMPARISON_COMMANDS : []),
+        ...(nativeCanvasOverview(host) ? ['overview'] : []),
+    ];
 }

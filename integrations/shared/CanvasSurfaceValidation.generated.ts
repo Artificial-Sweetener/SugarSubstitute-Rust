@@ -29,6 +29,7 @@ import {
   isCanvasSurfacePresentationReply,
   isCanvasSurfacePresentationChanged,
 } from './CanvasSurfacePreviewValidation.generated.js';
+import { isCanvasSurfaceOverviewRequest } from './CanvasSurfaceOverviewValidation.generated.js';
 import {
   isCanvasSurfaceViewportRequest,
   isCanvasSurfaceViewportReply,
@@ -399,6 +400,7 @@ export function isCanvasSurfaceMessage(value: unknown): value is Contract.Canvas
     isCanvasSurfacePrepareRequest(value) ||
     isCanvasSurfaceGeometryRequest(value) ||
     isCanvasSurfaceSelectRequest(value) ||
+    isCanvasSurfaceOverviewRequest(value) ||
     isCanvasSurfaceCommitRequest(value) ||
     isCanvasSurfaceReleaseRequest(value) ||
     isCanvasSurfaceReply(value) ||
@@ -426,6 +428,11 @@ export {
   isCanvasSurfaceClip,
   isCanvasSurfaceGeometry,
 } from './CanvasSurfaceGeometryValidation.generated.js';
+export {
+  isCanvasSurfaceOverviewRect,
+  isCanvasSurfaceOverviewCell,
+  isCanvasSurfaceOverviewRequest,
+} from './CanvasSurfaceOverviewValidation.generated.js';
 export {
   isCanvasSurfaceViewportCommand,
   isCanvasSurfaceImageDimensions,

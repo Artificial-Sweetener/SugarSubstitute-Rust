@@ -119,6 +119,30 @@ export type CanvasSurfaceSelectRequest = {
   readonly file: CanvasSurfaceFileReference;
   readonly comparison?: CanvasSurfaceComparison;
 };
+/** Describe the schema-defined CanvasSurfaceOverviewRect wire value. */
+export type CanvasSurfaceOverviewRect = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+/** Describe the schema-defined CanvasSurfaceOverviewCell wire value. */
+export type CanvasSurfaceOverviewCell = {
+  readonly itemId: string;
+  readonly file: CanvasSurfaceFileReference;
+  readonly rect: CanvasSurfaceOverviewRect;
+};
+/** Describe the schema-defined CanvasSurfaceOverviewRequest wire value. */
+export type CanvasSurfaceOverviewRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'surface.overview';
+  readonly address: CanvasSurfaceAddress;
+  readonly revision: number;
+  readonly cells: readonly CanvasSurfaceOverviewCell[];
+};
 /** Describe the schema-defined CanvasSurfaceCommitRequest wire value. */
 export type CanvasSurfaceCommitRequest = {
   readonly protocol: 'sugarcubes.canvas';
@@ -299,7 +323,8 @@ export type CanvasSurfacePresentationDisplay =
       readonly type: 'final';
       readonly selectionRevision: number;
       readonly viewport: CanvasSurfaceViewportState;
-    };
+    }
+  | { readonly type: 'overview'; readonly selectionRevision: number };
 /** Describe the schema-defined CanvasSurfacePresentationChange wire value. */
 export type CanvasSurfacePresentationChange = {
   readonly address: CanvasSurfaceAddress;
@@ -334,6 +359,7 @@ export type CanvasSurfaceMessage =
   | CanvasSurfacePrepareRequest
   | CanvasSurfaceGeometryRequest
   | CanvasSurfaceSelectRequest
+  | CanvasSurfaceOverviewRequest
   | CanvasSurfaceCommitRequest
   | CanvasSurfaceReleaseRequest
   | CanvasSurfaceReply

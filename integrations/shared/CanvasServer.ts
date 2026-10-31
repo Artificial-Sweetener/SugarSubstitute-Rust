@@ -126,6 +126,7 @@ export class CanvasServer {
       value.type !== 'surface.prepare' &&
       value.type !== 'surface.geometry' &&
       value.type !== 'surface.select' &&
+      value.type !== 'surface.overview' &&
       value.type !== 'surface.commit' &&
       value.type !== 'surface.viewport.request' &&
       value.type !== 'surface.preview.begin' &&

@@ -421,7 +421,10 @@ export class NativeCanvasPreview {
       !matches(this.#shown, display.token, display.leaseRevision)
     )
       return;
-    if (display.type === 'final' && display.selectionRevision !== this.options.finalRevision())
+    if (
+      (display.type === 'final' || display.type === 'overview') &&
+      display.selectionRevision !== this.options.finalRevision()
+    )
       return;
     if (display.type === 'empty' && this.options.finalRevision() !== null) return;
     this.#sequence = change.sequence;

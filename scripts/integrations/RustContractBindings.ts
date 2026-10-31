@@ -123,8 +123,28 @@ function property(
   const access = `self.${field}`;
   if (node.type === 'array') {
     const array = contractArraySchema(node);
+    const size = [
+      ...(array.minimum === 1
+        ? [`!${access}.is_empty()`]
+        : array.minimum > 1
+          ? [`${access}.len() >= ${array.minimum}`]
+          : []),
+      `${access}.len() <= ${array.maximum}`,
+    ];
+    const element =
+      Object.keys(array.items).join() === '$ref' && typeof array.items.$ref === 'string'
+        ? /^#\/\$defs\/([A-Za-z]+)$/.exec(array.items.$ref)?.[1]
+        : undefined;
+    // Named object items delegate to their own generated bounds; inline shapes stay refused.
+    if (element && names.has(element))
+      return {
+        type: `Vec<${element}>`,
+        valid: [...size, `${access}.iter().all(${element}::valid)`],
+      };
     const choices = contractArrayEnum(array.items);
     if (array.maximum === 0) return { type: 'Vec<String>', valid: [`${access}.is_empty()`] };
+    if (array.minimum > 0)
+      throw new Error('Rust contract enum arrays do not support a minimum length.');
     const condition = `        if !matches!(item.as_str(), ${choices.map((choice) => JSON.stringify(choice)).join(' | ')}) {`;
     const patterns = choices
       .map(

@@ -15,41 +15,60 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Derive the native presentation requested by the view owners, independent of host progress. */
 /**
- * Qualify the selected output and optional B image against drawable geometry.
+ * Qualify the selected output, optional B image or overview grid against drawable geometry.
  *
  * A comparison is presented only with an eligible final image A and an image B, so a host that
- * receives the pair can always place the divider. Preparation permits hidden staged geometry.
+ * receives the pair can always place the divider. Overview replaces the selected image; with no
+ * paintable cell or drawable geometry it presents nothing rather than a retained final.
+ * Preparation permits hidden staged geometry.
  */
-export function nativeCanvasDesired(geometry, item, comparison, accepts, preparing) {
-    const eligible = geometry &&
+export function nativeCanvasDesired(geometry, item, comparison, overview, accepts, preparing) {
+    const drawable = !!geometry &&
         geometry.viewport.width > 0 &&
         geometry.viewport.height > 0 &&
-        (preparing || (geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0)) &&
-        item?.mediaKind === 'image'
-        ? item
-        : null;
+        (preparing || (geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0));
+    const eligible = drawable && !overview && item?.mediaKind === 'image' ? item : null;
+    const grid = overview && (drawable ? overview : []);
     const pair = eligible && comparison?.item.mediaKind === 'image' ? comparison : null;
     return {
         geometry,
         item: eligible,
         comparison: pair,
+        overview: grid,
         key: JSON.stringify([
             geometry && { ...geometry, focused: false },
             item && [item.id, item.file, item.mediaKind],
             accepts,
             ...(pair ? [[pair.item.id, pair.item.file]] : []),
+            ...(grid ? [['overview', grid.length > 0]] : []),
         ]),
-        empty: item?.mediaKind !== 'image',
-        previewable: item === null,
+        empty: grid ? grid.length === 0 : item?.mediaKind !== 'image',
+        previewable: !grid && item === null,
+        shown: eligible !== null || (grid?.length ?? 0) > 0,
     };
+}
+/** Identify the painted overview layout independently of the identity that entered overview. */
+export function nativeCanvasOverviewKey(overview) {
+    return overview && JSON.stringify(overview);
 }
 /** Identify divider placement independently of the pair that the select operation fixed. */
 export function nativeCanvasWipeKey(comparison) {
     return comparison && JSON.stringify([comparison.orientation, comparison.split]);
 }
-/** Select A and the optional B together so the host applies both under one revision. */
+/**
+ * Select A and the optional B together so the host applies both under one revision, or select
+ * the overview grid in their place.
+ *
+ * An overview is the displayed selection while shown: its key never equals an image key, so a
+ * later image selection is always sent, and each newer layout is sent behind the one in flight.
+ */
 export function nativeCanvasSelection(desired) {
-    const { item, comparison } = desired;
+    const { item, comparison, overview } = desired;
+    if (overview?.length)
+        return {
+            key: JSON.stringify(['overview', overview]),
+            operation: { type: 'surface.overview', cells: overview },
+        };
     if (!item)
         return null;
     return {

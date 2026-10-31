@@ -19,9 +19,11 @@ import { canvasSecondaryPhysicalScale, canvasSecondaryResource, canvasViewSnapsh
 /**
  * Publish only states the native surface can present.
  *
- * The surface presents image detail only, so overview and batch grids stay hidden. Without a
- * negotiated comparison host, the comparison and image B are withheld even if the shared view
- * retains one from another presenter. A shown pair shares the presentation's readiness.
+ * Without an overview host the surface presents image detail only, so overview and batch grids
+ * stay hidden. Like the browser grid, a shown overview reports no image readiness, only native
+ * failures. Without a negotiated comparison host, the comparison and image B are withheld even
+ * if the shared view retains one from another presenter. A shown pair shares the presentation's
+ * readiness.
  */
 export function nativeCanvasSnapshot(state) {
     const { plan, viewport } = state;
@@ -56,6 +58,11 @@ export function nativeCanvasSnapshot(state) {
             message: 'The selected workflow output is unavailable.',
         };
     }
+    const overview = state.overview && plan.view.mode === 'overview';
+    if (overview && presented.state !== 'error' && presented.state !== 'unavailable')
+        resource = { ...presented, state: 'empty', message: '' };
+    else if (overview)
+        resource = presented;
     const comparison = state.comparison ? plan.view.comparison : null;
     const secondaryDimensions = (comparison && viewport?.secondaryDimensions) || null;
     const snapshot = canvasViewSnapshot(state.address, plan, state.catalog, state.sources, state.connected, state.mediaActions, {
@@ -80,7 +87,11 @@ export function nativeCanvasSnapshot(state) {
     return Object.freeze({
         ...snapshot,
         secondary: comparison ? snapshot.secondary : null,
-        grid: Object.freeze([]),
-        view: Object.freeze({ ...snapshot.view, mode: 'image', comparison }),
+        grid: overview ? snapshot.grid : Object.freeze([]),
+        view: Object.freeze({
+            ...snapshot.view,
+            mode: overview ? 'overview' : 'image',
+            comparison,
+        }),
     });
 }

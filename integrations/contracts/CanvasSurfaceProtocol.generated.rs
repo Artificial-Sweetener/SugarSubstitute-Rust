@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): 86f02235ba6da821878249cd376aaf4e0400249cbc557692ad8277b3fc6daa01
+// Schema SHA-256 (LF): f3cc344bc371d8eadc99c6601da0b447eea4d97872ffb93283594558613882bc
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -285,6 +285,73 @@ impl CanvasSurfaceSelectRequest {
             && valid_surface_identity(&self.item_id, "result:", 4096)
             && self.file.valid()
             && self.comparison.as_ref().is_none_or(CanvasSurfaceComparison::valid)
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceOverviewRect data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceOverviewRect {
+    pub(super) x: f64,
+    pub(super) y: f64,
+    pub(super) width: f64,
+    pub(super) height: f64,
+}
+impl CanvasSurfaceOverviewRect {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        (-1000000.0..=1000000.0).contains(&self.x)
+            && (-1000000.0..=1000000.0).contains(&self.y)
+            && (0.0..=1000000.0).contains(&self.width)
+            && self.width > 0.0
+            && (0.0..=1000000.0).contains(&self.height)
+            && self.height > 0.0
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceOverviewCell data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceOverviewCell {
+    pub(super) item_id: String,
+    pub(super) file: CanvasSurfaceFileReference,
+    pub(super) rect: CanvasSurfaceOverviewRect,
+}
+impl CanvasSurfaceOverviewCell {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        valid_surface_identity(&self.item_id, "result:", 1024)
+            && self.file.valid()
+            && self.rect.valid()
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceOverviewRequest data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceOverviewRequest {
+    pub(super) protocol: String,
+    pub(super) version: u64,
+    pub(super) session: String,
+    pub(super) request_id: u64,
+    pub(super) r#type: String,
+    pub(super) address: CanvasSurfaceAddress,
+    pub(super) revision: u64,
+    pub(super) cells: Vec<CanvasSurfaceOverviewCell>,
+}
+impl CanvasSurfaceOverviewRequest {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.protocol == "sugarcubes.canvas"
+            && self.version == 3
+            && valid_panel_session(&self.session)
+            && (1..=2147483647).contains(&self.request_id)
+            && self.r#type == "surface.overview"
+            && self.address.valid()
+            && (1..=9007199254740991).contains(&self.revision)
+            && !self.cells.is_empty()
+            && self.cells.len() <= 8
+            && self.cells.iter().all(CanvasSurfaceOverviewCell::valid)
     }
 }
 
@@ -729,6 +796,8 @@ pub(super) enum CanvasSurfacePresentationDisplay {
     Preview { token: String, lease_revision: u64, viewport: CanvasSurfaceViewportState },
     #[serde(rename = "final")]
     Final { selection_revision: u64, viewport: CanvasSurfaceViewportState },
+    #[serde(rename = "overview")]
+    Overview { selection_revision: u64 },
 }
 impl CanvasSurfacePresentationDisplay {
     /// Reject values outside the exact schema-defined bounds.
@@ -742,6 +811,9 @@ impl CanvasSurfacePresentationDisplay {
             }
             Self::Final { selection_revision, viewport } => {
                 (1..=9007199254740991).contains(selection_revision) && viewport.valid()
+            }
+            Self::Overview { selection_revision } => {
+                (1..=9007199254740991).contains(selection_revision)
             }
         }
     }

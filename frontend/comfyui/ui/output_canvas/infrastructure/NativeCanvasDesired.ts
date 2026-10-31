@@ -18,7 +18,10 @@
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import type { CanvasComparison } from '../domain/CanvasViewState.js';
-import type { CanvasSurfaceViewportCommand } from '../../../../../integrations/contracts/CanvasSurface.js';
+import type {
+  CanvasSurfaceOverviewCell,
+  CanvasSurfaceViewportCommand,
+} from '../../../../../integrations/contracts/CanvasSurface.js';
 import type { NativeCanvasOperation } from './NativeCanvasBinding.js';
 
 /** Pair the resolved B image with the divider chosen by the selection owner. */
@@ -32,49 +35,68 @@ export interface NativeCanvasComparison {
 export interface NativeCanvasDesired {
   readonly empty: boolean;
   readonly previewable: boolean;
+  /** Whether a final image or a nonempty overview grid is to be presented. */
+  readonly shown: boolean;
   /** Focus updates retain this presentation identity and follow its current operation. */
   geometry: CanvasSurfaceGeometry | null;
   readonly item: WorkflowOutputItem | null;
   /** Divider updates retain this identity; only the B image participates in its key. */
   comparison: NativeCanvasComparison | null;
+  /**
+   * Natively painted overview cells, or null outside overview. Scroll and layout updates retain
+   * this identity; only entering, leaving or emptying the grid participates in its key.
+   */
+  overview: readonly CanvasSurfaceOverviewCell[] | null;
   readonly key: string;
 }
 
 /**
- * Qualify the selected output and optional B image against drawable geometry.
+ * Qualify the selected output, optional B image or overview grid against drawable geometry.
  *
  * A comparison is presented only with an eligible final image A and an image B, so a host that
- * receives the pair can always place the divider. Preparation permits hidden staged geometry.
+ * receives the pair can always place the divider. Overview replaces the selected image; with no
+ * paintable cell or drawable geometry it presents nothing rather than a retained final.
+ * Preparation permits hidden staged geometry.
  */
 export function nativeCanvasDesired(
   geometry: CanvasSurfaceGeometry | null,
   item: WorkflowOutputItem | null,
   comparison: NativeCanvasComparison | null,
+  overview: readonly CanvasSurfaceOverviewCell[] | null,
   accepts: boolean,
   preparing: boolean,
 ): NativeCanvasDesired {
-  const eligible =
-    geometry &&
+  const drawable =
+    !!geometry &&
     geometry.viewport.width > 0 &&
     geometry.viewport.height > 0 &&
-    (preparing || (geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0)) &&
-    item?.mediaKind === 'image'
-      ? item
-      : null;
+    (preparing || (geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0));
+  const eligible = drawable && !overview && item?.mediaKind === 'image' ? item : null;
+  const grid = overview && (drawable ? overview : []);
   const pair = eligible && comparison?.item.mediaKind === 'image' ? comparison : null;
   return {
     geometry,
     item: eligible,
     comparison: pair,
+    overview: grid,
     key: JSON.stringify([
       geometry && { ...geometry, focused: false },
       item && [item.id, item.file, item.mediaKind],
       accepts,
       ...(pair ? [[pair.item.id, pair.item.file]] : []),
+      ...(grid ? [['overview', grid.length > 0]] : []),
     ]),
-    empty: item?.mediaKind !== 'image',
-    previewable: item === null,
+    empty: grid ? grid.length === 0 : item?.mediaKind !== 'image',
+    previewable: !grid && item === null,
+    shown: eligible !== null || (grid?.length ?? 0) > 0,
   };
+}
+
+/** Identify the painted overview layout independently of the identity that entered overview. */
+export function nativeCanvasOverviewKey(
+  overview: readonly CanvasSurfaceOverviewCell[] | null,
+): string | null {
+  return overview && JSON.stringify(overview);
 }
 
 /** Identify divider placement independently of the pair that the select operation fixed. */
@@ -82,12 +104,26 @@ export function nativeCanvasWipeKey(comparison: NativeCanvasComparison | null): 
   return comparison && JSON.stringify([comparison.orientation, comparison.split]);
 }
 
-/** Select A and the optional B together so the host applies both under one revision. */
+/**
+ * Select A and the optional B together so the host applies both under one revision, or select
+ * the overview grid in their place.
+ *
+ * An overview is the displayed selection while shown: its key never equals an image key, so a
+ * later image selection is always sent, and each newer layout is sent behind the one in flight.
+ */
 export function nativeCanvasSelection(desired: NativeCanvasDesired): {
   readonly key: string;
-  readonly operation: Extract<NativeCanvasOperation, { readonly type: 'surface.select' }>;
+  readonly operation: Extract<
+    NativeCanvasOperation,
+    { readonly type: 'surface.select' | 'surface.overview' }
+  >;
 } | null {
-  const { item, comparison } = desired;
+  const { item, comparison, overview } = desired;
+  if (overview?.length)
+    return {
+      key: JSON.stringify(['overview', overview]),
+      operation: { type: 'surface.overview', cells: overview },
+    };
   if (!item) return null;
   return {
     key: JSON.stringify(

@@ -44,8 +44,13 @@ import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.j
 import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
 import { NativeCanvasActionSurface } from './NativeCanvasActionSurface.js';
-import { nativeCanvasCommands, nativeCanvasComparison } from './NativeCanvasCapabilities.js';
+import {
+  nativeCanvasCommands,
+  nativeCanvasComparison,
+  nativeCanvasOverview,
+} from './NativeCanvasCapabilities.js';
 import type { NativeCanvasComparison } from './NativeCanvasDesired.js';
+import { NativeCanvasOverview } from './NativeCanvasOverview.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
 import {
   NativeCanvasPresentation,
@@ -76,6 +81,8 @@ export class NativeCanvasAttachment {
   readonly #keyboard: CanvasViewportKeyboard;
   /** Fixed per attachment; changed host capabilities rebuild the attachment. */
   readonly #comparison: boolean;
+  /** Present only for a host that paints overview cells; fixed like the comparison flag. */
+  readonly #overview: NativeCanvasOverview | null;
   #catalog: CanvasCatalogSnapshot;
   #sources: readonly CanvasSourceSummary[];
   #plan: CanvasDisplayPlan;
@@ -112,6 +119,26 @@ export class NativeCanvasAttachment {
     const overlay = document.createElement('div');
     overlay.className = 'sc-output-overlay-root';
     element.append(this.viewport, overlay);
+    const host = options.nativeSurface();
+    this.#overview =
+      host && nativeCanvasOverview(host)
+        ? new NativeCanvasOverview(element, {
+            frames: options.frames,
+            address: options.address,
+            capabilities: host.capabilities,
+            geometry: () => this.#surface,
+            select: (cell) => {
+              if (!this.#disposed && options.accepts())
+                options.selection.apply(options.address.viewId, this.#catalog, {
+                  type: 'select',
+                  selection: cell.selection,
+                });
+            },
+            changed: () => {
+              if (this.#ready) this.#present();
+            },
+          })
+        : null;
     this.#status = new CanvasStatusPublisher(options.clock, () => this.#publish());
     this.#media = new CanvasMediaActions({
       read: () => this.#snapshot(),
@@ -197,6 +224,7 @@ export class NativeCanvasAttachment {
       () => this.#keyboard.dispose(),
       () => this.viewport.removeEventListener('pointerdown', this.#focusViewport),
       () => this.#native.dispose(),
+      () => this.#overview?.dispose(),
       () => this.#media.dispose(),
       () => this.#status.dispose(),
       () => this.port.dispose(),
@@ -247,6 +275,9 @@ export class NativeCanvasAttachment {
     this.#catalog = catalog;
     this.#sources = Object.freeze(catalog.entries.map((entry) => entry.summary));
     this.#plan = this.#projection.project(catalog);
+    const overview = this.#overview !== null && this.#plan.view.mode === 'overview';
+    this.element.classList.toggle('sc-output-overview-mode', overview);
+    this.#overview?.reconcile(catalog, this.#plan.view, overview);
     this.#present();
     this.#status.changed(true);
   }
@@ -301,8 +332,10 @@ export class NativeCanvasAttachment {
     this.#overlay.dispose();
     this.#media.dispose();
     const released = this.#native.dispose();
+    this.#overview?.dispose();
     this.options.views.releaseAttachment(this.options.address);
     this.element.replaceChildren();
+    this.element.classList.remove('sc-output-overview-mode');
     return released;
   }
 
@@ -321,11 +354,19 @@ export class NativeCanvasAttachment {
   /** Forward qualified geometry without constructing a browser drawing surface. */
   #resize(surface: CanvasSurfaceGeometry): void {
     this.#surface = surface;
+    this.#overview?.resize();
     this.#present();
   }
 
-  /** Hand the current plan's A, optional B and divider to the native presentation owner. */
+  /**
+   * Hand the current plan's A, optional B and divider, or its overview cells in their place, to
+   * the native presentation owner. Live previews do not stream while the overview is shown.
+   */
   #present(): void {
+    if (this.#overview && this.#plan.view.mode === 'overview') {
+      this.#native.update(this.#surface, null, null, null, this.#overview.cells);
+      return;
+    }
     const comparison = this.#comparison ? this.#plan.view.comparison : null;
     const secondary = this.#plan.secondary?.item;
     const pair: NativeCanvasComparison | null =
@@ -357,6 +398,7 @@ export class NativeCanvasAttachment {
       // Shared controls read a first snapshot before the native presentation owner exists.
       previewAvailable: this.#native?.previewAvailable ?? false,
       comparison: this.#comparison,
+      overview: this.#overview !== null,
     });
   }
 }

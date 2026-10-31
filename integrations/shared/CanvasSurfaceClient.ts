@@ -20,6 +20,7 @@ import type { CanvasSurfaceCommand, CanvasSurfaceResult } from '../contracts/Can
 import type { CanvasSurfaceAddress } from '../contracts/CanvasSurfaceProtocol.generated.js';
 import { snapshotCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
 import { validCanvasPreviewCommand } from './CanvasSurfacePreview.js';
+import { validCanvasSurfaceOverview } from './CanvasSurfaceOverview.js';
 
 /** Require the exact attachment and revision in the host's correlated surface reply. */
 export async function requestCanvasSurface(
@@ -34,6 +35,8 @@ export async function requestCanvasSurface(
     return { status: 'cancelled', message: 'Canvas surface request cancelled.' };
   if (!validCanvasPreviewCommand(command))
     return { status: 'error', message: 'Canvas preview request is invalid.' };
+  if (!validCanvasSurfaceOverview(command))
+    return { status: 'error', message: 'Canvas overview cells must name distinct results.' };
   const address = Object.freeze({ ...command.address });
   const revision = command.revision;
   const type = command.type;

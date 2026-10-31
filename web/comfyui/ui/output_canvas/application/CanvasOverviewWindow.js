@@ -15,6 +15,32 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Pack small batches and virtualize larger batches without expanding the complete catalog. */
 import { canvasBatchLayout } from './CanvasBatchLayout.js';
+/**
+ * Place each window cell exactly as the overview grid lays it out.
+ *
+ * Cells fill rows of equal-width columns separated by the window gap; a partial final row of a
+ * packed batch is centered. Coordinates are relative to the overview's visible top-left, so a
+ * partially scrolled row can start above zero.
+ */
+export function canvasOverviewPlacements(window) {
+    const columnWidth = (window.width - (window.columns - 1) * window.gap) / window.columns;
+    const finalCount = window.count % window.columns;
+    return Object.freeze(window.cells.map((_, index) => {
+        const finalRow = window.count <= 8 && finalCount > 0 && index >= window.count - finalCount;
+        const shift = finalRow
+            ? ((window.columns - finalCount) * (window.width + window.gap)) / window.columns / 2
+            : 0;
+        return Object.freeze({
+            x: window.left + (index % window.columns) * (columnWidth + window.gap) + shift,
+            y: window.offset -
+                window.scroll +
+                Math.floor(index / window.columns) * (window.cellHeight + window.gap),
+            width: columnWidth,
+            height: window.cellHeight,
+            shift,
+        });
+    }));
+}
 /** Fit up to eight images together; bound larger batches to eight intersecting cells. */
 export function canvasOverviewWindow(catalog, width, height, scrollTop, reference = null, previousColumns = null) {
     if (![width, height, scrollTop].every((value) => Number.isFinite(value) && value >= 0))
@@ -83,5 +109,6 @@ export function canvasOverviewWindow(catalog, width, height, scrollTop, referenc
         width: packed?.width ?? width,
         cellHeight: packed?.cellHeight ?? rowHeight,
         gap: packed?.gap ?? 0,
+        scroll,
     });
 }

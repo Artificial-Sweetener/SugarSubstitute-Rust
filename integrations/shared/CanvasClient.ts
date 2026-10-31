@@ -43,6 +43,7 @@ import {
 } from './CanvasSurfacePreview.js';
 import type { CanvasSurfacePresentationChange } from '../contracts/CanvasSurface.js';
 import type { CanvasRemoteChanges } from './CanvasRemoteChanges.js';
+import { canvasSurfaceOverviewMessageFits } from './CanvasSurfaceOverview.js';
 import {
   snapshotCanvasSurfaceCapabilities,
   discoverCanvasSurface,
@@ -417,6 +418,8 @@ export class CanvasClient implements CanvasLayerHost {
           !canvasPreviewMessageFits(message)
         )
           throw new Error('Canvas preview request exceeds the native transport bounds.');
+        if (request.type === 'surface.overview' && !canvasSurfaceOverviewMessageFits(message))
+          throw new Error('Canvas overview request exceeds the native transport bounds.');
         transportOwned = true;
         this.port.send(message);
       } catch (error: unknown) {

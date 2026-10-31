@@ -97,6 +97,9 @@ export async function canvasBindings(
     'CanvasSurfaceGeometryRequest',
     'CanvasSurfaceComparison',
     'CanvasSurfaceSelectRequest',
+    'CanvasSurfaceOverviewRect',
+    'CanvasSurfaceOverviewCell',
+    'CanvasSurfaceOverviewRequest',
     'CanvasSurfaceCommitRequest',
     'CanvasSurfaceReleaseRequest',
     'CanvasSurfaceCancelRequest',
@@ -124,7 +127,7 @@ export async function canvasBindings(
   const surfaceMessages = schema.oneOf.filter(({ $ref }) =>
     surfaceNames.some((name) => $ref === `#/$defs/${name}`),
   );
-  if (surfaceMessages.length !== 17) throw new Error('Canvas surface message union changed.');
+  if (surfaceMessages.length !== 18) throw new Error('Canvas surface message union changed.');
   const ordinaryDefinitions = Object.fromEntries(
     Object.entries(schema.$defs).filter(([name]) => !surfaceNames.includes(name)),
   );
@@ -188,6 +191,14 @@ export async function canvasBindings(
             'CanvasSurfaceSize',
             'CanvasSurfaceClip',
             'CanvasSurfaceGeometry',
+          ],
+        },
+        {
+          file: 'integrations/shared/CanvasSurfaceOverviewValidation.generated.ts',
+          definitions: [
+            'CanvasSurfaceOverviewRect',
+            'CanvasSurfaceOverviewCell',
+            'CanvasSurfaceOverviewRequest',
           ],
         },
         {
