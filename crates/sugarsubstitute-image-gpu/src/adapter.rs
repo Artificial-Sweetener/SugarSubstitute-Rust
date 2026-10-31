@@ -20,6 +20,14 @@ pub struct AdapterId {
     catalog: u64,
     index: u8,
 }
+impl AdapterId {
+    /// Identity outside every live catalog, for descriptor policy tests; it selects no device.
+    #[cfg(feature = "boundary-fixtures")]
+    #[doc(hidden)]
+    pub const fn fixture() -> Self {
+        Self { catalog: 0, index: 0 }
+    }
+}
 /// Native graphics API used by the selected device.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {
@@ -59,6 +67,11 @@ pub struct AdapterDescriptor {
     pub class: AdapterClass,
     /// Whether storage buffers and workgroups meet the implemented image-kernel requirements.
     pub compatible: bool,
+    /// Operating-system adapter identity, when the driver reports a valid LUID.
+    pub luid: Option<crate::AdapterLuid>,
+    /// Whether the device can import composition-owned D3D11 textures as display targets.
+    /// This requires Vulkan `VK_KHR_external_memory_win32` and a valid LUID.
+    pub shared_textures: bool,
 }
 struct Entry {
     descriptor: AdapterDescriptor,
@@ -114,6 +127,13 @@ impl AdapterCatalog {
             }
             let class = class(info.device_type);
             let compatible = compatible(class, &adapter.limits());
+            #[cfg(windows)]
+            let luid = crate::shared::adapter_luid(&adapter);
+            #[cfg(not(windows))]
+            let luid = None;
+            let shared_textures = backend == Backend::Vulkan
+                && luid.is_some()
+                && adapter.features().contains(wgpu::Features::VULKAN_EXTERNAL_MEMORY_WIN32);
             entries.push(Entry {
                 descriptor: AdapterDescriptor {
                     id: AdapterId { catalog: identity, index: entries.len() as u8 },
@@ -123,6 +143,8 @@ impl AdapterCatalog {
                     backend,
                     class,
                     compatible,
+                    luid,
+                    shared_textures,
                 },
                 adapter,
             });
@@ -158,7 +180,11 @@ impl AdapterCatalog {
             .adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("SugarSubstitute image DAG"),
-                required_features: wgpu::Features::empty(),
+                required_features: if entry.descriptor.shared_textures {
+                    wgpu::Features::VULKAN_EXTERNAL_MEMORY_WIN32
+                } else {
+                    wgpu::Features::empty()
+                },
                 required_limits: wgpu::Limits::default(),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 ..Default::default()
@@ -168,6 +194,7 @@ impl AdapterCatalog {
         tracing::info!(operation="image_gpu_selection", adapter=%entry.descriptor.name,
             vendor=entry.descriptor.vendor, device=entry.descriptor.device,
             backend=?entry.descriptor.backend, class=?entry.descriptor.class,
+            shared_textures=entry.descriptor.shared_textures,
             "Initialized the explicitly selected image GPU");
         let faults = Arc::new(crate::fault::Faults::default());
         let callback = faults.clone();
@@ -279,6 +306,8 @@ mod tests {
             backend: Backend::Vulkan,
             class: AdapterClass::Discrete,
             compatible: true,
+            luid: None,
+            shared_textures: false,
         }
     }
     #[test]

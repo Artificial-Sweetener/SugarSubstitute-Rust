@@ -3,13 +3,15 @@
 //! Exercise placement and actual offscreen DirectComposition surface submission.
 
 use super::*;
-use crate::canvas::{CpuFrameKind, placement::PhysicalRect};
+use crate::canvas::{CpuFrame, CpuFrameKind, placement::PhysicalRect};
 use sugarsubstitute_canvas::DamagePlan;
 use sugarsubstitute_contracts::execution::{Generation, SurfaceId};
 use sugarsubstitute_image_ops::Extent;
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::canvas::test_harness as harness;
+
+mod shared;
 
 #[test]
 fn clip_uses_local_coordinates_and_rejects_exposure_outside_viewport()
@@ -57,7 +59,7 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     let _apartment = Apartment::enter()?;
     let ((memory, graphics), mut execution) = harness::run_blocking(16 * 1024 * 1024, |context| {
         let memory = context.memory().clone();
-        let graphics = crate::canvas::CanvasGraphics::prepare(&memory, &context)?;
+        let graphics = crate::canvas::CanvasGraphics::prepare(&memory, &context, None)?;
         Ok::<_, crate::canvas::CanvasGraphicsError>((memory, graphics))
     })
     .map_err(|cause| cause as Box<dyn std::error::Error>)?;
@@ -91,7 +93,7 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     };
     let viewport = PhysicalRect { x: 8, y: 12, width: 64, height: 48 };
     let placement = CanvasPlacement { viewport, clip: viewport };
-    assert_eq!(canvas.present(&frame, placement)?, Some(stamp));
+    assert_eq!(canvas.present(&CanvasContent::Cpu(frame), placement)?, Some(stamp));
     assert!(canvas.acknowledgement.retains(stamp, placement));
     assert!(canvas.retains(stamp, placement));
     assert!(!canvas.has_retirements());
@@ -104,8 +106,8 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     let acknowledged = CpuFrame { pending: false, ..frame };
     let moved_viewport = PhysicalRect { x: 16, ..viewport };
     let moved = CanvasPlacement { viewport: moved_viewport, clip: moved_viewport };
-    assert_eq!(canvas.present(&acknowledged, moved)?, Some(stamp));
-    assert_eq!(canvas.present(&acknowledged, moved)?, None);
+    assert_eq!(canvas.present(&CanvasContent::Cpu(acknowledged), moved)?, Some(stamp));
+    assert_eq!(canvas.present(&CanvasContent::Cpu(acknowledged), moved)?, None);
     assert!(canvas.acknowledgement.retains(stamp, moved));
 
     let resized = Extent::new(80, 60)?;
@@ -125,9 +127,12 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
         viewport: resized_viewport,
         clip: PhysicalRect { x: 15, y: 18, width: 72, height: 52 },
     };
-    assert_eq!(canvas.present(&resized_frame, resized_placement)?, Some(resized_stamp));
+    assert_eq!(
+        canvas.present(&CanvasContent::Cpu(resized_frame), resized_placement)?,
+        Some(resized_stamp)
+    );
     assert_eq!(canvas.active.as_ref().map(Allocation::extent), Some(resized));
-    assert!(canvas.present(&acknowledged, placement).is_err());
+    assert!(canvas.present(&CanvasContent::Cpu(acknowledged), placement).is_err());
     assert!(canvas.acknowledgement.retains(resized_stamp, resized_placement));
 
     let probe_bytes = 16 * 1024 * 1024 - 8 * 1024 * 1024 - (80 * 60 * 12 + 1024 * 1024);
@@ -146,14 +151,14 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     canvas.reap_retirements()?;
     assert_eq!(canvas.retirements.iter().flatten().count(), 1);
     drop(canvas.lease.as_ref().ok_or("Canvas lease absent")?.claim(probe_bytes)?);
-    assert_eq!(canvas.present(&acknowledged, placement)?, None);
+    assert_eq!(canvas.present(&CanvasContent::Cpu(acknowledged), placement)?, None);
     execution
         .wait_composition(canvas.next_wait().ok_or("Hide wait absent")?)
         .map_err(|cause| cause as Box<dyn std::error::Error>)?;
     canvas.reap_retirements()?;
     assert!(!canvas.has_retirements());
     assert!(canvas.hide()?);
-    assert_eq!(canvas.present(&acknowledged, placement)?, Some(stamp));
+    assert_eq!(canvas.present(&CanvasContent::Cpu(acknowledged), placement)?, Some(stamp));
 
     let large = Extent::new(1024, 1024)?;
     let large_pixels = vec![0xffab_cdef; large.pixels() as usize];
@@ -171,7 +176,7 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     assert!(
         canvas
             .present(
-                &large_frame,
+                &CanvasContent::Cpu(large_frame),
                 CanvasPlacement { viewport: large_viewport, clip: large_viewport }
             )
             .is_err()
@@ -190,7 +195,7 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
         .map_err(|cause| cause as Box<dyn std::error::Error>)?;
     canvas.reap_retirements()?;
     assert!(canvas.hide()?);
-    assert_eq!(canvas.present(&acknowledged, placement)?, Some(stamp));
+    assert_eq!(canvas.present(&CanvasContent::Cpu(acknowledged), placement)?, Some(stamp));
     canvas.end_draws()?;
     // This root was never bound to a target, so no native window can retain the visual tree.
     canvas.release_after_detach()?;

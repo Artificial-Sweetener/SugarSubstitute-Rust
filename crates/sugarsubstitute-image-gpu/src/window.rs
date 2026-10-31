@@ -4,10 +4,8 @@
 use crate::{
     DisplayImage, DisplayMapping, GpuDevice, GpuError,
     coordination::{ConfigurationIntent, SubmissionPermit},
-    display_mapping::MappingUpload,
     surface_state::{Reconfiguration, ReconfigureReason},
-    transfer::Transfer,
-    window_shader::Blitter,
+    window_shader::{Blitter, StagedDraw},
 };
 use std::sync::{
     Arc, Mutex,
@@ -209,12 +207,8 @@ impl WindowSurface {
         if self.blitter.is_none() {
             self.blitter = Some(Blitter::new(&device, self.owner.format, context)?);
         }
-        let upload =
-            MappingUpload::new(mapping, underlay.map(|(_, mapping)| mapping), extent, context)?;
-        let staging = context
-            .memory()
-            .claim(upload.bytes.len() as u64 + 128)
-            .map_err(|cause| GpuError::new("gpu_display_mapping_staging", cause))?;
+        let staged =
+            StagedDraw::new(mapping, underlay.map(|(_, mapping)| mapping), extent, context)?;
         let acquired = {
             let _timing = device.timings.begin(crate::timing::Phase::Acquire, 0, 1);
             self.owner.surface.get_current_texture()
@@ -246,26 +240,19 @@ impl WindowSurface {
                 ));
             }
         };
-        let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("SugarSubstitute native window frame"),
-        });
-        let input = image.view();
-        let underlay_input = underlay.map_or_else(|| image.view(), |(image, _)| image.view());
         let output = texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let blitter = self
             .blitter
             .as_ref()
             .ok_or_else(|| GpuError::invalid("Native window shader is unavailable"))?;
-        blitter.encode(&device, &input, &underlay_input, &output, &mut commands);
-        device.faults.check()?;
-        Transfer::upload(
-            blitter.mapping(),
-            staging,
-            &upload.bytes,
-            Some(commands),
+        blitter.submit(
+            &device,
+            staged,
+            image,
+            underlay.map(|(image, _)| image),
+            &output,
             submission.clone(),
-        )
-        .retire()?;
+        )?;
         crate::adapter::check(context)?;
         Ok(Some(WindowFrame { texture: Some(texture), owner: self.owner.clone(), submission }))
     }

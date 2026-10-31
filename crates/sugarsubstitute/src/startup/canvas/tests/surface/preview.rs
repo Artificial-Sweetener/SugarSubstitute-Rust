@@ -82,8 +82,9 @@ pub(super) fn wait_frame(fixture: &mut Fixture) -> Result<FrameStamp, Box<dyn Er
         let observed = fixture.wake.revision();
         fixture.advance(100);
         fixture.pump()?;
-        if let Some(frame) = prepared_frame(&fixture.canvas).filter(|frame| frame.frame.pending) {
-            let target = frame.frame.target;
+        if let Some(frame) = prepared_frame(&fixture.canvas).filter(|frame| frame.content.pending())
+        {
+            let target = frame.content.target();
             if fixture
                 .canvas
                 .session

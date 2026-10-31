@@ -37,8 +37,8 @@ fn settle_geometry(
             }
         }
         let step = match fixture.canvas.presentation() {
-            MainCanvasPresentation::Frame(frame) if frame.frame.pending => {
-                NativeStep::Upload(frame.frame.target, frame.placement.viewport)
+            MainCanvasPresentation::Frame(frame) if frame.content.pending() => {
+                NativeStep::Upload(frame.content.target(), frame.placement.viewport)
             }
             MainCanvasPresentation::Hide if !hidden => NativeStep::Hide,
             _ => NativeStep::Idle,
@@ -150,7 +150,7 @@ fn declared_jpeg_rejects_actual_png_and_never_publishes_it() -> Result<(), Box<d
     assert_eq!(value["change"]["displayed"]["type"], "final");
     assert_eq!(value["change"]["displayed"]["selectionRevision"], 3);
     assert_eq!(fixture.accepted()?, camera);
-    assert!(prepared_frame(&fixture.canvas).is_none_or(|frame| !frame.frame.pending));
+    assert!(prepared_frame(&fixture.canvas).is_none_or(|frame| !frame.content.pending()));
     drain(&mut fixture)?;
     fixture.finish()
 }
@@ -184,7 +184,7 @@ fn legal_png_begin_is_unavailable_before_allocation_and_preserves_the_shown_prev
     fixture.take(300, "unavailable")?;
     assert!(memory.claim(available).is_ok());
     assert_eq!(fixture.accepted()?, camera);
-    assert_eq!(prepared_frame(&fixture.canvas).map(|frame| frame.frame.target), Some(target));
+    assert_eq!(prepared_frame(&fixture.canvas).map(|frame| frame.content.target()), Some(target));
     assert!(change(&mut fixture)?.is_none());
     begin(&mut fixture, 301, "preview:2", 3)?;
     drop(memory);
@@ -278,8 +278,8 @@ fn withdrawing_a_preview_refit_by_resizing_restores_the_navigated_final_camera()
             break;
         }
         match fixture.canvas.presentation() {
-            MainCanvasPresentation::Frame(frame) if frame.frame.pending => {
-                fixture.canvas.presented(frame.frame.target)?;
+            MainCanvasPresentation::Frame(frame) if frame.content.pending() => {
+                fixture.canvas.presented(frame.content.target())?;
             }
             MainCanvasPresentation::Hide => fixture.canvas.hidden(fixture.identity)?,
             _ => fixture.wait_preview_progress(observed)?,
@@ -407,9 +407,9 @@ fn withdrawing_staged_latest_reports_restored_final_only_after_actual_native_ack
         fixture.advance(100);
         fixture.pump()?;
         if let Some(frame) =
-            prepared_frame(&fixture.canvas).filter(|frame| frame.frame.target != target)
+            prepared_frame(&fixture.canvas).filter(|frame| frame.content.target() != target)
         {
-            restored = Some(frame.frame.target);
+            restored = Some(frame.content.target());
             break;
         }
         fixture.wait_preview_progress(observed)?;

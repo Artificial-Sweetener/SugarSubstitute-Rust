@@ -34,7 +34,7 @@ fn addressed_commands_report_only_the_exact_accepted_camera_and_reuse_unchanged_
     fixture.viewport(7, json!({"type":"fit"}))?;
     snapshot(&fixture.take(7, "applied")?, 7, "fit", 0.25, [320, 160]);
     assert_eq!(fixture.accepted()?, fitted);
-    assert!(!prepared_frame(&fixture.canvas).ok_or("Accepted frame absent")?.frame.pending);
+    assert!(!prepared_frame(&fixture.canvas).ok_or("Accepted frame absent")?.content.pending());
     fixture.send(
         8,
         "surface.viewport.request",

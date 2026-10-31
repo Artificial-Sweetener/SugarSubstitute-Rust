@@ -140,6 +140,67 @@ impl DisplayImage {
         crate::adapter::check(context)?;
         Ok(Self(Arc::new(Image { texture, extent, device, _memory: memory })))
     }
+    /// Upload opaque `0xffRRGGBB` words as a completed image for driver-boundary qualification.
+    /// # Errors
+    /// Rejects incomplete or nonopaque pixels; preserves admission, control and native causes.
+    #[cfg(feature = "boundary-fixtures")]
+    pub fn from_pixels(
+        device: Arc<GpuDevice>,
+        extent: Extent,
+        pixels: &[u32],
+        context: &JobContext,
+    ) -> Result<Self, GpuError> {
+        crate::adapter::check(context)?;
+        if pixels.len() as u64 != extent.pixels()
+            || pixels.iter().any(|pixel| pixel >> 24 != 255)
+            || extent.width() > 16384
+            || extent.height() > 16384
+        {
+            return Err(GpuError::invalid("Qualification image pixels are invalid"));
+        }
+        let memory = device
+            .memory
+            .claim(
+                (u64::from(row_bytes(extent.width())) * u64::from(extent.height()))
+                    .next_multiple_of(65536)
+                    + 4096,
+            )
+            .map_err(|cause| GpuError::new("gpu_display_image_admission", cause))?;
+        let _staging = context
+            .memory()
+            .claim(extent.pixels() * 4)
+            .map_err(|cause| GpuError::new("gpu_display_fixture_staging", cause))?;
+        let bytes: Vec<u8> = pixels.iter().flat_map(|pixel| pixel.to_le_bytes()).collect();
+        device.faults.check()?;
+        let texture = device.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("SugarSubstitute qualification display image"),
+            size: size(extent.width(), extent.height()),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Bgra8Unorm,
+            usage: wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        device.queue.write_texture(
+            location(&texture, [0, 0]),
+            &bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(extent.width() * 4),
+                rows_per_image: Some(extent.height()),
+            },
+            size(extent.width(), extent.height()),
+        );
+        let submission = device.submission(context)?;
+        let commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("SugarSubstitute qualification image upload"),
+        });
+        Transfer::submit(device.clone(), commands, submission).retire()?;
+        Ok(Self(Arc::new(Image { texture, extent, device, _memory: memory })))
+    }
     /// Read one bounded physical region for qualification or export, excluding row padding.
     /// Native presentation consumes the device image directly.
     /// # Errors

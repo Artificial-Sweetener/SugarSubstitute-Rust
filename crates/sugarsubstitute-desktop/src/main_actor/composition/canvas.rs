@@ -9,7 +9,7 @@ use super::{adopt, missing};
 use crate::{
     DesktopError,
     canvas::{
-        CpuFrame,
+        CanvasContent,
         acknowledgement::{Acknowledgement, FrameEffect, HideEffect},
         placement::CanvasPlacement,
     },
@@ -53,7 +53,7 @@ impl super::Composition {
             ));
         }
         self.ledger.dirty = true;
-        let result = canvas.present(&frame.frame, frame.placement)?;
+        let result = canvas.present(&frame.content, frame.placement)?;
         self.ledger.dirty = false;
         self.ledger.committed = true;
         Ok(result)
@@ -213,6 +213,8 @@ pub(super) struct Canvas {
     linked: bool,
     retired: bool,
     lease: Option<MemoryLease>,
+    #[cfg(test)]
+    capture_next: bool,
 }
 
 impl Canvas {
@@ -259,17 +261,20 @@ impl Canvas {
             linked: false,
             retired: false,
             lease: Some(lease),
+            #[cfg(test)]
+            capture_next: false,
         })
     }
 
     /// Upload and commit one complete frame, returning acknowledgement only after commit.
+    /// CPU and shared GPU frames use the same surfaces, so the renderer may switch per frame.
     /// A failed native mutation retains both old and replacement resources for tree retirement.
     pub(super) fn present(
         &mut self,
-        frame: &CpuFrame<'_>,
+        content: &CanvasContent<'_>,
         placement: CanvasPlacement,
     ) -> Result<Option<FrameStamp>, DesktopError> {
-        let extent = frame.validate()?;
+        let extent = content.validate()?;
         let clip = clip(placement)?;
         if extent.width() != placement.viewport.width
             || extent.height() != placement.viewport.height
@@ -280,9 +285,9 @@ impl Canvas {
             ));
         }
         match self.acknowledgement.frame(
-            frame.target,
+            content.target(),
             placement,
-            frame.pending,
+            content.pending(),
             self.has_retirements(),
         )? {
             FrameEffect::Committed(acknowledged) => return Ok(acknowledged),
@@ -291,6 +296,15 @@ impl Canvas {
         }
         let composition = self.composition.as_ref().ok_or_else(|| missing("canvas_composition"))?;
         let device = self.device.as_mut().ok_or_else(|| missing("canvas_device"))?;
+        #[cfg(windows)]
+        if let CanvasContent::Shared(shared) = content
+            && !shared.texture.owned_by(device.graphics())
+        {
+            return Err(DesktopError::message(
+                "canvas_shared_texture",
+                "texture belongs to another graphics device",
+            ));
+        }
         device.initialize(composition)?;
         if self.visual.is_none() {
             let mut raw = std::ptr::null_mut();
@@ -319,7 +333,21 @@ impl Canvas {
         }
         let allocation = if replacement { &mut self.pending } else { &mut self.active };
         let allocation = allocation.as_mut().ok_or_else(|| missing("canvas_allocation"))?;
-        allocation.upload(frame)?;
+        #[cfg(test)]
+        if std::mem::take(&mut self.capture_next) {
+            allocation.capture.request();
+        }
+        let uploaded = allocation.upload(content);
+        // A failed upload may still have queued its read, so the fence always follows it.
+        #[cfg(windows)]
+        if let CanvasContent::Shared(shared) = content {
+            let value = device
+                .graphics()
+                .signal_reads()
+                .map_err(|cause| DesktopError::new("canvas_shared_texture_reads", cause))?;
+            shared.texture.record_reads(value);
+        }
+        uploaded?;
         let visual = self.visual.as_ref().ok_or_else(|| missing("canvas_visual"))?;
         // SAFETY: All interfaces are live on the UI apartment; the clip is within this viewport.
         unsafe {
@@ -361,8 +389,8 @@ impl Canvas {
                 });
             }
         }
-        self.acknowledgement.committed(frame.target, placement);
-        Ok(Some(frame.target))
+        self.acknowledgement.committed(content.target(), placement);
+        Ok(Some(content.target()))
     }
 
     /// Complete outstanding drawing before the parent tree detaches.

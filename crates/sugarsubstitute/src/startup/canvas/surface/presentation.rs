@@ -120,7 +120,7 @@ impl NativeSurface {
             allocation: binding.allocation?,
             memory,
             graphics: session.host_graphics()?,
-            frame,
+            content: sugarsubstitute_desktop::canvas::CanvasContent::Cpu(frame),
         })
     }
 

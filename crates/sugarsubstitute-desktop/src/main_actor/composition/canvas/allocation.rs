@@ -3,7 +3,7 @@
 //! Own one admitted composition surface and any unfinished Direct2D drawing operation.
 
 use super::super::{adopt, missing};
-use crate::{DesktopError, canvas::CpuFrame};
+use crate::{DesktopError, canvas::CanvasContent};
 use std::{error::Error, fmt, mem::ManuallyDrop};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::Extent;
@@ -19,7 +19,10 @@ use windows::{
                 D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR, ID2D1Bitmap1, ID2D1DeviceContext,
             },
             DirectComposition::{IDCompositionSurface, IDCompositionSurfaceFactory},
-            Dxgi::Common::{DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM},
+            Dxgi::{
+                Common::{DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM},
+                IDXGISurface,
+            },
         },
     },
     core::Interface,
@@ -38,6 +41,8 @@ pub(super) struct Allocation {
     drawing: bool,
     context: Option<ID2D1DeviceContext>,
     bitmap: Option<ID2D1Bitmap1>,
+    #[cfg(test)]
+    pub(super) capture: capture::Capture,
     _claim: MemoryClaim,
 }
 
@@ -55,6 +60,8 @@ impl Allocation {
             drawing: false,
             context: None,
             bitmap: None,
+            #[cfg(test)]
+            capture: capture::Capture::default(),
             _claim: claim,
         })
     }
@@ -89,12 +96,14 @@ impl Allocation {
     }
 
     /// Upload complete immutable pixels and always try to close the exact native draw.
-    pub(super) fn upload(&mut self, frame: &CpuFrame<'_>) -> Result<(), DesktopError> {
-        if frame.validate()? != self.extent || self.drawing {
+    pub(super) fn upload(&mut self, content: &CanvasContent<'_>) -> Result<(), DesktopError> {
+        if content.validate()? != self.extent || self.drawing {
             return Err(DesktopError::message("canvas_upload", "frame or drawing state differs"));
         }
-        let result = self.draw(frame);
+        let result = self.draw(content);
         let retirement = self.end_draw();
+        #[cfg(test)]
+        let retirement = retirement.and_then(|()| self.capture.complete());
         match (result, retirement) {
             (Ok(()), Ok(())) => Ok(()),
             (Err(cause), Ok(())) | (Ok(()), Err(cause)) => Err(cause),
@@ -105,7 +114,7 @@ impl Allocation {
         }
     }
 
-    fn draw(&mut self, frame: &CpuFrame<'_>) -> Result<(), DesktopError> {
+    fn draw(&mut self, content: &CanvasContent<'_>) -> Result<(), DesktopError> {
         let surface = self.surface()?.clone();
         let mut raw = std::ptr::null_mut();
         let mut offset = POINT::default();
@@ -135,18 +144,37 @@ impl Allocation {
             colorContext: ManuallyDrop::new(None),
         };
         let mut raw = std::ptr::null_mut();
-        // SAFETY: Frame validation proves the complete immutable pixel storage and stride.
-        let status = unsafe {
-            (context.vtable().CreateBitmap)(
-                context.as_raw(),
-                D2D_SIZE_U { width: self.extent.width(), height: self.extent.height() },
-                frame.pixels.as_ptr().cast(),
-                self.extent.width() * 4,
-                &properties,
-                &mut raw,
-            )
+        let status = match content {
+            // SAFETY: Frame validation proves the complete immutable pixel storage and stride.
+            CanvasContent::Cpu(frame) => unsafe {
+                (context.vtable().CreateBitmap)(
+                    context.as_raw(),
+                    D2D_SIZE_U { width: self.extent.width(), height: self.extent.height() },
+                    frame.pixels.as_ptr().cast(),
+                    self.extent.width() * 4,
+                    &properties,
+                    &mut raw,
+                )
+            },
+            CanvasContent::Shared(frame) => {
+                let surface: IDXGISurface = frame
+                    .texture
+                    .texture()
+                    .cast()
+                    .map_err(|cause| DesktopError::new("query_canvas_shared_surface", cause))?;
+                // SAFETY: The texture belongs to this context's D3D11 device and has the same
+                // BGRA8 format; the surface outlives this call and the retained bitmap.
+                unsafe {
+                    (context.vtable().CreateBitmapFromDxgiSurface)(
+                        context.as_raw(),
+                        surface.as_raw(),
+                        &properties,
+                        &mut raw,
+                    )
+                }
+            }
         };
-        // SAFETY: CreateBitmap transfers an ID2D1Bitmap1 reference to this retained slot.
+        // SAFETY: Both creation calls transfer an ID2D1Bitmap1 reference to this retained slot.
         unsafe { adopt(&mut self.bitmap, raw, status, "create_canvas_bitmap")? };
         let bitmap = self.bitmap.as_ref().ok_or_else(|| missing("canvas_bitmap"))?;
         #[allow(clippy::cast_precision_loss)]
@@ -167,6 +195,8 @@ impl Allocation {
                 None,
             );
         }
+        #[cfg(test)]
+        self.capture.copy(context, offset, self.extent)?;
         Ok(())
     }
 
@@ -207,6 +237,9 @@ impl Error for DrawFailures {
         Some(&self.primary)
     }
 }
+
+#[cfg(test)]
+mod capture;
 
 #[cfg(test)]
 mod tests {

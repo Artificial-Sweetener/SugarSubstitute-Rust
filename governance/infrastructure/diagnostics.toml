@@ -36,6 +36,13 @@ disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/tests/shared.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:600321ca2a7ee26f33721fd96b1b383ea176c6a149467984fc32c7e0df420af6"
+disposition = "fixture"
+rationale = "Native shared-texture qualification reports measured per-adapter interop timings as test output; runtime construction and presentation are unchanged."
+
+[[records]]
 path = "crates/sugarsubstitute-comfy/src/readiness_transport/memory.rs"
 owner = "sugarsubstitute-comfy"
 source_sha256 = "sha256:56e68cb5732ab3be85a83d5b64709018d9cb80fe1d44908108be81edc07414a6"

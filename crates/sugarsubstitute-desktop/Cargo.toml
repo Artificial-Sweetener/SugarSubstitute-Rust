@@ -42,6 +42,7 @@ gtk.workspace = true
 cairo-rs.workspace = true
 
 [dev-dependencies]
+sugarsubstitute-image-gpu = { path = "../sugarsubstitute-image-gpu", features = ["boundary-fixtures"] }
 sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 

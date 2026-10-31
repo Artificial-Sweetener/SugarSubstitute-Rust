@@ -235,9 +235,9 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     )?;
     assert!(canvas.take_command().is_none());
     let first = prepared_frame(&canvas).ok_or("Prepared red frame is missing")?;
-    let red = first.frame.pixels[36];
+    let red = first.content.cpu_pixels()[36];
     assert!((red >> 16) & 0xff > 224 && red & 0xff < 16);
-    let first_stamp = first.frame.target;
+    let first_stamp = first.content.target();
     canvas.presented(first_stamp)?;
     reply(&mut canvas, 4, "applied")?;
 
@@ -264,9 +264,9 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     }
     assert!(canvas.take_command().is_none());
     let second = prepared_frame(&canvas).ok_or("Prepared blue frame is missing")?;
-    let blue = second.frame.pixels[36];
+    let blue = second.content.cpu_pixels()[36];
     assert!((blue >> 16) & 0xff < 16 && blue & 0xff > 224);
-    let second_stamp = second.frame.target;
+    let second_stamp = second.content.target();
     assert_ne!(first_stamp, second_stamp);
     canvas.presented(second_stamp)?;
     reply(&mut canvas, 5, "applied")?;
@@ -321,7 +321,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         let revision = wake.revision();
         pump(&mut canvas, &client)?;
         if let Some(frame) = prepared_frame(&canvas) {
-            break frame.frame.target;
+            break frame.content.target();
         }
         wake.wait_after(revision)?;
     };
@@ -366,11 +366,11 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         let revision = wake.revision();
         pump(&mut canvas, &client)?;
         if let Some(frame) = prepared_frame(&canvas) {
-            let extent = frame.frame.validate()?;
+            let extent = frame.content.validate()?;
             assert_eq!((extent.width(), extent.height()), (12, 12));
             assert_eq!(frame.placement.viewport.width, 12);
             assert_eq!(frame.placement.viewport.x, 12);
-            break frame.frame.target;
+            break frame.content.target();
         }
         wake.wait_after(revision)?;
     };

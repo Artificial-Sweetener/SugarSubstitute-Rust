@@ -25,6 +25,11 @@ impl Device {
         Self { graphics, composition: None, surfaces: None }
     }
 
+    /// Borrow the retained worker-prepared graphics device.
+    pub(super) fn graphics(&self) -> &Arc<CanvasGraphics> {
+        &self.graphics
+    }
+
     /// Check the actual prepared device identity across frame submissions.
     pub(super) fn owns_graphics(&self, graphics: &Arc<CanvasGraphics>) -> bool {
         Arc::ptr_eq(&self.graphics, graphics)

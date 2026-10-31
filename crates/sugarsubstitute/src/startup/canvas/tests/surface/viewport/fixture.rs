@@ -241,9 +241,9 @@ impl Fixture {
             self.pump()?;
             if let Some(frame) = prepared_frame(&self.canvas) {
                 let width = frame.placement.viewport.width;
-                let target = frame.frame.target;
-                let pending = frame.frame.pending;
-                last = frame.frame.pixels.to_vec();
+                let target = frame.content.target();
+                let pending = frame.content.pending();
+                last = frame.content.cpu_pixels().to_vec();
                 if pending {
                     // Acknowledge, then re-read the same frame before waiting for further work.
                     self.canvas.presented(target)?;
@@ -276,8 +276,10 @@ impl Fixture {
         loop {
             let observed = self.wake.revision();
             self.pump()?;
-            if let Some(frame) = prepared_frame(&self.canvas).filter(|frame| frame.frame.pending) {
-                return Ok(frame.frame.target);
+            if let Some(frame) =
+                prepared_frame(&self.canvas).filter(|frame| frame.content.pending())
+            {
+                return Ok(frame.content.target());
             }
             self.wake.wait_after(observed)?;
         }
@@ -337,8 +339,8 @@ impl Fixture {
                 return self.decode(command, id, "applied");
             }
             if let Some(target) = prepared_frame(&self.canvas)
-                .filter(|frame| frame.frame.pending)
-                .map(|frame| frame.frame.target)
+                .filter(|frame| frame.content.pending())
+                .map(|frame| frame.content.target())
             {
                 self.canvas.presented(target)?;
             } else {

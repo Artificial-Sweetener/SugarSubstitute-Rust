@@ -86,6 +86,54 @@ pub(crate) struct BlockingExecution {
 
 #[cfg(feature = "native-composition")]
 impl BlockingExecution {
+    /// Allocate the next job identity on this owner.
+    fn next_spec(&mut self, class: JobClass, bytes: u64) -> TestResult<JobSpec> {
+        let id = JobId::new(self.next_job)?;
+        self.next_job = self
+            .next_job
+            .checked_add(1)
+            .ok_or_else(|| std::io::Error::other("Test job identity overflow"))?;
+        Ok(JobSpec {
+            id,
+            operation: Operation::Infrastructure,
+            class,
+            deadline: Some(Moment::from_nanos(30_000_000_000)),
+            reservation_bytes: bytes,
+            replacement: None,
+        })
+    }
+
+    /// Run one more blocking graphics operation on this owner and observe its result.
+    pub(crate) fn blocking<T, E>(
+        &mut self,
+        bytes: u64,
+        action: impl FnOnce(JobContext) -> Result<T, E> + Send + 'static,
+    ) -> TestResult<T>
+    where
+        T: Send + 'static,
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        let spec = self.next_spec(JobClass::InfrastructureOrdinary, bytes)?;
+        let mut job = self.client.submit_blocking(&self.scope, spec, action)?;
+        wait(&self.client, &self.wake, &mut job)
+    }
+
+    /// Run one asynchronous native discovery operation on this owner and observe its result.
+    pub(crate) fn asynchronous<T, E, F>(
+        &mut self,
+        bytes: u64,
+        action: impl FnOnce(JobContext) -> F + Send + 'static,
+    ) -> TestResult<T>
+    where
+        T: Send + 'static,
+        E: std::error::Error + Send + Sync + 'static,
+        F: std::future::Future<Output = Result<T, E>> + Send + 'static,
+    {
+        let spec = self.next_spec(JobClass::IoOrdinary, bytes)?;
+        let mut job = self.client.submit_async(&self.scope, spec, action)?;
+        wait(&self.client, &self.wake, &mut job)
+    }
+
     /// Observe an actual DirectComposition wait on the same admitted worker owner.
     pub(crate) fn wait_composition(
         &mut self,
@@ -145,7 +193,10 @@ where
     E: std::error::Error + Send + Sync + 'static,
 {
     let wake = Arc::new(Wake::default());
-    let owner = ExecutionOwner::new(Arc::new(FixedClock), wake.clone())?;
+    // Later jobs on this owner reserve beside the retained first reservation.
+    let capacity = std::num::NonZeroU64::new(bytes.saturating_add(256 * 1024 * 1024))
+        .ok_or_else(|| std::io::Error::other("Invalid execution capacity"))?;
+    let owner = ExecutionOwner::with_memory_capacity(Arc::new(FixedClock), wake.clone(), capacity)?;
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let spec = JobSpec {

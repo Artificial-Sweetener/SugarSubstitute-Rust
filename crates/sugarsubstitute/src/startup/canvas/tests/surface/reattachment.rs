@@ -26,11 +26,11 @@ impl Compositor {
         let mut hidden = false;
         match fixture.canvas.presentation() {
             MainCanvasPresentation::Frame(frame) => {
-                let (target, placement) = (frame.frame.target, frame.placement);
+                let (target, placement) = (frame.content.target(), frame.placement);
                 match self.acknowledgement.frame(
                     target,
                     placement,
-                    frame.frame.pending,
+                    frame.content.pending(),
                     self.retiring,
                 )? {
                     FrameEffect::Committed(stamp) => acknowledged = stamp,
@@ -335,7 +335,7 @@ fn reopen_and_select(replay: &mut Replay, order: ReopenOrder) -> Result<(), Box<
     let accepted = replay.fixture.accepted()?;
     assert_eq!(accepted.extent, sugarsubstitute_image_ops::Extent::new(160, 320)?);
     let shown = match replay.fixture.canvas.presentation() {
-        MainCanvasPresentation::Frame(frame) if !frame.frame.pending => frame.frame.target,
+        MainCanvasPresentation::Frame(frame) if !frame.content.pending() => frame.content.target(),
         MainCanvasPresentation::Retain(retained) => retained.target,
         _ => return Err("The final selection is not the acknowledged native presentation".into()),
     };

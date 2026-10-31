@@ -22,6 +22,8 @@ pub use gesture::{
     MAX_INPUT_OCCLUSIONS, MainCanvasButton, MainCanvasGesture, MainCanvasInput,
     MainCanvasInputRegion,
 };
+/// Composition-device adapter placement and shared-texture fallback reasons.
+pub mod composition_adapter;
 
 #[cfg(all(windows, feature = "native-composition"))]
 #[allow(unsafe_code)]
@@ -33,6 +35,11 @@ pub use graphics::{CanvasGraphics, CanvasGraphicsError};
 mod composition_fence;
 #[cfg(all(windows, feature = "native-composition"))]
 pub use composition_fence::{CompositionFence, CompositionFenceError, CompositionWait};
+#[cfg(all(windows, feature = "native-composition"))]
+#[allow(unsafe_code)]
+mod shared_texture;
+#[cfg(all(windows, feature = "native-composition"))]
+pub use shared_texture::SharedCanvasTexture;
 
 /// Maximum supported physical width or height for a native canvas viewport.
 pub const MAX_VIEWPORT_EDGE: u32 = 16_384;
@@ -85,6 +92,7 @@ pub enum CpuFrameKind {
 
 /// Borrowed opaque top-row-first sRGB words, `0xffRRGGBB`, with explicit pixel semantics.
 /// The application keeps the original execution-backed pixels alive for the complete borrow.
+#[derive(Clone, Copy)]
 pub struct CpuFrame<'a> {
     /// Whether these pixels are canonical prepared output or a transient complete projection.
     pub kind: CpuFrameKind,
@@ -119,7 +127,77 @@ pub struct MainCanvasFrame<'a> {
     #[cfg(windows)]
     pub graphics: &'a Arc<CanvasGraphics>,
     /// Complete immutable prepared pixels and their application frame identity.
-    pub frame: CpuFrame<'a>,
+    pub content: CanvasContent<'a>,
+}
+
+/// Complete pixels of one main-window canvas frame, prepared by either renderer.
+/// The same retained surface accepts both kinds, so presentation may switch per frame.
+#[cfg(feature = "native-composition")]
+pub enum CanvasContent<'a> {
+    /// CPU-prepared pixels uploaded through Direct2D.
+    Cpu(CpuFrame<'a>),
+    /// A completed GPU frame in a shared composition texture.
+    #[cfg(windows)]
+    Shared(SharedFrame<'a>),
+}
+
+/// A GPU-drawn frame whose shared texture the composition copies on the UI thread.
+/// The drawing worker observed GPU completion before this frame was published.
+#[cfg(all(windows, feature = "native-composition"))]
+pub struct SharedFrame<'a> {
+    /// `true` requires exactly one successful-commit acknowledgement for this frame.
+    pub pending: bool,
+    /// Retained frame represented by every texture pixel.
+    pub target: FrameStamp,
+    /// Shared texture exported by the frame's composition graphics device.
+    pub texture: &'a SharedCanvasTexture,
+}
+
+#[cfg(feature = "native-composition")]
+impl CanvasContent<'_> {
+    /// Application frame represented by these pixels.
+    pub fn target(&self) -> FrameStamp {
+        match self {
+            Self::Cpu(frame) => frame.target,
+            #[cfg(windows)]
+            Self::Shared(frame) => frame.target,
+        }
+    }
+    /// Borrow CPU-prepared pixels; shared GPU frames expose no host pixels.
+    pub fn cpu_pixels(&self) -> &[u32] {
+        match self {
+            Self::Cpu(frame) => frame.pixels,
+            #[cfg(windows)]
+            Self::Shared(_) => &[],
+        }
+    }
+    /// Whether presentation must acknowledge this frame's first successful commit.
+    pub fn pending(&self) -> bool {
+        match self {
+            Self::Cpu(frame) => frame.pending,
+            #[cfg(windows)]
+            Self::Shared(frame) => frame.pending,
+        }
+    }
+    /// Validate complete pixel dimensions before any native effect.
+    /// # Errors
+    /// Rejects invalid CPU frames and shared textures above the viewport bound.
+    pub fn validate(&self) -> Result<Extent, DesktopError> {
+        match self {
+            Self::Cpu(frame) => frame.validate(),
+            #[cfg(windows)]
+            Self::Shared(frame) => {
+                let extent = frame.texture.extent();
+                if extent.width() > MAX_VIEWPORT_EDGE || extent.height() > MAX_VIEWPORT_EDGE {
+                    return Err(DesktopError::message(
+                        "canvas_frame",
+                        "Shared canvas texture exceeds the viewport bound",
+                    ));
+                }
+                Ok(extent)
+            }
+        }
+    }
 }
 
 /// Keep only the exact native pixels already acknowledged at this allocation.

@@ -118,8 +118,8 @@ fn settle(fixture: &mut Fixture) -> Result<Vec<Value>, Box<dyn Error>> {
         fixture.advance(100);
         fixture.pump()?;
         if let Some(target) = prepared_frame(&fixture.canvas)
-            .filter(|frame| frame.frame.pending)
-            .map(|frame| frame.frame.target)
+            .filter(|frame| frame.content.pending())
+            .map(|frame| frame.content.target())
         {
             fixture.canvas.presented(target)?;
         } else if fixture.execution()? == Execution::Running {

@@ -2786,11 +2786,13 @@ dependencies = [
 name = "sugarsubstitute-image-gpu"
 version = "0.1.0"
 dependencies = [
+ "ash",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
  "sugarsubstitute-image-ops",
  "tracing",
  "wgpu",
+ "windows",
 ]
 
 [[package]]

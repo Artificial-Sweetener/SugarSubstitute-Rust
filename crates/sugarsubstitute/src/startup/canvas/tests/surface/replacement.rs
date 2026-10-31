@@ -67,8 +67,8 @@ impl Replacement<'_> {
             let observed = self.wake.revision();
             pump(self.canvas, self.client)?;
             if let Some(frame) = prepared_frame(self.canvas) {
-                assert!(frame.frame.pending);
-                let target = frame.frame.target;
+                assert!(frame.content.pending());
+                let target = frame.content.target();
                 assert!(self.canvas.take_command().is_none());
                 return Ok(target);
             }
@@ -107,8 +107,8 @@ impl Replacement<'_> {
             self.send(base, base + 3, "surface.release", json!({}))?;
             wait_reply(self.canvas, self.client, self.wake, base + 3, "applied")?;
             let frame = prepared_frame(self.canvas).ok_or("Restored native frame is absent")?;
-            assert_eq!(frame.frame.target, current);
-            assert!(!frame.frame.pending);
+            assert_eq!(frame.content.target(), current);
+            assert!(!frame.content.pending());
             self.send(base, base + 4, "surface.commit", json!({}))?;
             reply(self.canvas, base + 4, "stale")?;
         }

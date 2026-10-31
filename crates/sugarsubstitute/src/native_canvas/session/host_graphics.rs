@@ -41,7 +41,7 @@ impl Session {
             #[cfg(test)]
             let result = CanvasGraphics::fixture(&memory, &context);
             #[cfg(not(test))]
-            let result = CanvasGraphics::prepare(&memory, &context);
+            let result = CanvasGraphics::prepare(&memory, &context, None);
             if result.is_ok() {
                 tracing::info!(
                     operation = "canvas_graphics_ready",

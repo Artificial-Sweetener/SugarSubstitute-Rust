@@ -92,6 +92,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/main_actor/composition/cursor.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/composition/drop_target.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/composition/drop_target/tests.rs",
+    "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/tests/shared.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/composition/input.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/composition/retirement.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/composition/tests.rs",
@@ -138,7 +139,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:1cb0d035921aa647e575e7723277d98967a60f929a44d8cf1c960283f705850a"
+source_sha256 = "sha256:d10a0ba3be361912a32ef641f18143ee623c834ba8239cd15bc65d839e192dad"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
@@ -159,6 +160,8 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/kernel.rs",
     "crates/sugarsubstitute-image-gpu/src/native_commands.rs",
     "crates/sugarsubstitute-image-gpu/src/kernel/tests.rs",
+    "crates/sugarsubstitute-image-gpu/src/shared.rs",
+    "crates/sugarsubstitute-image-gpu/src/shared_surface.rs",
     "crates/sugarsubstitute-image-gpu/src/transfer.rs",
     "crates/sugarsubstitute-image-gpu/src/boundary_fixtures.rs",
     "crates/sugarsubstitute-image-gpu/src/window.rs",
@@ -166,7 +169,7 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/window_frame.rs",
     "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:7dbd1c3275ae5eca453a62d74911b350a5d0a96586a3d04c1573aa23bda9de8f"
+source_sha256 = "sha256:61e3efbef58b3031f7e2e8b0c92142c8150376a5a5c61797b590b77fc9c71429"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"

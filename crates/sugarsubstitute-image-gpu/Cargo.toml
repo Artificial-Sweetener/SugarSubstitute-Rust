@@ -18,6 +18,10 @@ sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
 wgpu.workspace = true
 tracing.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+ash.workspace = true
+windows.workspace = true
+
 [dev-dependencies]
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 

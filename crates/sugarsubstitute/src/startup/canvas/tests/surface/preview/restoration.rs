@@ -77,10 +77,10 @@ fn restored_old_final_cannot_acknowledge_a_new_final_selection() -> Result<(), B
             }
         }
         if let Some(frame) = prepared_frame(&fixture.canvas)
-            .filter(|frame| frame.frame.target != preview)
-            .filter(|frame| acknowledged != Some(frame.frame.target))
+            .filter(|frame| frame.content.target() != preview)
+            .filter(|frame| acknowledged != Some(frame.content.target()))
         {
-            let target = frame.frame.target;
+            let target = frame.content.target();
             fixture.canvas.presented(target)?;
             acknowledged = Some(target);
         } else {

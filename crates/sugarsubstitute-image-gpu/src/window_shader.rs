@@ -1,9 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Present already-encoded sRGB display bytes through a native unorm swapchain.
-use crate::{GpuDevice, GpuError, buffer::Buffer, display_mapping::MappingUpload};
+use crate::{
+    DisplayImage, DisplayMapping, GpuDevice, GpuError, buffer::Buffer,
+    coordination::SubmissionPermit, display_mapping::MappingUpload, transfer::Transfer,
+};
 use std::{borrow::Cow, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
+use sugarsubstitute_image_ops::Extent;
+
+/// Encoded display mapping and its admitted staging, prepared before any native output exists.
+/// Staging first lets memory pressure reject a draw without abandoning an acquired output image.
+pub(crate) struct StagedDraw {
+    upload: MappingUpload,
+    staging: MemoryClaim,
+}
+
+impl StagedDraw {
+    /// Encode mappings for one physical output under the caller's execution admission.
+    pub(crate) fn new(
+        mapping: Option<DisplayMapping<'_>>,
+        underlay: Option<DisplayMapping<'_>>,
+        output: Extent,
+        context: &JobContext,
+    ) -> Result<Self, GpuError> {
+        let upload = MappingUpload::new(mapping, underlay, output, context)?;
+        let staging = context
+            .memory()
+            .claim(upload.bytes.len() as u64 + 128)
+            .map_err(|cause| GpuError::new("gpu_display_mapping_staging", cause))?;
+        Ok(Self { upload, staging })
+    }
+}
 
 pub(crate) struct Blitter {
     pipeline: wgpu::RenderPipeline,
@@ -62,6 +90,33 @@ impl Blitter {
     /// Retain the exact mapping buffer through its write and draw submission.
     pub(crate) fn mapping(&self) -> Arc<Buffer> {
         self.mapping.clone()
+    }
+    /// Draw one staged projection into `output` and observe its native completion.
+    /// Every input image, mapping buffer and staging claim stays alive through retirement.
+    pub(crate) fn submit(
+        &self,
+        device: &Arc<GpuDevice>,
+        staged: StagedDraw,
+        image: &DisplayImage,
+        underlay: Option<&DisplayImage>,
+        output: &wgpu::TextureView,
+        submission: SubmissionPermit,
+    ) -> Result<(), GpuError> {
+        let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("SugarSubstitute native display frame"),
+        });
+        let input = image.view();
+        let underlay_input = underlay.map_or_else(|| image.view(), DisplayImage::view);
+        self.encode(device, &input, &underlay_input, output, &mut commands);
+        device.faults.check()?;
+        Transfer::upload(
+            self.mapping(),
+            staged.staging,
+            &staged.upload.bytes,
+            Some(commands),
+            submission,
+        )
+        .retire()
     }
     pub(crate) fn encode(
         &self,
