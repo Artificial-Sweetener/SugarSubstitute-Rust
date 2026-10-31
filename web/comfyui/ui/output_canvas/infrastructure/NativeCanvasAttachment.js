@@ -30,6 +30,7 @@ import { nativeCanvasCommands, nativeCanvasComparison, nativeCanvasInput, native
 import { NativeCanvasInspection } from './NativeCanvasInspection.js';
 import { NativeCanvasOcclusions } from './NativeCanvasOcclusions.js';
 import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
+import { nativeCanvasAddressed } from './NativeCanvasDesired.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
 import { NativeCanvasPresentation, } from './NativeCanvasPresentation.js';
@@ -50,6 +51,7 @@ export class NativeCanvasAttachment {
     #overlay;
     #stopView;
     #stopTransfer;
+    #stopCamera;
     #keyboard;
     /** Fixed per attachment; changed host capabilities rebuild the attachment. */
     #comparison;
@@ -188,6 +190,11 @@ export class NativeCanvasAttachment {
             viewport: (command, scope) => this.#native.viewport(command, scope),
             accepts: () => !this.#disposed && options.accepts(),
         });
+        this.#stopCamera =
+            host?.camera?.listen((change) => {
+                if (nativeCanvasAddressed(options.address, change.address))
+                    this.#native.settled(change.selectionRevision, change.viewport);
+            }) ?? (() => { });
         this.#stopTransfer =
             options.transferChanged?.(() => {
                 if (this.#ready)
@@ -209,6 +216,7 @@ export class NativeCanvasAttachment {
             () => this.viewport.removeEventListener('pointerdown', this.#focusViewport),
             () => this.#native.dispose(),
             () => this.#inspection.dispose(),
+            this.#stopCamera,
             () => this.#overview?.dispose(),
             () => this.#media.dispose(),
             () => this.#status.dispose(),
@@ -320,6 +328,7 @@ export class NativeCanvasAttachment {
         this.#media.dispose();
         const released = this.#native.dispose();
         this.#inspection.dispose();
+        this.#stopCamera();
         this.#overview?.dispose();
         this.options.views.releaseAttachment(this.options.address);
         this.element.replaceChildren();

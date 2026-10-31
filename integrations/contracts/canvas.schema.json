@@ -2187,6 +2187,31 @@
       "required": ["mode", "physicalScale", "dimensions"],
       "additionalProperties": false
     },
+    "CanvasSurfaceCameraChange": {
+      "type": "object",
+      "properties": {
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "selectionRevision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "viewport": { "$ref": "#/$defs/CanvasSurfaceViewportState" }
+      },
+      "required": ["address", "sequence", "selectionRevision", "viewport"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceCameraChanged": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "const": 0 },
+        "type": { "const": "surface.camera.changed" },
+        "schema": { "const": 1 },
+        "change": { "$ref": "#/$defs/CanvasSurfaceCameraChange" }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "schema", "change"],
+      "additionalProperties": false
+    },
     "CanvasSurfaceViewportRequest": {
       "type": "object",
       "properties": {
@@ -2308,6 +2333,7 @@
       "$ref": "#/$defs/CanvasSurfaceReply"
     },
     { "$ref": "#/$defs/CanvasSurfaceViewportRequest" },
-    { "$ref": "#/$defs/CanvasSurfaceViewportReply" }
+    { "$ref": "#/$defs/CanvasSurfaceViewportReply" },
+    { "$ref": "#/$defs/CanvasSurfaceCameraChanged" }
   ]
 }

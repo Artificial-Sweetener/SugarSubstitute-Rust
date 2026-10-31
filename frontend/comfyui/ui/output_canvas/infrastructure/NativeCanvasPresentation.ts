@@ -50,7 +50,6 @@ import {
   nativeCanvasWipe,
   nativeCanvasWipeKey,
   type NativeCanvasComparison,
-  type NativeCanvasRestoration,
   type NativeCanvasDesired as Desired,
 } from './NativeCanvasDesired.js';
 
@@ -79,7 +78,7 @@ export interface NativeCanvasPresentationOptions {
   /** Lock preview controls only for pixels acknowledged by the presentation observation. */
   preview(value: boolean): void;
   /** Choose the camera an image selection restores when sent; without one it starts at Fit. */
-  readonly inspection?: NativeCanvasRestoration;
+  readonly inspection?: Parameters<typeof nativeCanvasSelection>[1];
   report(error: unknown): void;
 }
 
@@ -248,6 +247,21 @@ export class NativeCanvasPresentation {
     intent.observe();
     if (this.#viewport === intent) this.#wake();
     return intent.result;
+  }
+
+  /**
+   * Publish a host-settled gesture camera like a commanded one, only while its selection is the
+   * bound one and the shown camera already belongs to the desired presentation; the caller has
+   * matched the attachment address. A stale or superseded camera is ignored.
+   */
+  settled(selectionRevision: number, viewport: CanvasSurfaceViewportState): void {
+    const binding = this.#binding;
+    if (
+      binding?.selectionRevision === selectionRevision &&
+      binding.viewportKey === this.#desired?.key &&
+      this.#owns(binding)
+    )
+      this.options.viewport(viewport);
   }
 
   /** Keep a forwarded operation awaiting native acknowledgement; withdraw unsent intent locally. */

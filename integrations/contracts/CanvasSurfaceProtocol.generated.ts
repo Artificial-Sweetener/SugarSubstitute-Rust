@@ -226,6 +226,23 @@ export type CanvasSurfaceViewportState = {
   readonly secondaryDimensions?: CanvasSurfaceImageDimensions;
   readonly center?: CanvasSurfaceViewportCenter;
 };
+/** Describe the schema-defined CanvasSurfaceCameraChange wire value. */
+export type CanvasSurfaceCameraChange = {
+  readonly address: CanvasSurfaceAddress;
+  readonly sequence: number;
+  readonly selectionRevision: number;
+  readonly viewport: CanvasSurfaceViewportState;
+};
+/** Describe the schema-defined CanvasSurfaceCameraChanged wire value. */
+export type CanvasSurfaceCameraChanged = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: 0;
+  readonly type: 'surface.camera.changed';
+  readonly schema: 1;
+  readonly change: CanvasSurfaceCameraChange;
+};
 /** Describe the schema-defined CanvasSurfaceViewportRequest wire value. */
 export type CanvasSurfaceViewportRequest = {
   readonly protocol: 'sugarcubes.canvas';
@@ -386,4 +403,5 @@ export type CanvasSurfaceMessage =
   | CanvasSurfaceReleaseRequest
   | CanvasSurfaceReply
   | CanvasSurfaceViewportRequest
-  | CanvasSurfaceViewportReply;
+  | CanvasSurfaceViewportReply
+  | CanvasSurfaceCameraChanged;

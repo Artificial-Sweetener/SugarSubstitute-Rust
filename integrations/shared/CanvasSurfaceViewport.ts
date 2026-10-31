@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Gate optional camera requests and retain only immutable native observations. */
 import type {
+  CanvasSurfaceCameraChange,
   CanvasSurfaceCapabilities,
   CanvasSurfaceCommand,
   CanvasSurfaceInspection,
@@ -80,5 +81,16 @@ export function snapshotCanvasSurfaceViewport(
       ? { secondaryDimensions: Object.freeze({ ...secondaryDimensions }) }
       : {}),
     ...(center ? { center: Object.freeze({ ...center }) } : {}),
+  });
+}
+
+/** Retain one settled host-routed camera, including its nested viewport, as a frozen value. */
+export function snapshotCanvasSurfaceCameraChange(
+  change: CanvasSurfaceCameraChange,
+): CanvasSurfaceCameraChange {
+  return Object.freeze({
+    ...change,
+    address: Object.freeze({ ...change.address }),
+    viewport: snapshotCanvasSurfaceViewport(change.viewport),
   });
 }

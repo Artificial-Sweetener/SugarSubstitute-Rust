@@ -172,6 +172,54 @@ export function isCanvasSurfaceViewportState(
     (!Object.hasOwn(value, 'center') || isCanvasSurfaceViewportCenter(value['center']))
   );
 }
+/** Validate a bounded CanvasSurfaceCameraChange payload before dispatch. */
+export function isCanvasSurfaceCameraChange(
+  value: unknown,
+): value is Contract.CanvasSurfaceCameraChange {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 4 &&
+    Object.hasOwn(value, 'address') &&
+    isCanvasSurfaceAddress(value['address']) &&
+    Object.hasOwn(value, 'sequence') &&
+    typeof value['sequence'] === 'number' &&
+    Number.isSafeInteger(value['sequence']) &&
+    value['sequence'] >= 1 &&
+    value['sequence'] <= 9007199254740991 &&
+    Object.hasOwn(value, 'selectionRevision') &&
+    typeof value['selectionRevision'] === 'number' &&
+    Number.isSafeInteger(value['selectionRevision']) &&
+    value['selectionRevision'] >= 1 &&
+    value['selectionRevision'] <= 9007199254740991 &&
+    Object.hasOwn(value, 'viewport') &&
+    isCanvasSurfaceViewportState(value['viewport'])
+  );
+}
+/** Validate a bounded CanvasSurfaceCameraChanged payload before dispatch. */
+export function isCanvasSurfaceCameraChanged(
+  value: unknown,
+): value is Contract.CanvasSurfaceCameraChanged {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 7 &&
+    Object.hasOwn(value, 'protocol') &&
+    value['protocol'] === 'sugarcubes.canvas' &&
+    Object.hasOwn(value, 'version') &&
+    value['version'] === 3 &&
+    Object.hasOwn(value, 'session') &&
+    typeof value['session'] === 'string' &&
+    value['session'].length <= 80 &&
+    new RegExp('^[a-zA-Z0-9-]{16,80}$').test(value['session']) &&
+    Object.hasOwn(value, 'requestId') &&
+    value['requestId'] === 0 &&
+    Object.hasOwn(value, 'type') &&
+    value['type'] === 'surface.camera.changed' &&
+    Object.hasOwn(value, 'schema') &&
+    value['schema'] === 1 &&
+    Object.hasOwn(value, 'change') &&
+    isCanvasSurfaceCameraChange(value['change'])
+  );
+}
 /** Validate a bounded CanvasSurfaceViewportRequest payload before dispatch. */
 export function isCanvasSurfaceViewportRequest(
   value: unknown,

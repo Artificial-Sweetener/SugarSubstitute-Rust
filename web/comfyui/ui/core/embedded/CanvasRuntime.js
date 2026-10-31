@@ -57,6 +57,12 @@ function isCanvasSurfaceInspection(value) {
 function isCanvasSurfaceViewportState(value) {
   return isRecord(value) && Object.keys(value).length === 3 + (Object.hasOwn(value, "secondaryDimensions") ? 1 : 0) + (Object.hasOwn(value, "center") ? 1 : 0) && Object.hasOwn(value, "mode") && (value["mode"] === "fit" || value["mode"] === "native" || value["mode"] === "custom") && Object.hasOwn(value, "physicalScale") && typeof value["physicalScale"] === "number" && Number.isFinite(value["physicalScale"]) && value["physicalScale"] >= 1e-9 && value["physicalScale"] <= 16384 && Object.hasOwn(value, "dimensions") && isCanvasSurfaceImageDimensions(value["dimensions"]) && (!Object.hasOwn(value, "secondaryDimensions") || isCanvasSurfaceImageDimensions(value["secondaryDimensions"])) && (!Object.hasOwn(value, "center") || isCanvasSurfaceViewportCenter(value["center"]));
 }
+function isCanvasSurfaceCameraChange(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "sequence") && typeof value["sequence"] === "number" && Number.isSafeInteger(value["sequence"]) && value["sequence"] >= 1 && value["sequence"] <= 9007199254740991 && Object.hasOwn(value, "selectionRevision") && typeof value["selectionRevision"] === "number" && Number.isSafeInteger(value["selectionRevision"]) && value["selectionRevision"] >= 1 && value["selectionRevision"] <= 9007199254740991 && Object.hasOwn(value, "viewport") && isCanvasSurfaceViewportState(value["viewport"]);
+}
+function isCanvasSurfaceCameraChanged(value) {
+  return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && value["requestId"] === 0 && Object.hasOwn(value, "type") && value["type"] === "surface.camera.changed" && Object.hasOwn(value, "schema") && value["schema"] === 1 && Object.hasOwn(value, "change") && isCanvasSurfaceCameraChange(value["change"]);
+}
 function isCanvasSurfaceViewportRequest(value) {
   return isRecord(value) && Object.keys(value).length === 8 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.viewport.request" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "command") && isCanvasSurfaceViewportCommand(value["command"]);
 }
@@ -175,7 +181,7 @@ function isCanvasSurfaceReply(value) {
   );
 }
 function isCanvasSurfaceMessage(value) {
-  return isCanvasSurfacePreviewBeginRequest(value) || isCanvasSurfacePreviewChunkRequest(value) || isCanvasSurfacePreviewEndRequest(value) || isCanvasSurfacePreviewWithdrawRequest(value) || isCanvasSurfacePresentationRequest(value) || isCanvasSurfacePresentationReply(value) || isCanvasSurfacePresentationChanged(value) || isCanvasSurfaceCapabilitiesRequest(value) || isCanvasSurfaceCapabilitiesReply(value) || isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceOverviewRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value) || isCanvasSurfaceViewportRequest(value) || isCanvasSurfaceViewportReply(value);
+  return isCanvasSurfacePreviewBeginRequest(value) || isCanvasSurfacePreviewChunkRequest(value) || isCanvasSurfacePreviewEndRequest(value) || isCanvasSurfacePreviewWithdrawRequest(value) || isCanvasSurfacePresentationRequest(value) || isCanvasSurfacePresentationReply(value) || isCanvasSurfacePresentationChanged(value) || isCanvasSurfaceCapabilitiesRequest(value) || isCanvasSurfaceCapabilitiesReply(value) || isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceOverviewRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value) || isCanvasSurfaceViewportRequest(value) || isCanvasSurfaceViewportReply(value) || isCanvasSurfaceCameraChanged(value);
 }
 
 // integrations/shared/CanvasValidation.generated.ts
@@ -495,6 +501,13 @@ function snapshotCanvasSurfaceViewport(viewport) {
     ...center ? { center: Object.freeze({ ...center }) } : {}
   });
 }
+function snapshotCanvasSurfaceCameraChange(change) {
+  return Object.freeze({
+    ...change,
+    address: Object.freeze({ ...change.address }),
+    viewport: snapshotCanvasSurfaceViewport(change.viewport)
+  });
+}
 
 // integrations/shared/CanvasByteEncoding.ts
 var ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -732,6 +745,7 @@ async function discoverCanvasSurface(port) {
     const host = Object.freeze({
       capabilities: snapshotCanvasSurfaceCapabilities(reply.capabilities),
       ...port.presentation && reply.capabilities.previewFormats.length ? { presentation: port.presentation } : {},
+      ...port.camera && negotiatesCanvasSurfaceInspection(reply.capabilities) ? { camera: port.camera } : {},
       execute: (command, cancellation) => command.type === "surface.release" || command.type === "surface.preview.withdraw" || port.current() && port.owns(host) ? supportsCanvasSurfaceViewport(host.capabilities, command) && supportsCanvasSurfaceComparison(host.capabilities, command) && supportsCanvasSurfaceOverview(host.capabilities, command) && supportsCanvasSurfaceOcclusion(host.capabilities, command) && supportsCanvasSurfacePreview(host.capabilities, command) && (!isCanvasPreviewCommand(command) || command.type === "surface.preview.withdraw" || port.observesPresentation?.()) ? port.execute(command, cancellation) : Promise.resolve({
         status: "unavailable",
         message: "Canvas surface operation is unavailable."
@@ -777,6 +791,7 @@ var CanvasClient = class {
   #pending = /* @__PURE__ */ new Map();
   #sourceListeners = /* @__PURE__ */ new Set();
   #presentationListeners = /* @__PURE__ */ new Set();
+  #cameraListeners = /* @__PURE__ */ new Set();
   #presentation = null;
   #presentationSequence = 0;
   #next = 0;
@@ -834,6 +849,14 @@ var CanvasClient = class {
           current: () => !this.#disposed && revision === this.#contextRevision,
           owns: (host) => this.#surface === host,
           presentation,
+          camera: {
+            listen: (listener) => {
+              this.#cameraListeners.add(listener);
+              return () => {
+                this.#cameraListeners.delete(listener);
+              };
+            }
+          },
           observesPresentation: () => presentation.observing,
           execute: (command, cancellation) => requestCanvasSurface(
             command,
@@ -881,6 +904,14 @@ var CanvasClient = class {
       for (const listener of [...this.#presentationListeners])
         if (this.#presentationListeners.has(listener)) listener(change);
       return this.#presentationListeners.size > 0;
+    }
+    if (value.type === "surface.camera.changed") {
+      if (value.change.sequence <= this.#presentationSequence) return false;
+      this.#presentationSequence = value.change.sequence;
+      const change = snapshotCanvasSurfaceCameraChange(value.change);
+      for (const listener of [...this.#cameraListeners])
+        if (this.#cameraListeners.has(listener)) listener(change);
+      return this.#cameraListeners.size > 0;
     }
     const pending = this.#pending.get(value.requestId);
     const viewportFailure = pending?.type === "surface.viewport.reply" && value.type === "surface.reply" && value.status !== "applied" && value.status !== "ready";
