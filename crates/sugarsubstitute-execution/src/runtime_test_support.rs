@@ -220,6 +220,19 @@ impl Gate {
     }
 }
 
+/// Keep one CPU lane inside its step until the test opens the barrier.
+pub(crate) struct Held {
+    pub(crate) entered: Arc<Gate>,
+    pub(crate) release: Arc<Gate>,
+}
+impl CpuTask<(), String> for Held {
+    fn step(&mut self, _: &JobContext) -> Result<CpuStep<()>, String> {
+        self.entered.open();
+        self.release.wait().map_err(|cause| cause.to_string())?;
+        Ok(CpuStep::Complete(()))
+    }
+}
+
 pub(crate) struct Rig {
     pub(crate) owner: ExecutionOwner,
     pub(crate) client: crate::runtime::ExecutionClient,

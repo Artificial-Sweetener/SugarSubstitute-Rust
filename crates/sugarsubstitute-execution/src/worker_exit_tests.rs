@@ -6,15 +6,15 @@
 use super::*;
 use crate::{
     runtime::ExecutionOwner,
-    runtime_test_support::{ClockPort, Gate, ManualClock, TestResult, Wake, spec},
+    runtime_test_support::{ClockPort, Gate, Held, ManualClock, TestResult, Wake, spec},
 };
 use std::{
     sync::{Condvar, OnceLock, Weak},
     time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
-    CompletionWake, CpuStep, CpuTask, ExecutionError, ExecutionId, ExecutionPort, JobClass,
-    JobContext, JobOutcome, Moment, ScopeId, ScopeSpec,
+    CompletionWake, ExecutionError, ExecutionId, ExecutionPort, JobClass, JobOutcome, Moment,
+    ScopeId, ScopeSpec,
 };
 
 /// Record the census each wake can observe, proving the wake follows the published status.
@@ -53,19 +53,6 @@ impl CompletionWake for StatusWake {
 
 const FINISHED: WorkerStatus =
     WorkerStatus { native_finished: true, async_finished: true, cpu_finished: true };
-
-/// Keep one CPU lane inside its loop until the test opens the barrier.
-struct Held {
-    entered: Arc<Gate>,
-    release: Arc<Gate>,
-}
-impl CpuTask<(), String> for Held {
-    fn step(&mut self, _: &JobContext) -> Result<CpuStep<()>, String> {
-        self.entered.open();
-        self.release.wait().map_err(|cause| cause.to_string())?;
-        Ok(CpuStep::Complete(()))
-    }
-}
 
 #[test]
 fn only_the_last_return_wakes_and_its_status_is_already_visible() -> TestResult {

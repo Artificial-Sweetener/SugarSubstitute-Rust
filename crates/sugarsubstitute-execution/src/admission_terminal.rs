@@ -79,10 +79,17 @@ impl Core {
         self.changed();
     }
 
+    /// Remove an observed record, or defer removal while cancellation or native custody remains.
+    ///
+    /// Retiring a record its owner never took (an abandoned result or a deferred acknowledgement)
+    /// changes the scope snapshot without a terminal notice, so it selects the coalesced
+    /// completion wake under the same lock that makes the change observable.
     pub(crate) fn acknowledge(&self, id: JobId) {
         let (removed, wake) = {
             let mut state = lock(&self.state);
             self.mailbox.remove(id);
+            let unobserved =
+                state.jobs.get(&id).is_some_and(|record| record.retiring || record.acknowledged);
             let deferred = state
                 .jobs
                 .get(&id)
@@ -92,10 +99,11 @@ impl Core {
                 state.jobs.get(&id).is_some_and(|record| record.process_capture.is_some());
             #[cfg(not(any(windows, test)))]
             let process_retained = false;
+            let retained_success = process_retained && !deferred;
             let removed = if deferred || process_retained {
                 if let Some(record) = state.jobs.get_mut(&id) {
                     record.acknowledged = true;
-                    if process_retained && !deferred {
+                    if retained_success {
                         // Actual result disposal/transfer has acknowledged the original
                         // historical Success. No terminal notification is republished.
                         record.phase = JobPhase::Terminal(TerminalKind::Success);
@@ -106,8 +114,10 @@ impl Core {
             } else {
                 state.jobs.remove(&id)
             };
+            let retired = unobserved && (removed.is_some() || retained_success);
             Self::retire_scopes(&mut state);
-            let wake = self.capacity_ready(&mut state);
+            let wake = self.capacity_ready(&mut state)
+                || (retired && !state.stopping && self.select_capacity_wake(&mut state));
             (removed, wake)
         };
         drop(removed);
@@ -115,3 +125,7 @@ impl Core {
         self.changed();
     }
 }
+
+#[cfg(test)]
+#[path = "admission_terminal_tests.rs"]
+mod tests;
