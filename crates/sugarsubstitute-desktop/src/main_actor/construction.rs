@@ -135,13 +135,19 @@ impl MainActor {
                     .with_additional_browser_args("")
                     .without_download_handlers()
                     .with_bounds(self.browser_bounds()?);
+                // A windowed rebuild reuses the environment the parent already authorized.
+                #[cfg(feature = "native-composition")]
+                let builder = match self.reused_environment.take() {
+                    Some(environment) => builder.with_environment(environment),
+                    None => builder,
+                };
                 let wake = move || {
                     if let Err(cause) = captured.send_event(NativeAction::Main) {
                         tracing::error!(operation="wake_main_construction", cause=%cause,
                                 "Native construction wake failed");
                     }
                 };
-                let begun = match self.hosting() {
+                let begun = match self.construction_hosting()? {
                     crate::MainHosting::Composition => {
                         builder.begin_owned_as_composition_child(self.window()?.as_ref(), wake)
                     }
@@ -219,26 +225,32 @@ impl MainActor {
                                 return Err(DesktopError::new("create_main_controller", cause));
                             }
                         }
-                        self.resize()?;
-                        let core = self.view()?.webview();
-                        let mut pid = 0;
-                        // SAFETY: This UI thread owns the live controller; output is adopted as data.
-                        unsafe { core.BrowserProcessId(&mut pid) }
-                            .map_err(|cause| DesktopError::new("observe_main_browser", cause))?;
-                        self.admission.controller_observed(pid)?;
-                        self.stage = ConstructionStage::PausedEnvironment;
-                        return Ok(Some(DesktopStartupObservation::ControllerPrepared {
-                            identity: self.identity(),
-                            browser_process_id: pid,
-                        }));
+                        #[cfg(feature = "native-composition")]
+                        if self.hosting == super::hosting::HostingSelection::Binding {
+                            self.stage = ConstructionStage::Bind;
+                            return Ok(None);
+                        }
+                        return self.observe_controller();
                     }
                     ConstructionProgress::Pending | ConstructionProgress::Advanced => {}
                 }
             }
+            #[cfg(feature = "native-composition")]
+            ConstructionStage::Bind => match self.bind_browser()? {
+                super::composition::BindStep::Pending => {}
+                super::composition::BindStep::Bound => return self.observe_controller(),
+                super::composition::BindStep::Rebuild => self.stage = ConstructionStage::Rebuild,
+            },
+            #[cfg(feature = "native-composition")]
+            ConstructionStage::Rebuild => {
+                if self.retire_composition_browser()? {
+                    self.stage = ConstructionStage::Begin;
+                }
+            }
             ConstructionStage::Browser => {
                 #[cfg(feature = "native-composition")]
-                if self.hosting().presents_native_canvas() && !self.prepare_composition()? {
-                    return Ok(None);
+                if self.hosting().presents_native_canvas() {
+                    self.attach_composition_input()?;
                 }
                 if self.receivers.is_none() {
                     self.receivers = Some(crate::windows_main_receivers::Receivers::new(
@@ -265,6 +277,34 @@ impl MainActor {
         Ok(None)
     }
 
+    /// Report the constructed browser's process exactly once, after its hosting is fixed.
+    fn observe_controller(&mut self) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+        self.resize()?;
+        let core = self.view()?.webview();
+        let mut pid = 0;
+        // SAFETY: This UI thread owns the live controller; output is adopted as data.
+        unsafe { core.BrowserProcessId(&mut pid) }
+            .map_err(|cause| DesktopError::new("observe_main_browser", cause))?;
+        self.admission.controller_observed(pid)?;
+        self.stage = ConstructionStage::PausedEnvironment;
+        Ok(Some(DesktopStartupObservation::ControllerPrepared {
+            identity: self.identity(),
+            browser_process_id: pid,
+        }))
+    }
+    /// Return the hosting the next browser construction uses.
+    fn construction_hosting(&self) -> Result<crate::MainHosting, DesktopError> {
+        #[cfg(feature = "native-composition")]
+        {
+            self.hosting.construction().ok_or_else(|| {
+                DesktopError::message("begin_main_construction", "browser hosting is undecided")
+            })
+        }
+        #[cfg(not(feature = "native-composition"))]
+        {
+            Ok(crate::MainHosting::Windowed)
+        }
+    }
     pub(super) fn browser_bounds(&self) -> Result<wry::Rect, DesktopError> {
         let window = self.window()?;
         let size = window.inner_size().to_logical::<f64>(window.scale_factor());

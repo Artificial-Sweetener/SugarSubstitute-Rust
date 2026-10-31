@@ -127,6 +127,10 @@ impl MainActor {
         }
         self.events = None;
         self.readiness = None;
+        #[cfg(feature = "native-composition")]
+        {
+            self.reused_environment = None;
+        }
         self.native_storage = None;
         self.request = None;
         self.retired = true;
@@ -149,6 +153,8 @@ impl Drop for MainActor {
             std::mem::forget(self.view.take());
             #[cfg(feature = "native-composition")]
             std::mem::forget(self.composition.take());
+            #[cfg(feature = "native-composition")]
+            std::mem::forget(self.reused_environment.take());
             std::mem::forget(self.panel_bridge.take());
             std::mem::forget(self.receivers.take());
             std::mem::forget(self.events.take());

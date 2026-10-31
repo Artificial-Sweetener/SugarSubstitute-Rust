@@ -45,6 +45,12 @@ enum ConstructionStage {
     Hosting,
     Begin,
     Native,
+    /// Bind the composition-hosted browser before its controller is observed.
+    #[cfg(feature = "native-composition")]
+    Bind,
+    /// Retire an unbound composition browser before rebuilding it windowed.
+    #[cfg(feature = "native-composition")]
+    Rebuild,
     PausedEnvironment,
     Browser,
     Live,
@@ -70,7 +76,11 @@ pub(crate) struct MainActor {
     #[cfg(feature = "native-composition")]
     hosting: hosting::HostingSelection,
     #[cfg(feature = "native-composition")]
-    composition_device: composition::DeviceSource,
+    composition_source: composition::CompositionSource,
+    /// The authorized environment retained across a windowed rebuild.
+    #[cfg(feature = "native-composition")]
+    reused_environment:
+        Option<webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Environment>,
     panel_bridge: Option<panel::bridge::Bridge>,
     canvas_replies: panel::Replies,
     panel_transport: panel::admission::Admission,
@@ -136,7 +146,9 @@ impl MainActor {
             #[cfg(feature = "native-composition")]
             hosting: hosting::HostingSelection::new(),
             #[cfg(feature = "native-composition")]
-            composition_device: composition::DeviceSource::System,
+            composition_source: composition::CompositionSource::System,
+            #[cfg(feature = "native-composition")]
+            reused_environment: None,
             panel_bridge: None,
             canvas_replies: panel::Replies::new(),
             panel_transport,

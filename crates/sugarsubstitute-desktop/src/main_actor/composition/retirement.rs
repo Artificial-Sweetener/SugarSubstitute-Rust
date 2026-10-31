@@ -34,7 +34,7 @@ impl FencedCommit {
 
 impl Composition {
     /// Reap only completed displaced surfaces, then offer one retained native wait.
-    fn next_wait(
+    pub(super) fn next_wait(
         &mut self,
     ) -> Result<Option<&mut Option<crate::canvas::CompositionWait>>, DesktopError> {
         if let Some(canvas) = &mut self.canvas {

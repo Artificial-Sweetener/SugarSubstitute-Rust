@@ -78,7 +78,8 @@ fn qualify_device_failure() -> TestResult {
     let released = Arc::new(AtomicU64::new(0));
     let lease = MemoryLease::new(65536, Box::new(Released(released.clone())));
     let claim = lease.claim(65536)?;
-    let mut composition = Composition::new(window.clone(), claim, DeviceSource::Failing(E_FAIL));
+    let mut composition =
+        Composition::new(window.clone(), claim, CompositionSource::FailingDevice(E_FAIL));
     let failure = composition.advance().err().ok_or("injected device failure was ignored")?;
     assert!(failure.to_string().contains("create_composition_device"), "{failure}");
     assert!(!composition.surface_ready());
@@ -86,6 +87,65 @@ fn qualify_device_failure() -> TestResult {
     assert!(composition.retire_step()?, "a failed device has no tree to detach");
     assert!(composition.window.is_none() && composition.claim.is_none());
     drop(composition);
+    drop(lease);
+    assert_eq!(released.load(Ordering::SeqCst), 65536);
+    assert_eq!(Rc::strong_count(&window), 1, "the parent window is returned to its owner");
+    Ok(())
+}
+
+#[test]
+fn injected_browser_bind_failure_retires_the_bound_surface_through_its_fence() -> TestResult {
+    crate::windows_test_desktop::run(
+        concat!(
+            module_path!(),
+            "::injected_browser_bind_failure_retires_the_bound_surface_through_its_fence"
+        ),
+        qualify_browser_bind_failure,
+    )
+}
+
+/// A browser that cannot bind leaves a committed tree whose detachment must reach the compositor.
+fn qualify_browser_bind_failure() -> TestResult {
+    let _apartment = crate::windows_ui_apartment::UiApartment::enter()?;
+    let mut builder = EventLoopBuilder::<()>::with_user_event();
+    let events = builder.with_any_thread(true).build();
+    let window = Rc::new(WindowBuilder::new().with_visible(false).build(&events)?);
+    let released = Arc::new(AtomicU64::new(0));
+    let lease = MemoryLease::new(65536, Box::new(Released(released.clone())));
+    let claim = lease.claim(65536)?;
+    let mut composition =
+        Composition::new(window.clone(), claim, CompositionSource::FailingBrowserBind(E_FAIL));
+    for _ in 0..8 {
+        if composition.surface_ready() {
+            break;
+        }
+        composition.advance()?;
+    }
+    assert!(composition.surface_ready(), "the system compositor created the surface");
+    let failure = composition.advance().err().ok_or("injected bind failure was ignored")?;
+    assert!(failure.to_string().contains("query_composition_controller"), "{failure}");
+    assert!(composition.composition.is_none(), "no browser was bound");
+    let ((), mut execution) =
+        crate::canvas::test_harness::run_blocking(4096, |_| Ok::<_, std::io::Error>(()))
+            .map_err(|cause| cause as Box<dyn std::error::Error>)?;
+    let mut retired = false;
+    for _ in 0..16 {
+        if composition.retire_step()? {
+            retired = true;
+            break;
+        }
+        if let Some(wait) = composition.next_wait()?
+            && wait.is_some()
+        {
+            execution
+                .wait_composition(wait)
+                .map_err(|cause| cause as Box<dyn std::error::Error>)?;
+        }
+    }
+    assert!(retired, "the detached tree retired after its compositor fence");
+    assert!(composition.device.is_none() && composition.target.is_none());
+    drop(composition);
+    execution.finish().map_err(|cause| cause as Box<dyn std::error::Error>)?;
     drop(lease);
     assert_eq!(released.load(Ordering::SeqCst), 65536);
     assert_eq!(Rc::strong_count(&window), 1, "the parent window is returned to its owner");

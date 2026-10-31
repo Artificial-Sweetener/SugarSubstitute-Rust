@@ -12,6 +12,7 @@ mod retirement;
 mod routing;
 
 use super::*;
+pub(super) use construction::BindStep;
 use retirement::FencedCommit;
 use std::ffi::c_void;
 use sugarsubstitute_contracts::execution::MemoryClaim;
@@ -58,26 +59,41 @@ enum Retire {
     Release,
 }
 
-/// Produce the DirectComposition device; tests substitute a deterministic native failure.
+/// Produce native composition effects; tests substitute deterministic native failures.
 #[derive(Clone, Copy, Debug)]
-pub(super) enum DeviceSource {
-    /// The system compositor, which fails under unsupported sessions or drivers.
+pub(super) enum CompositionSource {
+    /// The system compositor and the actual browser controller.
     System,
-    /// A native creation failure with this status and no transferred device.
+    /// Device creation fails with this status and transfers no device.
     #[cfg(test)]
-    Failing(HRESULT),
+    FailingDevice(HRESULT),
+    /// The surface is created by the system compositor, then the browser cannot be bound to it.
+    #[cfg(test)]
+    FailingBrowserBind(HRESULT),
 }
 
-impl DeviceSource {
+impl CompositionSource {
     /// Request one device, writing any transferred reference into `raw` before reporting status.
-    fn create(self, raw: &mut *mut c_void) -> HRESULT {
+    fn create_device(self, raw: &mut *mut c_void) -> HRESULT {
         match self {
+            #[cfg(test)]
+            Self::FailingDevice(status) => status,
             // SAFETY: The requested IID and writable output match the adopted interface.
-            Self::System => unsafe {
+            _ => unsafe {
                 DCompositionCreateDevice2(std::ptr::null_mut(), &IDCompositionDevice::IID, raw)
             },
+        }
+    }
+
+    /// Report an injected browser binding failure before any controller is queried.
+    fn browser_bind_failure(self) -> Result<(), DesktopError> {
+        match self {
             #[cfg(test)]
-            Self::Failing(status) => status,
+            Self::FailingBrowserBind(status) => Err(DesktopError::new(
+                "query_composition_controller",
+                windows::core::Error::from(status),
+            )),
+            _ => Ok(()),
         }
     }
 }
@@ -132,7 +148,7 @@ impl Ledger {
 
 /// This owner's original HWND, controller, COM outputs and memory claim remain UI-affine.
 pub(super) struct Composition {
-    source: DeviceSource,
+    source: CompositionSource,
     window: Option<Rc<Window>>,
     controller: Option<ICoreWebView2Controller>,
     composition: Option<ICoreWebView2CompositionController>,
@@ -152,7 +168,7 @@ pub(super) struct Composition {
 impl Composition {
     /// Retain the parent and claim before any native composition effect.
     /// The browser controller is attached only after the composition surface exists.
-    fn new(window: Rc<Window>, claim: MemoryClaim, source: DeviceSource) -> Self {
+    fn new(window: Rc<Window>, claim: MemoryClaim, source: CompositionSource) -> Self {
         Self {
             source,
             window: Some(window),
@@ -177,7 +193,7 @@ impl Composition {
         match self.stage {
             Stage::Device => {
                 let mut raw = std::ptr::null_mut();
-                let status = self.source.create(&mut raw);
+                let status = self.source.create_device(&mut raw);
                 // SAFETY: The call requested IDCompositionDevice, including on partial failure.
                 unsafe { adopt(&mut self.device, raw, status, "create_composition_device")? };
                 self.stage = Stage::Target;
@@ -228,6 +244,7 @@ impl Composition {
                 self.stage = Stage::Controller;
             }
             Stage::Controller => {
+                self.source.browser_bind_failure()?;
                 let controller =
                     self.controller.as_ref().ok_or_else(|| missing("browser_controller"))?;
                 let mut raw = std::ptr::null_mut();
