@@ -102,6 +102,9 @@ fn native_route_preserves_correlation_redacts_copies_and_releases_every_director
     let queue = service.queue();
     queue.push("operation=fixture_bootstrap\n".into());
     sink.entered()?;
+    // The bootstrap batch runs under the service's real-clock publication deadline; holding it
+    // while this thread routes the event would put test-thread scheduling inside that deadline.
+    sink.release()?;
     let output = Output::default();
     let writer = output.clone();
     let subscriber = crate::diagnostics::subscriber(
@@ -123,7 +126,6 @@ fn native_route_preserves_correlation_redacts_copies_and_releases_every_director
             "Structured host event"
         );
     });
-    sink.release()?;
     service.finish(&health);
     health.check()?;
     assert!(queue.state().memory.is_none());
