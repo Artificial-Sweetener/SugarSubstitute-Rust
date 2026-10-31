@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Host the composed browser's native pointer: mouse messages, cursor and drag-and-drop.
+//! Host the composed browser's native pointer, keyboard focus, cursor and drag-and-drop.
 //!
 //! Every mouse message is routed against the canvas owner's published input region before
 //! WebView2 receives it; gestures assigned to native navigation wait in the routing queue for
-//! the main loop, so the UI thread never waits on canvas work.
+//! the main loop, so the UI thread never waits on canvas work. Keyboard and IME messages are
+//! never intercepted: they belong to the browser's own focus window.
 
 use super::callbacks::{CallbackFence, retire_when_quiet};
+use super::cancellation::{self, Interruption};
 use super::cursor::{self, Hands, Pointer, Subscription};
 use super::drop_target::DropTarget;
+use super::focus::{self, Focus};
 use super::routing::{Button, ClickRule, Message, Routing};
 use super::*;
 use crate::canvas::{MainCanvasGesture, placement::PhysicalRect};
@@ -28,11 +31,11 @@ use windows::Win32::{
         },
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetMessageTime, SM_CXDOUBLECLK, SM_CYDOUBLECLK, WA_INACTIVE, WM_ACTIVATE,
-            WM_CANCELMODE, WM_CAPTURECHANGED, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
-            WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
-            WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP,
-            WM_SETCURSOR, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
+            GetMessageTime, SM_CXDOUBLECLK, SM_CYDOUBLECLK, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN,
+            WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL,
+            WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
+            WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN,
+            WM_XBUTTONUP,
         },
     },
 };
@@ -111,12 +114,19 @@ struct State {
     pointer: Pointer,
     routing: RefCell<Routing>,
     hands: Hands,
+    focus: Focus,
+    /// Buttons WebView2 last saw held, with the client point of that forwarded message.
+    page: Cell<(u16, POINT)>,
     callbacks: CallbackFence,
 }
 
 impl State {
     /// Deliver in physical client pixels on the original UI apartment, without retaining a borrow.
+    /// A press first moves keyboard focus into a browser that lacks it.
     fn deliver(&self, message: Mouse) -> Result<(), DesktopError> {
+        if focus::requests_focus(message.kind, self.focus.browser_focused()) {
+            self.focus.enter();
+        }
         if message.kind == WM_MOUSEMOVE && self.pointer.enter() {
             let mut tracking = TRACKMOUSEEVENT {
                 cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
@@ -156,7 +166,11 @@ impl State {
                 point,
             )
         }
-        .map_err(|cause| DesktopError::new("send_composed_browser_mouse", cause))
+        .map_err(|cause| DesktopError::new("send_composed_browser_mouse", cause))?;
+        if message.kind != WM_MOUSELEAVE {
+            self.page.set((message.keys & BUTTON_KEYS, point));
+        }
+        Ok(())
     }
 
     /// Route one message in client pixels; returns whether WebView2 also receives it.
@@ -209,11 +223,43 @@ impl State {
         Message::Press { button, point, rule }
     }
 
-    /// End a captured native gesture after capture or activation loss.
-    fn cancel_native(&self) {
-        self.update_routing(Routing::cancel);
-        if let Err(cause) = self.present_cursor() {
-            self.events.fail(cause);
+    /// End gestures interrupted outside their own release. A cancellation also releases every
+    /// button the page saw held, at the last forwarded point, so no page drag stays captured.
+    fn interrupt(&self, interruption: Interruption) -> Result<(), DesktopError> {
+        match interruption {
+            Interruption::CaptureLost => self.update_routing(Routing::cancel),
+            Interruption::Cancelled => {
+                self.update_routing(Routing::interrupt);
+                let (keys, point) = self.page.get();
+                self.page.set((0, point));
+                for release in cancellation::releases(keys) {
+                    // SAFETY: The controller is retained on its creating UI apartment.
+                    unsafe {
+                        self.controller.SendMouseInput(
+                            COREWEBVIEW2_MOUSE_EVENT_KIND(release.kind as i32),
+                            COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS(i32::from(release.keys)),
+                            release.data,
+                            point,
+                        )
+                    }
+                    .map_err(|cause| DesktopError::new("release_composed_browser_mouse", cause))?;
+                }
+            }
+        }
+        self.present_cursor()
+    }
+
+    /// Run one host operation that calls into WebView2 under the callback fence; a failure
+    /// closes this window through the main actor's failure path.
+    fn guarded(&self, operation: impl FnOnce() -> Result<(), DesktopError>) {
+        let _callback = self.events.callback();
+        match self.callbacks.enter(&self.events) {
+            Ok(_scope) => {
+                if let Err(cause) = operation() {
+                    self.events.fail(cause);
+                }
+            }
+            Err(cause) => self.events.fail(cause),
         }
     }
 
@@ -267,6 +313,9 @@ impl Input {
         controller: ICoreWebView2CompositionController,
         events: Rc<Events>,
     ) -> Result<Self, DesktopError> {
+        let browser = controller
+            .cast::<ICoreWebView2Controller>()
+            .map_err(|cause| DesktopError::new("query_composed_browser_controller", cause))?;
         let state = Rc::new(State {
             window,
             controller,
@@ -275,6 +324,8 @@ impl Input {
             pointer: Pointer::default(),
             routing: RefCell::new(Routing::new()?),
             hands: Hands::new(window)?,
+            focus: Focus::new(browser),
+            page: Cell::new((0, POINT::default())),
             callbacks: CallbackFence::default(),
         });
         let callback = Rc::new(state.clone());
@@ -284,10 +335,12 @@ impl Input {
         Ok(Self { state, registration, cursor: Subscription::default(), drop_target: None })
     }
 
-    /// Attach cursor presentation and drag forwarding; a partial attachment remains retirable.
+    /// Attach cursor presentation, focus reporting and drag forwarding; a partial attachment
+    /// remains retirable.
     pub(super) fn attach(&mut self) -> Result<(), DesktopError> {
         let observed = self.state.clone();
         self.cursor.install(&self.state.controller, move || observed.cursor_changed())?;
+        self.state.focus.install()?;
         if self.drop_target.is_none() {
             self.drop_target = Some(DropTarget::register(
                 self.state.window,
@@ -322,7 +375,7 @@ impl Input {
         }
     }
 
-    /// Revoke drag forwarding, remove the cursor subscription, then the subclass.
+    /// Revoke drag forwarding, remove the cursor and focus subscriptions, then the subclass.
     /// Every failure retains its native custody for a later retry.
     pub(super) fn retire(&mut self) -> Result<bool, DesktopError> {
         self.suspend();
@@ -333,6 +386,7 @@ impl Input {
             self.drop_target = None;
         }
         self.cursor.retire(&self.state.controller)?;
+        self.state.focus.retire()?;
         let removed = retire_when_quiet(&self.state.callbacks, || {
             windows_subclass::remove(self.state.window, Some(procedure), &self.registration)
         })?;
@@ -379,32 +433,26 @@ unsafe extern "system" fn procedure(
             return LRESULT(1);
         }
     }
-    // Tao releases its own capture inside a forwarded button-up, after routing ended that
-    // gesture; any other capture or activation loss cancels a native drag.
-    let lost = match message {
-        WM_CAPTURECHANGED => lparam.0 != window.0 as isize,
-        WM_CANCELMODE => true,
-        WM_ACTIVATE => wparam.0 & 0xffff == WA_INACTIVE as usize,
-        _ => false,
-    };
-    if lost && state.admits() {
-        state.cancel_native();
+    if state.admits()
+        && let Some(interruption) = cancellation::interruption(message, wparam, lparam, window)
+    {
+        state.guarded(|| state.interrupt(interruption));
     }
     if state.admits()
         && let Some(message) = mouse(message, wparam, lparam)
     {
-        let _callback = state.events.callback();
-        match state.callbacks.enter(&state.events) {
-            Ok(_input) => {
-                if let Err(cause) = state.deliver(message) {
-                    state.events.fail(cause);
-                }
-            }
-            Err(cause) => state.events.fail(cause),
-        }
+        state.guarded(|| state.deliver(message));
     }
-    // SAFETY: Preserve Tao's own capture, focus, window and native caption processing.
-    unsafe { DefSubclassProc(window, message, wparam, lparam) }
+    // SAFETY: Preserve Tao's own capture, focus, keyboard, IME, window and caption processing.
+    let result = unsafe { DefSubclassProc(window, message, wparam, lparam) };
+    // Activation gives this top-level window focus; pass it on once Tao has observed it.
+    if message == WM_SETFOCUS && state.admits() {
+        state.guarded(|| {
+            state.focus.enter();
+            Ok(())
+        });
+    }
+    result
 }
 
 #[cfg(test)]

@@ -3,10 +3,12 @@
 //! Retain a browser visual tree on the main UI apartment through checked teardown.
 
 mod callbacks;
+mod cancellation;
 mod canvas;
 mod construction;
 mod cursor;
 mod drop_target;
+mod focus;
 mod input;
 mod retirement;
 mod routing;

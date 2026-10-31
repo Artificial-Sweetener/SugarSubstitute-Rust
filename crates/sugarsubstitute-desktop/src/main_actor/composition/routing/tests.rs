@@ -259,3 +259,18 @@ fn moves_coalesce_and_overflow_becomes_one_cancellation() -> TestResult {
     assert_eq!(routing.cursor(), Some(CursorIntent::OpenHand));
     Ok(())
 }
+
+#[test]
+fn interruption_cancels_a_native_drag_and_releases_a_web_gesture_hold() -> TestResult {
+    let mut routing = routing(&[])?;
+    routing.route(press(Button::Primary, [50, 40]));
+    drain(&mut routing);
+    routing.interrupt();
+    assert_eq!(drain(&mut routing), [Cancel]);
+    assert!(routing.route(press(Button::Primary, [5, 5])), "a page press outside the region");
+    routing.interrupt();
+    assert_eq!(drain(&mut routing), [], "no native gesture remained to cancel");
+    assert!(!routing.route(Message::Wheel { point: [50, 40], delta: 120 }), "region is native");
+    assert_eq!(drain(&mut routing), [Pointer([50.0, 40.0]), Wheel(1.0)]);
+    Ok(())
+}

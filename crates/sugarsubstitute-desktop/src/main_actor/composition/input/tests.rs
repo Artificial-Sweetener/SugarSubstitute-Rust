@@ -3,7 +3,11 @@
 //! Exercise native mouse decoding without invoking a browser or changing the desktop.
 
 use super::*;
-use windows::Win32::UI::WindowsAndMessaging::WM_SIZE;
+use windows::Win32::UI::WindowsAndMessaging::{
+    WM_CHAR, WM_DEADCHAR, WM_IME_CHAR, WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_NOTIFY,
+    WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_SETFOCUS,
+    WM_SIZE, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_UNICHAR,
+};
 
 #[test]
 fn mouse_messages_preserve_signed_coordinates_buttons_and_wheel_units() {
@@ -41,4 +45,40 @@ fn mouse_leave_has_no_stale_pointer_data_and_other_messages_are_not_forwarded() 
         Some(Mouse { kind: WM_MOUSELEAVE, keys: 0, data: 0, point: [0, 0], screen: false })
     );
     assert_eq!(mouse(WM_SIZE, WPARAM(0), LPARAM(0)), None);
+}
+
+/// The subclass consumes only client-area `WM_SETCURSOR`; these reach Tao and the browser's own
+/// focus window exactly as Windows sent them, without forwarding, focus moves or cancellation.
+#[test]
+fn keyboard_ime_and_focus_messages_pass_through_untouched() {
+    let window = HWND(0x1234 as *mut core::ffi::c_void);
+    for message in [
+        WM_KEYDOWN,
+        WM_KEYUP,
+        WM_SYSKEYDOWN,
+        WM_SYSKEYUP,
+        WM_CHAR,
+        WM_DEADCHAR,
+        WM_SYSCHAR,
+        WM_UNICHAR,
+        WM_IME_SETCONTEXT,
+        WM_IME_STARTCOMPOSITION,
+        WM_IME_COMPOSITION,
+        WM_IME_ENDCOMPOSITION,
+        WM_IME_NOTIFY,
+        WM_IME_CHAR,
+        WM_SETFOCUS,
+        WM_KILLFOCUS,
+    ] {
+        for (wparam, lparam) in [(0, 0), (0x41, 0x001e_0001), (usize::MAX, -1)] {
+            let (wparam, lparam) = (WPARAM(wparam), LPARAM(lparam));
+            assert_eq!(mouse(message, wparam, lparam), None, "{message:#x}");
+            assert_eq!(
+                cancellation::interruption(message, wparam, lparam, window),
+                None,
+                "{message:#x}"
+            );
+            assert!(!focus::requests_focus(message, false), "{message:#x}");
+        }
+    }
 }

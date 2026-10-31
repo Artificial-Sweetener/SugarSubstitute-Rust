@@ -210,6 +210,13 @@ impl Routing {
         }
     }
 
+    /// End every gesture after the window was deactivated, minimized or told to cancel modes:
+    /// a native gesture is cancelled and a web gesture no longer withholds the native region.
+    pub(super) fn interrupt(&mut self) {
+        self.cancel();
+        self.web = false;
+    }
+
     /// Native cursor that wins over the browser's: closed hand while a native gesture holds
     /// capture, open hand over the region, otherwise none so WebView2's cursor applies.
     pub(super) const fn cursor(&self) -> Option<CursorIntent> {
