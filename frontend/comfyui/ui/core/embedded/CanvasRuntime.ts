@@ -21,6 +21,11 @@ export {
   canvasPngDimensions,
 } from '../../../../../integrations/shared/CanvasImagePolicy.js';
 export { encodeCanvasImage } from '../../../../../integrations/shared/CanvasImageEncoding.js';
+export { encodeCanvasBytes } from '../../../../../integrations/shared/CanvasByteEncoding.js';
+export {
+  CANVAS_PREVIEW_CHUNK_BYTES,
+  CANVAS_PREVIEW_LEASE_MILLISECONDS,
+} from '../../../../../integrations/shared/CanvasSurfacePreview.js';
 export { prepareCanvasImagePatch } from '../../../../../integrations/shared/CanvasImageRegions.js';
 export {
   cropCanvasImageRegion,

@@ -15,6 +15,22 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep per-binding revision and cancellation custody at the presentation adapter boundary. */
 import { CanvasCancellation } from '../../core/embedded/CanvasRuntime.js';
+/** Initialize every revision, acknowledgement and cancellation fact under the binding owner. */
+export function createNativeCanvasBinding(host) {
+    return {
+        host,
+        revision: 0,
+        prepared: false,
+        committed: false,
+        attempted: false,
+        geometry: null,
+        lastGeometry: null,
+        selection: null,
+        selectionRevision: null,
+        viewportKey: null,
+        active: null,
+    };
+}
 /** Allocate once across preparation, presentation, viewport commands and release. */
 function revision(binding) {
     if (binding.revision === Number.MAX_SAFE_INTEGER)
@@ -22,10 +38,14 @@ function revision(binding) {
     return ++binding.revision;
 }
 /** Send through the presentation's single binding without a second queue or deadline owner. */
-export async function sendNativeCanvasOperation(binding, address, operation) {
+export async function sendNativeCanvasOperation(binding, address, operation, assigned) {
     const next = revision(binding);
     const cancellation = new CanvasCancellation();
-    binding.active = { cancellation, dependsOnView: operation.type !== 'surface.prepare' };
+    binding.active = {
+        cancellation,
+        dependsOnView: operation.type !== 'surface.prepare' && !operation.type.startsWith('surface.preview.'),
+        type: operation.type,
+    };
     if (operation.type === 'surface.geometry')
         binding.geometry = null;
     if (operation.type === 'surface.select')
@@ -35,6 +55,7 @@ export async function sendNativeCanvasOperation(binding, address, operation) {
         binding.viewportKey = null;
     binding.attempted = true;
     try {
+        assigned?.(next);
         return await binding.host.execute({ ...operation, address, revision: next }, cancellation);
     }
     finally {

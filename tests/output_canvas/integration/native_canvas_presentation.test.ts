@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise selection handoff with the actual shared surface command contract. */
 
+import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 import {
   connectCanvasSurface,
   selectedPngCapabilities,
@@ -149,6 +150,8 @@ function fixture() {
   const visible: boolean[] = [];
   const errors: unknown[] = [];
   const surface = new NativeCanvasPresentation({
+    clock: new WorkflowTestClock(),
+    preview: () => {},
     acceptsPreparation: () => false,
     prepared: () => {},
     address,

@@ -20,6 +20,10 @@ import type {
   CanvasSurfaceViewportState,
 } from '../../../../../integrations/contracts/CanvasSurface.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
+import type {
+  WorkflowSessionId,
+  OutputSourceId,
+} from '../../execution/domain/ExecutionIdentity.js';
 import { applyCanvasAction } from '../application/CanvasActions.js';
 import type { CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
 import { CanvasSourceNavigation } from '../application/CanvasSourceNavigation.js';
@@ -78,6 +82,7 @@ export class NativeCanvasAttachment {
   #plan: CanvasDisplayPlan;
   #surface: CanvasSurfaceGeometry | null = null;
   #viewport: CanvasSurfaceViewportState | null = null;
+  #preview = false;
   #presentation: NativeCanvasPresentationStatus = { state: 'empty', message: '' };
   #ready = false;
   #disposed = false;
@@ -157,6 +162,7 @@ export class NativeCanvasAttachment {
     });
     this.#native = new NativeCanvasPresentation({
       address: options.address,
+      clock: options.clock,
       acceptsPreparation: () => !this.#disposed && options.acceptsPreparation(),
       prepared: () => this.#readiness.complete(),
       host: options.nativeSurface,
@@ -170,6 +176,10 @@ export class NativeCanvasAttachment {
       },
       viewport: (value) => {
         this.#viewport = value;
+        if (this.#ready) this.#status.changed(true);
+      },
+      preview: (value) => {
+        this.#preview = value;
         if (this.#ready) this.#status.changed(true);
       },
       report: (error) => options.report(error, null),
@@ -237,29 +247,41 @@ export class NativeCanvasAttachment {
     this.#catalog = catalog;
     this.#sources = Object.freeze(catalog.entries.map((entry) => entry.summary));
     this.#plan = this.#projection.project(catalog);
-    this.#native.update(this.#surface, this.#plan.primary?.item ?? null);
+    this.#native.update(this.#surface, this.#plan.primary?.item ?? null, this.#plan.preview);
     this.#status.changed(true);
   }
 
-  /** Refuse preview bytes until the native host exposes preview presentation. */
-  wants(): boolean {
-    return false;
+  /** Admit bytes only for this visible, committed view's authoritative source/run interest. */
+  wants(session: WorkflowSessionId, generation: number, source: OutputSourceId): boolean {
+    return (
+      !this.#disposed &&
+      this.#surface?.visible === true &&
+      this.options.accepts() &&
+      this.#catalog.result.context.sessionId === session &&
+      this.#catalog.generation === generation &&
+      this.options.selection.allowsSourcePreview(
+        this.options.address.viewId,
+        this.#catalog,
+        source,
+      ) &&
+      this.#native.wants()
+    );
   }
 
-  /** Preview delivery is disabled by the admission decision above. */
-  receive(_preview: WorkflowPreview, _blob: Blob): void {}
+  /** Preserve original token/Blob custody while native transfer remains independent of browser decoding. */
+  receive(preview: WorkflowPreview, blob: Blob): void {
+    if (this.wants(preview.sessionId, preview.generation, preview.sourceId))
+      this.#native.receive(preview, blob);
+  }
 
   /** Report zero browser image allocations for this attachment. */
   diagnostics() {
     return {
       displayed: 0,
       pendingDecodes: 0,
-      queuedInputs: 0,
-      previewDrops: 0,
-      estimatedBytes: 0,
       unknownLoads: 0,
-      activeDeadlines: 0,
       renderFrames: 0,
+      ...this.#native.diagnostics(),
     };
   }
 
@@ -299,7 +321,7 @@ export class NativeCanvasAttachment {
   /** Forward qualified geometry without constructing a browser drawing surface. */
   #resize(surface: CanvasSurfaceGeometry): void {
     this.#surface = surface;
-    this.#native.update(surface, this.#plan.primary?.item ?? null);
+    this.#native.update(surface, this.#plan.primary?.item ?? null, this.#plan.preview);
   }
 
   /** Publish selection and actual native readiness to the shared overlay. */
@@ -323,13 +345,18 @@ export class NativeCanvasAttachment {
         state: 'unavailable',
         message: 'Open this media in the host viewer.',
       };
-    } else if (!item && this.#plan.preview) {
+    } else if (!item && this.#plan.preview && !this.#native?.previewAvailable) {
       resource = {
         ...resource,
         state: 'unavailable',
         message: 'Live previews are not available on this surface.',
       };
-    } else if (this.#plan.primary && !item) {
+    } else if (
+      this.#plan.primary &&
+      !item &&
+      resource.state !== 'ready' &&
+      !(this.#plan.preview && this.#native?.previewAvailable)
+    ) {
       resource = {
         ...resource,
         state: 'unavailable',
@@ -345,7 +372,7 @@ export class NativeCanvasAttachment {
       this.#media.profile(),
       {
         comparisonAvailable: false,
-        preview: false,
+        preview: this.#preview,
         resource,
         secondaryResource: null,
         zoom: this.#viewport

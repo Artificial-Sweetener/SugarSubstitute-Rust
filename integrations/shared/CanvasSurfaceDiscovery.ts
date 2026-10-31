@@ -24,6 +24,9 @@ import type {
 import type { CanvasSurfaceCommand, CanvasSurfaceResult } from '../contracts/CanvasSurface.js';
 import { isCanvasSurfaceCapabilities } from './CanvasSurfaceValidation.generated.js';
 import { supportsCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
+import type { CanvasChangeObservation } from '../contracts/CanvasChangeObservation.js';
+import type { CanvasSurfacePresentationChange } from '../contracts/CanvasSurface.js';
+import { isCanvasPreviewCommand, supportsCanvasSurfacePreview } from './CanvasSurfacePreview.js';
 
 /** Represent an explicit refusal without suggesting any executable operation. */
 export const EMPTY_CANVAS_SURFACE_CAPABILITIES: CanvasSurfaceCapabilities = Object.freeze({
@@ -119,6 +122,8 @@ export async function discoverCanvasSurface(port: {
   read(): Promise<CanvasMessage>;
   current(): boolean;
   owns(host: CanvasSurfaceHost): boolean;
+  readonly presentation?: CanvasChangeObservation<CanvasSurfacePresentationChange>;
+  observesPresentation?(): boolean;
   execute(
     command: CanvasSurfaceCommand,
     cancellation?: CanvasCancellationSource,
@@ -139,11 +144,23 @@ export async function discoverCanvasSurface(port: {
     }
     const host: CanvasSurfaceHost = Object.freeze<CanvasSurfaceHost>({
       capabilities: snapshotCanvasSurfaceCapabilities(reply.capabilities),
+      ...(port.presentation && reply.capabilities.previewFormats.length
+        ? { presentation: port.presentation }
+        : {}),
       execute: (command, cancellation) =>
-        command.type === 'surface.release' || (port.current() && port.owns(host))
-          ? supportsCanvasSurfaceViewport(host.capabilities, command)
+        command.type === 'surface.release' ||
+        command.type === 'surface.preview.withdraw' ||
+        (port.current() && port.owns(host))
+          ? supportsCanvasSurfaceViewport(host.capabilities, command) &&
+            supportsCanvasSurfacePreview(host.capabilities, command) &&
+            (!isCanvasPreviewCommand(command) ||
+              command.type === 'surface.preview.withdraw' ||
+              port.observesPresentation?.())
             ? port.execute(command, cancellation)
-            : Promise.resolve({ status: 'unavailable', message: 'Canvas viewport is unavailable.' })
+            : Promise.resolve({
+                status: 'unavailable',
+                message: 'Canvas surface operation is unavailable.',
+              })
           : Promise.resolve({ status: 'unavailable', message: 'The canvas context changed.' }),
     });
     return host;

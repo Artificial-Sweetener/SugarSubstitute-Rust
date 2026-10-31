@@ -16,6 +16,7 @@
 /** Present a selected output through a host-owned surface without inserting an editable layer. */
 
 import type { CanvasCancellationSource } from './CanvasHost.js';
+import type { CanvasChangeObservation } from './CanvasChangeObservation.js';
 import type {
   CanvasSurfaceCapabilities,
   CanvasSurfaceCommitRequest,
@@ -26,12 +27,20 @@ import type {
   CanvasSurfaceSelectRequest,
   CanvasSurfaceViewportRequest,
   CanvasSurfaceViewportReply,
+  CanvasSurfacePreviewBeginRequest,
+  CanvasSurfacePreviewChunkRequest,
+  CanvasSurfacePreviewEndRequest,
+  CanvasSurfacePreviewWithdrawRequest,
+  CanvasSurfacePresentationChange,
 } from './CanvasSurfaceProtocol.generated.js';
 
 export type {
   CanvasSurfaceCapabilities,
   CanvasSurfaceViewportCommand,
   CanvasSurfaceViewportState,
+  CanvasSurfacePreviewIdentity,
+  CanvasSurfacePresentationChange,
+  CanvasSurfacePresentationDisplay,
 } from './CanvasSurfaceProtocol.generated.js';
 
 type Envelope = 'protocol' | 'version' | 'session' | 'requestId';
@@ -43,7 +52,11 @@ export type CanvasSurfaceCommand =
   | Omit<CanvasSurfaceSelectRequest, Envelope>
   | Omit<CanvasSurfaceCommitRequest, Envelope>
   | Omit<CanvasSurfaceReleaseRequest, Envelope>
-  | Omit<CanvasSurfaceViewportRequest, Envelope>;
+  | Omit<CanvasSurfaceViewportRequest, Envelope>
+  | Omit<CanvasSurfacePreviewBeginRequest, Envelope>
+  | Omit<CanvasSurfacePreviewChunkRequest, Envelope>
+  | Omit<CanvasSurfacePreviewEndRequest, Envelope>
+  | Omit<CanvasSurfacePreviewWithdrawRequest, Envelope>;
 
 /** Return an explicit host outcome without exposing native resources or filesystem authority. */
 export type CanvasSurfaceResult =
@@ -54,6 +67,13 @@ export type CanvasSurfaceResult =
 export interface CanvasSurfaceHost {
   /** Describe implemented presentation operations; this declaration grants no native authority. */
   readonly capabilities: CanvasSurfaceCapabilities;
+  /**
+   * Observe lease-correlated native presentation through the existing change subscription.
+   * Preview transfer requires an accepted observation subscription. Its final release fences
+   * callbacks, cancels incomplete preview work and requests restoration of retained final custody.
+   * Older hosts omit this capability. Notifications grant no native authority.
+   */
+  readonly presentation?: CanvasChangeObservation<CanvasSurfacePresentationChange>;
   /**
    * Prepare a hidden candidate, select its output, commit it, update geometry or release it.
    * A successful selection on a committed surface, or a successful commit, acknowledges that
@@ -66,6 +86,16 @@ export interface CanvasSurfaceHost {
    * the current scale around the viewport center; native centers physical 1:1. Pan uses
    * viewport fractions. Successful viewport replies describe the settled camera represented
    * by an accepted native frame. Empty or hidden surfaces return unavailable without a snapshot.
+   * Preview begin/chunk/end acknowledgements transfer bounded byte custody only. Each step
+   * releases its request; preparation and native acceptance arrive through presentation.
+   * The encoded transfer ceiling is 64 MiB, with independent stricter host memory/decoder
+   * admission. A lease expires 30 seconds after begin; chunks and progress never renew it.
+   * A token binds immutable bytes and preview identity to begin's revision, independently
+   * of later camera revisions. Withdrawal revokes that preview episode and restores retained
+   * final custody asynchronously. Canceling an acknowledged request does not replace withdrawal.
+   * Preview-capable hosts can commit a prepared empty surface, acknowledging empty native state.
+   * A first preview needs no selected final. Only accepted preview pixels lock navigation to Fit;
+   * the final remains navigable while preview bytes and pixels are being prepared.
    */
   execute(
     command: CanvasSurfaceCommand,

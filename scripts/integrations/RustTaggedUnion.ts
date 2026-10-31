@@ -107,6 +107,8 @@ export function rustTaggedUnion(
       .map(({ field, valid }) => (valid.length ? field : `${field}: _`))
       .join(', ');
     const validation = checks.length ? checks.join(' && ') : 'true';
+    const body =
+      validation.length + 16 <= 100 ? validation : checks.join('\n                    && ');
     const shape = pattern ? `{ ${pattern} }` : '{}';
     const arm = `            Self::${variant} ${shape} => ${validation},`;
     const members = fields.map(({ field, type }) => `${field}: ${type}`).join(', ');
@@ -116,7 +118,7 @@ export function rustTaggedUnion(
       arm:
         arm.length <= 100
           ? arm
-          : `            Self::${variant} ${shape} => {\n                ${checks.join('\n                    && ')}\n            }`,
+          : `            Self::${variant} ${shape} => {\n                ${body}\n            }`,
     };
   });
   return `/// Schema-defined untrusted ${name} data; validation grants no host authority.

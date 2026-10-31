@@ -41,6 +41,11 @@ export class CanvasRemoteChanges<Change> implements CanvasChangeObservation<Chan
   /** Keep protocol-specific requests and native event envelopes outside this lifetime owner. */
   constructor(private readonly port: CanvasRemoteChangesPort<Change>) {}
 
+  /** Read accepted observation authority without exposing listeners or its negotiation epoch. */
+  get observing(): boolean {
+    return !this.#disposed && this.#accepted;
+  }
+
   /** Register before starting the watch so synchronous native notifications cannot escape the lease. */
   subscribe(listener: (change: Change) => void): CanvasChangeSubscription {
     if (this.#disposed) return { ready: Promise.resolve('unavailable'), stop: () => {} };
@@ -121,7 +126,11 @@ export class CanvasRemoteChanges<Change> implements CanvasChangeObservation<Chan
 
   /** Notify only consumers still mounted in the current observation lifetime. */
   #publish(change: Change): void {
-    for (const listener of this.#listeners) listener(change);
+    const epoch = this.#epoch;
+    for (const listener of [...this.#listeners]) {
+      if (!this.#owns(epoch)) break;
+      if (this.#listeners.has(listener)) listener(change);
+    }
   }
   /** Re-read ownership after consumer callbacks may dispose or replace the observation lifetime. */
   #owns(epoch: number): boolean {

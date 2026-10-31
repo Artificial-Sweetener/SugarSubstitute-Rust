@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise native viewport intent within the existing presentation/revision lifetime. */
+import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 import {
   NativeCanvasPresentation,
   type NativeCanvasPresentationStatus,
@@ -107,6 +108,8 @@ function fixture(
     },
   };
   const presentation = new NativeCanvasPresentation({
+    clock: new WorkflowTestClock(),
+    preview: () => {},
     address: canvasSnapshot('viewport').address,
     host: () => host,
     accepts: () => true,

@@ -21,6 +21,15 @@ import {
   isCanvasSurfaceFileReference,
 } from './CanvasSurfaceGeometryValidation.generated.js';
 import {
+  isCanvasSurfacePreviewBeginRequest,
+  isCanvasSurfacePreviewChunkRequest,
+  isCanvasSurfacePreviewEndRequest,
+  isCanvasSurfacePreviewWithdrawRequest,
+  isCanvasSurfacePresentationRequest,
+  isCanvasSurfacePresentationReply,
+  isCanvasSurfacePresentationChanged,
+} from './CanvasSurfacePreviewValidation.generated.js';
+import {
   isCanvasSurfaceViewportRequest,
   isCanvasSurfaceViewportReply,
 } from './CanvasSurfaceViewportValidation.generated.js';
@@ -358,6 +367,13 @@ export function isCanvasSurfaceReply(value: unknown): value is Contract.CanvasSu
 /** Validate a bounded CanvasSurfaceMessage payload before dispatch. */
 export function isCanvasSurfaceMessage(value: unknown): value is Contract.CanvasSurfaceMessage {
   return (
+    isCanvasSurfacePreviewBeginRequest(value) ||
+    isCanvasSurfacePreviewChunkRequest(value) ||
+    isCanvasSurfacePreviewEndRequest(value) ||
+    isCanvasSurfacePreviewWithdrawRequest(value) ||
+    isCanvasSurfacePresentationRequest(value) ||
+    isCanvasSurfacePresentationReply(value) ||
+    isCanvasSurfacePresentationChanged(value) ||
     isCanvasSurfaceCapabilitiesRequest(value) ||
     isCanvasSurfaceCapabilitiesReply(value) ||
     isCanvasSurfacePrepareRequest(value) ||
@@ -370,6 +386,18 @@ export function isCanvasSurfaceMessage(value: unknown): value is Contract.Canvas
     isCanvasSurfaceViewportReply(value)
   );
 }
+export {
+  isCanvasSurfacePreviewIdentity,
+  isCanvasSurfacePreviewBeginRequest,
+  isCanvasSurfacePreviewChunkRequest,
+  isCanvasSurfacePreviewEndRequest,
+  isCanvasSurfacePreviewWithdrawRequest,
+  isCanvasSurfacePresentationRequest,
+  isCanvasSurfacePresentationReply,
+  isCanvasSurfacePresentationDisplay,
+  isCanvasSurfacePresentationChange,
+  isCanvasSurfacePresentationChanged,
+} from './CanvasSurfacePreviewValidation.generated.js';
 export {
   isCanvasSurfaceAddress,
   isCanvasSurfaceFileReference,

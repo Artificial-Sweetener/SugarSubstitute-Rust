@@ -19,6 +19,7 @@ import type { CanvasMessage } from '../contracts/CanvasProtocol.generated.js';
 import type { CanvasSurfaceCommand, CanvasSurfaceResult } from '../contracts/CanvasSurface.js';
 import type { CanvasSurfaceAddress } from '../contracts/CanvasSurfaceProtocol.generated.js';
 import { snapshotCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
+import { validCanvasPreviewCommand } from './CanvasSurfacePreview.js';
 
 /** Require the exact attachment and revision in the host's correlated surface reply. */
 export async function requestCanvasSurface(
@@ -31,13 +32,17 @@ export async function requestCanvasSurface(
 ): Promise<CanvasSurfaceResult> {
   if (cancellation?.cancelled())
     return { status: 'cancelled', message: 'Canvas surface request cancelled.' };
+  if (!validCanvasPreviewCommand(command))
+    return { status: 'error', message: 'Canvas preview request is invalid.' };
   const address = Object.freeze({ ...command.address });
   const revision = command.revision;
   const type = command.type;
   const admitted =
     command.type === 'surface.viewport.request'
       ? { ...command, address, command: Object.freeze({ ...command.command }) }
-      : { ...command, address };
+      : command.type === 'surface.preview.begin'
+        ? { ...command, address, preview: Object.freeze({ ...command.preview }) }
+        : { ...command, address };
   const reply = await request(admitted, cancellation);
   if (reply.type === 'surface.viewport.reply') {
     if (

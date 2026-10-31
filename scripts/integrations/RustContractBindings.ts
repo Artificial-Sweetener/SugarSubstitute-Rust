@@ -25,6 +25,8 @@ const SURFACE_IDENTITY_TAIL =
   '(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])';
 const SESSION_PATTERN = '^[a-zA-Z0-9-]{16,80}$';
 const COLOR_PATTERN = '^#[a-fA-F0-9]{6}$';
+const BASE64_PATTERN =
+  '^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\\s\\S])';
 const RUST_KEYWORDS = new Set([
   'as',
   'async',
@@ -217,6 +219,28 @@ ${condition.length <= 100 ? condition : `        if !matches!(\n            item
   }
   if (node.type === 'string') {
     keys(node, ['type', 'maxLength', 'pattern', 'x-length-unit']);
+    if (
+      node.pattern === BASE64_PATTERN &&
+      typeof node.maxLength === 'number' &&
+      Number.isSafeInteger(node.maxLength) &&
+      node.maxLength > 0 &&
+      node.maxLength <= 10924 &&
+      node['x-length-unit'] === undefined
+    )
+      return {
+        type: 'String',
+        valid: [`valid_bounded_base64(&${access}, ${node.maxLength})`],
+        helper: `fn valid_bounded_base64(value: &str, maximum: usize) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() > maximum || !bytes.len().is_multiple_of(4) {
+        return false;
+    }
+    let padding = if value.ends_with("==") { 2 } else { usize::from(value.ends_with('=')) };
+    bytes[..bytes.len() - padding]
+        .iter()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/'))
+}`,
+      };
     const identityPrefix = ['canvas:', 'view:', 'window:', 'attachment:', 'result:'].find(
       (prefix) => node.pattern === `^${prefix}${SURFACE_IDENTITY_TAIL}`,
     );

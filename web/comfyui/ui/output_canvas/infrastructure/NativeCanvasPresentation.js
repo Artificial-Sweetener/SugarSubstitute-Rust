@@ -14,7 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Hand an existing view's selected result to a negotiated native surface. */
-import { sendNativeCanvasOperation, releaseNativeCanvasBinding, } from './NativeCanvasBinding.js';
+import { sendNativeCanvasOperation, releaseNativeCanvasBinding, createNativeCanvasBinding, } from './NativeCanvasBinding.js';
+import { NativeCanvasPreview } from './NativeCanvasPreview.js';
+import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
 /** Keep one in-flight operation and coalesce newer view or geometry changes. */
 export class NativeCanvasPresentation {
     options;
@@ -26,34 +28,45 @@ export class NativeCanvasPresentation {
     #visible = false;
     #disposed = false;
     #retirement = null;
+    #preview = null;
+    #viewportRecovery = null;
     /** Bind native presentation to the existing qualified view address. */
     constructor(options) {
         this.options = options;
     }
     /** Reconcile only the selection and geometry already chosen by the view owners. */
-    update(geometry, item) {
+    update(geometry, item, preview = null) {
         if (this.#disposed)
             return;
+        this.#viewportRecovery = null;
         const preparing = this.options.acceptsPreparation();
         const host = this.options.accepts() || preparing ? this.options.host() : null;
         if (host !== (this.#binding?.host ?? null)) {
             void this.#retire();
             if (host) {
-                this.#binding = {
+                this.#binding = createNativeCanvasBinding(host);
+                const binding = this.#binding;
+                this.#preview = new NativeCanvasPreview({
+                    address: this.options.address,
                     host,
-                    revision: 0,
-                    prepared: false,
-                    committed: false,
-                    attempted: false,
-                    geometry: null,
-                    lastGeometry: null,
-                    selection: null,
-                    viewportKey: null,
-                    active: null,
-                };
+                    clock: this.options.clock,
+                    active: () => this.#owns(binding) && this.options.accepts(),
+                    finalRevision: () => binding.selectionRevision,
+                    changed: () => {
+                        this.#dirty = true;
+                        this.#start();
+                    },
+                    cancelOperation: () => {
+                        if (binding.active?.type.startsWith('surface.preview.'))
+                            binding.active.cancellation.cancel();
+                    },
+                    displayed: (value, presentation) => this.#observed(binding, value, presentation),
+                    report: this.options.report,
+                });
             }
             this.#desired = null;
         }
+        const previewChanged = this.#preview?.update(preview) ?? false;
         const eligible = geometry &&
             geometry.viewport.width > 0 &&
             geometry.viewport.height > 0 &&
@@ -67,23 +80,39 @@ export class NativeCanvasPresentation {
             this.options.accepts(),
         ]);
         if (this.#desired?.key === key) {
-            if (this.#desired.geometry?.focused === geometry?.focused)
+            if (this.#desired.geometry?.focused === geometry?.focused) {
+                if (previewChanged) {
+                    this.#dirty = true;
+                    this.#start();
+                }
                 return;
+            }
             this.#desired.geometry = geometry;
             this.#dirty = true;
             this.#start();
             return;
         }
-        this.#desired = { geometry, item: eligible, key, empty: item?.mediaKind !== 'image' };
-        this.options.viewport(null);
-        if (this.#viewport)
+        const retainedFinal = !item &&
+            this.#preview?.observing &&
+            this.#binding?.selectionRevision !== null &&
+            this.#binding?.geometry === JSON.stringify(geometry);
+        this.#desired = {
+            geometry,
+            item: eligible,
+            key,
+            empty: item?.mediaKind !== 'image',
+            previewable: item === null,
+        };
+        if (!retainedFinal)
+            this.options.viewport(null);
+        if (this.#viewport && !retainedFinal)
             this.#cancelViewport(this.#viewport);
         // A previous allocation can no longer be presented after the native window resizes.
         // Cancel its acknowledgement wait so the current geometry can reach the host.
-        if (this.#binding?.active?.dependsOnView)
+        if (this.#binding?.active?.dependsOnView && !retainedFinal)
             this.#binding.active.cancellation.cancel();
         // The native owner retains acknowledged pixels while a same-allocation replacement loads.
-        if (!eligible ||
+        if ((!eligible && !(item === null && this.#preview?.observing)) ||
             !this.#binding?.committed ||
             this.#binding.geometry !== JSON.stringify(geometry))
             this.#show(false);
@@ -95,11 +124,36 @@ export class NativeCanvasPresentation {
         this.#dirty = true;
         this.#start();
     }
+    /** Refuse preview bytes until a committed, observed binding owns the logical interest. */
+    wants() {
+        return this.#preview?.wants() ?? false;
+    }
+    /** Forward immutable encoded bytes without constructing a second renderer or mutation queue. */
+    receive(preview, blob) {
+        this.#preview?.receive(preview, blob);
+    }
+    /** Expose only local encoded custody; native decoded pixels remain host-owned. */
+    diagnostics() {
+        return (this.#preview?.diagnostics() ?? {
+            queuedInputs: 0,
+            previewDrops: 0,
+            estimatedBytes: 0,
+            activeDeadlines: 0,
+        });
+    }
+    /** Report implemented live preview support independently of whether pixels have arrived. */
+    get previewAvailable() {
+        return this.#preview?.observing ?? false;
+    }
     /** Admit one discrete intent into the existing presentation stream, replacing only older intent. */
     viewport(command, scope) {
         const binding = this.#binding;
         if (!binding ||
-            !this.#desired?.item ||
+            this.#preview?.displayed ||
+            (!this.#desired?.item &&
+                !(this.#desired?.previewable &&
+                    this.#preview?.observing &&
+                    binding.selectionRevision !== null)) ||
             !binding.host.capabilities.viewportState ||
             !scope.current() ||
             command.type === 'read' ||
@@ -108,32 +162,17 @@ export class NativeCanvasPresentation {
         const previous = this.#viewport;
         if (previous)
             this.#cancelViewport(previous);
-        return new Promise((resolve) => {
-            let complete = false;
-            const intent = {
-                command,
-                scope,
-                running: false,
-                complete: (applied) => {
-                    if (complete)
-                        return;
-                    complete = true;
-                    scope.signal.removeEventListener('abort', cancel);
-                    if (this.#viewport === intent)
-                        this.#viewport = null;
-                    resolve(applied);
-                },
-            };
-            const cancel = () => this.#cancelViewport(intent);
-            this.#viewport = intent;
-            scope.signal.addEventListener('abort', cancel, { once: true });
-            if (!scope.current()) {
-                intent.complete(false);
-                return;
-            }
+        const intent = new NativeCanvasViewportIntent(command, scope, (cancelled) => this.#cancelViewport(cancelled), (finished) => {
+            if (this.#viewport === finished)
+                this.#viewport = null;
+        });
+        this.#viewport = intent;
+        intent.observe();
+        if (this.#viewport === intent) {
             this.#dirty = true;
             this.#start();
-        });
+        }
+        return intent.result;
     }
     /** Keep a forwarded operation awaiting native acknowledgement; withdraw unsent intent locally. */
     #cancelViewport(intent) {
@@ -160,6 +199,11 @@ export class NativeCanvasPresentation {
                 this.#start();
         });
     }
+    /**
+     * Converge the bound surface on the newest desired state, one native mutation at a time.
+     * Each pass prepares, places, selects and commits in order, then serves viewport intent and
+     * finally one preview transfer step; a change during any await marks the run dirty again.
+     */
     async #run() {
         while (this.#dirty && !this.#disposed) {
             this.#dirty = false;
@@ -168,7 +212,10 @@ export class NativeCanvasPresentation {
             if (!binding || !desired || !this.#owns(binding))
                 return;
             try {
-                if ((desired.item || (this.options.acceptsPreparation() && desired.empty)) &&
+                if ((desired.item ||
+                    (desired.empty &&
+                        (this.options.acceptsPreparation() ||
+                            (desired.previewable && this.#preview?.observing)))) &&
                     desired.geometry &&
                     !binding.prepared) {
                     const result = await this.#send(binding, { type: 'surface.prepare' });
@@ -185,7 +232,7 @@ export class NativeCanvasPresentation {
                 const lastGeometry = desired.geometry ?? binding.lastGeometry;
                 if (!binding.prepared || !lastGeometry)
                     continue;
-                const geometry = desired.item
+                const geometry = desired.item || (desired.previewable && this.#preview?.observing)
                     ? lastGeometry
                     : { ...lastGeometry, visible: false, clip: { x: 0, y: 0, width: 0, height: 0 } };
                 const geometryKey = JSON.stringify(geometry);
@@ -203,17 +250,26 @@ export class NativeCanvasPresentation {
                 if (!this.#current(binding, desired))
                     continue;
                 if (!desired.item) {
-                    if (desired.empty)
-                        this.options.prepared();
-                    continue;
+                    if (!desired.previewable || !this.#preview?.observing) {
+                        if (desired.empty)
+                            this.options.prepared();
+                        continue;
+                    }
                 }
-                const selection = JSON.stringify([desired.item.id, desired.item.file]);
-                if (selection !== binding.selection) {
+                const selection = desired.item
+                    ? JSON.stringify([desired.item.id, desired.item.file])
+                    : null;
+                if (desired.item && selection !== binding.selection) {
+                    const preview = this.#preview;
+                    preview?.selecting();
+                    let selectionRevision = 0;
                     const result = await this.#send(binding, {
                         type: 'surface.select',
                         itemId: desired.item.id,
                         file: desired.item.file,
-                    });
+                    }, (revision) => {
+                        selectionRevision = revision;
+                    }).finally(() => preview?.selectionFinished());
                     if (!this.#owns(binding))
                         return;
                     if (result.status !== 'applied') {
@@ -221,6 +277,8 @@ export class NativeCanvasPresentation {
                         continue;
                     }
                     binding.selection = selection;
+                    binding.selectionRevision = selectionRevision;
+                    preview?.selected();
                 }
                 if (!this.#current(binding, desired))
                     continue;
@@ -244,18 +302,25 @@ export class NativeCanvasPresentation {
                     intent.complete(false);
                 const admitted = this.#viewport;
                 if (admitted ||
-                    (binding.host.capabilities.viewportState && binding.viewportKey !== desired.key)) {
+                    ((desired.item ||
+                        (desired.previewable &&
+                            this.#preview?.observing &&
+                            binding.selectionRevision !== null)) &&
+                        binding.host.capabilities.viewportState &&
+                        binding.viewportKey !== desired.key)) {
                     if (admitted) {
                         admitted.running = true;
                         binding.viewportKey = null;
                         this.options.viewport(null);
                     }
+                    const displayEpoch = this.#preview?.epoch;
                     try {
                         const result = await this.#send(binding, {
                             type: 'surface.viewport.request',
                             command: admitted?.command ?? { type: 'read' },
                         });
                         const current = this.#current(binding, desired) &&
+                            displayEpoch === this.#preview?.epoch &&
                             (!admitted || (this.#viewport === admitted && admitted.scope.current()));
                         if (current && result.status === 'applied' && 'viewport' in result) {
                             binding.viewportKey = desired.key;
@@ -264,6 +329,9 @@ export class NativeCanvasPresentation {
                         }
                         else {
                             const recoverUnavailable = admitted !== null && current && result.status === 'unavailable';
+                            const presentation = this.#preview?.pendingPresentation;
+                            if (current && result.status === 'stale' && presentation)
+                                this.#viewportRecovery = { binding, desired, presentation };
                             admitted?.complete(false);
                             if (admitted &&
                                 this.#current(binding, desired) &&
@@ -276,6 +344,7 @@ export class NativeCanvasPresentation {
                     }
                     catch (error) {
                         if (this.#current(binding, desired) &&
+                            displayEpoch === this.#preview?.epoch &&
                             (!admitted || (this.#viewport === admitted && admitted.scope.current())))
                             throw error;
                         this.options.report(error);
@@ -285,9 +354,34 @@ export class NativeCanvasPresentation {
                         admitted?.complete(false);
                     }
                 }
+                const previewStep = this.#preview?.next();
+                if (previewStep) {
+                    try {
+                        const result = await this.#send(binding, previewStep.operation, previewStep.started);
+                        if (!this.#owns(binding))
+                            return;
+                        previewStep.settled(result);
+                    }
+                    catch (error) {
+                        previewStep.failed(error);
+                    }
+                    this.#dirty = true;
+                    continue;
+                }
                 if (this.#current(binding, desired)) {
                     this.#show(true);
-                    this.options.status({ state: 'ready', message: '' });
+                    this.options.status({
+                        state: desired.item ||
+                            this.#preview?.displayed ||
+                            (desired.previewable &&
+                                this.#preview?.observing &&
+                                binding.selectionRevision !== null)
+                            ? 'ready'
+                            : this.#preview?.preparing
+                                ? 'loading'
+                                : 'empty',
+                        message: '',
+                    });
                 }
             }
             catch (error) {
@@ -300,8 +394,34 @@ export class NativeCanvasPresentation {
         }
     }
     /** Delegate through the same binding record for every operation. */
-    #send(binding, operation) {
-        return sendNativeCanvasOperation(binding, this.options.address, operation);
+    #send(binding, operation, assigned) {
+        return sendNativeCanvasOperation(binding, this.options.address, operation, assigned);
+    }
+    /** Let a native display transition supersede any still-pending final-camera acknowledgement. */
+    #observed(binding, display, presentation) {
+        if (!this.#owns(binding))
+            return;
+        const recovery = this.#viewportRecovery;
+        if (display &&
+            this.#desired === null &&
+            recovery?.binding === binding &&
+            recovery.presentation === presentation) {
+            this.#desired = recovery.desired;
+            this.#viewportRecovery = null;
+        }
+        if (binding.active?.type === 'surface.viewport.request')
+            binding.active.cancellation.cancel();
+        if (this.#viewport) {
+            this.#cancelViewport(this.#viewport);
+            this.#viewport.complete(false);
+        }
+        this.options.preview(display?.type === 'preview');
+        this.options.viewport(display && display.type !== 'empty' ? display.viewport : null);
+        if (display) {
+            binding.viewportKey = this.#desired?.key ?? null;
+            this.#show(binding.committed && this.#desired?.geometry?.visible === true);
+            this.options.status({ state: display.type === 'empty' ? 'empty' : 'ready', message: '' });
+        }
     }
     #owns(binding) {
         return (!this.#disposed &&
@@ -331,7 +451,8 @@ export class NativeCanvasPresentation {
     /** Settle unsent intent when its required presentation fails, without retrying that presentation. */
     #failedIntent() {
         this.#dirty = false;
-        this.options.viewport(null);
+        if (!this.#preview?.displayed)
+            this.options.viewport(null);
         if (this.#viewport && !this.#viewport.running)
             this.#viewport.complete(false);
     }
@@ -343,8 +464,12 @@ export class NativeCanvasPresentation {
     }
     /** Observe the host's release acknowledgement before allowing another binding to prepare. */
     #retire() {
+        this.#viewportRecovery = null;
         this.#show(false);
         this.options.viewport(null);
+        this.options.preview(false);
+        this.#preview?.dispose();
+        this.#preview = null;
         if (this.#viewport)
             this.#cancelViewport(this.#viewport);
         const binding = this.#binding;
