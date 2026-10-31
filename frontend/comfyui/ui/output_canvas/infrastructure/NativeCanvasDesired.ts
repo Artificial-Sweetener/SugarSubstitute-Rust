@@ -19,6 +19,7 @@ import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.j
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import type { CanvasComparison } from '../domain/CanvasViewState.js';
 import type {
+  CanvasSurfaceInspection,
   CanvasSurfaceOverviewCell,
   CanvasSurfaceViewportCommand,
 } from '../../../../../integrations/contracts/CanvasSurface.js';
@@ -110,6 +111,12 @@ export function nativeCanvasNavigable(
   );
 }
 
+/** Choose the camera that selecting a final restores, given whether it is shown with a B image. */
+export type NativeCanvasRestoration = (
+  item: WorkflowOutputItem,
+  compared: boolean,
+) => CanvasSurfaceInspection | null;
+
 /** Identify the painted overview layout independently of the identity that entered overview. */
 export function nativeCanvasOverviewKey(
   overview: readonly CanvasSurfaceOverviewCell[] | null,
@@ -128,8 +135,13 @@ export function nativeCanvasWipeKey(comparison: NativeCanvasComparison | null): 
  *
  * An overview is the displayed selection while shown: its key never equals an image key, so a
  * later image selection is always sent, and each newer layout is sent behind the one in flight.
+ * An image selection carries the inspection its first frame restores; that camera is not part
+ * of the key, so a changed saved camera never re-sends the shown selection.
  */
-export function nativeCanvasSelection(desired: NativeCanvasDesired): {
+export function nativeCanvasSelection(
+  desired: NativeCanvasDesired,
+  inspection?: NativeCanvasRestoration,
+): {
   readonly key: string;
   readonly operation: Extract<
     NativeCanvasOperation,
@@ -143,6 +155,7 @@ export function nativeCanvasSelection(desired: NativeCanvasDesired): {
       operation: { type: 'surface.overview', cells: overview },
     };
   if (!item) return null;
+  const restored = inspection?.(item, comparison !== null);
   return {
     key: JSON.stringify(
       comparison
@@ -156,6 +169,7 @@ export function nativeCanvasSelection(desired: NativeCanvasDesired): {
       ...(comparison
         ? { comparison: { itemId: comparison.item.id, file: comparison.item.file } }
         : {}),
+      ...(restored ? { inspection: restored } : {}),
     },
   };
 }

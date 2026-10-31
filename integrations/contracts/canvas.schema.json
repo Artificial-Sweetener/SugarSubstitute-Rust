@@ -14,8 +14,8 @@
         },
         "viewportCommands": {
           "type": "array",
-          "items": { "enum": ["fit", "native", "zoom", "pan", "wipe"] },
-          "maxItems": 5
+          "items": { "enum": ["fit", "native", "zoom", "pan", "wipe", "inspect"] },
+          "maxItems": 6
         },
         "viewportState": { "type": "boolean" },
         "previewFormats": { "type": "array", "items": { "enum": ["png", "jpeg"] }, "maxItems": 2 },
@@ -254,7 +254,8 @@
           "pattern": "^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
         },
         "file": { "$ref": "#/$defs/CanvasSurfaceFileReference" },
-        "comparison": { "$ref": "#/$defs/CanvasSurfaceComparison" }
+        "comparison": { "$ref": "#/$defs/CanvasSurfaceComparison" },
+        "inspection": { "$ref": "#/$defs/CanvasSurfaceInspection" }
       },
       "required": [
         "protocol",
@@ -2126,6 +2127,15 @@
           },
           "required": ["type", "orientation", "split"],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "inspect" },
+            "inspection": { "$ref": "#/$defs/CanvasSurfaceInspection" }
+          },
+          "required": ["type", "inspection"],
+          "additionalProperties": false
         }
       ]
     },
@@ -2138,13 +2148,41 @@
       "required": ["width", "height"],
       "additionalProperties": false
     },
+    "CanvasSurfaceViewportCenter": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["x", "y"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceInspectionSpan": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000000 },
+        "y": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000000 }
+      },
+      "required": ["x", "y"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceInspection": {
+      "type": "object",
+      "properties": {
+        "center": { "$ref": "#/$defs/CanvasSurfaceViewportCenter" },
+        "span": { "$ref": "#/$defs/CanvasSurfaceInspectionSpan" }
+      },
+      "required": ["center", "span"],
+      "additionalProperties": false
+    },
     "CanvasSurfaceViewportState": {
       "type": "object",
       "properties": {
         "mode": { "enum": ["fit", "native", "custom"] },
         "physicalScale": { "type": "number", "minimum": 1e-9, "maximum": 16384 },
         "dimensions": { "$ref": "#/$defs/CanvasSurfaceImageDimensions" },
-        "secondaryDimensions": { "$ref": "#/$defs/CanvasSurfaceImageDimensions" }
+        "secondaryDimensions": { "$ref": "#/$defs/CanvasSurfaceImageDimensions" },
+        "center": { "$ref": "#/$defs/CanvasSurfaceViewportCenter" }
       },
       "required": ["mode", "physicalScale", "dimensions"],
       "additionalProperties": false

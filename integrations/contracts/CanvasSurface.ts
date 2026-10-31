@@ -41,6 +41,7 @@ export type {
   CanvasSurfaceOverviewCell,
   CanvasSurfaceViewportCommand,
   CanvasSurfaceViewportState,
+  CanvasSurfaceInspection,
   CanvasSurfacePreviewIdentity,
   CanvasSurfacePresentationChange,
   CanvasSurfacePresentationDisplay,
@@ -90,6 +91,13 @@ export interface CanvasSurfaceHost {
    * the current scale around the viewport center; native centers physical 1:1. Pan uses
    * viewport fractions. Successful viewport replies describe the settled camera represented
    * by an accepted native frame. Empty or hidden surfaces return unavailable without a snapshot.
+   * Inspection requires the declared `inspect` viewport command. Its `center` is the image point
+   * at the viewport center, normalized to 0..1 of the image; its `span` is the normalized image
+   * distance per physical display pixel on each axis, independent of viewport size. A selection
+   * carrying an inspection presents its first frame at that camera, and the inspect command
+   * applies one to the shown image, both immediately without animation; the host contains the
+   * span across differing aspect ratios and applies its ordinary scale and pan bounds. Such a
+   * host reports `center` in every viewport state.
    * Preview begin/chunk/end acknowledgements transfer bounded byte custody only. Each step
    * releases its request; preparation and native acceptance arrive through presentation.
    * The encoded transfer ceiling is 64 MiB, with independent stricter host memory/decoder

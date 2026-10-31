@@ -17,14 +17,23 @@
 import type {
   CanvasSurfaceCapabilities,
   CanvasSurfaceCommand,
+  CanvasSurfaceInspection,
+  CanvasSurfaceViewportCommand,
   CanvasSurfaceViewportState,
 } from '../contracts/CanvasSurface.js';
 
-/** Require authoritative state for every optional camera command, including state reads. */
+/**
+ * Require authoritative state for every optional camera command, including state reads.
+ *
+ * A selection carrying an inspection restores a camera, so it requires the same declared
+ * `inspect` command as an inspection applied to the shown image.
+ */
 export function supportsCanvasSurfaceViewport(
   capabilities: CanvasSurfaceCapabilities,
   command: CanvasSurfaceCommand,
 ): boolean {
+  if (command.type === 'surface.select')
+    return command.inspection === undefined || negotiatesCanvasSurfaceInspection(capabilities);
   return (
     command.type !== 'surface.viewport.request' ||
     (capabilities.viewportState &&
@@ -33,16 +42,43 @@ export function supportsCanvasSurfaceViewport(
   );
 }
 
+/** Report whether the host restores image-relative inspections and reports viewport centers. */
+export function negotiatesCanvasSurfaceInspection(
+  capabilities: CanvasSurfaceCapabilities,
+): boolean {
+  return capabilities.viewportState && capabilities.viewportCommands.includes('inspect');
+}
+
+/** Retain one image-relative inspection as a frozen value. */
+export function snapshotCanvasSurfaceInspection(
+  inspection: CanvasSurfaceInspection,
+): CanvasSurfaceInspection {
+  return Object.freeze({
+    center: Object.freeze({ ...inspection.center }),
+    span: Object.freeze({ ...inspection.span }),
+  });
+}
+
+/** Retain one validated viewport command, including a nested inspection, as a frozen value. */
+export function snapshotCanvasSurfaceViewportCommand(
+  command: CanvasSurfaceViewportCommand,
+): CanvasSurfaceViewportCommand {
+  return command.type === 'inspect'
+    ? Object.freeze({ ...command, inspection: snapshotCanvasSurfaceInspection(command.inspection) })
+    : Object.freeze({ ...command });
+}
+
 /** Retain a native observation, including a shown comparison's B size, as one frozen value. */
 export function snapshotCanvasSurfaceViewport(
   viewport: CanvasSurfaceViewportState,
 ): CanvasSurfaceViewportState {
-  const { secondaryDimensions, ...state } = viewport;
+  const { secondaryDimensions, center, ...state } = viewport;
   return Object.freeze({
     ...state,
     dimensions: Object.freeze({ ...viewport.dimensions }),
     ...(secondaryDimensions
       ? { secondaryDimensions: Object.freeze({ ...secondaryDimensions }) }
       : {}),
+    ...(center ? { center: Object.freeze({ ...center }) } : {}),
   });
 }

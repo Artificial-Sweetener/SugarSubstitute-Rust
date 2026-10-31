@@ -32,6 +32,7 @@ export {
   resolveCanvasImageRegion,
 } from '../../../../../integrations/shared/CanvasImageRegionCrop.js';
 export { CanvasCancellation } from '../../../../../integrations/shared/CanvasCancellation.js';
+export { negotiatesCanvasSurfaceInspection } from '../../../../../integrations/shared/CanvasSurfaceViewport.js';
 export { negotiatesCanvasSurfaceComparison } from '../../../../../integrations/shared/CanvasSurfaceComparison.js';
 export { fittingCanvasSurfaceOverviewCells } from '../../../../../integrations/shared/CanvasSurfaceOverview.js';
 export {

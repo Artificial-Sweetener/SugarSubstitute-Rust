@@ -243,7 +243,7 @@ export class NativeCanvasPresentation {
                         continue;
                     }
                 }
-                const selection = nativeCanvasSelection(desired);
+                const selection = nativeCanvasSelection(desired, this.options.inspection);
                 if (selection && selection.key !== binding.selection) {
                     const preview = this.#preview;
                     preview?.selecting();

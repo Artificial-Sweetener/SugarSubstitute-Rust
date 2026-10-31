@@ -40,45 +40,58 @@ export class CanvasInspectionStore {
     /** Retire previous-Run cameras only when a newer Run's pixels are actually presented. */
     presentRun(view, runOrder) {
         const record = this.#require(view);
-        if (record.presentedRun !== null && runOrder <= record.presentedRun)
+        if (!this.retires(view, runOrder))
             return false;
         record.presentedRun = runOrder;
         record.shared = null;
         record.individual.clear();
         return true;
     }
+    /** Report whether presenting this Run's final would retire saved cameras, without retiring them. */
+    retires(view, runOrder) {
+        const record = this.#require(view);
+        return record.presentedRun === null || runOrder > record.presentedRun;
+    }
     /** Change link policy without overwriting saved independent slot cameras. */
     setLinked(view, linked, current) {
         const record = this.#require(view);
         if (record.linked === linked)
             return;
-        if (current && current.previewLane === null) {
-            const inspection = captureCanvasInspection(current.camera, current.geometry);
+        if (current) {
             const key = selectionKey(current.selection);
             if (linked)
-                record.shared = inspection;
+                record.shared = current.inspection;
             else if (!record.individual.has(key))
-                record.individual.set(key, inspection);
+                record.individual.set(key, current.inspection);
         }
         record.linked = linked;
     }
     /** Save final inspection without allowing preview presentation to replace it. */
     capture(view, slot, camera, geometry, previewLane) {
-        const record = this.#require(view);
-        if (previewLane !== null)
+        if (previewLane !== null) {
+            this.#require(view);
             return;
-        const inspection = captureCanvasInspection(camera, geometry);
+        }
+        this.record(view, slot, captureCanvasInspection(camera, geometry));
+    }
+    /** Save one final slot's settled inspection under the view's current link policy. */
+    record(view, slot, inspection) {
+        const record = this.#require(view);
         if (record.linked)
             record.shared = inspection;
         else
             record.individual.set(selectionKey(slot), inspection);
     }
+    /** Read the inspection a final in this slot restores, or null when it starts at Fit. */
+    inspection(view, slot) {
+        const record = this.#require(view);
+        return (record.linked ? record.shared : record.individual.get(selectionKey(slot))) ?? null;
+    }
     /** Fit new preview compositions independently of existing linked final inspection. */
     camera(view, slot, geometry, previewLane) {
-        const record = this.#require(view);
+        const inspection = this.inspection(view, slot);
         if (previewLane !== null)
             return centeredCanvasCamera(geometry);
-        const inspection = record.linked ? record.shared : record.individual.get(selectionKey(slot));
         return inspection
             ? projectCanvasInspection(inspection, geometry)
             : centeredCanvasCamera(geometry);

@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Hand an existing view's selected result to a negotiated native surface. */
 
-import type { CanvasCommandScope } from '../domain/CanvasViewPort.js';
+import type { CanvasOperationScope } from '../domain/CanvasViewPort.js';
 import {
   sendNativeCanvasOperation,
   releaseNativeCanvasBinding,
@@ -50,6 +50,7 @@ import {
   nativeCanvasWipe,
   nativeCanvasWipeKey,
   type NativeCanvasComparison,
+  type NativeCanvasRestoration,
   type NativeCanvasDesired as Desired,
 } from './NativeCanvasDesired.js';
 
@@ -77,6 +78,8 @@ export interface NativeCanvasPresentationOptions {
   viewport(value: CanvasSurfaceViewportState | null): void;
   /** Lock preview controls only for pixels acknowledged by the presentation observation. */
   preview(value: boolean): void;
+  /** Choose the camera an image selection restores when sent; without one it starts at Fit. */
+  readonly inspection?: NativeCanvasRestoration;
   report(error: unknown): void;
 }
 
@@ -220,7 +223,7 @@ export class NativeCanvasPresentation {
   }
 
   /** Admit one discrete intent into the existing presentation stream, replacing only older intent. */
-  viewport(command: CanvasSurfaceViewportCommand, scope: CanvasCommandScope): Promise<boolean> {
+  viewport(command: CanvasSurfaceViewportCommand, scope: CanvasOperationScope): Promise<boolean> {
     const binding = this.#binding;
     if (
       !binding ||
@@ -332,7 +335,7 @@ export class NativeCanvasPresentation {
             continue;
           }
         }
-        const selection = nativeCanvasSelection(desired);
+        const selection = nativeCanvasSelection(desired, this.options.inspection);
         if (selection && selection.key !== binding.selection) {
           const preview = this.#preview;
           preview?.selecting();

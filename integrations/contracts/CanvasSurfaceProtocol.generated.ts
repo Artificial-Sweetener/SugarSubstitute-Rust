@@ -18,7 +18,7 @@
 export type CanvasSurfaceCapabilities = {
   readonly schema: 1;
   readonly imageFormats: readonly ('png' | 'jpeg' | 'webp')[];
-  readonly viewportCommands: readonly ('fit' | 'native' | 'zoom' | 'pan' | 'wipe')[];
+  readonly viewportCommands: readonly ('fit' | 'native' | 'zoom' | 'pan' | 'wipe' | 'inspect')[];
   readonly viewportState: boolean;
   readonly previewFormats: readonly ('png' | 'jpeg')[];
   readonly comparison: boolean;
@@ -128,6 +128,7 @@ export type CanvasSurfaceSelectRequest = {
   readonly itemId: string;
   readonly file: CanvasSurfaceFileReference;
   readonly comparison?: CanvasSurfaceComparison;
+  readonly inspection?: CanvasSurfaceInspection;
 };
 /** Describe the schema-defined CanvasSurfaceOverviewRect wire value. */
 export type CanvasSurfaceOverviewRect = {
@@ -204,15 +205,26 @@ export type CanvasSurfaceViewportCommand =
       readonly type: 'wipe';
       readonly orientation: 'vertical' | 'horizontal';
       readonly split: number;
-    };
+    }
+  | { readonly type: 'inspect'; readonly inspection: CanvasSurfaceInspection };
 /** Describe the schema-defined CanvasSurfaceImageDimensions wire value. */
 export type CanvasSurfaceImageDimensions = { readonly width: number; readonly height: number };
+/** Describe the schema-defined CanvasSurfaceViewportCenter wire value. */
+export type CanvasSurfaceViewportCenter = { readonly x: number; readonly y: number };
+/** Describe the schema-defined CanvasSurfaceInspectionSpan wire value. */
+export type CanvasSurfaceInspectionSpan = { readonly x: number; readonly y: number };
+/** Describe the schema-defined CanvasSurfaceInspection wire value. */
+export type CanvasSurfaceInspection = {
+  readonly center: CanvasSurfaceViewportCenter;
+  readonly span: CanvasSurfaceInspectionSpan;
+};
 /** Describe the schema-defined CanvasSurfaceViewportState wire value. */
 export type CanvasSurfaceViewportState = {
   readonly mode: 'fit' | 'native' | 'custom';
   readonly physicalScale: number;
   readonly dimensions: CanvasSurfaceImageDimensions;
   readonly secondaryDimensions?: CanvasSurfaceImageDimensions;
+  readonly center?: CanvasSurfaceViewportCenter;
 };
 /** Describe the schema-defined CanvasSurfaceViewportRequest wire value. */
 export type CanvasSurfaceViewportRequest = {

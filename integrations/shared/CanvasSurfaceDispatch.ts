@@ -28,7 +28,9 @@ import {
 } from './CanvasSurfaceValidation.generated.js';
 import {
   supportsCanvasSurfaceViewport,
+  snapshotCanvasSurfaceInspection,
   snapshotCanvasSurfaceViewport,
+  snapshotCanvasSurfaceViewportCommand,
 } from './CanvasSurfaceViewport.js';
 import { supportsCanvasSurfaceComparison } from './CanvasSurfaceComparison.js';
 import {
@@ -84,7 +86,7 @@ export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurf
     });
   }
   if (request.type === 'surface.select') {
-    const { comparison, ...selection } = request;
+    const { comparison, inspection, ...selection } = request;
     return Object.freeze({
       ...selection,
       address,
@@ -97,6 +99,7 @@ export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurf
             }),
           }
         : {}),
+      ...(inspection ? { inspection: snapshotCanvasSurfaceInspection(inspection) } : {}),
     });
   }
   if (request.type === 'surface.overview')
@@ -114,7 +117,11 @@ export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurf
       ),
     });
   if (request.type === 'surface.viewport.request')
-    return Object.freeze({ ...request, address, command: Object.freeze({ ...request.command }) });
+    return Object.freeze({
+      ...request,
+      address,
+      command: snapshotCanvasSurfaceViewportCommand(request.command),
+    });
   if (request.type === 'surface.preview.begin')
     return Object.freeze({ ...request, address, preview: Object.freeze({ ...request.preview }) });
   return Object.freeze({ ...request, address });
