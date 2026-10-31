@@ -36,6 +36,46 @@ impl Future for PendingWithDrop {
     }
 }
 
+/// Report interruption from inside the very poll during which cancellation is requested.
+struct InterruptedDuringPoll {
+    context: JobContext,
+    polling: Arc<Gate>,
+    requested: Arc<Gate>,
+}
+impl Future for InterruptedDuringPoll {
+    type Output = Result<(), &'static str>;
+    fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+        self.polling.open();
+        if self.requested.wait().is_err() {
+            return Poll::Ready(Err("Cancellation was never requested"));
+        }
+        Poll::Ready(if self.context.cancellation_requested() { Err("Interrupted") } else { Ok(()) })
+    }
+}
+
+#[test]
+fn async_failure_observing_cancellation_requested_mid_poll_is_cancelled() -> TestResult {
+    let rig = Rig::new()?;
+    let polling = Arc::new(Gate::default());
+    let requested = Arc::new(Gate::default());
+    let (worker_polling, worker_requested) = (polling.clone(), requested.clone());
+    let mut job =
+        rig.client.submit_async(&rig.scope, spec(1, JobClass::IoOrdinary, 0)?, move |context| {
+            InterruptedDuringPoll { context, polling: worker_polling, requested: worker_requested }
+        })?;
+    // The select has already passed its stop branches when the future begins this poll.
+    polling.wait()?;
+    job.cancel();
+    requested.open();
+    assert!(matches!(rig.completion(&mut job)?.outcome, JobOutcome::Cancelled));
+    let mut failure =
+        rig.client.submit_async(&rig.scope, spec(2, JobClass::IoOrdinary, 0)?, |_| async {
+            Err::<(), _>("Interrupted")
+        })?;
+    assert!(matches!(rig.completion(&mut failure)?.outcome, JobOutcome::Failure("Interrupted")));
+    Ok(())
+}
+
 #[test]
 fn async_factory_and_poll_panics_are_owned_and_do_not_stop_the_adapter() -> TestResult {
     let rig = Rig::new()?;

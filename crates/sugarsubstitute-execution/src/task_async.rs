@@ -100,6 +100,7 @@ pub(crate) async fn run_async<T, E, F, M>(
                 () = context.cancelled() => JobOutcome::Cancelled,
                 result = &mut future => match result { Ok(Ok(value)) => JobOutcome::Success(value), Ok(Err(error)) => JobOutcome::Failure(error), Err(cause) => JobOutcome::Panicked(cause) },
             };
+            let outcome = stop_after_failure(&context, outcome);
             match catch_unwind(AssertUnwindSafe(|| drop(future))) {
                 Ok(()) => outcome,
                 Err(payload) => {
@@ -122,4 +123,23 @@ pub(crate) async fn run_async<T, E, F, M>(
         }
     };
     job.finish(&context, Some(started), outcome);
+}
+
+/// Classify a failure that completed while a stop was already requested as that stop.
+///
+/// The biased select observes a stop only before polling the future, so a cancellation or
+/// deadline that arrives during that same poll can surface as the future's own failure. As for
+/// blocking jobs, the stop takes precedence; a failure without a pending stop stays a failure and
+/// successful values are kept.
+fn stop_after_failure<T, E>(context: &JobContext, outcome: JobOutcome<T, E>) -> JobOutcome<T, E> {
+    match outcome {
+        JobOutcome::Failure(error) => match stop_reason(context) {
+            Some(reason) => match catch_unwind(AssertUnwindSafe(|| drop(error))) {
+                Ok(()) => stopped_outcome(reason),
+                Err(payload) => JobOutcome::Panicked(panic_cause(payload)),
+            },
+            None => JobOutcome::Failure(error),
+        },
+        outcome => outcome,
+    }
 }
