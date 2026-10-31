@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { nativeTargets, selectArtifacts } from './application-artifacts.mjs'
 import { nativeConfiguration } from './native-configuration.mjs'
 import { requireBootstrapImages } from './windows-imports.mjs'
-import { qualificationFeatures } from './build-qualification.mjs'
+import { nativeBuildArguments, qualificationFeatures } from './build-qualification.mjs'
 
 export async function buildNative(component, profile, qualification, platform, inspect) {
   const names = nativeTargets(component)
@@ -17,8 +17,7 @@ export async function buildNative(component, profile, qualification, platform, i
   if (!target || !path.isAbsolute(target)) throw new Error('Set an explicit absolute CARGO_TARGET_DIR')
   const workspace = fileURLToPath(new URL('../../', import.meta.url))
   const configuration = await nativeConfiguration(target, platform, workspace, process.env)
-  const args = ['build', '--locked', '-p', 'sugarsubstitute', ...names.flatMap(name => ['--bin', name]), '--target', configuration.target, '--profile', profile, '--message-format=json-render-diagnostics']
-  if (features.length) args.push('--features', features.join(','))
+  const args = nativeBuildArguments(names, configuration.target, profile, features)
   const result = spawnSync('cargo', args, { cwd: workspace, env: configuration.environment, encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 ** 2 })
   if (result.stderr) process.stderr.write(result.stderr)
   if (result.error) throw result.error

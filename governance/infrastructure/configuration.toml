@@ -338,7 +338,7 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "installer/release/native-build.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:18235031af3f7920423b469089309e4c25a30613f4c346fcb751a29a2fbaf0e2"
+source_sha256 = "sha256:c0ca26b89f47465cb92e3f357fcd3959b66e6f7a84b87cbbd7174c17da6e75a0"
 capabilities = ["environment"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 

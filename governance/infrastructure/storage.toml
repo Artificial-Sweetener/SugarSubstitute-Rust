@@ -3120,6 +3120,14 @@ disposition = "tooling"
 rationale = "Repository tooling artifact-files.mjs: artifact-files Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
+path = "installer/release/build-qualification.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:da7539a1e5944b4e1f342cf22de09f8c5f641f19f54afe9c2b234341d6e202be"
+capabilities = ["node:fs", "readFileSync"]
+disposition = "tooling"
+rationale = "Repository tooling build-qualification.test.mjs: reads the declared application manifest to prove ordinary installer builds ship its default features; writes nothing and runtime crates do not depend on this source."
+
+[[records]]
 path = "installer/release/build-updater.mjs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:6a762fedc9a8ae2900ae21a5d573a558e3b0bd270f7f329d25f0d47631268cf5"

@@ -297,7 +297,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "installer/release/native-build.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:18235031af3f7920423b469089309e4c25a30613f4c346fcb751a29a2fbaf0e2"
+source_sha256 = "sha256:c0ca26b89f47465cb92e3f357fcd3959b66e6f7a84b87cbbd7174c17da6e75a0"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
