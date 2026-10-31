@@ -11,8 +11,8 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
-use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_gpu::SharedTextureHandle;
+use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
+use sugarsubstitute_image_gpu::{AdapterLuid, SharedTextureHandle};
 use sugarsubstitute_image_ops::Extent;
 use windows::{
     Win32::{
@@ -21,7 +21,7 @@ use windows::{
             Direct3D11::{
                 D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE, D3D11_RESOURCE_MISC_SHARED,
                 D3D11_RESOURCE_MISC_SHARED_NTHANDLE, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
-                ID3D11Texture2D,
+                ID3D11Device, ID3D11Fence, ID3D11Texture2D,
             },
             Dxgi::{
                 Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC},
@@ -36,6 +36,37 @@ use windows::{
 /// Longest native wait between cancellation and deadline observations.
 const READ_WAIT_MILLISECONDS: u32 = 50;
 
+/// Worker-side allocator of shared textures for one composition graphics device.
+///
+/// It retains only the free-threaded D3D11 device, the read fence and the canvas reservation, so
+/// textures and drawing workers never extend the composition device's own retirement custody.
+#[derive(Clone)]
+pub struct SharedTextureFactory {
+    device: ID3D11Device,
+    fence: ID3D11Fence,
+    luid: AdapterLuid,
+    memory: MemoryLease,
+    owner: u64,
+}
+
+impl SharedTextureFactory {
+    /// Bind the shared-texture capability of a composition device.
+    pub(super) const fn new(
+        device: ID3D11Device,
+        fence: ID3D11Fence,
+        luid: AdapterLuid,
+        memory: MemoryLease,
+        owner: u64,
+    ) -> Self {
+        Self { device, fence, luid, memory, owner }
+    }
+
+    /// Adapter on which every texture from this factory is allocated.
+    pub const fn luid(&self) -> AdapterLuid {
+        self.luid
+    }
+}
+
 /// One shared BGRA8 texture on the composition device's adapter.
 ///
 /// Workers import its handle and await prior composition reads before each draw; the UI thread
@@ -45,7 +76,9 @@ pub struct SharedCanvasTexture {
     texture: ID3D11Texture2D,
     handle: usize,
     extent: Extent,
-    graphics: Arc<CanvasGraphics>,
+    fence: ID3D11Fence,
+    luid: AdapterLuid,
+    owner: u64,
     reads: AtomicU64,
     _claim: MemoryClaim,
 }
@@ -53,28 +86,24 @@ pub struct SharedCanvasTexture {
 impl SharedCanvasTexture {
     /// Allocate and export one shared texture on an admitted worker.
     /// # Errors
-    /// Rejects devices without shared-texture support and oversized extents; preserves admission,
-    /// control and native allocation failures.
+    /// Rejects oversized extents; preserves admission, control and native allocation failures.
     pub fn create(
-        graphics: &Arc<CanvasGraphics>,
+        factory: &SharedTextureFactory,
         extent: Extent,
         context: &JobContext,
     ) -> Result<Self, CanvasGraphicsError> {
         checkpoint(context)?;
-        if graphics.shared_textures().is_none() {
-            return Err(missing("canvas_shared_texture_device"));
-        }
         if extent.width() > super::MAX_VIEWPORT_EDGE || extent.height() > super::MAX_VIEWPORT_EDGE {
             return Err(CanvasGraphicsError::new(
                 "canvas_shared_texture_extent",
                 std::io::Error::from(std::io::ErrorKind::InvalidInput),
             ));
         }
-        let claim = graphics
-            .memory()
+        let claim = factory
+            .memory
             .claim(extent.pixels() * 4 + 64 * 1024)
             .map_err(|cause| CanvasGraphicsError::new("canvas_shared_texture_budget", cause))?;
-        let device = graphics.d3d().ok_or_else(|| missing("canvas_d3d_device"))?;
+        let device = &factory.device;
         let description = D3D11_TEXTURE2D_DESC {
             Width: extent.width(),
             Height: extent.height(),
@@ -110,7 +139,9 @@ impl SharedCanvasTexture {
             texture,
             handle: handle.0 as usize,
             extent,
-            graphics: graphics.clone(),
+            fence: factory.fence.clone(),
+            luid: factory.luid,
+            owner: factory.owner,
             reads: AtomicU64::new(0),
             _claim: claim,
         })
@@ -124,12 +155,11 @@ impl SharedCanvasTexture {
     /// Exported handle for import by the Vulkan device with the same adapter LUID.
     /// # Errors
     /// Rejects a graphics device that no longer reports shared-texture support.
-    pub fn handle(&self) -> Result<SharedTextureHandle, CanvasGraphicsError> {
-        let luid = self.graphics.shared_textures().ok_or_else(|| missing("canvas_shared_luid"))?;
+    pub fn handle(&self) -> SharedTextureHandle {
         // SAFETY: `create` exported this open NT handle for a single-mip, single-sample BGRA8
         // render-target texture of exactly this extent on the `luid` adapter, without a keyed
         // mutex; this value closes it only on drop, after every borrowed import completed.
-        Ok(unsafe { SharedTextureHandle::from_raw(self.handle, self.extent, luid) })
+        unsafe { SharedTextureHandle::from_raw(self.handle, self.extent, self.luid) }
     }
 
     /// Wait on a drawing worker until every recorded composition read of this texture completed.
@@ -140,7 +170,7 @@ impl SharedCanvasTexture {
         if required == 0 {
             return Ok(());
         }
-        let fence = &self.graphics.read_fence().ok_or_else(|| missing("canvas_read_fence"))?.fence;
+        let fence = &self.fence;
         // SAFETY: The worker owns this unnamed auto-reset event until it closes it below.
         let event = unsafe { CreateEventW(None, false, false, PCWSTR::null()) }
             .map_err(|cause| CanvasGraphicsError::new("create_canvas_read_event", cause))?;
@@ -187,7 +217,7 @@ impl SharedCanvasTexture {
 
     /// Whether this texture was exported by exactly this composition device.
     pub(crate) fn owned_by(&self, graphics: &Arc<CanvasGraphics>) -> bool {
-        Arc::ptr_eq(&self.graphics, graphics)
+        graphics.identity() == self.owner
     }
 
     /// Borrow the D3D11 texture for a UI-thread composition read.

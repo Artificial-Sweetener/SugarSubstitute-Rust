@@ -41,10 +41,15 @@ impl PendingPresentation {
 impl Session {
     /// The sole display slot spans preparation, native worker custody and desktop acknowledgement.
     pub(super) fn gpu_presentation_pending(&self) -> bool {
+        #[cfg(all(windows, feature = "native-composition"))]
+        let composition = self.composition_pending.is_some();
+        #[cfg(not(all(windows, feature = "native-composition")))]
+        let composition = false;
         self.pending_gpu_presentation.is_some()
             || self.presenting.is_some()
             || self.gpu_presentation.is_some()
             || self.awaiting_gpu.is_some()
+            || composition
     }
 
     /// Transfer a validated frame only after admission, preserving it and its cutoff on rejection.
@@ -67,6 +72,10 @@ impl Session {
                 }
                 self.document.pending_gpu_evidence = None;
                 self.retire(Retired { _presentation: Some(pending.frame), ..Default::default() })?;
+            }
+            #[cfg(all(windows, feature = "native-composition"))]
+            if !self.closing {
+                self.abandon_composition_frame(self.navigation_time())?;
             }
             return Ok(());
         }

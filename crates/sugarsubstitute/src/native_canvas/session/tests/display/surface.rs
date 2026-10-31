@@ -227,7 +227,8 @@ fn headless_cpu_output_cannot_gain_a_native_presenter_after_work_starts()
 #[test]
 fn cpu_surface_rejects_gpu_and_closed_sessions() -> Result<(), Box<dyn Error>> {
     let (mut gpu, _clock, _directory) = session()?;
-    gpu.config.gpu = Some("vulkan:8086:a780".parse()?);
+    gpu.config.gpu =
+        Some(crate::native_canvas::gpu_policy::GpuRequest::Required("vulkan:8086:a780".parse()?));
     assert!(gpu.attach_cpu_surface().is_err());
     let (mut closed, _clock, _directory) = session()?;
     closed.close()?;

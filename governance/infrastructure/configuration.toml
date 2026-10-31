@@ -23,7 +23,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-configuration/src/initial.rs"
 owner = "sugarsubstitute-configuration"
-source_sha256 = "sha256:dd5e9a3dbd304f3dea308858897c7698f681172209de3003461b5d12baefca59"
+source_sha256 = "sha256:15e9c49953d39ab314db8c06ce09be71d99c35fc1f1138dcefe4a8eb6a84dcb1"
 capabilities = ["codec"]
 rationale = "Authoritative initial/default or persisted startup codec. Decodes bounded bytes and validates feature-owned domain contracts without I/O."
 
@@ -44,21 +44,21 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-configuration/src/startup.rs"
 owner = "sugarsubstitute-configuration"
-source_sha256 = "sha256:1638e7efe5ebf618e25869479a68ab9b941f022cb1788656f61b23cd03167cc2"
+source_sha256 = "sha256:5bb47d12837ce1afd4c54b9255feb1f69c6e12352dd24bee2b8d8e3e39e28094"
 capabilities = ["codec", "document"]
 rationale = "Authoritative initial/default or persisted startup codec. Decodes bounded bytes and validates feature-owned domain contracts without I/O."
 
 [[records]]
 path = "crates/sugarsubstitute-configuration/src/startup_tests.rs"
 owner = "sugarsubstitute-configuration"
-source_sha256 = "sha256:80346aab1d9cd2632555e2b03eda54ee77ac8a2770094ae7a9de1b9a715f631d"
+source_sha256 = "sha256:df4187cb09bcfc55216a491e3f2bbb42ec7e0b46119545d6a730e69256c56c33"
 capabilities = ["codec"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-configuration/tests/contracts.rs"
 owner = "sugarsubstitute-configuration"
-source_sha256 = "sha256:d70b55a8ca8a8a50156c36d0e9c1a57d2abdcfc8bbae2b678da588b3a8ff4998"
+source_sha256 = "sha256:39b93f862c1fc8462d1b00e9d278330e327b921aca4023bfb07d2e39faf0b527"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 

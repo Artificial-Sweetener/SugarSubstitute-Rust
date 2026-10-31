@@ -22,7 +22,8 @@ use sugarsubstitute_contracts::{
 };
 pub(super) const HEADER_BYTES: usize = 120;
 const MAGIC: &[u8; 4] = b"SSCE";
-const VERSION: u16 = 1;
+/// Version 2 appends the stored canvas renderer preference to the Launch body.
+const VERSION: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Kind {

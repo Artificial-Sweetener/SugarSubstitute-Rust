@@ -11,6 +11,8 @@ use sugarsubstitute_supervision::cache::{Namespace, RuntimeCache, storage_key};
 mod acquisition;
 #[cfg(feature = "native-composition")]
 mod camera;
+#[cfg(all(windows, feature = "native-composition"))]
+mod composition;
 mod frames;
 #[cfg(feature = "native-composition")]
 mod transactions;

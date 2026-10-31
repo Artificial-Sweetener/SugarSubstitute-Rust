@@ -23,10 +23,11 @@ impl Session {
         Ok(())
     }
 
-    /// Preview candidates are prepared only for CPU presentation; GPU sessions refuse them at
-    /// discovery and admission instead of holding transfers until their lease expires.
+    /// Preview candidates are prepared and presented as CPU frames, including in a composition
+    /// GPU session; standalone GPU windows refuse them at discovery and admission instead of
+    /// holding transfers until their lease expires.
     pub(crate) fn presents_previews(&self) -> bool {
-        self.config.gpu.is_none()
+        self.presentation.gpu_window().is_none()
     }
 
     /// Report whether accepted preview pixels still own the active document during restoration.

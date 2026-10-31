@@ -6,7 +6,10 @@ mod owned;
 pub use owned::{EntryLaunchParts, EntryLaunchRequest, MAX_ENTRY_REQUEST_ALLOCATION_BYTES};
 
 use super::EntryShapeError;
-use crate::configuration::{LaunchConfiguration, LoopbackOrigin, Presentation, ProfileId};
+use crate::configuration::{
+    CanvasRendererPreference, LaunchConfiguration, LoopbackOrigin, MAX_CANVAS_RENDERER_BYTES,
+    Presentation, ProfileId,
+};
 use std::{fmt, num::NonZeroU16};
 
 /// Maximum raw Windows units in a nonterminated entry path.
@@ -244,6 +247,27 @@ impl<'a> EntryFrontendView<'a> {
         self.script
     }
 }
+/// Borrowed stored canvas renderer preference carried by one launch request.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum EntryCanvasRendererView<'a> {
+    /// No preference is stored.
+    #[default]
+    Absent,
+    /// Stored selector text of at most 64 bytes.
+    Stored(&'a str),
+    /// A stored value that is not bounded selector text.
+    Malformed,
+}
+impl EntryCanvasRendererView<'_> {
+    /// Own the borrowed preference for startup configuration.
+    pub fn to_owned_preference(self) -> CanvasRendererPreference {
+        match self {
+            Self::Absent => CanvasRendererPreference::Absent,
+            Self::Stored(text) => CanvasRendererPreference::stored(text),
+            Self::Malformed => CanvasRendererPreference::Malformed,
+        }
+    }
+}
 /// Exact original borrowed payload; no allocation, privilege or native proof.
 #[derive(Clone, Copy)]
 pub struct EntryLaunchRequestView<'a> {
@@ -253,6 +277,7 @@ pub struct EntryLaunchRequestView<'a> {
     profile: &'a str,
     presentation: Presentation,
     environment: EntryEnvironmentView<'a>,
+    canvas_renderer: EntryCanvasRendererView<'a>,
 }
 impl<'a> EntryLaunchRequestView<'a> {
     /// Compose bounded slices and validate the profile through its authoritative owner.
@@ -267,7 +292,33 @@ impl<'a> EntryLaunchRequestView<'a> {
         environment: EntryEnvironmentView<'a>,
     ) -> Result<Self, EntryShapeError> {
         ProfileId::validate(profile).map_err(EntryShapeError::Configuration)?;
-        Ok(Self { connection, frontend, profile_directory, profile, presentation, environment })
+        Ok(Self {
+            connection,
+            frontend,
+            profile_directory,
+            profile,
+            presentation,
+            environment,
+            canvas_renderer: EntryCanvasRendererView::Absent,
+        })
+    }
+    /// Attach the stored canvas renderer preference.
+    /// # Errors
+    /// Rejects stored text above the 64-byte selector bound.
+    pub fn with_canvas_renderer(
+        mut self,
+        preference: EntryCanvasRendererView<'a>,
+    ) -> Result<Self, EntryShapeError> {
+        if matches!(preference, EntryCanvasRendererView::Stored(text) if text.len() > MAX_CANVAS_RENDERER_BYTES)
+        {
+            return Err(EntryShapeError::CanvasRenderer);
+        }
+        self.canvas_renderer = preference;
+        Ok(self)
+    }
+    /// Return the stored canvas renderer preference.
+    pub const fn canvas_renderer(self) -> EntryCanvasRendererView<'a> {
+        self.canvas_renderer
     }
     /// Return exact original requested connection mode.
     pub const fn connection(self) -> EntryConnectionView<'a> {

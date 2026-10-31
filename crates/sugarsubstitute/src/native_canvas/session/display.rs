@@ -37,6 +37,8 @@ impl Session {
     #[cfg(feature = "native-composition")]
     pub(crate) fn revoke_presentation(&mut self) -> Result<(), Box<dyn Error>> {
         self.abandon_cpu_frame(self.navigation_time())?;
+        #[cfg(windows)]
+        self.abandon_composition_frame(self.navigation_time())?;
         self.drawable = false;
         Ok(())
     }
@@ -76,7 +78,7 @@ impl Session {
 
     /// A pair generation is usable only for its exact native output extent.
     pub(super) fn needs_display_buffers(&self, extent: sugarsubstitute_image_ops::Extent) -> bool {
-        self.config.gpu.is_none() && self.document.display_buffer_extent != Some(extent)
+        !self.gpu_document() && self.document.display_buffer_extent != Some(extent)
     }
 
     /// Publish a complete pair generation without withdrawing the acknowledged old projection.
@@ -112,7 +114,7 @@ impl Session {
         if !self.display_selection_pending(selection) {
             return Ok(());
         }
-        if self.config.gpu.is_none()
+        if !self.gpu_document()
             && !self
                 .document
                 .display_buffers
@@ -136,7 +138,7 @@ impl Session {
             coverage: layer.shown.coverage,
             projection: layer.projection,
         });
-        let source = if self.config.gpu.is_some() {
+        let source = if self.gpu_document() {
             let surface = match shown.tier {
                 BackingTier::Fallback => self.document.fallback_gpu_front.as_ref(),
                 BackingTier::Navigation => self.document.navigation_gpu_front.as_ref(),
@@ -332,7 +334,11 @@ impl Session {
                             self.accept_display(evidence, false)?;
                         }
                     }
-                    work::DrawPixels::Gpu(Some(frame)) => {
+                    #[cfg(all(windows, feature = "native-composition"))]
+                    work::DrawPixels::Gpu(Some(work::NativeFrame::Composition(frame))) => {
+                        self.offer_composition_frame(target, frame, evidence, now)?;
+                    }
+                    work::DrawPixels::Gpu(Some(work::NativeFrame::Window(frame))) => {
                         self.pacing.prepared(target, now)?;
                         self.document.pending_gpu_evidence = Some(evidence);
                         self.pending_gpu_presentation = Some(presentation::PendingPresentation {
@@ -391,7 +397,7 @@ impl Session {
         if !self.drawable {
             return Ok(None);
         }
-        let paced_completion = self.config.gpu.is_none()
+        let paced_completion = !self.gpu_document()
             && self.presentation.attached()
             && self.rendering.as_ref().is_some_and(|rendering| {
                 matches!(

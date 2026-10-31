@@ -143,7 +143,7 @@ impl Session {
     }
 
     pub(super) fn backing_stamp(&self, tier: BackingTier) -> Option<FrameStamp> {
-        if self.config.gpu.is_some() {
+        if self.gpu_document() {
             match tier {
                 BackingTier::Fallback => self.document.fallback_gpu_front.as_ref(),
                 BackingTier::Navigation => self.document.navigation_gpu_front.as_ref(),

@@ -260,7 +260,8 @@ fn project(view: EntryLaunchRequestView<'_>) -> Result<StartupConfiguration, Pro
         }
     };
     let profile = ProfileId::new(text(view.profile())?).map_err(ProjectionError::Configuration)?;
-    Ok(StartupConfiguration::new(connection, profile, view.presentation()))
+    Ok(StartupConfiguration::new(connection, profile, view.presentation())
+        .with_canvas_renderer(view.canvas_renderer().to_owned_preference()))
 }
 
 pub(super) fn project_main(

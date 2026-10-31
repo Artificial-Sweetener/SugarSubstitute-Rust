@@ -78,7 +78,11 @@ impl Fixture {
             JobSequence::new(),
             ScopeSpec { id: ScopeId::new(1)?, deadline: None },
         );
-        canvas.start(client.clone(), "en")?;
+        canvas.start(
+            client.clone(),
+            "en",
+            crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu,
+        )?;
         while !canvas.reported_ready {
             let observed = wake.revision();
             pump(&mut canvas, &client)?;

@@ -21,7 +21,7 @@ pub(super) fn prepare(
     underlay: Option<&GpuUnderlay>,
     view: ViewProjection,
     context: &JobContext,
-) -> Result<Option<WindowFrame>, WorkError> {
+) -> Result<Option<NativeFrame>, WorkError> {
     let samples = if view.source() != view.target() || underlay.is_some() {
         Some(ProjectionSamples::new(view, context)?)
     } else {
@@ -53,12 +53,24 @@ pub(super) fn prepare(
     } else {
         None
     };
-    let mut window = resources
-        .window
+    let mut display = resources
+        .display
         .lock()
         .map_err(|_| WorkError::invalid("Canvas native presentation state failed"))?;
-    let native = match window.as_mut() {
-        Some(window) => loop {
+    let native = match display.as_mut() {
+        #[cfg(all(windows, feature = "native-composition"))]
+        Some(DisplayTarget::Composition(target)) => {
+            let sources = super::composition::Sources {
+                frame,
+                samples: samples.as_ref(),
+                underlay: underlay.zip(underlay_samples.as_ref()),
+                matte,
+            };
+            return target
+                .draw(&sources, context, || reclaim_gpu_cache(resources))
+                .map(|frame| frame.map(NativeFrame::Composition));
+        }
+        Some(DisplayTarget::Window(window)) => loop {
             let prepared = match (&samples, underlay, &underlay_samples) {
                 (Some(samples), Some(underlay), Some(underlay_samples)) => window
                     .prepare_composited(
@@ -93,7 +105,7 @@ pub(super) fn prepare(
         };
         verify_gpu(frame, native, sources, samples.as_ref(), matte, verification, context)?;
     }
-    Ok(native)
+    Ok(native.map(NativeFrame::Window))
 }
 
 fn reclaim_gpu_cache(resources: &Resources) -> Result<CacheReclaim, WorkError> {

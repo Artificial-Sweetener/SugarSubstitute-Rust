@@ -35,7 +35,7 @@ impl Options {
             proof_window: _,
         } = self;
         Config {
-            gpu,
+            gpu: gpu.map(crate::native_canvas::gpu_policy::GpuRequest::Required),
             capture,
             verify_native,
             cache,

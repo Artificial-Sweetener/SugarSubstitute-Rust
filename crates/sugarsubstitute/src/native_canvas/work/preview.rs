@@ -96,7 +96,7 @@ impl Resources {
                 source_revision: None,
                 device: None,
             })),
-            window: Arc::new(Mutex::new(None)),
+            display: Arc::new(Mutex::new(None)),
             _metadata: metadata,
         })
     }

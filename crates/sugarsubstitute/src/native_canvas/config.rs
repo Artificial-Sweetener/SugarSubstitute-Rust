@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Configure one canvas lifetime independently of a standalone window or command line.
 
+use super::gpu_policy::GpuRequest;
 use std::path::PathBuf;
-use sugarsubstitute_image_gpu::AdapterKey;
 use sugarsubstitute_image_ops::Extent;
 
 /// The initial source decision belongs to the composing host.
@@ -18,8 +18,9 @@ pub(crate) enum InitialSource {
 
 /// Runtime inputs shared by standalone and application-owned canvas lifetimes.
 pub(crate) struct Config {
-    /// Explicit native adapter selection; absence selects CPU presentation.
-    pub(crate) gpu: Option<AdapterKey>,
+    /// Native adapter request; absence selects CPU presentation. An embedded request that cannot
+    /// be satisfied is replaced by absence before any display work starts.
+    pub(crate) gpu: Option<GpuRequest>,
     /// Retain the additional reference pixels required for explicit qualification.
     pub(crate) capture: bool,
     /// Request the separate native display verification readback during qualification.

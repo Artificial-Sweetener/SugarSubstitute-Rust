@@ -84,3 +84,50 @@ fn startup_launch_body_maximum_is_the_unchanged_frame_minus_header_bound()
     assert!(launch_payload::decode(&vec![0; maximum + 1]).is_err());
     Ok(())
 }
+#[test]
+fn startup_launch_body_carries_each_canvas_renderer_preference_exactly()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::{
+        configuration::CanvasRendererPreference, coordinator_entry::EntryCanvasRendererView,
+    };
+    for (preference, expected) in [
+        (CanvasRendererPreference::Absent, EntryCanvasRendererView::Absent),
+        (
+            CanvasRendererPreference::stored("vulkan:10de:2b85"),
+            EntryCanvasRendererView::Stored("vulkan:10de:2b85"),
+        ),
+        (CanvasRendererPreference::Malformed, EntryCanvasRendererView::Malformed),
+    ] {
+        let configuration = StartupConfiguration::new(
+            attached()?,
+            ProfileId::new("Profile_1".into())?,
+            Presentation::new("en", Theme::Light, false)?,
+        )
+        .with_canvas_renderer(preference.clone());
+        let original = EntryLaunchRequest::new(
+            configuration,
+            path(),
+            path(),
+            path(),
+            path(),
+            path(),
+            vec![0, 0],
+        )?;
+        let length = launch_payload::encoded_length(&original)?;
+        let mut body = vec![0; length];
+        assert_eq!(launch_payload::encode(&mut body, &original)?, length);
+        let view = launch_payload::decode(&body)?;
+        assert_eq!(view.canvas_renderer(), expected);
+        assert_eq!(view.canvas_renderer().to_owned_preference(), preference);
+        let mut unknown = body.clone();
+        let kind = length
+            - 2
+            - match preference {
+                CanvasRendererPreference::Stored(text) => text.len(),
+                _ => 0,
+            };
+        unknown[kind] = 3;
+        assert!(launch_payload::decode(&unknown).is_err());
+    }
+    Ok(())
+}

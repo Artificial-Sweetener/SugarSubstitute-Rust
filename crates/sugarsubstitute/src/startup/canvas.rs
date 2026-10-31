@@ -7,6 +7,7 @@ use crate::{
     job_sequence::JobSequence,
     native_canvas::{
         config::{Config, InitialSource},
+        gpu_policy::EmbeddedGpuPolicy,
         session::{Session, runtime::Runtime},
     },
 };
@@ -101,10 +102,12 @@ impl EmbeddedCanvas {
     }
 
     /// Start once on the application's existing executor; a reload retains the same session.
+    /// The renderer policy is fixed for the session; an unavailable GPU presents CPU frames.
     pub(super) fn start(
         &mut self,
         client: ExecutionClient,
         locale: &str,
+        gpu: EmbeddedGpuPolicy,
     ) -> Result<(), Box<dyn Error>> {
         if self.cutoff.is_some() {
             return Err("Application canvas has closed admission".into());
@@ -112,8 +115,16 @@ impl EmbeddedCanvas {
         if self.session.is_some() {
             return Ok(());
         }
+        // Only the composition can present GPU frames; other hosts keep CPU presentation.
+        #[cfg(all(windows, feature = "native-composition"))]
+        let gpu = gpu.request();
+        #[cfg(not(all(windows, feature = "native-composition")))]
+        let gpu = {
+            let _ = gpu;
+            None
+        };
         let config = Config {
-            gpu: None,
+            gpu,
             capture: false,
             verify_native: false,
             cache: self.anchor.clone(),
@@ -123,6 +134,9 @@ impl EmbeddedCanvas {
         };
         let mut session =
             Session::new(config, self.health.clone(), self.clock.clone(), self.jobs.clone())?;
+        #[cfg(all(windows, feature = "native-composition"))]
+        session.attach_composition_surface()?;
+        #[cfg(not(all(windows, feature = "native-composition")))]
         session.attach_cpu_surface()?;
         session.input(Input::Drawable(false))?;
         self.session = Some(session);
@@ -142,10 +156,12 @@ impl EmbeddedCanvas {
             {
                 session.close_until(cutoff)?;
             }
-            if !self.reported_ready && session.initialized() {
+            if !self.reported_ready && session.initialized() && session.renderer_settled() {
                 self.reported_ready = true;
                 tracing::info!(
                     operation = "embedded_canvas_ready",
+                    gpu = session.gpu_active(),
+                    gpu_fallback = session.gpu_fallback().unwrap_or("none"),
                     "Application canvas storage is ready"
                 );
             }
@@ -161,7 +177,18 @@ impl EmbeddedCanvas {
         request: sugarsubstitute_contracts::canvas_context::CanvasContextRequest,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
+        self.admit_composition_gpu();
         self.surface.context(identity, request, claim, self.session.as_mut())
+    }
+
+    /// Only composition-hosted main lifetimes deliver canvas messages here, so the first one
+    /// admits the opted-in GPU; windowed hosting never creates a device for an unused canvas.
+    #[cfg(feature = "native-composition")]
+    fn admit_composition_gpu(&mut self) {
+        #[cfg(windows)]
+        if let Some(session) = &mut self.session {
+            session.admit_composition_gpu();
+        }
     }
 
     /// Receive the current panel's shared surface operation.
@@ -173,6 +200,7 @@ impl EmbeddedCanvas {
         allocation: Option<sugarsubstitute_desktop::canvas::placement::WebViewAllocation>,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
+        self.admit_composition_gpu();
         match message {
             sugarsubstitute_contracts::canvas_surface::CanvasSurfaceMessage::Cancel {
                 request_id,

@@ -102,6 +102,8 @@ impl Session {
     pub(crate) fn cancel_selection(&mut self) -> Result<(), Box<dyn Error>> {
         let next = self.source_sequence.checked_add(1).ok_or("Canvas source revision exhausted")?;
         self.abandon_cpu_frame(self.navigation_time())?;
+        #[cfg(windows)]
+        self.abandon_composition_frame(self.navigation_time())?;
         self.cancel_acquirers();
         if let Some(loading) = &self.loading {
             loading.job.cancel();

@@ -19,6 +19,7 @@ impl Session {
             || !self.drawable
             || self.displaying.is_some()
             || self.document.cpu_pending.is_some()
+            || self.gpu_presentation_pending()
             || self.pending_retirement.is_some()
             || self.deferred_retirement.is_some()
             || self.preview.retired.is_some()

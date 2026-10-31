@@ -81,7 +81,7 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
         ScopeSpec { id: ScopeId::new(1)?, deadline: None },
     );
     canvas.surface = crate::startup::canvas::surface::NativeSurface::new();
-    canvas.start(client.clone(), "en")?;
+    canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;
     while !canvas.reported_ready {
         let revision = wake.revision();
         pump(&mut canvas, &client)?;

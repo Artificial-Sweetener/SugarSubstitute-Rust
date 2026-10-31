@@ -251,7 +251,8 @@ fn finished_reconstruction_threshold_does_not_turn_nearest_into_a_preview_loop()
 #[test]
 fn empty_viewer_releases_picker_before_any_frame_or_gpu_completion() -> Result<(), Box<dyn Error>> {
     let (mut session, _, _directory) = session()?;
-    session.config.gpu = Some("vulkan:8086:a780".parse()?);
+    session.config.gpu =
+        Some(crate::native_canvas::gpu_policy::GpuRequest::Required("vulkan:8086:a780".parse()?));
     session.device_pending = true;
     session.gpu_ready = false;
     let wake = Arc::new(refinement::Wake::default());

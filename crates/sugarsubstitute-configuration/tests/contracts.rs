@@ -142,8 +142,9 @@ fn preservation_checks_schema_without_rewriting_or_discarding_authored_text() ->
     initial::validate_preserved(bytes)?;
     assert_eq!(bytes, original);
     assert!(parse_startup_configuration(bytes).is_err());
+    initial::validate_preserved(b"schema_version = 2\ncanvas_renderer = 5")?;
     for invalid in [
-        b"schema_version=2".to_vec(),
+        b"schema_version=3".to_vec(),
         b"schema_version=1\nbad=[".to_vec(),
         b"# no version".to_vec(),
         vec![0xff],

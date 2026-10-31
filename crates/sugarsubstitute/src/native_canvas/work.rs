@@ -7,8 +7,11 @@ mod display;
 mod gpu;
 #[cfg(feature = "native-composition")]
 pub(super) mod preview;
+#[cfg(all(windows, feature = "native-composition"))]
+pub(super) use display::{CompositionFrame, CompositionTarget};
 pub(super) use display::{
-    CpuUnderlay, Draw, DrawInput, DrawPixels, DrawSource, GpuUnderlay, UnderlayEvidence,
+    CpuUnderlay, DisplayTarget, Draw, DrawInput, DrawPixels, DrawSource, GpuUnderlay, NativeFrame,
+    UnderlayEvidence,
 };
 use std::{
     path::PathBuf,
@@ -25,7 +28,7 @@ use sugarsubstitute_canvas_render::{
 use sugarsubstitute_contracts::execution::{
     CpuStep, CpuTask, JobContext, MemoryClaim, MemoryLease,
 };
-use sugarsubstitute_image_gpu::{GpuDevice, WindowFrame, WindowSurface};
+use sugarsubstitute_image_gpu::{GpuDevice, WindowSurface};
 use sugarsubstitute_image_io::{ArchiveStats, CacheReuse, ImageSource, SharedRaster};
 use sugarsubstitute_image_ops::{
     AssetId, Extent, ImageError, Pixel, RasterSampleRequest, RasterSource, Reconstruction, Region,
@@ -123,7 +126,7 @@ pub(super) struct Resources {
     pub(super) memory: MemoryLease,
     pub(super) cache: RuntimeCache,
     pub(super) engine: Arc<Mutex<Engine>>,
-    window: Arc<Mutex<Option<WindowSurface>>>,
+    display: Arc<Mutex<Option<DisplayTarget>>>,
     pub(super) _metadata: Arc<MemoryClaim>,
 }
 impl Clone for Resources {
@@ -134,7 +137,7 @@ impl Clone for Resources {
             memory: self.memory.clone(),
             cache: self.cache.clone(),
             engine: self.engine.clone(),
-            window: self.window.clone(),
+            display: self.display.clone(),
             _metadata: self._metadata.clone(),
         }
     }
@@ -216,7 +219,22 @@ impl Resources {
             source_revision: None,
             device: Some(device),
         }));
-        self.window = Arc::new(Mutex::new(window));
+        self.display = Arc::new(Mutex::new(window.map(DisplayTarget::Window)));
+        self
+    }
+    /// Bind the selected device and its main-window composition target before preparation.
+    #[cfg(all(windows, feature = "native-composition"))]
+    pub(super) fn with_composition(
+        mut self,
+        device: Arc<GpuDevice>,
+        target: CompositionTarget,
+    ) -> Self {
+        self.engine = Arc::new(Mutex::new(Engine {
+            renderer: None,
+            source_revision: None,
+            device: Some(device),
+        }));
+        self.display = Arc::new(Mutex::new(Some(DisplayTarget::Composition(Box::new(target)))));
         self
     }
 }
@@ -239,7 +257,7 @@ pub(super) fn initialize(
             memory,
             cache,
             engine,
-            window: Arc::new(Mutex::new(None)),
+            display: Arc::new(Mutex::new(None)),
             _metadata: metadata,
             capture,
             verify_native,

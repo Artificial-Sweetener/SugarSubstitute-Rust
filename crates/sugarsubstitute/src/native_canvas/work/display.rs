@@ -2,11 +2,16 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare disposable display from immutable canonical pixels independently of DAG evaluation.
 use super::*;
+#[cfg(all(windows, feature = "native-composition"))]
+mod composition;
 mod gpu;
+#[cfg(all(windows, feature = "native-composition"))]
+pub(in crate::native_canvas) use composition::{CompositionFrame, CompositionTarget};
 use std::error::Error;
 use std::sync::TryLockError;
 use sugarsubstitute_canvas::{BackingCoverage, ViewProjection};
 use sugarsubstitute_canvas_render::{CpuProjection, GpuFrame, ProjectionBuffer, ProjectionSamples};
+use sugarsubstitute_image_gpu::WindowFrame;
 use sugarsubstitute_image_gpu::{DisplayReadbackWorkspace, GpuError};
 
 enum ReadbackOutcome<T> {
@@ -93,10 +98,26 @@ pub(in crate::native_canvas) struct DrawInput {
     pub(in crate::native_canvas) document: (u64, u64),
     pub(in crate::native_canvas) source_revision: u64,
 }
+/// Native consumer of retained GPU display images, fixed when the device is installed.
+pub(in crate::native_canvas) enum DisplayTarget {
+    /// The standalone viewer's swapchain.
+    Window(WindowSurface),
+    /// Shared textures copied by the main-window composition.
+    #[cfg(all(windows, feature = "native-composition"))]
+    Composition(Box<CompositionTarget>),
+}
+/// A completed GPU display for exactly one native consumer.
+pub(in crate::native_canvas) enum NativeFrame {
+    /// A drawn swapchain image awaiting presentation on a worker.
+    Window(WindowFrame),
+    /// A drawn shared texture awaiting the composition copy on the UI thread.
+    #[cfg(all(windows, feature = "native-composition"))]
+    Composition(CompositionFrame),
+}
 /// Completed disposable pixels; these never replace canonical image-operation products.
 pub(in crate::native_canvas) enum DrawPixels {
     Cpu(Box<CpuProjection>),
-    Gpu(Option<WindowFrame>),
+    Gpu(Option<NativeFrame>),
 }
 /// Actual source generation, output camera and authored identity represented by one display.
 pub(in crate::native_canvas) struct Draw {
@@ -164,7 +185,7 @@ impl DrawInput {
                 let verified = native.is_some()
                     || self
                         .resources
-                        .window
+                        .display
                         .lock()
                         .map_err(|_| WorkError::invalid("Canvas presentation state failed"))?
                         .is_none();

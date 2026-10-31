@@ -107,7 +107,7 @@ impl Session {
     /// The application waits for this intent's native evidence just as for a camera command.
     pub(crate) fn camera_intent(&self) -> CameraCommandResult {
         if self.closing
-            || self.config.gpu.is_some()
+            || self.presentation.gpu_window().is_some()
             || self.source_failed()
             || self.document_suspended
             || self.restoring_document()
@@ -153,7 +153,7 @@ impl Session {
     /// Read actual native-accepted evidence for the current CPU image, even during later motion.
     /// Prepared CPU frames and semantic destination modes do not become display state here.
     pub(crate) fn accepted_camera(&self) -> Option<AcceptedCamera> {
-        if self.closing || self.config.gpu.is_some() || self.source_failed() {
+        if self.closing || self.presentation.gpu_window().is_some() || self.source_failed() {
             return None;
         }
         let scene = self.document.scene.as_ref()?;

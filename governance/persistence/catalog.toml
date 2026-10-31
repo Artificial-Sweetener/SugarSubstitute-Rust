@@ -205,13 +205,13 @@ migrations = []
 id = "startup-configuration"
 owner = "sugarsubstitute-configuration"
 sources = ["crates/sugarsubstitute-configuration/src/startup.rs", "crates/sugarsubstitute-configuration/src/initial.rs"]
-source_sha256 = "sha256:0b29a24eded87cd592d909ad61d1b5d6df46f6b59d8cb683d876bd5f6afd2b9f"
+source_sha256 = "sha256:10f09a22f4fbc7e80aafac5a6dc440edf22861aa2a969f1e9148c31c33072f9a"
 classification = "authoritative_state"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
-compatibility = "reject"
-migrations = []
+current_version = 2
+accepted_versions = [1, 2]
+compatibility = "migrate"
+migrations = ["1->2"]
 
 # The held64 native fixture retains actual cancellation and eventual exit evidence.
 [[formats]]
@@ -435,11 +435,11 @@ migrations = []
 id = "native-coordinator-entry"
 owner = "sugarsubstitute-execution"
 sources = ["crates/sugarsubstitute-execution/src/coordinator_entry/protocol.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/decode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/encode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/raw_windows.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/types.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload/encode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload/decode.rs"]
-source_sha256 = "sha256:d510d264e8b68f6902ed5ed244c8d299f92da6b8ba6034a5d994c9a8bb65b6f5"
+source_sha256 = "sha256:4bae44f464ba20a319e32500a6c409e169cfeb3436dac198118142a071857715"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 

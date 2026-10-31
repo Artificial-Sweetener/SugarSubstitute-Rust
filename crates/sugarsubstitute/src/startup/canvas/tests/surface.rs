@@ -171,7 +171,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         JobSequence::new(),
         ScopeSpec { id: ScopeId::new(1)?, deadline: None },
     );
-    canvas.start(client.clone(), "en")?;
+    canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;
     while !canvas.reported_ready {
         let revision = wake.revision();
         pump(&mut canvas, &client)?;

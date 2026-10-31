@@ -43,6 +43,8 @@ windows::core::link!("d2d1.dll" "system" fn D2D1CreateFactory(
 ) -> HRESULT);
 
 const DEVICE_BYTES: u64 = 8 * 1024 * 1024;
+/// Process-local graphics identities; shared textures name the device that exported them.
+static NEXT_IDENTITY: AtomicU64 = AtomicU64::new(1);
 
 /// A worker-prepared drawing device and its original admitted canvas reservation.
 /// The desktop adapter uses it only after the preparing job has actually completed.
@@ -51,6 +53,7 @@ const DEVICE_BYTES: u64 = 8 * 1024 * 1024;
 pub struct CanvasGraphics {
     native: Option<NativeGraphics>,
     placement: CompositionAdapter,
+    identity: u64,
     memory: MemoryLease,
     _claim: MemoryClaim,
 }
@@ -203,6 +206,7 @@ impl CanvasGraphics {
         Ok(Arc::new(Self {
             native: Some(NativeGraphics { d3d, _dxgi: dxgi, _factory: factory, drawing, reads }),
             placement,
+            identity: next_identity()?,
             memory: memory.clone(),
             _claim: claim,
         }))
@@ -225,6 +229,7 @@ impl CanvasGraphics {
         Ok(Arc::new(Self {
             native: None,
             placement: CompositionAdapter::Default(SharedTextureFallback::NoSelectedGpu),
+            identity: next_identity()?,
             memory: memory.clone(),
             _claim: claim,
         }))
@@ -246,14 +251,28 @@ impl CanvasGraphics {
         }
     }
 
+    /// Allocator for worker-drawn shared textures, when this device shares textures.
+    pub fn shared_texture_factory(&self) -> Option<super::SharedTextureFactory> {
+        let luid = self.shared_textures()?;
+        let native = self.native.as_ref()?;
+        let fence = native.reads.as_ref()?.fence.clone();
+        Some(super::SharedTextureFactory::new(
+            native.d3d.clone(),
+            fence,
+            luid,
+            self.memory.clone(),
+            self.identity,
+        ))
+    }
+
+    /// Process-local identity named by the shared textures this device exports.
+    pub(super) const fn identity(&self) -> u64 {
+        self.identity
+    }
+
     /// Require the same retained reservation as the frame's canvas session.
     pub(crate) fn owns_memory(&self, memory: &MemoryLease) -> bool {
         self.memory.same_reservation(memory)
-    }
-
-    /// Borrow the retained reservation that funds shared textures.
-    pub(super) fn memory(&self) -> &MemoryLease {
-        &self.memory
     }
 
     /// Borrow the device only after worker preparation has completed.
@@ -261,7 +280,8 @@ impl CanvasGraphics {
         self.native.as_ref().map(|native| &native.drawing)
     }
 
-    /// Borrow the free-threaded D3D11 device for resource creation.
+    /// Borrow the free-threaded D3D11 device for qualification queries.
+    #[cfg(test)]
     pub(crate) fn d3d(&self) -> Option<&ID3D11Device> {
         self.native.as_ref().map(|native| &native.d3d)
     }
@@ -298,6 +318,13 @@ impl CanvasGraphics {
         }
         Ok(value)
     }
+}
+
+/// Allocate one process-local graphics identity.
+fn next_identity() -> Result<u64, CanvasGraphicsError> {
+    NEXT_IDENTITY
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| value.checked_add(1))
+        .map_err(|_| missing("canvas_graphics_identity"))
 }
 
 /// Enumerate hardware DXGI adapters with their LUIDs; software adapters cannot share textures.

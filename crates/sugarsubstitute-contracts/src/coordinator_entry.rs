@@ -17,10 +17,10 @@ pub use identity::{
     EntryOutcome, EntryRequestId,
 };
 pub use input::{
-    EntryArgumentsIter, EntryArgumentsView, EntryConnectionView, EntryEnvironmentView,
-    EntryFrontendView, EntryLaunchParts, EntryLaunchRequest, EntryLaunchRequestView,
-    EntryWindowsPathView, MAX_ENTRY_ENVIRONMENT_UNITS, MAX_ENTRY_PATH_UNITS,
-    MAX_ENTRY_REQUEST_ALLOCATION_BYTES,
+    EntryArgumentsIter, EntryArgumentsView, EntryCanvasRendererView, EntryConnectionView,
+    EntryEnvironmentView, EntryFrontendView, EntryLaunchParts, EntryLaunchRequest,
+    EntryLaunchRequestView, EntryWindowsPathView, MAX_ENTRY_ENVIRONMENT_UNITS,
+    MAX_ENTRY_PATH_UNITS, MAX_ENTRY_REQUEST_ALLOCATION_BYTES,
 };
 
 #[cfg(test)]

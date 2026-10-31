@@ -28,6 +28,15 @@ impl Session {
         if !self.host_graphics_pending || self.host_graphics_job.is_some() || self.closing {
             return Ok(());
         }
+        // A composition GPU request places the device on the selected adapter, so wait for it.
+        if self.presentation.composition()
+            && self.config.gpu.is_some()
+            && !self.gpu_ready
+            && self.composition_device.is_none()
+        {
+            return Ok(());
+        }
+        let selected = self.composition_device.as_ref().map(|device| device.descriptor().clone());
         let memory = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.memory.clone();
         let spec = self.spec(
             Operation::Infrastructure,
@@ -38,10 +47,15 @@ impl Session {
         )?;
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         match runtime.client.submit_blocking(&runtime.scope, spec, move |context| {
-            #[cfg(test)]
-            let result = CanvasGraphics::fixture(&memory, &context);
-            #[cfg(not(test))]
-            let result = CanvasGraphics::prepare(&memory, &context, None);
+            // Tests without a selected GPU use the deterministic boundary; a selected GPU
+            // always needs the real composition device on its adapter.
+            let result = match &selected {
+                Some(selected) => CanvasGraphics::prepare(&memory, &context, Some(selected)),
+                #[cfg(test)]
+                None => CanvasGraphics::fixture(&memory, &context),
+                #[cfg(not(test))]
+                None => CanvasGraphics::prepare(&memory, &context, None),
+            };
             if result.is_ok() {
                 tracing::info!(
                     operation = "canvas_graphics_ready",
@@ -65,7 +79,10 @@ impl Session {
     pub(super) fn consume_host_graphics(&mut self) -> Result<(), Box<dyn Error>> {
         let Some(outcome) = Self::take(&mut self.host_graphics_job) else { return Ok(()) };
         match Self::terminal(outcome) {
-            Ok(graphics) if self.host_graphics.is_none() => self.host_graphics = Some(graphics),
+            Ok(graphics) if self.host_graphics.is_none() => {
+                self.adopt_composition_graphics(&graphics)?;
+                self.host_graphics = Some(graphics);
+            }
             Ok(graphics) => {
                 self.retire(Retired { _host_graphics: Some(graphics), ..Default::default() })?;
                 return Err("Canvas graphics device was already retained".into());
@@ -78,6 +95,10 @@ impl Session {
                 tracing::error!(operation="canvas_graphics_prepare", cause=%cause,
                     "Canvas graphics preparation failed");
                 self.host_graphics_failure = Some(cause);
+                if let Some(device) = self.composition_device.take() {
+                    self.fall_back_to_cpu("composition_device_failed", &device.descriptor().name);
+                    self.retire(Retired { _device: Some(device), ..Default::default() })?;
+                }
             }
         }
         Ok(())

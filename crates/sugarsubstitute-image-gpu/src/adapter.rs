@@ -24,8 +24,8 @@ impl AdapterId {
     /// Identity outside every live catalog, for descriptor policy tests; it selects no device.
     #[cfg(feature = "boundary-fixtures")]
     #[doc(hidden)]
-    pub const fn fixture() -> Self {
-        Self { catalog: 0, index: 0 }
+    pub const fn fixture(index: u8) -> Self {
+        Self { catalog: 0, index }
     }
 }
 /// Native graphics API used by the selected device.

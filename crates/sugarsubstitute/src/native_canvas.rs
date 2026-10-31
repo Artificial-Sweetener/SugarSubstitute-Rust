@@ -4,6 +4,7 @@
 
 pub(crate) mod config;
 mod coverage;
+pub(crate) mod gpu_policy;
 pub(crate) mod proof;
 pub(crate) mod session;
 mod work;

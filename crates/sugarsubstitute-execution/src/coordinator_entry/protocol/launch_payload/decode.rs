@@ -6,8 +6,8 @@ use std::num::NonZeroU16;
 use sugarsubstitute_contracts::{
     configuration::{LoopbackOrigin, Presentation, Theme},
     coordinator_entry::{
-        EntryArgumentsView, EntryConnectionView, EntryEnvironmentView, EntryFrontendView,
-        EntryWindowsPathView,
+        EntryArgumentsView, EntryCanvasRendererView, EntryConnectionView, EntryEnvironmentView,
+        EntryFrontendView, EntryWindowsPathView,
     },
 };
 
@@ -61,6 +61,14 @@ fn launch<'a>(reader: &mut Reader<'a>) -> Result<EntryLaunchRequestView<'a>, Ent
     let profile_directory = path(reader)?;
     let environment = EntryEnvironmentView::from_le_bytes(reader.section()?)
         .map_err(EntryTransportError::Shape)?;
+    let renderer_kind = reader.byte()?;
+    let renderer_length = reader.byte()? as usize;
+    let canvas_renderer = match (renderer_kind, renderer_length) {
+        (0, 0) => EntryCanvasRendererView::Absent,
+        (1, length) => EntryCanvasRendererView::Stored(text(reader, length)?),
+        (2, 0) => EntryCanvasRendererView::Malformed,
+        _ => return Err(EntryTransportError::Malformed),
+    };
     EntryLaunchRequestView::new(
         connection,
         frontend,
@@ -69,6 +77,7 @@ fn launch<'a>(reader: &mut Reader<'a>) -> Result<EntryLaunchRequestView<'a>, Ent
         presentation,
         environment,
     )
+    .and_then(|view| view.with_canvas_renderer(canvas_renderer))
     .map_err(EntryTransportError::Shape)
 }
 

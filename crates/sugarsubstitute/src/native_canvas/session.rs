@@ -15,6 +15,8 @@ pub(crate) use camera::{CameraCommandResult, CameraIntent, CameraSettlement};
 mod closing;
 mod comparison;
 mod completion;
+#[cfg(all(windows, feature = "native-composition"))]
+mod composition;
 mod display;
 mod document;
 #[cfg(feature = "native-composition")]
@@ -99,6 +101,8 @@ struct Retired {
     _host_graphics: Option<Arc<sugarsubstitute_desktop::canvas::CanvasGraphics>>,
     _gpu_front: Option<GpuSurface>,
     _presentation: Option<WindowFrame>,
+    #[cfg(all(windows, feature = "native-composition"))]
+    _composition: [Option<composition::CompositionDisplay>; 2],
     _drawing: Option<work::Draw>,
     _projection: Option<Box<CpuProjection>>,
     _buffers: [Option<ProjectionBuffer>; 2],
@@ -168,7 +172,7 @@ pub(crate) struct Session {
     runtime: Option<Runtime>,
     starting_owner: Option<ExecutionOwner>,
     initializing: Option<OwnedJob<(Resources, Scene), WorkError>>,
-    device_job: Option<OwnedJob<Arc<GpuDevice>, WorkError>>,
+    device_job: Option<OwnedJob<Option<Arc<GpuDevice>>, WorkError>>,
     #[cfg(all(windows, feature = "native-composition"))]
     host_graphics_job:
         Option<OwnedJob<Arc<sugarsubstitute_desktop::canvas::CanvasGraphics>, WorkError>>,
@@ -178,6 +182,19 @@ pub(crate) struct Session {
     host_graphics: Option<Arc<sugarsubstitute_desktop::canvas::CanvasGraphics>>,
     #[cfg(all(windows, feature = "native-composition"))]
     host_graphics_failure: Option<Box<dyn Error>>,
+    /// Selected device awaiting a composition graphics device on the same adapter.
+    #[cfg(all(windows, feature = "native-composition"))]
+    composition_device: Option<Arc<GpuDevice>>,
+    /// Completed shared frame awaiting its composition acknowledgement.
+    #[cfg(all(windows, feature = "native-composition"))]
+    composition_pending: Option<composition::CompositionDisplay>,
+    /// Last acknowledged shared frame, which the composition may copy again on placement changes.
+    #[cfg(all(windows, feature = "native-composition"))]
+    composition_shown: Option<composition::CompositionDisplay>,
+    /// Logged reason an embedded GPU request fell back to CPU frames.
+    gpu_fallback: Option<&'static str>,
+    /// Whether device discovery may start; a composition request waits for composition hosting.
+    gpu_admitted: bool,
     device_pending: bool,
     gpu_ready: bool,
     gpu_descriptor: Option<AdapterDescriptor>,
@@ -246,6 +263,37 @@ impl Session {
             && self.failed.is_none()
             && !self.closing
     }
+    /// Present CPU frames for the rest of this session, recording why GPU frames are unavailable.
+    /// Runs before any display work, so every later renderer decision observes CPU mode.
+    pub(super) fn fall_back_to_cpu(&mut self, reason: &'static str, adapter: &str) {
+        tracing::warn!(
+            operation = "canvas_gpu_fallback",
+            reason,
+            adapter,
+            "Embedded canvas presents CPU frames"
+        );
+        self.gpu_fallback = Some(reason);
+        self.config.gpu = None;
+        self.gpu_ready = true;
+    }
+    /// Reason the requested embedded GPU renderer is unavailable, when it fell back to CPU.
+    pub(crate) fn gpu_fallback(&self) -> Option<&'static str> {
+        self.gpu_fallback
+    }
+    /// Whether frames are prepared on the selected GPU.
+    pub(crate) fn gpu_active(&self) -> bool {
+        self.config.gpu.is_some() && self.gpu_ready
+    }
+    /// Whether the renderer is final: CPU, a GPU whose device and presentation are installed, or a
+    /// composition GPU request still awaiting composition hosting.
+    pub(crate) fn renderer_settled(&self) -> bool {
+        self.gpu_ready || !self.gpu_admitted
+    }
+    /// Whether the current document renders and displays through the selected GPU.
+    /// Previews are CPU-only documents even in a GPU session.
+    pub(super) fn gpu_document(&self) -> bool {
+        self.config.gpu.is_some() && !self.document.cpu_only
+    }
     /// One elapsed clock epoch supplies navigation and execution deadlines.
     fn navigation_time(&self) -> Duration {
         Duration::from_nanos(self.clock.now().as_nanos())
@@ -280,6 +328,14 @@ impl Session {
             host_graphics: None,
             #[cfg(all(windows, feature = "native-composition"))]
             host_graphics_failure: None,
+            #[cfg(all(windows, feature = "native-composition"))]
+            composition_device: None,
+            #[cfg(all(windows, feature = "native-composition"))]
+            composition_pending: None,
+            #[cfg(all(windows, feature = "native-composition"))]
+            composition_shown: None,
+            gpu_fallback: None,
+            gpu_admitted: true,
             device_pending: gpu_requested,
             gpu_ready: !gpu_requested,
             gpu_descriptor: None,

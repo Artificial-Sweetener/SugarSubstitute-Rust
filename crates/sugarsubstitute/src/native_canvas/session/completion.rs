@@ -162,7 +162,7 @@ impl Session {
                     .as_ref()
                     .is_some_and(|front| Arc::strong_count(front) > 1),
             });
-        if self.config.gpu.is_none()
+        if !self.gpu_document()
             && current_source
             && !self.closing
             && self.drawable

@@ -35,8 +35,8 @@ pub fn managed(
 }
 
 /// Check the historical preservation contract without reserializing user-authored text.
-/// Maintenance accepts schema-one TOML even when current startup validation would reject
-/// its settings. Repair must preserve those bytes so the user can correct them afterwards.
+/// Maintenance accepts schema-one and schema-two TOML even when current startup validation would
+/// reject its settings. Repair must preserve those bytes so the user can correct them afterwards.
 /// # Errors
 /// Rejects oversized/non-UTF-8 documents, malformed TOML and an unsupported version.
 pub fn validate_preserved(bytes: &[u8]) -> io::Result<()> {
@@ -48,7 +48,7 @@ pub fn validate_preserved(bytes: &[u8]) -> io::Result<()> {
     }
     let value: toml::Value =
         std::str::from_utf8(bytes).map_err(io::Error::other)?.parse().map_err(io::Error::other)?;
-    if value.get("schema_version").and_then(toml::Value::as_integer) != Some(1) {
+    if !matches!(value.get("schema_version").and_then(toml::Value::as_integer), Some(1 | 2)) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "Saved startup configuration requires a compatible installer",

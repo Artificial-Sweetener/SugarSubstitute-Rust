@@ -470,7 +470,17 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
             #[cfg(windows)]
             if let Some(canvas) = &mut self.canvas {
                 let locale = startup.session().configuration().presentation().locale().as_str();
-                canvas.start(self.execution.client()?, locale)?;
+                let preference = startup.session().configuration().canvas_renderer();
+                let policy = crate::native_canvas::gpu_policy::embedded_policy(preference)
+                    .unwrap_or_else(|reason| {
+                        tracing::warn!(
+                            operation = "canvas_gpu_fallback",
+                            reason,
+                            "Stored canvas renderer preference is unusable; presenting CPU frames"
+                        );
+                        crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu
+                    });
+                canvas.start(self.execution.client()?, locale, policy)?;
             }
             #[cfg(feature = "k1-native-qualification")]
             self.child.preview_after_main_revealed(identity, startup.session());

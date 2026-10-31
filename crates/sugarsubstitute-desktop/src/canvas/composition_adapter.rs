@@ -78,7 +78,7 @@ mod tests {
 
     fn descriptor(luid: Option<AdapterLuid>, shared_textures: bool) -> AdapterDescriptor {
         AdapterDescriptor {
-            id: AdapterId::fixture(),
+            id: AdapterId::fixture(0),
             name: "Discrete GPU".into(),
             vendor: 0x10de,
             device: 0x2b85,

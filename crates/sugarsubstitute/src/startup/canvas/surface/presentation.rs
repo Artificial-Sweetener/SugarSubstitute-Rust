@@ -78,7 +78,7 @@ impl NativeSurface {
                 !binding.committed
                     && binding.source_intent_revision == Some(session.source_intent_revision())
             })
-            && session.selected_cpu_frame().is_some()
+            && session.selected_frame().is_some()
             && session.host_graphics().is_some()
         {
             let pending = self.pending.take().ok_or("Pending canvas request disappeared")?;
@@ -113,14 +113,14 @@ impl NativeSurface {
         {
             return None;
         }
-        let (frame, memory) = session.selected_cpu_frame()?;
+        let (content, memory) = session.selected_frame()?;
         Some(MainCanvasFrame {
             identity: binding.identity,
             placement: binding.placement?,
             allocation: binding.allocation?,
             memory,
             graphics: session.host_graphics()?,
-            content: sugarsubstitute_desktop::canvas::CanvasContent::Cpu(frame),
+            content,
         })
     }
 
@@ -136,13 +136,13 @@ impl NativeSurface {
         if session.preview_frame_acknowledgeable(target) {
             session.did_present_cpu(target)?;
         } else {
-            let (frame, _) =
-                session.selected_cpu_frame().ok_or("Selected canvas frame is unavailable")?;
-            if frame.target != target {
+            let (content, _) =
+                session.selected_frame().ok_or("Selected canvas frame is unavailable")?;
+            if content.target() != target {
                 return Err("Native canvas acknowledged a stale frame".into());
             }
-            if frame.pending {
-                session.did_present_cpu(target)?;
+            if content.pending() {
+                session.did_present_selected(target)?;
             }
         }
         let preview = self.is_preview_frame(target, session);

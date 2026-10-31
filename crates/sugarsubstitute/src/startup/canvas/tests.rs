@@ -109,7 +109,7 @@ fn embedded_canvas_shares_capacity_and_retires_without_stopping_startup_scope()
         jobs.clone(),
         ScopeSpec { id: ScopeId::new(2)?, deadline: None },
     );
-    canvas.start(client.clone(), "en")?;
+    canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;
     loop {
         let revision = wake.revision();
         client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
@@ -122,7 +122,7 @@ fn embedded_canvas_shares_capacity_and_retires_without_stopping_startup_scope()
     let session = canvas.session.as_mut().ok_or("Canvas session absent")?;
     assert!(session.frame().is_none());
     assert!(!session.take_picker_request());
-    canvas.start(client.clone(), "en")?;
+    canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;
 
     let mut import =
         client.submit_blocking(&other, spec(jobs.allocate()?, 48 * 1024 * 1024), |_| {
@@ -178,7 +178,11 @@ fn closing_before_start_never_admits_a_new_canvas_scope() -> Result<(), Box<dyn 
         ScopeSpec { id: ScopeId::new(1)?, deadline: None },
     );
     canvas.close_until(Moment::from_nanos(10))?;
-    assert!(canvas.start(owner.client(), "en").is_err());
+    assert!(
+        canvas
+            .start(owner.client(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)
+            .is_err()
+    );
     assert!(canvas.settled()?);
     canvas.finish()?;
     Ok(())

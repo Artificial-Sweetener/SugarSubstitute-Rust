@@ -77,7 +77,7 @@ fn malformed_duplicate_unknown_or_missing_schema_fields_are_rejected() {
     }
     assert!(matches!(
         parse_startup_configuration(
-            ATTACH.replace("schema_version = 1", "schema_version = 2").as_bytes()
+            ATTACH.replace("schema_version = 1", "schema_version = 3").as_bytes()
         ),
         Err(StartupConfigurationError::UnsupportedSchema)
     ));
@@ -162,4 +162,55 @@ fn parser_applies_launch_argument_and_path_validation() {
         parse_startup_configuration(document.as_bytes()),
         Err(StartupConfigurationError::Invalid(ConfigurationError::InvalidLaunchPath))
     ));
+}
+
+/// Schema-two attachment with a top-level renderer preference line inserted before its tables.
+fn schema_two(preference: &str) -> String {
+    ATTACH.replacen("schema_version = 1\n", &format!("schema_version = 2\n{preference}"), 1)
+}
+
+#[test]
+fn schema_two_reads_the_renderer_preference_and_schema_one_reads_as_absent()
+-> Result<(), Box<dyn Error>> {
+    let stored = |text: &str| CanvasRendererPreference::stored(text);
+    assert_eq!(
+        parse_startup_configuration(ATTACH.as_bytes())?.canvas_renderer(),
+        &CanvasRendererPreference::Absent
+    );
+    assert_eq!(
+        parse_startup_configuration(schema_two("").as_bytes())?.canvas_renderer(),
+        &CanvasRendererPreference::Absent
+    );
+    for text in ["vulkan:10de:2b85", "cpu", "not-a-selector"] {
+        let document = schema_two(&format!("canvas_renderer = '{text}'\n"));
+        assert_eq!(
+            parse_startup_configuration(document.as_bytes())?.canvas_renderer(),
+            &stored(text)
+        );
+    }
+    let schema_one =
+        ATTACH.replacen("schema_version = 1\n", "schema_version = 1\ncanvas_renderer = 'cpu'\n", 1);
+    assert!(matches!(
+        parse_startup_configuration(schema_one.as_bytes()),
+        Err(StartupConfigurationError::UnsupportedSchema)
+    ));
+    Ok(())
+}
+
+#[test]
+fn corrupt_renderer_preferences_are_observable_misses_that_keep_startup_and_bytes()
+-> Result<(), Box<dyn Error>> {
+    for line in [
+        "canvas_renderer = 5\n".to_owned(),
+        "canvas_renderer = ['vulkan:10de:2b85']\n".to_owned(),
+        format!("canvas_renderer = '{}'\n", "x".repeat(65)),
+    ] {
+        let bytes = schema_two(&line).into_bytes();
+        let original = bytes.clone();
+        let configuration = parse_startup_configuration(&bytes)?;
+        assert_eq!(configuration.canvas_renderer(), &CanvasRendererPreference::Malformed);
+        assert_eq!(configuration.profile().as_str(), "desktop-1");
+        assert_eq!(bytes, original);
+    }
+    Ok(())
 }

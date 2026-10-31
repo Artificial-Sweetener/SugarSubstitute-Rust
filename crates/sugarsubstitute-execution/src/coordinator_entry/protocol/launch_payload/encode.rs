@@ -3,7 +3,10 @@
 //! Preflight and encode original Launch body bytes without a second frame grammar.
 use super::*;
 use std::path::Path;
-use sugarsubstitute_contracts::configuration::{ConnectionConfiguration, LoopbackHost, Theme};
+use sugarsubstitute_contracts::configuration::{
+    CanvasRendererPreference, ConnectionConfiguration, LoopbackHost, MAX_CANVAS_RENDERER_BYTES,
+    Theme,
+};
 
 fn add(total: &mut usize, length: usize) -> Result<(), EntryTransportError> {
     *total = total.checked_add(length).ok_or(EntryTransportError::Capacity)?;
@@ -56,6 +59,13 @@ pub(crate) fn encoded_length(request: &EntryLaunchRequest) -> Result<usize, Entr
         &mut length,
         request.environment().len().checked_mul(2).ok_or(EntryTransportError::Capacity)?,
     )?;
+    add(&mut length, 2)?;
+    if let CanvasRendererPreference::Stored(text) = configuration.canvas_renderer() {
+        if text.len() > MAX_CANVAS_RENDERER_BYTES {
+            return Err(EntryTransportError::Capacity);
+        }
+        add(&mut length, text.len())?;
+    }
     if length > MAX_BODY_BYTES {
         return Err(EntryTransportError::Capacity);
     }
@@ -121,6 +131,21 @@ fn launch(
     writer.u32(request.environment().len() * 2)?;
     for unit in request.environment() {
         writer.u16(*unit)?;
+    }
+    match configuration.canvas_renderer() {
+        CanvasRendererPreference::Absent => {
+            writer.byte(0)?;
+            writer.byte(0)?;
+        }
+        CanvasRendererPreference::Stored(text) => {
+            writer.byte(1)?;
+            writer.byte(u8::try_from(text.len()).map_err(|_| EntryTransportError::Capacity)?)?;
+            writer.bytes(text.as_bytes())?;
+        }
+        CanvasRendererPreference::Malformed => {
+            writer.byte(2)?;
+            writer.byte(0)?;
+        }
     }
     Ok(())
 }

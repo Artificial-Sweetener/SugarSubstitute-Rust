@@ -39,7 +39,7 @@ pub use composition_fence::{CompositionFence, CompositionFenceError, Composition
 #[allow(unsafe_code)]
 mod shared_texture;
 #[cfg(all(windows, feature = "native-composition"))]
-pub use shared_texture::SharedCanvasTexture;
+pub use shared_texture::{SharedCanvasTexture, SharedTextureFactory};
 
 /// Maximum supported physical width or height for a native canvas viewport.
 pub const MAX_VIEWPORT_EDGE: u32 = 16_384;

@@ -20,6 +20,8 @@ pub enum EntryShapeError {
     Capacity,
     /// The authoritative configuration owner rejected an input.
     Configuration(ConfigurationError),
+    /// Stored canvas renderer text exceeded its selector bound.
+    CanvasRenderer,
 }
 impl fmt::Display for EntryShapeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -30,6 +32,7 @@ impl fmt::Display for EntryShapeError {
             Self::Environment => "Entry environment snapshot rejected",
             Self::Capacity => "Entry retained capacity rejected",
             Self::Configuration(_) => "Entry configuration rejected",
+            Self::CanvasRenderer => "Entry canvas renderer preference rejected",
         })
     }
 }

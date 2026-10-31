@@ -42,6 +42,9 @@ sha2.workspace = true
 sugarsubstitute-networking = { path = "../sugarsubstitute-networking" }
 sugarsubstitute-crash = { path = "../sugarsubstitute-crash" }
 
+[dev-dependencies]
+sugarsubstitute-image-gpu = { path = "../sugarsubstitute-image-gpu", features = ["boundary-fixtures"] }
+
 [target.'cfg(windows)'.dev-dependencies]
 tempfile.workspace = true
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }

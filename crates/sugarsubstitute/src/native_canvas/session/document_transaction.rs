@@ -45,7 +45,7 @@ impl Session {
     /// # Errors
     /// Rejects a closing session, GPU-window presentation, or exhausted transaction identities.
     pub(crate) fn prepare_document(&mut self) -> Result<Option<DocumentToken>, Box<dyn Error>> {
-        if self.closing || self.config.gpu.is_some() {
+        if self.closing || self.presentation.gpu_window().is_some() {
             return Err("Canvas document preparation is unavailable".into());
         }
         self.document_suspended = true;

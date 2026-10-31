@@ -26,6 +26,11 @@ fn io(cause: impl std::fmt::Display) -> io::Error {
     io::Error::other(cause.to_string())
 }
 
+/// Borrow the worker-side texture allocator of a composition device that shares textures.
+fn factory(graphics: &CanvasGraphics) -> Result<crate::canvas::SharedTextureFactory, io::Error> {
+    graphics.shared_texture_factory().ok_or_else(|| io("Composition device shares no textures"))
+}
+
 /// Deterministic opaque pattern whose every channel varies across both axes.
 fn pattern(extent: Extent) -> Vec<u32> {
     (0..extent.height())
@@ -163,7 +168,7 @@ fn qualify_extent(
         Arc::new(
             execution
                 .blocking(64 * 1024, move |context| {
-                    SharedCanvasTexture::create(&graphics, extent, &context).map_err(io)
+                    SharedCanvasTexture::create(&factory(&graphics)?, extent, &context).map_err(io)
                 })
                 .map_err(io)?,
         )
@@ -176,7 +181,7 @@ fn qualify_extent(
             let image =
                 DisplayImage::from_pixels(drawn_device.clone(), extent, &drawn_pixels, &context)
                     .map_err(io)?;
-            let handle = drawn_texture.handle().map_err(io)?;
+            let handle = drawn_texture.handle();
             let target = SharedTarget::import(&drawn_device, &handle, &context).map_err(io)?;
             let mut surface = SharedSurface::new(drawn_device).map_err(io)?;
             drawn_texture.await_reads(&context).map_err(io)?;
@@ -258,7 +263,7 @@ fn qualify_extent(
     let foreign = execution.blocking(64 * 1024, move |context| {
         let graphics =
             CanvasGraphics::prepare(&foreign_memory, &context, Some(&selected)).map_err(io)?;
-        SharedCanvasTexture::create(&graphics, extent, &context).map_err(io)
+        SharedCanvasTexture::create(&factory(&graphics)?, extent, &context).map_err(io)
     });
     let foreign = foreign.map_err(io)?;
     let foreign_frame =

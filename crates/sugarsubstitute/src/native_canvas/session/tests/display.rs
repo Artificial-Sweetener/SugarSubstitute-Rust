@@ -92,7 +92,8 @@ fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
 /// Deliver failure or a forged source identity through the real owned completion boundary.
 fn pending_draw_outcome(failure: bool, foreign_payload: bool) -> Result<Fixture, Box<dyn Error>> {
     let (mut session, clock, directory) = session()?;
-    session.config.gpu = Some("vulkan:8086:a780".parse()?);
+    session.config.gpu =
+        Some(crate::native_canvas::gpu_policy::GpuRequest::Required("vulkan:8086:a780".parse()?));
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(session.clock.clone(), wake.clone())?;
     let client = owner.client();

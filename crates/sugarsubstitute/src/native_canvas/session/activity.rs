@@ -216,12 +216,19 @@ impl Session {
         if self.host_graphics.as_ref().is_some_and(|graphics| Arc::strong_count(graphics) != 1) {
             return Ok(());
         }
+        #[cfg(all(windows, feature = "native-composition"))]
+        let composition_retained = self.composition_device.is_some()
+            || self.composition_pending.is_some()
+            || self.composition_shown.is_some();
+        #[cfg(not(all(windows, feature = "native-composition")))]
+        let composition_retained = false;
         if self.pending_open.is_some()
             || self.resources.is_some()
             || self.document.has_resources()
             || self.gpu_presentation.is_some()
             || self.pending_gpu_presentation.is_some()
             || graphics_retained
+            || composition_retained
         {
             let cutoff = self.retirement_cutoff()?;
             let document = self.withdraw_document()?;
@@ -237,9 +244,15 @@ impl Session {
                     .pending_gpu_presentation
                     .take()
                     .map(|presentation| presentation.frame),
+                #[cfg(all(windows, feature = "native-composition"))]
+                _device: self.composition_device.take(),
+                #[cfg(all(windows, feature = "native-composition"))]
+                _composition: [self.composition_pending.take(), self.composition_shown.take()],
                 ..Default::default()
             };
             self.gpu_presentation = None;
+            // Diagnostics hold a claim on the retired reservation; observations end with it.
+            self.gpu_diagnostics = None;
             self.retirement_deadline = Some(cutoff);
             self.pending_retirement = Some(retired);
         } else if !self.shutdown_started {

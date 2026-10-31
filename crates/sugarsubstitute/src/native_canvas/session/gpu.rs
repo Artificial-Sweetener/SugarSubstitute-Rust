@@ -2,17 +2,19 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Select one native device at startup, then attach the desktop peer on its original thread.
 use super::*;
+use crate::native_canvas::gpu_policy::{GpuRequest, select_embedded_gpu};
 use sugarsubstitute_image_gpu::AdapterCatalog;
 
 impl Session {
     pub(super) fn initialize_gpu(&mut self) -> Result<(), Box<dyn Error>> {
-        if self.gpu_ready || self.device_job.is_some() || !self.device_pending {
+        if self.gpu_ready || self.device_job.is_some() || !self.device_pending || !self.gpu_admitted
+        {
             return Ok(());
         }
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         let memory =
             self.resources.as_ref().ok_or("Canvas admission is unavailable")?.memory.clone();
-        let key = self.config.gpu.ok_or("Canvas GPU selection is unavailable")?;
+        let request = self.config.gpu.ok_or("Canvas GPU selection is unavailable")?;
         let spec = self.spec(
             Operation::Infrastructure,
             JobClass::IoOrdinary,
@@ -22,8 +24,26 @@ impl Session {
         )?;
         match runtime.client.submit_async(&runtime.scope, spec, move |context| async move {
             let catalog = AdapterCatalog::discover(&context).await?;
-            let identity = catalog.resolve(key)?;
-            catalog.select(identity, &memory, &context).await.map_err(WorkError::from)
+            match request {
+                GpuRequest::Required(key) => {
+                    let identity = catalog.resolve(key)?;
+                    Ok(Some(catalog.select(identity, &memory, &context).await?))
+                }
+                GpuRequest::Embedded(policy) => {
+                    let Some(identity) = select_embedded_gpu(catalog.adapters(), policy) else {
+                        return Ok(None);
+                    };
+                    match catalog.select(identity, &memory, &context).await {
+                        Ok(device) => Ok(Some(device)),
+                        Err(cause) => {
+                            tracing::warn!(operation = "canvas_gpu_initialization",
+                                job_id = context.job_id().get(), cause = %cause,
+                                "Embedded canvas GPU initialization failed");
+                            Ok(None)
+                        }
+                    }
+                }
+            }
         }) {
             Ok(job) => {
                 self.device_job = Some(job);
@@ -39,10 +59,19 @@ impl Session {
             return Ok(());
         };
         match Self::terminal(outcome) {
-            Ok(device) if self.closing => {
+            Ok(Some(device)) if self.closing => {
                 self.retire(Retired { _device: Some(device), ..Default::default() })?
             }
-            Ok(device) => {
+            Ok(None) if self.closing => {}
+            // Only an embedded request yields no device; a required selector fails instead.
+            Ok(None) => self.fall_back_to_cpu("adapter_unavailable", ""),
+            #[cfg(all(windows, feature = "native-composition"))]
+            Ok(Some(device)) if self.presentation.composition() => {
+                // The composition device must share this adapter before any display work.
+                self.composition_device = Some(device);
+                self.request_host_graphics()?;
+            }
+            Ok(Some(device)) => {
                 let window = self
                     .presentation
                     .gpu_window()
@@ -72,7 +101,7 @@ impl Session {
     }
     /// The actual accepted backing generation, independent of a proof-only CPU snapshot.
     pub(super) fn current_frame(&self) -> Option<FrameStamp> {
-        if self.config.gpu.is_some() {
+        if self.gpu_document() {
             self.document.gpu_front.as_ref().and_then(GpuSurface::current)
         } else {
             self.document.front.as_ref().and_then(|surface| surface.current())

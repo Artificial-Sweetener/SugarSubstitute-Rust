@@ -37,6 +37,8 @@ pub(super) struct DocumentState {
     pub(super) fallback_presented: Option<Presented>,
     pub(super) navigation_presented: Option<Presented>,
     pub(super) rebuilt: bool,
+    /// CPU-prepared previews keep CPU backings and display even in a GPU session.
+    pub(super) cpu_only: bool,
 }
 
 impl DocumentState {
@@ -69,6 +71,7 @@ impl DocumentState {
             fallback_presented: None,
             navigation_presented: None,
             rebuilt: false,
+            cpu_only: false,
         }
     }
 

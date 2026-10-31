@@ -90,6 +90,11 @@ impl Lifetime for Session {
     fn did_present_cpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
         #[cfg(feature = "native-composition")]
         if self.accept_preview_cpu(target)? {
+            // CPU pixels replaced any shown shared texture; its ring slot may be reused.
+            #[cfg(windows)]
+            {
+                self.composition_shown = None;
+            }
             return Ok(());
         }
         if self.document.cpu_pending != Some(target) {
@@ -111,6 +116,10 @@ impl Lifetime for Session {
         self.document.cpu_pending = None;
         self.accept_display(evidence, true)?;
         self.document.native_presented = Some(target);
+        #[cfg(all(windows, feature = "native-composition"))]
+        {
+            self.composition_shown = None;
+        }
         Ok(())
     }
     fn expose(&mut self) {
@@ -144,6 +153,8 @@ impl Lifetime for Session {
         let now = self.navigation_time();
         if previous != extent {
             self.pending_cpu_withdrawal(now)?;
+            #[cfg(all(windows, feature = "native-composition"))]
+            self.abandon_composition_frame(now)?;
         }
         self.document.tools.resize(
             extent,
@@ -241,7 +252,7 @@ impl Lifetime for Session {
         Ok(())
     }
     fn frame(&self) -> Option<CpuFrame<'_>> {
-        if self.config.gpu.is_some() {
+        if self.gpu_document() {
             return None;
         }
         #[cfg(feature = "native-composition")]

@@ -195,22 +195,67 @@ pub enum ConnectionConfiguration {
     Attach(LoopbackOrigin),
 }
 
+/// Maximum stored canvas renderer selector length in bytes.
+pub const MAX_CANVAS_RENDERER_BYTES: usize = 64;
+
+/// Stored embedded-canvas renderer preference; the renderer owner interprets stored text.
+///
+/// The canvas presents CPU frames unless a stored selector names an available adapter.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CanvasRendererPreference {
+    /// No preference is stored.
+    #[default]
+    Absent,
+    /// Stored selector text of at most 64 bytes, not yet validated against any adapter.
+    Stored(String),
+    /// A stored value that is not bounded selector text; it is never rewritten.
+    Malformed,
+}
+
+impl CanvasRendererPreference {
+    /// Classify stored text, rejecting values above the selector bound.
+    pub fn stored(text: &str) -> Self {
+        if text.len() <= MAX_CANVAS_RENDERER_BYTES {
+            Self::Stored(text.to_owned())
+        } else {
+            Self::Malformed
+        }
+    }
+}
+
 /// Validated startup intent containing no live resources or native privileges.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StartupConfiguration {
     connection: ConnectionConfiguration,
     profile: ProfileId,
     presentation: Presentation,
+    canvas_renderer: CanvasRendererPreference,
 }
 
 impl StartupConfiguration {
     /// Compose already validated connection, isolation and presentation choices.
+    /// No canvas renderer preference is stored until [`Self::with_canvas_renderer`].
     pub fn new(
         connection: ConnectionConfiguration,
         profile: ProfileId,
         presentation: Presentation,
     ) -> Self {
-        Self { connection, profile, presentation }
+        Self {
+            connection,
+            profile,
+            presentation,
+            canvas_renderer: CanvasRendererPreference::Absent,
+        }
+    }
+    /// Attach the stored embedded-canvas renderer preference.
+    #[must_use]
+    pub fn with_canvas_renderer(mut self, preference: CanvasRendererPreference) -> Self {
+        self.canvas_renderer = preference;
+        self
+    }
+    /// Borrow the stored embedded-canvas renderer preference.
+    pub fn canvas_renderer(&self) -> &CanvasRendererPreference {
+        &self.canvas_renderer
     }
     /// Borrow the explicit connection mode and validated request.
     pub fn connection(&self) -> &ConnectionConfiguration {
