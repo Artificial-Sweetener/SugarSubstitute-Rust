@@ -43,19 +43,25 @@ impl MainActor {
         match self.stage {
             ConstructionStage::Window => {
                 let settings = self.request()?.settings();
+                let builder = WindowBuilder::new()
+                    .with_title(title)
+                    .with_inner_size(LogicalSize::new(
+                        settings.logical_width,
+                        settings.logical_height,
+                    ))
+                    .with_min_inner_size(LogicalSize::new(304, 240))
+                    .with_decorations(false)
+                    .with_resizable(true)
+                    .with_transparent(true)
+                    .with_theme(Some(if settings.dark { Theme::Dark } else { Theme::Light }))
+                    .with_visible(false);
+                // The composed browser has no HWND; its forwarding target owns OLE drops here.
+                #[cfg(feature = "native-composition")]
+                let builder = tao::platform::windows::WindowBuilderExtWindows::with_drag_and_drop(
+                    builder, false,
+                );
                 self.window = Some(Rc::new(
-                    WindowBuilder::new()
-                        .with_title(title)
-                        .with_inner_size(LogicalSize::new(
-                            settings.logical_width,
-                            settings.logical_height,
-                        ))
-                        .with_min_inner_size(LogicalSize::new(304, 240))
-                        .with_decorations(false)
-                        .with_resizable(true)
-                        .with_transparent(true)
-                        .with_theme(Some(if settings.dark { Theme::Dark } else { Theme::Light }))
-                        .with_visible(false)
+                    builder
                         .build(target)
                         .map_err(|cause| DesktopError::new("create_main_window", cause))?,
                 ));

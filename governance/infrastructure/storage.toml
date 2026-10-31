@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:9be6d5920584857d67fbbb23eb8ba482825207415d942700d587f9e3dd374d64"
+source_sha256 = "sha256:97f19f93f5c715344420e296bab966807b92b10f960c4eaef588c509be73dd45"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]

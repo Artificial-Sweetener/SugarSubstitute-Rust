@@ -2,8 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain a browser visual tree on the main UI apartment through checked teardown.
 
+mod callbacks;
 mod canvas;
 mod construction;
+mod cursor;
+mod drop_target;
 mod input;
 mod retirement;
 
@@ -250,7 +253,7 @@ impl Composition {
         if self.retired {
             return Ok(true);
         }
-        if let Some(input) = &self.input {
+        if let Some(input) = &mut self.input {
             if input.retire()? {
                 self.input = None;
             }
@@ -349,14 +352,14 @@ impl Composition {
         self.composition.as_ref().ok_or_else(|| missing("composition_controller"))
     }
 
-    /// Admit mouse forwarding only after the browser visual is committed.
+    /// Admit pointer, cursor and drag hosting only after the browser visual is committed.
     fn prepare_input(&mut self, events: Rc<Events>) -> Result<(), DesktopError> {
         if self.input.is_none() {
             let window = self.window.as_ref().ok_or_else(|| missing("composition_window"))?;
             let hwnd = HWND(window.hwnd() as *mut c_void);
             self.input = Some(input::Input::new(hwnd, self.composition()?.clone(), events)?);
         }
-        Ok(())
+        self.input.as_mut().ok_or_else(|| missing("composition_input"))?.attach()
     }
 
     /// Close input admission before the browser and visual tree begin retirement.

@@ -137,8 +137,14 @@ kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/composition/drop_target/tests.rs"
+source_sha256 = "sha256:d42a21d33754d4f5f56b5261e0238981ad58528e0d5386d8d5402b772584a968"
+kind = "fixture"
+rationale = "Behavioral fixture creates a hidden OS STATIC window with a technical title to exercise real OLE drop registration and revocation; it grants no production text route."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:e23e126a4da2c6d5f449bef955763fa7f367c0f4a23a9de6a78267e0ea9c5349"
+source_sha256 = "sha256:23cccb1c6f7e061e9db365001824e470b8682c1513ba31ee00b2c1ef87334e58"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
