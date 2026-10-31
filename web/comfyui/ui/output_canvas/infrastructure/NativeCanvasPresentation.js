@@ -19,6 +19,8 @@ import { IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS, NativeCanvasPreview, } from './
 import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
 import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
 import { nativeCanvasDesired, nativeCanvasNavigable, nativeCanvasOverviewKey, nativeCanvasSelection, nativeCanvasWipe, nativeCanvasWipeKey, } from './NativeCanvasDesired.js';
+/** The load-error text for a selected result the host cannot present. */
+const NATIVE_CANVAS_RESULT_FAILURE = 'The image could not be loaded.';
 /** Keep one in-flight operation and coalesce newer view or geometry changes. */
 export class NativeCanvasPresentation {
     options;
@@ -249,6 +251,14 @@ export class NativeCanvasPresentation {
                     }).finally(() => preview?.selectionFinished());
                     if (!this.#owns(binding))
                         return;
+                    if (result.status === 'error') {
+                        // The host could not present this result, e.g. an undecodable file. The prepared
+                        // surface stays usable: complete readiness, hide stale pixels, show the load error.
+                        this.options.prepared();
+                        this.#show(false);
+                        this.#failed(desired, result, NATIVE_CANVAS_RESULT_FAILURE);
+                        continue;
+                    }
                     if (result.status !== 'applied') {
                         this.#failed(desired, result);
                         continue;
@@ -432,7 +442,8 @@ export class NativeCanvasPresentation {
     #current(binding, desired) {
         return this.#owns(binding) && this.#desired === desired;
     }
-    #failed(desired, result) {
+    /** Publish a failed operation, using `message` instead of the host's when it names the result. */
+    #failed(desired, result, message) {
         if (this.#desired !== desired)
             return;
         this.#failedIntent();
@@ -443,7 +454,8 @@ export class NativeCanvasPresentation {
         const error = result.status === 'error';
         this.options.status({
             state: error ? 'error' : 'unavailable',
-            message: result.message ||
+            message: message ||
+                result.message ||
                 (error ? 'Native canvas presentation failed.' : 'The native canvas is unavailable.'),
         });
         if (error)
