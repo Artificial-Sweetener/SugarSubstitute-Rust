@@ -4240,7 +4240,7 @@ rationale = "Owned temporary directories keep viewer document and refinement fix
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/refinement.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:64ef538a114b4ea68de064f77679856ac5441b6bd20100c2420a6d32287234e1"
+source_sha256 = "sha256:03705b1bfb0039e6fe7aede463f2aeea6c9570c06c75c910bf1255779b2fb508"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary directories keep viewer document and refinement fixtures portable and isolated; test teardown retains the directory through its actual session lifetime."

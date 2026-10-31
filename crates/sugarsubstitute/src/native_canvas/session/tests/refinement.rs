@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise navigation cancellation against genuine owned execution jobs and terminal delivery.
 use super::*;
-use std::sync::{Condvar, Mutex, atomic::AtomicBool};
+use std::sync::{Condvar, Mutex};
 mod source_fencing;
 
 #[derive(Default)]
@@ -50,10 +50,57 @@ impl Wake {
         Ok(())
     }
 }
-struct PreparationBoundary(Arc<AtomicBool>);
+/// Hold a started preparation on its CPU lane without spinning until the test observes it.
+///
+/// A yielding task is rescheduled immediately, so a pending boundary that only yields would
+/// occupy a lane at full load and starve other parallel tests' terminal delivery.
+#[derive(Default)]
+struct Boundary {
+    state: Mutex<BoundaryState>,
+    changed: Condvar,
+}
+#[derive(Default)]
+struct BoundaryState {
+    open: bool,
+    fail: bool,
+}
+impl Boundary {
+    /// Let the held step return so the worker observes cancellation or completion.
+    fn open(&self) {
+        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).open = true;
+        self.changed.notify_all();
+    }
+    /// Make the held step fail with the fixture's boundary error.
+    fn fail(&self) {
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.fail = true;
+        state.open = true;
+        self.changed.notify_all();
+    }
+}
+/// Open the boundary before the session joins its worker, including on assertion unwind.
+struct BoundaryGuard(Arc<Boundary>);
+impl std::ops::Deref for BoundaryGuard {
+    type Target = Boundary;
+    fn deref(&self) -> &Boundary {
+        &self.0
+    }
+}
+impl Drop for BoundaryGuard {
+    fn drop(&mut self) {
+        self.0.open();
+    }
+}
+struct PreparationBoundary(Arc<Boundary>);
 impl CpuTask<Packet, WorkError> for PreparationBoundary {
     fn step(&mut self, _: &JobContext) -> Result<CpuStep<Packet>, WorkError> {
-        if self.0.load(Ordering::SeqCst) {
+        let state = self.0.state.lock().map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
+        let state = self
+            .0
+            .changed
+            .wait_while(state, |state| !state.open)
+            .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
+        if state.fail {
             Err(WorkError::invalid("Preparation boundary failure"))
         } else {
             Ok(CpuStep::Yield)
@@ -63,7 +110,7 @@ impl CpuTask<Packet, WorkError> for PreparationBoundary {
 struct Fixture {
     session: Session,
     wake: Arc<Wake>,
-    release: Arc<AtomicBool>,
+    boundary: BoundaryGuard,
     _directory: tempfile::TempDir,
 }
 fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> {
@@ -107,10 +154,10 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         Duration::from_secs(30),
         Some(ReplacementKey { surface: SurfaceId::new(1)?, revision: Generation::new(1)? }),
     )?;
-    let release = Arc::new(AtomicBool::new(false));
-    let task_release = release.clone();
+    let boundary = Arc::new(Boundary::default());
+    let task_boundary = boundary.clone();
     let job =
-        client.submit_cpu(&runtime.scope, spec, move |_| PreparationBoundary(task_release))?;
+        client.submit_cpu(&runtime.scope, spec, move |_| PreparationBoundary(task_boundary))?;
     session.runtime = Some(runtime);
     let coverage = coverage::detail(session.document.tools.navigation().viewport())?;
     session.rendering = Some(Rendering {
@@ -134,9 +181,14 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         document: identity,
         source_revision: 0,
     });
-    Ok(Fixture { session, wake, release, _directory: directory })
+    Ok(Fixture { session, wake, boundary: BoundaryGuard(boundary), _directory: directory })
 }
-fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
+fn observe_terminal(
+    session: &mut Session,
+    wake: &Wake,
+    boundary: &Boundary,
+) -> Result<(), Box<dyn Error>> {
+    boundary.open();
     while session.rendering.is_some() {
         let observed = wake.revision();
         session.consume_frame()?;
@@ -154,7 +206,7 @@ fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Er
 #[test]
 fn reversing_zoom_retires_an_unreached_coarser_destination_and_keeps_finer_ready_pixels()
 -> Result<(), Box<dyn Error>> {
-    let Fixture { mut session, wake, _directory, .. } =
+    let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.input(Input::Tool(ToolInput::Wheel {
         steps: -1.0,
@@ -168,7 +220,7 @@ fn reversing_zoom_retires_an_unreached_coarser_destination_and_keeps_finer_ready
         phase: sugarsubstitute_canvas::ScrollPhase::Unphased,
     }))?;
     assert!(session.rendering.as_ref().is_some_and(|rendering| rendering.superseded));
-    observe_terminal(&mut session, &wake)?;
+    observe_terminal(&mut session, &wake, &boundary)?;
     assert!(session.failed.is_none());
     assert_eq!(session.document.presented.ok_or("Lost finer ready pixels")?.sampling_scale, 1.0);
     Ok(())
@@ -176,7 +228,7 @@ fn reversing_zoom_retires_an_unreached_coarser_destination_and_keeps_finer_ready
 
 #[test]
 fn panning_a_preview_keeps_covered_finished_refinement_running() -> Result<(), Box<dyn Error>> {
-    let Fixture { mut session, wake, _directory, .. } =
+    let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
     session.input(Input::Tool(ToolInput::Pointer([7.0, 3.0])))?;
@@ -188,7 +240,7 @@ fn panning_a_preview_keeps_covered_finished_refinement_running() -> Result<(), B
     assert!(!rendering.superseded);
     rendering.superseded = true;
     rendering.job.cancel();
-    observe_terminal(&mut session, &wake)?;
+    observe_terminal(&mut session, &wake, &boundary)?;
     assert!(session.failed.is_none());
     assert!(session.document.presented.is_some());
     Ok(())
@@ -197,7 +249,7 @@ fn panning_a_preview_keeps_covered_finished_refinement_running() -> Result<(), B
 #[test]
 fn overlapping_repair_survives_pan_beyond_the_complete_coverage_guard() -> Result<(), Box<dyn Error>>
 {
-    let Fixture { mut session, wake, _directory, .. } =
+    let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
     session.input(Input::Tool(ToolInput::Pointer([-129.0, 3.0])))?;
@@ -205,7 +257,7 @@ fn overlapping_repair_survives_pan_beyond_the_complete_coverage_guard() -> Resul
     assert!(!rendering.superseded);
     rendering.superseded = true;
     rendering.job.cancel();
-    observe_terminal(&mut session, &wake)?;
+    observe_terminal(&mut session, &wake, &boundary)?;
     assert!(session.failed.is_none());
     Ok(())
 }
@@ -213,19 +265,19 @@ fn overlapping_repair_survives_pan_beyond_the_complete_coverage_guard() -> Resul
 #[test]
 fn zero_overlap_pan_cancels_obsolete_refinement_without_failing_viewer()
 -> Result<(), Box<dyn Error>> {
-    let Fixture { mut session, wake, _directory, .. } =
+    let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
     session.input(Input::Tool(ToolInput::Pointer([-2000.0, 3.0])))?;
     assert!(session.rendering.as_ref().is_some_and(|rendering| rendering.superseded));
-    observe_terminal(&mut session, &wake)?;
+    observe_terminal(&mut session, &wake, &boundary)?;
     assert!(session.failed.is_none());
     Ok(())
 }
 
 #[test]
 fn zoom_keeps_overlapping_compatible_finished_refinement_running() -> Result<(), Box<dyn Error>> {
-    let Fixture { mut session, wake, _directory, .. } =
+    let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.input(Input::Tool(ToolInput::Wheel {
         steps: 1.0,
@@ -239,7 +291,7 @@ fn zoom_keeps_overlapping_compatible_finished_refinement_running() -> Result<(),
     assert!(!rendering.superseded);
     rendering.superseded = true;
     rendering.job.cancel();
-    observe_terminal(&mut session, &wake)?;
+    observe_terminal(&mut session, &wake, &boundary)?;
     assert!(session.failed.is_none());
     Ok(())
 }
@@ -271,7 +323,7 @@ fn completed_detail_is_current_for_partial_overlap_but_not_disjoint_motion()
 #[test]
 fn canonical_navigation_reaches_publication_before_finished_settling_replaces_it()
 -> Result<(), Box<dyn Error>> {
-    let Fixture { mut session, wake, _directory, .. } =
+    let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Bilinear))?;
     session.rendering.as_mut().ok_or("Missing navigation job")?.tier = BackingTier::Navigation;
     session.input(Input::Tool(ToolInput::Wheel {
@@ -286,7 +338,7 @@ fn canonical_navigation_reaches_publication_before_finished_settling_replaces_it
     let rendering = session.rendering.as_mut().ok_or("Missing navigation job")?;
     rendering.superseded = true;
     rendering.job.cancel();
-    observe_terminal(&mut session, &wake)?;
+    observe_terminal(&mut session, &wake, &boundary)?;
     assert!(session.failed.is_none());
     Ok(())
 }

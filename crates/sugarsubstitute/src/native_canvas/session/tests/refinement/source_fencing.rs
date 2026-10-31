@@ -9,15 +9,15 @@ use sugarsubstitute_canvas_render::PreparedUpdate;
 fn replaced_source_render_failures_do_not_fail_the_selected_document() -> Result<(), Box<dyn Error>>
 {
     for superseded in [false, true] {
-        let Fixture { mut session, wake, release, _directory } =
+        let Fixture { mut session, wake, boundary, _directory } =
             preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
         session.rendering.as_mut().ok_or("Missing old preparation")?.superseded = superseded;
         session.document.scene.as_mut().ok_or("Missing selected scene")?.source_revision = 1;
         session.selection = 1;
         session.source_sequence = 1;
         let title = session.title.clone();
-        release.store(true, Ordering::SeqCst);
-        observe_terminal(&mut session, &wake)?;
+        boundary.fail();
+        observe_terminal(&mut session, &wake, &boundary)?;
         assert!(session.failed.is_none());
         assert_eq!(session.title, title);
         assert!(session.rendering.is_none());
@@ -29,11 +29,11 @@ fn replaced_source_render_failures_do_not_fail_the_selected_document() -> Result
 fn current_source_render_failures_preserve_superseded_failure_behavior()
 -> Result<(), Box<dyn Error>> {
     for superseded in [false, true] {
-        let Fixture { mut session, wake, release, _directory } =
+        let Fixture { mut session, wake, boundary, _directory } =
             preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
         session.rendering.as_mut().ok_or("Missing current preparation")?.superseded = superseded;
-        release.store(true, Ordering::SeqCst);
-        observe_terminal(&mut session, &wake)?;
+        boundary.fail();
+        observe_terminal(&mut session, &wake, &boundary)?;
         assert_eq!(
             session.failed.as_ref().ok_or("Current preparation failure was lost")?.to_string(),
             "Preparation boundary failure"
@@ -45,7 +45,7 @@ fn current_source_render_failures_preserve_superseded_failure_behavior()
 #[test]
 fn changed_authored_revision_retires_render_failure_for_the_same_raster_source()
 -> Result<(), Box<dyn Error>> {
-    let Fixture { mut session, wake, release, _directory } =
+    let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.document.scene.as_mut().ok_or("Missing selected scene")?.document.apply(
         DocumentEdit::Insert {
@@ -53,8 +53,8 @@ fn changed_authored_revision_retires_render_failure_for_the_same_raster_source()
             layer: Layer::new(LayerId::new(1)?, LayerContent::Exposure { stops: 1.0 })?,
         },
     )?;
-    release.store(true, Ordering::SeqCst);
-    observe_terminal(&mut session, &wake)?;
+    boundary.fail();
+    observe_terminal(&mut session, &wake, &boundary)?;
     assert!(session.failed.is_none());
     Ok(())
 }
@@ -63,11 +63,11 @@ fn changed_authored_revision_retires_render_failure_for_the_same_raster_source()
 fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
 -> Result<(), Box<dyn Error>> {
     for foreign_document in [false, true] {
-        let Fixture { mut session, wake, _directory, .. } = preparing(Reconstruction::Preview)?;
+        let Fixture { mut session, wake, boundary, _directory } = preparing(Reconstruction::Preview)?;
         let rendering = session.rendering.as_mut().ok_or("Missing preparation")?;
         rendering.superseded = true;
         rendering.job.cancel();
-        observe_terminal(&mut session, &wake)?;
+        observe_terminal(&mut session, &wake, &boundary)?;
         let snapshot =
             session.document.scene.as_ref().ok_or("Missing selected scene")?.document.snapshot();
         let document = (snapshot.identity(), snapshot.revision());
@@ -120,7 +120,7 @@ fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
             display_extent: view.surface(),
             superseded: false,
         });
-        assert!(observe_terminal(&mut session, &wake).is_err());
+        assert!(observe_terminal(&mut session, &wake, &boundary).is_err());
         assert!(session.document.front.is_none());
         assert!(
             session.pending_retirement.as_ref().is_some_and(|retired| retired._packet.is_some())
