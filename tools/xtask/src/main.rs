@@ -29,6 +29,7 @@ mod execution_source;
 mod execution_tests;
 #[cfg(test)]
 mod fixtures;
+mod gates;
 mod governance;
 mod infrastructure;
 mod localization;
@@ -102,47 +103,14 @@ fn run() -> Result<()> {
         return Ok(());
     }
     command::cargo(root, &["fmt", "--all", "--", "--check"], false)?;
-    command::cargo(
-        root,
-        &[
-            "clippy",
-            "--locked",
-            "--workspace",
-            "--all-targets",
-            "--all-features",
-            "--",
-            "-D",
-            "warnings",
-        ],
-        false,
-    )?;
-    command::cargo(
-        root,
-        &[
-            "clippy",
-            "--locked",
-            "-p",
-            "sugarsubstitute",
-            "--no-default-features",
-            "--all-targets",
-            "--",
-            "-D",
-            "warnings",
-        ],
-        false,
-    )?;
+    for leg in gates::CLIPPY {
+        command::cargo(root, leg, false)?;
+    }
     if task == "verify" {
-        command::cargo(root, &["test", "--locked", "--workspace", "--all-features"], false)?;
-        command::cargo(
-            root,
-            &["test", "--locked", "-p", "sugarsubstitute", "--no-default-features", "--lib"],
-            false,
-        )?;
-        command::cargo(
-            root,
-            &["doc", "--locked", "--workspace", "--all-features", "--no-deps"],
-            true,
-        )?;
+        for leg in gates::TESTS {
+            command::cargo(root, leg, false)?;
+        }
+        command::cargo(root, gates::DOCUMENTATION, true)?;
     }
     Ok(())
 }
