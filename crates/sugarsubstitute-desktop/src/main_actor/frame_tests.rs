@@ -67,16 +67,14 @@ fn configuration_request_is_closed_and_does_not_accept_ready_or_incomplete_recei
 }
 
 #[test]
-fn browser_uses_every_logical_client_pixel_at_supported_scales_without_caption_inset() {
-    for (scale, width, height) in
-        [(1.0, 304.0, 240.0), (1.75, 1280.0, 720.0), (2.0, 1920.0, 1080.0)]
-    {
+fn browser_uses_every_physical_client_pixel_at_any_scale_without_caption_inset() {
+    for (scale, width, height) in [(1.0, 304, 240), (1.25, 1001, 667), (1.75, 2241, 1261)] {
         let bounds = browser_bounds(width, height);
-        let position = bounds.position.to_logical::<f64>(scale);
-        let size = bounds.size.to_logical::<f64>(scale);
-        assert_eq!((position.x, position.y), (0.0, 0.0));
-        assert_eq!((size.width, size.height), (width, height));
+        let position = bounds.position.to_physical::<i32>(scale);
+        let size = bounds.size.to_physical::<u32>(scale);
+        assert_eq!((position.x, position.y), (0, 0));
+        assert_eq!((size.width, size.height), (width, height), "no rounding at {scale}");
     }
-    let zero = browser_bounds(0.0, 0.0).size.to_logical::<f64>(1.0);
-    assert_eq!((zero.width, zero.height), (1.0, 1.0));
+    let zero = browser_bounds(0, 0).size.to_physical::<u32>(1.0);
+    assert_eq!((zero.width, zero.height), (1, 1));
 }

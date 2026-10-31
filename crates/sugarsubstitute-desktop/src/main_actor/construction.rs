@@ -305,9 +305,10 @@ impl MainActor {
             Ok(crate::MainHosting::Windowed)
         }
     }
+    /// Fill the client area in exact physical pixels, so no logical round trip through a
+    /// changing DPI can misalign the browser with the native canvas beneath it.
     pub(super) fn browser_bounds(&self) -> Result<wry::Rect, DesktopError> {
-        let window = self.window()?;
-        let size = window.inner_size().to_logical::<f64>(window.scale_factor());
+        let size = self.window()?.inner_size();
         Ok(super::frame::browser_bounds(size.width, size.height))
     }
     pub(super) fn caption_controls(&self) -> Result<[AccessibleControl; 4], DesktopError> {
@@ -333,6 +334,19 @@ impl MainActor {
         if let Some(owner) = &self.controls {
             owner.raise_main()?;
         }
+        #[cfg(feature = "native-composition")]
+        self.withdraw_stale_canvas()?;
         Ok(())
+    }
+
+    /// Follow a window DPI change. The composed browser takes the new scale before its bounds
+    /// change; the windowed browser follows its monitor itself.
+    pub(super) fn rescale(
+        &mut self,
+        #[cfg_attr(not(feature = "native-composition"), allow(unused_variables))] scale: f64,
+    ) -> Result<(), DesktopError> {
+        #[cfg(feature = "native-composition")]
+        self.rescale_composition(scale)?;
+        self.resize()
     }
 }

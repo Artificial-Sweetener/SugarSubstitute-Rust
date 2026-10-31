@@ -435,7 +435,10 @@ impl MainActor {
             WindowEvent::CloseRequested | WindowEvent::Destroyed => {
                 return close_request::observe(self.revealed);
             }
-            WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => self.resize()?,
+            WindowEvent::Resized(_) => self.resize()?,
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.rescale(*scale_factor)?,
+            #[cfg(feature = "native-composition")]
+            WindowEvent::Moved(_) => self.composition_moved()?,
             _ => {}
         }
         Ok(None)

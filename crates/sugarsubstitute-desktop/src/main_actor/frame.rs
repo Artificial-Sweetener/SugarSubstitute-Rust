@@ -91,11 +91,11 @@ impl MainActor {
     }
 }
 
-/// Fill the client area in logical pixels; web-owned tabs share the native caption's first row.
-pub(super) fn browser_bounds(width: f64, height: f64) -> wry::Rect {
+/// Fill the client area in physical pixels; web-owned tabs share the native caption's first row.
+pub(super) fn browser_bounds(width: u32, height: u32) -> wry::Rect {
     wry::Rect {
-        position: wry::dpi::LogicalPosition::new(0.0, 0.0).into(),
-        size: wry::dpi::LogicalSize::new(width.max(1.0), height.max(1.0)).into(),
+        position: wry::dpi::PhysicalPosition::new(0, 0).into(),
+        size: wry::dpi::PhysicalSize::new(width.max(1), height.max(1)).into(),
     }
 }
 

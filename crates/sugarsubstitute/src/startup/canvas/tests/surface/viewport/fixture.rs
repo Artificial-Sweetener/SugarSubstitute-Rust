@@ -143,6 +143,15 @@ impl Fixture {
         )
     }
 
+    /// Replace the desktop-observed browser allocation attached to later geometry, as a window
+    /// resize or DPI change does.
+    pub(in crate::startup::canvas::tests::surface) fn reallocate(
+        &mut self,
+        allocation: WebViewAllocation,
+    ) {
+        self.allocation = allocation;
+    }
+
     pub(in crate::startup::canvas::tests::surface) fn viewport(
         &mut self,
         id: u64,

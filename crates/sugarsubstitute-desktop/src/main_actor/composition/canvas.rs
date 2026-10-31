@@ -26,7 +26,6 @@ use windows::{
     },
     core::Interface,
 };
-use wry::WebViewExtWindows;
 
 impl super::Composition {
     /// Present only through this retained tree; failed effects remain fenced for retirement.
@@ -56,12 +55,14 @@ impl super::Composition {
         let result = canvas.present(&frame.content, frame.placement)?;
         self.ledger.dirty = false;
         self.ledger.committed = true;
+        self.shown = Some(frame.allocation);
         Ok(result)
     }
 
     /// Hide a previously committed native canvas before its geometry becomes unusable.
     fn hide_canvas(&mut self) -> Result<bool, DesktopError> {
         if let Some(canvas) = &mut self.canvas {
+            self.shown = None;
             self.ledger.dirty = true;
             let hidden = canvas.hide()?;
             self.ledger.dirty = false;
@@ -73,27 +74,6 @@ impl super::Composition {
 }
 
 impl super::MainActor {
-    /// Observe the actual WebView allocation and zoom on its creating apartment.
-    pub(crate) fn canvas_allocation(
-        &self,
-    ) -> Result<crate::canvas::placement::WebViewAllocation, DesktopError> {
-        let window = self.window()?;
-        let size = window.inner_size();
-        let mut zoom = 0.0;
-        // SAFETY: The retained controller and writable scalar belong to this UI apartment.
-        unsafe { self.view()?.controller().ZoomFactor(&mut zoom) }
-            .map_err(|cause| DesktopError::new("canvas_webview_zoom", cause))?;
-        Ok(crate::canvas::placement::WebViewAllocation {
-            bounds: crate::canvas::placement::PhysicalRect {
-                x: 0,
-                y: 0,
-                width: size.width,
-                height: size.height,
-            },
-            physical_pixels_per_css_pixel: window.scale_factor() * zoom,
-        })
-    }
-
     /// Accept pixels only for this exact revealed browser lifetime.
     pub(crate) fn present_canvas(
         &mut self,

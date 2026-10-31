@@ -12,6 +12,7 @@ mod focus;
 mod input;
 mod retirement;
 mod routing;
+mod scale;
 
 use super::*;
 pub(super) use construction::BindStep;
@@ -20,7 +21,7 @@ use std::ffi::c_void;
 use sugarsubstitute_contracts::execution::MemoryClaim;
 use tao::platform::windows::WindowExtWindows;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2CompositionController, ICoreWebView2Controller,
+    ICoreWebView2CompositionController, ICoreWebView2Controller, ICoreWebView2Controller3,
 };
 use windows::{
     Win32::{
@@ -48,6 +49,7 @@ enum Stage {
     Tree,
     Child,
     Controller,
+    Scale,
     Bind,
     Commit,
     Ready,
@@ -154,11 +156,14 @@ pub(super) struct Composition {
     window: Option<Rc<Window>>,
     controller: Option<ICoreWebView2Controller>,
     composition: Option<ICoreWebView2CompositionController>,
+    scale: Option<ICoreWebView2Controller3>,
     device: Option<IDCompositionDevice>,
     target: Option<IDCompositionTarget>,
     root: Option<IDCompositionVisual>,
     browser: Option<IDCompositionVisual>,
     canvas: Option<canvas::Canvas>,
+    /// The browser allocation the committed native pixels were placed against.
+    shown: Option<crate::canvas::placement::WebViewAllocation>,
     retirement_fence: Option<FencedCommit>,
     input: Option<input::Input>,
     claim: Option<MemoryClaim>,
@@ -176,11 +181,13 @@ impl Composition {
             window: Some(window),
             controller: None,
             composition: None,
+            scale: None,
             device: None,
             target: None,
             root: None,
             browser: None,
             canvas: None,
+            shown: None,
             retirement_fence: None,
             input: None,
             claim: Some(claim),
@@ -262,6 +269,10 @@ impl Composition {
                 unsafe {
                     adopt(&mut self.composition, raw, status, "query_composition_controller")?
                 };
+                self.stage = Stage::Scale;
+            }
+            Stage::Scale => {
+                self.adopt_scale()?;
                 self.stage = Stage::Bind;
             }
             Stage::Bind => {
@@ -364,11 +375,13 @@ impl Composition {
             }
             self.retirement_fence = None;
             self.canvas = None;
+            self.shown = None;
             self.browser = None;
             self.root = None;
             self.target = None;
             self.device = None;
             self.composition = None;
+            self.scale = None;
             self.controller = None;
             self.window = None;
             self.claim = None;
@@ -437,6 +450,7 @@ impl Drop for Composition {
             std::mem::forget(self.window.take());
             std::mem::forget(self.controller.take());
             std::mem::forget(self.composition.take());
+            std::mem::forget(self.scale.take());
             std::mem::forget(self.device.take());
             std::mem::forget(self.target.take());
             std::mem::forget(self.root.take());

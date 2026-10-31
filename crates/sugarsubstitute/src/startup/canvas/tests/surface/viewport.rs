@@ -231,3 +231,46 @@ fn current_native_failure_terminates_the_shared_camera_request_without_losing_th
     assert!(fixture.canvas.take_command().is_none());
     fixture.finish_failed(87)
 }
+
+#[test]
+fn a_dpi_change_reacknowledges_geometry_at_the_new_density_before_native_pixels_return()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    let before = prepared_frame(&fixture.canvas).ok_or("Committed frame absent")?;
+    assert_eq!(before.placement.viewport, PhysicalRect { x: 10, y: 20, width: 80, height: 40 });
+    let before = before.allocation;
+    let rescaled = WebViewAllocation {
+        bounds: PhysicalRect { x: 0, y: 0, width: 450, height: 225 },
+        physical_pixels_per_css_pixel: 1.5,
+    };
+    assert_ne!(before, rescaled, "the desktop withdraws pixels placed at 1.0");
+    fixture.reallocate(rescaled);
+
+    // Geometry the page measured before its device pixel ratio changed cannot be placed.
+    fixture.send(
+        5,
+        "surface.geometry",
+        json!({"geometry":{
+            "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":10,"y":20},
+            "viewport":{"width":80,"height":40}, "clip":{"x":10,"y":20,"width":80,"height":40},
+            "physicalPixelsPerCssPixel":1.0, "visible":true, "focused":false
+        }}),
+    )?;
+    fixture.take(5, "error")?;
+    let stale = prepared_frame(&fixture.canvas).ok_or("Retained frame absent")?;
+    assert_eq!(stale.allocation, before, "no frame is placed at a mixed density");
+
+    // The page republishes at its new ratio; the same CSS viewport becomes a denser frame.
+    fixture.geometry(6, 80, 40)?;
+    fixture.complete(6)?;
+    let after = prepared_frame(&fixture.canvas).ok_or("Re-acknowledged frame absent")?;
+    assert_eq!(after.allocation, rescaled);
+    assert_eq!(after.placement.viewport, PhysicalRect { x: 15, y: 30, width: 120, height: 60 });
+    assert_eq!(after.content.cpu_pixels().len(), 120 * 60);
+    assert_eq!(
+        fixture.accepted()?.viewport.surface(),
+        sugarsubstitute_image_ops::Extent::new(120, 60)?
+    );
+    fixture.finish()
+}
