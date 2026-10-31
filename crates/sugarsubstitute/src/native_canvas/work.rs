@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use sugarsubstitute_canvas::{
-    Document, DocumentEdit, DocumentSnapshot, FrameStamp, Layer, LayerContent, LayerId,
+    Comparison, Document, DocumentEdit, DocumentSnapshot, FrameStamp, Layer, LayerContent, LayerId,
     RenderRequest, Viewport,
 };
 use sugarsubstitute_canvas_render::{
@@ -45,6 +45,40 @@ pub(super) struct Scene {
     pub(super) source: Option<Source>,
     pub(super) source_revision: u64,
     pub(super) original: Option<ImageSource>,
+    /// Inspection-only comparison original loaded with this source revision; never authored.
+    pub(super) compared: Option<Box<Compared>>,
+}
+/// A comparison original retained beside the document source for the same selection.
+pub(super) struct Compared {
+    pub(super) source: Source,
+    pub(super) _original: ImageSource,
+}
+impl Compared {
+    /// Describe the comparison raster for a document-space wipe boundary.
+    pub(super) fn comparison(
+        &self,
+        orientation: sugarsubstitute_canvas::WipeOrientation,
+        boundary: f64,
+    ) -> Result<Comparison, sugarsubstitute_canvas::CanvasError> {
+        let descriptor = self.source.descriptor();
+        Comparison::new(descriptor.asset(), descriptor.layout().extent(), orientation, boundary)
+    }
+}
+/// One selected original and an optional comparison original, admitted and loaded together.
+pub(crate) struct Originals {
+    pub(crate) primary: ImageSource,
+    pub(crate) compared: Option<ImageSource>,
+}
+impl Originals {
+    /// Select one original without a comparison.
+    pub(crate) const fn single(primary: ImageSource) -> Self {
+        Self { primary, compared: None }
+    }
+    /// Retain both originals until a storage worker can dispose of either one.
+    pub(super) fn requires_worker_retirement(&self) -> bool {
+        self.primary.requires_worker_retirement()
+            || self.compared.as_ref().is_some_and(ImageSource::requires_worker_retirement)
+    }
 }
 /// Original retained admission is shared by cache custody, source data, DAG reuse and UI buffers.
 pub(super) struct Resources {
@@ -69,8 +103,17 @@ impl Clone for Resources {
         }
     }
 }
-/// Share only immutable source identity; region reads execute on the admitted preparation worker.
-pub(super) struct SourcePort(pub(super) Option<Source>);
+/// Share only immutable source identities; region reads execute on the admitted preparation worker
+/// and dispatch to the original whose content identity the image graph requested.
+pub(super) struct SourcePort(pub(super) Vec<Source>);
+impl SourcePort {
+    fn source(&mut self, asset: AssetId) -> Result<&mut Source, ImageError> {
+        self.0
+            .iter_mut()
+            .find(|source| source.descriptor().asset() == asset)
+            .ok_or(ImageError::Invalid("Canvas source is unavailable"))
+    }
+}
 impl RasterSource for SourcePort {
     fn read_sample_batch(
         &mut self,
@@ -78,10 +121,7 @@ impl RasterSource for SourcePort {
         requests: &mut [RasterSampleRequest<'_>],
         context: &JobContext,
     ) -> Result<(), ImageError> {
-        self.0
-            .as_mut()
-            .ok_or(ImageError::Invalid("Canvas source is unavailable"))?
-            .read_sample_batch(asset, requests, context)
+        self.source(asset)?.read_sample_batch(asset, requests, context)
     }
 
     fn read_samples(
@@ -91,10 +131,7 @@ impl RasterSource for SourcePort {
         output: &mut [Pixel],
         context: &JobContext,
     ) -> Result<(), ImageError> {
-        self.0
-            .as_mut()
-            .ok_or(ImageError::Invalid("Canvas source is unavailable"))?
-            .read_samples(asset, samples, output, context)
+        self.source(asset)?.read_samples(asset, samples, output, context)
     }
 
     fn read(
@@ -104,10 +141,7 @@ impl RasterSource for SourcePort {
         output: &mut [Pixel],
         context: &JobContext,
     ) -> Result<(), ImageError> {
-        self.0
-            .as_mut()
-            .ok_or(ImageError::Invalid("Canvas source is unavailable"))?
-            .read(asset, region, output, context)
+        self.source(asset)?.read(asset, region, output, context)
     }
 }
 /// Mutable DAG reuse state belongs to preparation workers; the native thread never locks it.
@@ -174,21 +208,39 @@ pub(super) fn initialize(
             capture,
             verify_native,
         },
-        Scene { document, source: None, source_revision: 0, original: None },
+        Scene { document, source: None, source_revision: 0, original: None, compared: None },
     ))
 }
-/// Hash/decode an explicit original; image storage never becomes authoritative document data.
+/// Hash/decode explicit originals; image storage never becomes authoritative document data.
+/// A comparison original is imported under the same admission and becomes inspection state only.
 pub(super) fn load(
-    original: ImageSource,
+    originals: Originals,
     revision: u64,
     reuse: CacheReuse,
     resources: &Resources,
     context: &JobContext,
 ) -> Result<Scene, WorkError> {
     let now = sugarsubstitute_supervision::cache::utc_seconds()?;
+    let Originals { primary: original, compared } = originals;
     let raster =
         original.import_image(resources.cache.clone(), reuse, &resources.memory, now, context)?;
     let source = SharedRaster::new(raster, &resources.memory)?;
+    let compared = match compared {
+        Some(compared) => {
+            let raster = compared.import_image(
+                resources.cache.clone(),
+                reuse,
+                &resources.memory,
+                now,
+                context,
+            )?;
+            Some(Box::new(Compared {
+                source: SharedRaster::new(raster, &resources.memory)?,
+                _original: compared,
+            }))
+        }
+        None => None,
+    };
     let descriptor = source.descriptor();
     let extent = descriptor.layout().extent();
     let mut document = Document::new(revision, extent, &resources.memory)?;
@@ -200,6 +252,7 @@ pub(super) fn load(
         source: Some(source),
         source_revision: revision,
         original: Some(original),
+        compared,
     })
 }
 /// One immutable prepared request plus optional newly admitted UI backing for physical resize.
@@ -237,6 +290,8 @@ pub(super) struct Prepare {
     pub(super) resources: Resources,
     pub(super) document: DocumentSnapshot,
     pub(super) source: Option<Source>,
+    pub(super) compared: Option<Source>,
+    pub(super) comparison: Option<Comparison>,
     pub(super) source_revision: u64,
     pub(super) view: Viewport,
     pub(super) target: FrameStamp,
@@ -267,14 +322,14 @@ impl CpuTask<Packet, WorkError> for Prepare {
         if engine.source_revision != Some(self.source_revision) {
             let renderer = match &engine.device {
                 Some(device) => Renderer::Gpu(Box::new(GpuRenderer::new(
-                    SourcePort(self.source.clone()),
+                    SourcePort(self.source.iter().chain(&self.compared).cloned().collect()),
                     512,
                     device.clone(),
                     &self.resources.memory,
                     context,
                 )?)),
                 None => Renderer::Cpu(Box::new(CpuRenderer::new(
-                    SourcePort(self.source.clone()),
+                    SourcePort(self.source.iter().chain(&self.compared).cloned().collect()),
                     512,
                     &self.resources.memory,
                 )?)),

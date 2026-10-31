@@ -13,15 +13,17 @@ pub(super) struct RasterGrid<'a> {
 }
 
 /// Select the nearest permitted ready pyramid and preserve the exact requested output mapping.
+/// `source` is the raster's own extent; per-axis ratios stretch it into the document rectangle.
 pub(super) fn raster_node(
     graph: &mut Graph,
     asset: AssetId,
+    source: Extent,
     grid: RasterGrid<'_>,
     clip: bool,
     sampling_scale: &mut f64,
 ) -> Result<NodeId, CanvasError> {
     let RasterGrid { document, view, reconstruction, ready } = grid;
-    let source = graph.add(Operation::Raster { asset, extent: document })?;
+    let source = graph.add(Operation::Raster { asset, extent: source })?;
     let mut selected = source;
     if reconstruction.uses_canonical_pyramid() {
         let pyramid = graph.pyramid(source)?;

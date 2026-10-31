@@ -25,8 +25,9 @@ pub use file_reference::{
     CanvasFileError, CanvasFileReference, CanvasFileStorage, MAX_FILE_REFERENCE_BYTES,
 };
 pub use message::{
-    CanvasSurfaceMessage, CanvasSurfaceMessageError, CanvasSurfaceOperation,
-    CanvasSurfaceReplyStatus, CanvasSurfaceRequest, MAX_SURFACE_MESSAGE_BYTES,
+    CanvasSurfaceComparison, CanvasSurfaceMessage, CanvasSurfaceMessageError,
+    CanvasSurfaceOperation, CanvasSurfaceReplyStatus, CanvasSurfaceRequest,
+    MAX_SURFACE_MESSAGE_BYTES,
 };
 pub use presentation::{
     CanvasSurfacePresentationChange, CanvasSurfacePresentationDisplay,
@@ -37,7 +38,9 @@ pub use preview::{
     CanvasSurfacePreviewLease, MAX_SURFACE_PREVIEW_BYTES, MAX_SURFACE_PREVIEW_CHUNK_BYTES,
     SURFACE_PREVIEW_LEASE_MILLISECONDS,
 };
-pub use viewport::{CanvasViewportCommand, CanvasViewportMode, CanvasViewportState};
+pub use viewport::{
+    CanvasViewportCommand, CanvasViewportMode, CanvasViewportState, CanvasWipeOrientation,
+};
 
 use std::{error::Error, fmt};
 

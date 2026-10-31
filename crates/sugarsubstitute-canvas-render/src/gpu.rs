@@ -125,7 +125,16 @@ impl<S: RasterSource> GpuRenderer<S> {
         context: &JobContext,
         navigation: bool,
     ) -> Result<PreparedGpuUpdate, RenderError> {
-        let RenderRequest { document, view, reconstruction, matte, target, base, damage } = request;
+        let RenderRequest {
+            document,
+            comparison,
+            view,
+            reconstruction,
+            matte,
+            target,
+            base,
+            damage,
+        } = request;
         if damage.dirty().surface() != view.surface() {
             return Err(RenderError::Invalid("Canvas damage and viewport dimensions differ"));
         }
@@ -138,6 +147,7 @@ impl<S: RasterSource> GpuRenderer<S> {
         let compiled = if navigation {
             document.compile_navigation_view(
                 view,
+                comparison,
                 matte,
                 reconstruction,
                 &self.memory,
@@ -146,7 +156,7 @@ impl<S: RasterSource> GpuRenderer<S> {
                 },
             )?
         } else {
-            document.compile_view(view, matte, reconstruction, &self.memory)?
+            document.compile_view(view, comparison, matte, reconstruction, &self.memory)?
         };
         let sampling_scale = compiled.sampling_scale();
         let (graph, output) = compiled.into_parts();

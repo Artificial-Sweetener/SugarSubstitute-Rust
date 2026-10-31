@@ -63,15 +63,15 @@ impl Session {
             &mut self.pending_open,
             move |open, context| {
                 #[cfg(feature = "native-composition")]
-                let source = match open.source {
-                    OpenSource::Image(source) => source,
+                let originals = match open.source {
+                    OpenSource::Image(originals) => originals,
                     OpenSource::Acquired(owner) => {
                         owner.acquire(resources.cache.clone(), &resources.memory, &context)?
                     }
                 };
                 #[cfg(not(feature = "native-composition"))]
-                let OpenSource::Image(source) = open.source;
-                work::load(source, open.intent, open.reuse, &resources, &context)
+                let OpenSource::Image(originals) = open.source;
+                work::load(originals, open.intent, open.reuse, &resources, &context)
             },
         ) {
             Ok(job) => {

@@ -55,6 +55,8 @@ pub enum CanvasSurfaceOperation {
         item_id: String,
         /// The Comfy adapter must validate the reference against its qualified backend.
         file: CanvasFileReference,
+        /// An optional second result shown through a wipe under the same revision.
+        comparison: Option<CanvasSurfaceComparison>,
     },
     /// Inspect or change the committed image viewport in attachment revision order.
     Viewport(CanvasViewportCommand),
@@ -70,6 +72,15 @@ pub enum CanvasSurfaceOperation {
     Commit,
     /// Release only the addressed candidate or committed attachment.
     Release,
+}
+
+/// A second attributed result selected for comparison with the primary selection.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CanvasSurfaceComparison {
+    /// SugarCubes' comparison result identity, retained only as correlation data.
+    pub item_id: String,
+    /// Structured, untrusted reference the Comfy adapter validates like the primary file.
+    pub file: CanvasFileReference,
 }
 
 /// Stable host outcomes; successful preparation is distinct from applied operations.
@@ -154,12 +165,23 @@ impl CanvasSurfaceMessage {
                 }
                 let file = CanvasFileReference::from_wire(value.file)
                     .ok_or(CanvasSurfaceMessageError::Invalid)?;
+                let comparison = value
+                    .comparison
+                    .map(|comparison| {
+                        CanvasFileReference::from_wire(comparison.file)
+                            .map(|file| CanvasSurfaceComparison {
+                                item_id: comparison.item_id,
+                                file,
+                            })
+                            .ok_or(CanvasSurfaceMessageError::Invalid)
+                    })
+                    .transpose()?;
                 CanvasSurfaceRequest::new(
                     value.session,
                     value.request_id,
                     value.address,
                     value.revision,
-                    CanvasSurfaceOperation::Select { item_id: value.item_id, file },
+                    CanvasSurfaceOperation::Select { item_id: value.item_id, file, comparison },
                 )?
             }
             "surface.commit" => {

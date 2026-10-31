@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Acquire selected encoded originals without coupling canvas state to a host's transport.
 
+use super::work::Originals;
 use super::*;
 use std::io;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
-use sugarsubstitute_image_io::ImageSource;
 use sugarsubstitute_supervision::cache::RuntimeCache;
 
 /// An inert, one-use host adapter retained until its native acquisition actually retires.
@@ -14,14 +14,15 @@ pub(crate) trait SourceAcquirer: Send + Sync {
     /// Peak transient bytes needed while acquiring the original.
     fn reservation_bytes(&self) -> u64;
 
-    /// Acquire one retained original on an ordinary worker with the supplied finite context.
-    /// Observe cancellation before returning; success requires native transfer retirement.
+    /// Acquire the selected original, and any comparison original, on an ordinary worker with
+    /// the supplied finite context. Observe cancellation before returning; success requires
+    /// native transfer retirement.
     fn acquire(
         &self,
         cache: RuntimeCache,
         resident: &MemoryLease,
         context: &JobContext,
-    ) -> io::Result<ImageSource>;
+    ) -> io::Result<Originals>;
 
     /// Stop an unstarted acquisition without blocking; running jobs are separately cancelled.
     fn cancel(&self);

@@ -230,7 +230,7 @@ impl Session {
                 .client
                 .submit_blocking_owned_input(&runtime.scope, spec, input, move |input, context| {
                     work::load(
-                        input.source,
+                        work::Originals::single(input.source),
                         input.revision,
                         CacheReuse::Compatible,
                         &resources,

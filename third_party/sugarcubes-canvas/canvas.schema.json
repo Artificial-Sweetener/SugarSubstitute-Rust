@@ -14,8 +14,8 @@
         },
         "viewportCommands": {
           "type": "array",
-          "items": { "enum": ["fit", "native", "zoom", "pan"] },
-          "maxItems": 4
+          "items": { "enum": ["fit", "native", "zoom", "pan", "wipe"] },
+          "maxItems": 5
         },
         "viewportState": { "type": "boolean" },
         "previewFormats": { "type": "array", "items": { "enum": ["png", "jpeg"] }, "maxItems": 2 },
@@ -234,7 +234,8 @@
           "x-length-unit": "unicode-codepoints",
           "pattern": "^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
         },
-        "file": { "$ref": "#/$defs/CanvasSurfaceFileReference" }
+        "file": { "$ref": "#/$defs/CanvasSurfaceFileReference" },
+        "comparison": { "$ref": "#/$defs/CanvasSurfaceComparison" }
       },
       "required": [
         "protocol",
@@ -247,6 +248,20 @@
         "itemId",
         "file"
       ],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceComparison": {
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "maxLength": 4096,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+        },
+        "file": { "$ref": "#/$defs/CanvasSurfaceFileReference" }
+      },
+      "required": ["itemId", "file"],
       "additionalProperties": false
     },
     "CanvasSurfaceCommitRequest": {
@@ -2012,6 +2027,16 @@
           },
           "required": ["type", "x", "y", "units"],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "wipe" },
+            "orientation": { "enum": ["vertical", "horizontal"] },
+            "split": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "required": ["type", "orientation", "split"],
+          "additionalProperties": false
         }
       ]
     },
@@ -2029,7 +2054,8 @@
       "properties": {
         "mode": { "enum": ["fit", "native", "custom"] },
         "physicalScale": { "type": "number", "minimum": 1e-9, "maximum": 16384 },
-        "dimensions": { "$ref": "#/$defs/CanvasSurfaceImageDimensions" }
+        "dimensions": { "$ref": "#/$defs/CanvasSurfaceImageDimensions" },
+        "secondaryDimensions": { "$ref": "#/$defs/CanvasSurfaceImageDimensions" }
       },
       "required": ["mode", "physicalScale", "dimensions"],
       "additionalProperties": false

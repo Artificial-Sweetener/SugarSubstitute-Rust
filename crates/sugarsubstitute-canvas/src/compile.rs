@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compile authored content into explicit image operations at the requested evaluation grid.
-use crate::{CanvasError, DocumentSnapshot, LayerContent, LayerMask, Viewport};
+use crate::{
+    CanvasError, Comparison, DocumentSnapshot, LayerContent, LayerMask, Viewport, WipeOrientation,
+};
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_ops::{
     AssetId, Extent, Filter, Graph, ImageError, NodeId, Operation, Pixel, Reconstruction, Region,
@@ -46,17 +48,19 @@ impl DocumentSnapshot {
     /// Finished raster layers use canonical Lanczos pyramid reduction followed by their selected
     /// final filter. Previews sample original rasters directly with sparse nearest reconstruction.
     /// Vector coverage, adjustments and composition use the same requested linear-light grid. At
-    /// actual size, one document pixel corresponds to one device pixel.
+    /// actual size, one document pixel corresponds to one device pixel. A comparison raster uses
+    /// the same reconstruction, stretched into the document rectangle under the same camera.
     /// # Errors
     /// Reports invalid matte/coordinates, graph limits and original memory/operation failures.
     pub fn compile_view(
         &self,
         view: Viewport,
+        comparison: Option<Comparison>,
         matte: Pixel,
         reconstruction: Reconstruction,
         memory: &MemoryLease,
     ) -> Result<CompiledView, CanvasError> {
-        self.compile(view, matte, reconstruction, memory, None)
+        self.compile(view, comparison, matte, reconstruction, memory, None)
     }
 
     /// Compile navigation using the nearest ready canonical pyramid covering the requested view.
@@ -68,17 +72,19 @@ impl DocumentSnapshot {
     pub fn compile_navigation_view(
         &self,
         view: Viewport,
+        comparison: Option<Comparison>,
         matte: Pixel,
         reconstruction: Reconstruction,
         memory: &MemoryLease,
         ready: impl Fn(&Graph, NodeId, Region) -> Result<bool, ImageError>,
     ) -> Result<CompiledView, CanvasError> {
-        self.compile(view, matte, reconstruction, memory, Some(&ready))
+        self.compile(view, comparison, matte, reconstruction, memory, Some(&ready))
     }
 
     fn compile(
         &self,
         view: Viewport,
+        comparison: Option<Comparison>,
         matte: Pixel,
         reconstruction: Reconstruction,
         memory: &MemoryLease,
@@ -88,7 +94,7 @@ impl DocumentSnapshot {
             return Err(CanvasError::Invalid("Canvas matte must be opaque"));
         }
         let target = view.surface();
-        let mut graph = Graph::new(graph_capacity(self), memory)?;
+        let mut graph = Graph::new(graph_capacity(self, comparison), memory)?;
         let background = graph.add(Operation::Solid { extent: target, color: matte })?;
         let document = self.extent();
         let raster = RasterGrid { document, view, reconstruction, ready };
@@ -112,9 +118,14 @@ impl DocumentSnapshot {
                 }
                 content => {
                     let mut foreground = match content {
-                        LayerContent::Raster { asset, .. } => {
-                            raster_node(&mut graph, asset, raster, true, &mut sampling_scale)?
-                        }
+                        LayerContent::Raster { asset, .. } => raster_node(
+                            &mut graph,
+                            asset,
+                            document,
+                            raster,
+                            true,
+                            &mut sampling_scale,
+                        )?,
                         LayerContent::VectorRectangle(shape) => {
                             vector_node(&mut graph, shape, document, view)?
                         }
@@ -140,18 +151,34 @@ impl DocumentSnapshot {
                 }
             }
         }
+        if let Some(comparison) = comparison {
+            let compared = raster_node(
+                &mut graph,
+                comparison.asset(),
+                comparison.extent(),
+                raster,
+                true,
+                &mut sampling_scale,
+            )?;
+            let mask = wipe_node(&mut graph, comparison, document, view)?;
+            let foreground = graph.add(Operation::Mask { input: compared, mask })?;
+            composite = graph.add(Operation::Over { background: composite, foreground })?;
+        }
         let output = graph.add(Operation::Over { background, foreground: composite })?;
         Ok(CompiledView { graph, output, sampling_scale })
     }
 }
 
+/// Pyramid reductions needed to bring an extent's longer edge down to one pixel.
+fn reductions(extent: Extent) -> usize {
+    (u32::BITS - (extent.width().max(extent.height()) - 1).leading_zeros()) as usize
+}
+
 /// Admit the actual maximum operation inventory for these layers, including every explicit mip.
-fn graph_capacity(document: &DocumentSnapshot) -> usize {
-    let extent = document.extent();
-    let reductions =
-        (u32::BITS - (extent.width().max(extent.height()) - 1).leading_zeros()) as usize;
-    let sampled = reductions + 2;
-    let mut capacity = 3;
+fn graph_capacity(document: &DocumentSnapshot, comparison: Option<Comparison>) -> usize {
+    let sampled = reductions(document.extent()) + 2;
+    // Comparison: its own pyramid plus resample, document clip, clip mask, wipe, mask and over.
+    let mut capacity = 3 + comparison.map_or(0, |comparison| reductions(comparison.extent()) + 8);
     for layer in document.layers().iter().filter(|layer| layer.visible() && layer.opacity() > 0.0) {
         let mask = match layer.mask() {
             Some(LayerMask::Raster { .. }) => sampled,
@@ -185,7 +212,7 @@ fn mask_node(
 ) -> Result<NodeId, CanvasError> {
     match mask {
         Some(LayerMask::Raster { asset, .. }) => {
-            raster_node(graph, asset, grid, false, sampling_scale)
+            raster_node(graph, asset, grid.document, grid, false, sampling_scale)
         }
         Some(LayerMask::VectorRectangle(shape)) => {
             vector_node(graph, shape, grid.document, grid.view)
@@ -224,6 +251,28 @@ fn vector_node(
         shape,
         translation: view.pixel_translation(),
     })?)
+}
+
+/// Cover the document on the leading side of the comparison's document-space divider.
+fn wipe_node(
+    graph: &mut Graph,
+    comparison: Comparison,
+    document: Extent,
+    view: Viewport,
+) -> Result<NodeId, CanvasError> {
+    let [width, height] = [f64::from(document.width()), f64::from(document.height())];
+    let boundary = comparison.boundary();
+    let bounds = match comparison.orientation() {
+        WipeOrientation::Vertical => [0.0, 0.0, boundary.clamp(0.0, width), height],
+        WipeOrientation::Horizontal => [0.0, 0.0, width, boundary.clamp(0.0, height)],
+    };
+    if bounds[2] <= 0.0 || bounds[3] <= 0.0 {
+        return Ok(
+            graph.add(Operation::Solid { extent: view.surface(), color: Pixel::TRANSPARENT })?
+        );
+    }
+    let shape = VectorRectangle::new(bounds, Pixel::linear(0.0, 0.0, 0.0, 1.0)?)?;
+    vector_node(graph, shape, document, view)
 }
 
 #[cfg(test)]

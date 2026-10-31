@@ -3,6 +3,7 @@
 //! Prove native and web surface message admission and exact reply correlation.
 
 use super::*;
+use crate::canvas_surface::{CanvasViewportMode, CanvasViewportState};
 use serde_json::{Value, json};
 
 fn vectors() -> Result<Value, Box<dyn Error>> {
@@ -55,9 +56,10 @@ fn selected_output_reply_retains_original_attachment_and_revision() -> Result<()
     assert_eq!(request.request_id(), 1);
     assert_eq!(request.revision(), 1);
     assert_eq!(request.address().view_id(), "view:one");
-    let CanvasSurfaceOperation::Select { item_id, file } = request.operation() else {
+    let CanvasSurfaceOperation::Select { item_id, file, comparison } = request.operation() else {
         return Err("Expected selected output".into());
     };
+    assert!(comparison.is_none());
     assert_eq!(item_id, "result:one");
     assert_eq!(file.filename(), "résumé🌈.png");
     let reply: Value =
@@ -68,6 +70,33 @@ fn selected_output_reply_retains_original_attachment_and_revision() -> Result<()
     assert_eq!(reply["requestId"], value["requestId"]);
     assert!(request.reply(CanvasSurfaceReplyStatus::Ready, "").is_err());
     assert!(request.reply(CanvasSurfaceReplyStatus::Error, &"x".repeat(513)).is_err());
+    Ok(())
+}
+
+#[test]
+fn a_comparison_selection_decodes_both_results_and_wipes_report_both_extents()
+-> Result<(), Box<dyn Error>> {
+    let mut value = vectors()?.get("base").ok_or("Missing surface message base")?.clone();
+    value["comparison"] = json!({
+        "itemId":"result:two", "file":{"filename":"two.png","subfolder":"","type":"output"}
+    });
+    let CanvasSurfaceMessage::Request(request) =
+        CanvasSurfaceMessage::decode(&serde_json::to_vec(&value)?)?
+    else {
+        return Err("Expected a selection request".into());
+    };
+    let CanvasSurfaceOperation::Select { comparison: Some(comparison), .. } = request.operation()
+    else {
+        return Err("Expected a comparison selection".into());
+    };
+    assert_eq!(comparison.item_id, "result:two");
+    assert_eq!(comparison.file.filename(), "two.png");
+    let state = CanvasViewportState::new(CanvasViewportMode::Fit, 0.5, 64, 32)?
+        .with_secondary_dimensions(16, 24)?;
+    assert_eq!(state.secondary_dimensions(), Some((16, 24)));
+    let wire = serde_json::to_value(state.to_wire())?;
+    assert_eq!(wire["secondaryDimensions"], json!({"width":16,"height":24}));
+    assert!(state.with_secondary_dimensions(0, 24).is_err());
     Ok(())
 }
 

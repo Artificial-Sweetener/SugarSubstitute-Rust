@@ -13,11 +13,14 @@ pub(crate) use camera::AcceptedCamera;
 #[cfg(feature = "native-composition")]
 pub(crate) use camera::{CameraCommandResult, CameraIntent, CameraSettlement};
 mod closing;
+mod comparison;
 mod completion;
 mod display;
 mod document;
 #[cfg(feature = "native-composition")]
 mod document_transaction;
+#[cfg(feature = "native-composition")]
+pub(crate) use super::work::Originals as SelectedOriginals;
 #[cfg(feature = "native-composition")]
 pub(crate) use document_transaction::{DocumentToken, PreviewOffer, PreviewStatus, PreviewToken};
 mod gpu;
@@ -37,13 +40,14 @@ use self::runtime::Runtime;
 use super::{
     config::{Config, InitialSource},
     coverage::{self, BackingTier},
-    work::{self, Packet, Resources, Scene},
+    work::{self, Originals, Packet, Resources, Scene},
     work_error::WorkError,
 };
 use crate::{diagnostics::DiagnosticHealth, job_sequence::JobSequence};
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 use sugarsubstitute_canvas::{
-    BackingCoverage, DamagePlan, FrameStamp, Navigation, ToolManager, Viewport,
+    BackingCoverage, Comparison, DamagePlan, FrameStamp, Navigation, ToolManager, Viewport,
+    WipeOrientation,
 };
 use sugarsubstitute_canvas_render::{
     CpuProjection, CpuSurface, GpuSurface, PresentationMode, PresentationPacer,
@@ -67,9 +71,9 @@ struct Open {
     expected: Option<AssetId>,
 }
 
-/// An explicit original or an inert host adapter that acquires one on a storage worker.
+/// Explicit originals or an inert host adapter that acquires them on a storage worker.
 enum OpenSource {
-    Image(ImageSource),
+    Image(Originals),
     #[cfg(feature = "native-composition")]
     Acquired(Arc<dyn acquisition::SourceAcquirer>),
 }
@@ -78,7 +82,7 @@ impl OpenSource {
     /// Retain source custody until a storage worker can dispose it.
     fn requires_worker_retirement(&self) -> bool {
         match self {
-            Self::Image(source) => source.requires_worker_retirement(),
+            Self::Image(originals) => originals.requires_worker_retirement(),
             #[cfg(feature = "native-composition")]
             Self::Acquired(_) => true,
         }
@@ -123,6 +127,7 @@ struct Rendering {
     tier: BackingTier,
     coverage: BackingCoverage,
     display_extent: sugarsubstitute_image_ops::Extent,
+    comparison: Option<Comparison>,
     superseded: bool,
 }
 struct Loading {
@@ -141,6 +146,14 @@ struct Presented {
     reconstruction: Reconstruction,
     document: (u64, u64),
     source_revision: u64,
+    comparison: Option<Comparison>,
+}
+/// Viewport-anchored wipe intent for a loaded comparison; converted to a document boundary per camera.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Wipe {
+    orientation: WipeOrientation,
+    /// Leading fraction of the viewport, within `0.0..=1.0`.
+    split: f64,
 }
 /// Native callbacks mutate only application intent and retained presentation, never image kernels.
 pub(crate) struct Session {
@@ -208,6 +221,7 @@ pub(crate) struct Session {
     input_observed: Duration,
     expose_pending: bool,
     drawable: bool,
+    wipe: Wipe,
     frame_revision: u64,
     picker: bool,
     failed: Option<Box<dyn Error>>,
@@ -305,6 +319,7 @@ impl Session {
             input_observed: Duration::ZERO,
             expose_pending: false,
             drawable: true,
+            wipe: Wipe { orientation: WipeOrientation::Vertical, split: 0.5 },
             frame_revision: 0,
             picker: false,
             failed: None,

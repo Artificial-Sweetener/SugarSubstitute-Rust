@@ -188,10 +188,15 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
     resources.release_graph_tiles()?;
     let target =
         backing.target().ok_or_else(|| WorkError::invalid("Proof has no presented frame"))?;
-    let mut renderer = CpuRenderer::new(super::work::SourcePort(source), 64, &resources.memory)?;
+    let mut renderer = CpuRenderer::new(
+        super::work::SourcePort(source.into_iter().collect()),
+        64,
+        &resources.memory,
+    )?;
     let update = renderer.prepare(
         RenderRequest {
             document: &document,
+            comparison: None,
             view,
             reconstruction,
             matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,

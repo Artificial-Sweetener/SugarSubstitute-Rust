@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Device-independent frame intent and exact application-owned presentation identities.
-use crate::{DamagePlan, DocumentSnapshot, Viewport};
+use crate::{Comparison, DamagePlan, DocumentSnapshot, Viewport};
 use sugarsubstitute_contracts::execution::{Generation, SurfaceId};
 use sugarsubstitute_image_ops::{Pixel, Reconstruction};
 
@@ -17,6 +17,8 @@ pub struct FrameStamp {
 pub struct RenderRequest<'a> {
     /// Frozen authored content for this request.
     pub document: &'a DocumentSnapshot,
+    /// Optional second raster revealed through a viewport-anchored wipe over the document.
+    pub comparison: Option<Comparison>,
     /// Requested physical camera state.
     pub view: Viewport,
     /// Explicit disposable-preview or canonical-finished raster reconstruction intent.

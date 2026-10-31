@@ -327,6 +327,7 @@ fn paired_projection_pressure_evicts_only_cache_tiles_and_preserves_canonical_pi
         let prepared = renderer.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view: source_view,
                 reconstruction: Reconstruction::Preview,
                 matte: Pixel::linear(0.0, 0.0, 0.0, 1.0)?,

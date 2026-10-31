@@ -60,6 +60,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         let prepared = renderer.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 matte,
@@ -80,6 +81,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         let (graph, output) = snapshot
             .compile_view(
                 view,
+                None,
                 matte,
                 Reconstruction::Finished(Filter::Lanczos3),
                 context.memory(),

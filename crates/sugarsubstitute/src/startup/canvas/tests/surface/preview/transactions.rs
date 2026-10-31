@@ -241,6 +241,60 @@ fn original_begin_deadline_wakes_and_expires_without_chunk_renewal() -> Result<(
 }
 
 #[test]
+fn withdrawing_a_preview_refit_by_resizing_restores_the_navigated_final_camera()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    fixture.viewport(5, json!({"type":"zoom","factor":1.25}))?;
+    let navigated = fixture.complete(5)?;
+    watch(&mut fixture, 100, true)?;
+    transfer(&mut fixture, 200, "preview:1", JPEG)?;
+    let target = wait_frame(&mut fixture)?;
+    fixture.canvas.presented(target)?;
+    wait_change(&mut fixture, "presented")?;
+    fixture.geometry(324, 60, 30)?;
+    settle_geometry(&mut fixture, 324)?;
+    fixture.geometry(325, 80, 40)?;
+    settle_geometry(&mut fixture, 325)?;
+    fixture.send(
+        326,
+        "surface.preview.withdraw",
+        json!({"token":"preview:1","leaseRevision":200}),
+    )?;
+    let mut restored = None;
+    for _ in 0..500 {
+        let observed = fixture.wake.revision();
+        fixture.advance(100);
+        fixture.pump()?;
+        while let Some(command) = fixture.canvas.take_command() {
+            if let DesktopStartupCommand::SendSurfacePresentation(change) = command {
+                let value: Value = serde_json::from_slice(change.payload())?;
+                if value["change"]["displayed"]["type"] == "final" {
+                    restored = Some(value);
+                }
+            }
+        }
+        if restored.is_some() {
+            break;
+        }
+        match fixture.canvas.presentation() {
+            MainCanvasPresentation::Frame(frame) if frame.frame.pending => {
+                fixture.canvas.presented(frame.frame.target)?;
+            }
+            MainCanvasPresentation::Hide => fixture.canvas.hidden(fixture.identity)?,
+            _ => fixture.wait_preview_progress(observed)?,
+        }
+    }
+    let restored = restored.ok_or("Withdrawal never reported the restored final")?;
+    assert_eq!(restored["change"]["displayed"]["viewport"], navigated["viewport"]);
+    fixture.viewport(327, json!({"type":"read"}))?;
+    let read = fixture.complete(327)?;
+    assert_eq!(read["viewport"], navigated["viewport"]);
+    drain(&mut fixture)?;
+    fixture.finish()
+}
+
+#[test]
 fn a_navigated_final_accepts_a_locked_fit_preview() -> Result<(), Box<dyn Error>> {
     for commands in [
         vec![

@@ -96,12 +96,16 @@ impl NativeSurface {
         if preview && mode != CanvasViewportMode::Fit {
             return Err("Native-accepted preview camera is not in Fit mode".into());
         }
-        Ok(Some(CanvasViewportState::new(
+        let state = CanvasViewportState::new(
             mode,
             camera.viewport.zoom(),
             camera.extent.width(),
             camera.extent.height(),
-        )?))
+        )?;
+        if preview {
+            return Ok(Some(state));
+        }
+        Ok(Some(super::super::viewport::with_comparison(state, session)?))
     }
     /// Update preview/final identity only after the session accepts this exact native target.
     pub(in crate::startup::canvas::surface) fn preview_presented(

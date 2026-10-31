@@ -29,7 +29,7 @@ fn scene(
         index: 0,
         layer: Layer::new(LayerId::new(1)?, LayerContent::VectorRectangle(rectangle))?,
     })?;
-    Ok(Scene { document, source: None, source_revision: identity, original: None })
+    Ok(Scene { document, source: None, source_revision: identity, original: None, compared: None })
 }
 
 fn available(memory: &MemoryLease) -> Result<u64, WorkError> {

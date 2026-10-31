@@ -110,6 +110,7 @@ fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
             })
         })?;
         session.rendering = Some(Rendering {
+            comparison: None,
             job,
             document,
             source_revision: 0,

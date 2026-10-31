@@ -991,14 +991,14 @@ rationale = "Isolated native qualification reports observed GPU display, repair 
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/scene.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:0499bb7770a79530de6515cc1826b051317bd62b9f85679ae3740fad49561fba"
+source_sha256 = "sha256:cd0d3a02d3d26dfd8f3c9f5e1e39c1756d1bb4cc269ae9dc17cd6b117c28722a"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/scale.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:7d20bd20e0fbe8efbcea9c3df6bc81245d3ba3e6ba9ee1a5948dc3bfa1f8afc4"
+source_sha256 = "sha256:6735b59bc30c9486865d15af1a6c2d417a6d2de8102912945d367e2082d6dd0f"
 disposition = "fixture"
 rationale = "Isolated 4K hardware qualification reports actual retained GPU copy, CPU pixel agreement and finite-admission tile eviction through the production execution boundary."
 

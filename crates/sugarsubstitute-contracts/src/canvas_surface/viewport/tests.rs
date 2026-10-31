@@ -39,6 +39,14 @@ fn shared_viewport_request_vectors_match_the_web_boundary() -> Result<(), Box<dy
                 x: value["command"]["x"].as_f64().ok_or("Missing x")?,
                 y: value["command"]["y"].as_f64().ok_or("Missing y")?,
             },
+            "wipe" => CanvasViewportCommand::Wipe {
+                orientation: match value["command"]["orientation"].as_str() {
+                    Some("vertical") => CanvasWipeOrientation::Vertical,
+                    Some("horizontal") => CanvasWipeOrientation::Horizontal,
+                    _ => return Err("Unknown fixture wipe orientation".into()),
+                },
+                split: value["command"]["split"].as_f64().ok_or("Missing split")?,
+            },
             _ => return Err("Unknown fixture command".into()),
         };
         assert_eq!(decoded.operation(), &CanvasSurfaceOperation::Viewport(expected));

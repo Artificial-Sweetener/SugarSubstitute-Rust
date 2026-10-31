@@ -92,7 +92,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
     };
     let identity = (document.snapshot().identity(), document.snapshot().revision());
     session.document.scene =
-        Some(Scene { document, source: None, source_revision: 0, original: None });
+        Some(Scene { document, source: None, source_revision: 0, original: None, compared: None });
     session.selection = 0;
     let spec = session.spec(
         Operation::FramePrepare,
@@ -108,6 +108,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
     session.runtime = Some(runtime);
     let coverage = coverage::detail(session.document.tools.navigation().viewport())?;
     session.rendering = Some(Rendering {
+        comparison: None,
         job,
         document: identity,
         source_revision: 0,
@@ -118,6 +119,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         superseded: false,
     });
     session.document.presented = Some(Presented {
+        comparison: None,
         tier: BackingTier::Detail,
         coverage,
         view: session.document.tools.navigation().viewport(),

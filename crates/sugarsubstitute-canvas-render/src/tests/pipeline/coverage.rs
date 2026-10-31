@@ -51,6 +51,7 @@ fn padded_crop_matches_direct_mixed_composition_at_finished_zoom_boundaries() ->
             let padded = CpuSurface::from_prepared(padded_renderer.prepare(
                 RenderRequest {
                     document: &snapshot,
+                    comparison: None,
                     view: coverage.viewport(),
                     reconstruction,
                     matte: black()?,
@@ -68,6 +69,7 @@ fn padded_crop_matches_direct_mixed_composition_at_finished_zoom_boundaries() ->
             let direct = CpuSurface::from_prepared(direct_renderer.prepare(
                 RenderRequest {
                     document: &snapshot,
+                    comparison: None,
                     view: target,
                     reconstruction,
                     matte: black()?,

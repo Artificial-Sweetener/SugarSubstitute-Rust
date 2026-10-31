@@ -18,6 +18,7 @@ fn navigation_selects_the_nearest_ready_raster_and_mask_pyramids()
         let ready = snapshot
             .compile_navigation_view(
                 view,
+                None,
                 matte,
                 intent,
                 context.memory(),
@@ -32,11 +33,15 @@ fn navigation_selects_the_nearest_ready_raster_and_mask_pyramids()
         collect_filters(ready.graph(), ready.output(), &mut filters)?;
         assert_eq!(filters, [8, 0, 2]);
         let ideal = snapshot
-            .compile_navigation_view(view, matte, intent, context.memory(), |_, _, _| Ok(true))
+            .compile_navigation_view(view, None, matte, intent, context.memory(), |_, _, _| {
+                Ok(true)
+            })
             .map_err(|cause| ImageError::Source(Box::new(cause)))?;
         assert_eq!(ideal.sampling_scale(), view.zoom());
         let cold = snapshot
-            .compile_navigation_view(view, matte, intent, context.memory(), |_, _, _| Ok(false))
+            .compile_navigation_view(view, None, matte, intent, context.memory(), |_, _, _| {
+                Ok(false)
+            })
             .map_err(|cause| ImageError::Source(Box::new(cause)))?;
         assert_eq!(cold.sampling_scale(), view.zoom());
         let mut filters = [0; 3];
@@ -60,6 +65,7 @@ fn exact_settling_and_pixel_inspection_do_not_substitute_cached_coarser_levels()
         let exact = snapshot
             .compile_navigation_view(
                 view,
+                None,
                 matte,
                 Reconstruction::Finished(Filter::Lanczos3),
                 context.memory(),
@@ -71,6 +77,7 @@ fn exact_settling_and_pixel_inspection_do_not_substitute_cached_coarser_levels()
         let nearest = snapshot
             .compile_navigation_view(
                 view,
+                None,
                 matte,
                 Reconstruction::navigation_for_display_zoom(2.5)?,
                 context.memory(),
@@ -89,6 +96,7 @@ fn navigation_preserves_readiness_boundary_errors() -> crate::tests::harness::Te
             raster_fixture(context).map_err(|cause| ImageError::Source(Box::new(cause)))?;
         let result = document.snapshot().compile_navigation_view(
             view,
+            None,
             Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
             Reconstruction::Finished(Filter::Bilinear),
             context.memory(),
@@ -118,6 +126,7 @@ fn compile_policy(
     let compile = |reconstruction| -> Result<[u32; 3], CanvasError> {
         let compiled = snapshot.compile_view(
             view,
+            None,
             Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
             reconstruction,
             context.memory(),

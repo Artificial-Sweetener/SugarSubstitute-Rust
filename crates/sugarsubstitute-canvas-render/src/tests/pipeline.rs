@@ -2,10 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Render real document DAG content through exact viewport repair and canonical display encoding.
 use super::*;
+mod comparison;
 mod coverage;
 mod phase;
 mod progressive;
 mod reconstruction;
+mod translucency;
 use sugarsubstitute_canvas::{
     Document, DocumentEdit, Layer, LayerContent, LayerId, LayerMask, Viewport,
 };
@@ -67,6 +69,7 @@ fn repeated_tall_pan_repairs_retain_warmed_source_chunks_under_view_cache_churn(
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(1)?,
@@ -82,6 +85,7 @@ fn repeated_tall_pan_repairs_retain_warmed_source_chunks_under_view_cache_churn(
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(2)?,
@@ -98,6 +102,7 @@ fn repeated_tall_pan_repairs_retain_warmed_source_chunks_under_view_cache_churn(
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(3)?,
@@ -136,6 +141,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(1)?,
@@ -155,6 +161,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(2)?,
@@ -173,6 +180,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(3)?,
@@ -212,6 +220,7 @@ fn vector_layers_rasterize_at_requested_zoom_without_flattening_geometry() -> ha
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(1)?,
@@ -252,6 +261,7 @@ fn adjustment_layer_mask_and_opacity_preserve_original_translucent_coverage() ->
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(1)?,
@@ -287,6 +297,7 @@ fn completely_offscreen_huge_images_do_not_trigger_decode_or_pyramid_work() -> h
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(1)?,
@@ -321,6 +332,7 @@ fn minified_one_pixel_axes_preserve_geometric_image_coverage() -> harness::TestR
             RenderRequest {
                 reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
+                comparison: None,
                 view,
                 matte: black()?,
                 target: stamp(1)?,

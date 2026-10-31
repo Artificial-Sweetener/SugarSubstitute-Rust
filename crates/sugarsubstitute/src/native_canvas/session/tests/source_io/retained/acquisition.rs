@@ -3,7 +3,7 @@
 //! Exercise cancellation and worker-owned retirement of a host source adapter.
 
 use super::*;
-use crate::native_canvas::session::acquisition::SourceAcquirer;
+use crate::native_canvas::session::{SelectedOriginals, acquisition::SourceAcquirer};
 use std::{
     io,
     path::PathBuf,
@@ -39,11 +39,16 @@ impl SourceAcquirer for ReadySource {
         1024
     }
 
-    fn acquire(&self, _: RuntimeCache, _: &MemoryLease, _: &JobContext) -> io::Result<ImageSource> {
+    fn acquire(
+        &self,
+        _: RuntimeCache,
+        _: &MemoryLease,
+        _: &JobContext,
+    ) -> io::Result<SelectedOriginals> {
         if self.close_before_return {
             self.settled.store(true, Ordering::Release);
         }
-        Ok(ImageSource::file(self.path.clone()))
+        Ok(SelectedOriginals::single(ImageSource::file(self.path.clone())))
     }
 
     fn cancel(&self) {}
@@ -68,7 +73,7 @@ impl SourceAcquirer for BlockingSource {
         _: RuntimeCache,
         _: &MemoryLease,
         context: &JobContext,
-    ) -> io::Result<ImageSource> {
+    ) -> io::Result<SelectedOriginals> {
         assert_eq!(context.spec().class, JobClass::InfrastructureOrdinary);
         let mut state = self.state.lock().map_err(|_| io::Error::other("Source state poisoned"))?;
         state.entered = true;

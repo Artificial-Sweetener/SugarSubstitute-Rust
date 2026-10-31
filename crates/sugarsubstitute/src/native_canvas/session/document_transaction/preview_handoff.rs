@@ -92,6 +92,7 @@ impl Session {
             reconstruction,
             document: drawing.document,
             source_revision: drawing.source_revision,
+            comparison: None,
         });
         document.cpu_projection = Some(projection);
         document.projection_damage = Some(DamagePlan::full(drawing.view.surface()));

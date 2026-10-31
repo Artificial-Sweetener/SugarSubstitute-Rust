@@ -353,6 +353,7 @@ impl Session {
                     reconstruction: packet.reconstruction,
                     document: packet.document,
                     source_revision: packet.source_revision,
+                    comparison: rendering.comparison,
                 };
                 match packet.tier {
                     BackingTier::Fallback => self.document.fallback_presented = Some(shown),

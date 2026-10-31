@@ -29,6 +29,7 @@ fn shown(
 ) -> Result<(Presented, FrameStamp), Box<dyn Error>> {
     Ok((
         Presented {
+            comparison: None,
             tier,
             sampling_scale: view.zoom(),
             coverage: coverage::detail(view)?,

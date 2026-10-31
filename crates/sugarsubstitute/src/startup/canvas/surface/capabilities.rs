@@ -27,6 +27,7 @@ impl NativeSurface {
                     CanvasSurfaceViewportCommand::Native,
                     CanvasSurfaceViewportCommand::Zoom,
                     CanvasSurfaceViewportCommand::Pan,
+                    CanvasSurfaceViewportCommand::Wipe,
                 ]
             } else {
                 Vec::new()
@@ -37,6 +38,7 @@ impl NativeSurface {
             } else {
                 Vec::new()
             },
+            comparison: available,
             ..Default::default()
         };
         let status = if available {

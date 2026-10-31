@@ -41,6 +41,7 @@ fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composit
                 let mut surface = CpuSurface::from_prepared(renderer.prepare(
                     RenderRequest {
                         document: &snapshot,
+                        comparison: None,
                         view,
                         reconstruction: Reconstruction::Finished(filter),
                         matte: black()?,
@@ -61,6 +62,7 @@ fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composit
                     let repair = renderer.prepare(
                         RenderRequest {
                             document: &snapshot,
+                            comparison: None,
                             view,
                             reconstruction: Reconstruction::Finished(filter),
                             matte: black()?,
@@ -74,6 +76,7 @@ fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composit
                     let full = CpuSurface::from_prepared(renderer.prepare(
                         RenderRequest {
                             document: &snapshot,
+                            comparison: None,
                             view,
                             reconstruction: Reconstruction::Finished(filter),
                             matte: black()?,
@@ -135,6 +138,7 @@ fn nearest_pan_preserves_the_source_pixel_where_offset_rounding_would_choose_its
         let mut surface = CpuSurface::from_prepared(renderer.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction,
                 matte: black()?,
@@ -160,6 +164,7 @@ fn nearest_pan_preserves_the_source_pixel_where_offset_rounding_would_choose_its
         surface.apply(&renderer.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction,
                 matte: black()?,
@@ -172,6 +177,7 @@ fn nearest_pan_preserves_the_source_pixel_where_offset_rounding_would_choose_its
         let full = CpuSurface::from_prepared(renderer.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction,
                 matte: black()?,
@@ -204,6 +210,7 @@ fn fractional_pan_projection_cannot_replace_a_fresh_canonical_sampling_grid() ->
         let source = CpuSurface::from_prepared(renderer.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view: source_view,
                 reconstruction,
                 matte: black()?,
@@ -232,6 +239,7 @@ fn fractional_pan_projection_cannot_replace_a_fresh_canonical_sampling_grid() ->
         let target = CpuSurface::from_prepared(renderer.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view: target_view,
                 reconstruction,
                 matte: black()?,

@@ -151,6 +151,7 @@ fn fractional_pan_repairs_finished_detail_on_the_retained_grid_until_release()
         reconstruction: finished,
         document: (1, 1),
         source_revision: 0,
+        comparison: None,
     });
 
     session.input(Input::Tool(ToolInput::Pointer([20.0, 30.0])))?;
@@ -191,6 +192,7 @@ fn pan_detail_grid_requires_the_same_document_source_and_finished_quality()
         reconstruction: finished,
         document: (1, 1),
         source_revision: 7,
+        comparison: None,
     });
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
     session.input(Input::Tool(ToolInput::Pointer([0.5, -0.25])))?;
@@ -237,6 +239,7 @@ fn finished_reconstruction_threshold_does_not_turn_nearest_into_a_preview_loop()
         reconstruction: finished,
         document: (1, 1),
         source_revision: 0,
+        comparison: None,
     });
     assert_eq!(session.reconstruction()?, finished);
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;

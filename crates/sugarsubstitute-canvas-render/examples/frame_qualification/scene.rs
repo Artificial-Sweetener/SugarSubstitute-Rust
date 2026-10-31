@@ -154,6 +154,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         let prepared = gpu.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction,
                 matte,
@@ -173,7 +174,8 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         {
             return Err("GPU frame changed publication metadata".into());
         }
-        let compiled = snapshot.compile_view(view, matte, reconstruction, context.memory())?;
+        let compiled =
+            snapshot.compile_view(view, None, matte, reconstruction, context.memory())?;
         let (graph, output) = compiled.into_parts();
         let mut cpu = Evaluator::new(graph, Gradient(image), 32, context.memory())?;
         let (update, worst) = readback(&prepared, &mut cpu, output, &encoder, context)?;
@@ -220,6 +222,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         let full = gpu.prepare(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction,
                 matte,

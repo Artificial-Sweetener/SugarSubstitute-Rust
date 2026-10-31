@@ -4,9 +4,10 @@
 
 use super::*;
 use crate::native_canvas::session::{CameraCommandResult, CameraSettlement};
+use sugarsubstitute_canvas::WipeOrientation;
 use sugarsubstitute_canvas::{NavigationCommand, ZoomMode};
 use sugarsubstitute_contracts::canvas_surface::{
-    CanvasViewportCommand, CanvasViewportMode, CanvasViewportState,
+    CanvasViewportCommand, CanvasViewportMode, CanvasViewportState, CanvasWipeOrientation,
 };
 
 impl NativeSurface {
@@ -27,8 +28,25 @@ impl NativeSurface {
         }) {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
+        if let CanvasViewportCommand::Wipe { orientation, split } = command {
+            if session.compared_extent().is_none() {
+                return self.reply(
+                    identity,
+                    &request,
+                    CanvasSurfaceReplyStatus::Unavailable,
+                    claim,
+                );
+            }
+            let orientation = match orientation {
+                CanvasWipeOrientation::Vertical => WipeOrientation::Vertical,
+                CanvasWipeOrientation::Horizontal => WipeOrientation::Horizontal,
+            };
+            if session.set_wipe(orientation, split).is_err() {
+                return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+            }
+        }
         let navigation = match command {
-            CanvasViewportCommand::Read => None,
+            CanvasViewportCommand::Read | CanvasViewportCommand::Wipe { .. } => None,
             CanvasViewportCommand::Fit => Some(NavigationCommand::Fit),
             CanvasViewportCommand::Native => Some(NavigationCommand::OneToOne),
             CanvasViewportCommand::Zoom { factor } => Some(NavigationCommand::Zoom(factor)),
@@ -74,11 +92,14 @@ impl NativeSurface {
                     ZoomMode::OneToOne => CanvasViewportMode::Native,
                     ZoomMode::Custom => CanvasViewportMode::Custom,
                 };
-                Some(CanvasViewportState::new(
-                    mode,
-                    camera.viewport.zoom(),
-                    camera.extent.width(),
-                    camera.extent.height(),
+                Some(with_comparison(
+                    CanvasViewportState::new(
+                        mode,
+                        camera.viewport.zoom(),
+                        camera.extent.width(),
+                        camera.extent.height(),
+                    )?,
+                    session,
                 )?)
             }
         };
@@ -101,4 +122,15 @@ impl NativeSurface {
             ),
         }
     }
+}
+
+/// Report a loaded comparison original's extent beside the primary image's state.
+pub(in crate::startup::canvas::surface) fn with_comparison(
+    state: CanvasViewportState,
+    session: &Session,
+) -> Result<CanvasViewportState, Box<dyn Error>> {
+    Ok(match session.compared_extent() {
+        Some(extent) => state.with_secondary_dimensions(extent.width(), extent.height())?,
+        None => state,
+    })
 }

@@ -131,6 +131,8 @@ impl PreparePreview {
         }
         let resources = active.preview_cpu()?;
         let prepare = Prepare {
+            compared: None,
+            comparison: None,
             tier: BackingTier::Fallback,
             reconstruction: Reconstruction::Finished(Filter::Lanczos3),
             resources: resources.clone(),

@@ -2,6 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Apply admitted attachment geometry, final selection and commit operations.
 use super::*;
+#[cfg(test)]
+use crate::native_canvas::session::SelectedOriginals;
+use sugarsubstitute_contracts::canvas_surface::CanvasFileReference;
+
 impl NativeSurface {
     /// Apply an already-qualified operation through its authoritative session owner.
     pub(super) fn apply_operation(
@@ -82,39 +86,35 @@ impl NativeSurface {
                     self.reply(identity, &request, CanvasSurfaceReplyStatus::Applied, claim)
                 }
             }
-            CanvasSurfaceOperation::Select { file, .. } => {
-                let target = match ComfyViewTarget::new(&file) {
-                    Ok(target) => target,
-                    Err(_) => {
-                        return self.reply(
-                            identity,
-                            &request,
-                            CanvasSurfaceReplyStatus::Error,
-                            claim,
-                        );
-                    }
-                };
-                if file.storage() != CanvasFileStorage::Output
-                    || !file.filename().to_ascii_lowercase().ends_with(".png")
-                {
+            CanvasSurfaceOperation::Select { file, comparison, .. } => {
+                let compared = comparison.as_ref().map(|comparison| &comparison.file);
+                let Some(target) = admitted_output(&file) else {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
-                }
+                };
+                let Ok(compared_target) =
+                    compared.map(|file| admitted_output(file).ok_or(())).transpose()
+                else {
+                    return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+                };
                 self.fence_previews(session)?;
                 #[cfg(test)]
                 if let Some(output) = &self.fixture_output {
-                    let mut components = Path::new(file.filename()).components();
-                    let leaf = matches!(components.next(), Some(Component::Normal(_)))
-                        && components.next().is_none();
-                    if !file.subfolder().is_empty() || !leaf {
+                    let (Some(primary), Ok(compared)) = (
+                        fixture_file(output, &file),
+                        compared.map(|file| fixture_file(output, file).ok_or(())).transpose(),
+                    ) else {
                         return self.reply(
                             identity,
                             &request,
                             CanvasSurfaceReplyStatus::Error,
                             claim,
                         );
-                    }
-                    let mut source = Some(ImageSource::file(output.join(file.filename())));
-                    if !session.offer_source(&mut source, CacheReuse::Compatible, None)? {
+                    };
+                    let mut originals = Some(SelectedOriginals {
+                        primary: ImageSource::file(primary),
+                        compared: compared.map(ImageSource::file),
+                    });
+                    if !session.offer_originals(&mut originals, CacheReuse::Compatible, None)? {
                         return self.reply(
                             identity,
                             &request,
@@ -122,7 +122,7 @@ impl NativeSurface {
                             claim,
                         );
                     }
-                } else if !self.offer_comfy(identity, target, session)? {
+                } else if !self.offer_comfy(identity, target, compared_target, session)? {
                     return self.reply(
                         identity,
                         &request,
@@ -131,7 +131,7 @@ impl NativeSurface {
                     );
                 }
                 #[cfg(not(test))]
-                if !self.offer_comfy(identity, target, session)? {
+                if !self.offer_comfy(identity, target, compared_target, session)? {
                     return self.reply(
                         identity,
                         &request,
@@ -168,4 +168,23 @@ impl NativeSurface {
             }
         }
     }
+}
+
+/// Admit only a PNG Comfy output reference that the backend adapter may fetch.
+fn admitted_output(file: &CanvasFileReference) -> Option<ComfyViewTarget> {
+    if file.storage() != CanvasFileStorage::Output
+        || !file.filename().to_ascii_lowercase().ends_with(".png")
+    {
+        return None;
+    }
+    ComfyViewTarget::new(file).ok()
+}
+
+/// Resolve a deterministic qualification fixture by leaf name inside its owned output folder.
+#[cfg(test)]
+fn fixture_file(output: &Path, file: &CanvasFileReference) -> Option<PathBuf> {
+    let mut components = Path::new(file.filename()).components();
+    let leaf =
+        matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none();
+    (file.subfolder().is_empty() && leaf).then(|| output.join(file.filename()))
 }

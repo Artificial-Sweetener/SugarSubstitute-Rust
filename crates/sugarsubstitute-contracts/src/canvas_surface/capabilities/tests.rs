@@ -166,7 +166,7 @@ fn discovery_rejects_nonempty_failure_descriptors_and_oversized_lists() -> Resul
             ..Default::default()
         },
         CanvasSurfaceCapabilities {
-            viewport_commands: vec![CanvasSurfaceViewportCommand::Fit; 5],
+            viewport_commands: vec![CanvasSurfaceViewportCommand::Fit; 6],
             ..Default::default()
         },
         CanvasSurfaceCapabilities {

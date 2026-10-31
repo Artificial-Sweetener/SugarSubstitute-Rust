@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Native canvas document and viewport state independent of windows and render devices.
+mod comparison;
 mod compile;
 mod coverage;
 mod damage;
@@ -11,6 +12,7 @@ mod presentation;
 mod projection;
 mod tools;
 mod viewport;
+pub use comparison::{Comparison, WipeOrientation};
 pub use compile::CompiledView;
 pub use coverage::BackingCoverage;
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};

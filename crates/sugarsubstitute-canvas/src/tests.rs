@@ -330,6 +330,7 @@ fn maximum_stack(
     view.fit(extent)?;
     let compiled = snapshot.compile_view(
         view,
+        None,
         Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
         sugarsubstitute_image_ops::Reconstruction::Finished(
             sugarsubstitute_image_ops::Filter::Lanczos3,

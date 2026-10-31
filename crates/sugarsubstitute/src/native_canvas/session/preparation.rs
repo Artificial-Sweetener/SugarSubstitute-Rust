@@ -101,6 +101,7 @@ impl Session {
         let document = scene.document.snapshot();
         let identity = (document.identity(), document.revision());
         let target_view = self.document.tools.navigation().viewport();
+        let comparison = self.comparison_for(target_view)?;
         let document_extent = document.extent();
         let display_extent = target_view.surface();
         let needs_display_buffers = self.needs_display_buffers(display_extent);
@@ -141,6 +142,7 @@ impl Session {
             let current = if let Some(shown) = self.document.presented.as_ref() {
                 shown.document == identity
                     && shown.source_revision == scene.source_revision
+                    && shown.comparison == comparison
                     && shown.reconstruction == reconstruction
                     && shown.view.zoom() == detail_view.zoom()
                     && !coverage::detail_needs_refresh(
@@ -166,6 +168,7 @@ impl Session {
         let compatible = shown.filter(|shown| {
             shown.document == identity
                 && shown.source_revision == scene.source_revision
+                && shown.comparison == comparison
                 && shown.reconstruction == reconstruction
                 && shown.view.surface() == view.surface()
         });
@@ -226,6 +229,7 @@ impl Session {
         let resources =
             self.resources.as_ref().ok_or("Canvas preparation resources are unavailable")?.clone();
         let source = scene.source.clone();
+        let compared = scene.compared.as_ref().map(|compared| compared.source.clone());
         let source_revision = scene.source_revision;
         let gpu_surface = match tier {
             BackingTier::Fallback => self.document.fallback_gpu_front.clone(),
@@ -239,6 +243,8 @@ impl Session {
             resources,
             document,
             source,
+            compared,
+            comparison,
             source_revision,
             view,
             target,
@@ -263,6 +269,7 @@ impl Session {
                     tier,
                     coverage,
                     display_extent,
+                    comparison,
                     superseded: false,
                 });
                 self.frame_revision = next;

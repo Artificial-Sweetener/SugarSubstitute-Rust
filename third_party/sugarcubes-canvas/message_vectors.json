@@ -42,6 +42,70 @@
       "path": "origin",
       "value": "http://example.invalid",
       "valid": false
+    },
+    {
+      "name": "valid comparison pair",
+      "path": "comparison",
+      "value": {
+        "itemId": "result:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "output" }
+      },
+      "valid": true
+    },
+    {
+      "name": "null comparison",
+      "path": "comparison",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "comparison missing file",
+      "path": "comparison",
+      "value": { "itemId": "result:two" },
+      "valid": false
+    },
+    {
+      "name": "comparison missing result identity",
+      "path": "comparison",
+      "value": { "file": { "filename": "b.png", "subfolder": "", "type": "output" } },
+      "valid": false
+    },
+    {
+      "name": "comparison foreign result identity",
+      "path": "comparison",
+      "value": {
+        "itemId": "image:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "output" }
+      },
+      "valid": false
+    },
+    {
+      "name": "comparison unknown storage",
+      "path": "comparison",
+      "value": {
+        "itemId": "result:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "other" }
+      },
+      "valid": false
+    },
+    {
+      "name": "comparison extra authority",
+      "path": "comparison",
+      "value": {
+        "itemId": "result:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "output" },
+        "origin": "http://example.invalid"
+      },
+      "valid": false
+    },
+    {
+      "name": "comparison extra file authority",
+      "path": "comparison",
+      "value": {
+        "itemId": "result:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "output", "path": "C:/b.png" }
+      },
+      "valid": false
     }
   ]
 }

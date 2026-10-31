@@ -69,6 +69,7 @@ fn a_failed_sparse_batch_cannot_retry_into_a_published_update() -> harness::Test
         let mut preparation = renderer.begin(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction: Reconstruction::Preview,
                 matte: black()?,
@@ -99,6 +100,7 @@ fn a_failed_tile_cannot_be_skipped_to_publish_incomplete_patch_pixels() -> harne
         let mut preparation = renderer.begin(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction: Reconstruction::Preview,
                 matte: black()?,
@@ -131,6 +133,7 @@ fn cooperative_preparation_publishes_only_after_all_viewport_tiles_are_complete(
         let mut preparation = renderer.begin(
             RenderRequest {
                 document: &snapshot,
+                comparison: None,
                 view,
                 reconstruction: Reconstruction::Preview,
                 matte: black()?,
@@ -173,6 +176,7 @@ fn abandoned_sparse_preparation_releases_graph_tiles_without_invalidating_a_surf
         let matte = black()?;
         let request = |target| RenderRequest {
             document: &snapshot,
+            comparison: None,
             view,
             reconstruction: Reconstruction::Preview,
             matte,
@@ -220,6 +224,7 @@ fn replacing_the_compiled_graph_rejects_unpublished_earlier_preparations() -> ha
         let target = stamp(1)?;
         let request = || RenderRequest {
             document: &snapshot,
+            comparison: None,
             view,
             reconstruction: Reconstruction::Preview,
             matte,

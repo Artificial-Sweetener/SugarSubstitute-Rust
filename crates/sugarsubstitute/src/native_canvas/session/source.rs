@@ -30,10 +30,29 @@ impl Session {
         reuse: CacheReuse,
         expected: Option<AssetId>,
     ) -> Result<bool, Box<dyn Error>> {
-        let mut input = source.take().map(OpenSource::Image);
+        let mut originals = source.take().map(Originals::single);
+        let result = self.offer_originals(&mut originals, reuse, expected);
+        if let Some(originals) = originals {
+            *source = Some(originals.primary);
+        }
+        result
+    }
+
+    /// Offer one original and an optional comparison original as a single selection.
+    /// A rejected caller retains both originals for retry or worker-owned disposal.
+    ///
+    /// # Errors
+    /// Preserves the caller's originals on exhausted identity, deadline or admission failure.
+    pub(crate) fn offer_originals(
+        &mut self,
+        originals: &mut Option<Originals>,
+        reuse: CacheReuse,
+        expected: Option<AssetId>,
+    ) -> Result<bool, Box<dyn Error>> {
+        let mut input = originals.take().map(OpenSource::Image);
         let result = self.offer_original(&mut input, reuse, expected);
-        if let Some(OpenSource::Image(original)) = input {
-            *source = Some(original);
+        if let Some(OpenSource::Image(returned)) = input {
+            *originals = Some(returned);
         }
         result
     }

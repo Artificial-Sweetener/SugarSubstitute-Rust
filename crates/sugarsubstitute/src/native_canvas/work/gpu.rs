@@ -22,6 +22,7 @@ pub(super) fn prepare(
     };
     let request = RenderRequest {
         document: &input.document,
+        comparison: input.comparison,
         view: input.view,
         reconstruction: input.reconstruction,
         matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,

@@ -264,13 +264,14 @@ impl NativeSurface {
         &mut self,
         identity: MainIdentity,
         target: ComfyViewTarget,
+        compared: Option<ComfyViewTarget>,
         session: &mut Session,
     ) -> Result<bool, Box<dyn Error>> {
         let backend = self
             .backend
             .filter(|backend| backend.identity == identity)
             .ok_or("Canvas backend grant disappeared")?;
-        let owner = super::comfy_source::ComfySource::new(backend, target)?;
+        let owner = super::comfy_source::ComfySource::new(backend, target, compared)?;
         let mut source: Option<
             Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
         > = Some(Arc::new(owner));

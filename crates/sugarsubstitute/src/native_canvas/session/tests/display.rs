@@ -113,7 +113,7 @@ fn pending_draw_outcome(failure: bool, foreign_payload: bool) -> Result<Fixture,
     };
     let identity = (document.snapshot().identity(), document.snapshot().revision());
     session.document.scene =
-        Some(Scene { document, source: None, source_revision: 7, original: None });
+        Some(Scene { document, source: None, source_revision: 7, original: None, compared: None });
     session.selection = 7;
     session.source_sequence = 7;
     let view = session.document.tools.navigation().viewport();
@@ -236,6 +236,7 @@ fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dy
         source: None,
         source_revision: 0,
         original: None,
+        compared: None,
     });
     let source_revision = 0;
     session.document.front = Some(products.surface);

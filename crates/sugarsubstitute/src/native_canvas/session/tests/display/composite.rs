@@ -16,6 +16,7 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
     let old_underlay = stamp(1)?;
     let target = stamp(3)?;
     let shown = Presented {
+        comparison: None,
         tier: BackingTier::Detail,
         coverage,
         view,
@@ -77,6 +78,7 @@ fn partial_detail_selects_shared_composite_contract_before_cpu_or_gpu_projection
     let detail_stamp = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(2)? };
     let fallback_stamp = FrameStamp { generation: Generation::new(1)?, ..detail_stamp };
     let shown = |tier, coverage| Presented {
+        comparison: None,
         tier,
         coverage,
         view: coverage.viewport(),
