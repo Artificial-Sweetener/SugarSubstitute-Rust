@@ -15,7 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove large catalogs and exact batch holes produce bounded, correctly ordered gallery windows. */
 
-import { canvasOverviewWindow } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOverviewWindow.js';
+import {
+  canvasOverviewPlacements,
+  canvasOverviewWindow,
+} from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOverviewWindow.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import { canvasBatchLayout } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasBatchLayout.js';
 
@@ -107,4 +110,49 @@ test('retains the previous packed topology near a tie and releases it after a us
   expect(() => canvasBatchLayout(2, { width: 0, height: 900 }, reference, null)).toThrow(
     RangeError,
   );
+});
+
+test('places packed cells on the grid and centers a partial final row', () => {
+  const catalog = canvasCatalogFixture();
+  const entry = catalog.entries[0]!;
+  const batch = {
+    ...catalog,
+    entries: [{ ...entry, summary: { ...entry.summary, batchCount: 3 } }],
+  };
+  const window = canvasOverviewWindow(batch, 1000, 800, 0, { width: 1000, height: 1000 });
+  expect(window.columns).toBe(2);
+  const placements = canvasOverviewPlacements(window);
+  const column = (window.width - window.gap) / 2;
+  expect(placements).toHaveLength(3);
+  expect(placements[0]).toMatchObject({ x: window.left, y: window.offset, shift: 0 });
+  expect(placements[1]?.x).toBeCloseTo(window.left + column + window.gap);
+  expect(placements[1]?.y).toBeCloseTo(window.offset);
+  // The lone final cell is centered by half a column and gap, as the grid translates it.
+  const shift = (window.width + window.gap) / 2 / 2;
+  expect(placements[2]?.shift).toBeCloseTo(shift);
+  expect(placements[2]?.x).toBeCloseTo(window.left + shift);
+  expect(placements[2]?.y).toBeCloseTo(window.offset + window.cellHeight + window.gap);
+  for (const placement of placements) {
+    expect(placement.width).toBeCloseTo(column);
+    expect(placement.height).toBe(window.cellHeight);
+  }
+});
+
+test('places virtualized rows relative to the visible scroll position', () => {
+  const catalog = canvasCatalogFixture();
+  const huge = {
+    ...catalog,
+    entries: catalog.entries.map((entry) => ({
+      ...entry,
+      summary: { ...entry.summary, batchCount: 100 },
+    })),
+  };
+  const window = canvasOverviewWindow(huge, 600, 600, 250);
+  expect(window.scroll).toBe(250);
+  const placements = canvasOverviewPlacements(window);
+  expect(placements[0]?.y).toBeCloseTo(window.offset - 250);
+  expect(placements[0]?.y).toBeLessThanOrEqual(0);
+  expect(placements[0]?.y).toBeGreaterThan(-window.rowHeight);
+  expect(placements[window.columns]?.y).toBeCloseTo(placements[0]!.y + window.rowHeight);
+  expect(placements.every((placement) => placement.shift === 0)).toBe(true);
 });

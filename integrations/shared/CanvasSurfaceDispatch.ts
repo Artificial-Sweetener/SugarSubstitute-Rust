@@ -32,6 +32,10 @@ import {
 } from './CanvasSurfaceViewport.js';
 import { supportsCanvasSurfaceComparison } from './CanvasSurfaceComparison.js';
 import {
+  supportsCanvasSurfaceOverview,
+  validCanvasSurfaceOverview,
+} from './CanvasSurfaceOverview.js';
+import {
   isCanvasPreviewCommand,
   supportsCanvasSurfacePreview,
   validCanvasPreviewCommand,
@@ -45,6 +49,7 @@ export type CanvasSurfaceRequest = Extract<
       | 'surface.prepare'
       | 'surface.geometry'
       | 'surface.select'
+      | 'surface.overview'
       | 'surface.commit'
       | 'surface.viewport.request'
       | 'surface.preview.begin'
@@ -86,6 +91,20 @@ export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurf
         : {}),
     });
   }
+  if (request.type === 'surface.overview')
+    return Object.freeze({
+      ...request,
+      address,
+      cells: Object.freeze(
+        request.cells.map((cell) =>
+          Object.freeze({
+            ...cell,
+            file: Object.freeze({ ...cell.file }),
+            rect: Object.freeze({ ...cell.rect }),
+          }),
+        ),
+      ),
+    });
   if (request.type === 'surface.viewport.request')
     return Object.freeze({ ...request, address, command: Object.freeze({ ...request.command }) });
   if (request.type === 'surface.preview.begin')
@@ -99,6 +118,7 @@ export function isCanvasSurfaceRequest(message: CanvasMessage): message is Canva
     message.type === 'surface.prepare' ||
     message.type === 'surface.geometry' ||
     message.type === 'surface.select' ||
+    message.type === 'surface.overview' ||
     message.type === 'surface.commit' ||
     message.type === 'surface.viewport.request' ||
     message.type === 'surface.preview.begin' ||
@@ -138,6 +158,8 @@ export async function dispatchCanvasSurface(
           !context?.canvas.capabilities.displayOutput ||
           !supportsCanvasSurfaceViewport(port.surface.capabilities, command) ||
           !supportsCanvasSurfaceComparison(port.surface.capabilities, command) ||
+          !supportsCanvasSurfaceOverview(port.surface.capabilities, command) ||
+          !validCanvasSurfaceOverview(command) ||
           !supportsCanvasSurfacePreview(port.surface.capabilities, command) ||
           !validCanvasPreviewCommand(command) ||
           (isCanvasPreviewCommand(command) &&

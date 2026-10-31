@@ -264,6 +264,61 @@
       "required": ["itemId", "file"],
       "additionalProperties": false
     },
+    "CanvasSurfaceOverviewRect": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 }
+      },
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceOverviewCell": {
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "maxLength": 1024,
+          "x-length-unit": "unicode-codepoints",
+          "pattern": "^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+        },
+        "file": { "$ref": "#/$defs/CanvasSurfaceFileReference" },
+        "rect": { "$ref": "#/$defs/CanvasSurfaceOverviewRect" }
+      },
+      "required": ["itemId", "file", "rect"],
+      "additionalProperties": false
+    },
+    "CanvasSurfaceOverviewRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "surface.overview" },
+        "address": { "$ref": "#/$defs/CanvasSurfaceAddress" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "cells": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CanvasSurfaceOverviewCell" },
+          "minItems": 1,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "requestId",
+        "type",
+        "address",
+        "revision",
+        "cells"
+      ],
+      "additionalProperties": false
+    },
     "CanvasSurfaceCommitRequest": {
       "type": "object",
       "properties": {
@@ -1909,6 +1964,21 @@
           },
           "required": ["type", "selectionRevision", "viewport"],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "overview"
+            },
+            "selectionRevision": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "selectionRevision"],
+          "additionalProperties": false
         }
       ]
     },
@@ -2170,6 +2240,7 @@
     {
       "$ref": "#/$defs/CanvasSurfaceSelectRequest"
     },
+    { "$ref": "#/$defs/CanvasSurfaceOverviewRequest" },
     {
       "$ref": "#/$defs/CanvasSurfaceCommitRequest"
     },

@@ -346,7 +346,16 @@ export function isCanvasSurfacePresentationDisplay(
       value['selectionRevision'] >= 1 &&
       value['selectionRevision'] <= 9007199254740991 &&
       Object.hasOwn(value, 'viewport') &&
-      isCanvasSurfaceViewportState(value['viewport']))
+      isCanvasSurfaceViewportState(value['viewport'])) ||
+    (isRecord(value) &&
+      Object.keys(value).length === 2 &&
+      Object.hasOwn(value, 'type') &&
+      value['type'] === 'overview' &&
+      Object.hasOwn(value, 'selectionRevision') &&
+      typeof value['selectionRevision'] === 'number' &&
+      Number.isSafeInteger(value['selectionRevision']) &&
+      value['selectionRevision'] >= 1 &&
+      value['selectionRevision'] <= 9007199254740991)
   );
 }
 /** Validate a bounded CanvasSurfacePresentationChange payload before dispatch. */

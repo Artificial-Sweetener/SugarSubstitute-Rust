@@ -20,6 +20,8 @@ type Schema = Record<string, unknown>;
 /** Retain the item contract and its finite collection admission budget. */
 export interface ContractArraySchema {
   readonly items: Schema;
+  /** Zero unless the schema requires a nonempty collection. */
+  readonly minimum: number;
   readonly maximum: number;
 }
 
@@ -46,9 +48,14 @@ export function contractArrayEnum(items: Schema): readonly string[] {
   return values;
 }
 
-/** Preserve existing bounded item shapes while rejecting unknown array constraints. */
+/**
+ * Preserve existing bounded item shapes while rejecting unknown array constraints.
+ *
+ * A declared `minItems` must be a positive integer no larger than `maxItems`; an explicit zero
+ * restates the default and is refused so every lower bound in a schema is meaningful.
+ */
 export function contractArraySchema(node: Schema): ContractArraySchema {
-  if (Object.keys(node).some((key) => !['type', 'items', 'maxItems'].includes(key)))
+  if (Object.keys(node).some((key) => !['type', 'items', 'minItems', 'maxItems'].includes(key)))
     throw new Error('Unsupported contract array schema keyword.');
   if (
     node.type !== 'array' ||
@@ -58,7 +65,17 @@ export function contractArraySchema(node: Schema): ContractArraySchema {
     node.maxItems > 4096
   )
     throw new Error('Contract arrays require a finite integer bound from 0 through 4096.');
+  const minimum = node.minItems ?? 0;
+  if (
+    'minItems' in node &&
+    (typeof minimum !== 'number' ||
+      !Number.isSafeInteger(minimum) ||
+      minimum < 1 ||
+      minimum > node.maxItems)
+  )
+    throw new Error('Contract array minimums must be positive integers within the maximum.');
+  if (typeof minimum !== 'number') throw new Error('Invalid contract array minimum.');
   const items = record(node.items);
   if ('enum' in items) contractArrayEnum(items);
-  return { items, maximum: node.maxItems };
+  return { items, minimum, maximum: node.maxItems };
 }

@@ -21,6 +21,7 @@ import type {
 } from '../contracts/CanvasSurface.js';
 import type { CanvasMessage } from '../contracts/CanvasProtocol.generated.js';
 import { decodeCanvasBytes } from './CanvasByteEncoding.js';
+import { canvasMessageFits } from './CanvasMessageSize.js';
 import { MAX_CANVAS_IMAGE_BYTES } from './CanvasImagePolicy.js';
 import { snapshotCanvasSurfaceViewport } from './CanvasSurfaceViewport.js';
 
@@ -92,14 +93,7 @@ export function decodeCanvasPreviewChunk(data: string, offset: number, total: nu
 
 /** Check serialized public JSON without importing an adapter's private transport framing. */
 export function canvasPreviewMessageFits(message: CanvasMessage): boolean {
-  const encoded = JSON.stringify(message);
-  let bytes = 0;
-  for (const character of encoded) {
-    const point = character.codePointAt(0) ?? 0;
-    bytes += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
-    if (bytes > CANVAS_PREVIEW_MESSAGE_BYTES) return false;
-  }
-  return true;
+  return canvasMessageFits(message, CANVAS_PREVIEW_MESSAGE_BYTES);
 }
 
 /** Preserve a native observation without retaining mutable adapter-owned metadata. */
@@ -107,7 +101,7 @@ export function snapshotCanvasSurfacePresentation(
   change: CanvasSurfacePresentationChange,
 ): CanvasSurfacePresentationChange {
   const displayed =
-    change.displayed.type === 'empty'
+    change.displayed.type === 'empty' || change.displayed.type === 'overview'
       ? Object.freeze({ ...change.displayed })
       : Object.freeze({
           ...change.displayed,

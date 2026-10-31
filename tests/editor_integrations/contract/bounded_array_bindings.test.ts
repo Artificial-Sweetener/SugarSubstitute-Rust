@@ -145,7 +145,6 @@ test.each([
 });
 
 test.each([
-  { minItems: 0 },
   { uniqueItems: true },
   { additionalItems: false },
   { contains: { const: 'fit' } },
@@ -187,7 +186,7 @@ test.each([
 test.each([
   {},
   { type: 'string', maxLength: 4 },
-  { $ref: '#/$defs/FixtureCapabilities' },
+  { $ref: '#/$defs/FixtureUnknown' },
   { type: 'object', properties: {}, required: [], additionalProperties: false },
   { type: 'array', items: { enum: ['fit'] }, maxItems: 1 },
 ])('keeps unsupported Rust array item vocabularies fail closed: %p', (items) => {
@@ -212,6 +211,52 @@ test('preserves TypeScript arrays of bounded objects and local references', asyn
     expect(valid({ commands: [{ name: 'fit', extra: true }] })).toBe(false);
     expect(valid({ commands: Array.from({ length: 4097 }, () => ({ name: 'fit' })) })).toBe(false);
   }
+});
+
+test.each([0, -1, 0.5, 5, '1', null, Number.NaN])(
+  'refuses an invalid minimum %p in both generators',
+  async (minItems) => {
+    const invalid = { ...array, minItems };
+    expect(() => contractArraySchema(invalid)).toThrow('positive integers within the maximum');
+    expect(() => rust(invalid)).toThrow('positive integers within the maximum');
+    await expect(typescript(invalid)).rejects.toThrow('positive integers within the maximum');
+  },
+);
+
+test('requires nonempty collections of named objects in both generated languages', async () => {
+  const element = {
+    type: 'object',
+    properties: { name: { type: 'string', maxLength: 4 } },
+    required: ['name'],
+    additionalProperties: false,
+  };
+  const items = {
+    type: 'array',
+    items: { $ref: '#/$defs/FixtureElement' },
+    minItems: 1,
+    maxItems: 8,
+  };
+  const valid = await validator(items, { FixtureElement: element });
+  expect(valid({ commands: [] })).toBe(false);
+  expect(valid({ commands: [{ name: 'fit' }] })).toBe(true);
+  expect(valid({ commands: Array.from({ length: 8 }, () => ({ name: 'fit' })) })).toBe(true);
+  expect(valid({ commands: Array.from({ length: 9 }, () => ({ name: 'fit' })) })).toBe(false);
+  expect(valid({ commands: [{ name: 'large' }] })).toBe(false);
+  const values = definitions(items, { FixtureElement: element });
+  const source = rustContractBindings(values, JSON.stringify(values), options);
+  expect(source).toContain('pub(super) commands: Vec<FixtureElement>,');
+  expect(source).toContain('!self.commands.is_empty()');
+  expect(source).toContain('self.commands.len() <= 8');
+  expect(source).toContain('self.commands.iter().all(FixtureElement::valid)');
+  const pair = { ...items, minItems: 2 };
+  const pairs = definitions(pair, { FixtureElement: element });
+  expect(rustContractBindings(pairs, JSON.stringify(pairs), options)).toContain(
+    'self.commands.len() >= 2',
+  );
+  expect((await validator(pair, { FixtureElement: element }))({ commands: [{ name: 'a' }] })).toBe(
+    false,
+  );
+  expect(() => rust({ ...array, minItems: 1 })).toThrow('do not support a minimum length');
 });
 
 test('formats longer enum lists without widening Rust source limits', () => {

@@ -18,7 +18,7 @@ import { sendNativeCanvasOperation, releaseNativeCanvasBinding, createNativeCanv
 import { NativeCanvasPreview } from './NativeCanvasPreview.js';
 import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
 import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
-import { nativeCanvasDesired, nativeCanvasSelection, nativeCanvasWipe, nativeCanvasWipeKey, } from './NativeCanvasDesired.js';
+import { nativeCanvasDesired, nativeCanvasOverviewKey, nativeCanvasSelection, nativeCanvasWipe, nativeCanvasWipeKey, } from './NativeCanvasDesired.js';
 /** Keep one in-flight operation and coalesce newer view or geometry changes. */
 export class NativeCanvasPresentation {
     options;
@@ -37,11 +37,12 @@ export class NativeCanvasPresentation {
         this.options = options;
     }
     /**
-     * Reconcile only the selection, comparison and geometry already chosen by the view owners.
+     * Reconcile only the selection, comparison, overview and geometry chosen by the view owners.
      * A divider-only comparison change keeps the presented pair and its camera; the newest
-     * divider follows any in-flight placement rather than cancelling it.
+     * divider follows any in-flight placement rather than cancelling it. Overview layout changes
+     * likewise follow the overview request in flight.
      */
-    update(geometry, item, preview = null, comparison = null) {
+    update(geometry, item, preview = null, comparison = null, overview = null) {
         if (this.#disposed)
             return;
         this.#viewportRecovery = null;
@@ -73,20 +74,23 @@ export class NativeCanvasPresentation {
             this.#desired = null;
         }
         const previewChanged = this.#preview?.update(preview) ?? false;
-        const desired = nativeCanvasDesired(geometry, item, nativeCanvasComparison(host) ? comparison : null, this.options.accepts(), preparing);
+        const desired = nativeCanvasDesired(geometry, item, nativeCanvasComparison(host) ? comparison : null, host?.capabilities.overview ? overview : null, this.options.accepts(), preparing);
         if (this.#desired?.key === desired.key) {
             const focused = this.#desired.geometry?.focused !== geometry?.focused;
             const divider = nativeCanvasWipeKey(this.#desired.comparison) !== nativeCanvasWipeKey(desired.comparison);
+            const layout = nativeCanvasOverviewKey(this.#desired.overview) !==
+                nativeCanvasOverviewKey(desired.overview);
             if (focused)
                 this.#desired.geometry = geometry;
             this.#desired.comparison = desired.comparison;
-            if (focused || divider || previewChanged) {
+            this.#desired.overview = desired.overview;
+            if (focused || divider || layout || previewChanged) {
                 this.#dirty = true;
                 this.#start();
             }
             return;
         }
-        const retainedFinal = !item &&
+        const retainedFinal = desired.previewable &&
             this.#preview?.observing &&
             this.#binding?.selectionRevision !== null &&
             this.#binding?.geometry === JSON.stringify(geometry);
@@ -100,11 +104,11 @@ export class NativeCanvasPresentation {
         if (this.#binding?.active?.dependsOnView && !retainedFinal)
             this.#binding.active.cancellation.cancel();
         // The native owner retains acknowledged pixels while a same-allocation replacement loads.
-        if ((!desired.item && !(item === null && this.#preview?.observing)) ||
+        if ((!desired.shown && !(desired.previewable && this.#preview?.observing)) ||
             !this.#binding?.committed ||
             this.#binding.geometry !== JSON.stringify(geometry))
             this.#show(false);
-        this.options.status(desired.item
+        this.options.status(desired.shown
             ? host
                 ? { state: 'loading', message: 'Loading the selected image.' }
                 : { state: 'unavailable', message: 'The native canvas is unavailable.' }
@@ -202,7 +206,7 @@ export class NativeCanvasPresentation {
             if (!binding || !desired || !this.#owns(binding))
                 return;
             try {
-                if ((desired.item ||
+                if ((desired.shown ||
                     (desired.empty &&
                         (this.options.acceptsPreparation() ||
                             (desired.previewable && this.#preview?.observing)))) &&
@@ -222,7 +226,7 @@ export class NativeCanvasPresentation {
                 const lastGeometry = desired.geometry ?? binding.lastGeometry;
                 if (!binding.prepared || !lastGeometry)
                     continue;
-                const geometry = desired.item || (desired.previewable && this.#preview?.observing)
+                const geometry = desired.shown || (desired.previewable && this.#preview?.observing)
                     ? lastGeometry
                     : { ...lastGeometry, visible: false, clip: { x: 0, y: 0, width: 0, height: 0 } };
                 const geometryKey = JSON.stringify(geometry);
@@ -239,7 +243,7 @@ export class NativeCanvasPresentation {
                 }
                 if (!this.#current(binding, desired))
                     continue;
-                if (!desired.item) {
+                if (!desired.shown) {
                     if (!desired.previewable || !this.#preview?.observing) {
                         if (desired.empty)
                             this.options.prepared();
@@ -379,7 +383,7 @@ export class NativeCanvasPresentation {
                 if (this.#current(binding, desired)) {
                     this.#show(true);
                     this.options.status({
-                        state: desired.item ||
+                        state: desired.shown ||
                             this.#preview?.displayed ||
                             (desired.previewable &&
                                 this.#preview?.observing &&
@@ -424,7 +428,7 @@ export class NativeCanvasPresentation {
             this.#viewport.complete(false);
         }
         this.options.preview(display?.type === 'preview');
-        this.options.viewport(display && display.type !== 'empty' ? display.viewport : null);
+        this.options.viewport(display && 'viewport' in display ? display.viewport : null);
         if (display) {
             binding.viewportKey = this.#desired?.key ?? null;
             this.#show(binding.committed && this.#desired?.geometry?.visible === true);

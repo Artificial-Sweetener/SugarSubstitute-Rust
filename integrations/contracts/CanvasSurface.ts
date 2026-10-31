@@ -25,6 +25,7 @@ import type {
   CanvasSurfaceReleaseRequest,
   CanvasSurfaceReply,
   CanvasSurfaceSelectRequest,
+  CanvasSurfaceOverviewRequest,
   CanvasSurfaceViewportRequest,
   CanvasSurfaceViewportReply,
   CanvasSurfacePreviewBeginRequest,
@@ -36,6 +37,7 @@ import type {
 
 export type {
   CanvasSurfaceCapabilities,
+  CanvasSurfaceOverviewCell,
   CanvasSurfaceViewportCommand,
   CanvasSurfaceViewportState,
   CanvasSurfacePreviewIdentity,
@@ -50,6 +52,7 @@ export type CanvasSurfaceCommand =
   | Omit<CanvasSurfacePrepareRequest, Envelope>
   | Omit<CanvasSurfaceGeometryRequest, Envelope>
   | Omit<CanvasSurfaceSelectRequest, Envelope>
+  | Omit<CanvasSurfaceOverviewRequest, Envelope>
   | Omit<CanvasSurfaceCommitRequest, Envelope>
   | Omit<CanvasSurfaceReleaseRequest, Envelope>
   | Omit<CanvasSurfaceViewportRequest, Envelope>
@@ -102,6 +105,13 @@ export interface CanvasSurfaceHost {
    * its camera. Wipe shows B within the left (vertical) or top (horizontal) 0..1 `split`
    * fraction of the viewport, and is unavailable without a shown comparison.
    * Viewport state carries B's dimensions only while a comparison is shown.
+   * Overview requires the declared overview capability. It presents one to eight distinct
+   * results, each fitted (contain) into its whole `rect`: CSS pixels relative to the geometry
+   * origin. A partially scrolled cell keeps its full rect, which may start at a negative origin;
+   * the host clips painting to the viewport. Its applied reply follows native presentation of the whole grid, and like
+   * a selection it fences preview custody and becomes the displayed selection revision. The grid
+   * has no camera, so viewport requests are unavailable while it is shown; a later selection
+   * leaves it. An encoded overview message must fit the 32 KiB native surface message ceiling.
    */
   execute(
     command: CanvasSurfaceCommand,

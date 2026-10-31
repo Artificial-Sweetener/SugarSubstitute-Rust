@@ -93,7 +93,7 @@ function isCanvasSurfacePresentationReply(value) {
 function isCanvasSurfacePresentationDisplay(value) {
   return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "empty" || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "type") && value["type"] === "preview" && Object.hasOwn(value, "token") && typeof value["token"] === "string" && value["token"].length <= 48 && Array.from(value["token"]).length <= 24 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
     value["token"]
-  ) && Object.hasOwn(value, "leaseRevision") && typeof value["leaseRevision"] === "number" && Number.isSafeInteger(value["leaseRevision"]) && value["leaseRevision"] >= 1 && value["leaseRevision"] <= 9007199254740991 && Object.hasOwn(value, "viewport") && isCanvasSurfaceViewportState(value["viewport"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "final" && Object.hasOwn(value, "selectionRevision") && typeof value["selectionRevision"] === "number" && Number.isSafeInteger(value["selectionRevision"]) && value["selectionRevision"] >= 1 && value["selectionRevision"] <= 9007199254740991 && Object.hasOwn(value, "viewport") && isCanvasSurfaceViewportState(value["viewport"]);
+  ) && Object.hasOwn(value, "leaseRevision") && typeof value["leaseRevision"] === "number" && Number.isSafeInteger(value["leaseRevision"]) && value["leaseRevision"] >= 1 && value["leaseRevision"] <= 9007199254740991 && Object.hasOwn(value, "viewport") && isCanvasSurfaceViewportState(value["viewport"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "final" && Object.hasOwn(value, "selectionRevision") && typeof value["selectionRevision"] === "number" && Number.isSafeInteger(value["selectionRevision"]) && value["selectionRevision"] >= 1 && value["selectionRevision"] <= 9007199254740991 && Object.hasOwn(value, "viewport") && isCanvasSurfaceViewportState(value["viewport"]) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "overview" && Object.hasOwn(value, "selectionRevision") && typeof value["selectionRevision"] === "number" && Number.isSafeInteger(value["selectionRevision"]) && value["selectionRevision"] >= 1 && value["selectionRevision"] <= 9007199254740991;
 }
 function isCanvasSurfacePresentationChange(value) {
   return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "sequence") && typeof value["sequence"] === "number" && Number.isSafeInteger(value["sequence"]) && value["sequence"] >= 1 && value["sequence"] <= 9007199254740991 && Object.hasOwn(value, "token") && typeof value["token"] === "string" && value["token"].length <= 48 && Array.from(value["token"]).length <= 24 && new RegExp("^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$").test(
@@ -104,6 +104,19 @@ function isCanvasSurfacePresentationChange(value) {
 }
 function isCanvasSurfacePresentationChanged(value) {
   return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && value["requestId"] === 0 && Object.hasOwn(value, "type") && value["type"] === "surface.presentation.changed" && Object.hasOwn(value, "schema") && value["schema"] === 1 && Object.hasOwn(value, "change") && isCanvasSurfacePresentationChange(value["change"]);
+}
+
+// integrations/shared/CanvasSurfaceOverviewValidation.generated.ts
+function isCanvasSurfaceOverviewRect(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "x") && typeof value["x"] === "number" && Number.isFinite(value["x"]) && value["x"] >= -1e6 && value["x"] <= 1e6 && Object.hasOwn(value, "y") && typeof value["y"] === "number" && Number.isFinite(value["y"]) && value["y"] >= -1e6 && value["y"] <= 1e6 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isFinite(value["width"]) && value["width"] > 0 && value["width"] <= 1e6 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isFinite(value["height"]) && value["height"] > 0 && value["height"] <= 1e6;
+}
+function isCanvasSurfaceOverviewCell(value) {
+  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "itemId") && typeof value["itemId"] === "string" && value["itemId"].length <= 2048 && Array.from(value["itemId"]).length <= 1024 && new RegExp(
+    "^result:(?:[^\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])+(?![\\s\\S])"
+  ).test(value["itemId"]) && Object.hasOwn(value, "file") && isCanvasSurfaceFileReference(value["file"]) && Object.hasOwn(value, "rect") && isCanvasSurfaceOverviewRect(value["rect"]);
+}
+function isCanvasSurfaceOverviewRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 8 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "surface.overview" && Object.hasOwn(value, "address") && isCanvasSurfaceAddress(value["address"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 1 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "cells") && Array.isArray(value["cells"]) && value["cells"].length >= 1 && value["cells"].length <= 8 && value["cells"].every((item) => isCanvasSurfaceOverviewCell(item));
 }
 
 // integrations/shared/CanvasSurfaceValidation.generated.ts
@@ -150,7 +163,7 @@ function isCanvasSurfaceReply(value) {
   );
 }
 function isCanvasSurfaceMessage(value) {
-  return isCanvasSurfacePreviewBeginRequest(value) || isCanvasSurfacePreviewChunkRequest(value) || isCanvasSurfacePreviewEndRequest(value) || isCanvasSurfacePreviewWithdrawRequest(value) || isCanvasSurfacePresentationRequest(value) || isCanvasSurfacePresentationReply(value) || isCanvasSurfacePresentationChanged(value) || isCanvasSurfaceCapabilitiesRequest(value) || isCanvasSurfaceCapabilitiesReply(value) || isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value) || isCanvasSurfaceViewportRequest(value) || isCanvasSurfaceViewportReply(value);
+  return isCanvasSurfacePreviewBeginRequest(value) || isCanvasSurfacePreviewChunkRequest(value) || isCanvasSurfacePreviewEndRequest(value) || isCanvasSurfacePreviewWithdrawRequest(value) || isCanvasSurfacePresentationRequest(value) || isCanvasSurfacePresentationReply(value) || isCanvasSurfacePresentationChanged(value) || isCanvasSurfaceCapabilitiesRequest(value) || isCanvasSurfaceCapabilitiesReply(value) || isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceOverviewRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value) || isCanvasSurfaceViewportRequest(value) || isCanvasSurfaceViewportReply(value);
 }
 
 // integrations/shared/CanvasValidation.generated.ts
@@ -502,6 +515,19 @@ function decodeCanvasBytes(data, maximumBytes) {
   return bytes;
 }
 
+// integrations/shared/CanvasMessageSize.ts
+var CANVAS_SURFACE_MESSAGE_BYTES = 32768;
+function canvasMessageFits(message, bytes) {
+  const encoded = JSON.stringify(message);
+  let size = 0;
+  for (const character of encoded) {
+    const point = character.codePointAt(0) ?? 0;
+    size += point <= 127 ? 1 : point <= 2047 ? 2 : point <= 65535 ? 3 : 4;
+    if (size > bytes) return false;
+  }
+  return true;
+}
+
 // integrations/shared/CanvasImagePolicy.ts
 var MAX_CANVAS_IMAGE_BYTES = 64 * 1024 * 1024;
 var MAX_CANVAS_IMAGE_PIXELS = 64 * 1024 * 1024;
@@ -542,17 +568,10 @@ function validCanvasPreviewCommand(command) {
   return true;
 }
 function canvasPreviewMessageFits(message) {
-  const encoded = JSON.stringify(message);
-  let bytes = 0;
-  for (const character of encoded) {
-    const point = character.codePointAt(0) ?? 0;
-    bytes += point <= 127 ? 1 : point <= 2047 ? 2 : point <= 65535 ? 3 : 4;
-    if (bytes > CANVAS_PREVIEW_MESSAGE_BYTES) return false;
-  }
-  return true;
+  return canvasMessageFits(message, CANVAS_PREVIEW_MESSAGE_BYTES);
 }
 function snapshotCanvasSurfacePresentation(change) {
-  const displayed = change.displayed.type === "empty" ? Object.freeze({ ...change.displayed }) : Object.freeze({
+  const displayed = change.displayed.type === "empty" || change.displayed.type === "overview" ? Object.freeze({ ...change.displayed }) : Object.freeze({
     ...change.displayed,
     viewport: snapshotCanvasSurfaceViewport(change.displayed.viewport)
   });
@@ -563,12 +582,42 @@ function validCanvasSurfacePresentation(change) {
   return change.status !== "presented" || change.displayed.type === "preview" && change.displayed.token === change.token && change.displayed.leaseRevision === change.leaseRevision && change.displayed.viewport.mode === "fit";
 }
 
+// integrations/shared/CanvasSurfaceOverview.ts
+var CANVAS_SURFACE_OVERVIEW_CELLS = 8;
+function supportsCanvasSurfaceOverview(capabilities, command) {
+  return command.type !== "surface.overview" || capabilities.overview;
+}
+function validCanvasSurfaceOverview(command) {
+  if (command.type !== "surface.overview") return true;
+  return new Set(command.cells.map((cell) => cell.itemId)).size === command.cells.length;
+}
+function canvasSurfaceOverviewMessageFits(message) {
+  return canvasMessageFits(message, CANVAS_SURFACE_MESSAGE_BYTES);
+}
+function fittingCanvasSurfaceOverviewCells(address, cells) {
+  const envelope = {
+    protocol: "sugarcubes.canvas",
+    version: 3,
+    session: "x".repeat(80),
+    requestId: 2147483647,
+    type: "surface.overview",
+    address,
+    revision: Number.MAX_SAFE_INTEGER
+  };
+  let count = Math.min(cells.length, CANVAS_SURFACE_OVERVIEW_CELLS);
+  while (count > 0 && !canvasSurfaceOverviewMessageFits({ ...envelope, cells: cells.slice(0, count) }))
+    count--;
+  return cells.slice(0, count);
+}
+
 // integrations/shared/CanvasSurfaceClient.ts
 async function requestCanvasSurface(command, cancellation, request) {
   if (cancellation?.cancelled())
     return { status: "cancelled", message: "Canvas surface request cancelled." };
   if (!validCanvasPreviewCommand(command))
     return { status: "error", message: "Canvas preview request is invalid." };
+  if (!validCanvasSurfaceOverview(command))
+    return { status: "error", message: "Canvas overview cells must name distinct results." };
   const address = Object.freeze({ ...command.address });
   const revision = command.revision;
   const type = command.type;
@@ -657,7 +706,7 @@ async function discoverCanvasSurface(port) {
     const host = Object.freeze({
       capabilities: snapshotCanvasSurfaceCapabilities(reply.capabilities),
       ...port.presentation && reply.capabilities.previewFormats.length ? { presentation: port.presentation } : {},
-      execute: (command, cancellation) => command.type === "surface.release" || command.type === "surface.preview.withdraw" || port.current() && port.owns(host) ? supportsCanvasSurfaceViewport(host.capabilities, command) && supportsCanvasSurfaceComparison(host.capabilities, command) && supportsCanvasSurfacePreview(host.capabilities, command) && (!isCanvasPreviewCommand(command) || command.type === "surface.preview.withdraw" || port.observesPresentation?.()) ? port.execute(command, cancellation) : Promise.resolve({
+      execute: (command, cancellation) => command.type === "surface.release" || command.type === "surface.preview.withdraw" || port.current() && port.owns(host) ? supportsCanvasSurfaceViewport(host.capabilities, command) && supportsCanvasSurfaceComparison(host.capabilities, command) && supportsCanvasSurfaceOverview(host.capabilities, command) && supportsCanvasSurfacePreview(host.capabilities, command) && (!isCanvasPreviewCommand(command) || command.type === "surface.preview.withdraw" || port.observesPresentation?.()) ? port.execute(command, cancellation) : Promise.resolve({
         status: "unavailable",
         message: "Canvas surface operation is unavailable."
       }) : Promise.resolve({ status: "unavailable", message: "The canvas context changed." })
@@ -966,6 +1015,8 @@ var CanvasClient = class {
           throw new Error("Canvas surface request is invalid.");
         if (isSurfaceRequest(request) && isCanvasPreviewCommand(request) && !canvasPreviewMessageFits(message))
           throw new Error("Canvas preview request exceeds the native transport bounds.");
+        if (request.type === "surface.overview" && !canvasSurfaceOverviewMessageFits(message))
+          throw new Error("Canvas overview request exceeds the native transport bounds.");
         transportOwned = true;
         this.port.send(message);
       } catch (error) {
@@ -1476,6 +1527,7 @@ export {
   encodeCanvasImage,
   encodeCanvasRaster,
   encodeMaskPixels,
+  fittingCanvasSurfaceOverviewCells,
   isCanvasInputSource,
   isCanvasInputTarget,
   isCanvasMaskReference,
