@@ -190,6 +190,7 @@ impl DesktopStart {
                     navigation: self.navigation,
                 },
                 &self.qualification,
+                working_directory,
             )
             .map_err(super::outer)?;
             let command = WindowsLaunchCommand::from_utf16(

@@ -7,9 +7,11 @@ mod tests;
 use std::{
     error::Error,
     ffi::{OsStr, OsString},
-    os::windows::io::AsRawHandle,
+    os::windows::{ffi::OsStrExt, io::AsRawHandle},
+    path::{Path, PathBuf},
 };
 use sugarsubstitute_contracts::{
+    configuration::LaunchConfiguration,
     execution::Generation,
     lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey},
     startup::LaunchId,
@@ -27,6 +29,8 @@ pub(crate) struct DesktopRole {
     pub(crate) run: RunKey,
     pub(crate) launch: LaunchId,
     pub(crate) navigation: Generation,
+    /// The parent's installation root, which anchors this installation's runtime cache scope.
+    pub(crate) installation: PathBuf,
 }
 impl DesktopRole {
     /// Validate an exact dedicated role without native effects or environment lookup.
@@ -46,6 +50,7 @@ impl DesktopRole {
         let generation = RunGeneration::new(number(&mut arguments, "--run-generation")?)?;
         let launch = LaunchId::new(number(&mut arguments, "--launch")?)?;
         let navigation = Generation::new(number(&mut arguments, "--navigation")?)?;
+        let installation = path(&mut arguments, "--installation-root")?;
         let qualification =
             super::super::qualification::QualificationIntent::child(&mut arguments)?;
         Ok(Self {
@@ -55,6 +60,7 @@ impl DesktopRole {
             run: RunKey { owner: CoordinatorKey { namespace, epoch }, instance, generation },
             launch,
             navigation,
+            installation,
         })
     }
 }
@@ -67,10 +73,13 @@ pub(in crate::production) enum DesktopRoleSource<'a> {
 }
 /// Encode the sole child argument grammar from an actual pinned bootstrap and Root record.
 /// This runs under the original projection/creation charge; no secret capability is copied.
+/// `installation` is the parent's installation root; the child anchors its runtime cache there
+/// instead of consulting its working directory.
 pub(in crate::production) fn arguments(
     source: DesktopRoleSource<'_>,
     identity: sugarsubstitute_contracts::startup::MainIdentity,
     qualification: &super::super::qualification::QualificationIntent,
+    installation: &Path,
 ) -> Result<Vec<Vec<u16>>, Box<dyn Error + Send + Sync>> {
     let (token, original) = match source {
         DesktopRoleSource::Root(bootstrap) => {
@@ -90,7 +99,7 @@ pub(in crate::production) fn arguments(
     };
     let sugarsubstitute_contracts::startup::MainIdentity { run, launch, navigation } = identity;
     let mut output = Vec::new();
-    output.try_reserve_exact(19)?;
+    output.try_reserve_exact(21)?;
     for value in [
         "--internal-production-desktop".to_owned(),
         "--bootstrap".to_owned(),
@@ -111,12 +120,17 @@ pub(in crate::production) fn arguments(
         launch.get().to_string(),
         "--navigation".to_owned(),
         navigation.get().to_string(),
+        "--installation-root".to_owned(),
     ] {
         let mut units = Vec::new();
         units.try_reserve_exact(value.len())?;
         units.extend(value.encode_utf16());
         output.push(units);
     }
+    let mut root = Vec::new();
+    root.try_reserve_exact(installation.as_os_str().encode_wide().count())?;
+    root.extend(installation.as_os_str().encode_wide());
+    output.push(root);
     qualification.append(&mut output)?;
     Ok(output)
 }
@@ -132,6 +146,18 @@ fn value(
         .ok_or("Desktop role field missing")?
         .into_string()
         .map_err(|_| "Desktop role field must be ASCII".into())
+}
+/// Read the parent's installation root, accepting only an absolute validated local path.
+fn path(
+    arguments: &mut impl Iterator<Item = OsString>,
+    flag: &str,
+) -> Result<PathBuf, Box<dyn Error>> {
+    if arguments.next().as_deref() != Some(OsStr::new(flag)) {
+        return Err("Desktop role field order mismatch".into());
+    }
+    let path = PathBuf::from(arguments.next().ok_or("Desktop role field missing")?);
+    LaunchConfiguration::validate_path(&path)?;
+    Ok(path)
 }
 fn number(
     arguments: &mut impl Iterator<Item = OsString>,

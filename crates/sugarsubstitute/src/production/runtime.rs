@@ -152,9 +152,9 @@ fn run_desktop(
     )?;
     #[cfg(feature = "native-composition")]
     content.configure_composition(composition_scope)?;
-    // The root-created desktop uses the installation working directory as its cache anchor.
-    // Cache ownership and path validation remain with the existing storage adapter.
-    content.configure_canvas(std::env::current_dir()?, canvas_health, canvas_scope)?;
+    // The parent's installation root anchors the canvas's runtime cache scope, beside the
+    // installation's other runtime cache consumers. The cache owner validates it on a worker.
+    content.configure_canvas(role.installation, canvas_health, canvas_scope)?;
     let receipt = sugarsubstitute_desktop::run_startup(
         DesktopOptions {
             title: sugarsubstitute::APPLICATION_NAME.into(),

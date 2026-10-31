@@ -66,7 +66,7 @@ rationale = "Host composition of localized native startup/profile-conflict feedb
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/runtime.rs"
-source_sha256 = "sha256:d8e7d0f04e70177cd8ff5cf826fbffd229fa72a3961e2cbcc685310aa464b817"
+source_sha256 = "sha256:d8b155358beadb8ff2fd3e5fa819f4ecb63ba52b769d354755f99f28d41d0c75"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Select the real coordinator or inherited desktop role and compose its owned runtime."
 
@@ -420,7 +420,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:af5c4069cb66db3bb73986da9cdb6e6caaa82f349b54ee0f50da339aa82e759a"
+source_sha256 = "sha256:f49b090501cc62889f159345a484ff5a77193b790b31f7ac419f76059ac7b663"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 

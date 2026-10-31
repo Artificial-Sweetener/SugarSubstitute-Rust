@@ -48,13 +48,15 @@ fn prepare(
         return Err("Original recovery Desktop command admission stopped".into());
     }
     let identity = origin.desktop_identity()?;
+    let executable = std::env::current_exe()?;
+    // The installed image directory is the installation root, matching ordinary installed startup.
+    let directory = executable.parent().ok_or("Actual recovery executable directory missing")?;
     let arguments = desktop_role::arguments(
         DesktopRoleSource::Recovery(bootstrap),
         identity,
         &QualificationIntent::default(),
+        directory,
     )?;
-    let executable = std::env::current_exe()?;
-    let directory = executable.parent().ok_or("Actual recovery executable directory missing")?;
     let command = WindowsLaunchCommand::from_utf16(
         &wide(executable.as_os_str())?,
         &wide(directory.as_os_str())?,

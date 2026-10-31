@@ -172,7 +172,8 @@ impl<B: StartupBackend> StartupHost<B> {
     }
 
     /// Retain one empty application canvas before the native startup lifetime begins.
-    /// The root process selects the working directory; the cache owner validates it on a worker.
+    /// `anchor` is the installation root supplied by the parent; the runtime cache owner opens
+    /// its schema-qualified scope below it and validates it on a worker.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     pub(crate) fn configure_canvas(
         &mut self,

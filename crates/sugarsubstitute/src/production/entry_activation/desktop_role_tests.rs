@@ -24,6 +24,8 @@ fn input() -> Vec<OsString> {
         "9",
         "--navigation",
         "10",
+        "--installation-root",
+        r"E:\Programs\SugarSubstitute",
     ]
     .into_iter()
     .map(OsString::from)
@@ -40,7 +42,19 @@ fn desktop_role_preserves_original_counter_and_full_identity() -> TestResult {
     assert_eq!(role.run.generation.get(), 8);
     assert_eq!(role.launch.get(), 9);
     assert_eq!(role.navigation.get(), 10);
+    assert_eq!(role.installation, std::path::Path::new(r"E:\Programs\SugarSubstitute"));
     Ok(())
+}
+#[test]
+fn desktop_role_requires_an_absolute_installation_root_for_its_cache_anchor() {
+    for bad in ["relative", r"E:\Programs\..\Other", ""] {
+        let mut arguments = input();
+        arguments[20] = bad.into();
+        assert!(DesktopRole::parse(arguments).is_err(), "accepted {bad:?}");
+    }
+    let mut unflagged = input();
+    unflagged[19] = "--working-directory".into();
+    assert!(DesktopRole::parse(unflagged).is_err());
 }
 #[test]
 fn desktop_role_rejects_zero_pseudo_negative_and_malformed_identity() {
