@@ -106,7 +106,6 @@ function fixture({ pending, staged }: Scenario) {
     acceptsPreparation: () => staged && views.acceptsPreparation(address),
     nativeSurface: () => host.host,
     connected: () => true,
-    open: () => {},
     report: (error) => errors.push(error),
   });
   const geometry = (value: CanvasSurfaceGeometry) => surface.port.updateSurface(address, value);

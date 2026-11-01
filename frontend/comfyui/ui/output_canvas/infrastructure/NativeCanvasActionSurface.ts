@@ -26,7 +26,6 @@ export class NativeCanvasActionSurface implements CanvasActionSurface {
   /** Keep transfers with the same qualified owner as the browser surface. */
   constructor(
     private readonly actions: CanvasMediaActions,
-    private readonly openItem: (item: WorkflowOutputItem) => void,
     private readonly viewport: (
       command: CanvasSurfaceViewportCommand,
       scope: CanvasCommandScope,
@@ -58,9 +57,12 @@ export class NativeCanvasActionSurface implements CanvasActionSurface {
   admitLargeImage(): boolean {
     return false;
   }
-  /** Open the exact selected output through the host's existing action. */
-  open(item: WorkflowOutputItem): void {
-    this.openItem(item);
+  /**
+   * Open the exact selected output with the shared file action: the desktop host has no browser
+   * windows, so its open reveals the file in its folder, or downloads it where reveal is unavailable.
+   */
+  open(item: WorkflowOutputItem, scope: CanvasCommandScope): Promise<boolean> {
+    return this.actions.open(item, scope);
   }
   /** Execute a qualified user-requested transfer. */
   media(

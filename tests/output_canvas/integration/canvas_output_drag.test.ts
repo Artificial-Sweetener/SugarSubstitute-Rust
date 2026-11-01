@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove exact output dragging retains one preparation and cannot export obsolete pixels. */
 import { jest } from '@jest/globals';
-import { BrowserCanvasDrag } from '../../../frontend/comfyui/ui/output_canvas/presentation/browser/BrowserCanvasDrag.js';
+import { CanvasOutputDrag } from '../../../frontend/comfyui/ui/output_canvas/presentation/CanvasOutputDrag.js';
 
 /** Model only the synchronous browser DataTransfer boundary. */
 function drag(image: HTMLImageElement) {
@@ -53,7 +53,7 @@ test('exports the exact prepared file and download URL and releases it on leavin
   const prepare = jest
     .fn<(key: string, signal: AbortSignal) => Promise<{ file: File; url: string }>>()
     .mockResolvedValue({ file, url: 'http://localhost/view?filename=output.jpg' });
-  const owner = new BrowserCanvasDrag(root, {
+  const owner = new CanvasOutputDrag(root, {
     resolve: (target) => (target === image ? { key: 'batch-2', element: image } : null),
     prepare,
     accepts: () => true,
@@ -85,7 +85,7 @@ test('cancels pending work and rejects a late preparation after the displayed ba
   let current = 'first';
   let finish: ((value: { file: File; url: string }) => void) | undefined;
   let signal: AbortSignal | undefined;
-  const owner = new BrowserCanvasDrag(root, {
+  const owner = new CanvasOutputDrag(root, {
     resolve: (target) => (target === image ? { key: current, element: image } : null),
     prepare: (_key, request) => {
       signal = request;
@@ -117,7 +117,7 @@ test('admits outbound navigation only after full image bytes are ready for that 
   const image = document.createElement('img');
   root.append(image);
   let finish: ((value: { file: File; url: string }) => void) | undefined;
-  const owner = new BrowserCanvasDrag(root, {
+  const owner = new CanvasOutputDrag(root, {
     resolve: (target) => (target === image ? { key: 'batch-3', element: image } : null),
     prepare: () =>
       new Promise((resolve) => {
@@ -149,7 +149,7 @@ test('reports current preparation failures once and silently retires cancellatio
   const image = document.createElement('img');
   root.append(image);
   const report = jest.fn<(error: unknown) => void>();
-  const owner = new BrowserCanvasDrag(root, {
+  const owner = new CanvasOutputDrag(root, {
     resolve: (target) => (target === image ? { key: 'output', element: image } : null),
     prepare: async () => {
       throw new Error('File unavailable');

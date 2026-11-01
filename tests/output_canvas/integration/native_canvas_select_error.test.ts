@@ -78,7 +78,6 @@ function fixture(staged: boolean) {
     acceptsPreparation: () => staged && views.acceptsPreparation(address),
     nativeSurface: () => host.host,
     connected: () => true,
-    open: () => {},
     report: (error) => errors.push(error),
   });
   retirements.push(async () => {

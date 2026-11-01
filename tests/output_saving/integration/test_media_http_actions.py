@@ -45,7 +45,7 @@ class Revealer:
         return True
 
     def reveal(self, path: Path) -> None:
-        """Record the selected validated image."""
+        """Record the selected validated output."""
         self.paths.append(path)
 
 
@@ -107,6 +107,34 @@ def test_local_reveal_remote_refusal_and_on_demand_jpeg(tmp_path: Path) -> None:
                 "/sugarcubes/output-saving/reveal",
                 json={**reference, "filename": "missing.png"},
                 headers={"Origin": origin},
+            )
+            assert response.status == 400
+            video = output / "clip.mp4"
+            video.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+            video_reference = {**reference, "filename": video.name}
+            response = await client.post(
+                "/sugarcubes/output-saving/reveal",
+                json=video_reference,
+                headers={"Origin": origin},
+            )
+            assert response.status == 200
+            assert revealed == [png.resolve(), video.resolve()]
+            (tmp_path / "outside.mp4").write_bytes(b"outside")
+            for escaping in [
+                {**reference, "filename": "outside.mp4", "subfolder": ".."},
+                {**reference, "filename": "..\\outside.mp4"},
+                {**reference, "filename": str(tmp_path / "outside.mp4")},
+            ]:
+                response = await client.post(
+                    "/sugarcubes/output-saving/reveal",
+                    json=escaping,
+                    headers={"Origin": origin},
+                )
+                assert response.status == 400
+            assert revealed == [png.resolve(), video.resolve()]
+            response = await client.post(
+                "/sugarcubes/output-saving/image",
+                json={"file": video_reference, "format": "preferred"},
             )
             assert response.status == 400
             response = await client.post(

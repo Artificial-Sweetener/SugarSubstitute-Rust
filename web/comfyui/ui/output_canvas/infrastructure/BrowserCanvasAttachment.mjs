@@ -35,7 +35,7 @@ import { BrowserCanvasResources } from './BrowserCanvasResources.mjs';
 import { applyCanvasAction } from '../application/CanvasActions.js';
 import { BrowserCanvasActionSurface } from './BrowserCanvasActionSurface.mjs';
 import { ensureBrowserCanvasStyles } from './BrowserCanvasStyles.mjs';
-import { BrowserCanvasDrag } from '../presentation/browser/BrowserCanvasDrag.mjs';
+import { CanvasOutputDrag } from '../presentation/CanvasOutputDrag.js';
 import { BrowserCanvasDragSubjects } from './BrowserCanvasDragSubject.mjs';
 import { CanvasMediaActions } from './CanvasMediaActions.js';
 import { BrowserCanvasMediaDetail } from './BrowserCanvasMediaDetail.mjs';
@@ -126,7 +126,7 @@ export class BrowserCanvasAttachment {
         });
         this.#browserResources = new BrowserCanvasResources(resources, budget, options.allowances, options.url);
         const dragSubjects = new BrowserCanvasDragSubjects(this.viewport, this.#images, this.#overview, () => this.#plan);
-        this.#drag = new BrowserCanvasDrag(element, {
+        this.#drag = new CanvasOutputDrag(element, {
             resolve: (target, event) => dragSubjects.resolve(target, event),
             prepare: (key, signal) => {
                 const item = dragSubjects.item(key);

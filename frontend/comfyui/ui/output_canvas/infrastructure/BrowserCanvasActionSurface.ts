@@ -72,8 +72,9 @@ export class BrowserCanvasActionSurface implements CanvasActionSurface {
   }
 
   /** Delegate the exact selected item to the host's existing open action. */
-  open(item: WorkflowOutputItem): void {
+  open(item: WorkflowOutputItem): boolean {
     this.openItem(item);
+    return true;
   }
 
   /** Keep copy and file actions with the existing browser transfer owner. */

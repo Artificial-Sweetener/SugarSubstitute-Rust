@@ -28,7 +28,7 @@ from ..application.media_service import OutputMediaService
 from ..domain.media import ImageTransferFormat, ImageTransferPayload
 from ..domain.transfer import OutputFileReference
 from .local_file_access import local_file_request
-from .transfer_references import decode_transfer_reference
+from .transfer_references import decode_output_reference, decode_transfer_reference
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ def register_media_routes(
             )
         try:
             value: object = await request.json()
-            reference = decode_transfer_reference(value)
+            reference = decode_output_reference(value)
             await asyncio.to_thread(service.reveal, reference)
             return web.json_response({"success": True})
         except (ValueError, TypeError) as error:

@@ -56,12 +56,12 @@ export class OutputTransferClient {
   }
 }
 
-/** Preserve full-fidelity transfer URLs without native lossy preview parameters. */
-export function outputTransferUrl(origin: string, selection: OutputTransferSelection): string {
+/** Preserve full-fidelity file URLs without native lossy preview parameters. */
+export function outputFileUrl(origin: string, file: OutputFileReference): string {
   const url = new URL('/view', origin);
   if (url.protocol !== 'http:' && url.protocol !== 'https:')
     throw new Error('The image host is unavailable.');
-  url.search = new URLSearchParams({ ...selection.file }).toString();
+  url.search = new URLSearchParams({ ...file }).toString();
   return url.href;
 }
 

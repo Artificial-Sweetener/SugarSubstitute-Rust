@@ -61,7 +61,7 @@ function fixture(resources?: CanvasSourcePreparation) {
     pan,
     retry: () => false,
     admitLargeImage: () => false,
-    open: () => {},
+    open: () => false,
     media: () => false,
   };
   const snapshot = canvasSnapshot('actions');

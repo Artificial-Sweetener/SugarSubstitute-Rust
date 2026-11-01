@@ -36,6 +36,11 @@ import {
   type CanvasOverviewBounds,
   type CanvasOverviewGridCell,
 } from '../presentation/CanvasOverviewGrid.js';
+import {
+  CanvasOutputDrag,
+  type CanvasOutputDragPayload,
+  type CanvasOutputDragSubject,
+} from '../presentation/CanvasOutputDrag.js';
 
 /** The schema's overview-cell result identity ceiling, in Unicode code points. */
 const MAX_OVERVIEW_ITEM_ID = 1024;
@@ -53,6 +58,11 @@ export interface NativeCanvasOverviewOptions {
   select(cell: CanvasOverviewCell): void;
   /** Notify the attachment that the natively painted cells changed. */
   changed(): void;
+  /** Fence the fixed attachment before outbound drags. */
+  accepts(): boolean;
+  /** Prepare one painted image for the page's outbound drag. */
+  drag?(item: WorkflowOutputItem, signal: AbortSignal): Promise<CanvasOutputDragPayload | null>;
+  report(error: unknown): void;
 }
 
 /**
@@ -102,6 +112,7 @@ function surfaceRect(
 export class NativeCanvasOverview {
   readonly element: HTMLDivElement;
   readonly #grid: CanvasOverviewGrid;
+  readonly #drag: CanvasOutputDrag;
   #cells: readonly CanvasSurfaceOverviewCell[] = Object.freeze([]);
   #key = '[]';
 
@@ -120,6 +131,16 @@ export class NativeCanvasOverview {
       },
     });
     this.element = this.#grid.element;
+    // The host routes overview input to the page, so painted cells reuse the page's drag source.
+    this.#drag = new CanvasOutputDrag(this.element, {
+      resolve: (target) => this.#dragSubject(target),
+      prepare: (key, signal) => {
+        const item = this.#paintedItem(key);
+        return item && options.drag ? options.drag(item, signal) : Promise.resolve(null);
+      },
+      accepts: () => this.#grid.active && options.accepts() && !!options.drag,
+      report: (error) => options.report(error),
+    });
   }
 
   /** Read the cells the host should currently paint, in grid order. */
@@ -147,6 +168,12 @@ export class NativeCanvasOverview {
       canvasBatchGridCatalog(finals, view.selection, view.follow === 'auto'),
       active,
     );
+    this.#drag.reconcile();
+  }
+
+  /** Discard a prepared drag after shared transfer preferences change. */
+  invalidateDrag(): void {
+    this.#drag.invalidate();
   }
 
   /** Re-measure after the surface allocation moves or resizes. */
@@ -154,9 +181,28 @@ export class NativeCanvasOverview {
     this.#grid.render(false);
   }
 
-  /** Detach the grid's controls. */
+  /** Detach the grid's controls and release any prepared drag. */
   dispose(): void {
+    this.#drag.dispose();
     this.#grid.dispose();
+  }
+
+  /** Resolve a pointer target to its cell only while the host paints that cell's image. */
+  #dragSubject(target: EventTarget | null): CanvasOutputDragSubject | null {
+    if (!(target instanceof Node)) return null;
+    for (const { cell, button } of this.#grid.cellElements) {
+      const item = cell.item;
+      if (item && button.contains(target) && this.#paintedItem(item.id))
+        return { key: item.id, element: button };
+    }
+    return null;
+  }
+
+  /** Find a currently painted image cell's item by identity. */
+  #paintedItem(id: string): WorkflowOutputItem | null {
+    if (!this.#cells.some((cell) => cell.itemId === id)) return null;
+    const item = this.#grid.cellElements.find(({ cell }) => cell.item?.id === id)?.cell.item;
+    return item?.mediaKind === 'image' ? item : null;
   }
 
   /** Admit paintable cells, explain the others, and publish only a changed layout. */
@@ -200,6 +246,7 @@ export class NativeCanvasOverview {
     if (key === this.#key) return;
     this.#key = key;
     this.#cells = cells;
+    this.#drag.reconcile();
     this.options.changed();
   }
 }

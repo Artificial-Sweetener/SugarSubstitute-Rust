@@ -198,7 +198,6 @@ function fixture(discovery: Discovery) {
         accepts,
         acceptsPreparation,
         connected: () => true,
-        open: () => {},
         report: (error) => errors.push(error),
         nativeSurface: () => connection.surface,
         surfacePending: () => presenter.current() === 'pending',

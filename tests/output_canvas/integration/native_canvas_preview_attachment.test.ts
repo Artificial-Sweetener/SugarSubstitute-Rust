@@ -105,7 +105,6 @@ function fixture(firstPreview = false, staged = false) {
     acceptsPreparation: () => staged && views.acceptsPreparation(address),
     nativeSurface: () => host.host,
     connected: () => true,
-    open: () => {},
     report: (error) => errors.push(error),
   });
   surface.port.updateSurface(address, previewGeometry);

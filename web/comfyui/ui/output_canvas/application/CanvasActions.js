@@ -47,10 +47,7 @@ export async function applyCanvasAction(command, owners) {
             return surface.admitLargeImage(scope);
         case 'open-media': {
             const item = command.target === 'primary' ? plan.primary?.item : plan.secondary?.item;
-            if (!item)
-                return false;
-            surface.open(item, scope);
-            return true;
+            return item ? await surface.open(item, scope) : false;
         }
         case 'copy-media':
         case 'file-media':

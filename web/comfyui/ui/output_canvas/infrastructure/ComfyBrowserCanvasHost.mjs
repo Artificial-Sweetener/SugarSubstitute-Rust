@@ -21,22 +21,20 @@ import { BrowserCanvasImageLoader } from './BrowserCanvasImageLoader.mjs';
 import { BrowserCanvasMediaPosters } from './BrowserCanvasMediaPosters.mjs';
 import { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.mjs';
 import { BrowserCanvasPosterRenderer } from './BrowserCanvasPosterRenderer.mjs';
-import { comfyCanvasMediaUrl } from './ComfyCanvasMedia.js';
+import { comfyCanvasMediaUrl, openComfyCanvasMedia } from './ComfyCanvasMedia.js';
 import { ComfyCanvasModelRuntime } from './ComfyCanvasModelRuntime.mjs';
 /** Retain browser presentation caches independently of shared workflow and controls. */
 export class ComfyBrowserCanvasHost {
     document;
     logger;
-    drag;
     #allowances = new CanvasImageAllowances();
     #sessions = new BrowserCanvasMediaSessions();
     #models;
     #posters;
     #window;
-    constructor(document, logger, drag) {
+    constructor(document, logger) {
         this.document = document;
         this.logger = logger;
-        this.drag = drag;
         const window = document.defaultView;
         if (!window)
             throw new Error('Output canvas window is unavailable.');
@@ -58,7 +56,7 @@ export class ComfyBrowserCanvasHost {
             models: this.#models,
             mediaSessions: this.#sessions,
             url: (item) => comfyCanvasMediaUrl(this.document.location.origin, item),
-            ...(this.drag ? { drag: this.drag } : {}),
+            open: (item) => openComfyCanvasMedia(this.#window, item),
             disposeLoader: () => loader.dispose(),
         });
     }

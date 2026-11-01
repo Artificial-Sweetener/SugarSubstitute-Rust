@@ -237,7 +237,6 @@ function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
     acceptsPreparation: () => false,
     nativeSurface: () => host,
     connected: () => true,
-    open: () => {},
     report: (error) => errors.push(error),
   });
   return {

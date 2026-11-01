@@ -1,6 +1,6 @@
 import { OutputMediaClient } from './OutputMediaClient.js';
 import { OutputMediaProfileSource } from './OutputMediaProfileSource.js';
-import { OutputTransferClient, outputTransferUrl, } from './OutputTransferClient.js';
+import { OutputTransferClient, outputFileUrl, } from './OutputTransferClient.js';
 /** Coordinate the shared file selection with browser-owned transport and clipboard boundaries. */
 export class BrowserOutputTransfer {
     origin;
@@ -43,14 +43,18 @@ export class BrowserOutputTransfer {
         await this.clipboard.write(image.blob, image.mimeType);
         return true;
     }
-    /** Reveal through the local backend or start the remote browser download without rendering another image. */
-    async fileAction(file, accepts, signal) {
+    /**
+     * Reveal through the local backend or start the browser download without rendering another image.
+     *
+     * Only still images have preferred renditions, so other media download their exact file.
+     */
+    async fileAction(file, accepts, signal, content = 'image') {
         if (this.#disposed || signal?.aborted || !accepts())
             return false;
         if (this.#profile.read().fileAction === 'reveal')
             await this.#media.reveal(file, signal);
         else
-            this.download.start(this.#media.downloadUrl(file));
+            this.download.start(content === 'image' ? this.#media.downloadUrl(file) : outputFileUrl(this.origin, file));
         return true;
     }
     /** Retire profile listeners and refuse late clipboard writes after the browser host is torn down. */
@@ -84,7 +88,7 @@ export class BrowserOutputTransfer {
             const selection = await this.#client.choose(file, controller.signal);
             if (this.#disposed || !accepts() || controller.signal.aborted)
                 return null;
-            const url = outputTransferUrl(this.origin, selection);
+            const url = outputFileUrl(this.origin, selection.file);
             const response = await this.fetch(url, {
                 signal: controller.signal,
             });

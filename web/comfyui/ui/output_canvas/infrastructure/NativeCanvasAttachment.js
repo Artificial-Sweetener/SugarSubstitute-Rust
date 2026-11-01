@@ -107,6 +107,9 @@ export class NativeCanvasAttachment {
                         if (this.#ready)
                             this.#present();
                     },
+                    accepts: () => !this.#disposed && options.accepts(),
+                    ...(options.drag ? { drag: options.drag } : {}),
+                    report: (error) => options.report(error, null),
                 })
                 : null;
         this.#status = new CanvasStatusPublisher(options.clock, () => this.#publish());
@@ -123,7 +126,7 @@ export class NativeCanvasAttachment {
             read: () => !this.#disposed && options.accepts() ? { plan: this.#plan, catalog: this.#catalog } : null,
             cells: () => [],
         });
-        const surface = new NativeCanvasActionSurface(this.#media, options.open, (command, scope) => this.#native.viewport(command, scope));
+        const surface = new NativeCanvasActionSurface(this.#media, (command, scope) => this.#native.viewport(command, scope));
         this.port = new CanvasSurfacePort(this.#snapshot(), {
             origin: document.location.origin,
             capabilities: {
@@ -134,7 +137,8 @@ export class NativeCanvasAttachment {
                     'select-source',
                     'batch',
                     'follow',
-                    'open-media',
+                    // Opening uses the shared file action because the desktop host opens no browser windows.
+                    ...(options.fileAction ? ['open-media'] : []),
                     ...nativeCanvasCommands(options.nativeSurface()),
                     ...this.#media.commands(),
                 ],
@@ -197,6 +201,7 @@ export class NativeCanvasAttachment {
             }) ?? (() => { });
         this.#stopTransfer =
             options.transferChanged?.(() => {
+                this.#overview?.invalidateDrag();
                 if (this.#ready)
                     this.#status.changed(true);
             }) ?? (() => { });

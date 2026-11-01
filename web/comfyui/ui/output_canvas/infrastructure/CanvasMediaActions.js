@@ -27,9 +27,32 @@ export class CanvasMediaActions {
         const item = canvasMediaItem(this.options.read(), command.target);
         if (!item)
             return false;
+        return await this.#perform(() => canvasMediaItem(this.options.read(), command.target)?.id === item.id, scope, async (accepts, signal) => command.type === 'copy-media'
+            ? ((await this.options.copy?.(item, accepts, command.format, signal)) ?? false)
+            : ((await this.options.fileAction?.(item, accepts, signal)) ?? false));
+    }
+    /**
+     * Apply the file action to the exact selected output of any media kind.
+     *
+     * Native presentation opens outputs in place of a browser window through this action.
+     */
+    async open(item, scope) {
+        const fileAction = this.options.fileAction;
+        if (this.#disposed || !fileAction || !this.options.accepts() || !scope.current())
+            return false;
+        const selected = () => {
+            const snapshot = this.options.read();
+            return snapshot.selected?.id === item.id || snapshot.secondary?.id === item.id;
+        };
+        if (!selected())
+            return false;
+        return await this.#perform(selected, scope, (accepts, signal) => fileAction(item, accepts, signal));
+    }
+    /** Run one operation that supersedes earlier ones while its pinned output remains current. */
+    async #perform(current, scope, run) {
         this.#pending?.controller.abort();
         const controller = new AbortController();
-        this.#pending = { controller, target: command.target, item };
+        this.#pending = { controller, current };
         const operation = ++this.#operation;
         const cancel = () => controller.abort();
         scope.signal.addEventListener('abort', cancel, { once: true });
@@ -40,13 +63,11 @@ export class CanvasMediaActions {
             scope.current() &&
             operation === this.#operation &&
             this.options.accepts() &&
-            canvasMediaItem(this.options.read(), command.target)?.id === item.id;
+            current();
         try {
             if (!accepts())
                 return false;
-            return command.type === 'copy-media'
-                ? ((await this.options.copy?.(item, accepts, command.format, controller.signal)) ?? false)
-                : ((await this.options.fileAction?.(item, accepts, controller.signal)) ?? false);
+            return await run(accepts, controller.signal);
         }
         catch (error) {
             if (controller.signal.aborted && error instanceof DOMException && error.name === 'AbortError')
@@ -59,12 +80,10 @@ export class CanvasMediaActions {
                 this.#pending = null;
         }
     }
-    /** Cancel transport when a published state retires the exact originating image. */
+    /** Cancel transport when a published state retires the exact originating output. */
     reconcile() {
         const pending = this.#pending;
-        if (pending &&
-            (!this.options.accepts() ||
-                canvasMediaItem(this.options.read(), pending.target)?.id !== pending.item.id))
+        if (pending && (!this.options.accepts() || !pending.current()))
             pending.controller.abort();
     }
     /** Invalidate pending work before the attachment and its resources retire. */

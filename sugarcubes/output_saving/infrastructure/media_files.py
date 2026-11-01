@@ -60,6 +60,15 @@ class HostOutputImageFiles:
         return choices
 
     def resolve(self, reference: OutputFileReference) -> Path:
+        """Resolve a contained file only when it is a supported still image."""
+        path = self._contained(reference)
+        if path.suffix.casefold() not in {".png", ".jpg", ".jpeg", ".webp"}:
+            raise ValueError(
+                "This output image is unavailable or outside its host folder."
+            )
+        return path
+
+    def _contained(self, reference: OutputFileReference) -> Path:
         """Reject traversal, junction escape and missing files while delegating opaque managed roots."""
         if reference.subfolder.startswith(MANAGED_SUBFOLDER_PREFIX):
             path = self._registry.resolve(
@@ -74,11 +83,7 @@ class HostOutputImageFiles:
         if root is None:
             raise ValueError("This host image namespace is unavailable.")
         path = (root / reference.subfolder / reference.filename).resolve()
-        if (
-            not path.is_relative_to(root)
-            or not path.is_file()
-            or path.suffix.casefold() not in {".png", ".jpg", ".jpeg", ".webp"}
-        ):
+        if not path.is_relative_to(root) or not path.is_file():
             raise ValueError(
                 "This output image is unavailable or outside its host folder."
             )
@@ -111,5 +116,5 @@ class HostOutputImageFiles:
             )
 
     def reveal(self, reference: OutputFileReference) -> None:
-        """Open only a currently contained host image, never a client-supplied absolute path."""
-        self._revealer.reveal(self.resolve(reference))
+        """Select a currently contained output of any media kind, never a client-supplied absolute path."""
+        self._revealer.reveal(self._contained(reference))

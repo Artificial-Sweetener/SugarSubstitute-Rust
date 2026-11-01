@@ -1,5 +1,5 @@
 /** Retain at most one encoded image and retire it on navigation, hiding, leaving, or disposal. */
-export class BrowserCanvasDrag {
+export class CanvasOutputDrag {
     root;
     options;
     #preparation = null;
