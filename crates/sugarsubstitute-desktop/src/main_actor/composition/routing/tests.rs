@@ -243,6 +243,41 @@ fn two_primary_presses_within_the_windows_rule_add_a_double_click() -> TestResul
 }
 
 #[test]
+fn capture_released_by_the_first_click_keeps_the_double_click_pending() -> TestResult {
+    let mut routing = routing(&[])?;
+    routing.route(press(Button::Primary, [50, 40]));
+    routing.route(Message::Release { button: Button::Primary, point: [50, 40], held: false });
+    // Tao releases capture after the button-up, which arrives as a capture change.
+    routing.cancel();
+    drain(&mut routing);
+    let second = ClickRule { time: 1_400, ..RULE };
+    routing.route(Message::Press { button: Button::Primary, point: [51, 41], rule: second });
+    assert_eq!(
+        drain(&mut routing),
+        [Pointer([51.0, 41.0]), button(MainCanvasButton::Primary, true), DoubleClick([51.0, 41.0])]
+    );
+    Ok(())
+}
+
+#[test]
+fn capture_lost_during_a_drag_or_deactivation_forgets_the_pending_click() -> TestResult {
+    let mut routing = routing(&[])?;
+    routing.route(press(Button::Primary, [50, 40]));
+    routing.cancel();
+    assert_eq!(drain(&mut routing).last(), Some(&Cancel));
+    let second = ClickRule { time: 1_400, ..RULE };
+    routing.route(Message::Press { button: Button::Primary, point: [51, 41], rule: second });
+    assert!(!drain(&mut routing).contains(&DoubleClick([51.0, 41.0])), "drag was cancelled");
+    routing.route(Message::Release { button: Button::Primary, point: [51, 41], held: false });
+    routing.interrupt();
+    drain(&mut routing);
+    let third = ClickRule { time: 1_500, ..RULE };
+    routing.route(Message::Press { button: Button::Primary, point: [51, 41], rule: third });
+    assert!(!drain(&mut routing).contains(&DoubleClick([51.0, 41.0])), "window was interrupted");
+    Ok(())
+}
+
+#[test]
 fn moves_coalesce_and_overflow_becomes_one_cancellation() -> TestResult {
     let mut routing = routing(&[])?;
     for x in 20..60 {

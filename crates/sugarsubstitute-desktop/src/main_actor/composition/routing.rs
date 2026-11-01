@@ -202,18 +202,23 @@ impl Routing {
         }
     }
 
-    /// End a captured native gesture after capture, activation or region loss.
+    /// End a captured native gesture after capture or region loss.
+    ///
+    /// Releasing a button also releases capture, so a capture change without a held native
+    /// gesture keeps the pending click: the next press may still complete a double click.
     pub(super) fn cancel(&mut self) {
-        self.click = None;
         if self.native.take().is_some() {
+            self.click = None;
             self.push(MainCanvasGesture::Cancel);
         }
     }
 
     /// End every gesture after the window was deactivated, minimized or told to cancel modes:
-    /// a native gesture is cancelled and a web gesture no longer withholds the native region.
+    /// a native gesture is cancelled, a pending click is forgotten, and a web gesture no longer
+    /// withholds the native region.
     pub(super) fn interrupt(&mut self) {
         self.cancel();
+        self.click = None;
         self.web = false;
     }
 
