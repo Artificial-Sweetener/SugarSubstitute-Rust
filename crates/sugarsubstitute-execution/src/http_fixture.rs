@@ -16,7 +16,8 @@ pub struct Exchange {
     pub range: Option<String>,
     /// Complete raw response bytes. Closing after them can simulate a broken transfer.
     pub response: Vec<u8>,
-    /// Keep a truncated response open until the client retires its socket.
+    /// Keep the socket open until the client closes it, or reuses or replaces it for the next
+    /// scripted request.
     pub await_client_close: bool,
     /// Cancel the client scope only after this peer receives its request and writes the response prefix.
     pub cancel_client: Option<std::sync::Arc<Scope>>,
@@ -56,20 +57,23 @@ impl Server {
     /// # Errors
     /// Rejects unexpected request bytes, credentials, peer addresses, cancellation and I/O.
     pub async fn run(self, context: JobContext) -> io::Result<()> {
-        for exchange in &self.exchanges {
-            let mut socket = loop {
-                check(&context)?;
-                match self.listener.accept() {
-                    Ok((socket, peer)) if peer.ip().is_loopback() => break socket,
-                    Ok(_) => return Err(io::Error::other("HTTP fixture non-loopback peer")),
-                    Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {
-                        wait(&context).await?
+        // A keep-alive client may send its next request on the same socket, or pool the socket
+        // and connect again; a pooled socket stays open until the script ends.
+        let mut pooled = Vec::new();
+        let mut next = None;
+        for (index, exchange) in self.exchanges.iter().enumerate() {
+            let (mut socket, prefix) = match next.take() {
+                Some(next) => next,
+                None => loop {
+                    check(&context)?;
+                    if let Some(socket) = accept(&self.listener)? {
+                        break (socket, Vec::new());
                     }
-                    Err(cause) => return Err(cause),
-                }
+                    wait(&context).await?;
+                },
             };
             socket.set_nonblocking(true)?;
-            request(&mut socket, exchange, &context).await?;
+            request(&mut socket, exchange, prefix, &context).await?;
             let mut offset = 0;
             while offset < exchange.response.len() {
                 check(&context)?;
@@ -86,33 +90,74 @@ impl Server {
                 client.cancel();
             }
             if exchange.await_client_close {
-                closed(&mut socket, &context).await?;
+                let more = index + 1 < self.exchanges.len();
+                next = match closed(&mut socket, &self.listener, more, &context).await? {
+                    Retirement::Closed => None,
+                    Retirement::Reused(prefix) => Some((socket, prefix)),
+                    Retirement::Reconnected(arrival) => {
+                        pooled.push(socket);
+                        Some((arrival, Vec::new()))
+                    }
+                };
             }
         }
+        drop(pooled);
         Ok(())
     }
 }
-/// A silent peer exercises the client's real idle timeout without a scripted sleep.
-async fn closed(socket: &mut TcpStream, context: &JobContext) -> io::Result<()> {
+/// How the client let go of a served socket.
+enum Retirement {
+    Closed,
+    /// The next request began on the same socket with these bytes.
+    Reused(Vec<u8>),
+    /// The client pooled the socket and opened this next connection.
+    Reconnected(TcpStream),
+}
+/// Accept one pending loopback connection without blocking.
+fn accept(listener: &TcpListener) -> io::Result<Option<TcpStream>> {
+    match listener.accept() {
+        Ok((socket, peer)) if peer.ip().is_loopback() => Ok(Some(socket)),
+        Ok(_) => Err(io::Error::other("HTTP fixture non-loopback peer")),
+        Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => Ok(None),
+        Err(cause) => Err(cause),
+    }
+}
+/// Wait until the client closes `socket` or, while `more` requests remain scripted, reuses or
+/// replaces it. A silent peer exercises the client's real idle timeout without a sleep.
+async fn closed(
+    socket: &mut TcpStream,
+    listener: &TcpListener,
+    more: bool,
+    context: &JobContext,
+) -> io::Result<Retirement> {
     let mut byte = [0];
     loop {
         check(context)?;
         match socket.read(&mut byte) {
-            Ok(0) => return Ok(()),
+            Ok(0) => return Ok(Retirement::Closed),
+            Ok(_) if more => return Ok(Retirement::Reused(byte.to_vec())),
             Ok(_) => return Err(io::Error::other("Unexpected request body")),
-            Err(cause) if cause.kind() == io::ErrorKind::ConnectionReset => return Ok(()),
-            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => wait(context).await?,
+            Err(cause) if cause.kind() == io::ErrorKind::ConnectionReset => {
+                return Ok(Retirement::Closed);
+            }
+            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {}
             Err(cause) => return Err(cause),
         }
+        if more && let Some(next) = accept(listener)? {
+            return Ok(Retirement::Reconnected(next));
+        }
+        wait(context).await?;
     }
 }
-/// Read only bounded HTTP headers and verify the request without a general-purpose web server.
+/// Read only bounded HTTP headers, after any `prefix` already read from the same socket, and
+/// verify the request without a general-purpose web server.
 async fn request(
     socket: &mut TcpStream,
     exchange: &Exchange,
+    prefix: Vec<u8>,
     context: &JobContext,
 ) -> io::Result<()> {
-    let mut bytes = Vec::new();
+    let mut bytes = prefix;
     let mut scratch = [0; 1024];
     while !bytes.ends_with(b"\r\n\r\n") {
         check(context)?;

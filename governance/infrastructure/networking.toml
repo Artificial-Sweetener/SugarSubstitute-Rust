@@ -24,7 +24,7 @@ rationale = "Bounded WinHTTP headers/body reads, original finite phase deadlines
 [[records]]
 path = "crates/sugarsubstitute-execution/src/http_fixture.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:4375051f99dd1c051af5ae6cf2ded46798783d25acb80b89ed673549d9d93558"
+source_sha256 = "sha256:13a2aac06dfdf4c196cce287a406cc2d4e6c42d2f7515fce687cb902501ce968"
 boundary = "fixture"
 rationale = "Execution-owned isolated HTTP server qualifies real native requests, hostile responses and actual client socket closure."
 
