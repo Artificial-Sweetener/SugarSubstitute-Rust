@@ -66,8 +66,19 @@ export function canvasVisibleClip(
   let right = Math.min(bounds.right, window.innerWidth);
   let bottom = Math.min(bounds.bottom, window.innerHeight);
   let representable = true;
+  // Overflow clips only through the containing-block chain: a fixed or absolutely positioned
+  // box escapes the overflow of ancestors until one of them forms its containing block.
+  let escape: 'none' | 'absolute' | 'fixed' = 'none';
   for (const ancestor of ancestry.elements) {
     const style = window.getComputedStyle(ancestor);
+    const clipsOverflow =
+      escape === 'none' ||
+      (escape === 'absolute' &&
+        ((style.position !== '' && style.position !== 'static') || containsFixed(style))) ||
+      (escape === 'fixed' && containsFixed(style));
+    if (clipsOverflow) escape = 'none';
+    if (style.position === 'fixed') escape = 'fixed';
+    else if (style.position === 'absolute' && escape === 'none') escape = 'absolute';
     if (
       style.display === 'none' ||
       style.visibility === 'hidden' ||
@@ -100,7 +111,7 @@ export function canvasVisibleClip(
         bottom = Math.min(bottom, clipped[3]);
       }
     }
-    if (style.display === 'contents') continue;
+    if (style.display === 'contents' || !clipsOverflow) continue;
     const paintContainment = style
       .getPropertyValue('contain')
       .split(/\s+/)
@@ -220,6 +231,23 @@ function innerEdges(
 
 function active(value: string): boolean {
   return value !== '' && value !== 'none' && value !== 'normal';
+}
+
+/** Whether this box forms the containing block of fixed (and absolute) descendants. */
+function containsFixed(style: CSSStyleDeclaration): boolean {
+  const contain = style.getPropertyValue('contain').split(/\s+/);
+  const willChange = style.getPropertyValue('will-change').split(/\s*,\s*/);
+  return (
+    active(style.transform) ||
+    active(style.getPropertyValue('translate')) ||
+    active(style.getPropertyValue('rotate')) ||
+    active(style.getPropertyValue('scale')) ||
+    active(style.getPropertyValue('perspective')) ||
+    active(style.getPropertyValue('filter')) ||
+    active(style.getPropertyValue('backdrop-filter')) ||
+    contain.some((value) => ['paint', 'layout', 'strict', 'content'].includes(value)) ||
+    willChange.some((value) => ['transform', 'perspective', 'filter'].includes(value))
+  );
 }
 
 function rounded(style: CSSStyleDeclaration): boolean {
