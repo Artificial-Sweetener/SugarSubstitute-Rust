@@ -158,6 +158,7 @@ fn real_registration_owns_the_window_until_revoked_and_declines_without_a_browse
         events: fixture.events.clone(),
         active: Cell::new(true),
         entered: Cell::new(false),
+        exporting: Cell::new(false),
         callbacks: CallbackFence::default(),
     });
     let target: IDropTarget = Target(state.clone()).into();

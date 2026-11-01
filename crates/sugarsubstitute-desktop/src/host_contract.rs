@@ -515,6 +515,14 @@ pub trait StartupWindowContent: WindowContent {
         None
     }
 
+    /// Hand over a prepared drag-out of the shown output, at most once per routed request.
+    /// Called on every main-loop turn after routed gestures; the desktop discards an output for
+    /// another lifetime or one whose primary press already ended.
+    #[cfg(feature = "native-composition")]
+    fn take_main_canvas_drag_out(&mut self) -> Option<crate::canvas::MainCanvasDragOut> {
+        None
+    }
+
     /// Acknowledge a matching frame only after native upload and composition commit succeed.
     ///
     /// # Errors

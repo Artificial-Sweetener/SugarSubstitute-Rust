@@ -73,6 +73,9 @@ struct Binding {
     presented_overview: bool,
     committed: bool,
     presented: Option<MainCanvasRetention>,
+    /// Filename leaf of the selected single output, which a drag-out exports; none for an
+    /// overview or comparison selection.
+    drag_name: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -120,6 +123,9 @@ pub(super) struct NativeSurface {
     contexts: [Option<Context>; 4],
     replies: [Option<DesktopStartupCommand>; 8],
     preview: preview::Preview,
+    /// The latest routed drag-out awaiting its copied original.
+    drag_out: Option<input::DragRequest>,
+    drag_sequence: u64,
     closed: bool,
 }
 
@@ -141,6 +147,8 @@ impl NativeSurface {
             contexts: std::array::from_fn(|_| None),
             replies: std::array::from_fn(|_| None),
             preview: preview::Preview::default(),
+            drag_out: None,
+            drag_sequence: 0,
             closed: false,
         }
     }

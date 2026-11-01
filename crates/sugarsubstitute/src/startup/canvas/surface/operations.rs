@@ -106,6 +106,7 @@ impl NativeSurface {
             }
             CanvasSurfaceOperation::Select { file, comparison, inspection, .. } => {
                 let compared = comparison.as_ref().map(|comparison| &comparison.file);
+                let drag_name = compared.is_none().then(|| output_leaf(&file));
                 let Some(target) = admitted_output(&file) else {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
                 };
@@ -172,7 +173,9 @@ impl NativeSurface {
                     center: inspection.center(),
                     span: inspection.span(),
                 }));
-                self.await_selection(identity, request, claim, false, session)
+                self.await_selection(identity, request, claim, false, session)?;
+                self.binding.as_mut().ok_or("Canvas binding disappeared")?.drag_name = drag_name;
+                Ok(())
             }
             CanvasSurfaceOperation::Commit => {
                 let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
@@ -221,11 +224,17 @@ impl NativeSurface {
         let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
         binding.selected = true;
         binding.overview = overview;
+        binding.drag_name = None;
         binding.selection_revision = request.revision();
         binding.source_intent_revision = Some(session.source_intent_revision());
         self.pending = Some(Pending { identity, request, claim, kind: PendingKind::Select });
         Ok(())
     }
+}
+
+/// The stored output's own filename leaf, without any subfolder component.
+fn output_leaf(file: &CanvasFileReference) -> String {
+    file.filename().rsplit(['/', '\\']).next().unwrap_or_default().to_owned()
 }
 
 /// Admit only a Comfy output-storage reference that the backend adapter may fetch; the view

@@ -27,6 +27,24 @@ pub struct MainCanvasInputRegion<'a> {
     /// Page-published web content above the viewport, rounded outward; at most
     /// [`MAX_INPUT_OCCLUSIONS`] rectangles.
     pub occlusions: &'a [PhysicalRect],
+    /// Whether a primary drag exports the shown output instead of panning: navigation is the
+    /// effective tool and the content fits the viewport on both axes, so it cannot pan.
+    pub drag_out: bool,
+}
+
+/// The shown output prepared for one OS drag-out from the native region.
+///
+/// The canvas owner supplies the stored output's own filename leaf and its complete encoded
+/// bytes; the desktop offers them as a virtual file and never receives a filesystem path.
+pub struct MainCanvasDragOut {
+    /// Native main lifetime whose routed gesture requested the drag.
+    pub identity: crate::MainIdentity,
+    /// Original output filename leaf, without any directory component.
+    pub filename: String,
+    /// Complete encoded output bytes.
+    pub bytes: Vec<u8>,
+    /// Admission covering `bytes`, released with them after the last drop target lets go.
+    pub claim: sugarsubstitute_contracts::execution::MemoryClaim,
 }
 
 /// Pointer button that may drive native navigation; every other button stays with WebView2.
@@ -59,6 +77,9 @@ pub enum MainCanvasGesture {
     DoubleClick([f64; 2]),
     /// Capture or activation was lost, or the region was withdrawn; end any native gesture.
     Cancel,
+    /// A primary drag crossed the system drag threshold while drag-out applied. The native
+    /// gesture has ended; the canvas owner may hand the shown output to an OS drag.
+    DragOut,
 }
 
 /// A routed gesture for the exact main lifetime whose region admitted it.

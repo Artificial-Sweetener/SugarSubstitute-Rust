@@ -248,3 +248,18 @@ fn tao_double_click_order_preserves_fit_roundtrip_after_release_and_pointer_moti
         Ok(())
     })
 }
+
+#[test]
+fn drag_out_yields_to_any_other_effective_tool() -> harness::TestResult {
+    execute(|memory| {
+        let mut tools = manager()?;
+        assert!(tools.allows_drag_out(), "fitted navigation exports instead of panning");
+        let id = ToolId::new(2)?;
+        tools.register(id, EditingTool::default(), memory)?;
+        tools.select(id, None, Duration::ZERO)?;
+        assert!(!tools.allows_drag_out(), "a selected editing tool takes priority");
+        tools.select(ToolId::PAN_ZOOM, None, Duration::ZERO)?;
+        assert!(tools.allows_drag_out());
+        Ok(())
+    })
+}

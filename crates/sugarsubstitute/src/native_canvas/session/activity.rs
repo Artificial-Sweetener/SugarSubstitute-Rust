@@ -26,6 +26,8 @@ impl Session {
             self.consume_host_graphics()?;
         }
         #[cfg(feature = "native-composition")]
+        self.consume_drag_out();
+        #[cfg(feature = "native-composition")]
         let restoring_preview = self.preview_restoring();
         #[cfg(not(feature = "native-composition"))]
         let restoring_preview = false;
@@ -185,6 +187,10 @@ impl Session {
         let graphics_in_flight = self.host_graphics_job.is_some();
         #[cfg(not(all(windows, feature = "native-composition")))]
         let graphics_in_flight = false;
+        #[cfg(feature = "native-composition")]
+        let drag_out_in_flight = self.drag_out.in_flight();
+        #[cfg(not(feature = "native-composition"))]
+        let drag_out_in_flight = false;
         #[cfg(all(windows, feature = "native-composition"))]
         let graphics_retained = self.host_graphics.is_some();
         #[cfg(not(all(windows, feature = "native-composition")))]
@@ -200,6 +206,7 @@ impl Session {
         if self.initializing.is_some()
             || self.device_job.is_some()
             || graphics_in_flight
+            || drag_out_in_flight
             || self.loading.is_some()
             || self.rendering.is_some()
             || self.displaying.is_some()

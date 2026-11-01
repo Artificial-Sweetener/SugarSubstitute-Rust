@@ -262,8 +262,15 @@ impl EmbeddedCanvas {
     pub(super) fn input_region(
         &self,
     ) -> Option<sugarsubstitute_desktop::canvas::MainCanvasInputRegion<'_>> {
-        self.session.as_ref()?;
-        self.surface.input_region()
+        self.surface.input_region(self.session.as_ref()?)
+    }
+
+    /// Take the copied original of the latest routed drag-out for the desktop's OS drag.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn take_drag_out(
+        &mut self,
+    ) -> Option<sugarsubstitute_desktop::canvas::MainCanvasDragOut> {
+        self.surface.take_drag_out(self.session.as_mut()?)
     }
 
     /// Apply one gesture the desktop routed into the published native input region.

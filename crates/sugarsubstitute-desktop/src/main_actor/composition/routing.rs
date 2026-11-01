@@ -7,6 +7,8 @@
 //! context menus keep working; only wheel input routed to the canvas is withheld from it.
 //! A primary or middle press inside the region starts a native gesture that stays captured
 //! until its release or a cancellation. A gesture that starts elsewhere stays with WebView2.
+//! While the region offers drag-out, a primary press keeps its origin and crossing the system
+//! drag threshold ends the native gesture with a drag-out request instead of a pan.
 //! Without a region every message belongs to WebView2 alone.
 //!
 //! This owner performs no native calls; the Win32 adapter samples message facts for it and
@@ -57,6 +59,8 @@ pub(super) struct ClickRule {
     pub(super) bounds: [i32; 2],
     /// `GetDoubleClickTime` in milliseconds.
     pub(super) limit: u32,
+    /// `SM_CXDRAG` and `SM_CYDRAG` for the window's current DPI.
+    pub(super) drag: [i32; 2],
 }
 
 /// One decoded mouse message in physical client pixels; `held` reports whether any mouse
@@ -81,6 +85,9 @@ pub(super) enum Message {
 pub(super) struct Routing {
     clip: Option<PhysicalRect>,
     occlusions: Vec<PhysicalRect>,
+    drag_out: bool,
+    /// Primary press point and drag threshold of a gesture that may become a drag-out.
+    origin: Option<([i32; 2], [i32; 2])>,
     native: Option<MainCanvasButton>,
     web: bool,
     hover: bool,
@@ -104,6 +111,8 @@ impl Routing {
         Ok(Self {
             clip: None,
             occlusions,
+            drag_out: false,
+            origin: None,
             native: None,
             web: false,
             hover: false,
@@ -115,13 +124,17 @@ impl Routing {
         })
     }
 
-    /// Install the current region, or withdraw it with `None`.
+    /// Install the current region and whether it offers drag-out, or withdraw it with `None`.
     ///
     /// A replaced region keeps a captured native gesture; withdrawal cancels it. A region with
     /// more than [`MAX_INPUT_OCCLUSIONS`] occlusions is invalid and withdraws routing.
-    pub(super) fn publish(&mut self, region: Option<(PhysicalRect, &[PhysicalRect])>) {
+    pub(super) fn publish(&mut self, region: Option<(PhysicalRect, &[PhysicalRect], bool)>) {
         match region {
-            Some((clip, occlusions)) if occlusions.len() <= MAX_INPUT_OCCLUSIONS => {
+            Some((clip, occlusions, drag_out)) if occlusions.len() <= MAX_INPUT_OCCLUSIONS => {
+                self.drag_out = drag_out;
+                if !drag_out {
+                    self.origin = None;
+                }
                 if self.clip != Some(clip) || self.occlusions != occlusions {
                     self.clip = Some(clip);
                     self.occlusions.clear();
@@ -132,6 +145,7 @@ impl Routing {
                 if self.clip.take().is_some() {
                     self.occlusions.clear();
                 }
+                self.drag_out = false;
                 self.cancel();
             }
         }
@@ -146,6 +160,17 @@ impl Routing {
                 self.last = Some(point);
                 if !held {
                     self.web = false;
+                }
+                if held && self.crosses_drag_threshold(point) {
+                    self.push(MainCanvasGesture::Pointer(position(point)));
+                    self.push(MainCanvasGesture::DragOut);
+                    // The OS drag that follows owns the rest of this button press.
+                    self.native = None;
+                    self.origin = None;
+                    self.click = None;
+                    self.web = true;
+                    self.hover = false;
+                    return true;
                 }
                 self.hover = self.native.is_some() || (!self.web && self.inside(point));
                 if self.hover {
@@ -176,6 +201,7 @@ impl Routing {
                     self.push(MainCanvasGesture::Pointer(position(point)));
                     self.push(MainCanvasGesture::Button { button: routed, pressed: false });
                     self.native = None;
+                    self.origin = None;
                 }
                 if !held {
                     self.web = false;
@@ -207,6 +233,7 @@ impl Routing {
     /// Releasing a button also releases capture, so a capture change without a held native
     /// gesture keeps the pending click: the next press may still complete a double click.
     pub(super) fn cancel(&mut self) {
+        self.origin = None;
         if self.native.take().is_some() {
             self.click = None;
             self.push(MainCanvasGesture::Cancel);
@@ -222,10 +249,13 @@ impl Routing {
         self.web = false;
     }
 
-    /// Native cursor that wins over the browser's: closed hand while a native gesture holds
-    /// capture, open hand over the region, otherwise none so WebView2's cursor applies.
+    /// Native cursor that wins over the browser's: the arrow over or during a gesture in a
+    /// region that offers drag-out, closed hand while a native gesture holds capture, open
+    /// hand over the region, otherwise none so WebView2's cursor applies.
     pub(super) const fn cursor(&self) -> Option<CursorIntent> {
-        if self.native.is_some() {
+        if self.drag_out && (self.native.is_some() || self.hover) {
+            Some(CursorIntent::Arrow)
+        } else if self.native.is_some() {
             Some(CursorIntent::ClosedHand)
         } else if self.hover {
             Some(CursorIntent::OpenHand)
@@ -265,7 +295,18 @@ impl Routing {
             self.push(MainCanvasGesture::DoubleClick(position(point)));
         }
         self.native = Some(routed);
+        self.origin =
+            (self.drag_out && routed == MainCanvasButton::Primary).then_some((point, rule.drag));
         self.hover = true;
+    }
+
+    /// Whether a held primary press that may become a drag-out moved beyond its threshold.
+    fn crosses_drag_threshold(&self, [x, y]: [i32; 2]) -> bool {
+        let Some(([start_x, start_y], [width, height])) = self.origin else { return false };
+        self.drag_out
+            && self.native == Some(MainCanvasButton::Primary)
+            && ((i64::from(x) - i64::from(start_x)).abs() > i64::from(width.max(0))
+                || (i64::from(y) - i64::from(start_y)).abs() > i64::from(height.max(0)))
     }
 
     fn inside(&self, [x, y]: [i32; 2]) -> bool {
@@ -290,6 +331,7 @@ impl Routing {
             self.count = 0;
             self.native = None;
             self.click = None;
+            self.origin = None;
             self.queue[0] = Some(MainCanvasGesture::Cancel);
             self.count = 1;
             return;

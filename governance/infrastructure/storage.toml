@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:e973bc9fa8eaaff782a95e75d3d1cb42878113adf68a1b54c9e194066be411a7"
+source_sha256 = "sha256:5940b75c5153ee12f15040a2672817b8b8d31c94fe8e76874f6318e6026c1652"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -4352,10 +4352,10 @@ rationale = "An owned temporary cache anchor verifies platform startup rejects i
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/source/tests.rs"
 owner = "sugarsubstitute-image-io"
-source_sha256 = "sha256:10da56c7787a5a5ba32f13c734fd33d750654b77a0c77f866c5e698514c67a3a"
+source_sha256 = "sha256:9a8de6183cc9084edbf2230aa0ad462fe01113fbf5c8fab9b9bdb694cb31272b"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
-rationale = "An owned temporary cache fixture verifies nonblocking contention and subsequent use of a retained encoded original on the real storage worker."
+rationale = "An owned temporary cache fixture verifies nonblocking contention, subsequent use and exact bounded copying of a retained encoded original on the real storage worker."
 
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/output_media/transfer/tests/native_http.rs"

@@ -73,6 +73,8 @@ impl Session {
         self.withdraw_preview()?;
         #[cfg(feature = "native-composition")]
         self.close_acquirer_retirement(cutoff, first_close);
+        #[cfg(feature = "native-composition")]
+        self.close_drag_out();
         self.initialization_pending = false;
         self.device_pending = false;
         #[cfg(all(windows, feature = "native-composition"))]

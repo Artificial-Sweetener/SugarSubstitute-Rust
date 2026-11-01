@@ -161,6 +161,24 @@ fn cursor_and_capture_follow_pan_availability_and_cancel_without_sticky_state() 
 }
 
 #[test]
+fn drag_out_applies_only_to_unlocked_content_that_fits_the_surface() -> TestResult {
+    let mut empty = Navigation::new(Viewport::new(Extent::new(1000, 500)?)?);
+    assert!(!empty.allows_drag_out(), "no content");
+    empty.set_content(Some(Extent::new(400, 200)?), time(0))?;
+    assert!(empty.allows_drag_out(), "a small image fits even at 1:1");
+    let mut nav = navigation()?;
+    assert!(nav.allows_drag_out(), "Fit keeps the content within the surface");
+    actual(&mut nav)?;
+    assert!(!nav.allows_drag_out(), "1:1 of a larger image pans instead");
+    nav.input(NavigationInput::Fit, time(100))?;
+    nav.advance(time(400))?;
+    assert!(nav.allows_drag_out());
+    nav.set_policy(true, false);
+    assert!(!nav.allows_drag_out(), "locked previews never drag out");
+    Ok(())
+}
+
+#[test]
 fn wheel_magnitude_accumulates_pending_intent_and_leaves_exact_native_snap() -> TestResult {
     let mut nav = navigation()?;
     wheel(&mut nav, 3.0, 0)?;

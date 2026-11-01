@@ -207,6 +207,8 @@ impl Navigation {
                     })),
                     &mut token,
                 ),
+                // WebView2 requests only clipboard reads, never writes: the page's user-initiated
+                // image copy proceeds without this event while clipboard reads stay denied.
                 3 => core.add_PermissionRequested(
                     &PermissionRequestedEventHandler::create(Box::new(move |_, args| {
                         let _callback = captured.callback();

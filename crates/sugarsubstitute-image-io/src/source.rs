@@ -4,6 +4,7 @@
 
 use crate::{CacheReuse, CachedRaster, ImportError, import_cached_image, import_image};
 use std::{
+    io::{Read, Seek, SeekFrom},
     path::PathBuf,
     sync::{Arc, Mutex, TryLockError},
 };
@@ -126,4 +127,73 @@ impl ImageSource {
             }
         }
     }
+
+    /// Copy the complete original encoded bytes, as acquired, for handing to another program.
+    ///
+    /// Call on an execution-owned storage worker. The returned claim, taken from `memory`,
+    /// covers the copy's capacity. A retained stream already in use by an import is rejected
+    /// without waiting.
+    ///
+    /// # Errors
+    /// Rejects an empty original or one above `maximum` bytes before allocating; returns
+    /// `ImportError::Busy` for a stream in use and preserves admission, cancellation and native
+    /// read failures.
+    pub fn encoded_bytes(
+        &self,
+        maximum: u64,
+        memory: &MemoryLease,
+        context: &JobContext,
+    ) -> Result<(Vec<u8>, MemoryClaim), ImportError> {
+        crate::check(context)?;
+        match &self.inner {
+            Original::File(path) => {
+                sugarsubstitute_supervision::with_artifact_input(path, maximum, context, |input| {
+                    copy_bounded(input, maximum, memory, context)
+                })
+                .map_err(|cause| match cause {
+                    sugarsubstitute_supervision::ArtifactError::Storage(cause) => {
+                        ImportError::Io(cause)
+                    }
+                    sugarsubstitute_supervision::ArtifactError::Producer(cause) => cause,
+                    retirement => ImportError::Io(std::io::Error::other(retirement)),
+                })
+            }
+            Original::Memory(original) => {
+                let bytes = original.bytes()?;
+                copy_bounded(&mut std::io::Cursor::new(bytes), maximum, memory, context)
+            }
+            Original::Encoded(encoded) => {
+                let mut reader = encoded.reader.try_lock().map_err(|cause| match cause {
+                    TryLockError::WouldBlock => ImportError::Busy,
+                    TryLockError::Poisoned(_) => {
+                        ImportError::Invalid("Encoded original reader failed")
+                    }
+                })?;
+                copy_bounded(&mut *reader, maximum, memory, context)
+            }
+        }
+    }
+}
+
+/// Read a complete seekable stream after admitting its exact length within `maximum` bytes.
+fn copy_bounded(
+    stream: &mut (impl Read + Seek),
+    maximum: u64,
+    memory: &MemoryLease,
+    context: &JobContext,
+) -> Result<(Vec<u8>, MemoryClaim), ImportError> {
+    let length = stream.seek(SeekFrom::End(0))?;
+    if length == 0 || length > maximum {
+        return Err(ImportError::Invalid("Encoded original length is outside its limit"));
+    }
+    let length = usize::try_from(length)
+        .map_err(|_| ImportError::Invalid("Encoded original length is outside its limit"))?;
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(length)?;
+    let claim = memory.claim(bytes.capacity() as u64)?;
+    bytes.resize(length, 0);
+    stream.seek(SeekFrom::Start(0))?;
+    crate::check(context)?;
+    stream.read_exact(&mut bytes)?;
+    Ok((bytes, claim))
 }

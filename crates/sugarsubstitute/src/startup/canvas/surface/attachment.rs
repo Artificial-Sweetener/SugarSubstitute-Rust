@@ -43,6 +43,7 @@ impl NativeSurface {
             presented_viewport: None,
             overview: false,
             presented_overview: false,
+            drag_name: None,
             committed: false,
             presented: None,
         });

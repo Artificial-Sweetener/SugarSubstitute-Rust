@@ -10,10 +10,11 @@
 use super::callbacks::{CallbackFence, retire_when_quiet};
 use super::cancellation::{self, Interruption};
 use super::cursor::{self, Hands, Pointer, Subscription};
+use super::drag_source;
 use super::drop_target::DropTarget;
 use super::routing::{Button, ClickRule, Message, Routing};
 use super::*;
-use crate::canvas::{MainCanvasGesture, placement::PhysicalRect};
+use crate::canvas::{MainCanvasDragOut, MainCanvasGesture, placement::PhysicalRect};
 use crate::main_actor::focus::{self, Focus};
 use crate::windows_subclass::{self, Registration};
 use std::cell::{Cell, RefCell};
@@ -27,11 +28,12 @@ use windows::Win32::{
         Controls::WM_MOUSELEAVE,
         HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
         Input::KeyboardAndMouse::{
-            GetDoubleClickTime, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+            GetDoubleClickTime, GetKeyState, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+            VK_LBUTTON,
         },
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetMessageTime, SM_CXDOUBLECLK, SM_CYDOUBLECLK, WM_DPICHANGED, WM_LBUTTONDBLCLK,
+            GetMessageTime, SM_CXDOUBLECLK, SM_CXDRAG, SM_CYDOUBLECLK, SM_CYDRAG, WM_DPICHANGED, WM_LBUTTONDBLCLK,
             WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
             WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONDBLCLK,
             WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK,
@@ -218,6 +220,10 @@ impl State {
                     GetSystemMetricsForDpi(SM_CYDOUBLECLK, dpi),
                 ],
                 limit: GetDoubleClickTime(),
+                drag: [
+                    GetSystemMetricsForDpi(SM_CXDRAG, dpi),
+                    GetSystemMetricsForDpi(SM_CYDRAG, dpi),
+                ],
             }
         };
         Message::Press { button, point, rule }
@@ -352,8 +358,9 @@ impl Input {
     }
 
     /// Install the canvas owner's current input region, or withdraw routing with `None`.
-    /// The region is the shown clip in physical client pixels and its occlusions.
-    pub(super) fn publish(&self, region: Option<(PhysicalRect, &[PhysicalRect])>) {
+    /// The region is the shown clip in physical client pixels, its occlusions and whether a
+    /// primary drag from it exports the shown output.
+    pub(super) fn publish(&self, region: Option<(PhysicalRect, &[PhysicalRect], bool)>) {
         let region = region.filter(|_| self.state.admits());
         self.state.update_routing(|routing| routing.publish(region));
         if let Err(cause) = self.state.present_cursor() {
@@ -364,6 +371,36 @@ impl Input {
     /// Take the oldest gesture routed to native navigation.
     pub(super) fn take(&self) -> Option<MainCanvasGesture> {
         self.state.routing.borrow_mut().take()
+    }
+
+    /// Run the OS copy drag of the shown output while the primary button is still held.
+    ///
+    /// The drag is modal on this UI thread. This window's drop target refuses it, so the page
+    /// never receives its own output, and WebView2 sees the primary release OLE consumed.
+    pub(super) fn drag_out(&self, drag: MainCanvasDragOut) -> Result<(), DesktopError> {
+        // SAFETY: Reads this thread's synchronized key state without retaining any handle.
+        let held = unsafe { GetKeyState(i32::from(VK_LBUTTON.0)) } < 0;
+        let Some(drop_target) = self.drop_target.as_ref().filter(|_| held && self.state.admits())
+        else {
+            // A drag started after the release would drop wherever the pointer rests.
+            tracing::debug!(
+                operation = "canvas_drag_out",
+                "Drag-out ended before its output was ready"
+            );
+            return Ok(());
+        };
+        drop_target.exporting(true);
+        let outcome = drag_source::run(drag);
+        drop_target.exporting(false);
+        // OLE consumed the primary release; end the page's and routing's view of the press.
+        let released = self.state.interrupt(Interruption::Cancelled);
+        let effect = outcome?;
+        tracing::debug!(
+            operation = "canvas_drag_out",
+            copied = effect.0 != 0,
+            "Canvas drag-out finished"
+        );
+        released
     }
 
     /// Fence further browser input before any asynchronous main-window retirement.

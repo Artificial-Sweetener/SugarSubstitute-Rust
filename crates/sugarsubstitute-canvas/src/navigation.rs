@@ -81,6 +81,11 @@ impl Navigation {
     pub const fn frame_period(&self) -> Duration {
         self.frame_period
     }
+    /// Whether a primary drag should export the content instead of panning: unlocked content
+    /// that cannot pan, because Fit or its zoom keeps it within the surface on both axes.
+    pub fn allows_drag_out(&self) -> bool {
+        self.content.is_some() && !self.locked && !self.can_pan()
+    }
     /// Resolve feedback from the same availability rules that admit pan gestures.
     pub fn cursor(&self) -> CursorIntent {
         if self.dragging && !self.drag_out && self.can_pan() {

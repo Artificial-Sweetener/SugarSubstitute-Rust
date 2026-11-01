@@ -7,7 +7,9 @@
 
 use super::*;
 use crate::startup::canvas::RoutedInput;
-use sugarsubstitute_desktop::canvas::{MainCanvasButton, MainCanvasGesture, MainCanvasInput};
+use sugarsubstitute_desktop::canvas::{
+    MainCanvasButton, MainCanvasDragOut, MainCanvasGesture, MainCanvasInput,
+};
 use viewport::fixture::Fixture;
 
 const PRIMARY: MainCanvasButton = MainCanvasButton::Primary;
@@ -229,6 +231,80 @@ fn gestures_for_another_main_lifetime_are_refused() -> Result<(), Box<dyn Error>
     for gesture in [MainCanvasGesture::Wheel(1.0), MainCanvasGesture::Cancel] {
         let result = fixture.canvas.input(MainCanvasInput { identity: other, gesture })?;
         assert_eq!(result, RoutedInput::Refused);
+    }
+    fixture.finish()
+}
+
+/// Pump real execution until the routed drag-out's copied original is handed over.
+fn copied(fixture: &mut Fixture) -> Result<MainCanvasDragOut, Box<dyn Error>> {
+    loop {
+        let revision = fixture.wake.revision();
+        fixture.pump()?;
+        if let Some(drag) = fixture.canvas.take_drag_out() {
+            return Ok(drag);
+        }
+        fixture.wake.wait_after(revision)?;
+    }
+}
+
+fn drag_out(fixture: &mut Fixture) -> Result<bool, Box<dyn Error>> {
+    Ok(fixture.canvas.input_region().ok_or("Committed final has no input region")?.drag_out)
+}
+
+#[test]
+fn a_fitted_final_offers_drag_out_and_a_pannable_camera_pans_instead() -> Result<(), Box<dyn Error>>
+{
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    assert!(drag_out(&mut fixture)?, "Fit keeps the output within the viewport");
+    fixture.viewport(5, json!({"type":"zoom","factor":4}))?;
+    fixture.complete(5)?;
+    assert!(!drag_out(&mut fixture)?, "a zoomed output pans");
+    assert_eq!(route(&mut fixture, &[MainCanvasGesture::DragOut])?, [RoutedInput::Refused]);
+    fixture.viewport(6, json!({"type":"fit"}))?;
+    fixture.complete(6)?;
+    assert!(drag_out(&mut fixture)?);
+    fixture.finish()
+}
+
+#[test]
+fn a_drag_out_hands_over_the_selected_output_name_and_original_bytes() -> Result<(), Box<dyn Error>>
+{
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    let routed = route(
+        &mut fixture,
+        &[
+            MainCanvasGesture::Pointer([50.0, 40.0]),
+            button(true),
+            MainCanvasGesture::Pointer([60.0, 40.0]),
+            MainCanvasGesture::DragOut,
+        ],
+    )?;
+    assert_eq!(routed, [RoutedInput::Applied; 4]);
+    let drag = copied(&mut fixture)?;
+    assert_eq!(drag.identity, fixture.identity);
+    assert_eq!(drag.filename, "wide.png");
+    let decoder = png::Decoder::new(std::io::Cursor::new(drag.bytes.as_slice()));
+    let info = decoder.read_info()?.info().clone();
+    assert_eq!((info.width, info.height), (320, 160), "the exact selected original");
+    assert!(fixture.canvas.take_drag_out().is_none(), "handed over at most once");
+    drop(drag);
+    // The navigation gesture ended, so the camera still accepts commands.
+    read(&mut fixture, 5)?;
+    fixture.finish()
+}
+
+#[test]
+fn a_replaced_selection_drops_its_pending_drag_out() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    route(&mut fixture, &[MainCanvasGesture::Pointer([50.0, 40.0]), MainCanvasGesture::DragOut])?;
+    fixture.select(5, "tall.png")?;
+    fixture.complete(5)?;
+    for _ in 0..8 {
+        fixture.pump()?;
+        assert!(fixture.canvas.take_drag_out().is_none(), "the replaced output never exports");
     }
     fixture.finish()
 }

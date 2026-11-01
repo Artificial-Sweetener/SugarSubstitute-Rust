@@ -387,6 +387,13 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     }
 
     #[cfg(all(windows, feature = "native-composition"))]
+    fn take_main_canvas_drag_out(
+        &mut self,
+    ) -> Option<sugarsubstitute_desktop::canvas::MainCanvasDragOut> {
+        self.canvas.as_mut()?.take_drag_out()
+    }
+
+    #[cfg(all(windows, feature = "native-composition"))]
     fn main_canvas_presented(
         &mut self,
         target: sugarsubstitute_canvas::FrameStamp,

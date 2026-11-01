@@ -4,13 +4,23 @@
 //!
 //! The desktop adapter routes Win32 mouse messages against the region on the UI thread, so web
 //! controls above the canvas keep their own input without a page round trip. Gestures arrive
-//! in physical client pixels and become physical pixels of the native viewport.
+//! in physical client pixels and become physical pixels of the native viewport. A drag-out
+//! request copies the shown original on a worker before the desktop runs the OS drag.
 
 use super::*;
 use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
 use sugarsubstitute_desktop::canvas::{
-    Input, MainCanvasButton, MainCanvasGesture, MainCanvasInput, MainCanvasInputRegion,
+    Input, MainCanvasButton, MainCanvasDragOut, MainCanvasGesture, MainCanvasInput,
+    MainCanvasInputRegion,
 };
+
+/// One routed drag-out, bound to the lifetime and selection whose original it exports.
+pub(super) struct DragRequest {
+    identity: MainIdentity,
+    request: u64,
+    selection_revision: u64,
+    filename: String,
+}
 
 /// Whether a routed gesture reached the navigation tool.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -24,7 +34,11 @@ pub(in crate::startup) enum RoutedInput {
 impl NativeSurface {
     /// Publish the region only while a committed final image, not a preview or overview grid,
     /// is shown at the acknowledged placement of the current geometry and no modal blocks it.
-    pub(in crate::startup::canvas) fn input_region(&self) -> Option<MainCanvasInputRegion<'_>> {
+    /// It offers drag-out for a single selected output whose content cannot pan.
+    pub(in crate::startup::canvas) fn input_region(
+        &self,
+        session: &Session,
+    ) -> Option<MainCanvasInputRegion<'_>> {
         let binding = self.binding.as_ref()?;
         let presented = binding.presented?;
         let navigable = !self.closed
@@ -44,7 +58,61 @@ impl NativeSurface {
             placement: presented.placement,
             allocation: presented.allocation,
             occlusions: &binding.occlusions,
+            drag_out: binding.drag_name.is_some() && session.allows_drag_out(),
         })
+    }
+
+    /// Hand the copied original of the latest drag-out to the desktop, at most once.
+    ///
+    /// The request is dropped once its selection, lifetime or drag-out availability ends,
+    /// so a late copy never exports a replaced output.
+    pub(in crate::startup::canvas) fn take_drag_out(
+        &mut self,
+        session: &mut Session,
+    ) -> Option<MainCanvasDragOut> {
+        let pending = self.drag_out.as_ref()?;
+        let current =
+            self.input_region(session)
+                .is_some_and(|region| region.identity == pending.identity && region.drag_out)
+                && self.binding.as_ref().is_some_and(|binding| {
+                    binding.selection_revision == pending.selection_revision
+                });
+        if !current {
+            self.drag_out = None;
+            return None;
+        }
+        let copied = session.take_drag_out(pending.request)?;
+        let pending = self.drag_out.take()?;
+        Some(MainCanvasDragOut {
+            identity: pending.identity,
+            filename: pending.filename,
+            bytes: copied.bytes,
+            claim: copied.claim,
+        })
+    }
+
+    /// End the navigation gesture and start copying the shown original for an OS drag.
+    fn request_drag_out(
+        &mut self,
+        identity: MainIdentity,
+        session: &mut Session,
+    ) -> Result<RoutedInput, Box<dyn Error>> {
+        session.input(Input::Unfocused)?;
+        let Some(binding) = self.binding.as_ref() else { return Ok(RoutedInput::Refused) };
+        let Some(filename) = binding.drag_name.clone().filter(|_| session.allows_drag_out()) else {
+            return Ok(RoutedInput::Refused);
+        };
+        let selection_revision = binding.selection_revision;
+        self.drag_sequence =
+            self.drag_sequence.checked_add(1).ok_or("Drag-out identities exhausted")?;
+        let request = self.drag_sequence;
+        self.drag_out = session.request_drag_out(request)?.then_some(DragRequest {
+            identity,
+            request,
+            selection_revision,
+            filename,
+        });
+        Ok(RoutedInput::Applied)
     }
 
     /// Apply one routed gesture to the session's navigation tool.
@@ -67,10 +135,13 @@ impl NativeSurface {
             return Ok(RoutedInput::Applied);
         }
         let Some(origin) =
-            self.input_region().filter(|_| current).map(|region| region.placement.viewport)
+            self.input_region(session).filter(|_| current).map(|region| region.placement.viewport)
         else {
             return Ok(RoutedInput::Refused);
         };
+        if input.gesture == MainCanvasGesture::DragOut {
+            return self.request_drag_out(input.identity, session);
+        }
         let local = |[x, y]: [f64; 2]| [x - f64::from(origin.x), y - f64::from(origin.y)];
         let tool = match input.gesture {
             MainCanvasGesture::Pointer(point) => ToolInput::Pointer(local(point)),
@@ -81,7 +152,9 @@ impl NativeSurface {
                 ToolInput::Wheel { steps, phase: ScrollPhase::Unphased }
             }
             MainCanvasGesture::DoubleClick(point) => ToolInput::DoubleClick(local(point)),
-            MainCanvasGesture::Cancel => return Ok(RoutedInput::Refused),
+            MainCanvasGesture::Cancel | MainCanvasGesture::DragOut => {
+                return Ok(RoutedInput::Refused);
+            }
         };
         session.input(Input::Tool(tool))?;
         // Hover moves never change the camera; a held drag stays pending until its release.

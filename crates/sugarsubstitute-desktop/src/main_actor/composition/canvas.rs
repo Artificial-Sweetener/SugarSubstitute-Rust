@@ -140,13 +140,31 @@ impl super::MainActor {
                     .as_ref()
                     .and_then(|tree| tree.canvas.as_ref())
                     .is_some_and(|canvas| canvas.shows(region.placement));
-                (shown && self.canvas_allocation()? == region.allocation)
-                    .then_some((region.placement.clip, region.occlusions))
+                (shown && self.canvas_allocation()? == region.allocation).then_some((
+                    region.placement.clip,
+                    region.occlusions,
+                    region.drag_out,
+                ))
             }
             _ => None,
         };
         input.publish(current);
         Ok(())
+    }
+
+    /// Run the OS drag of a prepared output for this exact revealed lifetime; any other
+    /// lifetime's output is discarded.
+    pub(crate) fn drag_out_canvas(
+        &mut self,
+        drag: crate::canvas::MainCanvasDragOut,
+    ) -> Result<(), DesktopError> {
+        let Some(input) = self.composition.as_ref().and_then(|tree| tree.input.as_ref()) else {
+            return Ok(());
+        };
+        if drag.identity != self.identity() || !self.revealed || self.admission.closing() {
+            return Ok(());
+        }
+        input.drag_out(drag)
     }
 
     /// Take one routed gesture as an observation for this exact main lifetime.

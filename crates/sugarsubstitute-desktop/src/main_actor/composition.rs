@@ -7,6 +7,7 @@ mod cancellation;
 mod canvas;
 mod construction;
 mod cursor;
+mod drag_source;
 mod drop_target;
 mod input;
 mod retirement;

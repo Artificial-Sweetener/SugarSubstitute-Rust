@@ -22,6 +22,8 @@ mod document;
 #[cfg(feature = "native-composition")]
 mod document_transaction;
 #[cfg(feature = "native-composition")]
+mod drag_out;
+#[cfg(feature = "native-composition")]
 pub(crate) use super::work::{
     Originals as SelectedOriginals, OverviewOriginals, OverviewSelection,
 };
@@ -222,6 +224,8 @@ pub(crate) struct Session {
     preview: document_transaction::PreviewState,
     #[cfg(feature = "native-composition")]
     document_suspended: bool,
+    #[cfg(feature = "native-composition")]
+    drag_out: drag_out::DragOut,
     rendering: Option<Rendering>,
     displaying: Option<display::Displaying>,
     pending_retirement: Option<Retired>,
@@ -360,6 +364,8 @@ impl Session {
             preview: document_transaction::PreviewState::default(),
             #[cfg(feature = "native-composition")]
             document_suspended: false,
+            #[cfg(feature = "native-composition")]
+            drag_out: drag_out::DragOut::default(),
             rendering: None,
             displaying: None,
             pending_retirement: None,

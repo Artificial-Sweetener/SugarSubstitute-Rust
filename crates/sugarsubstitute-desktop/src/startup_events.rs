@@ -261,6 +261,13 @@ fn route_canvas_input(
     while let Some(observation) = session.main.as_ref().and_then(MainActor::take_canvas_input) {
         session.observe(content, observation)?;
     }
+    // A failed drag-out leaves the window and its canvas intact; only that export is lost.
+    if let Some(drag) = content.take_main_canvas_drag_out()
+        && let Some(main) = &mut session.main
+        && let Err(cause) = main.drag_out_canvas(drag)
+    {
+        tracing::warn!(operation = "canvas_drag_out", cause = %cause, "Canvas drag-out failed");
+    }
     Ok(())
 }
 

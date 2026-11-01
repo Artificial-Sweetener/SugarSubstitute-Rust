@@ -138,7 +138,7 @@ rationale = "Native boundary: Own native window lifetime and CPU frame presentat
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/composition/drop_target/tests.rs"
-source_sha256 = "sha256:d42a21d33754d4f5f56b5261e0238981ad58528e0d5386d8d5402b772584a968"
+source_sha256 = "sha256:b471d4f55734ece4fcd5e25bed74bd118226c039045e0b4e8d07ced1f81c9b7b"
 kind = "fixture"
 rationale = "Behavioral fixture creates a hidden OS STATIC window with a technical title to exercise real OLE drop registration and revocation; it grants no production text route."
 
@@ -420,7 +420,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:c1435bfe9b9817d366f9c6a5e20e0e764f76b69e3b12c750bf58675545979303"
+source_sha256 = "sha256:6489fcd92455f710c4ee6263efaee0460e044353d4d7ec99468af6a7d120ea5e"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -450,7 +450,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:303ef96fd3c2c57d1ca5edea40774913f11489155e7ecf6a98d779ec99c63494"
+source_sha256 = "sha256:3c78c0f5a82270437d8b03b071df7986eac3e8f1c7fece23575c989f85bddaae"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 

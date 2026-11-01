@@ -55,6 +55,8 @@ struct State {
     events: Rc<Events>,
     active: Cell<bool>,
     entered: Cell<bool>,
+    /// This window is the source of the current OS drag, which the page must not receive.
+    exporting: Cell<bool>,
     callbacks: CallbackFence,
 }
 
@@ -93,7 +95,7 @@ impl State {
         if matches!(phase, Phase::Drop(_)) {
             self.entered.set(false);
         }
-        if !continuing || !self.active.get() || !self.events.accepting() {
+        if !continuing || !self.active.get() || self.exporting.get() || !self.events.accepting() {
             return Ok(DROPEFFECT_NONE);
         }
         let _callback = self.events.callback();
@@ -316,6 +318,7 @@ impl DropTarget {
             events,
             active: Cell::new(true),
             entered: Cell::new(false),
+            exporting: Cell::new(false),
             callbacks: CallbackFence::default(),
         });
         let target: IDropTarget = Target(state.clone()).into();
@@ -326,6 +329,11 @@ impl DropTarget {
     /// Decline further drags before asynchronous main-window retirement.
     pub(super) fn suspend(&self) {
         self.state.active.set(false);
+    }
+
+    /// Refuse drops while this window is the source of an OS drag-out.
+    pub(super) fn exporting(&self, exporting: bool) {
+        self.state.exporting.set(exporting);
     }
 
     /// Revoke only after every forwarded drag call returned; true once OLE is balanced.

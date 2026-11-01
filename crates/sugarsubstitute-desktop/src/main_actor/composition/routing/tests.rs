@@ -3,17 +3,17 @@
 //! Exercise the composed-window routing table without a window, browser or canvas.
 
 use super::*;
-use MainCanvasGesture::{Cancel, DoubleClick, Pointer, Wheel};
+use MainCanvasGesture::{Cancel, DoubleClick, DragOut, Pointer, Wheel};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 const CLIP: PhysicalRect = PhysicalRect { x: 10, y: 20, width: 100, height: 50 };
 const MENU: PhysicalRect = PhysicalRect { x: 10, y: 20, width: 30, height: 10 };
-const RULE: ClickRule = ClickRule { time: 1_000, bounds: [4, 4], limit: 500 };
+const RULE: ClickRule = ClickRule { time: 1_000, bounds: [4, 4], limit: 500, drag: [4, 4] };
 
 fn routing(occlusions: &[PhysicalRect]) -> Result<Routing, crate::DesktopError> {
     let mut routing = Routing::new()?;
-    routing.publish(Some((CLIP, occlusions)));
+    routing.publish(Some((CLIP, occlusions, false)));
     Ok(routing)
 }
 
@@ -177,7 +177,7 @@ fn withdrawal_cancels_but_a_replaced_region_keeps_the_captured_gesture() -> Test
     let mut routing = routing(&[])?;
     routing.route(press(Button::Primary, [50, 40]));
     drain(&mut routing);
-    routing.publish(Some((CLIP, &[PhysicalRect { x: 40, y: 30, width: 20, height: 20 }])));
+    routing.publish(Some((CLIP, &[PhysicalRect { x: 40, y: 30, width: 20, height: 20 }], false)));
     assert_eq!(routing.cursor(), Some(CursorIntent::ClosedHand));
     assert!(routing.route(Message::Move { point: [52, 41], held: true }));
     assert_eq!(
@@ -197,9 +197,9 @@ fn a_new_occlusion_under_the_pointer_restores_the_browser_cursor() -> TestResult
     let mut routing = routing(&[])?;
     routing.route(Message::Move { point: [15, 25], held: false });
     assert_eq!(routing.cursor(), Some(CursorIntent::OpenHand));
-    routing.publish(Some((CLIP, &[MENU])));
+    routing.publish(Some((CLIP, &[MENU], false)));
     assert_eq!(routing.cursor(), None);
-    routing.publish(Some((CLIP, &[PhysicalRect { x: 0, y: 0, width: 1, height: 1 }; 65])));
+    routing.publish(Some((CLIP, &[PhysicalRect { x: 0, y: 0, width: 1, height: 1 }; 65], false)));
     assert_eq!(routing.cursor(), None, "an oversized occlusion list withdraws routing");
     assert!(routing.route(Message::Wheel { point: [80, 60], delta: 120 }));
     Ok(())
@@ -308,5 +308,68 @@ fn interruption_cancels_a_native_drag_and_releases_a_web_gesture_hold() -> TestR
     assert_eq!(drain(&mut routing), [], "no native gesture remained to cancel");
     assert!(!routing.route(Message::Wheel { point: [50, 40], delta: 120 }), "region is native");
     assert_eq!(drain(&mut routing), [Pointer([50.0, 40.0]), Wheel(1.0)]);
+    Ok(())
+}
+
+#[test]
+fn a_fitting_primary_drag_requests_drag_out_once_past_the_threshold() -> TestResult {
+    let mut routing = Routing::new()?;
+    routing.publish(Some((CLIP, &[], true)));
+    assert!(routing.route(Message::Move { point: [50, 40], held: false }));
+    assert_eq!(routing.cursor(), Some(CursorIntent::Arrow));
+    assert!(routing.route(press(Button::Primary, [50, 40])));
+    assert!(routing.route(Message::Move { point: [54, 36], held: true }), "within the threshold");
+    assert_eq!(routing.cursor(), Some(CursorIntent::Arrow));
+    assert_eq!(
+        drain(&mut routing),
+        [Pointer([50.0, 40.0]), button(MainCanvasButton::Primary, true), Pointer([54.0, 36.0])]
+    );
+    assert!(routing.route(Message::Move { point: [55, 40], held: true }));
+    assert_eq!(drain(&mut routing), [Pointer([55.0, 40.0]), DragOut]);
+    assert_eq!(routing.cursor(), None, "the OS drag owns the remaining press");
+    assert!(routing.route(Message::Move { point: [90, 60], held: true }));
+    assert!(routing.route(Message::Release {
+        button: Button::Primary,
+        point: [90, 60],
+        held: false
+    }));
+    assert_eq!(drain(&mut routing), [], "no second request or pan follows");
+    Ok(())
+}
+
+#[test]
+fn a_pannable_or_middle_drag_keeps_panning_without_drag_out() -> TestResult {
+    let mut routing = routing(&[])?;
+    assert!(routing.route(press(Button::Primary, [50, 40])));
+    assert!(routing.route(Message::Move { point: [80, 60], held: true }));
+    assert_eq!(routing.cursor(), Some(CursorIntent::ClosedHand));
+    assert_eq!(
+        drain(&mut routing),
+        [Pointer([50.0, 40.0]), button(MainCanvasButton::Primary, true), Pointer([80.0, 60.0])]
+    );
+    let mut fitting = Routing::new()?;
+    fitting.publish(Some((CLIP, &[], true)));
+    assert!(fitting.route(press(Button::Middle, [50, 40])));
+    assert!(fitting.route(Message::Move { point: [80, 60], held: true }));
+    assert_eq!(
+        drain(&mut fitting),
+        [Pointer([50.0, 40.0]), button(MainCanvasButton::Middle, true), Pointer([80.0, 60.0])]
+    );
+    Ok(())
+}
+
+#[test]
+fn losing_drag_out_or_the_region_mid_press_never_requests_it() -> TestResult {
+    let mut routing = Routing::new()?;
+    routing.publish(Some((CLIP, &[], true)));
+    assert!(routing.route(press(Button::Primary, [50, 40])));
+    routing.publish(Some((CLIP, &[], false)));
+    assert!(routing.route(Message::Move { point: [80, 60], held: true }));
+    assert!(!drain(&mut routing).contains(&DragOut));
+    assert_eq!(routing.cursor(), Some(CursorIntent::ClosedHand));
+    routing.publish(Some((CLIP, &[], true)));
+    routing.publish(None);
+    assert!(routing.route(Message::Move { point: [90, 60], held: true }));
+    assert_eq!(drain(&mut routing), [Cancel]);
     Ok(())
 }

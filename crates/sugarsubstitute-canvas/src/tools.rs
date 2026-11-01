@@ -90,6 +90,13 @@ impl ToolManager {
     pub const fn navigation(&self) -> &Navigation {
         &self.navigation
     }
+    /// Whether a primary drag exports the content: navigation is the effective tool with no
+    /// uncommitted edit taking priority, and the content cannot pan.
+    pub fn allows_drag_out(&self) -> bool {
+        self.effective == ToolId::PAN_ZOOM
+            && self.edit.is_none()
+            && self.navigation.allows_drag_out()
+    }
     /// Command the shared camera without changing selected tools, staged edits or capture.
     /// A tool's live gesture retains ownership until its existing input lifecycle completes.
     /// # Errors
