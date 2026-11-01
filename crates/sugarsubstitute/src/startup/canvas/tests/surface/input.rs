@@ -288,6 +288,17 @@ fn a_drag_out_hands_over_the_selected_output_name_and_original_bytes() -> Result
     let decoder = png::Decoder::new(std::io::Cursor::new(drag.bytes.as_slice()));
     let info = decoder.read_info()?.info().clone();
     assert_eq!((info.width, info.height), (320, 160), "the exact selected original");
+    let staged = drag.staged.as_ref().ok_or("The output was not staged as a file")?;
+    assert_eq!(staged.file_name().and_then(|name| name.to_str()), Some("wide.png"));
+    assert_eq!(std::fs::read(staged)?, drag.bytes, "the staged file holds the exact original");
+    assert!(
+        staged.ancestors().any(|folder| {
+            folder.ends_with(
+                sugarsubstitute_supervision::cache::Namespace::DragOutStaging.directory(),
+            )
+        }),
+        "staged inside the cache's own namespace: {staged:?}"
+    );
     assert!(fixture.canvas.take_drag_out().is_none(), "handed over at most once");
     drop(drag);
     // The navigation gesture ended, so the camera still accepts commands.
@@ -305,6 +316,25 @@ fn a_replaced_selection_drops_its_pending_drag_out() -> Result<(), Box<dyn Error
     for _ in 0..8 {
         fixture.pump()?;
         assert!(fixture.canvas.take_drag_out().is_none(), "the replaced output never exports");
+    }
+    fixture.finish()
+}
+
+#[test]
+fn only_the_most_recent_staged_drags_stay_on_disk() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    let mut staged = Vec::new();
+    for _ in 0..crate::native_canvas::drag_staging::STAGED_DRAGS + 1 {
+        route(
+            &mut fixture,
+            &[MainCanvasGesture::Pointer([50.0, 40.0]), MainCanvasGesture::DragOut],
+        )?;
+        staged.push(copied(&mut fixture)?.staged.ok_or("The output was not staged as a file")?);
+    }
+    assert!(!staged[0].exists(), "the oldest drag's file is removed when a later drag starts");
+    for path in &staged[1..] {
+        assert!(path.exists(), "{path:?} stays readable for a late drop target");
     }
     fixture.finish()
 }

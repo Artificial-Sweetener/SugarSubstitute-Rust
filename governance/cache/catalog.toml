@@ -48,7 +48,7 @@ recovery = "Resume the actual length under shared entry custody; restart ignored
 id = "setup-browser-profile"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache.rs"]
-source_sha256 = "sha256:131799bb38ac9af502ad1d52ca923ccc51f8f771e18c529dd341844d50ed77d8"
+source_sha256 = "sha256:d0cc7bfb599a1e875af2c26de30e7f3766f676634a07325d35f622361b96ce65"
 namespace = "setup-webview-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -173,7 +173,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
     "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/readers.rs",
 ]
-source_sha256 = "sha256:aa0dfb4e1c5405f91cbfcdc56bd0654121194b4896f471e95bf6c67370091c11"
+source_sha256 = "sha256:62ca21e5a68637a632678793661b276d966b072cd112ea72c645a4c1d27ec5a0"
 namespace = "runtime-cache-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -220,3 +220,16 @@ compatibility_inputs = ["backend_process_identity", "encoded_view_target", "png_
 freshness = "Each selection downloads a fresh bounded PNG or JPEG, as the view target's filename extension names, from the independently qualified current Comfy peer. The entry file name follows that format, so the target-keyed identity never changes format. The canvas image owner validates and hashes the retained original during import."
 retention = "The shared runtime cache admits up to 32 GiB of encoded Comfy output copies, with seven-day idle retention. A retained reader pins its generation during canvas import and reconstruction."
 recovery = "Interrupted or rejected downloads remain unpublished. A fresh generation preserves earlier pinned entries; shared maintenance removes only owned disposable entries and preserves unknown content."
+
+[[caches]]
+id = "drag-out-staging"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/native_canvas/drag_staging.rs", "crates/sugarsubstitute/src/native_canvas/session/drag_out.rs"]
+source_sha256 = "sha256:01bceaa86f4a513ab5b4dee19def1a010a6ce7e357c269f50b612ef82e1da0e0"
+namespace = "drag-out-staging-v1"
+storage_schema = 1
+compatibility_epoch = 1
+compatibility_inputs = ["original_encoded_bytes", "sanitized_output_leaf_name"]
+freshness = "Each drag-out writes a fresh entry from the shown output's retained original, copied on an admitted storage worker; no staged copy is ever reused by a later drag."
+retention = "The namespace admits 1 GiB and keeps no idle age: a copy stays only while the canvas pins it, and the canvas pins its four most recent drags because drop targets may read after the drag ends. The next drag releases the oldest pin on its worker."
+recovery = "Cache maintenance at canvas startup and every later admission remove unpinned copies, including an interrupted run's, after verifying their recorded ownership; unknown content stays intact. A failed staging leaves the drag with its virtual file only."

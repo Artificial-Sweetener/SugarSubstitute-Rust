@@ -85,3 +85,50 @@ fn registered_namespace_is_created_when_opening_an_older_owned_scope() -> TestRe
         Ok(())
     })
 }
+
+#[test]
+fn drag_out_staging_keeps_only_pinned_copies_and_never_touches_other_content() -> TestResult {
+    worker::run_reserved(32 * 1024 * 1024, |context, _| {
+        let root = tempfile::tempdir()?;
+        let cache = open(root.path(), 64, context)?;
+        let stage = |name: &[u8]| -> io::Result<CacheLease> {
+            let mut lease = cache.clone().fresh(
+                Namespace::DragOutStaging,
+                &storage_key(name),
+                8,
+                100,
+                context,
+            )?;
+            lease.write("ComfyUI_00001_.png", name, context)?;
+            lease.publish(context)?;
+            Ok(lease)
+        };
+        let mut other = cache.clone().acquire(
+            Namespace::ImageSources,
+            &storage_key(b"live"),
+            8,
+            100,
+            context,
+        )?;
+        other.write("payload", b"keep", context)?;
+        let other_path = other.path();
+        drop(other);
+        let pinned = stage(b"pinned")?;
+        let released = stage(b"released")?.path();
+        let staging = cache.path().join(Namespace::DragOutStaging.directory());
+        std::fs::write(staging.join("unknown"), b"foreign")?;
+        // An earlier run's unpinned copy expires at once, whatever the clock says.
+        let report = cache.maintain(100, context)?;
+        assert_eq!(report.removed_entries, 1);
+        assert!(!released.exists());
+        assert_eq!(std::fs::read(pinned.path().join("ComfyUI_00001_.png"))?, b"pinned");
+        assert_eq!(std::fs::read(other_path.join("payload"))?, b"keep");
+        assert_eq!(std::fs::read(staging.join("unknown"))?, b"foreign");
+        let path = pinned.path();
+        drop(pinned);
+        assert_eq!(cache.maintain(100, context)?.removed_entries, 1);
+        assert!(!path.exists());
+        assert_eq!(std::fs::read(staging.join("unknown"))?, b"foreign");
+        Ok(())
+    })
+}

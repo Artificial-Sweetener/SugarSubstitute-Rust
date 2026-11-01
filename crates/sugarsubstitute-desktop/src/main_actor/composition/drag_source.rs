@@ -2,14 +2,15 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Export the shown canvas output to other applications through one OLE copy drag.
 //!
-//! The canvas owner hands over the output's own filename and complete encoded bytes. They are
-//! offered only as a virtual file: `FileGroupDescriptorW` names the original filename and
-//! `FileContents` holds the bytes, so a drop keeps that name without exposing a Comfy, cache or
-//! temporary path. OLE requires the drag source to run modally on the window's STA thread.
+//! The canvas owner hands over the output's own filename, its complete encoded bytes and the
+//! staged copy it pinned in the runtime cache's drag-out namespace. Targets that accept files
+//! receive that copy through `CF_HDROP`; others read a virtual file, `FileGroupDescriptorW`
+//! naming the original filename with `FileContents` holding the bytes. Neither exposes a Comfy
+//! or user folder. OLE requires the drag source to run modally on the window's STA thread.
 
 use super::*;
 use crate::canvas::MainCanvasDragOut;
-use std::mem::ManuallyDrop;
+use std::{mem::ManuallyDrop, os::windows::ffi::OsStrExt, path::Path};
 use windows::{
     Win32::{
         Foundation::{
@@ -46,6 +47,10 @@ const DRAGDROP_S_CANCEL: HRESULT = HRESULT(0x0004_0101);
 const DRAGDROP_S_USEDEFAULTCURSORS: HRESULT = HRESULT(0x0004_0102);
 /// A file descriptor name holds 259 UTF-16 units and its terminator.
 const NAME_UNITS: usize = 260;
+/// The predefined `CF_HDROP` clipboard format.
+const CF_HDROP: u16 = 15;
+/// `DROPFILES`: file list offset, drop point, nonclient flag and wide-character flag.
+const DROPFILES_BYTES: usize = 20;
 
 /// Which virtual-file representation a format request names.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,6 +59,8 @@ enum Offer {
     Descriptor,
     /// The item's complete `FileContents`.
     Contents,
+    /// `CF_HDROP` naming the staged copy.
+    Files,
 }
 
 /// Clipboard format identities of one virtual file, registered once per drag.
@@ -61,6 +68,8 @@ enum Offer {
 struct Formats {
     descriptor: u16,
     contents: u16,
+    /// Whether a staged copy backs `CF_HDROP`.
+    files: bool,
 }
 
 impl Formats {
@@ -75,7 +84,7 @@ impl Formats {
         };
         match (u16::try_from(descriptor), u16::try_from(contents)) {
             (Ok(descriptor), Ok(contents)) if descriptor != 0 && contents != 0 => {
-                Ok(Self { descriptor, contents })
+                Ok(Self { descriptor, contents, files: false })
             }
             _ => Err(DesktopError::message(
                 "register_canvas_drag_formats",
@@ -90,6 +99,8 @@ impl Formats {
             Offer::Descriptor
         } else if format.cfFormat == self.contents {
             Offer::Contents
+        } else if format.cfFormat == CF_HDROP && self.files {
+            Offer::Files
         } else {
             return Err(DV_E_FORMATETC);
         };
@@ -103,11 +114,14 @@ impl Formats {
         if offer == Offer::Contents && !matches!(format.lindex, -1 | 0) {
             return Err(DV_E_LINDEX);
         }
+        if offer == Offer::Files && format.lindex != -1 {
+            return Err(DV_E_LINDEX);
+        }
         Ok(offer)
     }
 
-    /// The formats offered for enumeration, in preference order.
-    fn enumerated(self) -> [FORMATETC; 2] {
+    /// The formats offered for enumeration, in preference order: a real file first.
+    fn enumerated(self) -> Vec<FORMATETC> {
         let format = |cf_format| FORMATETC {
             cfFormat: cf_format,
             ptd: std::ptr::null_mut(),
@@ -115,8 +129,31 @@ impl Formats {
             lindex: -1,
             tymed: TYMED_HGLOBAL.0 as u32,
         };
-        [format(self.descriptor), FORMATETC { lindex: 0, ..format(self.contents) }]
+        let mut formats = Vec::with_capacity(3);
+        if self.files {
+            formats.push(format(CF_HDROP));
+        }
+        formats.push(format(self.descriptor));
+        formats.push(FORMATETC { lindex: 0, ..format(self.contents) });
+        formats
     }
+}
+
+/// Encode one absolute staged file as a wide `DROPFILES` list, refusing any other path.
+fn dropped_files(path: &Path) -> Option<Vec<u8>> {
+    let units: Vec<u16> = path.as_os_str().encode_wide().collect();
+    if !path.is_absolute() || units.is_empty() || units.contains(&0) || path.file_name().is_none() {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(DROPFILES_BYTES + (units.len() + 2) * 2);
+    for field in [DROPFILES_BYTES as u32, 0, 0, 0, 1] {
+        bytes.extend_from_slice(&field.to_le_bytes());
+    }
+    // The list ends with an empty name after the one terminated path.
+    for unit in units.into_iter().chain([0, 0]) {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    Some(bytes)
 }
 
 /// Encode an output filename leaf as a descriptor name, refusing any path or device syntax.
@@ -144,25 +181,32 @@ struct VirtualFile {
     formats: Formats,
     name: [u16; NAME_UNITS],
     bytes: Vec<u8>,
+    dropped: Option<Vec<u8>>,
     _claim: sugarsubstitute_contracts::execution::MemoryClaim,
 }
 
 impl VirtualFile {
-    /// Admit only a nonempty output whose filename leaf a descriptor can carry.
-    fn new(drag: MainCanvasDragOut, formats: Formats) -> Result<Self, DesktopError> {
-        let name = descriptor_name(&drag.filename).ok_or_else(|| {
-            DesktopError::message(
-                "canvas_drag_output",
-                "Output filename cannot name a dropped file",
-            )
-        })?;
+    /// Admit only a nonempty output whose filename leaf, or its staged copy's safe leaf, a
+    /// descriptor can carry; an invalid staged path offers no `CF_HDROP`.
+    fn new(drag: MainCanvasDragOut, mut formats: Formats) -> Result<Self, DesktopError> {
+        let dropped = drag.staged.as_deref().and_then(dropped_files);
+        formats.files = dropped.is_some();
+        let staged_leaf = drag.staged.as_deref().and_then(Path::file_name);
+        let name = descriptor_name(&drag.filename)
+            .or_else(|| staged_leaf.and_then(|leaf| descriptor_name(&leaf.to_string_lossy())))
+            .ok_or_else(|| {
+                DesktopError::message(
+                    "canvas_drag_output",
+                    "Output filename cannot name a dropped file",
+                )
+            })?;
         if drag.bytes.is_empty() {
             return Err(DesktopError::message(
                 "canvas_drag_output",
                 "Output bytes are unavailable",
             ));
         }
-        Ok(Self { formats, name, bytes: drag.bytes, _claim: drag.claim })
+        Ok(Self { formats, name, bytes: drag.bytes, dropped, _claim: drag.claim })
     }
 
     /// The one-item group naming this file and its exact size.
@@ -192,6 +236,7 @@ impl VirtualFile {
                 )
             },
             Offer::Contents => &self.bytes,
+            Offer::Files => self.dropped.as_deref().ok_or(DV_E_FORMATETC)?,
         };
         let global = global_copy(bytes)?;
         Ok(STGMEDIUM {

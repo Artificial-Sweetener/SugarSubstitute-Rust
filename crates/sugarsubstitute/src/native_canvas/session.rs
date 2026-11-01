@@ -101,6 +101,8 @@ struct Retired {
     _device: Option<Arc<GpuDevice>>,
     #[cfg(all(windows, feature = "native-composition"))]
     _host_graphics: Option<Arc<sugarsubstitute_desktop::canvas::CanvasGraphics>>,
+    #[cfg(feature = "native-composition")]
+    _drag_staging: Vec<crate::native_canvas::drag_staging::StagedDrag>,
     _gpu_front: Option<GpuSurface>,
     _presentation: Option<WindowFrame>,
     #[cfg(all(windows, feature = "native-composition"))]

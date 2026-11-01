@@ -34,8 +34,10 @@ pub struct MainCanvasInputRegion<'a> {
 
 /// The shown output prepared for one OS drag-out from the native region.
 ///
-/// The canvas owner supplies the stored output's own filename leaf and its complete encoded
-/// bytes; the desktop offers them as a virtual file and never receives a filesystem path.
+/// The canvas owner supplies the stored output's own filename leaf, its complete encoded bytes
+/// and, when staging succeeded, the path of a staged copy named after it in the runtime cache's
+/// drag-out namespace. The desktop offers the bytes as a virtual file and the staged copy as a
+/// dropped file; it never receives a path into the user's or Comfy's folders.
 pub struct MainCanvasDragOut {
     /// Native main lifetime whose routed gesture requested the drag.
     pub identity: crate::MainIdentity,
@@ -45,6 +47,8 @@ pub struct MainCanvasDragOut {
     pub bytes: Vec<u8>,
     /// Admission covering `bytes`, released with them after the last drop target lets go.
     pub claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    /// Absolute path of the pinned staged copy, offered to targets that accept only files.
+    pub staged: Option<std::path::PathBuf>,
 }
 
 /// Pointer button that may drive native navigation; every other button stays with WebView2.

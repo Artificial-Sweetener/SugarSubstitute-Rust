@@ -4,6 +4,8 @@
 
 pub(crate) mod config;
 mod coverage;
+#[cfg(feature = "native-composition")]
+pub(crate) mod drag_staging;
 pub(crate) mod gpu_policy;
 pub(crate) mod proof;
 pub(crate) mod session;

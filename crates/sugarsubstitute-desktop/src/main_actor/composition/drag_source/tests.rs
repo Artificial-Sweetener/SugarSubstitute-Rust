@@ -24,7 +24,7 @@ use windows::Win32::System::{
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const FORMATS: Formats = Formats { descriptor: 0xc101, contents: 0xc102 };
+const FORMATS: Formats = Formats { descriptor: 0xc101, contents: 0xc102, files: false };
 
 /// Count released admission so the test proves the claim lives exactly as long as the data.
 struct Released(Arc<AtomicU64>);
@@ -56,7 +56,13 @@ fn drag(
 ) -> Result<MainCanvasDragOut, Box<dyn Error>> {
     let lease = MemoryLease::new(bytes.len() as u64, Box::new(Released(released.clone())));
     let claim = lease.claim(bytes.len() as u64)?;
-    Ok(MainCanvasDragOut { identity: identity()?, filename: filename.into(), bytes, claim })
+    Ok(MainCanvasDragOut {
+        identity: identity()?,
+        filename: filename.into(),
+        bytes,
+        claim,
+        staged: None,
+    })
 }
 
 fn request(cf_format: u16, tymed: u32, lindex: i32) -> FORMATETC {
@@ -201,4 +207,45 @@ fn outputs_without_bytes_or_a_droppable_name_never_reach_ole() -> TestResult {
     assert!(VirtualFile::new(drag("image.png", Vec::new(), &released)?, FORMATS).is_err());
     assert!(VirtualFile::new(drag("sub/image.png", vec![1], &released)?, FORMATS).is_err());
     Ok(())
+}
+
+#[test]
+fn a_staged_copy_is_offered_first_as_one_dropped_file() -> TestResult {
+    let _apartment = Apartment::enter()?;
+    let released = Arc::new(AtomicU64::new(0));
+    // The data object names the path only; drop targets open it, so no file is needed here.
+    let staged = std::path::PathBuf::from("C:\\staging\\ComfyUI_00042_.png");
+    let mut output = drag("ComfyUI_00042_.png", b"bytes".to_vec(), &released)?;
+    output.staged = Some(staged.clone());
+    let data = data_object(output)?;
+    let formats = Formats::register()?;
+    let global = TYMED_HGLOBAL.0 as u32;
+    // SAFETY: Real OLE calls on this STA with live local format descriptions.
+    unsafe {
+        assert_eq!(data.QueryGetData(&request(CF_HDROP, global, -1)), HRESULT(0));
+        let list = take(data.GetData(&request(CF_HDROP, global, -1))?);
+        let field =
+            |index: usize| u32::from_le_bytes([0, 1, 2, 3].map(|byte| list[index * 4 + byte]));
+        assert_eq!([field(0), field(1), field(2), field(3), field(4)], [20, 0, 0, 0, 1]);
+        let units: Vec<u16> =
+            list[20..].chunks_exact(2).map(|unit| u16::from_le_bytes([unit[0], unit[1]])).collect();
+        let end = units.iter().position(|unit| *unit == 0).ok_or("Unterminated file list")?;
+        assert_eq!(std::path::PathBuf::from(String::from_utf16(&units[..end])?), staged);
+        assert_eq!(&units[end..], [0, 0], "one path, then the empty terminator");
+        let enumerator = data.EnumFormatEtc(DATADIR_GET.0 as u32)?;
+        let mut offered = [FORMATETC::default(), FORMATETC::default(), FORMATETC::default()];
+        let mut fetched = 0;
+        let _ = enumerator.Next(&mut offered, Some(&raw mut fetched));
+        assert_eq!(fetched, 3);
+        assert_eq!(offered[0].cfFormat, CF_HDROP);
+        assert_eq!(take(data.GetData(&request(formats.contents, global, 0))?), b"bytes");
+    }
+    Ok(())
+}
+
+#[test]
+fn only_an_absolute_staged_path_backs_dropped_files() {
+    assert!(dropped_files(Path::new("relative/output.png")).is_none());
+    assert!(dropped_files(Path::new("C:\\")).is_none());
+    assert!(dropped_files(Path::new("C:\\staging\\output.png")).is_some());
 }

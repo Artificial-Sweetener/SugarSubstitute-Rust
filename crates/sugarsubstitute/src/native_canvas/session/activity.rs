@@ -26,7 +26,7 @@ impl Session {
             self.consume_host_graphics()?;
         }
         #[cfg(feature = "native-composition")]
-        self.consume_drag_out();
+        self.consume_drag_out()?;
         #[cfg(feature = "native-composition")]
         let restoring_preview = self.preview_restoring();
         #[cfg(not(feature = "native-composition"))]

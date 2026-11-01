@@ -88,6 +88,7 @@ impl NativeSurface {
             filename: pending.filename,
             bytes: copied.bytes,
             claim: copied.claim,
+            staged: copied.staged,
         })
     }
 
@@ -106,12 +107,9 @@ impl NativeSurface {
         self.drag_sequence =
             self.drag_sequence.checked_add(1).ok_or("Drag-out identities exhausted")?;
         let request = self.drag_sequence;
-        self.drag_out = session.request_drag_out(request)?.then_some(DragRequest {
-            identity,
-            request,
-            selection_revision,
-            filename,
-        });
+        self.drag_out = session
+            .request_drag_out(request, filename.clone())?
+            .then_some(DragRequest { identity, request, selection_revision, filename });
         Ok(RoutedInput::Applied)
     }
 

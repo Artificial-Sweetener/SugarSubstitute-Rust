@@ -28,9 +28,12 @@ pub enum Namespace {
     ImageSources,
     /// Encoded Comfy output copies from a qualified peer, validated by the image importer.
     ComfyOutputs,
+    /// Shown-output copies handed to other programs by an OS drag. A staged copy stays only
+    /// while its drag owner pins it; any later maintenance or admission removes unpinned ones.
+    DragOutStaging,
 }
 impl Namespace {
-    pub(super) const ALL: [Self; 9] = [
+    pub(super) const ALL: [Self; 10] = [
         Self::UpdateOffers,
         Self::UpdateDownloads,
         Self::PackedPayloads,
@@ -40,6 +43,7 @@ impl Namespace {
         Self::SetupRuntime,
         Self::ImageSources,
         Self::ComfyOutputs,
+        Self::DragOutStaging,
     ];
     /// Canonical schema/epoch-qualified directory component.
     pub const fn directory(self) -> &'static str {
@@ -53,6 +57,7 @@ impl Namespace {
             Self::SetupRuntime => "setup-runtime-v1",
             Self::ImageSources => "image-sources-v1",
             Self::ComfyOutputs => "comfy-outputs-v1",
+            Self::DragOutStaging => "drag-out-staging-v1",
         }
     }
     /// Production byte budget for this namespace, including reserved active entries.
@@ -64,6 +69,7 @@ impl Namespace {
             Self::ImageSources | Self::ComfyOutputs => 32 * GIB,
             Self::SetupBrowser => GIB,
             Self::UpstreamMetadata | Self::SetupRuntime => 256 * 1024 * 1024,
+            Self::DragOutStaging => GIB,
         }
     }
     /// Maximum idle age in UTC seconds. Clock regression never makes an entry older.
@@ -74,6 +80,8 @@ impl Namespace {
             Self::PackedPayloads => 7 * DAY,
             Self::ImageSources | Self::ComfyOutputs => 7 * DAY,
             Self::SetupBrowser | Self::SetupRuntime => DAY,
+            // Pins, not age, retain staged copies; an unpinned copy is already expired.
+            Self::DragOutStaging => 0,
         }
     }
 }

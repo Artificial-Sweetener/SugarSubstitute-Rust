@@ -249,6 +249,8 @@ pub(super) fn initialize(
     let memory = context.memory().clone();
     let metadata = Arc::new(memory.claim(1024 * 1024)?);
     let cache = RuntimeCache::open(&anchor, CachePolicy::default(), context)?;
+    #[cfg(feature = "native-composition")]
+    super::drag_staging::clean(&cache, sugarsubstitute_supervision::cache::utc_seconds()?, context);
     let document = Document::new(1, Extent::new(1, 1)?, &memory)?;
     let engine =
         Arc::new(Mutex::new(Engine { renderer: None, source_revision: None, device: None }));

@@ -1760,7 +1760,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Saf
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/retirement.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5434cf5acd8f650cd7ba7b9d9f9050ab3f5c88e8a8018394e61c316426cb5f4a"
+source_sha256 = "sha256:6c74cabd33745dc4bc2e6c1f22b45f57aebccee22437fc5dc38ff4b6bb0ec2fe"
 capabilities = ["std::fs::read", "std::fs::remove_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Feature retirement journals intent while native pins and exact inventories control deletion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -4316,6 +4316,14 @@ source_sha256 = "sha256:18396ea646589d3d015045f8fcc375f60ea0b936b0b74bb4352fc6cb
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/input.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:9f304169491742371b86b7392ab148df7048ef7b6c9d40cd6765e90b7abf2fa8"
+capabilities = ["std::fs::read"]
+disposition = "fixture"
+rationale = "Reads the staged drag-out copies inside the fixture's owned temporary cache to verify their exact bytes, name and bounded retention."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
