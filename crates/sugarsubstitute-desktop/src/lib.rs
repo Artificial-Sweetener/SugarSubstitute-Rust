@@ -43,6 +43,8 @@ mod main_panel_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_panel_ingress;
 mod main_panel_ingress_receipt;
+#[cfg(test)]
+mod main_panel_ingress_vectors_tests;
 mod main_readiness;
 mod main_readiness_storage;
 mod main_readiness_types;
