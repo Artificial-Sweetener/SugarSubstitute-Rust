@@ -82,3 +82,16 @@ fn keyboard_ime_and_focus_messages_pass_through_untouched() {
         }
     }
 }
+
+/// Only the page's caption moves the window; window buttons stay with the host's own controls.
+#[test]
+fn only_the_page_caption_region_becomes_a_window_caption() {
+    assert_eq!(
+        caption_hit(COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION),
+        Some(LRESULT(HTCAPTION as isize))
+    );
+    // WebView2's nowhere, client, minimize, maximize and close region kinds.
+    for kind in [0, 1, 8, 9, 20] {
+        assert_eq!(caption_hit(COREWEBVIEW2_NON_CLIENT_REGION_KIND(kind)), None, "{kind}");
+    }
+}

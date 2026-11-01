@@ -20,6 +20,8 @@ use crate::windows_subclass::{self, Registration};
 use std::cell::{Cell, RefCell};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_MOUSE_EVENT_KIND, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS,
+    COREWEBVIEW2_NON_CLIENT_REGION_KIND, COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION,
+    ICoreWebView2CompositionController4,
 };
 use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, WPARAM},
@@ -33,11 +35,12 @@ use windows::Win32::{
         },
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetMessageTime, SM_CXDOUBLECLK, SM_CXDRAG, SM_CYDOUBLECLK, SM_CYDRAG, WM_DPICHANGED,
-            WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN,
-            WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY,
-            WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS,
-            WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
+            GetMessageTime, HTCAPTION, HTCLIENT, SM_CXDOUBLECLK, SM_CXDRAG, SM_CYDOUBLECLK,
+            SM_CYDRAG, WM_DPICHANGED, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
+            WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
+            WM_MOUSEWHEEL, WM_NCDESTROY, WM_NCHITTEST, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
+            WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN,
+            WM_XBUTTONUP,
         },
     },
 };
@@ -108,9 +111,16 @@ fn mouse(message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<Mouse> {
     })
 }
 
+/// Honor only the page's caption: the host draws its own window buttons and frame edges.
+fn caption_hit(kind: COREWEBVIEW2_NON_CLIENT_REGION_KIND) -> Option<LRESULT> {
+    (kind == COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION).then_some(LRESULT(HTCAPTION as isize))
+}
+
 struct State {
     window: HWND,
     controller: ICoreWebView2CompositionController,
+    /// The page's `app-region` query, absent on a runtime without non-client region support.
+    regions: Option<ICoreWebView2CompositionController4>,
     events: Rc<Events>,
     active: Cell<bool>,
     pointer: Pointer,
@@ -194,6 +204,28 @@ impl State {
             _ => Message::Other,
         };
         self.update_routing(|routing| routing.route(routed))
+    }
+
+    /// Answer a client-area hit test over the page's caption region with `HTCAPTION`, so
+    /// Windows moves, snaps and maximizes the window. A composition-hosted WebView2 owns no
+    /// HWND and cannot answer `WM_NCHITTEST` for its own `app-region: drag` elements.
+    fn caption(&self, lparam: LPARAM) -> Result<Option<LRESULT>, DesktopError> {
+        let Some(regions) = &self.regions else { return Ok(None) };
+        let mut point =
+            POINT { x: lparam.0 as u16 as i16 as i32, y: (lparam.0 >> 16) as u16 as i16 as i32 };
+        // SAFETY: The original live HWND and local POINT belong to this UI-thread callback.
+        if !unsafe { ScreenToClient(self.window, &raw mut point) }.as_bool() {
+            return Err(DesktopError::message(
+                "composed_browser_caption_coordinates",
+                "Native hit-test coordinates are unavailable",
+            ));
+        }
+        let mut kind = COREWEBVIEW2_NON_CLIENT_REGION_KIND::default();
+        // SAFETY: The controller is retained on its creating UI apartment and the query writes
+        // one scalar into live local storage.
+        unsafe { regions.GetNonClientRegionAtPoint(point, &raw mut kind) }
+            .map_err(|cause| DesktopError::new("query_composed_browser_caption", cause))?;
+        Ok(caption_hit(kind))
     }
 
     /// Mutate routing and wake the main loop when its gesture queue stops being empty.
@@ -322,9 +354,11 @@ impl Input {
         let browser = controller
             .cast::<ICoreWebView2Controller>()
             .map_err(|cause| DesktopError::new("query_composed_browser_controller", cause))?;
+        let regions = controller.cast::<ICoreWebView2CompositionController4>().ok();
         let state = Rc::new(State {
             window,
             controller,
+            regions,
             events,
             active: Cell::new(true),
             pointer: Pointer::default(),
@@ -469,6 +503,18 @@ unsafe extern "system" fn procedure(
             cursor::select(current);
             return LRESULT(1);
         }
+    }
+    if message == WM_NCHITTEST && state.admits() {
+        // SAFETY: Tao answers its frame edges first; only its client answer may become caption.
+        let hit = unsafe { DefSubclassProc(window, message, wparam, lparam) };
+        let mut caption = None;
+        if hit.0 == HTCLIENT as isize {
+            state.guarded(|| {
+                caption = state.caption(lparam)?;
+                Ok(())
+            });
+        }
+        return caption.unwrap_or(hit);
     }
     if state.admits()
         && let Some(interruption) = cancellation::interruption(message, wparam, lparam, window)
