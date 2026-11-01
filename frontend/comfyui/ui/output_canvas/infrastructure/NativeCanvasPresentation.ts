@@ -52,9 +52,14 @@ import {
   type NativeCanvasComparison,
   type NativeCanvasDesired as Desired,
 } from './NativeCanvasDesired.js';
-
-/** The load-error text for a selected result the host cannot present. */
-const NATIVE_CANVAS_RESULT_FAILURE = 'The image could not be loaded.';
+import {
+  NATIVE_CANVAS_PRESENTATION_FAILURE,
+  NATIVE_CANVAS_RESULT_FAILURE,
+  nativeCanvasFailureStatus,
+  nativeCanvasPendingStatus,
+  nativeCanvasSettledStatus,
+  type NativeCanvasPresentationStatus,
+} from './NativeCanvasStatus.js';
 
 export interface NativeCanvasPresentationOptions {
   readonly address: CanvasAttachmentAddress;
@@ -80,12 +85,6 @@ export interface NativeCanvasPresentationOptions {
   /** Choose the camera an image selection restores when sent; without one it starts at Fit. */
   readonly inspection?: Parameters<typeof nativeCanvasSelection>[1];
   report(error: unknown): void;
-}
-
-/** Describe native readiness without retaining a browser image or native handle. */
-export interface NativeCanvasPresentationStatus {
-  readonly state: 'empty' | 'loading' | 'ready' | 'unavailable' | 'error';
-  readonly message: string;
 }
 
 /** Keep one in-flight operation and coalesce newer view or geometry changes. */
@@ -190,13 +189,7 @@ export class NativeCanvasPresentation {
     )
       this.#show(false);
     this.options.status(
-      desired.shown
-        ? host
-          ? { state: 'loading', message: 'Loading the selected image.' }
-          : this.options.surfacePending?.()
-            ? { state: 'loading', message: '' }
-            : { state: 'unavailable', message: 'The native canvas is unavailable.' }
-        : { state: 'empty', message: '' },
+      nativeCanvasPendingStatus(desired, host !== null, () => !!this.options.surfacePending?.()),
     );
     this.#wake();
   }
@@ -481,24 +474,14 @@ export class NativeCanvasPresentation {
         }
         if (this.#current(binding, desired)) {
           this.#show(true);
-          this.options.status({
-            state:
-              desired.shown ||
-              this.#preview?.displayed ||
-              (desired.previewable &&
-                this.#preview?.observing &&
-                binding.selectionRevision !== null)
-                ? 'ready'
-                : this.#preview?.preparing
-                  ? 'loading'
-                  : 'empty',
-            message: '',
-          });
+          this.options.status(
+            nativeCanvasSettledStatus(desired, this.#preview, binding.selectionRevision),
+          );
         }
       } catch (error: unknown) {
         if (this.#current(binding, desired)) {
           this.#failedIntent();
-          this.options.status({ state: 'error', message: 'Native canvas presentation failed.' });
+          this.options.status({ state: 'error', message: NATIVE_CANVAS_PRESENTATION_FAILURE });
         }
         this.options.report(error);
       }
@@ -564,16 +547,9 @@ export class NativeCanvasPresentation {
     // A staged sibling temporarily owns native mutation. Its release explicitly refreshes
     // the retained attachment; permit that refresh to reconcile previously rejected geometry.
     if (result.status === 'stale') this.#desired = null;
-    const error = result.status === 'error';
-    this.options.status({
-      state: error ? 'error' : 'unavailable',
-      message:
-        message ||
-        result.message ||
-        (error ? 'Native canvas presentation failed.' : 'The native canvas is unavailable.'),
-    });
-    if (error)
-      this.options.report(new Error(result.message || 'Native canvas presentation failed.'));
+    this.options.status(nativeCanvasFailureStatus(result, message));
+    if (result.status === 'error')
+      this.options.report(new Error(result.message || NATIVE_CANVAS_PRESENTATION_FAILURE));
   }
 
   /** Settle unsent intent when its required presentation fails, without retrying that presentation. */

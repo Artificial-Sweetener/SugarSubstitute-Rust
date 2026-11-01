@@ -15,10 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise native viewport intent within the existing presentation/revision lifetime. */
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
-import {
-  NativeCanvasPresentation,
-  type NativeCanvasPresentationStatus,
-} from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasPresentation.js';
+import { NativeCanvasPresentation } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasPresentation.js';
+import type { NativeCanvasPresentationStatus } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasStatus.js';
 import type {
   CanvasSurfaceCommand,
   CanvasSurfaceHost,

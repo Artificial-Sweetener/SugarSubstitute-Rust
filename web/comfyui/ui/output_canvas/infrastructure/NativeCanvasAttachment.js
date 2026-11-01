@@ -33,7 +33,7 @@ import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
 import { nativeCanvasAddressed } from './NativeCanvasDesired.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
-import { NativeCanvasPresentation, } from './NativeCanvasPresentation.js';
+import { NativeCanvasPresentation } from './NativeCanvasPresentation.js';
 /** Retain controls and selection while leaving every output pixel to the native host. */
 export class NativeCanvasAttachment {
     element;

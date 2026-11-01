@@ -57,10 +57,8 @@ import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
 import { nativeCanvasAddressed, type NativeCanvasComparison } from './NativeCanvasDesired.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
-import {
-  NativeCanvasPresentation,
-  type NativeCanvasPresentationStatus,
-} from './NativeCanvasPresentation.js';
+import { NativeCanvasPresentation } from './NativeCanvasPresentation.js';
+import type { NativeCanvasPresentationStatus } from './NativeCanvasStatus.js';
 
 /** Supply the negotiated host through the existing canvas capability registry. */
 export interface NativeCanvasAttachmentOptions extends CanvasAttachmentOptions {

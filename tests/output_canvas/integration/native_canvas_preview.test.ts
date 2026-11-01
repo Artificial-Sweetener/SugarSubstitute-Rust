@@ -16,10 +16,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove native preview byte custody, fair operation credit and truthful displayed state. */
 import { afterEach, expect, test } from '@jest/globals';
-import {
-  NativeCanvasPresentation,
-  type NativeCanvasPresentationStatus,
-} from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasPresentation.js';
+import { NativeCanvasPresentation } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasPresentation.js';
+import type { NativeCanvasPresentationStatus } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasStatus.js';
 import type { WorkflowPreview } from '../../../frontend/comfyui/ui/execution/domain/WorkflowPreview.js';
 import type { WorkflowOutputItem } from '../../../frontend/comfyui/ui/execution/domain/WorkflowOutput.js';
 import type {
