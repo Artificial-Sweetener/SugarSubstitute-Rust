@@ -214,11 +214,13 @@ pub fn run_startup(
             {
                 session.fail(&mut content, cause);
             }
+            // Display-rate canvas deadlines are shorter than the default system timer period.
             if let Err(cause) = animation_period.reconcile(
                 !session.closing
-                    && !session.splash.retiring
-                    && session.splash.state.visible
-                    && content.animating(),
+                    && ((!session.splash.retiring
+                        && session.splash.state.visible
+                        && content.animating())
+                        || content.main_canvas_animating()),
             ) {
                 session.fail(&mut content, cause);
             }

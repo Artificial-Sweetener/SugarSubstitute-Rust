@@ -94,3 +94,13 @@ pub struct MainCanvasInput {
     /// Routed observation in physical client pixels.
     pub gesture: MainCanvasGesture,
 }
+
+/// The refresh rate of the display showing the exact main lifetime, observed on attachment
+/// and whenever the window moves to another display.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MainCanvasDisplay {
+    /// Native main lifetime; the canvas owner rejects any other identity.
+    pub identity: crate::MainIdentity,
+    /// Active refresh rate in hertz; unavailable timing selects the portable fallback.
+    pub hertz: Option<f64>,
+}

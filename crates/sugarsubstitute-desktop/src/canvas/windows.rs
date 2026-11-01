@@ -3,7 +3,7 @@
 //! Pump native canvas input, borrowed presentation and actual application teardown on one UI STA.
 mod activity;
 pub(crate) mod cursor;
-mod display;
+pub(crate) mod display;
 mod input;
 mod retirement;
 use super::feedback;

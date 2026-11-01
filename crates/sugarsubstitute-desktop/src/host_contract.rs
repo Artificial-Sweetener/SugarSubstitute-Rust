@@ -413,6 +413,9 @@ pub enum DesktopStartupObservation {
     /// It is delivered after the UI-thread message returned and never waits for canvas work.
     #[cfg(feature = "native-composition")]
     CanvasInput(crate::canvas::MainCanvasInput),
+    /// The refresh rate of the display now showing the composed main window's canvas.
+    #[cfg(feature = "native-composition")]
+    CanvasDisplay(crate::canvas::MainCanvasDisplay),
     /// A native callback requested replacement of the exact already revealed document.
     MainReloadRequested {
         /// Full current run, launch and navigation; stale callbacks cannot select another Main.
@@ -513,6 +516,12 @@ pub trait StartupWindowContent: WindowContent {
     #[cfg(feature = "native-composition")]
     fn main_canvas_input_region(&self) -> Option<crate::canvas::MainCanvasInputRegion<'_>> {
         None
+    }
+
+    /// Whether the main canvas has timed work due within a few display frames, so the event
+    /// loop needs a fine system timer period to meet display-rate deadlines.
+    fn main_canvas_animating(&self) -> bool {
+        false
     }
 
     /// Hand over a prepared drag-out of the shown output, at most once per routed request.

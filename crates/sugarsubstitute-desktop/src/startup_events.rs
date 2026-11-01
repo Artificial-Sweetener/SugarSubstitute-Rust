@@ -258,6 +258,10 @@ fn route_canvas_input(
     if let Err(cause) = main.publish_canvas_input(content.main_canvas_input_region()) {
         return fail_main(session, content, cause);
     }
+    #[cfg(windows)]
+    if let Some(observation) = session.main.as_mut().and_then(MainActor::take_canvas_display) {
+        session.observe(content, observation)?;
+    }
     while let Some(observation) = session.main.as_ref().and_then(MainActor::take_canvas_input) {
         session.observe(content, observation)?;
     }

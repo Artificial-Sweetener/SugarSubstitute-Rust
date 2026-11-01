@@ -7,6 +7,7 @@ mod cancellation;
 mod canvas;
 mod construction;
 mod cursor;
+mod display;
 mod drag_source;
 mod drop_target;
 mod input;
@@ -166,6 +167,8 @@ pub(super) struct Composition {
     shown: Option<crate::canvas::placement::WebViewAllocation>,
     retirement_fence: Option<FencedCommit>,
     input: Option<input::Input>,
+    /// The display whose refresh rate the canvas last received, as its native monitor handle.
+    display: Option<isize>,
     claim: Option<MemoryClaim>,
     stage: Stage,
     ledger: Ledger,
@@ -190,6 +193,7 @@ impl Composition {
             shown: None,
             retirement_fence: None,
             input: None,
+            display: None,
             claim: Some(claim),
             stage: Stage::Device,
             ledger: Ledger::default(),

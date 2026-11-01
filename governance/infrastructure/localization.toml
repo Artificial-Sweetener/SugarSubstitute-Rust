@@ -420,7 +420,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:6489fcd92455f710c4ee6263efaee0460e044353d4d7ec99468af6a7d120ea5e"
+source_sha256 = "sha256:b074983e4fc6718a9ef5a68b6fe5033997a837fc38713fcdafb69b2cd0d279be"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -450,7 +450,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:3c78c0f5a82270437d8b03b071df7986eac3e8f1c7fece23575c989f85bddaae"
+source_sha256 = "sha256:8d803bc58a880a4a406715e2c6dabc934a1b0ca4c5c04180b0fbaadb1b6b266d"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -462,7 +462,7 @@ rationale = "Recovery and caption controls select supplied canonical labels acco
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_runtime.rs"
-source_sha256 = "sha256:d24289236f29fd8276e1cba0c24f891d21dcdeb5d96f3eadf94e96728c3d4d59"
+source_sha256 = "sha256:3774c80ce5ea416f5afa4ca40f38ff44206d7037a524d02028186b09e50e12f4"
 kind = "native"
 rationale = "The native startup session retains DesktopOptions from the host and passes them to the owned splash surface; it does not create product copy."
 
@@ -696,7 +696,7 @@ rationale = "The upstream derivative compares numeric HTTP statusCode framing an
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/canvas/windows.rs"
-source_sha256 = "sha256:5fed584d3d5e8bb363ba28040c1727b1a78f6e37d82ddf892c99ee8b2393880b"
+source_sha256 = "sha256:3e560630876c7b3df8bd3bc16dd8118dd19f5e42c52a4270ffe67239c6a1993a"
 kind = "native"
 rationale = "Native canvas window consumes catalog-owned titles/status from the application lifetime; input observations preserve authored source paths without constructing product copy."
 

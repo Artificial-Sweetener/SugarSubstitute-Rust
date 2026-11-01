@@ -169,6 +169,18 @@ impl<B: StartupBackend> StartupHost<B> {
                             }
                             return Ok(());
                         }
+                        DesktopStartupObservation::CanvasDisplay(display) if accepts => {
+                            let canvas =
+                                self.canvas.as_mut().ok_or("Application canvas disappeared")?;
+                            if self
+                                .child
+                                .canvas_backend(display.identity)
+                                .is_some_and(|backend| canvas.matches_backend(backend))
+                            {
+                                canvas.display(display.hertz)?;
+                            }
+                            return Ok(());
+                        }
                         DesktopStartupObservation::CanvasContextMessage(observed)
                             if grants_native_canvas(accepts, observed.hosting()) =>
                         {

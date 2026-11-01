@@ -363,15 +363,8 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         use sugarsubstitute_desktop::canvas::MainCanvasPresentation;
         let Some(canvas) = self.canvas.as_ref() else { return MainCanvasPresentation::Hide };
         let presentation = canvas.presentation();
-        if presentation
-            .identity()
-            .and_then(|identity| self.child.canvas_backend(identity))
-            .is_some_and(|backend| canvas.matches_backend(backend))
-        {
-            presentation
-        } else {
-            MainCanvasPresentation::Hide
-        }
+        let granted = presentation.identity().and_then(|id| self.child.canvas_backend(id));
+        if canvas.granted(granted) { presentation } else { MainCanvasPresentation::Hide }
     }
 
     #[cfg(all(windows, feature = "native-composition"))]
@@ -380,10 +373,11 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     ) -> Option<sugarsubstitute_desktop::canvas::MainCanvasInputRegion<'_>> {
         let canvas = self.canvas.as_ref()?;
         let region = canvas.input_region()?;
-        self.child
-            .canvas_backend(region.identity)
-            .is_some_and(|backend| canvas.matches_backend(backend))
-            .then_some(region)
+        canvas.granted(self.child.canvas_backend(region.identity)).then_some(region)
+    }
+
+    fn main_canvas_animating(&self) -> bool {
+        self.canvas.as_ref().is_some_and(|canvas| canvas.animating())
     }
 
     #[cfg(all(windows, feature = "native-composition"))]

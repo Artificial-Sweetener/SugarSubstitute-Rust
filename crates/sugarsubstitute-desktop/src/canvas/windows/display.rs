@@ -6,7 +6,7 @@ use ::windows::Win32::{Devices::Display::*, Foundation::ERROR_SUCCESS};
 use tao::platform::windows::MonitorHandleExtWindows;
 
 /// Query the active path for this actual monitor; unsupported topology has an observable fallback.
-pub(super) fn refresh(monitor: &tao::monitor::MonitorHandle) -> Result<Option<f64>, DesktopError> {
+pub(crate) fn refresh(monitor: &tao::monitor::MonitorHandle) -> Result<Option<f64>, DesktopError> {
     let mut paths = [DISPLAYCONFIG_PATH_INFO::default(); 64];
     let mut modes = [DISPLAYCONFIG_MODE_INFO::default(); 128];
     let mut path_count = paths.len() as u32;

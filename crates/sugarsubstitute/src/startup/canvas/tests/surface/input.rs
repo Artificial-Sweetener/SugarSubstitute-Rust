@@ -338,3 +338,29 @@ fn only_the_most_recent_staged_drags_stay_on_disk() -> Result<(), Box<dyn Error>
     }
     fixture.finish()
 }
+
+/// A routed drag admits its frame on the turn that routed it; the main loop does not wait
+/// for another wake before the canvas starts preparing it.
+#[test]
+fn a_routed_pan_admits_its_frame_without_another_main_loop_turn() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    fixture.viewport(5, json!({"type":"zoom","factor":4}))?;
+    fixture.complete(5)?;
+    fixture.advance(100);
+    fixture.pump()?;
+    let scope = ScopeId::new(1)?;
+    let before = fixture.scope_jobs(scope)?;
+    route(
+        &mut fixture,
+        &[
+            MainCanvasGesture::Pointer([50.0, 40.0]),
+            button(true),
+            MainCanvasGesture::Pointer([70.0, 48.0]),
+        ],
+    )?;
+    let after = fixture.scope_jobs(scope)?;
+    assert_ne!(before, after, "The routed pan admitted no frame: [{before}]");
+    route(&mut fixture, &[button(false)])?;
+    fixture.finish()
+}

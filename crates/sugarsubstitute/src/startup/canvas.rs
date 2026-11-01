@@ -92,6 +92,19 @@ impl EmbeddedCanvas {
         self.surface.matches_backend(backend)
     }
 
+    /// Whether the main lifetime's current backend grant, if any, is the one this canvas holds.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn granted(&self, backend: Option<crate::startup::CanvasBackend>) -> bool {
+        backend.is_some_and(|backend| self.matches_backend(backend))
+    }
+
+    /// Whether timed canvas work is due within a few display frames, so the event loop needs
+    /// a fine system timer period to meet display-rate deadlines.
+    pub(super) fn animating(&self) -> bool {
+        let soon = Instant::now() + Duration::from_millis(100);
+        self.next_deadline().is_some_and(|deadline| deadline <= soon)
+    }
+
     /// Retire a closed native navigation even when it never acquired an attachment.
     #[cfg(feature = "native-composition")]
     pub(super) fn main_retired(
@@ -273,26 +286,47 @@ impl EmbeddedCanvas {
         self.surface.take_drag_out(self.session.as_mut()?)
     }
 
-    /// Apply one gesture the desktop routed into the published native input region.
+    /// Apply one gesture the desktop routed into the published native input region, then
+    /// advance at once so its frame is admitted on this turn rather than after the next wake.
     #[cfg(feature = "native-composition")]
     pub(super) fn input(
         &mut self,
         input: sugarsubstitute_desktop::canvas::MainCanvasInput,
     ) -> Result<surface::RoutedInput, Box<dyn Error>> {
-        match self.session.as_mut() {
-            Some(session) => self.surface.routed_input(input, session),
-            None => Ok(surface::RoutedInput::Refused),
+        let routed = match self.session.as_mut() {
+            Some(session) => self.surface.routed_input(input, session)?,
+            None => return Ok(surface::RoutedInput::Refused),
+        };
+        if routed == surface::RoutedInput::Applied {
+            self.poll()?;
         }
+        Ok(routed)
     }
 
-    /// Accept the exact native frame and resolve the matching shared operation.
+    /// Follow the active display's refresh rate so navigation and presentation pace to it.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn display(&mut self, hertz: Option<f64>) -> Result<(), Box<dyn Error>> {
+        if let Some(session) = &mut self.session {
+            session.input(Input::DisplayRefresh(hertz))?;
+            tracing::info!(
+                operation = "canvas_display_timing",
+                hertz = hertz.unwrap_or(60.0),
+                "Embedded canvas display timing updated"
+            );
+        }
+        Ok(())
+    }
+
+    /// Accept the exact native frame, resolve the matching shared operation, and admit the
+    /// next frame at once: presentation released the display slot this frame held.
     #[cfg(feature = "native-composition")]
     pub(super) fn presented(
         &mut self,
         target: sugarsubstitute_canvas::FrameStamp,
     ) -> Result<(), Box<dyn Error>> {
         let session = self.session.as_mut().ok_or("Application canvas is not started")?;
-        self.surface.presented(target, session)
+        self.surface.presented(target, session)?;
+        self.poll()
     }
 
     /// Resolve hidden geometry only after the matching native hide completed in composition.

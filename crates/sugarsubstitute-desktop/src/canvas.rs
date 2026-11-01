@@ -19,8 +19,8 @@ pub mod acknowledgement;
 mod gesture;
 #[cfg(feature = "native-composition")]
 pub use gesture::{
-    MAX_INPUT_OCCLUSIONS, MainCanvasButton, MainCanvasDragOut, MainCanvasGesture, MainCanvasInput,
-    MainCanvasInputRegion,
+    MAX_INPUT_OCCLUSIONS, MainCanvasButton, MainCanvasDisplay, MainCanvasDragOut,
+    MainCanvasGesture, MainCanvasInput, MainCanvasInputRegion,
 };
 /// Composition-device adapter placement and shared-texture fallback reasons.
 pub mod composition_adapter;
