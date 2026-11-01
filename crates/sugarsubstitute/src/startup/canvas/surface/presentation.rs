@@ -5,8 +5,9 @@
 use super::*;
 
 impl NativeSurface {
-    /// Keep acknowledged native pixels during a same-attachment source replacement.
-    /// Changed geometry, hidden surfaces and revoked bindings must withdraw them instead.
+    /// Keep acknowledged native pixels during a same-attachment source replacement, and show
+    /// them at changed geometry until a frame at that geometry is presented. Hidden surfaces
+    /// and revoked bindings withdraw them instead.
     pub(in crate::startup::canvas) fn presentation<'a>(
         &self,
         session: &'a Session,
@@ -32,14 +33,14 @@ impl NativeSurface {
             .or(self.retained.as_ref())
             .and_then(|binding| {
                 let presented = binding.presented?;
-                if self.closed
-                    || !binding.committed
-                    || binding.placement != Some(presented.placement)
-                    || binding.allocation != Some(presented.allocation)
-                {
+                if self.closed || !binding.committed {
                     return None;
                 }
-                Some(presented)
+                Some(MainCanvasRetention {
+                    shown: binding.placement?,
+                    allocation: binding.allocation?,
+                    ..presented
+                })
             });
         retained.map_or(MainCanvasPresentation::Hide, MainCanvasPresentation::Retain)
     }
@@ -177,10 +178,12 @@ impl NativeSurface {
             session.promote_document(token, target)?;
             binding.document = None;
         }
+        let placement = binding.placement.ok_or("Canvas placement disappeared")?;
         binding.presented = Some(MainCanvasRetention {
             identity: binding.identity,
             target,
-            placement: binding.placement.ok_or("Canvas placement disappeared")?,
+            placement,
+            shown: placement,
             allocation: binding.allocation.ok_or("Canvas allocation disappeared")?,
         });
         let final_selected = !preview

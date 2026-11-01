@@ -378,7 +378,11 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         Some(allocation),
         memory.claim(64 * 1024)?,
     )?;
-    assert!(matches!(canvas.presentation(), MainCanvasPresentation::Hide));
+    let MainCanvasPresentation::Retain(resizing) = canvas.presentation() else {
+        return Err("A resize withdrew the acknowledged native pixels".into());
+    };
+    assert_eq!(resizing.target, restored_stamp);
+    assert_eq!((resizing.shown.viewport.width, resizing.shown.viewport.height), (10, 10));
     assert!(canvas.take_command().is_none());
     let cancellation = CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),

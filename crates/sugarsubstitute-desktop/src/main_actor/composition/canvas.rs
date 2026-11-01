@@ -4,6 +4,7 @@
 
 mod allocation;
 mod device;
+mod reposition;
 
 use super::{adopt, missing};
 use crate::{
@@ -86,13 +87,7 @@ impl super::MainActor {
             self.hide_canvas()?;
             return Ok(None);
         }
-        let size = self.window()?.inner_size();
-        let clip = frame.placement.clip;
-        if clip.x < 0
-            || clip.y < 0
-            || i64::from(clip.x) + i64::from(clip.width) > i64::from(size.width)
-            || i64::from(clip.y) + i64::from(clip.height) > i64::from(size.height)
-        {
+        if !self.inside_window(frame.placement)? {
             self.hide_canvas()?;
             return Ok(None);
         }
@@ -100,6 +95,16 @@ impl super::MainActor {
             .as_mut()
             .ok_or_else(|| missing("browser_composition"))?
             .present_canvas(frame)
+    }
+
+    /// Whether a placement's clip lies inside the current client area.
+    fn inside_window(&self, placement: CanvasPlacement) -> Result<bool, DesktopError> {
+        let size = self.window()?.inner_size();
+        let clip = placement.clip;
+        Ok(clip.x >= 0
+            && clip.y >= 0
+            && i64::from(clip.x) + i64::from(clip.width) <= i64::from(size.width)
+            && i64::from(clip.y) + i64::from(clip.height) <= i64::from(size.height))
     }
 
     /// Fence previous pixels when no current application frame owns the viewport.
@@ -176,8 +181,8 @@ impl super::MainActor {
         }))
     }
 
-    /// Keep acknowledged pixels only while their native lifetime and geometry remain exact.
-    /// No upload, allocation or replacement acknowledgement occurs on this path.
+    /// Keep acknowledged pixels while their native lifetime remains exact, shown where the
+    /// retention places them. No upload, allocation or replacement acknowledgement occurs here.
     pub(crate) fn retain_canvas(
         &mut self,
         retained: crate::canvas::MainCanvasRetention,
@@ -186,6 +191,7 @@ impl super::MainActor {
             && self.revealed
             && !self.admission.closing()
             && self.canvas_allocation()? == retained.allocation
+            && self.inside_window(retained.shown)?
             && self
                 .composition
                 .as_ref()
@@ -193,7 +199,15 @@ impl super::MainActor {
                 .is_some_and(|canvas| canvas.retains(retained.target, retained.placement));
         if !current {
             self.hide_canvas()?;
+            return Ok(());
         }
+        let composition =
+            self.composition.as_mut().ok_or_else(|| missing("browser_composition"))?;
+        let canvas = composition.canvas.as_mut().ok_or_else(|| missing("canvas_composition"))?;
+        composition.ledger.dirty = true;
+        let committed = canvas.reposition(retained.shown)?;
+        composition.ledger.dirty = false;
+        composition.ledger.committed |= committed;
         Ok(())
     }
 }
@@ -208,6 +222,8 @@ pub(super) struct Canvas {
     pending: Option<Allocation>,
     retirements: [Option<RetiredAllocation>; 2],
     acknowledgement: Acknowledgement,
+    /// Where the committed pixels show, which differs from their placement once repositioned.
+    displayed: Option<CanvasPlacement>,
     linked: bool,
     retired: bool,
     lease: Option<MemoryLease>,
@@ -256,6 +272,7 @@ impl Canvas {
             pending: None,
             retirements: [None, None],
             acknowledgement: Acknowledgement::default(),
+            displayed: None,
             linked: false,
             retired: false,
             lease: Some(lease),
@@ -388,6 +405,7 @@ impl Canvas {
             }
         }
         self.acknowledgement.committed(content.target(), placement);
+        self.displayed = Some(placement);
         Ok(Some(content.target()))
     }
 
@@ -435,6 +453,7 @@ impl Canvas {
             });
         }
         self.acknowledgement.hide_committed();
+        self.displayed = None;
         Ok(false)
     }
 

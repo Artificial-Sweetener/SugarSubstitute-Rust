@@ -200,7 +200,7 @@ impl CanvasContent<'_> {
     }
 }
 
-/// Keep only the exact native pixels already acknowledged at this allocation.
+/// Keep only the exact native pixels already acknowledged, shown at the current geometry.
 /// This carries no image storage and cannot upload or acknowledge a replacement.
 #[cfg(feature = "native-composition")]
 #[derive(Clone, Copy)]
@@ -211,7 +211,12 @@ pub struct MainCanvasRetention {
     pub target: FrameStamp,
     /// Previously acknowledged physical placement, unchanged during retention.
     pub placement: placement::CanvasPlacement,
-    /// Current native allocation that originally qualified the placement.
+    /// Where the retained pixels show now: the acknowledged placement, or the surface's current
+    /// geometry while a frame at that geometry is prepared. Changed geometry keeps the retained
+    /// pixels centred in the current viewport and clipped to its clip, as a resized camera keeps
+    /// its centre.
+    pub shown: placement::CanvasPlacement,
+    /// Current native allocation that qualifies `shown`.
     pub allocation: placement::WebViewAllocation,
 }
 

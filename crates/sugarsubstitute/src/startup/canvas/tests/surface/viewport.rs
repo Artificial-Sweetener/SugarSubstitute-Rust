@@ -274,3 +274,27 @@ fn a_dpi_change_reacknowledges_geometry_at_the_new_density_before_native_pixels_
     );
     fixture.finish()
 }
+
+/// A resize keeps the acknowledged pixels shown at the new geometry until a frame at that
+/// geometry is presented, so a live window or panel resize never blanks the canvas.
+#[test]
+fn resized_geometry_keeps_the_acknowledged_frame_shown_until_its_replacement()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    let acknowledged = prepared_frame(&fixture.canvas).ok_or("Committed frame absent")?;
+    let (target, placement) = (acknowledged.content.target(), acknowledged.placement);
+    fixture.geometry(5, 100, 50)?;
+    let MainCanvasPresentation::Retain(retained) = fixture.canvas.presentation() else {
+        return Err("Changed geometry withdrew the acknowledged native pixels".into());
+    };
+    assert_eq!(retained.target, target);
+    assert_eq!(retained.placement, placement);
+    assert_ne!(retained.shown, placement);
+    assert_eq!((retained.shown.viewport.width, retained.shown.viewport.height), (100, 50));
+    fixture.complete(5)?;
+    let replacement = prepared_frame(&fixture.canvas).ok_or("Resized frame absent")?;
+    assert_ne!(replacement.content.target(), target);
+    assert_eq!(replacement.placement, retained.shown);
+    fixture.finish()
+}
