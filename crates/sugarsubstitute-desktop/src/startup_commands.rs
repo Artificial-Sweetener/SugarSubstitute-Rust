@@ -154,9 +154,7 @@ pub(super) fn drain(
                 main_operation(session, content, |owner| owner.reveal(identity).map(Some))?;
             }
             DesktopStartupCommand::SendPanel(command) => {
-                main_operation(session, content, |owner| {
-                    owner.send_panel(&command).map(|()| None)
-                })?;
+                main_operation(session, content, |owner| owner.send_panel(command).map(|()| None))?;
             }
             DesktopStartupCommand::SendCanvasContext(reply) => {
                 main_operation(session, content, |owner| {

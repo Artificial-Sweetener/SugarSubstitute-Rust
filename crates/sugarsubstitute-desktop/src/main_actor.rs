@@ -86,6 +86,7 @@ pub(crate) struct MainActor {
         Option<webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Environment>,
     panel_bridge: Option<panel::bridge::Bridge>,
     canvas_replies: panel::Replies,
+    panel_messages: panel::HostMessages,
     panel_transport: panel::admission::Admission,
     panel_navigation_started: bool,
     receivers: Option<crate::windows_main_receivers::Receivers>,
@@ -155,6 +156,7 @@ impl MainActor {
             reused_environment: None,
             panel_bridge: None,
             canvas_replies: panel::Replies::new(),
+            panel_messages: panel::HostMessages::new(),
             panel_transport,
             panel_navigation_started: false,
             receivers: None,
@@ -216,6 +218,7 @@ impl MainActor {
                 || self.events.as_ref().is_some_and(|events| events.remaining() != 0)
                 || self.panel_bridge_needs_progress()
                 || self.canvas_reply_needs_progress()
+                || self.panel_message_needs_progress()
                 || self.panel_transport_needs_progress()
                 || self.preview_needs_progress())
     }
@@ -302,7 +305,7 @@ impl MainActor {
         if self.stage != ConstructionStage::Live {
             return self.construct_step(target, proxy, title);
         }
-        if self.progress_panel_transport()? {
+        if self.progress_panel_transport()? || self.progress_panel_messages()? {
             return Ok(None);
         }
         let reply_was_due = self.canvas_replies.reply_due();

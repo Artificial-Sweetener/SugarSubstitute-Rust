@@ -16,6 +16,7 @@ impl MainActor {
         self.admission.close();
         self.panel_transport.close();
         self.canvas_replies.clear();
+        self.panel_messages.clear();
         self.recovery.close();
         #[cfg(feature = "native-composition")]
         if let Some(composition) = &self.composition {

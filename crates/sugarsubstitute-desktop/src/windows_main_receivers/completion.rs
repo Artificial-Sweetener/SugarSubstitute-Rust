@@ -14,6 +14,15 @@ use std::{
 use webview2_com::Microsoft::Web::WebView2::Win32::*;
 use windows::core::{HRESULT, HSTRING, PCWSTR, implement};
 
+/// Tiered slot admission keeps queued back-pressured traffic from exhausting the table.
+///
+/// Surface traffic (canvas replies, presentations, ingress receipts and panel transport) may
+/// occupy the first two slots. Host panel messages may also occupy the third. The fourth stays
+/// free for the actor's single sequential lifecycle evaluation (hook enablement, readiness
+/// probe, frame configuration or completion barrier), which submits without queueing.
+const SURFACE_SLOTS: usize = 2;
+const PANEL_SLOTS: usize = 3;
+
 pub(super) struct Operations {
     pending: RefCell<[Option<Operation>; 4]>,
     next: Cell<u64>,
@@ -94,9 +103,14 @@ impl Operations {
         }
     }
 
-    /// Reserve two command slots for current-document panel and lifecycle traffic.
+    /// Admit surface traffic only while two slots remain for panel messages and lifecycle work.
     pub(super) fn admits_surface_delivery(&self) -> bool {
-        self.pending() < 2
+        self.pending() < SURFACE_SLOTS
+    }
+
+    /// Admit a host panel message only while one slot remains for lifecycle evaluation.
+    pub(super) fn admits_panel_delivery(&self) -> bool {
+        self.pending() < PANEL_SLOTS
     }
 }
 
@@ -332,6 +346,36 @@ mod tests {
         operations.completed(third);
         assert!(operations.admits_surface_delivery());
         operations.completed(fourth);
+        Ok(())
+    }
+
+    #[test]
+    fn stalled_callbacks_leave_admitted_tiers_a_lifecycle_slot_without_exhaustion()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let lease = MemoryLease::new(4 * 1024 * 1024, Box::new(Release));
+        let operations = Operations::new(Events::new(&lease, || {})?)?;
+        let mut armed = Vec::new();
+        while operations.admits_surface_delivery() {
+            armed.push(operations.arm(None)?);
+        }
+        assert_eq!(armed.len(), SURFACE_SLOTS);
+        assert!(operations.admits_panel_delivery());
+        while operations.admits_panel_delivery() {
+            armed.push(operations.arm(None)?);
+        }
+        assert_eq!(armed.len(), PANEL_SLOTS);
+        armed.push(operations.arm(None)?);
+        assert!(!operations.admits_surface_delivery());
+        assert!(!operations.admits_panel_delivery());
+        let lifecycle = armed.pop().ok_or("lifecycle operation is missing")?;
+        operations.completed(lifecycle);
+        assert!(!operations.admits_panel_delivery());
+        armed.push(operations.arm(None)?);
+        for id in armed {
+            operations.completed(id);
+        }
+        assert!(operations.admits_surface_delivery());
+        assert_eq!(operations.pending(), 0);
         Ok(())
     }
 }

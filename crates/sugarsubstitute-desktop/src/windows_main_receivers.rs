@@ -181,6 +181,12 @@ impl Receivers {
         Ok(self.operations.admits_surface_delivery())
     }
 
+    /// Keep the final browser command slot available for lifecycle evaluation.
+    pub(crate) fn admits_panel_delivery(&self) -> Result<bool, DesktopError> {
+        self.require_outer_call()?;
+        Ok(self.operations.admits_panel_delivery())
+    }
+
     /// Submit at most four retained same-session CDP operations; callbacks alone retire them.
     pub(crate) fn call(
         &self,

@@ -8,23 +8,22 @@ pub(super) mod admission;
 pub(super) mod bridge;
 mod delivery;
 pub(super) mod ingress;
+mod messages;
 mod replies;
 use crate::main_native_delivery::{DeliveryCorrelation, NativeDelivery, OwnedDelivery};
+pub(super) use messages::HostMessages;
 pub(super) use replies::Replies;
 
 impl MainActor {
-    /// Submit one host message to the same observed document without exposing native handles.
-    pub(crate) fn send_panel(&self, command: &crate::PanelCommand) -> Result<(), DesktopError> {
-        let payload = command
-            .message()
-            .encode()
-            .map_err(|cause| DesktopError::new("encode_panel_message", cause))?;
-        self.deliver(command.identity(), &payload)
+    /// Retain one host message for the current document until a panel command slot is free.
+    pub(crate) fn send_panel(&mut self, command: crate::PanelCommand) -> Result<(), DesktopError> {
+        let context = self.admitted_panel_context(command.identity())?;
+        self.panel_messages.push(messages::HostMessage::new(command, context)?)
     }
 
     /// Deliver a correlated surface reply to the same current document and UI apartment.
     pub(crate) fn send_surface(&mut self, reply: crate::SurfaceReply) -> Result<(), DesktopError> {
-        self.admit_canvas_reply(reply.identity())?;
+        self.admitted_panel_context(reply.identity())?;
         self.canvas_replies.push(NativeDelivery::Surface(reply))
     }
 
@@ -40,7 +39,7 @@ impl MainActor {
         {
             return Ok(());
         }
-        self.admit_canvas_reply(change.identity())?;
+        self.admitted_panel_context(change.identity())?;
         self.canvas_replies.push(NativeDelivery::Presentation(change))
     }
 
@@ -49,7 +48,7 @@ impl MainActor {
         &mut self,
         reply: crate::CanvasContextReply,
     ) -> Result<(), DesktopError> {
-        self.admit_canvas_reply(reply.identity())?;
+        self.admitted_panel_context(reply.identity())?;
         self.canvas_replies.push(NativeDelivery::Context(reply))
     }
 
@@ -58,19 +57,49 @@ impl MainActor {
         &mut self,
         receipt: crate::PanelIngressReceipt,
     ) -> Result<(), DesktopError> {
-        self.admit_canvas_reply(receipt.identity())?;
+        self.admitted_panel_context(receipt.identity())?;
         self.canvas_replies.push(NativeDelivery::Ingress(receipt))
     }
 
-    fn admit_canvas_reply(&self, identity: crate::MainIdentity) -> Result<(), DesktopError> {
+    /// Return the revealed current top-document context that may receive this identity's traffic.
+    fn admitted_panel_context(&self, identity: crate::MainIdentity) -> Result<i64, DesktopError> {
         self.admission.frontend(identity)?;
         if !self.revealed {
             return Err(DesktopError::message("send_panel", "main is not revealed"));
         }
-        if self.readiness.as_ref().and_then(MainReadiness::panel_context).is_none() {
-            return Err(DesktopError::message("send_panel", "current top document is absent"));
-        }
-        Ok(())
+        self.readiness
+            .as_ref()
+            .and_then(MainReadiness::panel_context)
+            .ok_or_else(|| DesktopError::message("send_panel", "current top document is absent"))
+    }
+
+    /// Wait for actual completion wakes when the panel command slots are occupied.
+    pub(super) fn panel_message_needs_progress(&self) -> bool {
+        !self.panel_messages.is_empty()
+            && self
+                .receivers
+                .as_ref()
+                .is_none_or(|receivers| receivers.admits_panel_delivery().unwrap_or(true))
+    }
+
+    /// Retire host messages for a superseded document, then submit one when a slot is free.
+    pub(super) fn progress_panel_messages(&mut self) -> Result<bool, DesktopError> {
+        let current = (self.revealed && !self.admission.closing())
+            .then(|| self.readiness.as_ref().and_then(MainReadiness::panel_context))
+            .flatten()
+            .map(|context| (self.identity(), context));
+        let receivers = self
+            .receivers
+            .as_ref()
+            .ok_or_else(|| DesktopError::message("main_receivers", "receivers not created"))?;
+        let admitted = receivers.admits_panel_delivery()?;
+        self.panel_messages.progress(current, admitted, |message| {
+            receivers.call(
+                Command::PanelDelivery(message.context()),
+                "Runtime.evaluate",
+                message.parameters(),
+            )
+        })
     }
 
     /// Wait for actual completion wakes when browser delivery slots are occupied.
@@ -169,37 +198,5 @@ impl MainActor {
             &parameters,
         )?;
         Ok(true)
-    }
-
-    /// Use one navigation-qualified delivery mechanism for panel and canvas replies.
-    fn deliver(&self, identity: crate::MainIdentity, payload: &[u8]) -> Result<(), DesktopError> {
-        Self::deliver_to(
-            &self.admission,
-            &self.readiness,
-            self.revealed,
-            self.receivers()?,
-            identity,
-            payload,
-        )
-    }
-
-    fn deliver_to(
-        admission: &Admission,
-        readiness: &Option<MainReadiness>,
-        revealed: bool,
-        receivers: &crate::windows_main_receivers::Receivers,
-        identity: crate::MainIdentity,
-        payload: &[u8],
-    ) -> Result<(), DesktopError> {
-        admission.frontend(identity)?;
-        if !revealed {
-            return Err(DesktopError::message("send_panel", "main is not revealed"));
-        }
-        let context = readiness
-            .as_ref()
-            .and_then(MainReadiness::panel_context)
-            .ok_or_else(|| DesktopError::message("send_panel", "current top document is absent"))?;
-        let parameters = delivery::encode(context, payload)?;
-        receivers.call(Command::PanelDelivery(context), "Runtime.evaluate", &parameters)
     }
 }
