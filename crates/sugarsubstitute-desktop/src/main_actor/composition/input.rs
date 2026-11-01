@@ -31,11 +31,11 @@ use windows::Win32::{
         },
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetMessageTime, SM_CXDOUBLECLK, SM_CYDOUBLECLK, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN,
-            WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL,
-            WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
-            WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN,
-            WM_XBUTTONUP,
+            GetMessageTime, SM_CXDOUBLECLK, SM_CYDOUBLECLK, WM_DPICHANGED, WM_LBUTTONDBLCLK,
+            WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
+            WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONDBLCLK,
+            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK,
+            WM_XBUTTONDOWN, WM_XBUTTONUP,
         },
     },
 };
@@ -451,6 +451,10 @@ unsafe extern "system" fn procedure(
             state.focus.enter();
             Ok(())
         });
+    }
+    // A routed hand loaded at the old DPI is rebuilt and reselected without waiting for movement.
+    if message == WM_DPICHANGED && state.admits() {
+        state.guarded(|| state.present_cursor());
     }
     result
 }

@@ -189,3 +189,19 @@ fn assert_scaled_hotspot(actual: u32, source: u32, source_size: u32, target_size
     let scaled = source * target_size;
     assert!((actual * source_size).abs_diff(scaled) <= source_size);
 }
+
+#[test]
+fn a_dpi_change_rebuilds_both_hands_at_the_new_cursor_size_once() -> Result<(), Box<dyn Error>> {
+    let cursors = Cursors::sized([32, 32])?;
+    let arrow = cursors.arrow();
+    let open = cursors.resolve([32, 32], CursorIntent::OpenHand)?;
+    let closed = cursors.resolve([32, 32], CursorIntent::ClosedHand)?;
+    assert_eq!(cursors.resolve([32, 32], CursorIntent::OpenHand)?.handle(), open.handle());
+    let larger = cursors.resolve([48, 48], CursorIntent::OpenHand)?;
+    assert_ne!(larger.handle(), open.handle(), "the new DPI needs a new private hand");
+    assert_ne!(cursors.resolve([48, 48], CursorIntent::ClosedHand)?.handle(), closed.handle());
+    assert_eq!(cursors.resolve([48, 48], CursorIntent::OpenHand)?.handle(), larger.handle());
+    assert_eq!(cursors.resolve([48, 48], CursorIntent::Arrow)?.handle(), arrow);
+    assert!(open.owned().is_some(), "a displaced hand stays owned while still referenced");
+    Ok(())
+}

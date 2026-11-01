@@ -112,9 +112,13 @@ impl Cursors {
     /// Create the shared arrow and private hands using this live peer's physical DPI.
     /// Errors preserve native metric/resource failures; call on the peer's owning thread.
     pub(crate) fn new(window: HWND) -> Result<Self, Box<dyn Error>> {
+        Self::sized(cursor_size(window)?)
+    }
+
+    /// Create the shared arrow and private hands at one physical cursor size.
+    fn sized(size: [i32; 2]) -> Result<Self, Box<dyn Error>> {
         // SAFETY: IDC_ARROW requests a shared Windows cursor that callers never destroy.
         let arrow = unsafe { LoadCursorW(None, IDC_ARROW)? };
-        let size = cursor_size(window)?;
         let pair = CursorPair::new(size)?;
         Ok(Self(RefCell::new(Cache { arrow, pair: Some(pair) })))
     }
@@ -126,7 +130,17 @@ impl Cursors {
         window: HWND,
         intent: CursorIntent,
     ) -> Result<CursorResource, Box<dyn Error>> {
-        self.refresh(window, false)?;
+        self.resolve(cursor_size(window)?, intent)
+    }
+
+    /// Resolve an intent at the window's current physical cursor size, rebuilding the hand
+    /// pair when that size changed with the window's DPI.
+    fn resolve(
+        &self,
+        size: [i32; 2],
+        intent: CursorIntent,
+    ) -> Result<CursorResource, Box<dyn Error>> {
+        self.resize(size, false)?;
         let cache = self.0.borrow();
         let pair = cache.pair.as_ref().ok_or_else(invalid_cursor)?;
         Ok(match intent {
@@ -138,7 +152,10 @@ impl Cursors {
 
     /// Reload the current Windows arrow and rebuild exactly one DPI-sized private hand pair.
     pub(super) fn refresh(&self, window: HWND, force: bool) -> Result<(), Box<dyn Error>> {
-        let size = cursor_size(window)?;
+        self.resize(cursor_size(window)?, force)
+    }
+
+    fn resize(&self, size: [i32; 2], force: bool) -> Result<(), Box<dyn Error>> {
         if !force && self.0.borrow().pair.as_ref().is_some_and(|pair| pair.size == size) {
             return Ok(());
         }
