@@ -31,7 +31,7 @@ import type {
   CanvasSourceSummary,
   CanvasViewSnapshot,
 } from '../domain/CanvasViewPort.js';
-import type { NativeCanvasPresentationStatus } from './NativeCanvasPresentation.js';
+import type { NativeCanvasPresentationStatus } from './NativeCanvasStatus.js';
 
 /** Collect the attachment-owned facts that one native snapshot projects. */
 export interface NativeCanvasSnapshotState {

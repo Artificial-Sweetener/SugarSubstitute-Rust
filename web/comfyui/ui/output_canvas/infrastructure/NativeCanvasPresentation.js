@@ -19,8 +19,7 @@ import { IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS, NativeCanvasPreview, } from './
 import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
 import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
 import { nativeCanvasDesired, nativeCanvasNavigable, nativeCanvasOverviewKey, nativeCanvasSelection, nativeCanvasWipe, nativeCanvasWipeKey, } from './NativeCanvasDesired.js';
-/** The load-error text for a selected result the host cannot present. */
-const NATIVE_CANVAS_RESULT_FAILURE = 'The image could not be loaded.';
+import { NATIVE_CANVAS_PRESENTATION_FAILURE, NATIVE_CANVAS_RESULT_FAILURE, nativeCanvasFailureStatus, nativeCanvasPendingStatus, nativeCanvasSettledStatus, } from './NativeCanvasStatus.js';
 /** Keep one in-flight operation and coalesce newer view or geometry changes. */
 export class NativeCanvasPresentation {
     options;
@@ -106,13 +105,7 @@ export class NativeCanvasPresentation {
             !this.#binding?.committed ||
             this.#binding.geometry !== JSON.stringify(geometry))
             this.#show(false);
-        this.options.status(desired.shown
-            ? host
-                ? { state: 'loading', message: 'Loading the selected image.' }
-                : this.options.surfacePending?.()
-                    ? { state: 'loading', message: '' }
-                    : { state: 'unavailable', message: 'The native canvas is unavailable.' }
-            : { state: 'empty', message: '' });
+        this.options.status(nativeCanvasPendingStatus(desired, host !== null, () => !!this.options.surfacePending?.()));
         this.#wake();
     }
     /** Refuse preview bytes until a committed, observed binding owns the logical interest. */
@@ -395,24 +388,13 @@ export class NativeCanvasPresentation {
                 }
                 if (this.#current(binding, desired)) {
                     this.#show(true);
-                    this.options.status({
-                        state: desired.shown ||
-                            this.#preview?.displayed ||
-                            (desired.previewable &&
-                                this.#preview?.observing &&
-                                binding.selectionRevision !== null)
-                            ? 'ready'
-                            : this.#preview?.preparing
-                                ? 'loading'
-                                : 'empty',
-                        message: '',
-                    });
+                    this.options.status(nativeCanvasSettledStatus(desired, this.#preview, binding.selectionRevision));
                 }
             }
             catch (error) {
                 if (this.#current(binding, desired)) {
                     this.#failedIntent();
-                    this.options.status({ state: 'error', message: 'Native canvas presentation failed.' });
+                    this.options.status({ state: 'error', message: NATIVE_CANVAS_PRESENTATION_FAILURE });
                 }
                 this.options.report(error);
             }
@@ -465,15 +447,9 @@ export class NativeCanvasPresentation {
         // the retained attachment; permit that refresh to reconcile previously rejected geometry.
         if (result.status === 'stale')
             this.#desired = null;
-        const error = result.status === 'error';
-        this.options.status({
-            state: error ? 'error' : 'unavailable',
-            message: message ||
-                result.message ||
-                (error ? 'Native canvas presentation failed.' : 'The native canvas is unavailable.'),
-        });
-        if (error)
-            this.options.report(new Error(result.message || 'Native canvas presentation failed.'));
+        this.options.status(nativeCanvasFailureStatus(result, message));
+        if (result.status === 'error')
+            this.options.report(new Error(result.message || NATIVE_CANVAS_PRESENTATION_FAILURE));
     }
     /** Settle unsent intent when its required presentation fails, without retrying that presentation. */
     #failedIntent() {
