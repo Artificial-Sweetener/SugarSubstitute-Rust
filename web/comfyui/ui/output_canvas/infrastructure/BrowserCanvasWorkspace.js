@@ -157,7 +157,6 @@ export class BrowserCanvasWorkspace {
         this.#allocation = allocation;
         const visible = allocation.visible && this.#suspension === null;
         const inset = this.#applyFrame();
-        this.#workspaceFrame.syncOrigin();
         const painted = JSON.stringify([
             visible,
             inset,

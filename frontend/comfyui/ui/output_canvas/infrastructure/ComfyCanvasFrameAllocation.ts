@@ -15,6 +15,12 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Allocate the native graph viewport beneath chrome while retaining its mounted render layers. */
 
+/**
+ * Carry the DOM-widget layer clip from the graph root to the stylesheet rule that applies it. The
+ * layer exists only while Comfy renders Nodes 1.0, so a rule keeps remounts clipped.
+ */
+export const GRAPH_LAYER_CLIP_PROPERTY = '--sc-output-graph-layer-clip';
+
 interface SavedStyle {
   readonly element: HTMLElement;
   readonly property: string;
@@ -22,7 +28,14 @@ interface SavedStyle {
   readonly priority: string;
 }
 
-/** Own graph bounds for native rendering and graph-pinned surfaces while leaving chrome stationary. */
+/**
+ * Own graph bounds for native rendering and graph-pinned surfaces while leaving chrome stationary.
+ *
+ * Every graph render layer paints inside the allocated rectangle: Comfy's own `overflow: clip` on
+ * the graph root clips its canvases, Vue node pane and graph overlays, and a container clip bounds
+ * the fixed-position DOM widgets of Nodes 1.0. Chrome keeps the full frame by fixed positioning, in
+ * the client coordinates Comfy already assumes for its own fixed graph overlays.
+ */
 export class ComfyCanvasFrameAllocation {
   readonly #chrome: HTMLElement;
   readonly #frame: HTMLElement;
@@ -51,13 +64,19 @@ export class ComfyCanvasFrameAllocation {
     this.#styles = [
       { element: frame, property: 'overflow' },
       { element: panel, property: '--sc-output-workspace-reserved-width' },
-      ...['width', 'height', 'margin-left', 'margin-top', 'overflow', 'clip-path'].map(
-        (property) => ({
-          element: root,
-          property,
-        }),
-      ),
-      ...['left', 'width', 'top', 'height'].map((property) => ({ element: chrome, property })),
+      ...[
+        'width',
+        'height',
+        'margin-left',
+        'margin-top',
+        'overflow',
+        'isolation',
+        GRAPH_LAYER_CLIP_PROPERTY,
+      ].map((property) => ({ element: root, property })),
+      ...['position', 'left', 'width', 'top', 'height'].map((property) => ({
+        element: chrome,
+        property,
+      })),
     ].map(({ element, property }) => ({
       element,
       property,
@@ -85,15 +104,18 @@ export class ComfyCanvasFrameAllocation {
       : 0;
     const horizontal = left + right + inset;
     const vertical = top + bottom;
-    // Explicit chrome dimensions remove inverse calc rounding, so outer-frame resizes join the key.
+    // Fixed chrome follows the frame's client rectangle, so frame moves and resizes join the key.
     const allocation = JSON.stringify([
       inset,
       left,
       right,
       top,
       bottom,
-      measuredWidth ? frame.width : null,
-      measured ? frame.height : null,
+      frame.left,
+      frame.top,
+      frame.width,
+      frame.height,
+      measured ? panel.height : null,
     ]);
     if (this.#allocation === allocation) return;
     this.#allocation = allocation;
@@ -108,24 +130,20 @@ export class ComfyCanvasFrameAllocation {
     this.#set(this.root, 'height', vertical ? `calc(100% - ${vertical}px)` : null);
     // Hidden overflow permits focus-driven scrolling; the qualified outer frame must remain stationary.
     this.#set(this.#frame, 'overflow', 'clip');
-    this.#set(this.root, 'overflow', 'visible');
+    this.#set(this.root, 'overflow', 'clip');
+    // Chrome and graph layers keep their relative order inside the graph root's stacking context.
+    this.#set(this.root, 'isolation', 'isolate');
+    // The DOM-widget layer starts at the root's top edge with the root's width; it ends with the panel.
     this.#set(
       this.root,
-      'clip-path',
-      `inset(${-top}px ${-(right + inset)}px ${-bottom}px ${-left}px)`,
+      GRAPH_LAYER_CLIP_PROPERTY,
+      `inset(0px 0px calc(100% - ${measured ? panel.height : 0}px) 0px)`,
     );
-    this.#set(this.#chrome, 'left', horizontal ? `${-left}px` : null);
-    this.#set(
-      this.#chrome,
-      'width',
-      horizontal ? (measuredWidth ? `${frame.width}px` : `calc(100% + ${horizontal}px)`) : null,
-    );
-    this.#set(this.#chrome, 'top', vertical ? `${-top}px` : null);
-    this.#set(
-      this.#chrome,
-      'height',
-      vertical ? (measured ? `${frame.height}px` : `calc(100% + ${vertical}px)`) : null,
-    );
+    this.#set(this.#chrome, 'position', 'fixed');
+    this.#set(this.#chrome, 'left', `${frame.left}px`);
+    this.#set(this.#chrome, 'top', `${frame.top}px`);
+    this.#set(this.#chrome, 'width', `${frame.width}px`);
+    this.#set(this.#chrome, 'height', `${frame.height}px`);
   }
 
   /** Relinquish viewport allocation while Comfy owns an alternate application surface. */

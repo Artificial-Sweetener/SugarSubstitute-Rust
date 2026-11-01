@@ -15,7 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove graph-frame qualification and exact reversible ownership without replacing Comfy's renderers. */
 
-import { ComfyCanvasFrameAllocation } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasFrameAllocation.js';
+import {
+  ComfyCanvasFrameAllocation,
+  GRAPH_LAYER_CLIP_PROPERTY,
+} from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasFrameAllocation.js';
+import { ensureCanvasWorkspaceStyles } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasWorkspaceStyles.js';
 import { jest } from '@jest/globals';
 
 /** Build only the installed public frame/chrome shape, leaving all renderer children in place. */
@@ -44,9 +48,11 @@ test('allocates a common graph origin and compensates only identified native chr
   expect(f.root.style.marginLeft).toBe('0px');
   expect(f.root.style.width).toBe('calc(100% - 480px)');
   expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('480px');
+  expect(f.chrome.style.position).toBe('fixed');
   expect(f.chrome.style.left).toBe('0px');
-  expect(f.chrome.style.width).toBe('calc(100% + 480px)');
-  expect(f.root.style.clipPath).toBe('inset(0px -480px 0px 0px)');
+  expect(f.root.style.overflow).toBe('clip');
+  expect(f.root.style.isolation).toBe('isolate');
+  expect(f.root.style.clipPath).toBe('');
   expect(f.parent.style.overflow).toBe('clip');
   expect(f.root.children).toHaveLength(3);
   expect(f.canvas.parentElement).toBe(f.root);
@@ -64,8 +70,10 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
   const f = frame();
   f.root.style.setProperty('width', '90%', 'important');
   f.root.style.setProperty('overflow', 'clip');
+  f.root.style.setProperty(GRAPH_LAYER_CLIP_PROPERTY, 'none');
   f.parent.style.setProperty('overflow', 'hidden', 'important');
   f.chrome.style.setProperty('left', '2px');
+  f.chrome.style.setProperty('position', 'absolute', 'important');
   f.panel.style.setProperty('--sc-output-workspace-reserved-width', '10px', 'important');
   const original = f.root.style.cssText;
   const chromeOriginal = f.chrome.style.cssText;
@@ -101,13 +109,15 @@ test('allocates the real graph below chrome even with the output canvas closed a
   adapter.apply(480);
   expect(f.root.style.marginTop).toBe('86px');
   expect(f.root.style.height).toBe('calc(100% - 90px)');
-  expect(f.chrome.style.top).toBe('-86px');
+  expect(f.chrome.style.top).toBe('0px');
   expect(f.chrome.style.height).toBe('900px');
   expect(f.root.style.marginLeft).toBe('4px');
   expect(f.root.style.width).toBe('calc(100% - 488px)');
-  expect(f.chrome.style.left).toBe('-4px');
+  expect(f.chrome.style.left).toBe('0px');
   expect(f.chrome.style.width).toBe('1200px');
-  expect(f.root.style.clipPath).toBe('inset(-86px -484px -4px -4px)');
+  expect(f.root.style.getPropertyValue(GRAPH_LAYER_CLIP_PROPERTY)).toBe(
+    'inset(0px 0px calc(100% - 810px) 0px)',
+  );
   adapter.apply(0);
   expect(f.root.style.width).toBe('calc(100% - 8px)');
   expect(f.root.style.marginTop).toBe('86px');
@@ -175,11 +185,70 @@ test('updates authoritative chrome dimensions when only the outer frame resizes'
   expect(f.chrome.style.cssText).toContain('height: 937px');
   expect(f.root.style.marginLeft).toBe('63.25px');
   expect(f.root.style.marginTop).toBe('78.5px');
-  expect(f.root.style.clipPath).toBe('inset(-78.5px -597.71875px -2.25px -63.25px)');
+  expect(f.root.style.getPropertyValue(GRAPH_LAYER_CLIP_PROPERTY)).toBe(
+    'inset(0px 0px calc(100% - 856.25px) 0px)',
+  );
 
   width = 1484.375;
   adapter.apply(593.59375);
   expect(f.chrome.style.width).toBe('1484.375px');
+  adapter.dispose();
+});
+
+test('keeps fixed chrome on the frame client rectangle when the frame moves', () => {
+  const f = frame();
+  let left = 12;
+  jest
+    .spyOn(f.parent, 'getBoundingClientRect')
+    .mockImplementation(() => rectangle(left, 30, 1200, 900));
+  jest
+    .spyOn(f.panel, 'getBoundingClientRect')
+    .mockImplementation(() => rectangle(left + 4, 116, 1192, 810));
+  const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
+  adapter.apply(480);
+  expect(f.chrome.getAttribute('style')).toBe(
+    'position: fixed; left: 12px; top: 30px; width: 1200px; height: 900px;',
+  );
+  expect(f.root.style.marginLeft).toBe('4px');
+  left = 40;
+  adapter.apply(480);
+  expect(f.chrome.style.left).toBe('40px');
+  expect(f.root.style.marginLeft).toBe('4px');
+  adapter.dispose();
+  expect(f.chrome.style.cssText).toBe('');
+  expect(f.root.style.cssText).toBe('');
+});
+
+test('clips only the DOM-widget layer through the graph root allocation', () => {
+  const f = frame();
+  const widgets = document.createElement('div');
+  widgets.className = 'isolate';
+  const widget = document.createElement('div');
+  widget.className = 'dom-widget';
+  widgets.append(widget);
+  f.root.append(widgets);
+  ensureCanvasWorkspaceStyles(document);
+  // jsdom does not cascade custom properties into clip-path; inspect the matching CSSOM rule.
+  const rules = [...document.styleSheets]
+    .flatMap((sheet) => [...sheet.cssRules])
+    .filter((entry): entry is CSSStyleRule => entry instanceof CSSStyleRule)
+    .filter((entry) => entry.style.getPropertyValue('clip-path'));
+  expect(
+    rules.map((entry) => [entry.selectorText, entry.style.getPropertyValue('clip-path')]),
+  ).toEqual([
+    ['#graph-canvas-container > :has(> .dom-widget)', `var(${GRAPH_LAYER_CLIP_PROPERTY},none)`],
+  ]);
+  jest.spyOn(f.parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1200, 900));
+  jest.spyOn(f.panel, 'getBoundingClientRect').mockReturnValue(rectangle(0, 86, 1200, 814));
+  const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
+  adapter.apply(480);
+  expect(f.root.style.getPropertyValue(GRAPH_LAYER_CLIP_PROPERTY)).toBe(
+    'inset(0px 0px calc(100% - 814px) 0px)',
+  );
+  expect(widgets.getAttribute('style')).toBeNull();
+  expect(widget.getAttribute('style')).toBeNull();
+  adapter.suspend();
+  expect(f.root.style.getPropertyValue(GRAPH_LAYER_CLIP_PROPERTY)).toBe('');
   adapter.dispose();
 });
 
