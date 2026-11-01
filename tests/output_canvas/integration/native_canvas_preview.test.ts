@@ -646,6 +646,42 @@ test('commits visible empty native geometry so a first-ever preview needs no sel
   expect(f.statuses.at(-1)?.state).toBe('ready');
 });
 
+test('keeps a displayed live preview shown and ready while its allocation resizes', async () => {
+  const f = fixture();
+  await commit(f, null);
+  const blob = new NativePreviewBlob();
+  f.presentation.receive(f.preview(), blob);
+  f.respond(3);
+  await settle();
+  blob.release();
+  await settle();
+  f.respond(4);
+  await settle();
+  f.respond(5);
+  await settle();
+  const lease = begin(f);
+  observe(f, lease, {
+    type: 'preview',
+    token: lease.preview.token,
+    leaseRevision: lease.revision,
+    viewport: previewViewport,
+  });
+  expect(f.visible.at(-1)).toBe(true);
+  const shown = f.visible.length;
+  const published = f.statuses.length;
+  const resized = { ...previewGeometry, viewport: { width: 300, height: 200 } };
+  f.presentation.update(resized, null, f.preview());
+  await settle();
+  expect(f.calls[6]).toMatchObject({ type: 'surface.geometry', geometry: resized });
+  expect(f.visible).toHaveLength(shown);
+  expect(f.statuses).toHaveLength(published);
+  f.respond(6);
+  await settle();
+  expect(f.visible).toHaveLength(shown);
+  expect(f.statuses.slice(published).map((status) => status.state)).toEqual(['ready']);
+  expect(f.errors).toEqual([]);
+});
+
 test('does not renew the begin deadline and withdraws without waiting for a late Blob read', async () => {
   const f = fixture();
   await commit(f);

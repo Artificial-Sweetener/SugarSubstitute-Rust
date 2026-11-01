@@ -50,7 +50,11 @@ export interface NativeCanvasDesired {
    * this identity; only entering, leaving or emptying the grid participates in its key.
    */
   overview: readonly CanvasSurfaceOverviewCell[] | null;
+  /** Identify the presented content apart from its allocation; a resize keeps this identity. */
+  readonly content: string;
   readonly key: string;
+  /** Whether the geometry shows pixels: a positive viewport inside a visible, nonempty clip. */
+  readonly presentable: boolean;
 }
 
 /**
@@ -69,27 +73,31 @@ export function nativeCanvasDesired(
   accepts: boolean,
   preparing: boolean,
 ): NativeCanvasDesired {
-  const drawable =
-    !!geometry &&
-    geometry.viewport.width > 0 &&
-    geometry.viewport.height > 0 &&
-    (preparing || (geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0));
+  const sized = !!geometry && geometry.viewport.width > 0 && geometry.viewport.height > 0;
+  const presentable =
+    sized && geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0;
+  const drawable = presentable || (sized && preparing);
   const eligible = drawable && !overview && item?.mediaKind === 'image' ? item : null;
   const grid = overview && (drawable ? overview : []);
   const pair = eligible && comparison?.item.mediaKind === 'image' ? comparison : null;
+  const content = JSON.stringify([
+    item && [item.id, item.file, item.mediaKind],
+    accepts,
+    ...(pair ? [[pair.item.id, pair.item.file]] : []),
+    ...(grid ? [['overview', grid.length > 0]] : []),
+  ]);
   return {
     geometry,
     item: eligible,
     comparison: pair,
     overview: grid,
+    content,
     key: JSON.stringify([
       // Focus, gesture occlusions and the modal flag follow a presentation without replacing it.
       geometry && { ...geometry, focused: false, occlusions: undefined, modal: undefined },
-      item && [item.id, item.file, item.mediaKind],
-      accepts,
-      ...(pair ? [[pair.item.id, pair.item.file]] : []),
-      ...(grid ? [['overview', grid.length > 0]] : []),
+      content,
     ]),
+    presentable,
     empty: grid ? grid.length === 0 : item?.mediaKind !== 'image',
     previewable: !grid && item === null,
     shown: eligible !== null || (grid?.length ?? 0) > 0,

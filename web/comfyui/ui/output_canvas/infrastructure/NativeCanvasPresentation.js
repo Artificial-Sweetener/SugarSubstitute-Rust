@@ -41,7 +41,8 @@ export class NativeCanvasPresentation {
      * Reconcile only the selection, comparison, overview and geometry chosen by the view owners.
      * A divider-only comparison change keeps the presented pair and its camera; the newest
      * divider follows any in-flight placement rather than cancelling it. Overview layout changes
-     * likewise follow the overview request in flight.
+     * likewise follow the overview request in flight. A geometry-only change of shown content keeps
+     * the surface shown with its status unchanged; only content without committed pixels loads.
      */
     update(geometry, item, preview = null, comparison = null, overview = null) {
         if (this.#disposed)
@@ -91,6 +92,13 @@ export class NativeCanvasPresentation {
             this.#preview?.observing &&
             this.#binding?.selectionRevision !== null &&
             this.#binding?.geometry === JSON.stringify(geometry);
+        // Shown content whose allocation alone changes keeps its committed pixels: the host
+        // re-presents them at the new viewport, so the surface stays shown and ready meanwhile.
+        const resized = this.#visible &&
+            this.#desired?.content === desired.content &&
+            this.#binding?.committed === true &&
+            desired.presentable &&
+            (desired.shown || (desired.previewable && this.#preview?.observing === true));
         this.#desired = desired;
         if (!retainedFinal)
             this.options.viewport(null);
@@ -100,6 +108,10 @@ export class NativeCanvasPresentation {
         // Cancel its acknowledgement wait so the current geometry can reach the host.
         if (this.#binding?.active?.dependsOnView && !retainedFinal)
             this.#binding.active.cancellation.cancel();
+        if (resized) {
+            this.#wake();
+            return;
+        }
         // The native owner retains acknowledged pixels while a same-allocation replacement loads.
         if ((!desired.shown && !(desired.previewable && this.#preview?.observing)) ||
             !this.#binding?.committed ||
@@ -233,6 +245,9 @@ export class NativeCanvasPresentation {
                     if (!this.#owns(binding))
                         return;
                     if (result.status !== 'applied') {
+                        // Pixels kept shown through a resize cannot present at a rejected allocation.
+                        if (this.#current(binding, desired))
+                            this.#show(false);
                         this.#failed(desired, result);
                         continue;
                     }
