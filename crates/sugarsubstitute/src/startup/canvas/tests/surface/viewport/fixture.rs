@@ -298,9 +298,9 @@ impl Fixture {
             .join(", "))
     }
 
-    /// Report later geometry inside a different trusted web view allocation.
-    pub(in crate::startup::canvas::tests::surface) fn reallocate(&mut self, bounds: PhysicalRect) {
-        self.allocation.bounds = bounds;
+    /// Report later geometry inside different trusted web view bounds at the same density.
+    pub(in crate::startup::canvas::tests::surface) fn rebound(&mut self, bounds: PhysicalRect) {
+        self.reallocate(WebViewAllocation { bounds, ..self.allocation });
     }
 
     /// Write another qualification output beside the fixture's images.

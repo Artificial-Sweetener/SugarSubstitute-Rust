@@ -270,7 +270,7 @@ fn reattached_overview(order: [Stage; 3], variant: Variant) -> Result<(), Box<dy
         id += 1;
     }
     if variant.large {
-        fixture.reallocate(PhysicalRect { x: 0, y: 0, width: 2640, height: 1680 });
+        fixture.rebound(PhysicalRect { x: 0, y: 0, width: 2640, height: 1680 });
         fixture.send(id, "surface.geometry", geometry(candidate.0, candidate.1, density, true))?;
         fixture.complete(id)?;
         id += 1;
