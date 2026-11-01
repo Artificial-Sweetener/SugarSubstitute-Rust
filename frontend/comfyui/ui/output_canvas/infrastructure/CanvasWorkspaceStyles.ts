@@ -16,8 +16,14 @@
 /** Style output workspace regions while inheriting Fluent and Comfy appearance tokens. */
 
 import { MASONRY_STACK_Z_INDEX } from '../../core/OverlayStacking.js';
+import { GRAPH_LAYER_CLIP_PROPERTY } from './ComfyCanvasFrameAllocation.js';
 
-/** Install scoped allocation rules for owned regions and qualified native chrome. */
+/**
+ * Install scoped allocation rules for owned regions and qualified native chrome.
+ *
+ * The owned frame is fixed in client space, so the graph root's clip never reaches the pane in the
+ * reserved strip. Nodes 1.0 DOM widgets are fixed too, so their container applies the graph clip.
+ */
 export function ensureCanvasWorkspaceStyles(document: Document): void {
   if (document.getElementById('sugarcubes-output-workspace-styles')) return;
   const style = document.createElement('style');
@@ -32,7 +38,8 @@ export function ensureCanvasWorkspaceStyles(document: Document): void {
     .sc-output-canvas-toggle:disabled { opacity:.5; cursor:default; }
     .sc-output-canvas-toggle span { width:20px; height:20px; background:currentColor; pointer-events:none;
       mask:var(--sc-output-icon) center / contain no-repeat; }
-    .sc-output-workspace-frame { position:absolute; z-index:998; isolation:isolate; pointer-events:none; }
+    .sc-output-workspace-frame { position:fixed; z-index:998; isolation:isolate; pointer-events:none; }
+    #graph-canvas-container > :has(> .dom-widget) { clip-path:var(${GRAPH_LAYER_CLIP_PROPERTY},none); }
     .sc-output-workspace-topmenu { height:var(--sc-output-toolbar-height); flex-shrink:0; overflow:visible; }
     .sc-output-workspace-topmenu > * { flex-shrink:0; }
     .sc-output-workspace-content { position:absolute; inset:0; pointer-events:none; }

@@ -85,27 +85,13 @@ export class ComfyCanvasWorkspaceFrame {
             next.frameHeight !== previous.frameHeight)
             this.changed(next.width, next.height);
     }
-    /** Reanchor sibling pixels synchronously after native allocation moves their shared origin. */
-    syncOrigin() {
-        if (this.#disposed)
-            return;
-        const next = this.#readBounds();
-        for (const property of ['left', 'top']) {
-            const value = `${next[property]}px`;
-            if (this.element.style.getPropertyValue(property) !== value)
-                this.element.style.setProperty(property, value);
-        }
-        if (this.#bounds)
-            this.#bounds = { ...this.#bounds, left: next.left, top: next.top };
-    }
-    /** Measure native content in the current graph coordinate origin without changing host geometry. */
+    /** Measure the panel in client space, where the fixed sibling stays clear of graph allocation. */
     #readBounds() {
-        const origin = this.root.getBoundingClientRect();
         const panel = this.panel.getBoundingClientRect();
         const frame = this.root.parentElement?.getBoundingClientRect();
         return {
-            left: panel.left - origin.left,
-            top: panel.top - origin.top,
+            left: panel.left,
+            top: panel.top,
             width: panel.width,
             height: panel.height,
             frameWidth: frame?.width ?? 0,

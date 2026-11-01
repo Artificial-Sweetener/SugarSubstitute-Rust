@@ -14,9 +14,10 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove authoritative chrome reconstruction against Chromium's fractional nested layout. */
+/** Prove authoritative chrome reconstruction and graph-layer clipping against Chromium layout. */
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { build } from 'esbuild';
+import UPNG from 'upng-js';
 import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let browserReady: Promise<Browser>;
@@ -29,7 +30,7 @@ beforeAll(async () => {
   const output = await build({
     stdin: {
       contents:
-        "import {ComfyCanvasFrameAllocation} from './frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasFrameAllocation.ts';import {BrowserCanvasWorkspace} from './frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasWorkspace.ts';import {CanvasWorkspaceLayout} from './frontend/comfyui/ui/output_canvas/application/CanvasWorkspaceLayout.ts';globalThis.ComfyCanvasFrameAllocation=ComfyCanvasFrameAllocation;globalThis.BrowserCanvasWorkspace=BrowserCanvasWorkspace;globalThis.CanvasWorkspaceLayout=CanvasWorkspaceLayout;",
+        "import {ComfyCanvasFrameAllocation} from './frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasFrameAllocation.ts';import {BrowserCanvasWorkspace} from './frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasWorkspace.ts';import {CanvasWorkspaceLayout} from './frontend/comfyui/ui/output_canvas/application/CanvasWorkspaceLayout.ts';import {ensureCanvasViewportStyles} from './frontend/comfyui/ui/output_canvas/infrastructure/CanvasViewportStyles.ts';globalThis.ComfyCanvasFrameAllocation=ComfyCanvasFrameAllocation;globalThis.BrowserCanvasWorkspace=BrowserCanvasWorkspace;globalThis.CanvasWorkspaceLayout=CanvasWorkspaceLayout;globalThis.ensureCanvasViewportStyles=ensureCanvasViewportStyles;",
       resolveDir: process.cwd(),
     },
     bundle: true,
@@ -181,7 +182,7 @@ test('matches fractional outer-frame dimensions instead of losing an inverse-cal
       chromeWidth: 1484,
       rootX: 63.25,
       panelX: 63.25,
-      chromeStyle: 'left: -63.25px; width: 1484px; top: -78.5px; height: 937px;',
+      chromeStyle: 'position: fixed; left: 0px; top: 0px; width: 1484px; height: 937px;',
     },
     resized: {
       frameWidth: 1484.375,
@@ -189,4 +190,99 @@ test('matches fractional outer-frame dimensions instead of losing an inverse-cal
       chromeWidthStyle: '1484.38px',
     },
   });
+});
+
+/** Read one opaque screenshot pixel in CSS pixels at the fixture's unit device scale. */
+function pixel(image: UPNG.Image, x: number, y: number): readonly number[] {
+  const rgba = new Uint8Array(UPNG.toRGBA8(image)[0]!);
+  const offset = (y * image.width + x) * 4;
+  return [...rgba.slice(offset, offset + 3)];
+}
+
+test('keeps Comfy graph layers out of a transparent docked strip while chrome spans the frame', async () => {
+  const page = await pageReady;
+  if (!page) throw new Error('Browser page fixture is unavailable.');
+  // Comfy 1.47.11 graph root: full-frame chrome, the LiteGraph canvas, the transformed Vue node
+  // pane and the Nodes 1.0 DOM-widget layer, whose widgets are fixed in client coordinates.
+  await page.setContent(`<!doctype html><style>
+      * { box-sizing:border-box; }
+      html,body { margin:0; background:rgb(0,0,0); }
+      .comfyui-body { display:grid; grid-template-rows:auto 1fr auto; grid-template-columns:auto 1fr auto;
+        width:1200px; height:800px; overflow:hidden; }
+      #graph-canvas-container { grid-area:2/2; position:relative; width:100%; height:100%; overflow:clip; }
+      #chrome { position:absolute; top:0; left:0; z-index:999; display:flex; flex-direction:column;
+        width:100%; height:100%; pointer-events:none; }
+      #topbar { height:60px; flex-shrink:0; background:rgb(0,255,0); pointer-events:auto; }
+      .graph-canvas-panel { position:relative; flex:1; }
+      #graph-canvas { position:absolute; inset:0; width:100%; height:100%; background:rgb(40,40,40); }
+      [data-testid="transform-pane"] { position:absolute; inset:0; pointer-events:none;
+        transform-origin:0 0; transform:scale3d(1.5,1.5,1.5) translate3d(100px,0px,0); }
+      .node { position:absolute; left:300px; top:100px; width:600px; height:200px; background:rgb(0,0,255); }
+      .isolate { isolation:isolate; }
+      .dom-widget { position:fixed; left:500px; top:540px; width:690px; height:100px; background:rgb(255,0,0); }
+    </style><div class="comfyui-body"><div id="graph-canvas-container"><div id="chrome"><div id="topbar"></div><div class="graph-canvas-panel"></div></div><canvas id="graph-canvas"></canvas><div data-testid="transform-pane"><div class="node"></div></div><div class="isolate"><div class="dom-widget"></div></div></div></div>`);
+  await page.addScriptTag({ content: allocationScript });
+  const layout = await page.evaluate(async () => {
+    const owner = globalThis as typeof globalThis & {
+      BrowserCanvasWorkspace: new (
+        root: HTMLElement,
+        panel: HTMLElement,
+        model: unknown,
+        frames: { request(callback: () => void): () => void },
+        actions: { width(): void; close(): void; changed(): void; report(): void },
+      ) => {
+        readonly canvas: HTMLElement;
+        preferences(value: { visible: boolean; width: number }): void;
+      };
+      CanvasWorkspaceLayout: new () => unknown;
+      ensureCanvasViewportStyles(document: Document): void;
+    };
+    const root = document.querySelector<HTMLElement>('#graph-canvas-container')!;
+    const panel = document.querySelector<HTMLElement>('.graph-canvas-panel')!;
+    const workspace = new owner.BrowserCanvasWorkspace(
+      root,
+      panel,
+      new owner.CanvasWorkspaceLayout(),
+      {
+        request(callback) {
+          const handle = requestAnimationFrame(callback);
+          return () => cancelAnimationFrame(handle);
+        },
+      },
+      { width() {}, close() {}, changed() {}, report() {} },
+    );
+    workspace.preferences({ visible: true, width: 400 });
+    // A native host presents beneath the page, which leaves the docked pane transparent.
+    owner.ensureCanvasViewportStyles(document);
+    const viewport = document.createElement('div');
+    viewport.className = 'sc-output-viewport sc-output-native';
+    workspace.canvas.append(viewport);
+    for (let index = 0; index < 4; index++) await new Promise(requestAnimationFrame);
+    const pane = root.querySelector<HTMLElement>('.sc-output-workspace-pane')!;
+    const strip = pane.getBoundingClientRect();
+    return {
+      root: root.getBoundingClientRect().toJSON() as unknown,
+      strip: strip.toJSON() as unknown,
+      paneBackground: getComputedStyle(pane).backgroundColor,
+      stripTarget: pane.contains(document.elementFromPoint(1000, 400)),
+      widgetTarget: document.elementFromPoint(1100, 590)?.className,
+      graphWidgetTarget: document.elementFromPoint(600, 590)?.className,
+    };
+  });
+  expect(layout).toEqual({
+    root: { x: 0, y: 60, width: 800, height: 740, top: 60, right: 800, bottom: 800, left: 0 },
+    strip: { x: 800, y: 60, width: 400, height: 740, top: 60, right: 1200, bottom: 800, left: 800 },
+    paneBackground: 'rgba(0, 0, 0, 0)',
+    stripTarget: true,
+    widgetTarget: 'sc-output-viewport sc-output-native',
+    graphWidgetTarget: 'dom-widget',
+  });
+  const image = UPNG.decode((await page.screenshot()).buffer as ArrayBuffer);
+  // Graph layers render inside the allocated rectangle and never inside the transparent strip.
+  expect(pixel(image, 700, 300)).toEqual([0, 0, 255]);
+  expect(pixel(image, 600, 590)).toEqual([255, 0, 0]);
+  expect(pixel(image, 1000, 300)).toEqual([0, 0, 0]);
+  expect(pixel(image, 1100, 590)).toEqual([0, 0, 0]);
+  // Chrome keeps its full-frame row above the strip.
+  expect(pixel(image, 1100, 30)).toEqual([0, 255, 0]);
 });
