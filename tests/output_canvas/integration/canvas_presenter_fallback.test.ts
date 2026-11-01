@@ -169,6 +169,8 @@ function fixture(discovery: Discovery) {
   const mounted = { native: 0, browser: 0 };
   const natives: { attachment: NativeCanvasAttachment; address: CanvasAttachmentAddress }[] = [];
   const primary = new CanvasPrimarySurface({
+    // Retries of timed-out preparation are not exercised here.
+    clock: { later: () => () => {} },
     document,
     views,
     window: windowId('presenter'),

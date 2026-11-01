@@ -16,6 +16,7 @@
 /** Bound one native attachment's preparation and settle disposal before its registry lease retires. */
 
 import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
+import { CanvasPreparationTimeout } from '../domain/CanvasPreparation.js';
 
 /** Observe real host readiness once, retaining failure for the attachment transaction owner. */
 export class NativeCanvasReadiness {
@@ -24,8 +25,13 @@ export class NativeCanvasReadiness {
   #fail: ((error: Error) => void) | null = null;
   #stop: (() => void) | null = null;
 
-  /** Use the existing injected clock and the native host's five-second preparation bound. */
-  constructor(clock: ExecutionClock) {
+  /**
+   * Use the existing injected clock and the native host's five-second preparation bound.
+   *
+   * @param expired Called when the deadline passes, before readiness rejects with a
+   *   `CanvasPreparationTimeout` the attachment transaction owner may recover from.
+   */
+  constructor(clock: ExecutionClock, expired: () => void = () => {}) {
     this.ready = new Promise<void>((resolve, reject) => {
       this.#complete = resolve;
       this.#fail = reject;
@@ -33,9 +39,10 @@ export class NativeCanvasReadiness {
     // Constructor failure may prevent the attachment owner from receiving this promise.
     // Keep the original promise rejected for that owner's normal observation path.
     void this.ready.catch(() => {});
-    this.#stop = clock.later(5000, () =>
-      this.fail(new Error('Native canvas preparation timed out.')),
-    );
+    this.#stop = clock.later(5000, () => {
+      expired();
+      this.fail(new CanvasPreparationTimeout());
+    });
   }
 
   /** Complete only after the native host acknowledges preparation of the requested content. */

@@ -251,6 +251,8 @@ describe('composed browser canvas attachment', () => {
     const transport = createNativePanelTransport(window);
     if (!transport) throw new Error('Native transport fixture was not admitted.');
     const primary = new CanvasPrimarySurface({
+      // Retries of timed-out preparation are not exercised here.
+      clock: { later: () => () => {} },
       document,
       views: f.views,
       window: windowId('browser'),
@@ -366,6 +368,8 @@ describe('composed browser canvas attachment', () => {
       },
     };
     const primary = new CanvasPrimarySurface({
+      // Retries of timed-out preparation are not exercised here.
+      clock: { later: () => () => {} },
       document,
       views: f.views,
       window: windowId('browser'),

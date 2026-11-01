@@ -69,6 +69,8 @@ export interface NativeCanvasAttachmentOptions extends CanvasAttachmentOptions {
   surfacePending?(): boolean;
   /** Check the staged registry lease without granting active control or preview authority. */
   acceptsPreparation(): boolean;
+  /** Ask the attachment owner for a fresh attachment after a stalled preparation's request changed. */
+  recover?(): void;
 }
 
 /** Retain controls and selection while leaving every output pixel to the native host. */
@@ -102,6 +104,9 @@ export class NativeCanvasAttachment {
   #presentation: NativeCanvasPresentationStatus = { state: 'empty', message: '' };
   #ready = false;
   #disposed = false;
+  /** Preparation passed its deadline and has not completed since; `#stallKey` names its request. */
+  #stalled = false;
+  #stallKey: string | null = null;
 
   /** Mount shared controls without constructing browser loaders, image layers, or decoders. */
   constructor(
@@ -206,7 +211,10 @@ export class NativeCanvasAttachment {
       address: options.address,
       clock: options.clock,
       acceptsPreparation: () => !this.#disposed && options.acceptsPreparation(),
-      prepared: () => this.#readiness.complete(),
+      prepared: () => {
+        this.#stalled = false;
+        this.#readiness.complete();
+      },
       host: options.nativeSurface,
       surfacePending: () => this.options.surfacePending?.() ?? false,
       accepts: () => !this.#disposed && options.accepts(),
@@ -253,7 +261,10 @@ export class NativeCanvasAttachment {
     });
     this.#keyboard = new CanvasViewportKeyboard(this.viewport, this.port, options.report);
     this.viewport.addEventListener('pointerdown', this.#focusViewport);
-    this.#readiness = new NativeCanvasReadiness(options.clock);
+    this.#readiness = new NativeCanvasReadiness(options.clock, () => {
+      this.#stalled = true;
+      this.#stallKey = this.#requestKey();
+    });
     this.ready = this.#readiness.ready;
     const cleanup: (() => void)[] = [
       () => this.#readiness.dispose(),
@@ -329,6 +340,19 @@ export class NativeCanvasAttachment {
     this.#present();
     this.#status.changed(true);
     if (this.options.accepts()) this.#reveal.apply();
+    this.#recoverOnChange();
+  }
+
+  /** Report a preparation that passed its deadline and has not completed since. */
+  stalled(): boolean {
+    return this.#stalled && !this.#disposed;
+  }
+
+  /** Show the load error once the owner stops retrying a stalled preparation. */
+  preparationFailed(): void {
+    if (this.#disposed) return;
+    this.#presentation = { state: 'error', message: 'The native canvas could not be prepared.' };
+    if (this.#ready) this.#status.changed(true);
   }
 
   /** Admit bytes only for this visible, committed view's authoritative source/run interest. */
@@ -410,12 +434,29 @@ export class NativeCanvasAttachment {
   }
 
   /** Forward qualified geometry without constructing a browser drawing surface. */
+  /** Identify the stalled request: the selected output and the presented allocation. */
+  #requestKey(): string {
+    const surface = this.#surface && { ...this.#surface, focused: false };
+    return JSON.stringify([
+      this.#plan.primary?.item?.id ?? null,
+      surface && { ...surface, occlusions: undefined, modal: undefined },
+    ]);
+  }
+
+  /** A later selection or geometry change after a stalled preparation always attaches afresh. */
+  #recoverOnChange(): void {
+    if (!this.stalled() || this.#stallKey === this.#requestKey()) return;
+    this.#stallKey = this.#requestKey();
+    this.options.recover?.();
+  }
+
   #resize(surface: CanvasSurfaceGeometry): void {
     // Unchanged measurements (e.g. a remeasure after the attachment's own render) are idle.
     if (this.#surface && JSON.stringify(this.#surface) === JSON.stringify(surface)) return;
     this.#surface = surface;
     this.#overview?.resize();
     this.#present();
+    this.#recoverOnChange();
   }
 
   /**

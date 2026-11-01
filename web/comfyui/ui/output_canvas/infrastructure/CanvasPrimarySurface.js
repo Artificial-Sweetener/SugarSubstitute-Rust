@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Retire inactive primary attachments while retaining per-workflow lightweight view state. */
+import { CanvasPreparationTimeout } from '../domain/CanvasPreparation.js';
+import { CanvasPreparationRecovery, sameCanvasPreparationTarget, } from './CanvasPreparationRecovery.js';
 /** Give exactly one active visible primary workflow ownership of its surface and ephemeral previews. */
 export class CanvasPrimarySurface {
     options;
@@ -22,9 +24,32 @@ export class CanvasPrimarySurface {
     #stop = null;
     #disposed = false;
     #retirement = null;
+    /** Mount a fresh candidate even though the committed attachment matches the target. */
+    #remount = false;
+    #recovery;
     /** Inject attachment construction so lifecycle proofs exercise authority without borrowing platform decoders. */
     constructor(options) {
         this.options = options;
+        this.#recovery = new CanvasPreparationRecovery({
+            clock: options.clock,
+            retry: (target) => {
+                const current = this.#current;
+                if (current && !sameCanvasPreparationTarget(current, target))
+                    return;
+                // A slow host may have finished meanwhile; a prepared attachment needs no retry.
+                if (current && current.attachment.stalled?.() === false) {
+                    this.#recovery.reset();
+                    return;
+                }
+                this.#remount = true;
+                this.reconcile();
+            },
+            exhausted: (target) => {
+                const current = this.#current;
+                if (current && sameCanvasPreparationTarget(current, target))
+                    current.attachment.preparationFailed?.();
+            },
+        });
     }
     /** Report this primary attachment's bounded owned resources without exposing handles or workflow files. */
     diagnostics() {
@@ -76,7 +101,8 @@ export class CanvasPrimarySurface {
             this.#release();
             return;
         }
-        if (this.#current?.view === view &&
+        if (!this.#remount &&
+            this.#current?.view === view &&
             this.#current.generation === catalog.generation &&
             this.#current.element === element &&
             this.#current.renderer === renderer) {
@@ -122,6 +148,7 @@ export class CanvasPrimarySurface {
             this.options.report(error);
             return;
         }
+        this.#remount = false;
         const pending = {
             view,
             generation: catalog.generation,
@@ -162,7 +189,7 @@ export class CanvasPrimarySurface {
                 this.#cancelPending();
                 return;
             }
-            const attachment = this.options.mount(root, address, catalog, accepts, acceptsPreparation);
+            const attachment = this.options.mount(root, address, catalog, accepts, acceptsPreparation, () => this.#recover());
             if (attachment instanceof Promise)
                 void attachment.then((loaded) => this.#adopt(pending, loaded), (error) => this.#failPending(pending, error));
             else
@@ -188,8 +215,17 @@ export class CanvasPrimarySurface {
         this.#stop?.();
         this.#stop = null;
         this.options.document.removeEventListener('visibilitychange', this.reconcile);
+        this.#recovery.reset();
         this.#cancelPending();
         this.#release();
+    }
+    /** Attach afresh at once, with a new retry budget, after a stalled attachment's request changed. */
+    #recover() {
+        if (this.#disposed)
+            return;
+        this.#recovery.reset();
+        this.#remount = true;
+        this.reconcile();
     }
     /** Adopt only the still-current constructed attachment, retiring late loads immediately. */
     #adopt(pending, attachment) {
@@ -219,8 +255,11 @@ export class CanvasPrimarySurface {
         else
             this.#activate(pending);
     }
-    /** Commit only a still-current ready candidate, then retire the replaced surface. */
-    #activate(pending) {
+    /**
+     * Commit only a still-current ready candidate, then retire the replaced surface. A candidate
+     * committed after its preparation timed out keeps the retry budget running.
+     */
+    #activate(pending, recovering = false) {
         if (this.#pending !== pending)
             return;
         const { coordinator, views } = this.options;
@@ -245,6 +284,8 @@ export class CanvasPrimarySurface {
         const previous = this.#current;
         this.#pending = null;
         this.#current = { ...pending, attachment: pending.attachment };
+        if (!recovering)
+            this.#recovery.reset();
         pending.root.style.visibility = '';
         pending.root.style.pointerEvents = '';
         if (previous) {
@@ -262,12 +303,24 @@ export class CanvasPrimarySurface {
             this.options.report(error);
         }
     }
-    /** Ignore failures from a canceled candidate and retain the previous committed attachment. */
+    /**
+     * Ignore failures from a canceled candidate and retain the previous committed attachment.
+     *
+     * A preparation timeout is recoverable: the host may only be slow. With nothing committed, the
+     * timed-out candidate is committed so its loading state replaces a blank pane, and the same
+     * target is retried afresh on a bounded backoff until it prepares or shows its error state.
+     */
     #failPending(pending, error) {
         if (this.#pending !== pending)
             return;
-        this.#cancelPending();
+        const timedOut = error instanceof CanvasPreparationTimeout;
+        if (timedOut && !this.#current && pending.attachment)
+            this.#activate(pending, true);
+        else
+            this.#cancelPending();
         this.options.report(error);
+        if (timedOut)
+            this.#recovery.failed(pending);
     }
     /** Cancel the exact staged transaction before disposing any candidate resources. */
     #cancelPending() {

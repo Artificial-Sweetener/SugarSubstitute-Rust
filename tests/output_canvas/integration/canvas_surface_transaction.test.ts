@@ -61,6 +61,8 @@ function fixture(initialRenderer = 'browser') {
   }[] = [];
   const report = jest.fn<(error: unknown) => void>();
   const primary = new CanvasPrimarySurface({
+    // Retries of timed-out preparation are not exercised here.
+    clock: { later: () => () => {} },
     document,
     window: windowId('primary'),
     views,
