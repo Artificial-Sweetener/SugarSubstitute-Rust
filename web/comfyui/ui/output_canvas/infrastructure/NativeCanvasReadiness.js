@@ -14,14 +14,20 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bound one native attachment's preparation and settle disposal before its registry lease retires. */
+import { CanvasPreparationTimeout } from '../domain/CanvasPreparation.js';
 /** Observe real host readiness once, retaining failure for the attachment transaction owner. */
 export class NativeCanvasReadiness {
     ready;
     #complete = null;
     #fail = null;
     #stop = null;
-    /** Use the existing injected clock and the native host's five-second preparation bound. */
-    constructor(clock) {
+    /**
+     * Use the existing injected clock and the native host's five-second preparation bound.
+     *
+     * @param expired Called when the deadline passes, before readiness rejects with a
+     *   `CanvasPreparationTimeout` the attachment transaction owner may recover from.
+     */
+    constructor(clock, expired = () => { }) {
         this.ready = new Promise((resolve, reject) => {
             this.#complete = resolve;
             this.#fail = reject;
@@ -29,7 +35,10 @@ export class NativeCanvasReadiness {
         // Constructor failure may prevent the attachment owner from receiving this promise.
         // Keep the original promise rejected for that owner's normal observation path.
         void this.ready.catch(() => { });
-        this.#stop = clock.later(5000, () => this.fail(new Error('Native canvas preparation timed out.')));
+        this.#stop = clock.later(5000, () => {
+            expired();
+            this.fail(new CanvasPreparationTimeout());
+        });
     }
     /** Complete only after the native host acknowledges preparation of the requested content. */
     complete() {

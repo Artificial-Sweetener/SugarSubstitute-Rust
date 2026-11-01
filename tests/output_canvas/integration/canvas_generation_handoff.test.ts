@@ -85,6 +85,8 @@ test('background results stay with their workflow and late decodes cannot replac
   const root = document.createElement('div');
   document.body.append(root);
   const primary: CanvasPrimarySurface = new CanvasPrimarySurface({
+    // Retries of timed-out preparation are not exercised here.
+    clock: { later: () => () => {} },
     document,
     views,
     coordinator,
