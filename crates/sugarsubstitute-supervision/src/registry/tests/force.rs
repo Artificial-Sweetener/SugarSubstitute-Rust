@@ -49,3 +49,33 @@ fn failed_force_is_not_repeated_in_the_same_admitted_step() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn hung_desktop_child_is_forced_once_at_grace_and_settles_only_after_the_kill_empties_its_job()
+-> TestResult {
+    let mut h = Harness::new()?;
+    let key = h.launch(1)?.process();
+    h.created(key)?;
+    h.stop(key)?;
+    // The child's main thread is blocked in a native call, so it never exits on its own.
+    for before_grace in [0, 5_000_000_000, 9_999_999_999] {
+        h.clock.0.store(before_grace, Ordering::Release);
+        h.cleanup(key)?;
+        assert_eq!(h.fake.forces.load(Ordering::Acquire), 0);
+        assert!(!h.registry.snapshot(key)?.settled);
+    }
+    h.clock.0.store(10_000_000_000, Ordering::Release);
+    h.cleanup(key)?;
+    assert_eq!(h.fake.forces.load(Ordering::Acquire), 1);
+    assert!(!h.registry.snapshot(key)?.settled);
+    assert_eq!(h.fake.closes.load(Ordering::Acquire), 0);
+    // The job termination kills the hung child with the job's exit code.
+    h.fake.root_alive.store(false, Ordering::Release);
+    h.exit(key, ROOT, true, 1)?;
+    h.cleanup(key)?;
+    let snapshot = h.registry.snapshot(key)?;
+    assert_eq!(snapshot.root_exit, Some(1));
+    assert!(snapshot.settled);
+    assert_eq!(h.fake.forces.load(Ordering::Acquire), 1);
+    Ok(())
+}
