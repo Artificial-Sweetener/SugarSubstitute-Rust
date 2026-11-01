@@ -202,3 +202,36 @@ fn magnified_underlay_is_nearest_and_foreign_or_stale_sources_are_rejected() -> 
         Ok(())
     })
 }
+
+#[test]
+fn repeated_primary_rows_keep_each_rows_own_underlay_repair() -> harness::TestResult {
+    run_test(|context| {
+        let primary_extent = Extent::new(2, 1)?;
+        let target_extent = Extent::new(9, 3)?;
+        let primary = surface(primary_extent, stamp(3)?, |x, _| 0xff10_0000 | x, context)?;
+        let underlay = surface(target_extent, stamp(2)?, |x, y| 0xff00_1000 | y << 8 | x, context)?;
+        let mut target_view = Viewport::new(target_extent)?;
+        target_view.zoom_at(3.0, [0.0; 2])?;
+        let primary_map = ViewProjection::new(Viewport::new(primary_extent)?, target_view)?;
+        let underlay_map = ViewProjection::new(target_view, target_view)?;
+        let samples = ProjectionSamples::new(primary_map, context)?;
+        assert!(samples.rows().windows(2).all(|pair| pair[0] == pair[1]));
+
+        let projection = ProjectionBuffer::new(target_extent, context.memory(), context)?
+            .project_over(
+                stamp(4)?,
+                &primary,
+                primary_map,
+                Some((&underlay, underlay_map)),
+                black()?,
+                context,
+            )?;
+        for y in 0..3 {
+            for x in 0..9 {
+                let expected = if x < 6 { 0xff10_0000 | (x / 3) } else { 0xff00_1000 | y << 8 | x };
+                assert_eq!(projection.pixels()[(y * 9 + x) as usize], expected, "pixel {x},{y}");
+            }
+        }
+        Ok(())
+    })
+}

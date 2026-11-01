@@ -38,6 +38,7 @@ mod counter_deadline;
 mod cpu;
 #[cfg(any(windows, test))]
 mod desktop_capture;
+mod fork_join;
 #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
 mod preview_arming;
 #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]

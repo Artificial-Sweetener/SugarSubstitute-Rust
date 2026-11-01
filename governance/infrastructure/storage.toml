@@ -268,7 +268,7 @@ boundary = "native_ipc"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/admission_submit.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:83766454357f355c67ad8a9433d677639db7e87f2cd6563a14fdc2d72e738bf8"
+source_sha256 = "sha256:be809eeb348fb867c24e0ac5cb97b424efb024af43f0383f36684a5df040a2e8"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Admit factories and native permits atomically before ownership or external effects transfer. This receiver does not inspect filesystem state."

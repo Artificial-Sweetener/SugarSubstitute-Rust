@@ -190,3 +190,92 @@ fn command_lifetime_can_bound_an_operation_without_extending_that_bound()
     assert_eq!(operation.bounded_until(Moment::from_nanos(0)).deadline(), Some(context.now()));
     Ok(())
 }
+
+/// Run fork-join items in reverse order on the caller, recording each call's group count.
+#[derive(Default)]
+struct ReverseJoin(std::sync::Mutex<Vec<usize>>);
+impl ForkJoin for ReverseJoin {
+    fn width(&self) -> usize {
+        3
+    }
+    fn join<'a>(&self, items: Vec<ForkJoinItem<'a>>) {
+        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(items.len());
+        for item in items.into_iter().rev() {
+            item();
+        }
+    }
+}
+
+fn chunk_context(
+    fork_join: Option<Arc<dyn ForkJoin>>,
+) -> Result<JobContext, Box<dyn std::error::Error>> {
+    let resources = AdmittedJobResources::new(
+        MemoryLease::new(1, Box::new(ReleaseCount(Arc::new(AtomicU64::new(0))))),
+        None,
+    );
+    Ok(JobContext::new(
+        ExecutionId::new(1)?,
+        ScopeId::new(1)?,
+        JobSpec {
+            id: JobId::new(1)?,
+            operation: Operation::Infrastructure,
+            class: JobClass::InfrastructureOrdinary,
+            deadline: None,
+            reservation_bytes: 1,
+            replacement: None,
+        },
+        None,
+        Arc::new(ManualCancel(Arc::new(WaitState::default()))),
+        Arc::new(ManualClock(Arc::new(WaitState::default()))),
+        match fork_join {
+            Some(fork_join) => resources.with_fork_join(fork_join),
+            None => resources,
+        },
+    ))
+}
+
+#[test]
+fn chunks_run_in_order_on_the_caller_without_fork_join() -> Result<(), Box<dyn std::error::Error>> {
+    let context = chunk_context(None)?;
+    let mut data = [0_usize; 7];
+    let visited = std::sync::Mutex::new(Vec::new());
+    context.try_for_each_chunk_mut(&mut data, 3, |index, chunk| {
+        visited.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(index);
+        chunk.fill(index + 1);
+        Ok::<_, std::fmt::Error>(())
+    })?;
+    assert_eq!(data, [1, 1, 1, 2, 2, 2, 3]);
+    assert_eq!(*visited.lock().unwrap_or_else(std::sync::PoisonError::into_inner), [0, 1, 2]);
+    let failed =
+        context.try_for_each_chunk_mut(
+            &mut data,
+            0,
+            |index, _| {
+                if index == 4 { Err(index) } else { Ok(()) }
+            },
+        );
+    assert_eq!(failed, Err(4));
+    Ok(())
+}
+
+#[test]
+fn fork_join_groups_cover_every_chunk_once_and_report_the_earliest_failure()
+-> Result<(), Box<dyn std::error::Error>> {
+    let join = Arc::new(ReverseJoin::default());
+    let context = chunk_context(Some(join.clone()))?;
+    let mut data = [0_usize; 23];
+    context.try_for_each_chunk_mut(&mut data, 2, |index, chunk| {
+        chunk.iter_mut().for_each(|value| *value += index + 1);
+        Ok::<_, std::fmt::Error>(())
+    })?;
+    let expected: Vec<usize> = (0..23).map(|offset| offset / 2 + 1).collect();
+    assert_eq!(data.to_vec(), expected);
+    let failed = context.try_for_each_chunk_mut(&mut data, 2, |index, _| {
+        if index == 2 || index == 9 { Err(index) } else { Ok(()) }
+    });
+    assert_eq!(failed, Err(2));
+    let single = context.try_for_each_chunk_mut(&mut data[..2], 2, |_, _| Ok::<_, ()>(()));
+    assert_eq!(single, Ok(()));
+    assert_eq!(*join.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner), [3, 3]);
+    Ok(())
+}

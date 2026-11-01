@@ -27,7 +27,7 @@ mod spatial;
 
 pub use buffer::{TILE_EDGE, Tile};
 pub use display::SrgbEncoder;
-pub use display_sampling::{DisplaySample, bilinear_display_pixel};
+pub use display_sampling::{DisplaySample, bilinear_display_pixel, bilinear_display_row};
 pub use error::ImageError;
 pub(crate) use error::check;
 pub use evaluate::{EvaluationStats, Evaluator};

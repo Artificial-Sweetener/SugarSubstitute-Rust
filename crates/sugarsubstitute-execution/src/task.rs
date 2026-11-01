@@ -261,15 +261,16 @@ mod asynchronous;
 pub(crate) use asynchronous::{borrowed_panic_cause, panic_cause, run_async};
 
 /// Distinguish actual finite disposal from separately supervised native custody.
+/// The queued factory is boxed so outcome retirements stay small.
 pub(crate) enum FiniteRetirement {
-    Factory(QueuedJob, Stop),
+    Factory(Box<QueuedJob>, Stop),
     Outcome(Arc<dyn ErasedJob>),
 }
 
 /// Dispose accepted ownership exclusively on an execution-owned worker.
 pub(crate) fn retire(retired: FiniteRetirement) {
     match retired {
-        FiniteRetirement::Factory(queued, reason) => stop_queued(queued, reason),
+        FiniteRetirement::Factory(queued, reason) => stop_queued(*queued, reason),
         FiniteRetirement::Outcome(job) => job.dispose(),
     }
 }

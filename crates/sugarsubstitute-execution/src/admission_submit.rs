@@ -288,7 +288,7 @@ impl Core {
             deadline,
             cancel.clone(),
             self.clock.clone(),
-            sugarsubstitute_contracts::execution::AdmittedJobResources::new(memory, symbol_release),
+            resources(spec.class, memory, symbol_release, &self.helpers),
         );
         // Declared before the Core guard so unwind also unlocks before final release.
         construction_guard = context.clone();
@@ -351,3 +351,19 @@ impl Core {
 #[cfg(test)]
 #[path = "admission_construction_tests.rs"]
 mod construction_tests;
+
+/// Lend fork-join helper capacity only to CPU-class jobs.
+fn resources(
+    class: sugarsubstitute_contracts::execution::JobClass,
+    memory: MemoryLease,
+    symbol_release: Option<Box<dyn sugarsubstitute_contracts::execution::NativeHandleRelease>>,
+    helpers: &Arc<crate::fork_join::Helpers>,
+) -> sugarsubstitute_contracts::execution::AdmittedJobResources {
+    use sugarsubstitute_contracts::execution::{AdmittedJobResources, JobClass};
+    let resources = AdmittedJobResources::new(memory, symbol_release);
+    if matches!(class, JobClass::CpuInteractive | JobClass::CpuDecode) {
+        resources.with_fork_join(helpers.clone())
+    } else {
+        resources
+    }
+}

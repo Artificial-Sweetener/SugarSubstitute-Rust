@@ -10,6 +10,7 @@
 mod context;
 mod counter_deadline;
 mod errors;
+mod fork_join;
 mod identity;
 mod lifetime;
 mod memory;
@@ -21,6 +22,7 @@ mod spec;
 pub use context::{AdmittedJobResources, CancelControl, Clock, JobContext, WaitFuture};
 pub use counter_deadline::{CounterDeadline, CounterDeadlineError};
 pub use errors::{AdmissionError, ExecutionError};
+pub use fork_join::{ForkJoin, ForkJoinItem};
 pub use identity::{
     ExecutionId, Generation, IdentityError, JobId, Moment, ScopeId, SurfaceId, TimeError,
 };

@@ -4,8 +4,8 @@
 //! Provide job identity, cancellation, clock and retained memory without scheduling access.
 
 use super::{
-    ExecutionId, JobId, JobSpec, MemoryLease, Moment, NativeHandleLease, NativeHandleRelease,
-    ScopeId,
+    ExecutionId, ForkJoin, ForkJoinItem, JobId, JobSpec, MemoryLease, Moment, NativeHandleLease,
+    NativeHandleRelease, ScopeId,
 };
 use std::{future::Future, pin::Pin, sync::Arc};
 
@@ -43,29 +43,43 @@ pub trait CancelControl: Send + Sync {
 pub struct AdmittedJobResources {
     memory: MemoryLease,
     symbol_release: Option<Box<dyn NativeHandleRelease>>,
+    fork_join: Option<Arc<dyn ForkJoin>>,
 }
 impl AdmittedJobResources {
     /// Bundle already-admitted byte ownership and its optional fixed symbol reservation release.
     /// This constructs no queue, memory, native-output credit or native authority.
     pub fn new(memory: MemoryLease, symbol_release: Option<Box<dyn NativeHandleRelease>>) -> Self {
-        Self { memory, symbol_release }
+        Self { memory, symbol_release, fork_join: None }
+    }
+    /// Let the job spread borrowed work over the execution owner's bounded helper capacity.
+    #[must_use]
+    pub fn with_fork_join(mut self, fork_join: Arc<dyn ForkJoin>) -> Self {
+        self.fork_join = Some(fork_join);
+        self
     }
 }
 
 /// Own the bounded capabilities available to one admitted job.
 ///
 /// Clones retain cancellation/clock ports and the same byte charge. Contexts expose
-/// no submission, runtime, channel, native event-loop or worker-pool handles.
+/// no submission, runtime, channel, native event-loop or worker-pool handles. CPU contexts may
+/// spread borrowed work through a bounded fork-join that completes before it returns.
 #[derive(Clone)]
 pub struct JobContext {
     owner_id: ExecutionId,
     scope_id: ScopeId,
     spec: JobSpec,
     deadline: Option<Moment>,
-    cancellation: Arc<dyn CancelControl>,
+    ports: Arc<JobPorts>,
     clock: Arc<dyn Clock>,
     memory: MemoryLease,
     native_handles: Option<NativeHandleLease>,
+}
+
+/// Per-job adapter ports behind one thin handle; contexts also live in fixed native storage.
+struct JobPorts {
+    cancellation: Arc<dyn CancelControl>,
+    fork_join: Option<Arc<dyn ForkJoin>>,
 }
 
 impl JobContext {
@@ -90,7 +104,7 @@ impl JobContext {
             scope_id,
             spec,
             deadline,
-            cancellation,
+            ports: Arc::new(JobPorts { cancellation, fork_join: resources.fork_join }),
             clock,
             memory: resources.memory,
             native_handles,
@@ -136,12 +150,12 @@ impl JobContext {
 
     /// Observe a cancellation request without claiming the job has stopped.
     pub fn cancellation_requested(&self) -> bool {
-        self.cancellation.is_requested()
+        self.ports.cancellation.is_requested()
     }
 
     /// Own a wait for cancellation request notification.
     pub fn cancelled(&self) -> WaitFuture {
-        self.cancellation.cancelled()
+        self.ports.cancellation.cancelled()
     }
 
     /// Return the current moment in this job's injected monotonic clock.
@@ -161,6 +175,55 @@ impl JobContext {
     /// Borrow original fixed symbol output accounting; ordinary jobs return `None`.
     pub fn native_handles(&self) -> Option<&NativeHandleLease> {
         self.native_handles.as_ref()
+    }
+
+    /// Run `work` on every contiguous `chunk_len`-element chunk of `data` with its chunk index.
+    ///
+    /// CPU jobs spread groups of chunks over the execution owner's bounded helper threads and
+    /// return only after every chunk finished; other contexts run chunks in order on the caller.
+    /// Work observes this context's cancellation and deadline itself. A zero `chunk_len` is
+    /// treated as one.
+    /// # Errors
+    /// Returns the error of the earliest failing group; later chunks in that group do not run.
+    pub fn try_for_each_chunk_mut<T, E, F>(
+        &self,
+        data: &mut [T],
+        chunk_len: usize,
+        work: F,
+    ) -> Result<(), E>
+    where
+        T: Send,
+        E: Send,
+        F: Fn(usize, &mut [T]) -> Result<(), E> + Sync,
+    {
+        let chunk_len = chunk_len.max(1);
+        let chunks = data.len().div_ceil(chunk_len);
+        let fork_join = self.ports.fork_join.as_ref().filter(|port| port.width() > 1 && chunks > 1);
+        let Some(fork_join) = fork_join else {
+            return data
+                .chunks_mut(chunk_len)
+                .enumerate()
+                .try_for_each(|(index, chunk)| work(index, chunk));
+        };
+        let per_group = chunks.div_ceil(fork_join.width().min(chunks));
+        let groups = chunks.div_ceil(per_group);
+        let mut outcomes: Vec<Result<(), E>> = (0..groups).map(|_| Ok(())).collect();
+        let work = &work;
+        let items = data
+            .chunks_mut(per_group * chunk_len)
+            .zip(outcomes.iter_mut())
+            .enumerate()
+            .map(|(group, (slice, outcome))| {
+                Box::new(move || {
+                    *outcome = slice
+                        .chunks_mut(chunk_len)
+                        .enumerate()
+                        .try_for_each(|(index, chunk)| work(group * per_group + index, chunk));
+                }) as ForkJoinItem<'_>
+            })
+            .collect();
+        fork_join.join(items);
+        outcomes.into_iter().collect()
     }
 }
 

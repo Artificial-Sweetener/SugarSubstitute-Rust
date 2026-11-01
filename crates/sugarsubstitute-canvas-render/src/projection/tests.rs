@@ -88,7 +88,8 @@ fn projected_pixels_match_independent_camera_sampling_with_safe_matte_coverage()
                     let mut target = source;
                     target.zoom_at(factor, [13.125, 11.375])?;
                     target.pan_by([dx, dy])?;
-                    target.resize(Extent::new(37, 29)?)?;
+                    // Taller than two bands, so band boundaries and helper threads are covered.
+                    target.resize(Extent::new(37, 71)?)?;
                     let mapping = ViewProjection::new(source, target)?;
                     let projection = ProjectionBuffer::new(
                         mapping.target().surface(),
@@ -97,7 +98,7 @@ fn projected_pixels_match_independent_camera_sampling_with_safe_matte_coverage()
                     )?
                     .project(stamp(2)?, &base, mapping, matte, context)?;
                     let smooth = target.zoom() <= 2.0;
-                    for y in 0..29 {
+                    for y in 0..71 {
                         for x in 0..37 {
                             let point = source.device_at(
                                 target.document_at([f64::from(x) + 0.5, f64::from(y) + 0.5])?,

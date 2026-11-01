@@ -250,6 +250,8 @@ pub(crate) struct Core {
     pub(crate) notify: Arc<Notify>,
     pub(crate) cpu_changed: Condvar,
     pub(crate) workers: crate::worker_exit::WorkerCensus,
+    /// Bounded helper capacity lent to CPU jobs for borrowed fork-join work.
+    pub(crate) helpers: Arc<crate::fork_join::Helpers>,
 }
 
 fn ordinary(class: JobClass) -> bool {
@@ -295,6 +297,9 @@ impl Core {
             notify,
             cpu_changed: Condvar::new(),
             workers: crate::worker_exit::WorkerCensus::default(),
+            helpers: Arc::new(crate::fork_join::Helpers::new(
+                std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get),
+            )),
         })
     }
 
@@ -435,7 +440,7 @@ impl Core {
         }
         match retired {
             Retirement::Factory(queued, reason) => {
-                Some(crate::task::FiniteRetirement::Factory(queued, reason))
+                Some(crate::task::FiniteRetirement::Factory(Box::new(queued), reason))
             }
             Retirement::Outcome(job) => Some(crate::task::FiniteRetirement::Outcome(job)),
             #[cfg(any(windows, test))]
