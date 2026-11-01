@@ -40,6 +40,7 @@ import type {
   CanvasSurfaceSelectRequest,
 } from '../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
 import { CanvasClient } from '../../../integrations/shared/CanvasClient.js';
+import type { NativeCanvasPresentationStatus } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasStatus.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 
 type SurfaceRequest =
@@ -148,6 +149,7 @@ function fixture() {
   views.commitAttachment(address);
   let host: CanvasSurfaceHost | null = null;
   const visible: boolean[] = [];
+  const statuses: NativeCanvasPresentationStatus['state'][] = [];
   const errors: unknown[] = [];
   const surface = new NativeCanvasPresentation({
     clock: new WorkflowTestClock(),
@@ -158,7 +160,7 @@ function fixture() {
     host: () => host,
     accepts: () => views.accepts(address),
     visible: (value) => visible.push(value),
-    status: () => {},
+    status: (value) => statuses.push(value.state),
     viewport: () => {},
     report: (error) => errors.push(error),
   });
@@ -166,6 +168,7 @@ function fixture() {
     surface,
     address,
     visible,
+    statuses,
     errors,
     first: catalog.entries[0]!.items[0]!,
     second: catalog.entries[1]!.items[0]!,
@@ -381,7 +384,7 @@ test('reconciles stale geometry on an explicit refresh after a sibling attachmen
   await released;
 });
 
-test('reveals native pixels only after the surface accepts the current geometry', async () => {
+test('keeps committed pixels shown and ready while the host acknowledges a resized allocation', async () => {
   const f = fixture();
   const native = hostFixture();
   f.setHost(native.host);
@@ -390,15 +393,19 @@ test('reveals native pixels only after the surface accepts the current geometry'
     native.respond(index, status as CanvasSurfaceResult['status']);
     await settle();
   }
+  expect(f.statuses).toEqual(['loading', 'ready']);
   const resized = { ...geometry, viewport: { width: 400, height: 600 } };
   f.surface.update(resized, f.first);
-  expect(f.visible).toEqual([true, false]);
+  expect(f.visible).toEqual([true]);
+  expect(f.statuses).toEqual(['loading', 'ready']);
   expect(native.calls[4]).toMatchObject({ type: 'surface.geometry', geometry: resized });
   native.respond(4, 'applied');
   await settle();
-  expect(f.visible).toEqual([true, false, true]);
+  expect(f.visible).toEqual([true]);
+  expect(f.statuses).toEqual(['loading', 'ready', 'ready']);
+  expect(native.calls.filter((call) => call.type === 'surface.select')).toHaveLength(1);
   f.surface.update(resized, null);
-  expect(f.visible).toEqual([true, false, true, false]);
+  expect(f.visible).toEqual([true, false]);
   expect(native.calls[5]).toMatchObject({
     type: 'surface.geometry',
     geometry: { visible: false, clip: { x: 0, y: 0, width: 0, height: 0 } },
@@ -465,10 +472,11 @@ test('replaces pending geometry when another resize makes its presentation impos
   expect(native.calls[5]).toMatchObject({ type: 'surface.geometry', geometry: final });
   native.respond(4, 'applied');
   await settle();
-  expect(f.visible).toEqual([true, false]);
+  expect(f.visible).toEqual([true]);
   native.respond(5, 'applied');
   await settle();
-  expect(f.visible).toEqual([true, false, true]);
+  expect(f.visible).toEqual([true]);
+  expect(f.statuses).toEqual(['loading', 'ready', 'ready']);
   expect(native.calls.filter((call) => call.type === 'surface.select')).toHaveLength(1);
   expect(f.errors).toEqual([]);
   f.surface.dispose();
@@ -499,7 +507,7 @@ test('coalesces fractional geometry churn until native cancellation is acknowled
   if (!replacement) throw new Error('Replacement geometry request is missing.');
   expect(native.respond(replacement, 'applied')).toBe(true);
   await settle();
-  expect(f.visible).toEqual([true, false, true]);
+  expect(f.visible).toEqual([true]);
   expect(f.errors).toEqual([]);
   expect(native.reports).toEqual([]);
   await retireClientSurface(f, native);
@@ -528,7 +536,7 @@ test('reconciles newest geometry when native application wins the cancellation r
   if (!replacement) throw new Error('Replacement geometry request is missing.');
   expect(native.respond(replacement, 'applied')).toBe(true);
   await settle();
-  expect(f.visible).toEqual([true, false, true]);
+  expect(f.visible).toEqual([true]);
   expect(f.errors).toEqual([]);
   expect(native.reports).toEqual([]);
   await retireClientSurface(f, native);
@@ -548,10 +556,52 @@ test('reasserts the last accepted bounds when a pending resize is reversed', asy
   await settle();
   expect(native.pending[4]!.cancelled()).toBe(true);
   expect(native.calls[5]).toMatchObject({ type: 'surface.geometry', geometry });
+  expect(f.visible).toEqual([true]);
+  native.respond(5, 'applied');
+  await settle();
+  expect(f.visible).toEqual([true]);
+  f.surface.dispose();
+});
+
+test('loads a new selection that arrives with a resized allocation', async () => {
+  const f = fixture();
+  const native = hostFixture();
+  f.setHost(native.host);
+  f.surface.update(geometry, f.first);
+  for (const [index, status] of ['ready', 'applied', 'applied', 'applied'].entries()) {
+    native.respond(index, status as CanvasSurfaceResult['status']);
+    await settle();
+  }
+  const resized = { ...geometry, viewport: { width: 400, height: 600 } };
+  f.surface.update(resized, f.second);
   expect(f.visible).toEqual([true, false]);
+  expect(f.statuses).toEqual(['loading', 'ready', 'loading']);
+  expect(native.calls[4]).toMatchObject({ type: 'surface.geometry', geometry: resized });
+  native.respond(4, 'applied');
+  await settle();
+  expect(native.calls[5]).toMatchObject({ type: 'surface.select', itemId: f.second.id });
   native.respond(5, 'applied');
   await settle();
   expect(f.visible).toEqual([true, false, true]);
+  expect(f.statuses.at(-1)).toBe('ready');
+  f.surface.dispose();
+});
+
+test('hides kept pixels when the host cannot present the resized allocation', async () => {
+  const f = fixture();
+  const native = hostFixture();
+  f.setHost(native.host);
+  f.surface.update(geometry, f.first);
+  for (const [index, status] of ['ready', 'applied', 'applied', 'applied'].entries()) {
+    native.respond(index, status as CanvasSurfaceResult['status']);
+    await settle();
+  }
+  f.surface.update({ ...geometry, viewport: { width: 400, height: 600 } }, f.first);
+  expect(f.visible).toEqual([true]);
+  native.respond(4, 'unavailable');
+  await settle();
+  expect(f.visible).toEqual([true, false]);
+  expect(f.statuses.at(-1)).toBe('unavailable');
   f.surface.dispose();
 });
 
