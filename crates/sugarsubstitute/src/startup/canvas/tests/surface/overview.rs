@@ -76,27 +76,11 @@ fn selecting_one_result_leaves_the_overview_and_restores_navigation() -> Result<
     fixture.finish()
 }
 
-/// Collect formatted diagnostic lines written on the test thread.
-#[derive(Clone, Default)]
-struct Lines(Arc<std::sync::Mutex<Vec<u8>>>);
-impl std::io::Write for Lines {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0
-            .lock()
-            .map_err(|_| std::io::Error::other("Diagnostic lines poisoned"))?
-            .extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
 #[test]
 fn an_overview_records_each_lifecycle_step_once_through_its_reply() -> Result<(), Box<dyn Error>> {
-    use crate::canvas_surface_diagnostic::{Operation, Record, Stage, Status, Wait};
+    use crate::canvas_surface_diagnostic::{Operation, Stage, Status, Wait};
     let mut fixture = Fixture::empty()?;
-    let lines = Lines::default();
+    let lines = DiagnosticLines::default();
     let writer = lines.clone();
     let guard =
         tracing::subscriber::set_default(crate::diagnostics::fixture_subscriber(move || {
@@ -105,12 +89,7 @@ fn an_overview_records_each_lifecycle_step_once_through_its_reply() -> Result<()
     present_grid(&mut fixture, 3)?;
     wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
     drop(guard);
-    let bytes = lines.0.lock().map_err(|_| "Diagnostic lines poisoned")?.clone();
-    let records: Vec<Record> = std::str::from_utf8(&bytes)?
-        .lines()
-        .filter_map(|line| Record::parse(line.as_bytes()))
-        .filter(|record| record.request_id == 3)
-        .collect();
+    let records = lines.requests(3)?;
     assert!(
         records
             .iter()

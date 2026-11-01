@@ -55,6 +55,12 @@ impl NativeSurface {
                 };
                 let (projected, occlusions) = projected;
                 let preview_shown = self.has_shown_preview();
+                // A selection deferred while hidden keeps the one pending slot; its own reply
+                // proves presentation, so this geometry is answered as soon as it applies.
+                let deferred = self
+                    .pending
+                    .as_ref()
+                    .is_some_and(|pending| matches!(pending.kind, PendingKind::Select));
                 let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
                 binding.occlusions = occlusions;
                 binding.modal = geometry.modal();
@@ -91,11 +97,11 @@ impl NativeSurface {
                     self.fence_previews(session)?;
                     session.input(Input::Drawable(false))?;
                 }
-                if committed && projected.is_none() {
+                if committed && projected.is_none() && !deferred {
                     self.hold(identity, request, claim, PendingKind::Hide);
                     return Ok(());
                 }
-                if wait {
+                if wait && !deferred {
                     self.hold(identity, request, claim, PendingKind::Geometry);
                     Ok(())
                 } else {
@@ -206,6 +212,25 @@ impl NativeSurface {
         source: Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
     ) {
         self.fixture_acquirers.push((filename.to_owned(), source));
+    }
+
+    /// Admit geometry beside a selection deferred on its hidden committed attachment, so the
+    /// page can show the attachment that the selection waits to present on.
+    pub(super) fn admits_beside_deferred_selection(
+        &self,
+        identity: MainIdentity,
+        request: &CanvasSurfaceRequest,
+    ) -> bool {
+        matches!(request.operation(), CanvasSurfaceOperation::Geometry(_))
+            && self.pending.as_ref().is_some_and(|pending| {
+                matches!(pending.kind, PendingKind::Select) && pending.identity == identity
+            })
+            && self.binding.as_ref().is_some_and(|binding| {
+                binding.committed
+                    && binding.placement.is_none()
+                    && binding.identity == identity
+                    && binding.address == *request.address()
+            })
     }
 
     /// Hold an offered selection until its first matching native frame; an overview selection

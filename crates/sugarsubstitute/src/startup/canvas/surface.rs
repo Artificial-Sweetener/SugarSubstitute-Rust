@@ -286,7 +286,11 @@ impl NativeSurface {
         ) {
             return self.receive_preview(identity, request, claim, session);
         }
-        if self.pending.is_some() || self.restoring {
+        if self.restoring
+            || (self.pending.is_some()
+                && !self.admits_beside_deferred_selection(identity, &request)
+                && !self.withdraw_for_release(identity, &request, session)?)
+        {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
         let operation = request.operation().clone();
@@ -411,7 +415,9 @@ impl NativeSurface {
         self.closed = true;
         self.binding = None;
         self.retained = None;
-        self.pending = None;
+        if let Some(pending) = self.pending.take() {
+            lifecycle::retired(&pending.request, pending.kind);
+        }
         self.contexts = std::array::from_fn(|_| None);
         self.replies = std::array::from_fn(|_| None);
         self.preview.close_watch();

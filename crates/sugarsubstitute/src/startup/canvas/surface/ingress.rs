@@ -36,33 +36,59 @@ impl NativeSurface {
             pending.identity == identity && pending.request.request_id() == request_id
         }) {
             let session = session.ok_or("An active canvas operation lost its session")?;
-            let pending = self.pending.take().ok_or("Pending canvas request disappeared")?;
-            if let PendingKind::Viewport { intent, commanded: true } = pending.kind {
-                session.cancel_camera(intent)?;
-            }
-            if matches!(pending.kind, PendingKind::Select)
-                && let Some(binding) = &mut self.binding
-            {
-                session.cancel_selection()?;
-                binding.selected = false;
-            }
-            if matches!(pending.kind, PendingKind::Prepare) {
-                self.binding = self.retained.take();
-                session.cancel_document_preparation();
-                self.resume_document(session)?;
-            }
-            self.reply(
-                pending.identity,
-                &pending.request,
-                CanvasSurfaceReplyStatus::Cancelled,
-                pending.claim,
-            )?;
+            self.withdraw_pending(session, CanvasSurfaceReplyStatus::Cancelled)?;
         } else {
             super::lifecycle::unmatched(request_id);
         }
         self.enqueue(DesktopStartupCommand::CompletePanelIngress(
             PanelIngressReceipt::cancellation(identity, request_id, claim)?,
         ))
+    }
+
+    /// Withdraw the pending request's session intent and answer it with `status`.
+    fn withdraw_pending(
+        &mut self,
+        session: &mut Session,
+        status: CanvasSurfaceReplyStatus,
+    ) -> Result<(), Box<dyn Error>> {
+        let pending = self.pending.take().ok_or("Pending canvas request disappeared")?;
+        if let PendingKind::Viewport { intent, commanded: true } = pending.kind {
+            session.cancel_camera(intent)?;
+        }
+        if matches!(pending.kind, PendingKind::Select)
+            && let Some(binding) = &mut self.binding
+        {
+            session.cancel_selection()?;
+            binding.selected = false;
+        }
+        if matches!(pending.kind, PendingKind::Prepare) {
+            self.binding = self.retained.take();
+            session.cancel_document_preparation();
+            self.resume_document(session)?;
+        }
+        self.reply(pending.identity, &pending.request, status, pending.claim)
+    }
+
+    /// Let a release of the attachment end its pending selection or viewport wait, which a
+    /// hidden committed attachment defers until it is shown again. The wait is answered
+    /// `unavailable` before the release applies. Returns whether a wait was withdrawn.
+    pub(super) fn withdraw_for_release(
+        &mut self,
+        identity: MainIdentity,
+        release: &CanvasSurfaceRequest,
+        session: &mut Session,
+    ) -> Result<bool, Box<dyn Error>> {
+        let releasable = matches!(release.operation(), CanvasSurfaceOperation::Release)
+            && self.pending.as_ref().is_some_and(|pending| {
+                matches!(pending.kind, PendingKind::Select | PendingKind::Viewport { .. })
+                    && pending.identity == identity
+                    && pending.request.address() == release.address()
+                    && pending.request.revision() < release.revision()
+            });
+        if releasable {
+            self.withdraw_pending(session, CanvasSurfaceReplyStatus::Unavailable)?;
+        }
+        Ok(releasable)
     }
 
     /// Refuse current-page work that has no application policy or initialized canvas authority.

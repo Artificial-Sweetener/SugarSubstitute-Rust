@@ -57,6 +57,17 @@ pub(super) fn offered(request: &CanvasSurfaceRequest, intent: u64) {
     Record { intent, current: intent, ..record(Stage::Offered, request) }.emit();
 }
 
+/// Record a pending selection re-bound from its offered intent to the session's rebuild of it.
+pub(super) fn rebound(request: &CanvasSurfaceRequest, offered: u64, rebuilt: u64) {
+    Record {
+        pending: Waiting::Select,
+        intent: offered,
+        current: rebuilt,
+        ..record(Stage::Rebound, request)
+    }
+    .emit();
+}
+
 /// Record a queued terminal reply. Preview transfers are excluded: each chunk has its own reply.
 pub(super) fn replied(request: &CanvasSurfaceRequest, status: CanvasSurfaceReplyStatus) {
     if matches!(operation(request.operation()), Operation::Preview) {

@@ -218,6 +218,9 @@ pub(crate) struct Session {
     initial_frame: Option<(u64, sugarsubstitute_canvas::NavigationCommand)>,
     selection: u64,
     source_sequence: u64,
+    /// The selection a cache-corruption rebuild replaced, and the selection that continues it.
+    #[cfg(feature = "native-composition")]
+    rebuilt_selection: Option<(u64, u64)>,
     #[cfg(feature = "native-composition")]
     document_sequence: u64,
     #[cfg(feature = "native-composition")]
@@ -358,6 +361,8 @@ impl Session {
             initial_frame: None,
             selection: 1,
             source_sequence: 1,
+            #[cfg(feature = "native-composition")]
+            rebuilt_selection: None,
             #[cfg(feature = "native-composition")]
             document_sequence: 0,
             #[cfg(feature = "native-composition")]

@@ -72,6 +72,18 @@ impl Session {
         result
     }
 
+    /// Map a source intent the host offered to the current selection that continues it.
+    ///
+    /// A cache-corruption rebuild re-imports the same original under a new selection to fence
+    /// the corrupt work, so the rebuilt selection answers the host's request for the original
+    /// intent. Any later selection change ends the continuation.
+    #[cfg(feature = "native-composition")]
+    pub(crate) fn rebuilt_intent(&self, offered: u64) -> Option<u64> {
+        self.rebuilt_selection
+            .filter(|&(replaced, rebuilt)| replaced == offered && rebuilt == self.selection)
+            .map(|(_, rebuilt)| rebuilt)
+    }
+
     /// Report whether the latest offered source is still being acquired or decoded.
     #[cfg(feature = "native-composition")]
     pub(crate) fn source_loading(&self) -> bool {

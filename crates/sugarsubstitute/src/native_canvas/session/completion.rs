@@ -390,8 +390,14 @@ impl Session {
                     let mut original = Some(original.clone());
                     let expected = source.descriptor().asset();
                     self.document.rebuilt = true;
+                    #[cfg(feature = "native-composition")]
+                    let replaced = self.selection;
                     if !self.offer_source(&mut original, CacheReuse::Rebuild, Some(expected))? {
                         return Err("Canvas rebuild source could not be retained".into());
+                    }
+                    #[cfg(feature = "native-composition")]
+                    {
+                        self.rebuilt_selection = Some((replaced, self.selection));
                     }
                     return Ok(());
                 }

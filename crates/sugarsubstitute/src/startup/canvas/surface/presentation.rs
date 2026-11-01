@@ -60,6 +60,7 @@ impl NativeSurface {
         if session.initialized() {
             self.flush_contexts()?;
         }
+        self.follow_rebuilt_selection(session);
         let Some(pending) = &self.pending else { return Ok(()) };
         if !matches!(pending.kind, PendingKind::Hide) && session.source_failed() {
             let pending = self.pending.take().ok_or("Pending canvas request disappeared")?;
@@ -91,6 +92,21 @@ impl NativeSurface {
         }
         self.trace_selection_wait(session);
         self.poll_viewport(session)
+    }
+
+    /// Keep a pending selection answerable when the session rebuilt its corrupt cached source.
+    /// The rebuild re-imports the same original under a new source intent; the selection's
+    /// reply then waits on that rebuild's frame instead of the fenced corrupt one.
+    fn follow_rebuilt_selection(&mut self, session: &Session) {
+        let (Some(pending), Some(binding)) = (&self.pending, &mut self.binding) else { return };
+        if !matches!(pending.kind, PendingKind::Select) {
+            return;
+        }
+        let Some(offered) = binding.source_intent_revision else { return };
+        if let Some(rebuilt) = session.rebuilt_intent(offered) {
+            binding.source_intent_revision = Some(rebuilt);
+            super::lifecycle::rebound(&pending.request, offered, rebuilt);
+        }
     }
 
     /// Borrow the selected current frame only after the attachment requests commit.
@@ -134,6 +150,7 @@ impl NativeSurface {
         if self.pending.as_ref().is_some_and(|pending| matches!(pending.kind, PendingKind::Hide)) {
             return Err("Native canvas presented while a hide is pending".into());
         }
+        self.follow_rebuilt_selection(session);
         if session.preview_frame_acknowledgeable(target) {
             session.did_present_cpu(target)?;
         } else {

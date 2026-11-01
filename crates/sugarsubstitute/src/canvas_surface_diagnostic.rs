@@ -48,6 +48,8 @@ tokens! {
         Offered,
         /// The pending request's reply condition is unmet for a new reason.
         Waiting,
+        /// The pending selection now waits on the session's rebuild of its corrupt cached source.
+        Rebound,
         /// The request's terminal reply was queued for native delivery.
         Replied,
         /// The request's navigation retired first, so no page remains to receive a reply.

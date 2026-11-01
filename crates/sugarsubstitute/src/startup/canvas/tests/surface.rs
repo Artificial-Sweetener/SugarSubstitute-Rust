@@ -26,6 +26,7 @@ mod cancellation;
 mod comparison;
 mod failure;
 mod gate;
+mod hidden_selection;
 mod host;
 mod input;
 mod inspection;
@@ -34,6 +35,7 @@ mod overview;
 mod preview;
 mod reattached_overview;
 mod reattachment;
+mod rebuild;
 mod replacement;
 mod viewport;
 
@@ -49,6 +51,37 @@ impl Clock for ClockValue {
 struct Release;
 impl MemoryRelease for Release {
     fn release(&self, _: u64) {}
+}
+
+/// Collect formatted diagnostic lines written on the test thread.
+#[derive(Clone, Default)]
+struct DiagnosticLines(Arc<std::sync::Mutex<Vec<u8>>>);
+impl std::io::Write for DiagnosticLines {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .lock()
+            .map_err(|_| std::io::Error::other("Diagnostic lines poisoned"))?
+            .extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl DiagnosticLines {
+    /// Decode the canvas surface lifecycle records of one request, in emission order.
+    fn requests(
+        &self,
+        request_id: u64,
+    ) -> Result<Vec<crate::canvas_surface_diagnostic::Record>, Box<dyn Error>> {
+        let bytes = self.0.lock().map_err(|_| "Diagnostic lines poisoned")?.clone();
+        Ok(std::str::from_utf8(&bytes)?
+            .lines()
+            .filter_map(|line| crate::canvas_surface_diagnostic::Record::parse(line.as_bytes()))
+            .filter(|record| record.request_id == request_id)
+            .collect())
+    }
 }
 
 fn identity() -> Result<MainIdentity, Box<dyn Error>> {
