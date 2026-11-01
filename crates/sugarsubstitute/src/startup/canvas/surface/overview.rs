@@ -58,6 +58,17 @@ impl NativeSurface {
             else {
                 return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
             };
+            if let Some(acquisition) = &self.fixture_acquisition {
+                if !Self::offer_acquired(acquisition(files), session)? {
+                    return self.reply(
+                        identity,
+                        &request,
+                        CanvasSurfaceReplyStatus::Unavailable,
+                        claim,
+                    );
+                }
+                return self.await_selection(identity, request, claim, true, session);
+            }
             let OverviewSelection { extent, primary: (primary, primary_cell), cells } = files;
             let mut originals = Some(SelectedOriginals {
                 primary: ImageSource::file(primary),

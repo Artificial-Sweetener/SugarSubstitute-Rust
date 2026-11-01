@@ -3,11 +3,13 @@
 //! Answer an overview on a replacement attachment in every worker completion order.
 
 use super::*;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::atomic::AtomicBool};
 use sugarsubstitute_contracts::execution::{
     CpuStep, CpuTask, JobContext, ReplacementKey, Scope, SurfaceId,
 };
 use viewport::fixture::{Fixture, image as output_image};
+
+mod acquisition;
 
 const CANVAS: u64 = 1;
 const GATES: u64 = 2;
@@ -25,14 +27,22 @@ enum Stage {
     Display,
 }
 
-/// Opened once by the test; read by the job holding its lane.
+/// Opened once by the test; read by the job holding its lane or its acquisition.
 #[derive(Default)]
 struct Latch {
     open: Mutex<bool>,
     changed: Condvar,
+    entered: AtomicBool,
+    /// Wake the polling host once a running canvas job reaches this latch.
+    announce: Option<Arc<Wake>>,
 }
 
 impl Latch {
+    /// Hold work inside a running canvas job, announcing its arrival to the polling host.
+    fn announcing(wake: Arc<Wake>) -> Self {
+        Self { announce: Some(wake), ..Self::default() }
+    }
+
     fn open(&self) {
         *self.open.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = true;
         self.changed.notify_all();
@@ -40,6 +50,10 @@ impl Latch {
 
     /// Hold a blocking worker until opened, bounded so a failed test cannot strand shutdown.
     fn wait(&self) -> Result<(), std::io::Error> {
+        self.entered.store(true, Ordering::SeqCst);
+        if let Some(wake) = &self.announce {
+            wake.wake().map_err(std::io::Error::other)?;
+        }
         let guard = self.open.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let (guard, _) = self
             .changed
@@ -59,11 +73,11 @@ impl CpuTask<(), std::io::Error> for HeldCpu {
     }
 }
 
-/// One held lane and the job occupying it.
+/// One held lane and the job occupying it, or a latch inside the canvas stage itself.
 struct Gate {
     stage: Stage,
     latch: Arc<Latch>,
-    job: OwnedJob<(), std::io::Error>,
+    job: Option<OwnedJob<(), std::io::Error>>,
 }
 
 /// Lanes held by another scope of the canvas's execution owner, opened in a chosen order.
@@ -75,12 +89,23 @@ struct Gates {
 
 impl Gates {
     /// Occupy every lane before the canvas admits its stage, so each stage queues behind it.
-    fn hold(fixture: &Fixture, order: [Stage; 3]) -> Result<Self, Box<dyn Error>> {
+    /// An `acquisition` latch instead holds the load stage inside its running acquisition.
+    fn hold(
+        fixture: &Fixture,
+        order: [Stage; 3],
+        acquisition: Option<&Arc<Latch>>,
+    ) -> Result<Self, Box<dyn Error>> {
         let scope = fixture
             .client
             .create_scope(ScopeSpec { id: ScopeId::new(GATES)?, deadline: None }, None)?;
         let mut pending = VecDeque::new();
         for stage in order {
+            if stage == Stage::Load
+                && let Some(latch) = acquisition
+            {
+                pending.push_back(Gate { stage, latch: latch.clone(), job: None });
+                continue;
+            }
             let latch = Arc::new(Latch::default());
             let (operation, class) = match stage {
                 Stage::Load => (Operation::Infrastructure, JobClass::InfrastructureOrdinary),
@@ -108,7 +133,7 @@ impl Gates {
                     fixture.client.submit_cpu(&scope, spec, move |_| HeldCpu(held))?
                 }
             };
-            pending.push_back(Gate { stage, latch, job });
+            pending.push_back(Gate { stage, latch, job: Some(job) });
         }
         Ok(Self { pending, opened: Vec::new(), _scope: scope })
     }
@@ -124,6 +149,14 @@ impl Gates {
         true
     }
 
+    /// Canvas jobs running only because a held latch inside them has not opened.
+    fn blocking(&self) -> usize {
+        self.pending
+            .iter()
+            .filter(|gate| gate.job.is_none() && gate.latch.entered.load(Ordering::SeqCst))
+            .count()
+    }
+
     fn held(&self) -> Vec<Stage> {
         self.pending.iter().map(|gate| gate.stage).collect()
     }
@@ -132,10 +165,11 @@ impl Gates {
     fn finish(mut self, fixture: &Fixture) -> Result<(), Box<dyn Error>> {
         while self.open_next() {}
         for gate in &mut self.opened {
+            let Some(job) = &mut gate.job else { continue };
             let outcome = loop {
                 let observed = fixture.wake.revision();
                 fixture.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-                if let Some(completion) = gate.job.try_take_completion() {
+                if let Some(completion) = job.try_take_completion() {
                     break completion.outcome;
                 }
                 fixture.wake.wait_after(observed)?;
@@ -165,6 +199,8 @@ struct Variant {
     gate_release: bool,
     /// Execution-clock milliseconds added before every poll.
     clock_step: u64,
+    /// Acquire the overview through a host adapter retaining encoded originals in cache custody.
+    acquired: bool,
 }
 
 /// Poll only after a wake or at a reported deadline. A held lane opens only when the canvas has
@@ -186,7 +222,7 @@ fn await_reply(
             return check_reply(command, id, status);
         }
         let work = fixture.scope_work(canvas)?;
-        if work.running > 0 || (work.queued > 0 && !gates.holding()) {
+        if work.running > gates.blocking() || (work.queued > 0 && !gates.holding()) {
             fixture.wake.wait_after(observed).map_err(|cause| {
                 let jobs = fixture.scope_jobs(canvas).unwrap_or_default();
                 format!("{cause}; canvas {work:?}; held {:?}; jobs [{jobs}]", gates.held())
@@ -239,7 +275,13 @@ fn reattached_overview(order: [Stage; 3], variant: Variant) -> Result<(), Box<dy
         fixture.complete(id)?;
         id += 1;
     }
-    let mut gates = if variant.gate_release { Some(Gates::hold(&fixture, order)?) } else { None };
+    let held_acquisition = Arc::new(Latch::announcing(fixture.wake.clone()));
+    if variant.acquired {
+        fixture.canvas.surface.acquire_overviews_with(acquisition::held(held_acquisition.clone()));
+    }
+    let acquisition = variant.acquired.then_some(&held_acquisition);
+    let mut gates =
+        if variant.gate_release { Some(Gates::hold(&fixture, order, acquisition)?) } else { None };
     fixture.send(id, "surface.release", json!({}))?;
     fixture.take(id, "applied")?;
     id += 1;
@@ -254,7 +296,7 @@ fn reattached_overview(order: [Stage; 3], variant: Variant) -> Result<(), Box<dy
     id += 1;
     let mut gates = match gates {
         Some(gates) => gates,
-        None => Gates::hold(&fixture, order)?,
+        None => Gates::hold(&fixture, order, acquisition)?,
     };
     let cell = |filename: &str, [x, y, width, height]: [f64; 4]| {
         json!({"itemId":format!("result:{filename}"),
@@ -268,6 +310,7 @@ fn reattached_overview(order: [Stage; 3], variant: Variant) -> Result<(), Box<dy
     )?;
     await_reply(&mut fixture, &mut gates, id, "applied", variant.clock_step)
         .map_err(|cause| format!("{order:?} {variant:?}: {cause}"))?;
+    assert_eq!(held_acquisition.entered.load(Ordering::SeqCst), variant.acquired);
     gates.finish(&fixture)?;
     fixture.finish()
 }
@@ -289,9 +332,29 @@ const ORDERS: [[Stage; 3]; 6] = {
 fn a_reattached_overview_is_applied_in_every_worker_completion_order() -> Result<(), Box<dyn Error>>
 {
     for variant in [
-        Variant { large: false, navigate: false, gate_release: false, clock_step: 0 },
-        Variant { large: true, navigate: true, gate_release: true, clock_step: 0 },
-        Variant { large: true, navigate: false, gate_release: false, clock_step: 5 },
+        Variant {
+            large: false,
+            navigate: false,
+            gate_release: false,
+            clock_step: 0,
+            acquired: false,
+        },
+        Variant { large: true, navigate: true, gate_release: true, clock_step: 0, acquired: false },
+        Variant {
+            large: true,
+            navigate: false,
+            gate_release: false,
+            clock_step: 5,
+            acquired: false,
+        },
+        Variant {
+            large: false,
+            navigate: false,
+            gate_release: false,
+            clock_step: 0,
+            acquired: true,
+        },
+        Variant { large: true, navigate: true, gate_release: false, clock_step: 0, acquired: true },
     ] {
         for order in ORDERS {
             reattached_overview(order, variant)?;

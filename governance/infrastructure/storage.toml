@@ -4334,6 +4334,14 @@ disposition = "fixture"
 rationale = "Owned temporary PNG and JPEG fixtures exercise shared viewport commands through real canvas execution and native presentation acknowledgement without accessing user storage."
 
 [[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/reattached_overview/acquisition.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:cbaf3ea97130987b4fe9b17737d14b8ba2cf259f86ae9c7e691f93750e900c20"
+capabilities = ["std::fs::read"]
+disposition = "fixture"
+rationale = "Owned temporary PNG outputs are read into the fixture cache as encoded originals, exercising host acquisition without accessing user storage."
+
+[[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:b20c25369edbce3fae0c09020283af1faadcad160e1f6276fe8594767b2539cb"

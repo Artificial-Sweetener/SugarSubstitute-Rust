@@ -94,11 +94,21 @@ struct Pending {
     kind: PendingKind,
 }
 
+/// Build the host acquisition adapter for an overview of qualification fixture outputs.
+#[cfg(test)]
+pub(super) type FixtureAcquisition = Box<
+    dyn Fn(
+        crate::native_canvas::session::OverviewSelection<PathBuf>,
+    ) -> Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
+>;
+
 /// One native attachment and bounded replies for the current panel.
 pub(super) struct NativeSurface {
     backend: Option<crate::startup::CanvasBackend>,
     #[cfg(test)]
     fixture_output: Option<PathBuf>,
+    #[cfg(test)]
+    fixture_acquisition: Option<FixtureAcquisition>,
     binding: Option<Binding>,
     retained: Option<Binding>,
     restoring: bool,
@@ -116,6 +126,8 @@ impl NativeSurface {
             backend: None,
             #[cfg(test)]
             fixture_output: None,
+            #[cfg(test)]
+            fixture_acquisition: None,
             binding: None,
             retained: None,
             restoring: false,
@@ -133,6 +145,12 @@ impl NativeSurface {
         let mut surface = Self::new();
         surface.fixture_output = Some(output);
         surface
+    }
+
+    /// Acquire later overview fixtures through a host adapter instead of explicit file originals.
+    #[cfg(test)]
+    pub(super) fn acquire_overviews_with(&mut self, acquisition: FixtureAcquisition) {
+        self.fixture_acquisition = Some(acquisition);
     }
 
     fn available(&self, identity: MainIdentity) -> bool {
@@ -286,10 +304,7 @@ impl NativeSurface {
             .filter(|backend| backend.identity == identity)
             .ok_or("Canvas backend grant disappeared")?;
         let owner = super::comfy_source::ComfySource::new(backend, target, compared)?;
-        let mut source: Option<
-            Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
-        > = Some(Arc::new(owner));
-        session.offer_acquirer(&mut source, CacheReuse::Compatible)
+        Self::offer_acquired(Arc::new(owner), session)
     }
 
     fn offer_comfy_overview(
@@ -303,10 +318,15 @@ impl NativeSurface {
             .filter(|backend| backend.identity == identity)
             .ok_or("Canvas backend grant disappeared")?;
         let owner = super::comfy_source::ComfySource::overview(backend, selection)?;
-        let mut source: Option<
-            Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
-        > = Some(Arc::new(owner));
-        session.offer_acquirer(&mut source, CacheReuse::Compatible)
+        Self::offer_acquired(Arc::new(owner), session)
+    }
+
+    /// Offer an inert host acquisition adapter as the session's next source selection.
+    fn offer_acquired(
+        owner: Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
+        session: &mut Session,
+    ) -> Result<bool, Box<dyn Error>> {
+        session.offer_acquirer(&mut Some(owner), CacheReuse::Compatible)
     }
 
     fn flush_contexts(&mut self) -> Result<(), Box<dyn Error>> {
