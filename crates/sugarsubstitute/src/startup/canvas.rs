@@ -41,6 +41,9 @@ pub(super) struct EmbeddedCanvas {
     session: Option<Session>,
     cutoff: Option<Moment>,
     reported_ready: bool,
+    /// The showing display's refresh rate, kept for a session created after it was reported.
+    #[cfg(feature = "native-composition")]
+    display: Option<Option<f64>>,
     #[cfg(feature = "native-composition")]
     surface: surface::NativeSurface,
 }
@@ -68,6 +71,8 @@ impl EmbeddedCanvas {
             session: None,
             cutoff: None,
             reported_ready: false,
+            #[cfg(feature = "native-composition")]
+            display: None,
             #[cfg(feature = "native-composition")]
             surface,
         }
@@ -152,6 +157,10 @@ impl EmbeddedCanvas {
         #[cfg(not(all(windows, feature = "native-composition")))]
         session.attach_cpu_surface()?;
         session.input(Input::Drawable(false))?;
+        #[cfg(feature = "native-composition")]
+        if let Some(hertz) = self.display {
+            session.input(Input::DisplayRefresh(hertz))?;
+        }
         self.session = Some(session);
         let runtime = Runtime::shared(client, self.scope)?;
         self.session.as_mut().ok_or("Application canvas disappeared")?.start_runtime(runtime)
@@ -306,6 +315,7 @@ impl EmbeddedCanvas {
     /// Follow the active display's refresh rate so navigation and presentation pace to it.
     #[cfg(feature = "native-composition")]
     pub(super) fn display(&mut self, hertz: Option<f64>) -> Result<(), Box<dyn Error>> {
+        self.display = Some(hertz);
         if let Some(session) = &mut self.session {
             session.input(Input::DisplayRefresh(hertz))?;
             tracing::info!(

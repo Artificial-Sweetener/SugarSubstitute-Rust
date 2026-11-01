@@ -169,16 +169,16 @@ impl<B: StartupBackend> StartupHost<B> {
                             }
                             return Ok(());
                         }
-                        DesktopStartupObservation::CanvasDisplay(display) if accepts => {
-                            let canvas =
-                                self.canvas.as_mut().ok_or("Application canvas disappeared")?;
-                            if self
-                                .child
-                                .canvas_backend(display.identity)
-                                .is_some_and(|backend| canvas.matches_backend(backend))
-                            {
-                                canvas.display(display.hertz)?;
-                            }
+                        // Pacing grants nothing, and the display is reported once per display
+                        // change, usually before startup runs or any backend grant exists, so
+                        // only the canvas's existence is required.
+                        DesktopStartupObservation::CanvasDisplay(display)
+                            if self.canvas.is_some() =>
+                        {
+                            self.canvas
+                                .as_mut()
+                                .ok_or("Application canvas disappeared")?
+                                .display(display.hertz)?;
                             return Ok(());
                         }
                         DesktopStartupObservation::CanvasContextMessage(observed)
