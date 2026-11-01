@@ -24,6 +24,9 @@ use sugarsubstitute_desktop::{
 mod backend;
 mod cancellation;
 mod comparison;
+mod failure;
+mod gate;
+mod host;
 mod input;
 mod inspection;
 mod jpeg;

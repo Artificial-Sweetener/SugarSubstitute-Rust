@@ -128,12 +128,22 @@ impl NativeSurface {
                             claim,
                         );
                     };
-                    let mut originals = Some(SelectedOriginals {
-                        primary: ImageSource::file(primary),
-                        compared: compared.map(ImageSource::file),
-                        overview: None,
-                    });
-                    if !session.offer_originals(&mut originals, CacheReuse::Compatible, None)? {
+                    let gated = self
+                        .fixture_acquirers
+                        .iter()
+                        .position(|(name, _)| compared.is_none() && name == file.filename());
+                    let offered = if let Some(index) = gated {
+                        let mut source = Some(self.fixture_acquirers.swap_remove(index).1);
+                        session.offer_acquirer(&mut source, CacheReuse::Compatible)?
+                    } else {
+                        let mut originals = Some(SelectedOriginals {
+                            primary: ImageSource::file(primary),
+                            compared: compared.map(ImageSource::file),
+                            overview: None,
+                        });
+                        session.offer_originals(&mut originals, CacheReuse::Compatible, None)?
+                    };
+                    if !offered {
                         return self.reply(
                             identity,
                             &request,
@@ -186,6 +196,17 @@ impl NativeSurface {
 }
 
 impl NativeSurface {
+    /// Acquire the next selection of the fixture file `filename` through `source`, so a test
+    /// controls when its worker-side acquisition returns.
+    #[cfg(test)]
+    pub(in crate::startup::canvas) fn gate_fixture(
+        &mut self,
+        filename: &str,
+        source: Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
+    ) {
+        self.fixture_acquirers.push((filename.to_owned(), source));
+    }
+
     /// Hold an offered selection until its first matching native frame; an overview selection
     /// also locks the camera, while an ordinary selection releases that lock.
     pub(super) fn await_selection(

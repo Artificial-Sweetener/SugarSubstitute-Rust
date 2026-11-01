@@ -109,6 +109,10 @@ pub(super) struct NativeSurface {
     fixture_output: Option<PathBuf>,
     #[cfg(test)]
     fixture_acquisition: Option<FixtureAcquisition>,
+    /// One-use qualification adapters that replace a named fixture file's direct offer.
+    #[cfg(test)]
+    fixture_acquirers:
+        Vec<(String, Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>)>,
     binding: Option<Binding>,
     retained: Option<Binding>,
     restoring: bool,
@@ -128,6 +132,8 @@ impl NativeSurface {
             fixture_output: None,
             #[cfg(test)]
             fixture_acquisition: None,
+            #[cfg(test)]
+            fixture_acquirers: Vec::new(),
             binding: None,
             retained: None,
             restoring: false,

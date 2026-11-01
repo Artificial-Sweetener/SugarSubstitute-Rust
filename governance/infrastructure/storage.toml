@@ -4312,7 +4312,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:dd90c66bfb68e4fb3aa3f7284a4ff194c054ad81699a9bef9daf80979f932988"
+source_sha256 = "sha256:18396ea646589d3d015045f8fcc375f60ea0b936b0b74bb4352fc6cb84bc98e3"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
@@ -4328,7 +4328,7 @@ rationale = "An owned temporary cache anchor exercises backend revocation while 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/viewport/fixture.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:adb36b35d879521656da4b48ac6b01704a0e7c1c954df7d66c928dd984f77096"
+source_sha256 = "sha256:5c000dadd903fb71b5a9e3ae92961d899b09e1b08626892b3ccece27891bc246"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG and JPEG fixtures exercise shared viewport commands through real canvas execution and native presentation acknowledgement without accessing user storage."

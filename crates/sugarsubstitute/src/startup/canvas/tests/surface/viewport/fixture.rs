@@ -60,21 +60,33 @@ impl Fixture {
     pub(in crate::startup::canvas::tests::surface) fn with_density(
         density: f64,
     ) -> Result<Self, Box<dyn Error>> {
-        Self::with_options(density, true)
+        Self::with_options(density, true, None)
     }
 
     /// Prepare visible geometry without selecting any final result.
     pub(in crate::startup::canvas::tests::surface) fn empty() -> Result<Self, Box<dyn Error>> {
-        Self::with_options(1.0, false)
+        Self::with_options(1.0, false, None)
+    }
+
+    /// Prepare visible geometry whose selections fetch through the authenticated Comfy backend.
+    pub(in crate::startup::canvas::tests::surface) fn comfy(
+        backend: crate::startup::CanvasBackend,
+    ) -> Result<Self, Box<dyn Error>> {
+        Self::with_options(1.0, false, Some(backend))
     }
 
     /// Share actual execution and attachment setup across final and first-preview qualification.
-    fn with_options(density: f64, select: bool) -> Result<Self, Box<dyn Error>> {
+    fn with_options(
+        density: f64,
+        select: bool,
+        backend: Option<crate::startup::CanvasBackend>,
+    ) -> Result<Self, Box<dyn Error>> {
         let directory = tempfile::tempdir()?;
         let output = directory.path().join("canvas-qualification-output");
         std::fs::create_dir(&output)?;
         image(&output.join("wide.png"), 320, 160, [255, 0, 0])?;
         image(&output.join("tall.png"), 160, 320, [0, 0, 255])?;
+        image(&output.join("green.png"), 320, 160, [0, 255, 0])?;
         for (filename, bytes) in [("flat.jpg", FLAT_JPEG), ("progressive.jpg", PROGRESSIVE_JPEG)] {
             std::io::Write::write_all(&mut std::fs::File::create(output.join(filename))?, bytes)?;
         }
@@ -89,6 +101,9 @@ impl Fixture {
             JobSequence::new(),
             ScopeSpec { id: ScopeId::new(1)?, deadline: None },
         );
+        if backend.is_some() {
+            canvas.surface = crate::startup::canvas::surface::NativeSurface::new();
+        }
         canvas.start(
             client.clone(),
             "en",
@@ -102,6 +117,7 @@ impl Fixture {
             }
         }
         let identity = identity()?;
+        canvas.backend(backend)?;
         let mut fixture = Self {
             canvas,
             clock,
