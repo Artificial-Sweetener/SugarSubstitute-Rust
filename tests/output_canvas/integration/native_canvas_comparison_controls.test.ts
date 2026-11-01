@@ -89,7 +89,6 @@ function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
     acceptsPreparation: () => false,
     nativeSurface: () => host,
     connected: () => true,
-    open: () => {},
     report: (error) => errors.push(error),
   });
   surface.port.updateSurface(address, previewGeometry);
@@ -143,7 +142,6 @@ test('a host without comparison keeps the exact camera-only command set and no B
     'select-source',
     'batch',
     'follow',
-    'open-media',
     'fit',
     'native',
     'zoom',

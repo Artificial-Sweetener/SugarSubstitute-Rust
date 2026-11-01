@@ -17,7 +17,7 @@
 import { jest } from '@jest/globals';
 import {
   OutputTransferClient,
-  outputTransferUrl,
+  outputFileUrl,
 } from '../../../frontend/comfyui/ui/output_saving/OutputTransferClient.js';
 import { BrowserOutputTransfer } from '../../../frontend/comfyui/ui/output_saving/BrowserOutputTransfer.js';
 
@@ -196,5 +196,5 @@ test('preserves literal server errors and rejects non-HTTP image hosts', async (
     .fn<typeof globalThis.fetch>()
     .mockResolvedValue(response({ success: false, error: { message: '<unavailable>' } }));
   await expect(new OutputTransferClient(fetch).choose(file)).rejects.toThrow('<unavailable>');
-  expect(() => outputTransferUrl('file:///private', { file, mimeType: 'image/png' })).toThrow();
+  expect(() => outputFileUrl('file:///private', file)).toThrow();
 });

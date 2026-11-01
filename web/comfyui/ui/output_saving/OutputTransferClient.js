@@ -34,12 +34,12 @@ export class OutputTransferClient {
         }
     }
 }
-/** Preserve full-fidelity transfer URLs without native lossy preview parameters. */
-export function outputTransferUrl(origin, selection) {
+/** Preserve full-fidelity file URLs without native lossy preview parameters. */
+export function outputFileUrl(origin, file) {
     const url = new URL('/view', origin);
     if (url.protocol !== 'http:' && url.protocol !== 'https:')
         throw new Error('The image host is unavailable.');
-    url.search = new URLSearchParams({ ...selection.file }).toString();
+    url.search = new URLSearchParams({ ...file }).toString();
     return url.href;
 }
 /** Admit exact portable image identities without accepting external URLs or filesystem paths. */

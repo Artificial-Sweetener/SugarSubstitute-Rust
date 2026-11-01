@@ -18,7 +18,6 @@
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { CanvasImageAllowances } from '../application/CanvasImageAllowances.js';
 import type { CanvasImageLoadPort } from '../domain/CanvasImageResource.js';
-import type { BrowserCanvasDragPayload } from '../presentation/browser/BrowserCanvasDrag.js';
 import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
 import type { CanvasAttachmentOptions } from './CanvasAttachmentOptions.js';
 import type { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.js';
@@ -32,8 +31,8 @@ export interface BrowserCanvasAttachmentOptions extends CanvasAttachmentOptions 
   readonly mediaSessions?: BrowserCanvasMediaSessions;
   /** Build the host's validated full-fidelity file URL. */
   url(item: WorkflowOutputItem): string;
-  /** Prepare one exact completed image for platform-owned outbound dragging. */
-  drag?(item: WorkflowOutputItem, signal: AbortSignal): Promise<BrowserCanvasDragPayload | null>;
+  /** Open supported media in a separate browser window. */
+  open(item: WorkflowOutputItem): void;
   /** Dispose platform loading after the resource owner has canceled every lease. */
   disposeLoader(): void;
 }

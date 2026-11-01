@@ -17,12 +17,10 @@
 /** Advertise camera and admission operations only when the host can perform them. */
 export class NativeCanvasActionSurface {
     actions;
-    openItem;
     viewport;
     /** Keep transfers with the same qualified owner as the browser surface. */
-    constructor(actions, openItem, viewport) {
+    constructor(actions, viewport) {
         this.actions = actions;
-        this.openItem = openItem;
         this.viewport = viewport;
     }
     /** Fit through the native presentation's existing revision stream. */
@@ -49,9 +47,12 @@ export class NativeCanvasActionSurface {
     admitLargeImage() {
         return false;
     }
-    /** Open the exact selected output through the host's existing action. */
-    open(item) {
-        this.openItem(item);
+    /**
+     * Open the exact selected output with the shared file action: the desktop host has no browser
+     * windows, so its open reveals the file in its folder, or downloads it where reveal is unavailable.
+     */
+    open(item, scope) {
+        return this.actions.open(item, scope);
     }
     /** Execute a qualified user-requested transfer. */
     media(command, scope) {

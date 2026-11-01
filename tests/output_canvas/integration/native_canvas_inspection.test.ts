@@ -130,7 +130,6 @@ function workspace() {
           acceptsPreparation: () => false,
           nativeSurface: () => host,
           connected: () => true,
-          open: () => {},
           report: (error) => errors.push(error),
         });
         surface.port.updateSurface(address, previewGeometry);

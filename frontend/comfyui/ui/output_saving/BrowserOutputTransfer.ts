@@ -22,9 +22,12 @@ import { OutputMediaClient } from './OutputMediaClient.js';
 import { OutputMediaProfileSource } from './OutputMediaProfileSource.js';
 import {
   OutputTransferClient,
-  outputTransferUrl,
+  outputFileUrl,
   type OutputTransferSelection,
 } from './OutputTransferClient.js';
+
+/** Whether a file action may use still-image renditions or must keep the exact media file. */
+export type OutputFileContent = 'image' | 'media';
 
 /** Coordinate the shared file selection with browser-owned transport and clipboard boundaries. */
 export class BrowserOutputTransfer {
@@ -74,15 +77,23 @@ export class BrowserOutputTransfer {
     return true;
   }
 
-  /** Reveal through the local backend or start the remote browser download without rendering another image. */
+  /**
+   * Reveal through the local backend or start the browser download without rendering another image.
+   *
+   * Only still images have preferred renditions, so other media download their exact file.
+   */
   async fileAction(
     file: OutputFileReference,
     accepts: () => boolean,
     signal?: AbortSignal,
+    content: OutputFileContent = 'image',
   ): Promise<boolean> {
     if (this.#disposed || signal?.aborted || !accepts()) return false;
     if (this.#profile.read().fileAction === 'reveal') await this.#media.reveal(file, signal);
-    else this.download.start(this.#media.downloadUrl(file));
+    else
+      this.download.start(
+        content === 'image' ? this.#media.downloadUrl(file) : outputFileUrl(this.origin, file),
+      );
     return true;
   }
 
@@ -127,7 +138,7 @@ export class BrowserOutputTransfer {
     try {
       const selection = await this.#client.choose(file, controller.signal);
       if (this.#disposed || !accepts() || controller.signal.aborted) return null;
-      const url = outputTransferUrl(this.origin, selection);
+      const url = outputFileUrl(this.origin, selection.file);
       const response = await this.fetch(url, {
         signal: controller.signal,
       });

@@ -28,6 +28,13 @@ from .artifact_registry import MANAGED_SUBFOLDER_PREFIX, ManagedArtifactRegistry
 
 def decode_transfer_reference(value: object) -> OutputFileReference:
     """Reject absolute paths, traversal and non-image references before they cross the application boundary."""
+    reference = decode_output_reference(value)
+    _mime(reference.filename)
+    return reference
+
+
+def decode_output_reference(value: object) -> OutputFileReference:
+    """Admit an output of any media kind inside a Comfy namespace, for operations that never read it."""
     if not isinstance(value, Mapping):
         raise ValueError("An output image reference is required.")
     filename, subfolder, kind = (
@@ -54,7 +61,6 @@ def decode_transfer_reference(value: object) -> OutputFileReference:
         raise ValueError(
             "The output image reference is outside the host image namespace."
         )
-    _mime(filename)
     return OutputFileReference(filename, folder, kind)
 
 

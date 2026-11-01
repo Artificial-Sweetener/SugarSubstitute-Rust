@@ -79,6 +79,11 @@ test('uses explicit copy formats and the preferred download endpoint without nav
   expect(url.pathname).toBe('/sugarcubes/output-saving/image');
   expect(url.searchParams.get('format')).toBe('preferred');
   expect(url.searchParams.get('filename')).toBe('image.png');
+  const clip = { filename: 'clip.mp4', subfolder: 'outputs', type: 'output' as const };
+  expect(await transfer.fileAction(clip, () => true, undefined, 'media')).toBe(true);
+  const original = new URL(start.mock.calls[1]![0]);
+  expect(original.origin + original.pathname).toBe('https://comfy.example/view');
+  expect(Object.fromEntries(original.searchParams)).toEqual(clip);
   expect(fetch).toHaveBeenCalledTimes(1);
   transfer.dispose();
 });

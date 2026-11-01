@@ -43,8 +43,8 @@ export interface CanvasActionSurface {
   retry(plan: CanvasDisplayPlan, scope: CanvasCommandScope): SurfaceResult;
   /** Admit the current large image after explicit user intent. */
   admitLargeImage(scope: CanvasCommandScope): SurfaceResult;
-  /** Open the exact selected output through the host. */
-  open(item: WorkflowOutputItem, scope: CanvasCommandScope): void;
+  /** Open the exact selected output through the host's open action for this surface. */
+  open(item: WorkflowOutputItem, scope: CanvasCommandScope): SurfaceResult;
   /** Apply a supported copy or file action to the selected output. */
   media(command: MediaCommand, scope: CanvasCommandScope): SurfaceResult;
 }
@@ -94,9 +94,7 @@ export async function applyCanvasAction(
       return surface.admitLargeImage(scope);
     case 'open-media': {
       const item = command.target === 'primary' ? plan.primary?.item : plan.secondary?.item;
-      if (!item) return false;
-      surface.open(item, scope);
-      return true;
+      return item ? await surface.open(item, scope) : false;
     }
     case 'copy-media':
     case 'file-media':

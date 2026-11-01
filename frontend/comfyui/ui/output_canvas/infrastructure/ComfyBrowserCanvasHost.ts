@@ -19,13 +19,12 @@ import { isRecord } from '../../types/common.js';
 import { CanvasImageAllowances } from '../application/CanvasImageAllowances.js';
 import type { CanvasViewId } from '../domain/CanvasIdentity.js';
 import { BrowserCanvasAttachment } from './BrowserCanvasAttachment.js';
-import type { BrowserCanvasAttachmentOptions } from './BrowserCanvasAttachmentOptions.js';
 import { BrowserCanvasImageLoader } from './BrowserCanvasImageLoader.js';
 import { BrowserCanvasMediaPosters } from './BrowserCanvasMediaPosters.js';
 import { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.js';
 import { BrowserCanvasPosterRenderer } from './BrowserCanvasPosterRenderer.js';
 import type { CanvasAttachmentOptions } from './CanvasAttachmentOptions.js';
-import { comfyCanvasMediaUrl } from './ComfyCanvasMedia.js';
+import { comfyCanvasMediaUrl, openComfyCanvasMedia } from './ComfyCanvasMedia.js';
 import { ComfyCanvasModelRuntime } from './ComfyCanvasModelRuntime.js';
 
 /** Retain browser presentation caches independently of shared workflow and controls. */
@@ -39,7 +38,6 @@ export class ComfyBrowserCanvasHost {
   constructor(
     private readonly document: Document,
     private readonly logger: Pick<Console, 'error'>,
-    private readonly drag: BrowserCanvasAttachmentOptions['drag'],
   ) {
     const window = document.defaultView;
     if (!window) throw new Error('Output canvas window is unavailable.');
@@ -68,7 +66,7 @@ export class ComfyBrowserCanvasHost {
       models: this.#models,
       mediaSessions: this.#sessions,
       url: (item) => comfyCanvasMediaUrl(this.document.location.origin, item),
-      ...(this.drag ? { drag: this.drag } : {}),
+      open: (item) => openComfyCanvasMedia(this.#window, item),
       disposeLoader: () => loader.dispose(),
     });
   }

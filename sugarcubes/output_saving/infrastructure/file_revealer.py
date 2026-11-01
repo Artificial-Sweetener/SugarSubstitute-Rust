@@ -29,7 +29,7 @@ class ImageFileRevealer(Protocol):
         """Report whether a supported desktop file manager is installed."""
 
     def reveal(self, path: Path) -> None:
-        """Select one validated image file in its containing folder."""
+        """Select one validated output file of any media kind in its containing folder."""
 
 
 class WindowsImageFileRevealer:

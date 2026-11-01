@@ -15,7 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Drive the shared overview grid through real view owners onto a fake native host. */
 import { afterEach, expect, jest, test } from '@jest/globals';
-import { NativeCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasAttachment.js';
+import {
+  NativeCanvasAttachment,
+  type NativeCanvasAttachmentOptions,
+} from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasAttachment.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
 import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
 import { CanvasInspectionStore } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasInspectionStore.js';
@@ -112,7 +115,10 @@ function batchCatalog() {
 }
 
 /** Mount real view, selection, port and presentation owners over a held native host. */
-function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
+function fixture(
+  capabilities: Partial<CanvasSurfaceCapabilities>,
+  actions: Partial<Pick<NativeCanvasAttachmentOptions, 'fileAction' | 'drag'>> = {},
+) {
   jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
@@ -158,8 +164,8 @@ function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
     acceptsPreparation: () => false,
     nativeSurface: () => host,
     connected: () => true,
-    open: () => {},
     report: (error) => errors.push(error),
+    ...actions,
   });
   surface.port.updateSurface(address, surfaceGeometry);
   retirements.push(async () => {
@@ -352,4 +358,84 @@ test('a cell click selects its result as an ordinary image and leaves the overvi
   expect(f.surface.port.read().view.mode).toBe('overview');
   expect(f.calls.at(-1)?.type).toBe('surface.overview');
   expect(f.errors).toEqual([]);
+});
+
+/** Deliver a synchronous dragstart with a recording DataTransfer, as the page's engine would. */
+function dragStart(element: HTMLElement) {
+  const values = new Map<string, string>();
+  const files: File[] = [];
+  const transfer = {
+    setData: (type: string, value: string) => values.set(type, value),
+    items: { add: (file: File) => files.push(file), clear: () => files.splice(0) },
+    effectAllowed: 'none',
+  };
+  const event = new MouseEvent('dragstart', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', { value: transfer });
+  element.dispatchEvent(event);
+  return { event, values, files };
+}
+
+test('painted overview cells drag out their exact prepared file; other cells refuse', async () => {
+  const drag = jest.fn<NonNullable<NativeCanvasAttachmentOptions['drag']>>(async (item) => ({
+    file: new File(['png'], item.file.filename, { type: 'image/png' }),
+    url: `http://localhost/view?filename=${item.file.filename}`,
+  }));
+  const f = fixture({ overview: true }, { drag });
+  await f.drain();
+  const [first, , temporary] = f.catalog.entries[0]!.items;
+  const cells = [...f.root.querySelectorAll<HTMLButtonElement>('.sc-output-overview-cell')];
+  const image = cells[0]!.querySelector<HTMLElement>('.sc-output-overview-cell-status')!;
+  image.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+  await settle();
+  expect(drag).toHaveBeenCalledWith(first, expect.any(AbortSignal));
+  expect(cells[0]!.draggable).toBe(true);
+  const dragged = dragStart(cells[0]!);
+  expect(dragged.event.defaultPrevented).toBe(false);
+  expect(dragged.files.map((file) => file.name)).toEqual([first!.file.filename]);
+  expect(dragged.values.get('DownloadURL')).toBe(
+    `image/png:${first!.file.filename}:http://localhost/view?filename=${first!.file.filename}`,
+  );
+  cells[2]!.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+  await settle();
+  expect(drag).not.toHaveBeenCalledWith(temporary, expect.anything());
+  expect(cells[0]!.draggable).toBe(false);
+  expect(dragStart(cells[2]!).event.defaultPrevented).toBe(true);
+  expect(dragStart(cells[3]!).event.defaultPrevented).toBe(true);
+  expect(f.errors).toEqual([]);
+});
+
+test('Open media on the native presenter runs the shared file action for the exact video', async () => {
+  const accepted: boolean[] = [];
+  const fileAction = jest.fn<NonNullable<NativeCanvasAttachmentOptions['fileAction']>>(
+    async (_item, accepts) => {
+      accepted.push(accepts());
+      return true;
+    },
+  );
+  const f = fixture({ overview: true }, { fileAction });
+  await f.drain();
+  expect(f.surface.port.capabilities.commands).toContain('open-media');
+  const video = f.catalog.entries[0]!.items[3]!;
+  f.root.querySelectorAll<HTMLButtonElement>('.sc-output-overview-cell')[3]!.click();
+  await f.drain();
+  expect(f.surface.port.read().selected?.id).toBe(video.id);
+  const open = window.open;
+  const opened = jest.fn<typeof window.open>();
+  window.open = opened;
+  try {
+    expect(await f.dispatch({ type: 'open-media', target: 'primary' })).toBe('applied');
+  } finally {
+    window.open = open;
+  }
+  expect(fileAction).toHaveBeenCalledWith(video, expect.any(Function), expect.any(AbortSignal));
+  expect(accepted).toEqual([true]);
+  expect(opened).not.toHaveBeenCalled();
+  expect(f.errors).toEqual([]);
+});
+
+test('the native presenter hides Open media without a shared file action', async () => {
+  const f = fixture({ overview: true });
+  await f.drain();
+  expect(f.surface.port.capabilities.commands).not.toContain('open-media');
+  expect(await f.dispatch({ type: 'open-media', target: 'primary' })).toBe('unsupported');
 });

@@ -24,6 +24,7 @@ import type { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
 import type { CanvasCommandRequest } from '../domain/CanvasViewPort.js';
+import type { CanvasOutputDragPayload } from '../presentation/CanvasOutputDrag.js';
 import type { CanvasMediaOptions } from './CanvasMediaActions.js';
 
 /** Keep workflow ownership and transfer actions independent of image presentation. */
@@ -40,11 +41,11 @@ export interface CanvasAttachmentOptions {
   accepts(): boolean;
   /** Read shared connection state without installing another execution listener. */
   connected(): boolean;
-  /** Open supported media through the host-facing adapter. */
-  open(item: WorkflowOutputItem): void;
   copy?: CanvasMediaOptions['copy'];
   fileAction?: CanvasMediaOptions['fileAction'];
   mediaProfile?: CanvasMediaOptions['profile'];
+  /** Prepare one exact completed image for the page's outbound drag. */
+  drag?(item: WorkflowOutputItem, signal: AbortSignal): Promise<CanvasOutputDragPayload | null>;
   /** Invalidate prepared transfers after an accepted shared preference change. */
   transferChanged?(listener: () => void): () => void;
   /** Report product feedback through the existing SugarCubes services. */

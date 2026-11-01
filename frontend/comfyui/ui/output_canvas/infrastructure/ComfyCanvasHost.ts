@@ -37,7 +37,6 @@ import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
 import { ComfyCanvasWorkspaceHost } from './ComfyCanvasWorkspaceHost.js';
 import { CanvasPrimarySurface } from './CanvasPrimarySurface.js';
 import { ComfyCanvasToolbar } from './ComfyCanvasToolbar.js';
-import { openComfyCanvasMedia } from './ComfyCanvasMedia.js';
 import { ensureCanvasWorkspaceStyles } from './CanvasWorkspaceStyles.js';
 import { CanvasRevealCoordinator } from '../application/CanvasRevealCoordinator.js';
 import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
@@ -190,11 +189,17 @@ export class ComfyCanvasHost {
           accepts,
           catalog: () => this.#coordinator.catalog(address.viewId),
           connected: () => execution.connected,
-          open: (item) => openComfyCanvasMedia(window, item),
           copy: (item, accepts, format, signal) =>
             transfers.copy(item.file, accepts, format, signal),
-          fileAction: (item, accepts, signal) => transfers.fileAction(item.file, accepts, signal),
+          fileAction: (item, accepts, signal) =>
+            transfers.fileAction(
+              item.file,
+              accepts,
+              signal,
+              item.mediaKind === 'image' ? 'image' : 'media',
+            ),
           mediaProfile: () => transfers.profile(),
+          drag: (item, signal) => transfers.drag(item.file, signal),
           transferChanged: (listener: () => void) => {
             const profile = transfers.subscribe(listener);
             const settings = saving?.configuration.subscribe(listener);
@@ -214,11 +219,7 @@ export class ComfyCanvasHost {
           });
         return import('./ComfyBrowserCanvasHost.js').then(({ ComfyBrowserCanvasHost }) => {
           if (!acceptsPreparation()) return null;
-          const browser = (this.#browser ??= new ComfyBrowserCanvasHost(
-            document,
-            logger,
-            (item, signal) => transfers.drag(item.file, signal),
-          ));
+          const browser = (this.#browser ??= new ComfyBrowserCanvasHost(document, logger));
           return browser.mount(element, shared);
         });
       },

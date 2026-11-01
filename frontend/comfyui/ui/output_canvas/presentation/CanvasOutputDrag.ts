@@ -13,22 +13,22 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prepare one hovered completed image for the browser's synchronous outbound drag boundary. */
-export interface BrowserCanvasDragSubject {
+/** Prepare one hovered completed image for the page's synchronous outbound drag boundary, whichever presenter paints it. */
+export interface CanvasOutputDragSubject {
   readonly key: string;
-  readonly element: HTMLImageElement;
+  readonly element: HTMLElement;
 }
 
-export interface BrowserCanvasDragPayload {
+export interface CanvasOutputDragPayload {
   readonly file: File;
   readonly url: string;
 }
 
-export interface BrowserCanvasDragOptions {
+export interface CanvasOutputDragOptions {
   /** Resolve only current, displayed, draggable image pixels. */
-  resolve(target: EventTarget | null, event: MouseEvent | null): BrowserCanvasDragSubject | null;
+  resolve(target: EventTarget | null, event: MouseEvent | null): CanvasOutputDragSubject | null;
   /** Apply shared transfer policy before the browser makes its data store read-only. */
-  prepare(key: string, signal: AbortSignal): Promise<BrowserCanvasDragPayload | null>;
+  prepare(key: string, signal: AbortSignal): Promise<CanvasOutputDragPayload | null>;
   /** Fence the fixed attachment and its visibility. */
   accepts(): boolean;
   /** Report current failures through product feedback. */
@@ -36,21 +36,21 @@ export interface BrowserCanvasDragOptions {
 }
 
 interface DragPreparation {
-  readonly subject: BrowserCanvasDragSubject;
+  readonly subject: CanvasOutputDragSubject;
   readonly controller: AbortController;
   event: MouseEvent;
-  payload: BrowserCanvasDragPayload | null;
+  payload: CanvasOutputDragPayload | null;
 }
 
 /** Retain at most one encoded image and retire it on navigation, hiding, leaving, or disposal. */
-export class BrowserCanvasDrag {
+export class CanvasOutputDrag {
   #preparation: DragPreparation | null = null;
   #disposed = false;
 
   /** Delegate only local image gestures without observing host DOM or owning image decoding. */
   constructor(
     private readonly root: HTMLElement,
-    private readonly options: BrowserCanvasDragOptions,
+    private readonly options: CanvasOutputDragOptions,
   ) {
     root.addEventListener('pointerover', this.#hover);
     root.addEventListener('pointermove', this.#hover);

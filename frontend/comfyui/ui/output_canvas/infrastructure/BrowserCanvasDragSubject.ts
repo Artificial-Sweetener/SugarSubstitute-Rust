@@ -18,7 +18,7 @@ import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.j
 import type { CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
 import type { BrowserCanvasImages } from '../presentation/browser/BrowserCanvasImages.js';
 import type { BrowserCanvasOverview } from '../presentation/browser/BrowserCanvasOverview.js';
-import type { BrowserCanvasDragSubject } from '../presentation/browser/BrowserCanvasDrag.js';
+import type { CanvasOutputDragSubject } from '../presentation/CanvasOutputDrag.js';
 
 /** Resolve display identity without graph discovery, image admission, or transfer policy. */
 export class BrowserCanvasDragSubjects {
@@ -41,7 +41,7 @@ export class BrowserCanvasDragSubjects {
   }
 
   /** Refuse latent previews, outgoing decoded replacements, non-image media, and enlarged cameras. */
-  resolve(target: EventTarget | null, event: MouseEvent | null): BrowserCanvasDragSubject | null {
+  resolve(target: EventTarget | null, event: MouseEvent | null): CanvasOutputDragSubject | null {
     if (!event) return null;
     let element: HTMLImageElement | null = null;
     let key: string | null = null;
