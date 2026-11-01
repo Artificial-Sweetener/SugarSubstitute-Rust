@@ -8,6 +8,13 @@ required_roots = ["native/crashpad", "installer/worker", "crates/sugarsubstitute
 script_manifests = ["installer/package.json"]
 
 [[records]]
+path = "crates/sugarsubstitute/src/canvas_surface_diagnostic/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:640d289bf0094587cd681874034826bb8510f3ed7b3a9f2e45bd532484705f41"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
 path = "crates/sugarsubstitute/src/diagnostics.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:496b92d7f8fd9953652fff6a8782e3af151a6a02dce4674eaeb2dd0b9a849058"
@@ -186,6 +193,13 @@ rationale = "Test-only trace collector asserts actual retirement ordering withou
 path = "crates/sugarsubstitute/src/production/startup_readiness_diagnostic/tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:8b2e6bd04354772a423f392c45a3432e13d0c2084bb4e72509448d57668e79d1"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/overview.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:1e5a9a0b5223be28a4d82d6e7d9068ffbd2c5f2980469ec18f83c769d94d07c8"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 

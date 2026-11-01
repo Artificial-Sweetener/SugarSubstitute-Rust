@@ -57,6 +57,8 @@ impl NativeSurface {
                 CanvasSurfaceReplyStatus::Cancelled,
                 pending.claim,
             )?;
+        } else {
+            super::lifecycle::unmatched(request_id);
         }
         self.enqueue(DesktopStartupCommand::CompletePanelIngress(
             PanelIngressReceipt::cancellation(identity, request_id, claim)?,

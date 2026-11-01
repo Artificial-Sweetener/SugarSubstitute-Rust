@@ -89,6 +89,7 @@ impl NativeSurface {
                 pending.claim,
             )?;
         }
+        self.trace_selection_wait(session);
         self.poll_viewport(session)
     }
 
@@ -197,6 +198,7 @@ impl NativeSurface {
                 pending.claim,
             )?;
         }
+        self.trace_selection_wait(session);
         self.poll_viewport(session)
     }
 

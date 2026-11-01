@@ -10,6 +10,7 @@ use sugarsubstitute_contracts::execution::{
 use viewport::fixture::{Fixture, image as output_image};
 
 mod acquisition;
+mod comparison_exit;
 
 const CANVAS: u64 = 1;
 const GATES: u64 = 2;

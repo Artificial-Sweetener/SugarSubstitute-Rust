@@ -68,12 +68,12 @@ impl NativeSurface {
         let CameraCommandResult::Accepted(intent) = admitted else {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         };
-        self.pending = Some(Pending {
+        self.hold(
             identity,
             request,
             claim,
-            kind: PendingKind::Viewport { intent, commanded: navigation.is_some() },
-        });
+            PendingKind::Viewport { intent, commanded: navigation.is_some() },
+        );
         self.poll_viewport(session)
     }
 
@@ -119,6 +119,7 @@ impl NativeSurface {
         let pending = self.pending.take().ok_or("Viewport request disappeared")?;
         match state {
             Some(state) => {
+                super::lifecycle::replied(&pending.request, CanvasSurfaceReplyStatus::Applied);
                 self.enqueue(DesktopStartupCommand::SendSurface(SurfaceReply::viewport(
                     pending.identity,
                     &pending.request,

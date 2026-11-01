@@ -92,13 +92,11 @@ impl NativeSurface {
                     session.input(Input::Drawable(false))?;
                 }
                 if committed && projected.is_none() {
-                    self.pending =
-                        Some(Pending { identity, request, claim, kind: PendingKind::Hide });
+                    self.hold(identity, request, claim, PendingKind::Hide);
                     return Ok(());
                 }
                 if wait {
-                    self.pending =
-                        Some(Pending { identity, request, claim, kind: PendingKind::Geometry });
+                    self.hold(identity, request, claim, PendingKind::Geometry);
                     Ok(())
                 } else {
                     self.reply(identity, &request, CanvasSurfaceReplyStatus::Applied, claim)
@@ -185,7 +183,7 @@ impl NativeSurface {
                 binding.committed = true;
                 let kind =
                     if binding.selected { PendingKind::Commit } else { PendingKind::EmptyCommit };
-                self.pending = Some(Pending { identity, request, claim, kind });
+                self.hold(identity, request, claim, kind);
                 Ok(())
             }
             CanvasSurfaceOperation::PreviewBegin(_)
@@ -227,7 +225,9 @@ impl NativeSurface {
         binding.drag_name = None;
         binding.selection_revision = request.revision();
         binding.source_intent_revision = Some(session.source_intent_revision());
-        self.pending = Some(Pending { identity, request, claim, kind: PendingKind::Select });
+        super::lifecycle::offered(&request, session.source_intent_revision());
+        self.hold(identity, request, claim, PendingKind::Select);
+        self.trace_selection_wait(session);
         Ok(())
     }
 }

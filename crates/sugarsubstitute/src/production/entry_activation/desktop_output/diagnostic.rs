@@ -68,6 +68,7 @@ pub(super) enum Observation {
     Transport(crate::production::child_transport_diagnostic::Record),
     Probe(sugarsubstitute_desktop::frontend_probe_diagnostic::Record),
     Readiness(crate::production::startup_readiness_diagnostic::Record),
+    Canvas(crate::canvas_surface_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
 }
@@ -85,7 +86,10 @@ pub(super) struct Diagnostic {
     main_failure_seen: bool,
     probe_emitted: u8,
     probe_timeout_seen: bool,
+    canvas_emitted: u16,
 }
+/// Canvas request lifecycle records relayed per child run; later records are discarded.
+const CANVAS_RECORDS: u16 = 4096;
 impl Diagnostic {
     pub(super) const fn new() -> Self {
         Self {
@@ -100,6 +104,7 @@ impl Diagnostic {
             main_failure_seen: false,
             probe_emitted: 0,
             probe_timeout_seen: false,
+            canvas_emitted: 0,
         }
     }
     /// The authenticated output owner validates Run before these inert byte facts.
@@ -138,7 +143,15 @@ impl Diagnostic {
                         self.discard = false;
                         continue;
                     }
-                    if let Some(probe) =
+                    if let Some(record) =
+                        crate::canvas_surface_diagnostic::Record::parse(&self.bytes[..self.length])
+                    {
+                        // Canvas records keep their own budget, apart from the shared phase cap.
+                        if self.canvas_emitted < CANVAS_RECORDS {
+                            self.canvas_emitted += 1;
+                            emit(Observation::Canvas(record));
+                        }
+                    } else if let Some(probe) =
                         sugarsubstitute_desktop::frontend_probe_diagnostic::Record::parse(
                             &self.bytes[..self.length],
                         )
@@ -348,6 +361,9 @@ fn boolean(field: &str, prefix: &str) -> Option<bool> {
         _ => None,
     }
 }
+#[cfg(test)]
+#[path = "diagnostic/canvas_tests.rs"]
+mod canvas_tests;
 #[cfg(test)]
 #[path = "diagnostic/readiness_tests.rs"]
 mod readiness_tests;

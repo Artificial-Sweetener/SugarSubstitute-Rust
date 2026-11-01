@@ -24,8 +24,10 @@ impl NativeSurface {
         if self.backend.is_some_and(|backend| backend.identity == identity) {
             self.backend = None;
         }
-        if self.pending.as_ref().is_some_and(|pending| pending.identity == identity) {
-            self.pending = None;
+        if self.pending.as_ref().is_some_and(|pending| pending.identity == identity)
+            && let Some(pending) = self.pending.take()
+        {
+            super::lifecycle::retired(&pending.request, pending.kind);
         }
         for slot in &mut self.contexts {
             if slot.as_ref().is_some_and(|context| context.identity == identity) {

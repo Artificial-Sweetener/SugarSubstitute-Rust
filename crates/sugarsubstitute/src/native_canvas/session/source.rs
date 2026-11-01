@@ -72,6 +72,12 @@ impl Session {
         result
     }
 
+    /// Report whether the latest offered source is still being acquired or decoded.
+    #[cfg(feature = "native-composition")]
+    pub(crate) fn source_loading(&self) -> bool {
+        self.pending_open.is_some() || self.loading.is_some()
+    }
+
     /// Fence the host's current acquisition before its backend or attachment is replaced.
     /// A pending adapter stays retained for worker disposal, and a running job remains
     /// observed until it stops and any native transport has actually retired.

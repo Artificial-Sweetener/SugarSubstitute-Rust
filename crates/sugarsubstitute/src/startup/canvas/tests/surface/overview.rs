@@ -76,6 +76,61 @@ fn selecting_one_result_leaves_the_overview_and_restores_navigation() -> Result<
     fixture.finish()
 }
 
+/// Collect formatted diagnostic lines written on the test thread.
+#[derive(Clone, Default)]
+struct Lines(Arc<std::sync::Mutex<Vec<u8>>>);
+impl std::io::Write for Lines {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .lock()
+            .map_err(|_| std::io::Error::other("Diagnostic lines poisoned"))?
+            .extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn an_overview_records_each_lifecycle_step_once_through_its_reply() -> Result<(), Box<dyn Error>> {
+    use crate::canvas_surface_diagnostic::{Operation, Record, Stage, Status, Wait};
+    let mut fixture = Fixture::empty()?;
+    let lines = Lines::default();
+    let writer = lines.clone();
+    let guard =
+        tracing::subscriber::set_default(crate::diagnostics::fixture_subscriber(move || {
+            writer.clone()
+        }));
+    present_grid(&mut fixture, 3)?;
+    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    drop(guard);
+    let bytes = lines.0.lock().map_err(|_| "Diagnostic lines poisoned")?.clone();
+    let records: Vec<Record> = std::str::from_utf8(&bytes)?
+        .lines()
+        .filter_map(|line| Record::parse(line.as_bytes()))
+        .filter(|record| record.request_id == 3)
+        .collect();
+    assert!(
+        records
+            .iter()
+            .all(|record| record.operation == Operation::Overview && record.revision == 3)
+    );
+    let stages: Vec<Stage> = records.iter().map(|record| record.stage).collect();
+    assert_eq!(stages[..3], [Stage::Admitted, Stage::Offered, Stage::Pending], "{records:?}");
+    assert_eq!(stages.last(), Some(&Stage::Replied), "{records:?}");
+    assert_eq!(records.last().map(|record| record.status), Some(Status::Applied));
+    let waits: Vec<Wait> = records
+        .iter()
+        .filter(|record| record.stage == Stage::Waiting)
+        .map(|record| record.wait)
+        .collect();
+    assert!(!waits.is_empty() && waits.windows(2).all(|pair| pair[0] != pair[1]), "{waits:?}");
+    assert!(!waits.contains(&Wait::Superseded), "{waits:?}");
+    assert!(records.len() <= 10, "lifecycle records are bounded: {records:?}");
+    fixture.finish()
+}
+
 #[test]
 fn an_overview_cell_must_be_a_png_or_jpeg_output() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;

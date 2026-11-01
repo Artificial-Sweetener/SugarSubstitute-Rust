@@ -221,6 +221,7 @@ impl DesktopOutput {
                             launch=record.launch.get(),navigation=record.navigation.get(),
                             "Observed desktop consumption of its authenticated readiness reply");
                     }
+                    diagnostic::Observation::Canvas(record) => record.relay(self.run),
                     diagnostic::Observation::Close(close) => {
                         diagnostic::close::relay(self.run, close);
                     }

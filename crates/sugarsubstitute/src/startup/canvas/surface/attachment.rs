@@ -47,7 +47,7 @@ impl NativeSurface {
             committed: false,
             presented: None,
         });
-        self.pending = Some(Pending { identity, request, claim, kind: PendingKind::Prepare });
+        self.hold(identity, request, claim, PendingKind::Prepare);
         self.poll_attachment(session)?;
         Ok(())
     }
@@ -64,7 +64,7 @@ impl NativeSurface {
         if let Some(token) = self.binding.as_ref().and_then(|binding| binding.document) {
             session.restore_document(token)?;
             self.restoring = true;
-            self.pending = Some(Pending { identity, request, claim, kind: PendingKind::Restore });
+            self.hold(identity, request, claim, PendingKind::Restore);
             return Ok(());
         }
         self.binding = None;

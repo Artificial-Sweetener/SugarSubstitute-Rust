@@ -6,6 +6,7 @@ mod attachment;
 mod capabilities;
 mod ingress;
 mod input;
+mod lifecycle;
 mod navigation;
 mod operations;
 mod overview;
@@ -95,6 +96,8 @@ struct Pending {
     request: Box<CanvasSurfaceRequest>,
     claim: MemoryClaim,
     kind: PendingKind,
+    /// The last recorded reason a pending selection's reply condition was unmet.
+    wait: crate::canvas_surface_diagnostic::Wait,
 }
 
 /// Build the host acquisition adapter for an overview of qualification fixture outputs.
@@ -291,6 +294,7 @@ impl NativeSurface {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
         if matches!(operation, CanvasSurfaceOperation::Prepare) {
+            lifecycle::admitted(&request);
             return self.prepare(identity, request, claim, session);
         }
         let Some(binding) = &mut self.binding else {
@@ -303,6 +307,7 @@ impl NativeSurface {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Stale, claim);
         }
         binding.revision = request.revision();
+        lifecycle::admitted(&request);
         self.apply_operation(identity, request, allocation, claim, operation, session)
     }
 
@@ -374,6 +379,7 @@ impl NativeSurface {
         claim: MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
         let reply = SurfaceReply::new(identity, request, status, "", claim)?;
+        lifecycle::replied(request, status);
         self.enqueue(DesktopStartupCommand::SendSurface(reply))
     }
 

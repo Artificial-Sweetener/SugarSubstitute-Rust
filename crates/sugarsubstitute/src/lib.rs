@@ -13,6 +13,8 @@ pub mod viewer;
 
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod authority_clock;
+#[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
+mod canvas_surface_diagnostic;
 mod capture;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod capture_fixture;
