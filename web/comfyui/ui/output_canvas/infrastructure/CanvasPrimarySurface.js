@@ -34,10 +34,11 @@ export class CanvasPrimarySurface {
             clock: options.clock,
             retry: (target) => {
                 const current = this.#current;
-                if (current && !sameCanvasPreparationTarget(current, target))
-                    return;
-                // A slow host may have finished meanwhile; a prepared attachment needs no retry.
-                if (current && current.attachment.stalled?.() === false) {
+                // A slow host may have finished meanwhile; a prepared attachment needs no retry. Any
+                // other committed attachment, including an outdated one, is replaced afresh.
+                if (current &&
+                    sameCanvasPreparationTarget(current, target) &&
+                    current.attachment.stalled?.() === false) {
                     this.#recovery.reset();
                     return;
                 }
@@ -306,15 +307,18 @@ export class CanvasPrimarySurface {
     /**
      * Ignore failures from a canceled candidate and retain the previous committed attachment.
      *
-     * A preparation timeout is recoverable: the host may only be slow. With nothing committed, the
-     * timed-out candidate is committed so its loading state replaces a blank pane, and the same
-     * target is retried afresh on a bounded backoff until it prepares or shows its error state.
+     * A preparation timeout is recoverable: the host may only be slow. Unless a committed
+     * attachment already serves this exact target, the timed-out candidate is committed so its
+     * loading state replaces a blank pane or an outdated attachment (one from an earlier renderer
+     * identity, such as before native discovery concluded). The same target is then retried
+     * afresh on a bounded backoff until it prepares or shows its preparation error.
      */
     #failPending(pending, error) {
         if (this.#pending !== pending)
             return;
         const timedOut = error instanceof CanvasPreparationTimeout;
-        if (timedOut && !this.#current && pending.attachment)
+        const served = this.#current !== null && sameCanvasPreparationTarget(this.#current, pending);
+        if (timedOut && !served && pending.attachment)
             this.#activate(pending, true);
         else
             this.#cancelPending();
