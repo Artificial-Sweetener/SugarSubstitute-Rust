@@ -253,10 +253,12 @@ impl Routing {
                 .click
                 .is_some_and(|previous| double_click(previous, current, rule.bounds, rule.limit));
         self.click = (routed == MainCanvasButton::Primary && !doubled).then_some(current);
+        // The tool starts the press before the double-click, as the standalone viewer delivers
+        // them; a press after it would cancel the zoom transition the double-click began.
+        self.push(MainCanvasGesture::Button { button: routed, pressed: true });
         if doubled {
             self.push(MainCanvasGesture::DoubleClick(position(point)));
         }
-        self.push(MainCanvasGesture::Button { button: routed, pressed: true });
         self.native = Some(routed);
         self.hover = true;
     }

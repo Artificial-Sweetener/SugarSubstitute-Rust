@@ -216,3 +216,35 @@ fn a_shown_preview_publishes_no_gesture_camera() -> Result<(), Box<dyn Error>> {
     preview::drain(&mut fixture)?;
     fixture.finish()
 }
+
+#[test]
+fn a_routed_double_click_from_a_zoomed_camera_publishes_fit() -> Result<(), Box<dyn Error>> {
+    let mut fixture = watched()?;
+    fixture.viewport(6, json!({"type":"zoom","factor":4}))?;
+    fixture.complete(6)?;
+    assert!(settle(&mut fixture)?.is_empty());
+    let point = [50.0, 40.0];
+    // The exact order the host routing emits for two primary clicks within the Windows rule.
+    route(
+        &mut fixture,
+        &[
+            MainCanvasGesture::Pointer(point),
+            button(true),
+            MainCanvasGesture::Pointer(point),
+            button(false),
+            MainCanvasGesture::Pointer(point),
+            button(true),
+            MainCanvasGesture::DoubleClick(point),
+            MainCanvasGesture::Pointer(point),
+            button(false),
+        ],
+    )?;
+    let cameras = settle(&mut fixture)?;
+    let published = cameras.last().ok_or("The double-click published no camera")?;
+    let viewport = &published["change"]["viewport"];
+    assert_eq!(viewport["mode"], "fit", "{cameras:?}");
+    assert!(close(&viewport["physicalScale"], 0.25), "{viewport}");
+    fixture.viewport(7, json!({"type":"read"}))?;
+    assert_eq!(fixture.complete(7)?["viewport"], *viewport);
+    fixture.finish()
+}

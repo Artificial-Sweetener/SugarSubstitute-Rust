@@ -228,7 +228,8 @@ fn two_primary_presses_within_the_windows_rule_add_a_double_click() -> TestResul
     routing.route(Message::Press { button: Button::Primary, point: [51, 41], rule: second });
     assert_eq!(
         drain(&mut routing),
-        [Pointer([51.0, 41.0]), DoubleClick([51.0, 41.0]), button(MainCanvasButton::Primary, true)]
+        [Pointer([51.0, 41.0]), button(MainCanvasButton::Primary, true), DoubleClick([51.0, 41.0])],
+        "the press precedes the double-click, as the canvas tool expects"
     );
     routing.route(release);
     let third = ClickRule { time: 1_500, ..RULE };
