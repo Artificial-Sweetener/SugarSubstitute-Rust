@@ -11,10 +11,10 @@ use super::callbacks::{CallbackFence, retire_when_quiet};
 use super::cancellation::{self, Interruption};
 use super::cursor::{self, Hands, Pointer, Subscription};
 use super::drop_target::DropTarget;
-use super::focus::{self, Focus};
 use super::routing::{Button, ClickRule, Message, Routing};
 use super::*;
 use crate::canvas::{MainCanvasGesture, placement::PhysicalRect};
+use crate::main_actor::focus::{self, Focus};
 use crate::windows_subclass::{self, Registration};
 use std::cell::{Cell, RefCell};
 use webview2_com::Microsoft::Web::WebView2::Win32::{

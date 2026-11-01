@@ -88,6 +88,11 @@ impl MainActor {
             }
             return Ok(None);
         }
+        if let Some(focus) = &self.windowed_focus {
+            focus.retire()?;
+            self.windowed_focus = None;
+            return Ok(None);
+        }
         if let Some(view) = &mut self.view {
             if view
                 .checked_retire()
@@ -150,6 +155,7 @@ impl Drop for MainActor {
             std::mem::forget(self.controls.take());
             std::mem::forget(self.constructor.take());
             std::mem::forget(self.partial.take());
+            std::mem::forget(self.windowed_focus.take());
             std::mem::forget(self.view.take());
             #[cfg(feature = "native-composition")]
             std::mem::forget(self.composition.take());

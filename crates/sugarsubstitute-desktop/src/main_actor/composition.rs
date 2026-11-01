@@ -8,7 +8,6 @@ mod canvas;
 mod construction;
 mod cursor;
 mod drop_target;
-mod focus;
 mod input;
 mod retirement;
 mod routing;

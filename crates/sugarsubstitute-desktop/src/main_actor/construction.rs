@@ -252,6 +252,9 @@ impl MainActor {
                 if self.hosting().presents_native_canvas() {
                     self.attach_composition_input()?;
                 }
+                if !self.hosting().presents_native_canvas() {
+                    self.attach_windowed_focus()?;
+                }
                 if self.receivers.is_none() {
                     self.receivers = Some(crate::windows_main_receivers::Receivers::new(
                         self.view()?.webview(),
@@ -275,6 +278,18 @@ impl MainActor {
             ConstructionStage::PausedEnvironment | ConstructionStage::Live => {}
         }
         Ok(None)
+    }
+
+    /// Register focus reporting and Tab wrapping on a windowed browser once; a partial
+    /// registration stays retained for retirement.
+    fn attach_windowed_focus(&mut self) -> Result<(), DesktopError> {
+        if self.windowed_focus.is_none() {
+            self.windowed_focus = Some(focus::Focus::new(self.view()?.controller()));
+        }
+        self.windowed_focus
+            .as_ref()
+            .ok_or_else(|| DesktopError::message("windowed_browser_focus", "focus owner absent"))?
+            .install()
     }
 
     /// Report the constructed browser's process exactly once, after its hosting is fixed.

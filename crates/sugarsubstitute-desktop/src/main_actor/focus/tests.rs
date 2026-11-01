@@ -3,13 +3,17 @@
 //! Exercise the host's keyboard-focus decisions without a browser.
 
 use super::*;
+#[cfg(feature = "native-composition")]
 use windows::Win32::UI::WindowsAndMessaging::{
     WM_CHAR, WM_IME_CHAR, WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_NOTIFY,
-    WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONUP,
-    WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_SETFOCUS, WM_SYSKEYDOWN,
+    WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
+    WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MOUSEMOVE,
+    WM_MOUSEWHEEL, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_SETFOCUS, WM_SYSKEYDOWN, WM_XBUTTONDBLCLK,
+    WM_XBUTTONDOWN,
 };
 
 #[test]
+#[cfg(feature = "native-composition")]
 fn every_press_focuses_an_unfocused_browser_and_leaves_a_focused_one_alone() {
     for press in [
         WM_LBUTTONDOWN,
@@ -27,6 +31,7 @@ fn every_press_focuses_an_unfocused_browser_and_leaves_a_focused_one_alone() {
 }
 
 #[test]
+#[cfg(feature = "native-composition")]
 fn movement_release_wheel_focus_keyboard_and_ime_messages_never_move_focus_first() {
     for message in [
         WM_MOUSEMOVE,

@@ -8,6 +8,7 @@ mod close_request;
 mod composition;
 mod construction;
 mod evidence;
+mod focus;
 mod frame;
 #[cfg(feature = "native-composition")]
 mod hosting;
@@ -69,6 +70,8 @@ pub(crate) struct MainActor {
     constructor: Option<WebViewConstruction>,
     partial: Option<WebViewRetirement>,
     view: Option<WebView>,
+    /// Focus reporting and Tab wrapping registered on a windowed browser's controller.
+    windowed_focus: Option<focus::Focus>,
     #[cfg(feature = "native-composition")]
     composition: Option<composition::Composition>,
     #[cfg(feature = "native-composition")]
@@ -139,6 +142,7 @@ impl MainActor {
             constructor: None,
             partial: None,
             view: None,
+            windowed_focus: None,
             #[cfg(feature = "native-composition")]
             composition: None,
             #[cfg(feature = "native-composition")]
@@ -434,6 +438,12 @@ impl MainActor {
         match event {
             WindowEvent::CloseRequested | WindowEvent::Destroyed => {
                 return close_request::observe(self.revealed);
+            }
+            // Activation focuses this top-level window; a windowed browser takes it from here.
+            WindowEvent::Focused(true) => {
+                if let Some(focus) = &self.windowed_focus {
+                    focus.enter();
+                }
             }
             WindowEvent::Resized(_) => self.resize()?,
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.rescale(*scale_factor)?,
