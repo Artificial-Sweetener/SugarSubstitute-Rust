@@ -304,3 +304,18 @@ fn invalid_native_input_preserves_camera_and_closed_lifetimes_ignore_new_intent(
     assert_eq!(session.document.tools.navigation().viewport(), previous);
     Ok(())
 }
+
+/// The display's refresh rate belongs to the session: a document replaced after it was
+/// reported keeps navigation and presentation paced to the display, not the 60 Hz fallback.
+#[test]
+fn the_display_refresh_rate_paces_every_later_document() -> Result<(), Box<dyn Error>> {
+    let (mut session, _clock, _directory) = session()?;
+    session.input(Input::DisplayRefresh(Some(144.0)))?;
+    let period = Duration::try_from_secs_f64(1.0 / 144.0)?;
+    assert_eq!(session.document.tools.navigation().frame_period(), period);
+    assert_eq!(session.pacing.period(), period);
+    drop(session.withdraw_document()?);
+    assert_eq!(session.document.tools.navigation().frame_period(), period);
+    assert_eq!(session.pacing.period(), period);
+    Ok(())
+}

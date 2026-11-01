@@ -193,7 +193,10 @@ impl Lifetime for Session {
                 self.document.scene.as_ref().map(|scene| &scene.document),
                 now,
             )?,
-            Input::DisplayRefresh(rate) => self.document.tools.set_refresh_rate(rate)?,
+            Input::DisplayRefresh(rate) => {
+                self.document.tools.set_refresh_rate(rate)?;
+                self.display_refresh = rate;
+            }
             Input::Open => self.picker = true,
             Input::Unfocused => self.document.tools.cancel(
                 ToolCancelReason::FocusLost,

@@ -129,9 +129,10 @@ impl Session {
         {
             return Err("Canvas document still has unacknowledged presentation evidence".into());
         }
-        let empty = DocumentState::new(Viewport::new(
+        let mut empty = DocumentState::new(Viewport::new(
             self.document.tools.navigation().viewport().surface(),
         )?);
+        empty.tools.set_refresh_rate(self.display_refresh)?;
         Ok(std::mem::replace(&mut self.document, Box::new(empty)))
     }
 }

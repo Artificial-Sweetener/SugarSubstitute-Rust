@@ -221,6 +221,8 @@ pub(crate) struct Session {
     /// The selection a cache-corruption rebuild replaced, and the selection that continues it.
     #[cfg(feature = "native-composition")]
     rebuilt_selection: Option<(u64, u64)>,
+    /// The showing display's refresh rate, which outlives every document it paces.
+    display_refresh: Option<f64>,
     #[cfg(feature = "native-composition")]
     document_sequence: u64,
     #[cfg(feature = "native-composition")]
@@ -363,6 +365,7 @@ impl Session {
             source_sequence: 1,
             #[cfg(feature = "native-composition")]
             rebuilt_selection: None,
+            display_refresh: None,
             #[cfg(feature = "native-composition")]
             document_sequence: 0,
             #[cfg(feature = "native-composition")]

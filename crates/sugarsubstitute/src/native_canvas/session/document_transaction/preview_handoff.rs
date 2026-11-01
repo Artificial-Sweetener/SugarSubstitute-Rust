@@ -50,6 +50,7 @@ impl Session {
             generation: Generation::new(next)?,
         };
         let mut document = Box::new(document::DocumentState::new(retained.drawing.view));
+        document.tools.set_refresh_rate(self.display_refresh)?;
         document.cpu_only = true;
         document.tools.set_content(
             Some(retained.scene.document.snapshot().extent()),
