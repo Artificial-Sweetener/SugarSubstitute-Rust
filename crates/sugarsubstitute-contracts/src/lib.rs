@@ -17,6 +17,7 @@ pub mod installation;
 pub mod instance_conflict;
 pub mod lifecycle;
 pub mod localization;
+pub mod memory;
 pub mod panel;
 pub mod presentation;
 pub mod recovery_supervisor;

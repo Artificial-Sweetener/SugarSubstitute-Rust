@@ -160,3 +160,52 @@ fn stale_or_closed_notification_retirement_releases_claims_without_removing_corr
     assert!(lease.claim(3 * SurfacePresentation::STORAGE_BYTES).is_ok());
     Ok(())
 }
+
+fn allowance(
+    identity: MainIdentity,
+    generation: u64,
+    lease: &MemoryLease,
+) -> Result<NativeDelivery, Box<dyn Error>> {
+    use sugarsubstitute_contracts::memory::{MemoryAllowance, MemoryLevel, MemoryPreferenceChoice};
+    let allowance = MemoryAllowance {
+        generation,
+        level: MemoryLevel::Normal,
+        allowance_bytes: 1024,
+        ceiling_bytes: 4096,
+        total_bytes: 8192,
+        preference: MemoryPreferenceChoice::Share { percent: 25 },
+    };
+    Ok(NativeDelivery::Memory(crate::MemoryCommand::new(
+        identity,
+        &allowance,
+        lease.claim(crate::MemoryCommand::STORAGE_BYTES)?,
+    )?))
+}
+
+#[test]
+fn a_newer_pending_memory_allowance_replaces_the_older_one() -> Result<(), Box<dyn Error>> {
+    let identity = identity()?;
+    let old = MemoryLease::new(crate::MemoryCommand::STORAGE_BYTES, Box::new(Release));
+    let newer = MemoryLease::new(crate::MemoryCommand::STORAGE_BYTES, Box::new(Release));
+    let stale = MemoryLease::new(crate::MemoryCommand::STORAGE_BYTES, Box::new(Release));
+    let mut queue = Replies::new();
+    queue.push(allowance(identity, 1, &old)?)?;
+    queue.push(allowance(identity, 2, &newer)?)?;
+    // An older generation never replaces a newer pending allowance.
+    queue.push(allowance(identity, 1, &stale)?)?;
+    assert_eq!(queue.len, 1);
+    assert!(old.claim(crate::MemoryCommand::STORAGE_BYTES).is_ok());
+    assert!(stale.claim(crate::MemoryCommand::STORAGE_BYTES).is_ok());
+    let mut generations = Vec::new();
+    while queue.progress(true, |delivery| {
+        let value: Value = serde_json::from_slice(
+            delivery.payload().ok_or_else(|| DesktopError::message("test", "Missing payload"))?,
+        )
+        .map_err(|cause| DesktopError::new("test", cause))?;
+        generations.push(value["generation"].as_u64());
+        assert!(delivery.lane().is_none());
+        Ok(())
+    })? {}
+    assert_eq!(generations, [Some(2)]);
+    Ok(())
+}

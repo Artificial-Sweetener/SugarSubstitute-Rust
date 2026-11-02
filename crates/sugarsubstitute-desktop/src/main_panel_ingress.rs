@@ -6,6 +6,7 @@ use serde::Deserialize;
 use sugarsubstitute_contracts::{
     canvas_context::CanvasContextRequest,
     canvas_surface::CanvasSurfaceMessage,
+    memory::MemoryMessage,
     panel::{PanelMessage, PanelSession},
 };
 
@@ -142,13 +143,14 @@ pub(crate) enum ClientMessage {
     Panel(PanelMessage),
     Surface(CanvasSurfaceMessage),
     Context(CanvasContextRequest),
+    Memory(MemoryMessage),
 }
 
 impl ClientMessage {
     /// Keep control and cancellation traffic independent of ordinary response ownership.
     pub(crate) const fn lane(&self) -> Lane {
         match self {
-            Self::Panel(_) => Lane::Control,
+            Self::Panel(_) | Self::Memory(_) => Lane::Control,
             Self::Surface(CanvasSurfaceMessage::Cancel { .. }) => Lane::Cancellation,
             Self::Surface(_) | Self::Context(_) => Lane::Ordinary,
         }
@@ -157,7 +159,7 @@ impl ClientMessage {
     /// Correlate cancellation and replies without imposing a global public-ID frontier.
     pub(crate) fn request_id(&self) -> Option<u64> {
         match self {
-            Self::Panel(_) => None,
+            Self::Panel(_) | Self::Memory(_) => None,
             Self::Surface(CanvasSurfaceMessage::Request(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Discovery(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Presentation(value)) => Some(value.request_id()),
@@ -206,6 +208,9 @@ pub(crate) fn decode_payload(payload: &str, session: &PanelSession) -> Option<Cl
     if let Ok(message) = CanvasSurfaceMessage::decode(payload.as_bytes()) {
         return (message.session() == session).then_some(ClientMessage::Surface(message));
     }
+    if let Ok(message) = MemoryMessage::decode(payload.as_bytes()) {
+        return (message.session() == session).then_some(ClientMessage::Memory(message));
+    }
     let request = CanvasContextRequest::decode(payload.as_bytes()).ok()?;
     (request.session() == session).then_some(ClientMessage::Context(request))
 }
@@ -249,6 +254,25 @@ mod tests {
             frame(&event(BINDING_NAME, 17, &format!("1:o:1:{}", "x".repeat(16385))), Some(17))
                 .is_none()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn memory_reports_ride_the_control_lane_for_their_own_session_only()
+    -> Result<(), Box<dyn Error>> {
+        let session = PanelSession::new("session-12345678".into())?;
+        let usage = r#"{"protocol":"sugarcubes.memory","version":1,"session":"session-12345678","type":"usage","usedBytes":10,"demandBytes":20,"consumers":[]}"#;
+        let message = decode_payload(usage, &session).ok_or("Memory usage was not decoded")?;
+        assert!(matches!(
+            message,
+            ClientMessage::Memory(MemoryMessage::Usage { used_bytes: 10, .. })
+        ));
+        assert_eq!(message.lane(), Lane::Control);
+        assert_eq!(message.request_id(), None);
+        let other = PanelSession::new("session-87654321".into())?;
+        assert!(decode_payload(usage, &other).is_none());
+        let transport_version = usage.replace(r#""version":1"#, r#""version":3"#);
+        assert!(decode_payload(&transport_version, &session).is_none());
         Ok(())
     }
 

@@ -5,6 +5,7 @@
 ((outputSurfacePreference) => {
   const host = 'ai.artificialsweetener.sugarsubstitute';
   const controls = ['ready', 'applied', 'pong', 'rejected'];
+  const memoryReports = ['usage', 'preference'];
   const requestTypes = ['context.request', 'surface.capabilities.request', 'surface.viewport.request',
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
@@ -21,7 +22,10 @@
           query.getAll('sc-panel-transport').length !== 1 || query.get('sc-panel-transport') !== 'native') return null;
       return session;
     },
-    control: type => controls.includes(type),
+    control: value => value.protocol === 'sugarcubes.panel' && controls.includes(value.type) ||
+      value.protocol === 'sugarcubes.memory' && memoryReports.includes(value.type),
+    // The memory budget protocol versions independently of the version-three transport.
+    version: value => value.protocol === 'sugarcubes.memory' ? 1 : 3,
     request: type => requestTypes.includes(type),
     cancelled(value) {
       const envelope = { protocol: value.protocol, version: 3, session: value.session,
@@ -40,6 +44,7 @@
         ['stale', 'cancelled', 'unavailable', 'error'].includes(value.status);
     },
     notification: value => value.protocol === 'sugarcubes.panel' ||
+      value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
       value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
       ['surface.presentation.changed', 'surface.camera.changed'].includes(value.type),
   });

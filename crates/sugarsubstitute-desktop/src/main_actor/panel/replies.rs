@@ -49,6 +49,17 @@ impl Replies {
                 }
             }
         }
+        if let NativeDelivery::Memory(incoming) = &reply {
+            for offset in 0..self.len {
+                let index = (self.first + offset) % CAPACITY;
+                if let Some(NativeDelivery::Memory(pending)) = &self.slots[index] {
+                    if incoming.generation() > pending.generation() {
+                        self.slots[index] = Some(reply);
+                    }
+                    return Ok(());
+                }
+            }
+        }
         if self.len == CAPACITY {
             return Err(DesktopError::message("canvas_reply_queue", "reply capacity exhausted"));
         }
@@ -72,6 +83,7 @@ impl Replies {
             self.first = (self.first + 1) % CAPACITY;
             self.len -= 1;
             if matches!(&delivery, NativeDelivery::Presentation(value) if current != Some(value.identity()))
+                || matches!(&delivery, NativeDelivery::Memory(value) if current != Some(value.identity()))
             {
                 retired = true;
             } else {

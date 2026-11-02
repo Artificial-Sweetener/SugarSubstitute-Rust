@@ -12,6 +12,7 @@ pub(in crate::main_actor) enum Ingress {
     Panel(crate::PanelObservation),
     Surface(crate::SurfaceObservation),
     Context(crate::CanvasContextObservation),
+    Memory(crate::MemoryObservation),
 }
 
 impl MainActor {
@@ -66,6 +67,9 @@ impl MainActor {
             crate::main_panel_ingress::ClientMessage::Surface(message) => Ingress::Surface(
                 crate::SurfaceObservation::new(self.identity(), message, lease, claim, hosting),
             ),
+            crate::main_panel_ingress::ClientMessage::Memory(message) => Ingress::Memory(
+                crate::MemoryObservation::new(self.identity(), message, lease, claim),
+            ),
             crate::main_panel_ingress::ClientMessage::Context(request) => {
                 Ingress::Context(crate::CanvasContextObservation::new(
                     self.identity(),
@@ -85,6 +89,7 @@ impl MainActor {
     ) -> DesktopStartupObservation {
         match ingress {
             Ingress::Panel(observation) => DesktopStartupObservation::PanelMessage(observation),
+            Ingress::Memory(observation) => DesktopStartupObservation::MemoryMessage(observation),
             Ingress::Surface(observation) => {
                 #[cfg(feature = "native-composition")]
                 let mut observation = observation;

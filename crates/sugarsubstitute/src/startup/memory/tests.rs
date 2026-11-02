@@ -52,28 +52,19 @@ fn the_governor_samples_when_due_and_reports_only_changed_decisions() -> Result<
     let mut governor = MemoryGovernor::new(Box::new(source.clone()), MemoryPreference::default());
     assert_eq!(governor.total_bytes()?, 64 * GIB);
     let start = governor.next_deadline();
-    let first = governor.poll(start, Moment::from_nanos(0), CacheCharge::default())?;
+    let first = governor.poll(start, Moment::from_nanos(0), 0, false)?;
     assert_eq!(first.map(|decision| decision.level), Some(PressureLevel::Normal));
     assert_eq!(governor.next_deadline(), start + Duration::from_secs(2));
     // Not yet due: no sample is taken.
     assert!(
-        governor
-            .poll(start + Duration::from_secs(1), Moment::from_nanos(1), CacheCharge::default())?
-            .is_none()
+        governor.poll(start + Duration::from_secs(1), Moment::from_nanos(1), 0, false)?.is_none()
     );
     // Due again with nothing changed: sampled, but no new decision.
-    let unchanged = governor.poll(
-        start + Duration::from_secs(2),
-        Moment::from_nanos(2),
-        CacheCharge::default(),
-    )?;
+    let unchanged =
+        governor.poll(start + Duration::from_secs(2), Moment::from_nanos(2), 0, false)?;
     assert!(unchanged.is_none());
     source.set_available(GIB);
-    let pressed = governor.poll(
-        start + Duration::from_secs(4),
-        Moment::from_nanos(4),
-        CacheCharge::default(),
-    )?;
+    let pressed = governor.poll(start + Duration::from_secs(4), Moment::from_nanos(4), 0, false)?;
     assert_eq!(
         pressed.map(|decision| (decision.level, decision.cache_bytes)),
         Some((PressureLevel::Critical, 0))

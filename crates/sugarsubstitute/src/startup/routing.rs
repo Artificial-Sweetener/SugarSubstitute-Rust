@@ -4,7 +4,10 @@
 use super::consume_diagnostic::observe as observed_consume;
 use super::*;
 use policy::StartupRoute;
-#[cfg(all(windows, feature = "native-composition"))]
+#[cfg(all(
+    windows,
+    any(feature = "native-composition", feature = "windows-native-host", test)
+))]
 use sugarsubstitute_contracts::execution::Clock;
 use sugarsubstitute_contracts::startup::StartupEffect;
 use sugarsubstitute_desktop::StartupConsumeStage as ConsumeStage;
@@ -34,7 +37,7 @@ impl<B: StartupBackend> StartupHost<B> {
             .map_or(Ok(()), |composition| composition.advance(self.clock.now()));
         #[cfg(not(all(windows, feature = "native-composition")))]
         let composition = Ok(());
-        #[cfg(all(windows, feature = "native-composition"))]
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
         self.govern_memory();
         #[cfg(windows)]
         let canvas = self.canvas.as_mut().map_or(Ok(()), canvas::EmbeddedCanvas::poll);
@@ -118,6 +121,10 @@ impl<B: StartupBackend> StartupHost<B> {
     pub(super) fn route(&mut self, route: StartupRoute) -> Result<(), Box<dyn Error>> {
         match route {
             StartupRoute::Native(observation) => {
+                #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+                let Some(observation) = self.observe_memory(observation)? else {
+                    return Ok(());
+                };
                 #[cfg(all(windows, feature = "native-composition"))]
                 if let DesktopStartupObservation::MainRetired(identity)
                 | DesktopStartupObservation::MainAbsent(identity) = &observation
@@ -258,13 +265,13 @@ impl<B: StartupBackend> StartupHost<B> {
         #[cfg(windows)]
         {
             let canvas = self.canvas.as_ref().and_then(canvas::EmbeddedCanvas::next_deadline);
-            #[cfg(feature = "native-composition")]
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             let memory = self
                 .memory
                 .as_ref()
                 .filter(|_| !self.closing)
                 .map(super::memory::MemoryGovernor::next_deadline);
-            #[cfg(not(feature = "native-composition"))]
+            #[cfg(not(any(feature = "windows-native-host", test)))]
             let memory = None;
             canvas.into_iter().chain(memory).min()
         }
@@ -272,26 +279,55 @@ impl<B: StartupBackend> StartupHost<B> {
         None
     }
 
-    /// Sample memory when due and narrow or widen what retained canvas documents may keep.
-    #[cfg(all(windows, feature = "native-composition"))]
+    /// Sample memory when due, narrow or widen what retained canvas documents may keep, and
+    /// queue the page's allowance.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     fn govern_memory(&mut self) {
-        let (Some(memory), Some(canvas)) = (&mut self.memory, &mut self.canvas) else {
+        let Some(memory) = &mut self.memory else {
             return;
         };
         if self.closing {
             return;
         }
-        let charge = sugarsubstitute_execution::memory_budget::CacheCharge {
-            native_bytes: canvas.retained_bytes(),
-            ..Default::default()
-        };
-        match memory.poll(std::time::Instant::now(), self.clock.now(), charge) {
-            Ok(Some(decision)) => canvas.limit_retained(decision.native_bytes),
-            Ok(None) => {}
-            // A failed sample keeps the previous allowance; the canvas itself stays healthy.
+        #[cfg(feature = "native-composition")]
+        let native = self.canvas.as_ref().map_or(0, canvas::EmbeddedCanvas::retained_bytes);
+        #[cfg(not(feature = "native-composition"))]
+        let native = 0;
+        match memory.poll(std::time::Instant::now(), self.clock.now(), native, !self.visible) {
+            #[cfg(feature = "native-composition")]
+            Ok(Some(decision)) => {
+                if let Some(canvas) = &mut self.canvas {
+                    canvas.limit_retained(decision.native_bytes);
+                }
+            }
+            Ok(_) => {}
+            // A failed sample keeps the previous allowance; the application stays healthy.
             Err(error) => tracing::warn!(operation = "memory_budget_sample", %error,
                 "System memory could not be sampled; the previous cache allowance remains"),
         }
+    }
+
+    /// Consume the memory budget's own observations; returns any other observation unchanged.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    fn observe_memory(
+        &mut self,
+        observation: DesktopStartupObservation,
+    ) -> Result<Option<DesktopStartupObservation>, Box<dyn Error>> {
+        let Some(memory) = &mut self.memory else {
+            return Ok(Some(observation));
+        };
+        match observation {
+            DesktopStartupObservation::MemoryMessage(observed) => memory.observe_page(observed)?,
+            DesktopStartupObservation::BrowserProcesses { processes, .. } => {
+                memory.set_browser_processes(processes);
+            }
+            DesktopStartupObservation::MainRetired(identity) => {
+                memory.retire_page(identity);
+                return Ok(Some(DesktopStartupObservation::MainRetired(identity)));
+            }
+            other => return Ok(Some(other)),
+        }
+        Ok(None)
     }
 
     /// Map the actual owner epoch; failed arithmetic is returned rather than hidden.

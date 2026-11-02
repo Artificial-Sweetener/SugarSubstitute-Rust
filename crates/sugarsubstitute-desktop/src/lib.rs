@@ -36,6 +36,7 @@ mod main_canvas_context;
 mod main_downloads;
 mod main_environment;
 mod main_hosting;
+mod main_memory_contract;
 #[cfg(target_os = "windows")]
 mod main_native_delivery;
 mod main_navigation;
@@ -173,6 +174,7 @@ pub use main_canvas_context::{
 };
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};
 pub use main_hosting::MainHosting;
+pub use main_memory_contract::{MemoryCommand, MemoryObservation};
 pub use main_panel_contract::{PanelCommand, PanelObservation};
 pub use main_panel_ingress_receipt::{PanelIngressReceipt, PanelIngressReceiptError};
 pub use main_surface_contract::{

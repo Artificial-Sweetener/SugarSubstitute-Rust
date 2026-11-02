@@ -3,6 +3,7 @@
 //! Drive one admitted UI-affine browser lifetime through explicit native stages.
 
 mod admission;
+mod browser_memory;
 mod close_request;
 #[cfg(feature = "native-composition")]
 mod composition;

@@ -43,6 +43,22 @@ impl MainActor {
         self.canvas_replies.push(NativeDelivery::Presentation(change))
     }
 
+    /// Retain the latest memory allowance until native capacity returns; stale ones retire here.
+    pub(crate) fn send_memory(
+        &mut self,
+        command: crate::MemoryCommand,
+    ) -> Result<(), DesktopError> {
+        if command.identity() != self.identity()
+            || self.admission.closing()
+            || !self.revealed
+            || self.readiness.as_ref().and_then(MainReadiness::panel_context).is_none()
+        {
+            return Ok(());
+        }
+        self.admitted_panel_context(command.identity())?;
+        self.canvas_replies.push(NativeDelivery::Memory(command))
+    }
+
     /// Deliver a correlated context reply to the same current document and UI apartment.
     pub(crate) fn send_canvas_context(
         &mut self,

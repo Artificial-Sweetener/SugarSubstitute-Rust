@@ -56,6 +56,11 @@ impl Bridge {
         })
     }
 
+    /// Borrow the browser this binding is installed on.
+    pub(in crate::main_actor) const fn core(&self) -> &ICoreWebView2 {
+        &self.core
+    }
+
     /// Identify actual completed callbacks or the next nonblocking setup effect.
     pub(in crate::main_actor) fn needs_progress(&self) -> bool {
         self.shared.completed()

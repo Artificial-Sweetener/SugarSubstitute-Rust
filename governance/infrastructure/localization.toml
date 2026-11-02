@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:b2118961c1474895421891e5a3bfab8d8d3417d6c14c3101ccdef8b9e2dc4854"
+source_sha256 = "sha256:03c194115ee712602000816d3c59b42bb5ad2aec44e48db53e5e2c2865a3a25d"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -420,7 +420,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:87d403a2fb5731ce143c238a6df8c226663ef26e77a3ddee4e7b4236a32c855d"
+source_sha256 = "sha256:b8a893b1c324116a117b50b9832282793fc37586d3286645694b6c6fc1f96d84"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -450,7 +450,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:8d803bc58a880a4a406715e2c6dabc934a1b0ca4c5c04180b0fbaadb1b6b266d"
+source_sha256 = "sha256:487c6c41e09acd27ecd1d98e774009078fda816e69a641ec5fbefc223a3b56bb"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -714,13 +714,13 @@ rationale = "Hidden native picker lifecycle fixtures preserve original paths and
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js"
-source_sha256 = "sha256:15b3005c8072bfa63839ea87b6c091628b7c68186ef8c89e21e3a512a3253874"
+source_sha256 = "sha256:074d8aa3bf479b7dbe975ee0de876e53c9c995fbc47a1878e9262b1dbebb8cd1"
 kind = "native"
 rationale = "The bounded WebView transport defines technical JavaScript properties and error diagnostics; it does not construct product-facing text or select a locale."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:18d861a1f70114b6bae2956623b8364e5a42b2dc11354f899a9f2a9be8df8f5a"
+source_sha256 = "sha256:f16c3067be0c3d07f1ee6262a1199183e96fa3a9ff94bfc0dda76a7c4b6da4e4"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 

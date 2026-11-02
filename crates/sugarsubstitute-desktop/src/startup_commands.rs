@@ -156,6 +156,19 @@ pub(super) fn drain(
             DesktopStartupCommand::SendPanel(command) => {
                 main_operation(session, content, |owner| owner.send_panel(command).map(|()| None))?;
             }
+            DesktopStartupCommand::SendMemory(command) => {
+                main_operation(session, content, |owner| {
+                    owner.send_memory(command).map(|()| None)
+                })?;
+            }
+            DesktopStartupCommand::MeasureBrowser(identity) => {
+                main_operation(session, content, |owner| owner.measure_browser(identity))?;
+            }
+            DesktopStartupCommand::SetBrowserMemoryTarget { identity, low } => {
+                main_operation(session, content, |owner| {
+                    owner.set_browser_memory_target(identity, low).map(|()| None)
+                })?;
+            }
             DesktopStartupCommand::SendCanvasContext(reply) => {
                 main_operation(session, content, |owner| {
                     owner.send_canvas_context(reply).map(|()| None)

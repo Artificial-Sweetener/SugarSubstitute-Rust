@@ -13,6 +13,7 @@ pub(crate) enum NativeDelivery {
     Surface(SurfaceReply),
     Presentation(crate::SurfacePresentation),
     Ingress(PanelIngressReceipt),
+    Memory(crate::MemoryCommand),
 }
 
 impl NativeDelivery {
@@ -23,6 +24,7 @@ impl NativeDelivery {
             Self::Surface(value) => value.identity(),
             Self::Presentation(value) => value.identity(),
             Self::Ingress(value) => value.identity(),
+            Self::Memory(value) => value.identity(),
         }
     }
 
@@ -30,7 +32,7 @@ impl NativeDelivery {
     pub(crate) fn lane(&self) -> Option<Lane> {
         match self {
             Self::Context(_) | Self::Surface(_) => Some(Lane::Ordinary),
-            Self::Presentation(_) => None,
+            Self::Presentation(_) | Self::Memory(_) => None,
             Self::Ingress(value) => Some(match value.kind() {
                 ReceiptKind::Control => Lane::Control,
                 ReceiptKind::Cancellation { .. } => Lane::Cancellation,
@@ -43,7 +45,7 @@ impl NativeDelivery {
         match self {
             Self::Context(value) => Some(value.request_id()),
             Self::Surface(value) => Some(value.request_id()),
-            Self::Presentation(_) => None,
+            Self::Presentation(_) | Self::Memory(_) => None,
             Self::Ingress(value) => match value.kind() {
                 ReceiptKind::Control => None,
                 ReceiptKind::Cancellation { request_id } => Some(request_id),
@@ -57,6 +59,7 @@ impl NativeDelivery {
             Self::Context(value) => Some(value.payload()),
             Self::Surface(value) => Some(value.payload()),
             Self::Presentation(value) => Some(value.payload()),
+            Self::Memory(value) => Some(value.payload()),
             Self::Ingress(_) => None,
         }
     }
@@ -68,6 +71,7 @@ impl NativeDelivery {
             Self::Surface(value) => value.into_claim(),
             Self::Presentation(value) => value.into_claim(),
             Self::Ingress(value) => value.into_claim(),
+            Self::Memory(value) => value.into_claim(),
         }
     }
 }

@@ -24,7 +24,7 @@ mod delivery;
 mod execution;
 #[path = "startup/lifetime.rs"]
 mod lifetime;
-#[cfg(all(windows, feature = "native-composition"))]
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
 mod memory;
 #[path = "startup/policy.rs"]
 mod policy;
@@ -75,7 +75,7 @@ pub struct StartupHost<B: StartupBackend> {
     #[cfg(windows)]
     canvas: Option<canvas::EmbeddedCanvas>,
     /// The application memory budget, governing once a canvas exists.
-    #[cfg(all(windows, feature = "native-composition"))]
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     memory: Option<memory::MemoryGovernor>,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
@@ -144,7 +144,7 @@ impl<B: StartupBackend> StartupHost<B> {
         Ok(Self {
             #[cfg(windows)]
             canvas: None,
-            #[cfg(all(windows, feature = "native-composition"))]
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             memory: None,
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
@@ -204,11 +204,7 @@ impl<B: StartupBackend> StartupHost<B> {
             return Err("Application canvas cache anchor must be absolute".into());
         }
         let maximum = crate::native_canvas::budget::largest_canvas_extent()?;
-        // Only composition-hosted canvases retain documents for the memory budget to govern.
-        #[cfg(feature = "native-composition")]
         let (governor, retained) = memory::MemoryGovernor::open()?;
-        #[cfg(not(feature = "native-composition"))]
-        let retained = 0;
         // The renderer policy is chosen when the canvas starts, so fund a GPU session.
         self.execution.reserve_canvas_capacity(crate::native_canvas::budget::reservation_bytes(
             maximum, true, retained,
@@ -221,7 +217,6 @@ impl<B: StartupBackend> StartupHost<B> {
             scope,
             canvas::CanvasFunding { maximum_extent: maximum, retained_document_bytes: retained },
         ));
-        #[cfg(feature = "native-composition")]
         let _first = self.memory.replace(governor);
         Ok(())
     }
@@ -510,6 +505,10 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     }
     fn take_command(&mut self) -> Result<Option<DesktopStartupCommand>, Box<dyn Error>> {
         if let Some(command) = self.commands.take() {
+            return Ok(Some(command));
+        }
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        if let Some(command) = self.memory.as_mut().and_then(memory::MemoryGovernor::take_command) {
             return Ok(Some(command));
         }
         #[cfg(all(windows, feature = "native-composition"))]

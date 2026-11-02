@@ -293,6 +293,17 @@ pub enum DesktopStartupCommand {
     RevealMain(MainIdentity),
     /// Deliver a bounded host-direction panel message to the current top document.
     SendPanel(crate::PanelCommand),
+    /// Deliver the latest memory allowance to the current top document; newer ones replace it.
+    SendMemory(crate::MemoryCommand),
+    /// Report the current browser environment's processes as [`DesktopStartupObservation::BrowserProcesses`].
+    MeasureBrowser(MainIdentity),
+    /// Ask the current browser to trim its memory (`low`) or return to normal use.
+    SetBrowserMemoryTarget {
+        /// Exact current native document identity.
+        identity: MainIdentity,
+        /// Whether the browser should reduce its memory use.
+        low: bool,
+    },
     /// Deliver a correlated canvas context reply to the current top document.
     SendCanvasContext(crate::CanvasContextReply),
     /// Deliver a correlated canvas reply to the same current top document.
@@ -405,6 +416,15 @@ pub enum DesktopStartupObservation {
     MainRevealed(MainIdentity),
     /// A bounded panel message from the current native top-document context.
     PanelMessage(crate::PanelObservation),
+    /// A bounded memory report from the current native top-document context.
+    MemoryMessage(crate::MemoryObservation),
+    /// The processes the current browser environment runs, for the memory budget's footprint.
+    BrowserProcesses {
+        /// Exact current native document identity.
+        identity: MainIdentity,
+        /// Operating-system process identities; numeric data, not process custody.
+        processes: Vec<u32>,
+    },
     /// A bounded canvas message from the current native top-document context.
     SurfaceMessage(crate::SurfaceObservation),
     /// A bounded canvas context request from the current native top-document context.

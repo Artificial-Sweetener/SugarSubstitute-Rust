@@ -81,10 +81,10 @@
         if (envelope.length + 20 > 16384)
           deny('bound');
         const value = JSON.parse(encoded);
-        if (!value || value.session !== session || value.version !== 3)
+        if (!value || value.session !== session || value.version !== policy.version(value))
           deny();
         let lane;
-        if (value.protocol === 'sugarcubes.panel' && policy.control(value.type)) lane = 'c';
+        if (policy.control(value)) lane = 'c';
         else if (value.protocol === 'sugarcubes.canvas' && Number.isInteger(value.requestId) &&
             value.requestId >= 1 && value.requestId <= 2147483647) {
           if (value.type === 'cancel') lane = 'x';
@@ -148,7 +148,8 @@
       value(value, ticket) {
         if (closed) return false;
         if (ticket === undefined) {
-          if (!value || value.version !== 3 || value.session !== session || !policy.notification(value)) return false;
+          if (!value || value.version !== policy.version(value) || value.session !== session ||
+              !policy.notification(value)) return false;
           emit(value);
           return true;
         }

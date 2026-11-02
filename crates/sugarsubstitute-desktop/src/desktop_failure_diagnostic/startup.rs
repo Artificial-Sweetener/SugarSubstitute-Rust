@@ -44,6 +44,8 @@ pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> &'sta
         DesktopStartupObservation::SplashRetired(_) => "SplashRetired",
         DesktopStartupObservation::MainRevealed(_) => "MainRevealed",
         DesktopStartupObservation::PanelMessage(_) => "PanelMessage",
+        DesktopStartupObservation::MemoryMessage(_) => "MemoryMessage",
+        DesktopStartupObservation::BrowserProcesses { .. } => "BrowserProcesses",
         DesktopStartupObservation::SurfaceMessage(_) => "SurfaceMessage",
         #[cfg(feature = "native-composition")]
         DesktopStartupObservation::CanvasInput(_) => "CanvasInput",

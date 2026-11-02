@@ -132,6 +132,8 @@ impl StartupPolicy {
                 DesktopStartupObservation::CloseRequested => StartupRoute::Close,
                 DesktopStartupObservation::MainReloadRequested { .. }
                 | DesktopStartupObservation::PanelMessage(_)
+                | DesktopStartupObservation::MemoryMessage(_)
+                | DesktopStartupObservation::BrowserProcesses { .. }
                 | DesktopStartupObservation::SurfaceMessage(_)
                 | DesktopStartupObservation::CanvasContextMessage(_)
                 | DesktopStartupObservation::SplashPresented(_)
@@ -190,6 +192,9 @@ impl StartupPolicy {
             DesktopStartupObservation::SurfaceMessage(observed) => {
                 session.is_some_and(|session| observed.identity() == self.identity(session))
             }
+            DesktopStartupObservation::MemoryMessage(observed) => {
+                session.is_some_and(|session| observed.identity() == self.identity(session))
+            }
             DesktopStartupObservation::CanvasContextMessage(observed) => {
                 session.is_some_and(|session| observed.identity() == self.identity(session))
             }
@@ -211,6 +216,7 @@ impl StartupPolicy {
             DesktopStartupObservation::EnvironmentPrepared { identity, .. }
             | DesktopStartupObservation::ControllerPrepared { identity, .. }
             | DesktopStartupObservation::NavigationStarted(identity)
+            | DesktopStartupObservation::BrowserProcesses { identity, .. }
             | DesktopStartupObservation::FrontendReceipt { identity, .. }
             | DesktopStartupObservation::MainRevealed(identity)
             | DesktopStartupObservation::MainRetired(identity)
