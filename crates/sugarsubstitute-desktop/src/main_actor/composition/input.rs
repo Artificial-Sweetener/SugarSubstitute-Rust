@@ -305,9 +305,11 @@ impl State {
             );
             return;
         }
-        let _callback = self.events.callback();
         let outcome = self.callbacks.enter(&self.events).and_then(|_scope| {
+            // The main loop keeps driving native effects while OLE's modal loop dispatches its
+            // events, so only the WebView2 release below runs marked as a native callback.
             let outcome = exporter.export(|| drag_source::run(drag));
+            let _callback = self.events.callback();
             // OLE consumed the primary release; end the page's and routing's view of the press.
             let released = self.interrupt(Interruption::Cancelled);
             let effect = outcome??;
