@@ -19,6 +19,14 @@ export interface CodeMirrorPatchReplacement {
   readonly after: string;
 }
 
+/** A previously installed patch generation that installation upgrades in place. */
+export interface SupersededCodeMirrorPatch {
+  /** Ordered replacements of that generation, reverted in reverse to recover upstream bytes. */
+  readonly replacements: readonly CodeMirrorPatchReplacement[];
+  /** Installed entrypoint identities of that generation, in manifest entry order. */
+  readonly afterSha256: readonly [string, string];
+}
+
 /** Reviewed, finite patch identity for CodeMirror's selection synchronization and wrapped viewport. */
 export interface CodeMirrorPatchManifest {
   /** Exact package identity, with unchanged upstream MIT license bytes. */
@@ -29,13 +37,9 @@ export interface CodeMirrorPatchManifest {
     readonly licenseSha256: string;
   };
   /** Ordered selection, public-focus and wrapped viewport replacements shared by both builds. */
-  readonly replacements: readonly [
-    CodeMirrorPatchReplacement,
-    CodeMirrorPatchReplacement,
-    CodeMirrorPatchReplacement,
-    CodeMirrorPatchReplacement,
-    CodeMirrorPatchReplacement,
-  ];
+  readonly replacements: readonly CodeMirrorPatchReplacement[];
+  /** Earlier generations whose installed bytes are upgraded rather than rejected as drift. */
+  readonly superseded: readonly SupersededCodeMirrorPatch[];
   /** Complete entrypoint identities; no other dependency files are changed. */
   readonly entries: readonly [
     {
@@ -87,6 +91,53 @@ const focusAfter = `    focus() {
         });
     }`;
 
+/**
+ * Line gaps never start on or inside, or end inside, a replaced range.
+ *
+ * A gap is itself a replace decoration with the lowest precedence. When it began where a rich
+ * widget began (a weight's opening parenthesis at the start of a prompt, say), the widget won the
+ * overlap and the gap's spacer was never drawn while its text stayed hidden. The line then measured
+ * too short, the next update removed the gap, the one after restored it, and every chip inside was
+ * rebuilt several times per keystroke. Gap ends now step outside replaced ranges first.
+ */
+const gapBoundariesBefore = `                let size = this.gapSize(line, from, to, structure);`;
+const gapBoundariesAfter = `                // SugarPrompt: a gap never starts on or inside, or ends inside, a replaced range;
+                // overlapping replacements would hide the gap's spacer along with its text.
+                for (let moved = true; moved && from < to;) {
+                    moved = false;
+                    for (let set of this.stateDeco)
+                        set.between(from, from, (pointFrom, pointTo, value) => {
+                            if (value.point && pointFrom <= from && pointTo > from) {
+                                from = pointTo;
+                                moved = true;
+                            }
+                        });
+                }
+                for (let moved = true; moved && from < to;) {
+                    moved = false;
+                    for (let set of this.stateDeco)
+                        set.between(to, to, (pointFrom, pointTo, value) => {
+                            if (value.point && pointFrom < to && pointTo > to) {
+                                to = pointFrom;
+                                moved = true;
+                            }
+                        });
+                }
+                if (to - from < halfMargin)
+                    return;
+                let size = this.gapSize(line, from, to, structure);`;
+
+/** Wrapped lines that are split keep a 2048-character overscan around the viewport. */
+const wrappedMarginBefore =
+  'let margin = wrapping ? 10000 /* LG.MarginWrap */ : 2000 /* LG.Margin */';
+const wrappedMarginAfter =
+  'let margin = wrapping ? 2048 /* SugarPrompt wrapped viewport overscan */ : 2000 /* LG.Margin */';
+const displaySizeBefore = 'this.displaySize * (wrapping ? viewState.scaleY : viewState.scaleX)';
+const displaySizeAfter = 'this.displaySize / (wrapping ? viewState.scaleY : viewState.scaleX)';
+const anchorBefore =
+  'scrollAnchorHeight = this.viewState.heightMap.height / this.viewState.scaleY;';
+const anchorAfter = 'scrollAnchorHeight = this.viewState.heightMap.height;';
+
 /** Seal the upstream 6.43.13 distribution and complete reviewed patched-build identities. */
 export const codeMirrorPatchManifest: CodeMirrorPatchManifest = {
   package: {
@@ -98,30 +149,36 @@ export const codeMirrorPatchManifest: CodeMirrorPatchManifest = {
   replacements: [
     { before, after },
     { before: focusBefore, after: focusAfter },
+    { before: wrappedMarginBefore, after: wrappedMarginAfter },
+    { before: gapBoundariesBefore, after: gapBoundariesAfter },
+    { before: displaySizeBefore, after: displaySizeAfter },
+    { before: anchorBefore, after: anchorAfter },
+  ],
+  superseded: [
     {
-      before: 'let margin = wrapping ? 10000 /* LG.MarginWrap */ : 2000 /* LG.Margin */',
-      after:
-        'let margin = wrapping ? 2048 /* SugarPrompt wrapped viewport overscan */ : 2000 /* LG.Margin */',
-    },
-    {
-      before: 'this.displaySize * (wrapping ? viewState.scaleY : viewState.scaleX)',
-      after: 'this.displaySize / (wrapping ? viewState.scaleY : viewState.scaleX)',
-    },
-    {
-      before: 'scrollAnchorHeight = this.viewState.heightMap.height / this.viewState.scaleY;',
-      after: 'scrollAnchorHeight = this.viewState.heightMap.height;',
+      replacements: [
+        { before, after },
+        { before: focusBefore, after: focusAfter },
+        { before: wrappedMarginBefore, after: wrappedMarginAfter },
+        { before: displaySizeBefore, after: displaySizeAfter },
+        { before: anchorBefore, after: anchorAfter },
+      ],
+      afterSha256: [
+        '2423dff5df4812fcf03ee551442ca632055d2484da9044e7cc997d89472f661d',
+        '9252a026e1150e62404611f38f3f2630276779fc8be0d62dbe669222206649ed',
+      ],
     },
   ],
   entries: [
     {
       path: 'dist/index.js',
       beforeSha256: '5626b4f31cdf55fd6a92be66d28cd40e9446d2caeb10a5b3f3e6c1c02be42950',
-      afterSha256: '2423dff5df4812fcf03ee551442ca632055d2484da9044e7cc997d89472f661d',
+      afterSha256: 'b7429658da4c4b981ffc2127cfea34da8b51e1e895e70da6bc0ed5e7b4ec3257',
     },
     {
       path: 'dist/index.cjs',
       beforeSha256: '0ea6fbfd8e5b42ee2926058a929185ac1afffc913a4998e485269f203f7ca17c',
-      afterSha256: '9252a026e1150e62404611f38f3f2630276779fc8be0d62dbe669222206649ed',
+      afterSha256: 'c8940e3b6b1f35af2f24811a9eaeeaf6d8343a0f0531ff8b9e966d5d1a68e343',
     },
   ],
 };

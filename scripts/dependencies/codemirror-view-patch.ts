@@ -66,20 +66,42 @@ function candidate(
   manifest: CodeMirrorPatchManifest,
 ): Buffer {
   let result = bytes;
-  for (const replacement of manifest.replacements) {
-    const before = Buffer.from(replacement.before),
-      after = Buffer.from(replacement.after);
-    const position = result.indexOf(before);
-    if (position < 0 || result.indexOf(before, position + before.length) >= 0)
-      throw new Error('CM_REPLACEMENT_SITE');
-    result = Buffer.concat([
-      result.subarray(0, position),
-      after,
-      result.subarray(position + before.length),
-    ]);
-  }
+  for (const replacement of manifest.replacements)
+    result = replaceOnce(result, replacement.before, replacement.after);
   if (sha256(result) !== entry.afterSha256) throw new Error('CM_CANDIDATE_DRIFT');
   return result;
+}
+
+/** Replace each literal exactly once, in order; a missing or repeated site is drift. */
+function replaceOnce(bytes: Buffer, from: string, to: string): Buffer {
+  const before = Buffer.from(from),
+    position = bytes.indexOf(before);
+  if (position < 0 || bytes.indexOf(before, position + before.length) >= 0)
+    throw new Error('CM_REPLACEMENT_SITE');
+  return Buffer.concat([
+    bytes.subarray(0, position),
+    Buffer.from(to),
+    bytes.subarray(position + before.length),
+  ]);
+}
+
+/** Recover sealed upstream bytes from a superseded installed generation, or reject the bytes as drift. */
+function upstreamBytes(
+  installed: Buffer,
+  index: number,
+  entry: CodeMirrorPatchManifest['entries'][number],
+  manifest: CodeMirrorPatchManifest,
+): Buffer | null {
+  const identity = sha256(installed);
+  if (identity === entry.beforeSha256) return installed;
+  const generation = manifest.superseded.find(
+    (candidate) => candidate.afterSha256[index] === identity,
+  );
+  if (!generation) return null;
+  let upstream = installed;
+  for (const replacement of [...generation.replacements].reverse())
+    upstream = replaceOnce(upstream, replacement.after, replacement.before);
+  return sha256(upstream) === entry.beforeSha256 ? upstream : null;
 }
 
 /** Preflight both complete builds, then install once; any write or verification failure rolls back every attempted write. */
@@ -92,20 +114,21 @@ export function installCodeMirrorPatch(
   checkPackage(fs.read(resolve(packageRoot, 'package.json')), manifest);
   if (sha256(fs.read(resolve(packageRoot, 'LICENSE'))) !== manifest.package.licenseSha256)
     throw new Error('CM_LICENSE_DRIFT');
-  const entries = manifest.entries.map((entry) => {
+  const entries = manifest.entries.map((entry, index) => {
     const path = resolve(packageRoot, entry.path),
-      original = fs.read(path),
-      identity = sha256(original);
-    if (identity !== entry.beforeSha256 && identity !== entry.afterSha256)
-      throw new Error('CM_ENTRY_DRIFT');
-    return { entry, path, original, applied: identity === entry.afterSha256 };
+      original = fs.read(path);
+    if (sha256(original) === entry.afterSha256)
+      return { entry, path, original, upstream: original, applied: true };
+    const upstream = upstreamBytes(original, index, entry, manifest);
+    if (!upstream) throw new Error('CM_ENTRY_DRIFT');
+    return { entry, path, original, upstream, applied: false };
   });
   if (entries.every((entry) => entry.applied))
     return mode === 'check' ? 'verified' : 'already-applied';
   if (entries.some((entry) => entry.applied)) throw new Error('CM_MIXED_INSTALLATION');
   const prepared = entries.map((entry) => ({
     ...entry,
-    replacement: candidate(entry.original, entry.entry, manifest),
+    replacement: candidate(entry.upstream, entry.entry, manifest),
   }));
   if (mode === 'check') throw new Error('CM_PATCH_MISSING');
   const attempted: typeof prepared = [];
