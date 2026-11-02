@@ -35,6 +35,7 @@ import {
 import type { NativeLiteGraphTitleButton } from './CubeCanvasChromeRenderer.js';
 import { ComfyLiteGraphCubeBoundaryHost } from './ComfyLiteGraphCubeBoundaryHost.js';
 import { CubeIconResolver } from '../core/CubeIconResolver.js';
+import type { CubeCanvasImageStores } from './CubeCanvasImageStores.js';
 import { ComfyLiteGraphWidgetInteraction } from './ComfyLiteGraphWidgetInteraction.js';
 import type { NativeWidgetPointer } from './ComfyLiteGraphWidgetInteraction.js';
 import { computeCubeCanvasLayout } from './CubeCanvasLayout.js';
@@ -86,6 +87,8 @@ export interface ComfyLiteGraphCubeNodeHostOptions {
   history: LiteGraphCubeNodeInteractionHistory;
   titleHeight: number;
   openEditor(node: CubeNode): void;
+  /** Page-lifetime decoded images borrowed for this graph's chrome and preview rail. */
+  images: CubeCanvasImageStores;
   previewCatalog?: CubePreviewCatalog;
   previewImages?: CubeCanvasPreviewImageProvider;
   previewActions?: CubePreviewActions;
@@ -170,6 +173,7 @@ export class ComfyLiteGraphCubeNodeHost {
     const previewImages =
       options.previewImages ??
       new CubeCanvasPreviewImageCache({
+        images: options.images.previews,
         createImage: () => options.document.createElement('img'),
         findLoadedImage: (url, sourceLocator) => graphImages.find(url, sourceLocator),
         invalidate: () => this.#refresh(),
@@ -179,6 +183,7 @@ export class ComfyLiteGraphCubeNodeHost {
       options.canvas,
       previewImages,
       new CubeIconResolver({
+        images: options.images.icons,
         imageFactory: () => options.document.createElement('img'),
         onImageLoad: () => this.#refresh(),
       }),

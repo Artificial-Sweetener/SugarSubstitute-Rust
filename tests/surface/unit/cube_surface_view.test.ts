@@ -930,6 +930,7 @@ function cubeIdentity(instanceTitle: string): CubeIdentityPresentation {
     icon: {
       kind: 'asset',
       url: '/cube-icon.png',
+      identity: '',
       mediaType: 'image/png',
       initials: 'TI',
       fallback: {

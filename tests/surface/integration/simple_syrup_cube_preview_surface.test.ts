@@ -21,6 +21,7 @@ import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeN
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { ComfyCubePreviewCatalog } from '../../../frontend/comfyui/ui/surface/ComfyCubePreviewCatalog.js';
 import { CubeSurfacePresenter } from '../../../frontend/comfyui/ui/surface/CubeSurfacePresenter.js';
+import { testCanvasImages } from '../support/CanvasImageStores.js';
 
 describe('SimpleSyrup Cube preview surface', () => {
   afterEach(() => {
@@ -48,6 +49,7 @@ describe('SimpleSyrup Cube preview surface', () => {
       buildOutputImageUrl: () => null,
     });
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,

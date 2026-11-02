@@ -21,13 +21,13 @@ import { maskSourceImage } from '../domain/MaskSourcePixels.js';
 export class BrowserInputPreviews {
     stage;
     rasters;
-    #decoded = new InputPreviewWorkCache();
-    #full = new InputPreviewWorkCache(0, 1);
+    #decoded;
     #sources = new WeakMap();
     /** Bind image decoding to the owning document and inject same-origin transport for verification. */
-    constructor(stage, rasters) {
+    constructor(stage, rasters, memory) {
         this.stage = stage;
         this.rasters = rasters;
+        this.#decoded = new InputPreviewWorkCache(memory);
     }
     /** Stage each full-resolution source once for custom loaders before native interpretation and downsampling. */
     async interpret(source, settings, maximumSize) {
@@ -48,6 +48,6 @@ export class BrowserInputPreviews {
             maximumSize > INPUT_PREVIEW_MAXIMUM)
             return Promise.reject(new Error('Invalid source preview size.'));
         const key = JSON.stringify([file, settings, maximumSize]);
-        return (maximumSize === 0 ? this.#full : this.#decoded).read(key, () => this.rasters.load(file, settings, maximumSize));
+        return this.#decoded.read(key, () => this.rasters.load(file, settings, maximumSize), maximumSize === 0);
     }
 }

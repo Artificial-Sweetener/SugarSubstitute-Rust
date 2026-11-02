@@ -21,17 +21,20 @@ import type { InputPreviewPort } from '../application/InputEditorPorts.js';
 import { maskSourceImage } from '../domain/MaskSourcePixels.js';
 import type { InputPreviewSettings } from '../domain/InputLoader.js';
 import type { CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
+import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
 
 /** Keep original image decoding, alpha absence and orientation semantics with the native file loader. */
 export class BrowserInputPreviews implements InputPreviewPort {
-  readonly #decoded = new InputPreviewWorkCache();
-  readonly #full = new InputPreviewWorkCache(0, 1);
+  readonly #decoded: InputPreviewWorkCache;
   readonly #sources = new WeakMap<CanvasPixelRaster, Promise<string>>();
   /** Bind image decoding to the owning document and inject same-origin transport for verification. */
   constructor(
     private readonly stage: (source: CanvasPixelRaster) => Promise<string>,
     private readonly rasters: InputRasterPort,
-  ) {}
+    memory: MemoryBudgetRegistry,
+  ) {
+    this.#decoded = new InputPreviewWorkCache(memory);
+  }
 
   /** Stage each full-resolution source once for custom loaders before native interpretation and downsampling. */
   async interpret(
@@ -62,8 +65,10 @@ export class BrowserInputPreviews implements InputPreviewPort {
     )
       return Promise.reject(new Error('Invalid source preview size.'));
     const key = JSON.stringify([file, settings, maximumSize]);
-    return (maximumSize === 0 ? this.#full : this.#decoded).read(key, () =>
-      this.rasters.load(file, settings, maximumSize),
+    return this.#decoded.read(
+      key,
+      () => this.rasters.load(file, settings, maximumSize),
+      maximumSize === 0,
     );
   }
 }

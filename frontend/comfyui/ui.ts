@@ -92,16 +92,12 @@ const cubeAuthoringCommands = new CubeAuthoringHostCommands({
   createEmptyCube: () => ui.cubeCreation.startCreateEmptyCube(),
 });
 const adapter = ui.adapter;
-const toastService = ui.toast;
-const cubeApi = ui.api;
 const overlayManager = ui.overlayManager;
 const appRef = adapter.getApp() as SugarCubesHostApp | null;
 const windowRef = adapter.getWindow();
 const documentRef = adapter.getDocument();
 const logger = adapter.getConsole() ?? console;
-const hostFeedback = new CubeHostFeedback({
-  toast: toastService,
-});
+const hostFeedback = new CubeHostFeedback({ toast: ui.toast });
 
 const cubePreconfiguration = ui.workflowPreconfiguration;
 
@@ -117,6 +113,7 @@ const { workflowExecution, workflowFields, canvasInputs } = createWorkflowCanvas
   getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
   getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
   logger,
+  memory: ui.memory,
   reportPresentationError: (error) => {
     logger.error('SugarCubes presentation failed', { error });
     pushToastMessage('error', 'Interface unavailable', readErrorMessage(error));
@@ -132,7 +129,7 @@ const { appearance, relations, frame, setupPresentation } = workflowFields;
 const cubePicker = createComfyCubePickerIntegration({
   appearance: appearance.state,
   onStackApplied: () => workflowWorkspace.masonry.refresh(),
-  api: cubeApi,
+  api: ui.api,
   app,
   document: documentRef ?? document,
   getLiteGraph: () => adapter.getLiteGraph?.(),
@@ -194,7 +191,7 @@ const cubeAffordanceController = new CubeHostAffordanceController({
   cubeCreation: ui.cubeCreation,
   cubeSave: ui.cubeSave,
   confirm: ui.confirmDialog,
-  feedback: toastService,
+  feedback: ui.toast,
   prepareGraphClear: () => appRef?.clean?.(),
   markGraphDirty: () => {
     appRef?.canvas?.setDirty?.(true, true);
@@ -220,7 +217,7 @@ function createCubeRuntime(): ComfyCubeRuntime {
   const runtime = createComfyCubeRuntime({
     app: appRef,
     api,
-    cubeApi,
+    caches: ui.runtimeCaches,
     graphGateway: ui.workflowGraphAnalyses,
     reconcileCubeOrder: () => relations.reconcileCubeOrder(),
     liteGraph,
@@ -233,7 +230,7 @@ function createCubeRuntime(): ComfyCubeRuntime {
       save: async (node, values) => ui.cubeEditorSave.save(node, values),
       modelSuggestions: () => ui.modelSuggestions.getModelSuggestions(),
     },
-    feedback: toastService,
+    feedback: ui.toast,
     boundaryResolver: nativeBoundaryResolver,
     getWorkflowOutput: (path) => workflowExecution.outputs.output(path),
     getWorkflowPreview: (path) => workflowExecution.outputs.livePreview(path),
@@ -268,7 +265,7 @@ const pushToastMessage = hostFeedback.pushToast.bind(hostFeedback);
 const hostSettingsController = createHostSettingsComposition({
   adapter,
   appRef,
-  cubeApi,
+  cubeApi: ui.api,
   ui,
   logger,
   pushToast: pushToastMessage,
@@ -309,6 +306,7 @@ const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
 const workflowWorkspace = new ComfyWorkflowWorkspace(
   {
     saving: hostSettingsController.outputSaving,
+    memory: ui.memory,
     app: appRef,
     document: documentRef ?? document,
     execution: workflowExecution,

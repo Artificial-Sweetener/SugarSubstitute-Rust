@@ -31,7 +31,7 @@ export function createCanvasInputs(options) {
         host,
         editable: options.editable,
         refreshPreviews: (sources) => previews.refreshSources(sources),
-        files: new BrowserInputPreviews((source) => assets.stage(source), rasters),
+        files: new BrowserInputPreviews((source) => assets.stage(source), rasters, options.memory),
         maskEditing,
         legacy,
         verifyFile: (file) => assets.verify(file),

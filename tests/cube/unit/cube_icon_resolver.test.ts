@@ -20,6 +20,8 @@ import {
   deriveDefaultAliasInitials,
   resolveCubeIconModel,
 } from '../../../frontend/comfyui/ui/core/CubeIconResolver.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
+import { CubeIconImageStore } from '../../../frontend/comfyui/ui/core/CubeIconImageStore.js';
 
 describe('cube icon resolver', () => {
   beforeEach(() => {
@@ -141,6 +143,7 @@ describe('cube icon resolver', () => {
   test('image load failure remains available for initials fallback', () => {
     let imageRef: HTMLImageElement | null = null;
     const resolver = new CubeIconResolver({
+      images: new CubeIconImageStore(new MemoryBudgetRegistry()),
       imageFactory: () => {
         imageRef = document.createElement('img');
         return imageRef;

@@ -17,6 +17,7 @@ import { describe, expect, jest, test } from '@jest/globals';
 import { CubeVersionAvailabilityService } from '../../../frontend/comfyui/ui/cube/version/CubeVersionAvailabilityService.js';
 import { CubeVersionRepository } from '../../../frontend/comfyui/ui/cube/version/CubeVersionRepository.js';
 import type { ApiJsonResult } from '../../../frontend/comfyui/ui/core/CubeLibraryApi.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
 
 const result = (data: Record<string, unknown>, ok = true): ApiJsonResult => ({
   response: { ok },
@@ -30,7 +31,11 @@ describe('CubeVersionRepository', () => {
     );
     const load = jest.fn(async () => result({ cube: { cube_id: 'cube.test', version: '2.0.0' } }));
     const loadRevision = jest.fn(async () => result({}));
-    const repository = new CubeVersionRepository({ listRevisions, load, loadRevision });
+    const repository = new CubeVersionRepository(
+      { listRevisions, load, loadRevision },
+      new MemoryBudgetRegistry(),
+      console,
+    );
 
     const options = await repository.listOptions('cube.test', '1.0.0');
     const payload = await repository.loadArtifact('cube.test', options[0]!);
@@ -78,7 +83,11 @@ describe('CubeVersionRepository', () => {
       ),
     );
     const logger = { warn: jest.fn() };
-    const repository = new CubeVersionRepository({ listRevisions, load, loadRevision }, logger);
+    const repository = new CubeVersionRepository(
+      { listRevisions, load, loadRevision },
+      new MemoryBudgetRegistry(),
+      logger,
+    );
 
     const options = await repository.listOptions('cube.test', '2.0.0');
     await repository.loadArtifact('cube.test', options[0]!);

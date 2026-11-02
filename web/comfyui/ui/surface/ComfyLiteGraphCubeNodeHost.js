@@ -73,12 +73,14 @@ export class ComfyLiteGraphCubeNodeHost {
         const graphImages = new ComfyGraphPreviewImageSource(options.document, options.rootGraph, options.logger ?? null);
         const previewImages = options.previewImages ??
             new CubeCanvasPreviewImageCache({
+                images: options.images.previews,
                 createImage: () => options.document.createElement('img'),
                 findLoadedImage: (url, sourceLocator) => graphImages.find(url, sourceLocator),
                 invalidate: () => this.#refresh(),
                 ...(options.logger ? { logger: options.logger } : {}),
             });
         this.#renderer = new ComfyLiteGraphCubeRenderer(options.canvas, previewImages, new CubeIconResolver({
+            images: options.images.icons,
             imageFactory: () => options.document.createElement('img'),
             onImageLoad: () => this.#refresh(),
         }), options.resolveIdentitySource);

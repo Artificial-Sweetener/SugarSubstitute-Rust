@@ -52,6 +52,7 @@ import {
   mixedMediaFixture,
   CanvasModelRuntimeFixture,
 } from '../support/CanvasMixedMediaFixture.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
 
 /** Allocate real owners and replace only DOM measurement and platform decoding. */
 function fixture(brokenUrl = false) {
@@ -108,6 +109,7 @@ function fixture(brokenUrl = false) {
       return `${document.location.origin}/view?id=${item.id}`;
     },
     open: jest.fn(),
+    memory: new MemoryBudgetRegistry(),
     disposeLoader: () => loader.dispose(),
     report: (error: unknown) => {
       errors.push(error);

@@ -100,6 +100,7 @@ test('prepares decoded icons through the shared element factory for every DOM co
   const root = createResolvedCubeIconElement(document, {
     kind: 'asset',
     url: '/resolved.png',
+    identity: '',
     mediaType: 'image/png',
     initials: 'TI',
     fallback: FALLBACK_ICON_STYLE,

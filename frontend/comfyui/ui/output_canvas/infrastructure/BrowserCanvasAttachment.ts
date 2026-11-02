@@ -77,6 +77,7 @@ export class BrowserCanvasAttachment {
   readonly #viewProjection: CanvasViewProjection;
   readonly #overlay: MountedCanvasOverlay;
   readonly #stopView: () => void;
+  readonly #releaseMemory: () => void;
   #catalog: CanvasCatalogSnapshot;
   #sources: readonly CanvasSourceSummary[];
   #sourceSignature: string;
@@ -149,6 +150,9 @@ export class BrowserCanvasAttachment {
       },
     );
     const budget = new CanvasImageBudget();
+    this.#releaseMemory = options.memory.register(
+      budget.memoryConsumer(`output-canvas-displayed:${options.address.attachmentId}`),
+    );
     const decodes = new CanvasImageDecodeScheduler(options.loader, options.clock);
     const resources = new CanvasImageResources({
       clock: options.clock,
@@ -267,6 +271,7 @@ export class BrowserCanvasAttachment {
       report: options.report,
     });
     const cleanup: (() => void)[] = [
+      this.#releaseMemory,
       () => this.#drag.dispose(),
       () => this.#media.dispose(),
       this.#stopTransfer,
@@ -448,6 +453,7 @@ export class BrowserCanvasAttachment {
     this.#detail.dispose();
     this.#overview.dispose();
     this.#browserResources.dispose();
+    this.#releaseMemory();
     this.options.disposeLoader();
     this.options.views.releaseAttachment(this.options.address);
     this.element.replaceChildren();

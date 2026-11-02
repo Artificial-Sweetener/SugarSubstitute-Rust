@@ -102,8 +102,8 @@ import { CubeStructuralOperationGuard } from '../affordance/CubeStructuralOperat
 import { CubeNodeProductIdentityPresenter } from '../affordance/CubeNodeProductIdentityPresenter.js';
 import { CubeBlueprintMigrationDetector } from '../affordance/CubeBlueprintMigrationDetector.js';
 import { CubeFaceCardStateService } from '../surface/CubeFaceCardStateService.js';
-import { CubeVersionRepository, type CubeVersionApi } from './version/CubeVersionRepository.js';
-import { CubeVersionAvailabilityService } from './version/CubeVersionAvailabilityService.js';
+import type { CubeVersionAvailabilityService } from './version/CubeVersionAvailabilityService.js';
+import type { ComfyCubeRuntimeCaches } from './ComfyCubeRuntimeCaches.js';
 import { ComfyCubeVersionReplacementAdapter } from './version/ComfyCubeVersionReplacementAdapter.js';
 import { ComfyCubeVersionSelectionAdapter } from './version/ComfyCubeVersionSelectionAdapter.js';
 import { CubeVersionSwitchService } from './version/CubeVersionSwitchService.js';
@@ -120,7 +120,6 @@ import type { CubeWorkflowNodePackMetadata } from './node/CubeWorkflowNodePackMe
 export interface ComfyCubeRuntimeOptions {
   app: unknown;
   api: unknown;
-  cubeApi: CubeVersionApi;
   graphGateway: CubeGraphGateway;
   reconcileCubeOrder(): void;
   liteGraph: unknown;
@@ -138,6 +137,8 @@ export interface ComfyCubeRuntimeOptions {
   resolveIdentitySource?(metadata: UnknownRecord): CubeIdentitySource | null;
   presentationChanges?: { subscribe(listener: () => void): () => void };
   nodePackMetadata: CubeWorkflowNodePackMetadata;
+  /** Page-lifetime caches the runtime borrows; it never disposes them. */
+  caches: ComfyCubeRuntimeCaches;
   openAddCubeMenu?(metadata: CubeFaceChromeMetadata, anchor: CubeFaceActionAnchor): void;
 }
 
@@ -363,6 +364,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
       app.dragOverNode = node;
     },
     logger: options.logger,
+    images: options.caches.images,
     previewCatalog: new ComfyCubePreviewCatalog({
       getRootGraph: () => graph,
       getOutput: options.getWorkflowOutput,
@@ -421,8 +423,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
       discard: discardSubgraph,
     },
   });
-  const versionRepository = new CubeVersionRepository(options.cubeApi, options.logger);
-  const versionAvailability = new CubeVersionAvailabilityService(versionRepository);
+  const { versionRepository, versionAvailability } = options.caches;
   const versionSelection = new ComfyCubeVersionSelectionAdapter({
     selectedItems,
     processSelect: (node) => void processSelectFunction.call(canvas, node),

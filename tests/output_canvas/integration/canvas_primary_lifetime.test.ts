@@ -31,6 +31,7 @@ import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { BrowserCanvasPlatformFixture } from '../support/BrowserCanvasPlatformFixture.js';
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
 
 /** Replace only platform scheduling, geometry, and decoding; retain actual application and attachment ownership. */
 function fixture() {
@@ -130,6 +131,7 @@ function fixture() {
         catalog: () => coordinator.catalog(address.viewId),
         url: (item) => `${document.location.origin}/view?id=${item.id}`,
         open: () => undefined,
+        memory: new MemoryBudgetRegistry(),
         disposeLoader: () => loader.dispose(),
         report,
       });

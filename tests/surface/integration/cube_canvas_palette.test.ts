@@ -23,6 +23,8 @@ import { CubeIconResolver } from '../../../frontend/comfyui/ui/core/CubeIconReso
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { CubePreviewSnapshot } from '../../../frontend/comfyui/ui/surface/CubePreviewModel.js';
 import { comfyPrimeIconGlyph } from '../../../frontend/comfyui/ui/surface/ComfyPrimeIcons.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
+import { CubeIconImageStore } from '../../../frontend/comfyui/ui/core/CubeIconImageStore.js';
 
 const originalPalette = Object.getOwnPropertyDescriptor(globalThis, 'LiteGraph');
 afterEach(() => {
@@ -81,7 +83,7 @@ test.each<CubePreviewSnapshot | null>([
   const renderer = new ComfyLiteGraphCubeRenderer(
     { drawNode() {} },
     { get: () => null },
-    new CubeIconResolver(),
+    new CubeIconResolver({ images: new CubeIconImageStore(new MemoryBudgetRegistry()) }),
   );
   for (const color of ['#242424', '#eeeeee', '#123456']) {
     Object.defineProperty(globalThis, 'LiteGraph', {
@@ -137,7 +139,9 @@ test('paints legacy Cube header labels and glyphs with its accepted foreground',
       };
     },
   };
-  const renderer = new CubeCanvasChromeRenderer(new CubeIconResolver());
+  const renderer = new CubeCanvasChromeRenderer(
+    new CubeIconResolver({ images: new CubeIconImageStore(new MemoryBudgetRegistry()) }),
+  );
   // Adapt measured text and paint methods at the test's browser Canvas boundary.
   renderer.draw(context as unknown as CanvasRenderingContext2D, {
     node,
@@ -206,7 +210,9 @@ test('shares decoded icon contrast across renderer draws without repeating canva
       };
     },
   };
-  const icons = new CubeIconResolver();
+  const icons = new CubeIconResolver({
+    images: new CubeIconImageStore(new MemoryBudgetRegistry()),
+  });
   jest.spyOn(icons, 'getImage').mockReturnValue({ status: 'ready', image });
   const renderer = new CubeCanvasChromeRenderer(icons);
   for (const foreground of ['#242424', '#eeeeee', '#242424']) {

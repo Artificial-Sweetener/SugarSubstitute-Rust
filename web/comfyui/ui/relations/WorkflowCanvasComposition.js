@@ -47,6 +47,7 @@ export function createWorkflowCanvasComposition(options) {
         graph: () => options.app?.graph,
         report: options.reportPresentationError,
         logger: options.logger,
+        memory: options.memory,
     });
     return { workflowExecution, workflowFields, canvasInputs };
 }

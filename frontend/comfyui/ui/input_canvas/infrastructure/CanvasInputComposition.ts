@@ -34,6 +34,7 @@ import { PreparedInputPromptClient } from './PreparedInputPromptClient.js';
 import { ComfyInputReturnPreparation } from './ComfyInputReturnPreparation.js';
 import { ComfyInputAssociations } from './ComfyInputAssociations.js';
 import type { ComfyGraph } from '../../types/graph.js';
+import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
 
 /** Supply host capabilities and native root access at the composition boundary. */
 export interface CanvasInputHostOptions {
@@ -44,6 +45,8 @@ export interface CanvasInputHostOptions {
   graph(): ComfyGraph | null | undefined;
   report(error: unknown): void;
   readonly logger: Pick<Console, 'warn'>;
+  /** Page allowance shared by decoded source previews. */
+  readonly memory: MemoryBudgetRegistry;
 }
 
 /** Keep definition registration, execution preparation and view lifetime under explicit owners. */
@@ -71,7 +74,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     host,
     editable: options.editable,
     refreshPreviews: (sources) => previews.refreshSources(sources),
-    files: new BrowserInputPreviews((source) => assets.stage(source), rasters),
+    files: new BrowserInputPreviews((source) => assets.stage(source), rasters, options.memory),
     maskEditing,
     legacy,
     verifyFile: (file) => assets.verify(file),

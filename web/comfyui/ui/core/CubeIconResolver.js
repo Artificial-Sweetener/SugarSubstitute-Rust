@@ -114,6 +114,11 @@ export function resolveCubeIconModel(source = {}) {
             return {
                 kind: 'asset',
                 url,
+                identity: JSON.stringify([
+                    readText(metadata.cube_version) || readText(metadata.version),
+                    iconSource.path ?? '',
+                    iconSource.media_type,
+                ]),
                 mediaType: iconSource.media_type || '',
                 initials,
                 fallback,
@@ -123,16 +128,21 @@ export function resolveCubeIconModel(source = {}) {
     return createFallbackIconModel(initials);
 }
 /**
- * Cache image objects for repeated chrome rendering.
+ * Resolve icon models and their page-lifetime decoded images for repeated chrome rendering.
  */
 export class CubeIconResolver {
+    images;
     imageFactory;
     onImageLoad;
-    images;
-    constructor({ imageFactory, onImageLoad } = {}) {
-        this.imageFactory = typeof imageFactory === 'function' ? imageFactory : null;
+    constructor({ images, imageFactory, onImageLoad }) {
+        this.images = images;
+        this.imageFactory =
+            typeof imageFactory === 'function'
+                ? imageFactory
+                : typeof globalThis.Image === 'function'
+                    ? () => new globalThis.Image()
+                    : null;
         this.onImageLoad = typeof onImageLoad === 'function' ? onImageLoad : null;
-        this.images = new Map();
     }
     resolve(source = {}) {
         return resolveCubeIconModel(source);
@@ -141,32 +151,7 @@ export class CubeIconResolver {
         if (!model || model.kind !== 'asset' || !model.url) {
             return { status: 'unavailable', image: null };
         }
-        const existing = this.images.get(model.url);
-        if (existing) {
-            return existing;
-        }
-        const ImageRef = this.imageFactory ||
-            (typeof globalThis !== 'undefined' && typeof globalThis.Image === 'function'
-                ? () => new globalThis.Image()
-                : null);
-        if (!ImageRef) {
-            const unavailable = { status: 'error', image: null };
-            this.images.set(model.url, unavailable);
-            return unavailable;
-        }
-        const image = ImageRef();
-        const entry = { status: 'loading', image };
-        image.onload = () => {
-            entry.status = 'ready';
-            this.onImageLoad?.(model.url, entry);
-        };
-        image.onerror = () => {
-            entry.status = 'error';
-            this.onImageLoad?.(model.url, entry);
-        };
-        image.src = model.url;
-        this.images.set(model.url, entry);
-        return entry;
+        return this.images.acquire(model, this.imageFactory, this.onImageLoad);
     }
 }
 /** Resolve and render a safe cube icon element for the supplied document. */

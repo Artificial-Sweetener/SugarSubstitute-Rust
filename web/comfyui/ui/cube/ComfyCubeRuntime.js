@@ -53,8 +53,6 @@ import { CubeStructuralOperationGuard } from '../affordance/CubeStructuralOperat
 import { CubeNodeProductIdentityPresenter } from '../affordance/CubeNodeProductIdentityPresenter.js';
 import { CubeBlueprintMigrationDetector } from '../affordance/CubeBlueprintMigrationDetector.js';
 import { CubeFaceCardStateService } from '../surface/CubeFaceCardStateService.js';
-import { CubeVersionRepository } from './version/CubeVersionRepository.js';
-import { CubeVersionAvailabilityService } from './version/CubeVersionAvailabilityService.js';
 import { ComfyCubeVersionReplacementAdapter } from './version/ComfyCubeVersionReplacementAdapter.js';
 import { ComfyCubeVersionSelectionAdapter } from './version/ComfyCubeVersionSelectionAdapter.js';
 import { CubeVersionSwitchService } from './version/CubeVersionSwitchService.js';
@@ -235,6 +233,7 @@ export function createComfyCubeRuntime(options) {
             app.dragOverNode = node;
         },
         logger: options.logger,
+        images: options.caches.images,
         previewCatalog: new ComfyCubePreviewCatalog({
             getRootGraph: () => graph,
             getOutput: options.getWorkflowOutput,
@@ -297,8 +296,7 @@ export function createComfyCubeRuntime(options) {
             discard: discardSubgraph,
         },
     });
-    const versionRepository = new CubeVersionRepository(options.cubeApi, options.logger);
-    const versionAvailability = new CubeVersionAvailabilityService(versionRepository);
+    const { versionRepository, versionAvailability } = options.caches;
     const versionSelection = new ComfyCubeVersionSelectionAdapter({
         selectedItems,
         processSelect: (node) => void processSelectFunction.call(canvas, node),

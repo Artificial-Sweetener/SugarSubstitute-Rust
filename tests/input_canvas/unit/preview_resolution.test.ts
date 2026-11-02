@@ -19,6 +19,7 @@ import { inputPreviewResolution } from '../../../frontend/comfyui/ui/input_canva
 import { InputPreviewResolutionObserver } from '../../../frontend/comfyui/ui/input_canvas/presentation/InputPreviewResolutionObserver.js';
 import { InputPreviewWorkCache } from '../../../frontend/comfyui/ui/input_canvas/application/InputPreviewWorkCache.js';
 import { sourceCoverage } from '../support/source_mask_fixture.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
 
 /** Settle queued decoder admission and completion without real time. */
 async function settled(): Promise<void> {
@@ -115,7 +116,7 @@ test('coalesces geometry changes, uses device pixels and retires a pending upgra
 });
 
 test('shares in-flight decodes, limits concurrency and evicts old rasters without caching failures', async () => {
-  const cache = new InputPreviewWorkCache(),
+  const cache = new InputPreviewWorkCache(new MemoryBudgetRegistry()),
     releases: (() => void)[] = [];
   const load = jest.fn(async () => {
     await new Promise<void>((resolve) => releases.push(resolve));
@@ -150,7 +151,7 @@ test('shares in-flight decodes, limits concurrency and evicts old rasters withou
 });
 
 test('rejects oversized decoded rasters and bounds pending work without caching invalid results', async () => {
-  const cache = new InputPreviewWorkCache();
+  const cache = new InputPreviewWorkCache(new MemoryBudgetRegistry());
   await expect(
     cache.read('large', async () => ({ ...sourceCoverage, width: 1025 })),
   ).rejects.toThrow('size limit');
@@ -163,4 +164,30 @@ test('rejects oversized decoded rasters and bounds pending work without caching 
     'Too many pending',
   );
   await Promise.all(accepted);
+});
+
+test('shares one budgeted cache between previews and exclusive full-resolution decodes', async () => {
+  const memory = new MemoryBudgetRegistry();
+  const cache = new InputPreviewWorkCache(memory),
+    releases: (() => void)[] = [];
+  const load = jest.fn(async () => {
+    await new Promise<void>((resolve) => releases.push(resolve));
+    return sourceCoverage;
+  });
+  const full = cache.read('full', load, true);
+  const preview = cache.read('preview', load);
+  await settled();
+  expect(load).toHaveBeenCalledTimes(1);
+  releases.shift()?.();
+  await full;
+  await settled();
+  expect(load).toHaveBeenCalledTimes(2);
+  releases.shift()?.();
+  await preview;
+  expect(memory.usage().consumers.map((consumer) => consumer.id)).toEqual([
+    'input-canvas-previews',
+  ]);
+  expect(memory.usage().usedBytes).toBeGreaterThan(0);
+  memory.setAllowance(memory.usage().usedBytes, 'critical');
+  expect(memory.usage().usedBytes).toBe(0);
 });
