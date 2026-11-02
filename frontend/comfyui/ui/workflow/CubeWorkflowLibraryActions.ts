@@ -106,6 +106,7 @@ export class CubeWorkflowLibraryActions {
         jsonRequest(),
       );
       requireSuccess(result, 'Cube capture');
+      this.#state.invalidateCatalog();
       this.#state.begin(workflow);
       this.#feedback.push(
         'success',
@@ -140,6 +141,7 @@ export class CubeWorkflowLibraryActions {
         jsonRequest(),
       );
       requireSuccess(result, 'Source synchronization');
+      this.#state.invalidateCatalog();
       this.#state.begin(workflow);
       const status = readResultString(result.data, 'status') || 'unknown';
       this.#feedback.push(

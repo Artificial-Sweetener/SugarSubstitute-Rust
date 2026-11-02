@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 from typing import Iterable
 
@@ -40,6 +41,7 @@ def classify_workflow(
     """Compare saved embedded definitions while preserving workflow authority."""
 
     candidates: dict[tuple[str, str], list[CatalogCubeArtifact]] = defaultdict(list)
+    artifacts = tuple(artifacts)
     for artifact in artifacts:
         candidates[(artifact.cube_id, artifact.cube_version)].append(artifact)
     instance_ids: dict[str, list[str]] = defaultdict(list)
@@ -54,7 +56,9 @@ def classify_workflow(
         for definition in workflow.definitions
         if not definition.is_draft
     )
-    return CubeLibraryClassReport(definitions=classifications)
+    return CubeLibraryClassReport(
+        definitions=classifications, catalog_revision=catalog_revision(artifacts)
+    )
 
 
 def _classify_definition(
@@ -129,3 +133,27 @@ def _source_available(definition: EmbeddedCubeDefinition) -> bool:
         return parse_canonical_cube_id(definition.cube_id).source_kind == "github"
     except CubeIdentityError:
         return False
+
+
+def catalog_revision(artifacts: Iterable[CatalogCubeArtifact]) -> str:
+    """Derive the revision under which classifications of unchanged definitions stay valid.
+
+    The revision covers every candidate that classification compares, so clients may reuse a
+    classification for identical embedded definitions until a response reports another revision.
+    """
+
+    digest = hashlib.sha256()
+    for artifact in sorted(
+        artifacts, key=lambda item: (item.source_ref, item.semantic_hash)
+    ):
+        for value in (
+            artifact.source_ref,
+            artifact.cube_id,
+            artifact.cube_version,
+            artifact.semantic_hash,
+            artifact.library_class,
+            artifact.access,
+        ):
+            digest.update(value.encode("utf-8"))
+            digest.update(b"\0")
+    return f"sha256:{digest.hexdigest()}"

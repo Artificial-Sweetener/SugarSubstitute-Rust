@@ -168,10 +168,8 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     );
   }
 
-  /** Retire native documents before replacing an entire workflow. */
+  /** Retire native documents before replacing an entire workflow; the model catalog is app-wide. */
   beforeConfigureGraph(): void {
-    this.#stopCatalog?.();
-    this.#stopCatalog = null;
     for (const [widget, session] of [...this.#sessions]) {
       this.#retired.add(widget);
       this.#retire(widget, session);
@@ -182,6 +180,8 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   dispose(): void {
     this.#release?.();
     this.#release = null;
+    this.#stopCatalog?.();
+    this.#stopCatalog = null;
     this.beforeConfigureGraph();
   }
 

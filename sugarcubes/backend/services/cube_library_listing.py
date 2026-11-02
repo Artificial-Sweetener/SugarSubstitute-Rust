@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Mapping
@@ -25,7 +26,7 @@ from typing import Any, Mapping
 from ...cube_model import RESERVED_SOURCE_NAMES
 from ...instrumentation import log_event
 from ..responses import BackendError
-from .cube_file_io import format_display_path, list_cube_files
+from .cube_file_io import format_display_path, list_cube_files, safe_relative_path
 from .cube_library_diagnostics import log_cube_library_diagnostic
 from .cube_library_source_resolver import CubeLibrarySourceResolver
 from .cube_summary import summarize_cube_file
@@ -34,6 +35,31 @@ from .tracked_repo_models import TrackedRepo
 from .tracked_repo_service import TrackedRepoService
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class CatalogCubeFile:
+    """Identify one discovered catalog file and the source that owns it, without reading it."""
+
+    path: Path
+    base_dir: Path
+    source_kind: str
+    owner: str = ""
+    repo: str = ""
+    namespace: str = ""
+
+    @property
+    def source(self) -> dict[str, str]:
+        """Return the summary-compatible source descriptor for ownership policy."""
+
+        return {
+            "type": self.source_kind,
+            "owner": self.owner,
+            "repo": self.repo,
+            "namespace": self.namespace,
+            "repo_ref": f"{self.owner}/{self.repo}" if self.owner and self.repo else "",
+            "repo_relative_path": safe_relative_path(self.path, self.base_dir) or "",
+        }
 
 
 class CubeLibraryListing:
@@ -138,22 +164,17 @@ class CubeLibraryListing:
             phase_started_at = now
 
         phase_timings: dict[str, float] = {}
-        checkout_path = Path(tracked.local_checkout_path).resolve()
-        if not checkout_path.exists():
-            return []
-        cube_files = [
-            path for path in list_cube_files(checkout_path) if ".git" not in path.parts
-        ]
+        cube_files = self._repo_cube_files(tracked)
         record_phase("list_cube_files")
         cubes: list[dict[str, Any]] = []
-        for path in cube_files:
+        for file in cube_files:
             summary = summarize_cube_file(
-                path,
-                checkout_path,
+                file.path,
+                file.base_dir,
                 self.extension_root,
-                source_kind="github",
-                owner=tracked.owner,
-                repo=tracked.repo,
+                source_kind=file.source_kind,
+                owner=file.owner,
+                repo=file.repo,
                 include_internal_payload=include_internal_payload,
             )
             record_phase("summarize_cube_file")
@@ -176,29 +197,83 @@ class CubeLibraryListing:
     ) -> list[dict[str, Any]]:
         """List all cube files under the managed local source workspace."""
 
+        return [
+            self.ownership_policy_service.annotate_cube_payload(
+                summarize_cube_file(
+                    file.path,
+                    file.base_dir,
+                    self.extension_root,
+                    source_kind=file.source_kind,
+                    namespace=file.namespace,
+                    include_internal_payload=include_internal_payload,
+                )
+            )
+            for file in self._local_cube_files()
+        ]
+
+    def list_catalog_cube_files(
+        self, *, include_disabled: bool
+    ) -> list[CatalogCubeFile]:
+        """Discover catalog files in listing order without reading their contents."""
+
+        files: list[CatalogCubeFile] = []
+        for repo_entry in self.tracked_repo_service.list_repos()["repos"]:
+            if not include_disabled and not repo_entry.get("enabled"):
+                continue
+            files.extend(
+                self._repo_cube_files(self.tracked_repo_from_payload(repo_entry))
+            )
+        files.extend(self._local_cube_files())
+        return files
+
+    def catalog_file_writable(self, file: CatalogCubeFile) -> bool:
+        """Apply ownership policy to one discovered file's source."""
+
+        annotated = self.ownership_policy_service.annotate_cube_payload(
+            {"source": file.source}
+        )
+        return annotated.get("is_writable") is True
+
+    def _repo_cube_files(self, tracked: TrackedRepo) -> list[CatalogCubeFile]:
+        """Discover cube files under one tracked repo checkout."""
+
+        checkout_path = Path(tracked.local_checkout_path).resolve()
+        if not checkout_path.exists():
+            return []
+        return [
+            CatalogCubeFile(
+                path=path,
+                base_dir=checkout_path,
+                source_kind="github",
+                owner=tracked.owner,
+                repo=tracked.repo,
+            )
+            for path in list_cube_files(checkout_path)
+            if ".git" not in path.parts
+        ]
+
+    def _local_cube_files(self) -> list[CatalogCubeFile]:
+        """Discover cube files under every managed local namespace."""
+
         workspace_root = self.sources.local_workspace_root().resolve()
         if not workspace_root.exists():
             return []
-        cubes: list[dict[str, Any]] = []
+        files: list[CatalogCubeFile] = []
         namespace_dirs = [path for path in workspace_root.iterdir() if path.is_dir()]
         for namespace_dir in sorted(namespace_dirs):
             namespace = namespace_dir.name
             if namespace.lower() in RESERVED_SOURCE_NAMES:
                 continue
-            for path in list_cube_files(namespace_dir):
-                cubes.append(
-                    self.ownership_policy_service.annotate_cube_payload(
-                        summarize_cube_file(
-                            path,
-                            namespace_dir,
-                            self.extension_root,
-                            source_kind="local",
-                            namespace=namespace,
-                            include_internal_payload=include_internal_payload,
-                        )
-                    )
+            files.extend(
+                CatalogCubeFile(
+                    path=path,
+                    base_dir=namespace_dir,
+                    source_kind="local",
+                    namespace=namespace,
                 )
-        return cubes
+                for path in list_cube_files(namespace_dir)
+            )
+        return files
 
     def list_catalog_cube_summaries(
         self,

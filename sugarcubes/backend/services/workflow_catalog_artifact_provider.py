@@ -18,7 +18,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal, Mapping, Protocol
+import threading
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal, Protocol
 
 from ...cube_model import (
     CubeDocument,
@@ -28,47 +31,98 @@ from ...cube_model import (
 from ...instrumentation import log_diagnostic
 from ...library import CatalogCubeArtifact
 from ...workflow.semantic_hash import semantic_hash
+from .cube_file_io import read_cube_payload
+from .cube_library_listing import CatalogCubeFile
 
 _logger = logging.getLogger(__name__)
 _TRACE_MARKER = "SugarCubes workflow catalog diagnostic"
 
 
-class CatalogSummaryListing(Protocol):
-    """Expose source-aware summaries with canonical internal payloads."""
+class CatalogCubeFileListing(Protocol):
+    """Discover catalog files and their ownership without reading file contents."""
 
-    def list_catalog_cube_summaries(
-        self, *, include_disabled: bool, include_internal_payload: bool
-    ) -> list[dict[str, Any]]:
-        """Return installed artifact summaries."""
+    def list_catalog_cube_files(
+        self, *, include_disabled: bool
+    ) -> list[CatalogCubeFile]:
+        """Return installed catalog files in listing order."""
+
+    def catalog_file_writable(self, file: CatalogCubeFile) -> bool:
+        """Return whether ownership policy permits writing one file's source."""
+
+
+@dataclass(frozen=True)
+class _ArtifactIdentity:
+    """Hold the content-derived facts that are expensive to recompute for one file."""
+
+    cube_id: str
+    cube_version: str
+    semantic_hash: str
+
+
+@dataclass(frozen=True)
+class _CachedIdentity:
+    """Bind one file's derived identity, or its rejection, to the stat facts it was read under."""
+
+    stamp: tuple[int, int]
+    identity: _ArtifactIdentity | None
 
 
 class WorkflowCatalogArtifactProvider:
-    """Project current library artifacts into canonical semantic candidates."""
+    """Project current library artifacts into canonical semantic candidates.
 
-    def __init__(self, listing: CatalogSummaryListing) -> None:
+    Reading, validating and hashing every installed Cube dominated classification. Each file's
+    derived identity is cached under its resolved path and reused while its modification time
+    and size are unchanged; discovery and ownership still run per call, so added, removed,
+    retargeted or re-permissioned files are always current. Calls may run on worker threads.
+    """
+
+    def __init__(self, listing: CatalogCubeFileListing) -> None:
         """Bind the existing catalog listing owner."""
 
         self._listing = listing
+        self._identities: dict[Path, _CachedIdentity] = {}
+        self._lock = threading.Lock()
 
     def list_artifacts(self) -> tuple[CatalogCubeArtifact, ...]:
         """Return deterministic valid artifacts without exposing file-byte hashes."""
 
         artifacts: list[CatalogCubeArtifact] = []
-        summaries = self._listing.list_catalog_cube_summaries(
-            include_disabled=False,
-            include_internal_payload=True,
-        )
-        for summary in summaries:
-            artifact = self._project(summary)
-            if artifact is not None:
-                artifacts.append(artifact)
+        files = self._listing.list_catalog_cube_files(include_disabled=False)
+        live: set[Path] = set()
+        for file in files:
+            live.add(file.path)
+            identity = self._identity(file)
+            if identity is not None:
+                artifacts.append(self._artifact(file, identity))
+        with self._lock:
+            for path in [path for path in self._identities if path not in live]:
+                del self._identities[path]
         return tuple(sorted(artifacts, key=lambda item: item.source_ref))
 
-    def _project(self, summary: Mapping[str, object]) -> CatalogCubeArtifact | None:
-        """Validate one summary and retain only catalog-comparable content."""
+    def _identity(self, file: CatalogCubeFile) -> _ArtifactIdentity | None:
+        """Return one file's cached identity while its stat facts are unchanged."""
 
-        payload = summary.get("_payload")
-        if not isinstance(payload, Mapping):
+        try:
+            stat = file.path.stat()
+        except OSError:
+            return None
+        stamp = (stat.st_mtime_ns, stat.st_size)
+        with self._lock:
+            cached = self._identities.get(file.path)
+        if cached is not None and cached.stamp == stamp:
+            return cached.identity
+        identity = self._read_identity(file)
+        with self._lock:
+            self._identities[file.path] = _CachedIdentity(
+                stamp=stamp, identity=identity
+            )
+        return identity
+
+    def _read_identity(self, file: CatalogCubeFile) -> _ArtifactIdentity | None:
+        """Validate one file and retain only catalog-comparable content."""
+
+        payload, _error = read_cube_payload(file.path)
+        if payload is None:
             return None
         try:
             document = sanitize_authored_defaults_document(
@@ -80,28 +134,38 @@ class WorkflowCatalogArtifactProvider:
                 _TRACE_MARKER,
                 "sugarcubes_workflow_catalog_artifact_ignored",
                 {
-                    "cube_id": _read_string(summary.get("cube_id")),
+                    "cube_id": _read_string(payload.get("cube_id")),
                     "reason": str(exc),
                 },
             )
             return None
-        source = summary.get("source")
-        source_record = source if isinstance(source, Mapping) else {}
-        source_kind = _read_string(source_record.get("type"))
-        library_class: Literal["local", "synced"] = (
-            "local" if source_kind == "local" else "synced"
-        )
-        return CatalogCubeArtifact(
+        return _ArtifactIdentity(
             cube_id=document.cube_id,
             cube_version=document.version,
             semantic_hash=semantic_hash(document.to_dict()),
+        )
+
+    def _artifact(
+        self, file: CatalogCubeFile, identity: _ArtifactIdentity
+    ) -> CatalogCubeArtifact:
+        """Combine cached content identity with current source and ownership facts."""
+
+        library_class: Literal["local", "synced"] = (
+            "local" if file.source_kind == "local" else "synced"
+        )
+        return CatalogCubeArtifact(
+            cube_id=identity.cube_id,
+            cube_version=identity.cube_version,
+            semantic_hash=identity.semantic_hash,
             library_class=library_class,
-            access="writable" if summary.get("is_writable") is True else "read_only",
-            source_ref=_source_ref(source_kind, source_record),
+            access=(
+                "writable" if self._listing.catalog_file_writable(file) else "read_only"
+            ),
+            source_ref=_source_ref(file.source_kind, file.source),
         )
 
 
-def _source_ref(source_kind: str, source: Mapping[str, object]) -> str:
+def _source_ref(source_kind: str, source: dict[str, str]) -> str:
     """Build one stable source identifier without leaking absolute paths."""
 
     relative_path = _read_string(source.get("repo_relative_path"))

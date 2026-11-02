@@ -58,6 +58,83 @@ test('ignores a stale response after a newer workflow begins classification', as
   expect(state.read('first-instance')).toBeNull();
 });
 
+/** Build one Cube workflow whose classification inputs are its definition and instance. */
+function cubeWorkflow(instanceId: string, definitionVersion = '1.0.0', x = 0) {
+  return {
+    nodes: [
+      {
+        id: 1,
+        type: 'definition',
+        pos: [x, 0],
+        properties: { sugarcubes_kind: 'cube', sugarcubes_cube: { instance_id: instanceId } },
+      },
+    ],
+    definitions: { subgraphs: [{ id: 'definition', extra: { version: definitionVersion } }] },
+    extra: { ds: { offset: [x, x] } },
+  };
+}
+
+/** Answer every request with one classification under a controllable catalog revision. */
+function revisionedApi(revision: { current: string }) {
+  return jest.fn(async (body: BodyInit | null) => {
+    const parsed: unknown = JSON.parse(String(body));
+    const node =
+      typeof parsed === 'object' && parsed !== null && 'workflow' in parsed
+        ? JSON.stringify(parsed.workflow)
+        : '';
+    const instanceId = /"instance_id":"([^"]+)"/.exec(node)?.[1] ?? 'unknown';
+    return {
+      response: { ok: true, status: 200 },
+      data: {
+        ...classificationResponse(instanceId, 'captured'),
+        catalog_revision: revision.current,
+      },
+    };
+  });
+}
+
+test('issues no classification request when switching between unchanged workflows', async () => {
+  const revision = { current: 'sha256:one' };
+  const classifyWorkflow = revisionedApi(revision);
+  const state = new CubeWorkflowLibraryState({ classifyWorkflow }, console);
+  for (let cycle = 0; cycle < 10; cycle++) {
+    state.begin(cubeWorkflow('first', '1.0.0', cycle));
+    await flushPromises();
+    expect(state.read('first')).not.toBeNull();
+    state.begin(cubeWorkflow('second', '1.0.0', cycle * 2));
+    await flushPromises();
+    expect(state.read('second')).not.toBeNull();
+    expect(state.read('first')).toBeNull();
+  }
+  expect(classifyWorkflow).toHaveBeenCalledTimes(2);
+});
+
+test('reclassifies changed definitions, new catalog revisions and local catalog mutations', async () => {
+  const revision = { current: 'sha256:one' };
+  const classifyWorkflow = revisionedApi(revision);
+  const state = new CubeWorkflowLibraryState({ classifyWorkflow }, console);
+  state.begin(cubeWorkflow('first'));
+  await flushPromises();
+  state.begin(cubeWorkflow('first', '2.0.0'));
+  await flushPromises();
+  expect(classifyWorkflow).toHaveBeenCalledTimes(2);
+
+  revision.current = 'sha256:two';
+  state.begin(cubeWorkflow('other'));
+  await flushPromises();
+  state.begin(cubeWorkflow('first'));
+  await flushPromises();
+  expect(classifyWorkflow).toHaveBeenCalledTimes(4);
+
+  state.invalidateCatalog();
+  state.begin(cubeWorkflow('first'));
+  await flushPromises();
+  expect(classifyWorkflow).toHaveBeenCalledTimes(5);
+  state.begin(cubeWorkflow('first'));
+  await flushPromises();
+  expect(classifyWorkflow).toHaveBeenCalledTimes(5);
+});
+
 function classificationResult(instanceId: string) {
   return {
     response: { ok: true, status: 200 },

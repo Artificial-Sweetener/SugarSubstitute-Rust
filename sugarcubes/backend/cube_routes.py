@@ -18,14 +18,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 from aiohttp import web
 
 from ..importer import CubeImportError
 from .composition import BackendServices
+from .http_validators import (
+    ValidatedAsset,
+    if_none_match_satisfied,
+    validated_asset,
+)
 from .responses import BackendError, json_error, json_error_from_exception, json_success
 from .route_types import RouteHandler
 from .services.cube_metadata import normalize_metadata_string
@@ -104,9 +111,15 @@ def build_cube_route_handlers(services: BackendServices) -> CubeRouteHandlers:
             return json_error("'cube_id' query parameter is required", status=400)
         try:
             icon_path, media_type = services.library.resolve_cube_icon_asset(cube_id)
+            asset = await asyncio.to_thread(_read_validated_asset, icon_path)
+            # Icons keep a stable URL, so every use revalidates and unchanged bytes answer 304.
+            headers = {"ETag": asset.etag, "Cache-Control": "no-cache"}
+            if if_none_match_satisfied(
+                request.headers.get("If-None-Match"), asset.etag
+            ):
+                return web.Response(status=304, headers=headers)
             return web.Response(
-                body=icon_path.read_bytes(),
-                content_type=media_type,
+                body=asset.body, content_type=media_type, headers=headers
             )
         except BackendError as error:
             return json_error_from_exception(error)
@@ -259,6 +272,12 @@ def build_cube_route_handlers(services: BackendServices) -> CubeRouteHandlers:
         delete_cube=delete_cube,
         import_cube_file=import_cube_file,
     )
+
+
+def _read_validated_asset(path: Path) -> ValidatedAsset:
+    """Read and fingerprint one asset off the event loop."""
+
+    return validated_asset(path.read_bytes())
 
 
 __all__ = ["CubeRouteHandlers", "build_cube_route_handlers"]

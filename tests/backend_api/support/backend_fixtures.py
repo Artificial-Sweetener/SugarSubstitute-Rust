@@ -60,10 +60,12 @@ class FakeRequest:
         *,
         body: object = None,
         query: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
         json_error: BaseException | None = None,
     ) -> None:
         self._body = body
         self.query = query or {}
+        self.headers = headers or {}
         self._json_error = json_error
 
     async def json(self) -> object:

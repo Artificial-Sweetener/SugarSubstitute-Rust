@@ -18,6 +18,8 @@
 export interface CubeCatalogInvalidationCoordinatorOptions {
   refreshPicker(): Promise<unknown>;
   refreshLibrary(): Promise<unknown>;
+  /** Retire results derived from the previous catalog before any refresh is observed. */
+  retireCatalogResults(): void;
   logger: Pick<Console, 'warn'>;
 }
 
@@ -25,17 +27,20 @@ export interface CubeCatalogInvalidationCoordinatorOptions {
 export class CubeCatalogInvalidationCoordinator {
   readonly #refreshPicker: () => Promise<unknown>;
   readonly #refreshLibrary: () => Promise<unknown>;
+  readonly #retireCatalogResults: () => void;
   readonly #logger: Pick<Console, 'warn'>;
 
   /** Bind the independent catalog refresh operations. */
   constructor(options: CubeCatalogInvalidationCoordinatorOptions) {
     this.#refreshPicker = options.refreshPicker;
     this.#refreshLibrary = options.refreshLibrary;
+    this.#retireCatalogResults = options.retireCatalogResults;
     this.#logger = options.logger;
   }
 
   /** Refresh every dependent catalog without letting one failure suppress another. */
   async invalidate(): Promise<void> {
+    this.#retireCatalogResults();
     const [picker, library] = await Promise.allSettled([
       this.#refreshPicker(),
       this.#refreshLibrary(),

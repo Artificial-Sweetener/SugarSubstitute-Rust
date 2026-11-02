@@ -53,6 +53,8 @@ import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordina
 import type { CubeDefinitionEntry } from './graph/CubeDefinitionStore.js';
 import type { UnknownRecord } from './types/common.js';
 import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
+import { CubeGraphAnalysisCache } from './workflow/application/CubeGraphAnalysisCache.js';
+import { CubeGraphApi } from './workflow/infrastructure/CubeGraphApi.js';
 import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
 import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryPresentation.js';
 import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
@@ -108,6 +110,8 @@ export class SugarCubesUI {
   readonly boundsReconciler: CubeBoundsReconciler;
   readonly rendererGeometry: RendererGeometryCoordinator;
   readonly workflowLibraryState: CubeWorkflowLibraryState;
+  /** Share canonical workflow analyses across runtimes so unchanged switches issue no request. */
+  readonly workflowGraphAnalyses: CubeGraphAnalysisCache;
   readonly workflowLibraryActions: CubeWorkflowLibraryActions;
   readonly workflowLibraryPresentation: CubeWorkflowLibraryPresentation;
   readonly workflowPreconfiguration: CubeWorkflowPreconfiguration;
@@ -131,6 +135,7 @@ export class SugarCubesUI {
       this.api,
       this.adapter.getConsole?.() ?? console,
     );
+    this.workflowGraphAnalyses = new CubeGraphAnalysisCache(new CubeGraphApi(this.api));
     this.workflowLibraryActions = new CubeWorkflowLibraryActions({
       api: this.api,
       state: this.workflowLibraryState,
@@ -339,6 +344,12 @@ export class SugarCubesUI {
     });
     this.overlayManager.setup();
     this._setupDone = true;
+  }
+
+  /** Retire workflow results derived from a catalog that a local mutation just changed. */
+  retireWorkflowCatalogResults(): void {
+    this.workflowLibraryState.invalidateCatalog();
+    this.workflowGraphAnalyses.invalidate();
   }
 
   dispose(): void {

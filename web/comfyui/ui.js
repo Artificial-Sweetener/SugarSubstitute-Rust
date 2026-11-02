@@ -20,7 +20,6 @@ import { app } from '/scripts/app.js';
 import { api } from '/scripts/api.js';
 import { createEditorActionsRuntime } from './ui/editor_actions/EditorActionsComposition.js';
 import { createComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
-import { CubeGraphApi } from './ui/workflow/infrastructure/CubeGraphApi.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
 import { projectCubeProximityPreviewLinks } from './ui/surface/CubeProximityPreviewLinks.js';
 import { CubeAuthoringHostCommands } from './ui/cube/CubeAuthoringHostCommands.js';
@@ -134,6 +133,7 @@ const cubePicker = createComfyCubePickerIntegration({
 const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
     refreshPicker: () => cubePicker.refresh(),
     refreshLibrary: () => ui.libraryCatalog.refresh({ force: true }),
+    retireCatalogResults: () => ui.retireWorkflowCatalogResults(),
     logger,
 });
 invalidateCubeCatalogs = () => cubeCatalogInvalidation.invalidate();
@@ -206,7 +206,7 @@ function createCubeRuntime() {
         app: appRef,
         api,
         cubeApi,
-        graphGateway: new CubeGraphApi(cubeApi),
+        graphGateway: ui.workflowGraphAnalyses,
         reconcileCubeOrder: () => relations.reconcileCubeOrder(),
         liteGraph,
         document: documentRef,
