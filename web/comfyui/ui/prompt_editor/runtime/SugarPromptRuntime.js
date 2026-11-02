@@ -30685,6 +30685,7 @@ var PromptWrapLayout = class {
   #groups = [];
   #widths = /* @__PURE__ */ new Map();
   #font = "";
+  #scale = 0;
   #paint = "";
   #projection = null;
   #widthProjection = null;
@@ -30696,8 +30697,15 @@ var PromptWrapLayout = class {
   constructor(view) {
     this.view = view;
     this.#measurementRange = view.dom.ownerDocument.createRange();
+    view.dom.ownerDocument.fonts?.addEventListener("loadingdone", this.#fontsLoaded);
     this.#prepare();
   }
+  /** Newly loaded faces change glyph widths without changing the computed font description. */
+  #fontsLoaded = () => {
+    if (this.#disposed) return;
+    this.#widths = /* @__PURE__ */ new Map();
+    this.#measure();
+  };
   /** Reuse prepared semantic boundaries and let native geometry observation coalesce measurement. */
   update(update) {
     if (update.docChanged) {
@@ -30722,6 +30730,7 @@ var PromptWrapLayout = class {
   /** Retire queued measurement without leaving another editable document or observer. */
   destroy() {
     this.#disposed = true;
+    this.view.dom.ownerDocument.fonts?.removeEventListener("loadingdone", this.#fontsLoaded);
   }
   /** Rebuild grouping only after a current source projection, including explicit raw-mode retirement. */
   #prepare() {
@@ -30760,11 +30769,12 @@ var PromptWrapLayout = class {
     this.view.requestMeasure({
       key: this,
       read: (view) => {
+        if (this.#disposed || view.state.doc !== this.#document) return null;
         const content2 = view.contentDOM, style = getComputedStyle(content2), rect = content2.getBoundingClientRect();
         const scale = content2.offsetWidth ? rect.width / content2.offsetWidth : 1;
         const width = rect.width / scale - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
         const font = [style.font, style.letterSpacing, style.wordSpacing].join("|");
-        const widths = new Map(this.#font === font ? this.#widths : []);
+        const widths = new Map(this.#font === font && this.#scale === scale ? this.#widths : []);
         for (const visible of view.visibleRanges) {
           const visibleFrom = visible.from;
           const visibleTo = visible.to;
@@ -30777,16 +30787,17 @@ var PromptWrapLayout = class {
           for (let index = from; index < this.#sourceGroups.length; index++) {
             const group = this.#sourceGroups[index];
             if (!group || group.from >= visibleTo) break;
-            if (group.to <= visibleTo)
+            if (group.to <= visibleTo && !widths.has(group))
               widths.set(group, measurePromptWrapGroup(view, group, scale, this.#measurementRange));
           }
         }
-        return { groups: this.#groups, font, width, widths };
+        return { groups: this.#groups, font, scale, width, widths };
       },
       write: (measurement, view) => {
-        if (this.#disposed || measurement.groups !== this.#groups || view.state.doc !== this.#document)
+        if (!measurement || this.#disposed || measurement.groups !== this.#groups || view.state.doc !== this.#document)
           return;
         this.#font = measurement.font;
+        this.#scale = measurement.scale;
         this.#widths = new Map(measurement.widths);
         const selected = fittingPromptWrapGroups(this.#groups, this.#widths, measurement.width);
         const paint = selected.map((group) => String(this.#indices.get(group))).join(",");
