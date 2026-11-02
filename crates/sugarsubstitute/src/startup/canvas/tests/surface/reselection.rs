@@ -44,6 +44,12 @@ fn selecting_a_shown_output_again_presents_it_once_without_acquiring_it()
     fixture.canvas.surface.gate_fixture("wide.png", counting.clone());
     let previous = fixture.accepted()?.source_revision;
     fixture.select(6, "wide.png")?;
+    // The operation itself restores the retained document; no later event-loop wake is needed.
+    assert_eq!(
+        fixture.canvas.session.as_ref().map(Session::source_loading),
+        Some(false),
+        "The reselection waited for a later poll"
+    );
     let mut presents = 0;
     let mut replied = false;
     for _ in 0..500 {

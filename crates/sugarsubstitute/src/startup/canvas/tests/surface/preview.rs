@@ -141,7 +141,6 @@ fn first_preview_needs_no_final_selection_and_bootstraps_real_graphics()
     if !fixture.canvas.surface.has_preview_candidate() {
         return Err("Completed preview transfer never reached Session admission".into());
     }
-    assert!(fixture.canvas.next_deadline().is_some_and(|deadline| deadline <= Instant::now()));
     assert!(change(&mut fixture)?.is_none());
     let target = wait_frame(&mut fixture)?;
     assert!(

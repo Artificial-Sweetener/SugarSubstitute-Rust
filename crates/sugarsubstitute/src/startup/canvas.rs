@@ -244,7 +244,10 @@ impl EmbeddedCanvas {
             } => self.surface.cancel(identity, request_id, claim, self.session.as_mut()),
             message => match self.session.as_mut() {
                 Some(session) => {
-                    self.surface.receive(identity, message, allocation, claim, session)
+                    self.surface.receive(identity, message, allocation, claim, session)?;
+                    // Act on the operation now, as routed input does, rather than on the event
+                    // loop's next wake: a retained output reselected here presents in this pass.
+                    self.poll()
                 }
                 None => self.surface.refuse(identity, message, claim, None),
             },
