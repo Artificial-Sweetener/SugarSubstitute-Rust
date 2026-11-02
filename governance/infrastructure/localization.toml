@@ -138,7 +138,7 @@ rationale = "Native boundary: Own native window lifetime and CPU frame presentat
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/composition/drop_target/tests.rs"
-source_sha256 = "sha256:b471d4f55734ece4fcd5e25bed74bd118226c039045e0b4e8d07ced1f81c9b7b"
+source_sha256 = "sha256:deddfe2a33c851e2fc9f7346d93fb13b12a4102f57fb0a100656575c27bdded8"
 kind = "fixture"
 rationale = "Behavioral fixture creates a hidden OS STATIC window with a technical title to exercise real OLE drop registration and revocation; it grants no production text route."
 

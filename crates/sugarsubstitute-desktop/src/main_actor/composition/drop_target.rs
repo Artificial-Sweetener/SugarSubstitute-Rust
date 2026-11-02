@@ -331,9 +331,9 @@ impl DropTarget {
         self.state.active.set(false);
     }
 
-    /// Refuse drops while this window is the source of an OS drag-out.
-    pub(super) fn exporting(&self, exporting: bool) {
-        self.state.exporting.set(exporting);
+    /// The handle a queued drag-out uses to make this window refuse its own export.
+    pub(super) fn exporter(&self) -> Exporter {
+        Exporter(self.state.clone())
     }
 
     /// Revoke only after every forwarded drag call returned; true once OLE is balanced.
@@ -342,6 +342,23 @@ impl DropTarget {
         let state = &self.state;
         let lifecycle = &mut self.lifecycle;
         retire_when_quiet(&state.callbacks, || lifecycle.retire(|| drop(state.controller.take())))
+    }
+}
+
+/// Refuse drops on this window while it is the source of an OS drag-out.
+pub(super) struct Exporter(Rc<State>);
+
+impl Exporter {
+    /// Run `export` with this window's drops refused. Retirement waits until it returns,
+    /// because the modal drag still uses the OLE apartment and registration this target owns.
+    /// # Errors
+    /// Fails without running `export` when the callback depth is exhausted.
+    pub(super) fn export<T>(&self, export: impl FnOnce() -> T) -> Result<T, DesktopError> {
+        let _scope = self.0.callbacks.enter(&self.0.events)?;
+        self.0.exporting.set(true);
+        let result = export();
+        self.0.exporting.set(false);
+        Ok(result)
     }
 }
 

@@ -189,3 +189,31 @@ fn real_registration_owns_the_window_until_revoked_and_declines_without_a_browse
     assert_eq!(observed.get(), Some(Err(DRAGDROP_E_NOTREGISTERED)));
     Ok(())
 }
+
+#[test]
+fn an_export_refuses_its_own_drops_and_holds_retirement_until_it_returns()
+-> Result<(), Box<dyn std::error::Error>> {
+    let wakes = Rc::new(Cell::new(0));
+    let fixture = fixture_events(wakes.clone())?;
+    let state = Rc::new(State {
+        window: HWND::default(),
+        controller: RefCell::new(None),
+        events: fixture.events.clone(),
+        active: Cell::new(true),
+        entered: Cell::new(true),
+        exporting: Cell::new(false),
+        callbacks: CallbackFence::default(),
+    });
+    let exporter = Exporter(state.clone());
+    let deferred = exporter.export(|| {
+        let refused =
+            state.deliver(Phase::Over, MODIFIERKEYS_FLAGS(0), &POINTL::default(), DROPEFFECT_COPY);
+        assert_eq!(refused.ok(), Some(DROPEFFECT_NONE));
+        retire_when_quiet(&state.callbacks, || Ok(()))
+    })??;
+    assert!(!deferred, "retirement must wait for the modal drag to return");
+    assert!(!state.exporting.get());
+    assert_eq!(wakes.get(), 1, "the returning export wakes the deferred retirement");
+    assert!(retire_when_quiet(&state.callbacks, || Ok(()))?);
+    Ok(())
+}

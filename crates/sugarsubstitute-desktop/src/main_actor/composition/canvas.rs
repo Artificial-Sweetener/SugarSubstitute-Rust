@@ -157,7 +157,7 @@ impl super::MainActor {
         Ok(())
     }
 
-    /// Run the OS drag of a prepared output for this exact revealed lifetime; any other
+    /// Queue the OS drag of a prepared output for this exact revealed lifetime; any other
     /// lifetime's output is discarded.
     pub(crate) fn drag_out_canvas(
         &mut self,

@@ -11,7 +11,7 @@ use super::callbacks::{CallbackFence, retire_when_quiet};
 use super::cancellation::{self, Interruption};
 use super::cursor::{self, Hands, Pointer, Subscription};
 use super::drag_source;
-use super::drop_target::DropTarget;
+use super::drop_target::{DropTarget, Exporter};
 use super::routing::{Button, ClickRule, Message, Routing};
 use super::*;
 use crate::canvas::{MainCanvasDragOut, MainCanvasGesture, placement::PhysicalRect};
@@ -35,12 +35,12 @@ use windows::Win32::{
         },
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetMessageTime, HTCAPTION, HTCLIENT, SM_CXDOUBLECLK, SM_CXDRAG, SM_CYDOUBLECLK,
-            SM_CYDRAG, WM_DPICHANGED, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
-            WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
-            WM_MOUSEWHEEL, WM_NCDESTROY, WM_NCHITTEST, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
-            WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN,
-            WM_XBUTTONUP,
+            GetMessageTime, HTCAPTION, HTCLIENT, PostMessageW, SM_CXDOUBLECLK, SM_CXDRAG,
+            SM_CYDOUBLECLK, SM_CYDRAG, WM_APP, WM_DPICHANGED, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN,
+            WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL,
+            WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY, WM_NCHITTEST, WM_RBUTTONDBLCLK,
+            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK,
+            WM_XBUTTONDOWN, WM_XBUTTONUP,
         },
     },
 };
@@ -49,6 +49,8 @@ use windows::Win32::{
 const MOUSE_KEYS: u16 = 0x7f;
 /// `MK_LBUTTON | MK_RBUTTON | MK_MBUTTON | MK_XBUTTON1 | MK_XBUTTON2`.
 const BUTTON_KEYS: u16 = 0x73;
+/// Private message that starts the queued drag-out; Tao defines no `WM_APP` messages.
+const DRAG_OUT_MESSAGE: u32 = WM_APP + 1;
 
 /// These values remain borrowed from the original native message until synchronous delivery.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -130,6 +132,8 @@ struct State {
     /// Buttons WebView2 last saw held, with the client point of that forwarded message.
     page: Cell<(u16, POINT)>,
     callbacks: CallbackFence,
+    /// The drag-out posted for this window's next dispatch, with its export refusal.
+    drag_out: RefCell<Option<(MainCanvasDragOut, Exporter)>>,
 }
 
 impl State {
@@ -287,6 +291,40 @@ impl State {
         self.present_cursor()
     }
 
+    /// Run a queued copy drag while the primary button is still held. This window's drop target
+    /// refuses it, so the page never receives its own output, and WebView2 then sees the primary
+    /// release OLE consumed. A failure loses only this export; the window stays intact.
+    fn export(&self, drag: MainCanvasDragOut, exporter: &Exporter) {
+        // SAFETY: Reads this thread's synchronized key state without retaining any handle.
+        let held = unsafe { GetKeyState(i32::from(VK_LBUTTON.0)) } < 0;
+        if !held || !self.admits() {
+            // A drag started after the release would drop wherever the pointer rests.
+            tracing::debug!(
+                operation = "canvas_drag_out",
+                "Drag-out ended before its output was ready"
+            );
+            return;
+        }
+        let _callback = self.events.callback();
+        let outcome = self.callbacks.enter(&self.events).and_then(|_scope| {
+            let outcome = exporter.export(|| drag_source::run(drag));
+            // OLE consumed the primary release; end the page's and routing's view of the press.
+            let released = self.interrupt(Interruption::Cancelled);
+            let effect = outcome??;
+            released.map(|()| effect)
+        });
+        match outcome {
+            Ok(effect) => tracing::debug!(
+                operation = "canvas_drag_out",
+                copied = effect.0 != 0,
+                "Canvas drag-out finished"
+            ),
+            Err(cause) => {
+                tracing::warn!(operation = "canvas_drag_out", cause = %cause, "Canvas drag-out failed");
+            }
+        }
+    }
+
     /// Run one host operation that calls into WebView2 under the callback fence; a failure
     /// closes this window through the main actor's failure path.
     fn guarded(&self, operation: impl FnOnce() -> Result<(), DesktopError>) {
@@ -367,6 +405,7 @@ impl Input {
             focus: Focus::new(browser),
             page: Cell::new((0, POINT::default())),
             callbacks: CallbackFence::default(),
+            drag_out: RefCell::new(None),
         });
         let callback = Rc::new(state.clone());
         let registration = Registration::new(&callback);
@@ -407,39 +446,30 @@ impl Input {
         self.state.routing.borrow_mut().take()
     }
 
-    /// Run the OS copy drag of the shown output while the primary button is still held.
+    /// Queue the OS copy drag of the shown output for this window's next message dispatch.
     ///
-    /// The drag is modal on this UI thread. This window's drop target refuses it, so the page
-    /// never receives its own output, and WebView2 sees the primary release OLE consumed.
+    /// The drag runs modally from the window procedure rather than from the caller: OLE's
+    /// modal loop dispatches paints that Tao delivers to its event handler, which must not be
+    /// running already. A newer drag replaces one still waiting.
+    /// # Errors
+    /// Fails when the queued drag cannot be posted to the window; nothing stays queued.
     pub(super) fn drag_out(&self, drag: MainCanvasDragOut) -> Result<(), DesktopError> {
-        // SAFETY: Reads this thread's synchronized key state without retaining any handle.
-        let held = unsafe { GetKeyState(i32::from(VK_LBUTTON.0)) } < 0;
-        let Some(drop_target) = self.drop_target.as_ref().filter(|_| held && self.state.admits())
-        else {
-            // A drag started after the release would drop wherever the pointer rests.
-            tracing::debug!(
-                operation = "canvas_drag_out",
-                "Drag-out ended before its output was ready"
-            );
+        let Some(drop_target) = self.drop_target.as_ref().filter(|_| self.state.admits()) else {
             return Ok(());
         };
-        drop_target.exporting(true);
-        let outcome = drag_source::run(drag);
-        drop_target.exporting(false);
-        // OLE consumed the primary release; end the page's and routing's view of the press.
-        let released = self.state.interrupt(Interruption::Cancelled);
-        let effect = outcome?;
-        tracing::debug!(
-            operation = "canvas_drag_out",
-            copied = effect.0 != 0,
-            "Canvas drag-out finished"
-        );
-        released
+        self.state.drag_out.replace(Some((drag, drop_target.exporter())));
+        // SAFETY: Posts a private message to this thread's live HWND without borrowing memory.
+        unsafe { PostMessageW(Some(self.state.window), DRAG_OUT_MESSAGE, WPARAM(0), LPARAM(0)) }
+            .map_err(|cause| {
+                self.state.drag_out.take();
+                DesktopError::new("queue_canvas_drag_out", cause)
+            })
     }
 
     /// Fence further browser input before any asynchronous main-window retirement.
     pub(super) fn suspend(&self) {
         self.state.active.set(false);
+        self.state.drag_out.take();
         self.state.routing.borrow_mut().publish(None);
         if let Some(drop_target) = &self.drop_target {
             drop_target.suspend();
@@ -478,8 +508,16 @@ unsafe extern "system" fn procedure(
 ) -> LRESULT {
     // SAFETY: Installation retains this exact callback type for the complete native registration.
     let state = unsafe { windows_subclass::callback::<Rc<State>>(data) }.clone();
+    if message == DRAG_OUT_MESSAGE {
+        let queued = state.drag_out.take();
+        if let Some((drag, exporter)) = queued {
+            state.export(drag, &exporter);
+        }
+        return LRESULT(0);
+    }
     if message == WM_NCDESTROY {
         state.active.set(false);
+        state.drag_out.take();
         state.hands.retire();
         // SAFETY: The final callback returns this exact native registration after chaining.
         return unsafe {
