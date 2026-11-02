@@ -23,6 +23,7 @@ import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
+import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
 /** Share seed reuse across actual native field mounts and the override toolbar. */
 export function createWorkflowFieldHost(options) {
     const embedded = new EmbeddedPresentation();
@@ -79,6 +80,10 @@ export function createWorkflowFieldHost(options) {
                 window: windowRef,
                 presentation: embedded,
                 canvas,
+                memory: {
+                    registry: options.memory,
+                    preferences: () => new MemoryBudgetSettings(options.app),
+                },
                 connected: options.connected,
                 subscribeConnection: options.subscribeConnection,
                 report: options.reportPresentationError,

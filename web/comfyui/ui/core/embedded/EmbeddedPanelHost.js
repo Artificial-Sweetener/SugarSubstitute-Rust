@@ -18,6 +18,7 @@ import { PanelClientSession } from './PanelRuntime.js';
 import { createUxpPanelTransport } from './UxpPanelTransport.js';
 import { createNativePanelTransport } from './NativePanelTransport.js';
 import { EmbeddedPanelLayout } from './EmbeddedPanelLayout.js';
+import { MemoryHostLink } from '../memory/MemoryHostLink.js';
 /** Keep messaging active only while the owning SugarCubes document is alive. */
 export class EmbeddedPanelHost {
     options;
@@ -25,6 +26,7 @@ export class EmbeddedPanelHost {
     #layout;
     #stop = null;
     #stopConnection = null;
+    #memory = null;
     #timer = null;
     /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
     constructor(options, transport) {
@@ -69,6 +71,15 @@ export class EmbeddedPanelHost {
                 this.options.report(error);
             }
         };
+        if (this.transport.memoryBudget && this.options.memory) {
+            try {
+                this.#memory = new MemoryHostLink(this.transport, this.options.memory.registry, this.options.memory.preferences(), this.options.report);
+                this.#memory.start();
+            }
+            catch (error) {
+                this.options.report(error);
+            }
+        }
         this.#timer = this.options.window.setInterval(ready, 1000);
         this.options.window.addEventListener('pagehide', this.dispose);
         ready();
@@ -79,6 +90,8 @@ export class EmbeddedPanelHost {
         this.#stop = null;
         this.#stopConnection?.();
         this.#stopConnection = null;
+        this.#memory?.dispose();
+        this.#memory = null;
         if (this.#timer !== null)
             this.options.window.clearInterval(this.#timer);
         this.#timer = null;

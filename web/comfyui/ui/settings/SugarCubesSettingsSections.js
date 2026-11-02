@@ -17,6 +17,7 @@
 export const sugarCubesSettingsSections = {
     appearance: { label: 'Appearance', priority: 1000 },
     stack: { label: 'Cube stack', priority: 900 },
+    memory: { label: 'Memory', priority: 850 },
     canvas: { label: 'Image canvas', priority: 800 },
     output: { label: 'Output files', priority: 700 },
     models: { label: 'Model library', priority: 600 },

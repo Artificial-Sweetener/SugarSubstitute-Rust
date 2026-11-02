@@ -56,6 +56,7 @@ export function createNativePanelTransport(windowRef) {
     return {
         session: identity.session,
         preferencePolicy: preferencePolicy ?? 'host',
+        memoryBudget: true,
         ...(outputSurfacePreference ? { outputSurfacePreference } : {}),
         send: (message) => {
             send.call(bridge, message);
