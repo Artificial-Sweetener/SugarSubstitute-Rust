@@ -26,6 +26,8 @@ import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
+import type { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
+import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
 
 export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
@@ -36,6 +38,8 @@ export interface WorkflowFieldHostOptions
   stackControls(): CubeStackFrameControls;
   connected(): boolean;
   subscribeConnection(listener: (connected: boolean) => void): () => void;
+  /** The page's cache registry, joined to a desktop host's memory budget when one exists. */
+  memory: MemoryBudgetRegistry;
 }
 
 /** Share seed reuse across actual native field mounts and the override toolbar. */
@@ -100,6 +104,10 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         window: windowRef,
         presentation: embedded,
         canvas,
+        memory: {
+          registry: options.memory,
+          preferences: () => new MemoryBudgetSettings(options.app),
+        },
         connected: options.connected,
         subscribeConnection: options.subscribeConnection,
         report: options.reportPresentationError,

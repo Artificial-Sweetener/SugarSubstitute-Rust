@@ -21,12 +21,19 @@ import { createNativePanelTransport } from './NativePanelTransport.js';
 import type { BrowserPanelTransport } from './BrowserPanelTransport.js';
 import { EmbeddedPanelLayout } from './EmbeddedPanelLayout.js';
 import type { EmbeddedCanvasConnection } from './EmbeddedCanvasConnection.js';
+import type { MemoryBudgetRegistry } from '../memory/MemoryBudgetRegistry.js';
+import { MemoryHostLink, type MemoryPreferenceSource } from '../memory/MemoryHostLink.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
 export interface EmbeddedPanelOptions {
   readonly window: Window;
   readonly presentation: EmbeddedPresentation;
   readonly canvas?: EmbeddedCanvasConnection;
+  /** The page's cache registry and the stored memory limit it reports to a desktop host. */
+  readonly memory?: {
+    readonly registry: MemoryBudgetRegistry;
+    preferences(): MemoryPreferenceSource;
+  };
   connected(): boolean;
   subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
@@ -37,6 +44,7 @@ export class EmbeddedPanelHost {
   readonly #layout: EmbeddedPanelLayout;
   #stop: (() => void) | null = null;
   #stopConnection: (() => void) | null = null;
+  #memory: MemoryHostLink | null = null;
   #timer: number | null = null;
 
   /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
@@ -80,6 +88,19 @@ export class EmbeddedPanelHost {
         this.options.report(error);
       }
     };
+    if (this.transport.memoryBudget && this.options.memory) {
+      try {
+        this.#memory = new MemoryHostLink(
+          this.transport,
+          this.options.memory.registry,
+          this.options.memory.preferences(),
+          this.options.report,
+        );
+        this.#memory.start();
+      } catch (error: unknown) {
+        this.options.report(error);
+      }
+    }
     this.#timer = this.options.window.setInterval(ready, 1000);
     this.options.window.addEventListener('pagehide', this.dispose);
     ready();
@@ -91,6 +112,8 @@ export class EmbeddedPanelHost {
     this.#stop = null;
     this.#stopConnection?.();
     this.#stopConnection = null;
+    this.#memory?.dispose();
+    this.#memory = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

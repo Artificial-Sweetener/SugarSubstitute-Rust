@@ -16,6 +16,7 @@
 /** Define browser delivery for the existing portable editor protocols. */
 import type { PanelMessage } from './PanelRuntime.js';
 import type { CanvasMessage, CanvasMaskMessage } from './CanvasRuntime.js';
+import type { MemoryClientMessage } from '../memory/MemoryHostProtocol.js';
 
 /** Keep editor transport mechanics outside the embedded application lifecycle. */
 export interface BrowserPanelTransport {
@@ -24,7 +25,9 @@ export interface BrowserPanelTransport {
   readonly preferencePolicy?: 'host' | 'saved';
   /** Prefer an embedded host surface before capability negotiation; grants no native authority. */
   readonly outputSurfacePreference?: 'host';
-  send(message: PanelMessage | CanvasMessage | CanvasMaskMessage): void;
+  /** Whether the host joins this page to its application memory budget. */
+  readonly memoryBudget?: true;
+  send(message: PanelMessage | CanvasMessage | CanvasMaskMessage | MemoryClientMessage): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }
 

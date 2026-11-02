@@ -20,7 +20,6 @@ import {
   type WorkflowFieldHostOptions,
 } from './WorkflowFieldComposition.js';
 import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputComposition.js';
-import type { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
 
 /** Bind peer canvas capabilities without teaching the web output viewer about native document editing. */
 export function createWorkflowCanvasComposition(
@@ -30,7 +29,6 @@ export function createWorkflowCanvasComposition(
   > & {
     api: unknown;
     logger: Pick<Console, 'error' | 'warn'>;
-    memory: MemoryBudgetRegistry;
     notifyCanvas(message: string): void;
   },
 ): {
