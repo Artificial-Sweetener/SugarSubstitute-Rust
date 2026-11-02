@@ -33,7 +33,9 @@ export class ComfyCubeRuntimeLifecycle {
     }
     /** Release graph-bound presentation and adapters before graph replacement. */
     reset() {
-        this.#runtime?.dispose();
+        const runtime = this.#runtime;
+        // A failed disposal must still retire the runtime so the next graph never reuses it.
         this.#runtime = null;
+        runtime?.dispose();
     }
 }

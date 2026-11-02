@@ -77,7 +77,10 @@ export function createSugarCubesDebugApi({ ui, app, canvas }: DebugApiOptions) {
       },
     },
     layout: {
-      service: ui.layoutService,
+      /** Resolve the current layout owner on access instead of pinning it to the window. */
+      get service() {
+        return ui.layoutService;
+      },
       appendCube: (options: Parameters<typeof ui.layoutService.appendCube>[0]) =>
         ui.layoutService.appendCube(options),
       insertBetween: (options: Parameters<typeof ui.layoutService.insertBetween>[0]) =>

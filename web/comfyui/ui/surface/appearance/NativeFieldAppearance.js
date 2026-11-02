@@ -40,9 +40,9 @@ export class NativeFieldAppearance {
         this.#adapter = new NativeCardAdapter(app, reuse);
     }
     /** Index only native graph cards whose identified presentation is being refreshed. */
-    beginBatch(document, roots) {
+    beginBatch(roots) {
         if (this.kind === 'card' && roots.length)
-            this.#adapter.beginBatch(document, roots);
+            this.#adapter.beginBatch(roots);
     }
     /** Release transient indexes after each presentation batch. */
     endBatch() {

@@ -26,6 +26,7 @@ export class NativeNodeCardHost {
     #mounts = [];
     #activation = new Map();
     #leases = [];
+    #ownedCells = [];
     /** Create a host that delegates all node rendering to Comfy. */
     constructor(renderer) {
         this.#renderer = renderer;
@@ -38,6 +39,7 @@ export class NativeNodeCardHost {
         for (const card of cards) {
             const cell = container.ownerDocument.createElement('div');
             container.appendChild(cell);
+            this.#ownedCells.push(cell);
             this.mountCard(cell, card, onActivationChange, card.prompt === true ? { allowCollapse: false } : {});
             cells.push(cell);
         }
@@ -91,7 +93,7 @@ export class NativeNodeCardHost {
         for (const mount of this.#mounts)
             mount.refresh();
     }
-    /** Unmount this view's cards while retaining Comfy's shared renderer service. */
+    /** Unmount this view's cards and remove the cells it created, keeping caller-owned cells. */
     dispose() {
         for (const control of this.#activation.values())
             control.dispose();
@@ -99,6 +101,8 @@ export class NativeNodeCardHost {
             mount.unmount();
         for (const release of this.#leases.splice(0))
             release();
+        for (const cell of this.#ownedCells.splice(0))
+            cell.remove();
         this.#activation.clear();
     }
 }

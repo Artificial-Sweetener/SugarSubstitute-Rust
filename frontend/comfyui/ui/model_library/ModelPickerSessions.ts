@@ -17,6 +17,7 @@
 import type { ModelCatalogSnapshot } from './ModelCatalog.js';
 import type { ModelPickerBinding } from './ModelPickerBinding.js';
 import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
+import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
 import { comfyModelFieldOwner } from './ComfyModelFieldOwner.js';
 import type { ComfyModelFieldOwner } from './ComfyModelFieldOwner.js';
 import { ModelPickerSession } from './ModelPickerSession.js';
@@ -56,10 +57,11 @@ export class ModelPickerSessions {
       const session = new ModelPickerSession(this.#document, () => {
         if (!owner.exists()) return null;
         const snapshot = this.#snapshot();
+        const nodes = new ComfyNodeVNodeIndex();
         if (snapshot)
           for (const current of roots) {
             if (!current.isConnected) continue;
-            const receiver = readComfyModelFields(current, snapshot).find(
+            const receiver = readComfyModelFields(current, snapshot, nodes).find(
               (candidate) => candidate.inputName === inputName && candidate.kind === kind,
             );
             if (receiver) return receiver;

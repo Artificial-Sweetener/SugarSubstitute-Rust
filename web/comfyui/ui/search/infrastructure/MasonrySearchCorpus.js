@@ -1,5 +1,6 @@
 import { cubeFacePresentedWidgets } from '../../surface/CubeFaceWidgetPolicy.js';
 import { nativeNodeFieldRows } from '../../surface/NativeNodeFieldRows.js';
+import { ComfyNodeVNodeIndex } from '../../surface/ComfyVueTree.js';
 import { formatDisplayLabel } from '../../surface/appearance/DisplayLabels.js';
 /** Retain native references only while mounted; query and navigation never rediscover the graph. */
 export class MasonrySearchCorpus {
@@ -25,6 +26,7 @@ export class MasonrySearchCorpus {
     }
     /** Rebind exactly the cards identified by native row-mount changes. */
     refreshCards(ids) {
+        const nodes = new ComfyNodeVNodeIndex();
         for (const id of ids) {
             const mounted = this.#cards.get(id);
             if (!mounted)
@@ -32,7 +34,7 @@ export class MasonrySearchCorpus {
             for (const field of this.#nodes.get(id)?.fields ?? [])
                 this.fields.delete(field.description.id);
             const { card, cell } = mounted;
-            const rows = nativeNodeFieldRows(cell);
+            const rows = nativeNodeFieldRows(cell, nodes);
             const widgets = new Map(cubeFacePresentedWidgets(card.node).map((widget) => [widget.name, widget]));
             for (const source of card.widgetSources ?? []) {
                 const widget = source.node.widgets?.find((candidate) => candidate.name === source.name);

@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Identify native Vue presentation boundaries without touching custom widget internals. */
 import { isRecord } from '../../types/common.js';
-import { findVueComponents, findMountedNodeVNode, findNativeNodeVNode, resolveVueElement, } from '../ComfyVueTree.js';
+import { ComfyNodeVNodeIndex, findVueComponents, findMountedNodeVNode, findNativeNodeVNode, resolveVueElement, } from '../ComfyVueTree.js';
 import { classifyNativeField, planNativeFields, NATIVE_FIELD_COMPONENTS, } from './NativeFieldPresentation.js';
 import { readNativeNumericField } from './ComfyNativeNumericField.js';
 import { ComfyNativeSeedControlAdapter } from './ComfyNativeSeedControl.js';
@@ -32,7 +32,7 @@ export class NativeCardAdapter {
         this.#seeds = new ComfyNativeSeedControlAdapter(app, reuse);
     }
     /** Index graph component roots once for a coalesced host update. */
-    beginBatch(documentRef, roots) {
+    beginBatch(roots) {
         this.#seeds.beginBatch();
         const unresolved = roots.filter((root) => {
             if (this.#vnodes.has(root))
@@ -42,14 +42,11 @@ export class NativeCardAdapter {
                 this.#vnodes.set(root, vnode);
             return !vnode;
         });
-        if (!unresolved.length)
-            return;
-        const mount = documentRef.getElementById('vue-app');
-        const record = isRecord(mount) ? mount : {};
-        for (const vnode of findVueComponents(record._vnode, 'LGraphNode')) {
-            const element = resolveVueElement(vnode);
-            if (element && unresolved.includes(element))
-                this.#graphNodes.set(element, vnode);
+        const nodes = new ComfyNodeVNodeIndex();
+        for (const root of unresolved) {
+            const vnode = nodes.resolve(root);
+            if (vnode)
+                this.#graphNodes.set(root, vnode);
         }
     }
     /** Release the graph index so detached application trees are not retained. */

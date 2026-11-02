@@ -49,16 +49,22 @@ export class CubeCanvasPreviewImageCache implements CubeCanvasPreviewImageProvid
     this.#logger = options.logger ?? null;
   }
 
-  /** Return a decoded image or begin loading it exactly once. */
+  /**
+   * Return a decoded image or begin loading it exactly once.
+   *
+   * A decoded entry answers first: searching Comfy's document and graph images is a full scan,
+   * so it runs only while this cache has no decoded image for the key.
+   */
   get(url: string, sourceLocator?: string): HTMLImageElement | null {
     const cacheKey = `${sourceLocator ?? ''}\u0000${url}`;
+    const cached = this.#entries.get(cacheKey);
+    if (cached?.ready) return cached.image;
     const loaded = this.#findLoadedImage?.(url, sourceLocator) ?? null;
     if (loaded) {
       this.#entries.set(cacheKey, { image: loaded, ready: true });
       return loaded;
     }
-    const cached = this.#entries.get(cacheKey);
-    if (cached) return cached.ready ? cached.image : null;
+    if (cached) return null;
 
     const image = this.#createImage();
     const entry: CachedPreviewImage = { image, ready: false };

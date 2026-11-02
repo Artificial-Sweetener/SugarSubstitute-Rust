@@ -23,6 +23,7 @@ import {
 } from '../core/ComfyRendererMode.js';
 import { ModelPickerAppearance } from './ModelPickerAppearance.js';
 import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
+import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
 import type { ComfyModelFieldBinding } from './ComfyModelFieldAdapter.js';
 import { ModelCatalogClient } from './ModelCatalogClient.js';
 import type { ModelCatalogSnapshot } from './ModelCatalog.js';
@@ -293,9 +294,10 @@ export class ModelPickerHost {
           this.#sessions.reconcile();
           for (const [anchor, mount] of this.#mounts)
             if (!anchor.isConnected || !mount.root.isConnected) this.#release(anchor);
+          const nodes = new ComfyNodeVNodeIndex();
           for (const root of this.#dirty) {
             if (!root.isConnected) continue;
-            const bindings = readComfyModelFields(root, this.#snapshot);
+            const bindings = readComfyModelFields(root, this.#snapshot, nodes);
             const live = new Set(bindings.map((binding) => binding.anchor));
             for (const [anchor, mount] of this.#mounts)
               if (mount.root === root && !live.has(anchor)) this.#release(anchor);

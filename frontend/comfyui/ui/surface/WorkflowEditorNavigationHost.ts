@@ -106,7 +106,7 @@ export class WorkflowEditorNavigationHost {
     const back = native?.querySelector<HTMLElement>('[data-testid="subgraph-breadcrumb-back"]');
     if (!nested || !bar || !native || !back) {
       this.#restoreNative();
-      this.#view.element.remove();
+      this.#view.clear();
       return;
     }
     const entries = [

@@ -9,6 +9,7 @@ export class CubePromptEditorHost {
     #catalog;
     #report;
     #sessions = new Map();
+    #retired = new WeakSet();
     #restoreSurfaces = new Map();
     #release = null;
     #catalogSnapshot = null;
@@ -27,6 +28,9 @@ export class CubePromptEditorHost {
     }
     /** Acquire a field presentation without duplicating its native editor or serialized value. */
     mount(surface) {
+        // Cards of a replaced workflow can re-render during their deferred teardown; keep them native.
+        if (this.#retired.has(surface.widget))
+            return null;
         const hidden = surface.textarea.hidden;
         const display = surface.textarea.style.getPropertyValue('display');
         const priority = surface.textarea.style.getPropertyPriority('display');
@@ -80,6 +84,10 @@ export class CubePromptEditorHost {
             session.surfaces.delete(surface);
             this.#restoreSurfaces.get(surface)?.();
             this.#restoreSurfaces.delete(surface);
+            if (!session.surfaces.size && !belongsToGraph(surface.node)) {
+                this.#retire(surface.widget, session);
+                return;
+            }
             if (session.active === surface) {
                 const remaining = [...session.surfaces];
                 session.active =
@@ -122,22 +130,32 @@ export class CubePromptEditorHost {
     beforeConfigureGraph() {
         this.#stopCatalog?.();
         this.#stopCatalog = null;
-        for (const [widget, session] of this.#sessions) {
-            session.disposed = true;
-            session.editor?.dispose();
-            session.binding.dispose();
-            clearCubePromptWidgetHeight(widget);
-            for (const surface of session.surfaces)
-                this.#restoreSurfaces.get(surface)?.();
+        for (const [widget, session] of [...this.#sessions]) {
+            this.#retired.add(widget);
+            this.#retire(widget, session);
         }
-        this.#sessions.clear();
-        this.#restoreSurfaces.clear();
     }
     /** Release the document registration and every editor-owned resource. */
     dispose() {
         this.#release?.();
         this.#release = null;
         this.beforeConfigureGraph();
+    }
+    /** Release one session's editor, value observation, measured height and borrowed surfaces. */
+    #retire(widget, session) {
+        session.disposed = true;
+        session.editor?.dispose();
+        session.editor = null;
+        session.active = null;
+        session.binding.dispose();
+        clearCubePromptWidgetHeight(widget);
+        for (const surface of session.surfaces) {
+            this.#restoreSurfaces.get(surface)?.();
+            this.#restoreSurfaces.delete(surface);
+        }
+        session.surfaces.clear();
+        if (this.#sessions.get(widget) === session)
+            this.#sessions.delete(widget);
     }
     /** Load the bundled engine once and adapt the current shared model snapshot outside input. */
     async #create(session, surface) {
@@ -202,6 +220,14 @@ export class CubePromptEditorHost {
             surface.textarea.disabled ||
             surface.widget.computedDisabled === true);
     }
+}
+/** Report whether a node is still a member of the graph it names, independent of renderer DOM. */
+function belongsToGraph(node) {
+    const graph = node.graph;
+    if (!graph)
+        return false;
+    const nodes = graph._nodes ?? graph.nodes;
+    return !Array.isArray(nodes) || nodes.includes(node);
 }
 /** Keep late detached or inert graph preparations from taking a connected interactive editor. */
 function availablePromptSurface(surface) {

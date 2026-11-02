@@ -114,6 +114,46 @@ describe('NativeSubgraphChangeObserver', () => {
     expect(subgraph.onAfterChange).toBe(replacement);
   });
 
+  test('restores Comfy methods when observers with unrelated lifetimes dispose out of order', () => {
+    const add = jest.fn();
+    const remove = jest.fn();
+    const subgraph = { onAfterChange: null as ((graph: unknown) => void) | null, add, remove };
+    for (let cycle = 0; cycle < 10; cycle++) {
+      const runtime = new NativeSubgraphChangeObserver(subgraph, jest.fn());
+      const presentation = new NativeSubgraphChangeObserver(subgraph, jest.fn());
+      runtime.dispose();
+      presentation.dispose();
+      expect(subgraph.add).toBe(add);
+      expect(subgraph.remove).toBe(remove);
+      expect(subgraph.onAfterChange).toBeNull();
+    }
+  });
+
+  test('keeps disposed observers out of a wrapper chain buried beneath later host wrappers', async () => {
+    const add = jest.fn();
+    const subgraph = { add, remove: jest.fn() } as {
+      add: (...args: unknown[]) => unknown;
+      remove: (...args: unknown[]) => unknown;
+    };
+    const stale = jest.fn();
+    const first = new NativeSubgraphChangeObserver(subgraph, stale);
+    const observed = subgraph.add;
+    const hostWrapper = (...args: unknown[]): unknown => observed(...args);
+    subgraph.add = hostWrapper;
+    first.dispose();
+    expect(subgraph.add).toBe(hostWrapper);
+    const current = jest.fn();
+    const second = new NativeSubgraphChangeObserver(subgraph, current);
+    subgraph.add('node');
+    await Promise.resolve();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(stale).not.toHaveBeenCalled();
+    expect(current).toHaveBeenCalledTimes(1);
+    expect(current).toHaveBeenCalledWith([{ kind: 'add', info: 'node' }]);
+    second.dispose();
+    expect(subgraph.add).toBe(hostWrapper);
+  });
+
   test('fails closed when Comfy lacks the native topology methods', () => {
     expect(() => new NativeSubgraphChangeObserver({ onAfterChange: null }, jest.fn())).toThrow(
       'Comfy native subgraph topology methods are unavailable',
