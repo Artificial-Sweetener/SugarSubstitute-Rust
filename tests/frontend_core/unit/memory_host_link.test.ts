@@ -92,7 +92,7 @@ test('announces the preference and usage, then applies only newer host allowance
   const link = new MemoryHostLink(host.link, registry, preferences.source, jest.fn());
   link.start();
   expect(host.sent.map((message) => message.type)).toEqual(['preference', 'usage']);
-  expect(host.sent[1]).toMatchObject({ usedBytes: 32 * MIB, demandBytes: 96 * MIB });
+  expect(host.sent[1]).toMatchObject({ usedBytes: 32 * MIB, demandBytes: 224 * MIB });
   host.deliver(allowance(2, 16 * MIB));
   expect(registry.usage().usedBytes).toBeLessThanOrEqual(16 * MIB);
   // An older or foreign allowance is ignored.

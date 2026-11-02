@@ -15,7 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Encode and validate the SugarCubes memory budget protocol, version one. */
 import { isRecord } from '../../types/common.js';
-import type { MemoryPressureLevel, MemoryUsage } from './MemoryBudgetRegistry.js';
+import {
+  DEFAULT_MEMORY_ALLOWANCE_BYTES,
+  type MemoryPressureLevel,
+  type MemoryUsage,
+} from './MemoryBudgetRegistry.js';
 
 /** Protocol identifier shared with desktop hosts. */
 export const MEMORY_PROTOCOL = 'sugarcubes.memory';
@@ -63,7 +67,10 @@ export interface MemoryAllowance {
   readonly preference: MemoryPreference;
 }
 
-/** Report usage with room to grow: half again what the caches hold, at least 64 MiB. */
+/**
+ * Report usage with room to grow: half again what the caches hold, and never less room than the
+ * standalone allowance, so joining a host never shrinks a page's caches below it.
+ */
 export function usageMessage(session: string, usage: MemoryUsage): MemoryUsageMessage {
   const used = Math.max(0, Math.round(usage.usedBytes));
   const consumers = usage.consumers
@@ -76,7 +83,7 @@ export function usageMessage(session: string, usage: MemoryUsage): MemoryUsageMe
     session,
     type: 'usage',
     usedBytes: used,
-    demandBytes: used + Math.max(64 * 1024 * 1024, Math.round(used / 2)),
+    demandBytes: used + Math.max(DEFAULT_MEMORY_ALLOWANCE_BYTES, Math.round(used / 2)),
     consumers,
   };
 }
