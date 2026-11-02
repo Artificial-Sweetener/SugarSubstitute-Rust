@@ -31254,8 +31254,9 @@ var PromptMouseSelection = class {
     if (event.button !== 0 || event.ctrlKey || event.altKey || event.metaKey || view.compositionStarted)
       return null;
     const chip = typeof Element !== "undefined" && event.target instanceof Element ? event.target.closest(".sp-lora-chip") : null;
-    const position = chip && event.detail === 2 ? view.posAtDOM(chip, 0) : view.posAtCoords({ x: event.clientX, y: event.clientY });
-    if (position === null) return null;
+    const hit = chip && event.detail === 2 ? { pos: view.posAtDOM(chip, 0), assoc: 1 } : view.posAndSideAtCoords({ x: event.clientX, y: event.clientY });
+    if (hit === null) return null;
+    const position = hit.pos;
     if (this.disposed) return null;
     const freshness = state.field(editorFreshness), current6 = view.state.field(editorFreshness);
     if (freshness.source !== current6.source || freshness.context !== current6.context || state.facet(richRendering) !== view.state.facet(richRendering))
@@ -31305,8 +31306,8 @@ var PromptMouseSelection = class {
     }
     let pointerAnchor = null;
     if (!target && event.detail === 1) {
-      pointerAnchor = position;
-      target = EditorSelection.cursor(position);
+      pointerAnchor = hit;
+      target = EditorSelection.cursor(hit.pos, hit.assoc);
     }
     if (!target) return null;
     if (reveal) {
@@ -31340,14 +31341,15 @@ var PromptMouseSelection = class {
         if (this.disposed || this.gesture !== gesture) return lastSelection;
         let current7;
         if (currentEvent === event)
-          current7 = pointerAnchor === null ? range : EditorSelection.cursor(pointerAnchor);
+          current7 = pointerAnchor === null ? range : EditorSelection.cursor(pointerAnchor.pos, pointerAnchor.assoc);
         else {
-          const head = view.posAtCoords(
+          const { pos: head, assoc } = view.posAndSideAtCoords(
             { x: currentEvent.clientX, y: currentEvent.clientY },
             false
           );
           if (this.disposed || this.gesture !== gesture) return lastSelection;
-          if (pointerAnchor !== null) current7 = EditorSelection.range(pointerAnchor, head);
+          if (pointerAnchor !== null)
+            current7 = head === pointerAnchor.pos ? EditorSelection.cursor(head, assoc) : EditorSelection.range(pointerAnchor.pos, head, void 0, void 0, assoc);
           else {
             const line = view.state.doc.lineAt(head), word = promptWordRange(line.text, head - line.from);
             current7 = head < range.from ? EditorSelection.range(range.to, line.from + word.from) : head > range.to ? EditorSelection.range(range.from, line.from + word.to) : range;
@@ -31367,7 +31369,11 @@ var PromptMouseSelection = class {
           range = range.map(update.changes);
           original = original.map(update.changes);
           lastSelection = lastSelection.map(update.changes);
-          if (pointerAnchor !== null) pointerAnchor = update.changes.mapPos(pointerAnchor);
+          if (pointerAnchor !== null)
+            pointerAnchor = {
+              pos: update.changes.mapPos(pointerAnchor.pos),
+              assoc: pointerAnchor.assoc
+            };
         }
       }
     };
@@ -31395,6 +31401,47 @@ var promptMouseSelection = (() => {
     EditorView.mouseSelectionStyle.of((view, event) => view.plugin(plugin2)?.style(event) ?? null)
   ];
 })();
+
+// frontend/sugarprompt/editor/src/native-caret-side.ts
+var NativeCaretSide = class {
+  view;
+  /** Bind one mounted native view. */
+  constructor(view) {
+    this.view = view;
+  }
+  /** Re-check the painted row only when a collapsed caret changed side without moving. */
+  update(update) {
+    const main = update.state.selection.main, previous = update.startState.selection.main;
+    if (!update.selectionSet || !main.empty || !main.assoc || !previous.empty || previous.head !== main.head || previous.assoc === main.assoc)
+      return;
+    this.view.requestMeasure({
+      key: this,
+      read: () => this.misplaced(),
+      write: (boundary3) => {
+        if (!boundary3) return;
+        const selection = this.view.contentDOM.ownerDocument.getSelection();
+        if (selection?.isCollapsed) selection.collapse(boundary3.node, boundary3.offset);
+      }
+    });
+  }
+  /** Return the side-correct DOM boundary when the browser paints the caret on another visual row. */
+  misplaced() {
+    const view = this.view, main = view.state.selection.main;
+    if (!main.empty || !main.assoc || !view.hasFocus || view.composing || view.compositionStarted)
+      return null;
+    const selection = view.contentDOM.ownerDocument.getSelection();
+    const focus = selection?.focusNode;
+    if (!selection?.isCollapsed || !focus || !view.contentDOM.contains(focus)) return null;
+    if (view.posAtDOM(focus, selection.focusOffset) !== main.head) return null;
+    const painted = selection.getRangeAt(0).getBoundingClientRect(), intended = view.coordsAtPos(main.head, main.assoc);
+    if (!intended || painted.height <= 0) return null;
+    const row = Math.min(painted.height, intended.bottom - intended.top) / 2;
+    if (Math.abs(painted.top - intended.top) < row) return null;
+    const target = view.domAtPos(main.head, main.assoc);
+    return target.node === focus && target.offset === selection.focusOffset ? null : target;
+  }
+};
+var nativeCaretSide = ViewPlugin.fromClass(NativeCaretSide);
 
 // frontend/sugarprompt/editor/src/weight-preview-value.ts
 function weightPreviewText(state, session) {
@@ -46994,6 +47041,7 @@ function createNativeState(source, options) {
       loraMediaPreparation,
       ...options.onLoraMediaError ? [loraMediaErrors.of(options.onLoraMediaError)] : [],
       promptMouseSelection,
+      nativeCaretSide,
       reorderInteractions,
       weightPreview,
       keyboardWeightInteractions,

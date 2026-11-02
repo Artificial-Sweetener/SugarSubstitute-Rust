@@ -34,6 +34,11 @@ import {
   releaseProjectionToken,
 } from './projection-exposure.js';
 import type { SourceRange } from '../../core/src/offsets.js';
+/** A pointer hit keeps the side it landed on so a wrap boundary resolves to the clicked visual row. */
+interface PointerHit {
+  readonly pos: number;
+  readonly assoc: -1 | 1;
+}
 /** A finite follow-up intent observes native selection; it owns no caret, source or document history. */
 export class PromptMouseSelection {
   private pending: SelectionRange | null = null;
@@ -151,11 +156,13 @@ export class PromptMouseSelection {
       typeof Element !== 'undefined' && event.target instanceof Element
         ? event.target.closest('.sp-lora-chip')
         : null;
-    const position =
+    // The hit side distinguishes the end of one wrapped row from the start of the next.
+    const hit: PointerHit | null =
       chip && event.detail === 2
-        ? view.posAtDOM(chip, 0)
-        : view.posAtCoords({ x: event.clientX, y: event.clientY });
-    if (position === null) return null;
+        ? { pos: view.posAtDOM(chip, 0), assoc: 1 }
+        : view.posAndSideAtCoords({ x: event.clientX, y: event.clientY });
+    if (hit === null) return null;
+    const position = hit.pos;
     if (this.disposed) return null;
     const freshness = state.field(editorFreshness),
       current = view.state.field(editorFreshness);
@@ -223,10 +230,10 @@ export class PromptMouseSelection {
         };
       this.pending = target;
     }
-    let pointerAnchor: number | null = null;
+    let pointerAnchor: PointerHit | null = null;
     if (!target && event.detail === 1) {
-      pointerAnchor = position;
-      target = EditorSelection.cursor(position);
+      pointerAnchor = hit;
+      target = EditorSelection.cursor(hit.pos, hit.assoc);
     }
     if (!target) return null;
     if (reveal) {
@@ -261,14 +268,21 @@ export class PromptMouseSelection {
         if (this.disposed || this.gesture !== gesture) return lastSelection;
         let current: SelectionRange;
         if (currentEvent === event)
-          current = pointerAnchor === null ? range : EditorSelection.cursor(pointerAnchor);
+          current =
+            pointerAnchor === null
+              ? range
+              : EditorSelection.cursor(pointerAnchor.pos, pointerAnchor.assoc);
         else {
-          const head = view.posAtCoords(
+          const { pos: head, assoc } = view.posAndSideAtCoords(
             { x: currentEvent.clientX, y: currentEvent.clientY },
             false,
           );
           if (this.disposed || this.gesture !== gesture) return lastSelection;
-          if (pointerAnchor !== null) current = EditorSelection.range(pointerAnchor, head);
+          if (pointerAnchor !== null)
+            current =
+              head === pointerAnchor.pos
+                ? EditorSelection.cursor(head, assoc)
+                : EditorSelection.range(pointerAnchor.pos, head, undefined, undefined, assoc);
           else {
             const line = view.state.doc.lineAt(head),
               word = promptWordRange(line.text, head - line.from);
@@ -298,7 +312,11 @@ export class PromptMouseSelection {
           range = range.map(update.changes);
           original = original.map(update.changes);
           lastSelection = lastSelection.map(update.changes);
-          if (pointerAnchor !== null) pointerAnchor = update.changes.mapPos(pointerAnchor);
+          if (pointerAnchor !== null)
+            pointerAnchor = {
+              pos: update.changes.mapPos(pointerAnchor.pos),
+              assoc: pointerAnchor.assoc,
+            };
         }
       },
     };

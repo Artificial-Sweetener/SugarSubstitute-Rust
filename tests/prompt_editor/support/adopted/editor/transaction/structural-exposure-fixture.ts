@@ -38,6 +38,8 @@ export function structuralExposureFixture(source: string) {
       if (property === 'contentDOM') return { ownerDocument: document };
       if (property === 'hasFocus') return true;
       if (property === 'posAtCoords') return (point: { x: number }) => point.x;
+      if (property === 'posAndSideAtCoords')
+        return (point: { x: number }) => ({ pos: point.x, assoc: 1 });
       if (property === 'textDirectionAt') return () => Direction.LTR;
       if (property === 'bidiSpans')
         return (line: { length: number }) => [{ from: 0, to: line.length, level: 0 }];

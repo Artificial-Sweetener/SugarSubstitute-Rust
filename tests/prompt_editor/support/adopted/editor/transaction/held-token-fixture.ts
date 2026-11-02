@@ -115,6 +115,7 @@ export function heldTokenFixture(
   let disposed = false,
     style: MouseSelectionStyle | null = null;
   let readAdmission: (() => void) | null = null;
+  let hitSide: -1 | 1 = 1;
   /** Real transactions publish state before plugin and active style updates, matching the native owner cadence. */
   function dispatch(spec: TransactionSpec): void {
     const startState = state,
@@ -143,11 +144,11 @@ export function heldTokenFixture(
       assert.fail('mouse factory cannot focus');
     },
     /** Controlled external coordinates exercise the actual style continuation and may publish a genuine nested update. */
-    posAtCoords(point: { x: number }) {
+    posAndSideAtCoords(point: { x: number }) {
       const callback = readAdmission;
       readAdmission = null;
       callback?.();
-      return point.x;
+      return { pos: point.x, assoc: hitSide };
     },
     /** Public plugin transport resolves only the actual mounted native owner. */
     plugin() {
@@ -181,6 +182,10 @@ export function heldTokenFixture(
     /** A controlled read can exercise source/context reentry before style admission. */
     duringRead(callback: () => void) {
       readAdmission = callback;
+    },
+    /** Choose which side of the hit offset the next coordinate reads land on, as at a soft wrap. */
+    hitSide(side: -1 | 1) {
+      hitSide = side;
     },
     /** Source-only admission controls invoke the same registered public style factory without assuming success. */
     admitted(event = heldTokenPointer(8)) {
