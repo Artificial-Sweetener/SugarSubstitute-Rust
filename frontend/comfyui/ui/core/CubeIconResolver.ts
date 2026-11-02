@@ -25,6 +25,9 @@ import {
 import type { FallbackIconModel, FallbackIconStyle } from './CubeFallbackIconRenderer.js';
 import { isRecord } from '../types/common.js';
 import { prepareCubeIconContrast } from './CubeIconAssetContrast.js';
+import type { CubeIconImageEntry, CubeIconImageStore } from './CubeIconImageStore.js';
+
+export type { CubeIconImageEntry } from './CubeIconImageStore.js';
 
 interface AssetIconDescriptor {
   kind: 'asset';
@@ -36,6 +39,8 @@ interface AssetIconDescriptor {
 export interface AssetIconModel {
   kind: 'asset';
   url: string;
+  /** Distinguish revised icon content served from the same Cube URL. */
+  identity: string;
   mediaType: string;
   initials: string;
   fallback: FallbackIconStyle;
@@ -52,14 +57,9 @@ interface InitialsOptions {
   fallbackText?: unknown;
 }
 
-type ImageStatus = 'loading' | 'ready' | 'error' | 'unavailable';
-
-export interface CubeIconImageEntry {
-  status: ImageStatus;
-  image: HTMLImageElement | null;
-}
-
 interface CubeIconResolverOptions {
+  /** Page-lifetime decoded icons shared by every resolver. */
+  images: CubeIconImageStore;
   imageFactory?: (() => HTMLImageElement) | null;
   onImageLoad?: ((url: string, entry: CubeIconImageEntry) => void) | null;
 }
@@ -177,6 +177,11 @@ export function resolveCubeIconModel(source: unknown = {}): CubeIconModel {
       return {
         kind: 'asset',
         url,
+        identity: JSON.stringify([
+          readText(metadata.cube_version) || readText(metadata.version),
+          iconSource.path ?? '',
+          iconSource.media_type,
+        ]),
         mediaType: iconSource.media_type || '',
         initials,
         fallback,
@@ -187,17 +192,22 @@ export function resolveCubeIconModel(source: unknown = {}): CubeIconModel {
 }
 
 /**
- * Cache image objects for repeated chrome rendering.
+ * Resolve icon models and their page-lifetime decoded images for repeated chrome rendering.
  */
 export class CubeIconResolver {
+  private readonly images: CubeIconImageStore;
   private readonly imageFactory: (() => HTMLImageElement) | null;
   private readonly onImageLoad: ((url: string, entry: CubeIconImageEntry) => void) | null;
-  private readonly images: Map<string, CubeIconImageEntry>;
 
-  constructor({ imageFactory, onImageLoad }: CubeIconResolverOptions = {}) {
-    this.imageFactory = typeof imageFactory === 'function' ? imageFactory : null;
+  constructor({ images, imageFactory, onImageLoad }: CubeIconResolverOptions) {
+    this.images = images;
+    this.imageFactory =
+      typeof imageFactory === 'function'
+        ? imageFactory
+        : typeof globalThis.Image === 'function'
+          ? () => new globalThis.Image()
+          : null;
     this.onImageLoad = typeof onImageLoad === 'function' ? onImageLoad : null;
-    this.images = new Map();
   }
 
   resolve(source: unknown = {}): CubeIconModel {
@@ -208,33 +218,7 @@ export class CubeIconResolver {
     if (!model || model.kind !== 'asset' || !model.url) {
       return { status: 'unavailable', image: null };
     }
-    const existing = this.images.get(model.url);
-    if (existing) {
-      return existing;
-    }
-    const ImageRef =
-      this.imageFactory ||
-      (typeof globalThis !== 'undefined' && typeof globalThis.Image === 'function'
-        ? () => new globalThis.Image()
-        : null);
-    if (!ImageRef) {
-      const unavailable: CubeIconImageEntry = { status: 'error', image: null };
-      this.images.set(model.url, unavailable);
-      return unavailable;
-    }
-    const image = ImageRef();
-    const entry: CubeIconImageEntry = { status: 'loading', image };
-    image.onload = () => {
-      entry.status = 'ready';
-      this.onImageLoad?.(model.url, entry);
-    };
-    image.onerror = () => {
-      entry.status = 'error';
-      this.onImageLoad?.(model.url, entry);
-    };
-    image.src = model.url;
-    this.images.set(model.url, entry);
-    return entry;
+    return this.images.acquire(model, this.imageFactory, this.onImageLoad);
   }
 }
 

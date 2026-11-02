@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Cache bounded static media previews without retaining players, models, or decoded images. */
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
+import { BudgetedMemoryCache } from '../../core/memory/BudgetedMemoryCache.js';
+import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
 
 export interface CanvasPosterRenderer {
   /** Capture one static preview and retire native resources before resolving. */
@@ -27,15 +29,29 @@ interface PosterCapture {
   readonly consumers: Set<symbol>;
 }
 
-/** Bound cached encoded posters independently of the canvas's decoded-pixel budget. */
+/**
+ * Bound cached encoded posters independently of the canvas's decoded-pixel budget.
+ *
+ * Posters are encoded data, so they are the last tier the page allowance evicts; their own
+ * count and byte bounds still apply.
+ */
 export class BrowserCanvasMediaPosters {
-  readonly #cache = new Map<string, Blob>();
+  readonly #cache: BudgetedMemoryCache<string, Blob>;
   readonly #pending = new Map<string, PosterCapture>();
-  #bytes = 0;
   #disposed = false;
 
-  /** Inject the actual browser/host capture boundary. */
-  constructor(private readonly renderer: CanvasPosterRenderer) {}
+  /** Inject the actual browser/host capture boundary and the page memory allowance. */
+  constructor(
+    private readonly renderer: CanvasPosterRenderer,
+    memory: MemoryBudgetRegistry,
+  ) {
+    this.#cache = new BudgetedMemoryCache({
+      id: 'output-canvas-posters',
+      registry: memory,
+      maxEntries: 24,
+      maxBytes: 8 * 1024 * 1024,
+    });
+  }
 
   /** Reuse an exact revision's poster and never cache a retired request. */
   async read(item: WorkflowOutputItem, url: string, signal: AbortSignal): Promise<Blob> {
@@ -49,11 +65,7 @@ export class BrowserCanvasMediaPosters {
       item.file,
     ]);
     const cached = this.#cache.get(key);
-    if (cached) {
-      this.#cache.delete(key);
-      this.#cache.set(key, cached);
-      return cached;
-    }
+    if (cached) return cached;
     let capture = this.#pending.get(key);
     if (!capture || capture.controller.signal.aborted) {
       const controller = new AbortController();
@@ -79,15 +91,14 @@ export class BrowserCanvasMediaPosters {
 
   /** Expose explicit encoded-preview accounting without recurring telemetry. */
   diagnostics(): { posters: number; posterBytes: number } {
-    return { posters: this.#cache.size, posterBytes: this.#bytes };
+    return { posters: this.#cache.size, posterBytes: this.#cache.bytes() };
   }
   /** Release encoded previews with the owning canvas host. */
   dispose(): void {
     this.#disposed = true;
     for (const capture of this.#pending.values()) capture.controller.abort();
     this.#pending.clear();
-    this.#cache.clear();
-    this.#bytes = 0;
+    this.#cache.dispose();
   }
 
   /** Keep shared capture alive until its last visible/admitted consumer retires. */
@@ -125,15 +136,6 @@ export class BrowserCanvasMediaPosters {
   /** Retain encoded previews only within explicit count and byte limits. */
   #store(key: string, blob: Blob): void {
     if (this.#disposed || blob.size > 1024 * 1024) return;
-    const previous = this.#cache.get(key);
-    if (previous) this.#bytes -= previous.size;
-    this.#cache.set(key, blob);
-    this.#bytes += blob.size;
-    while (this.#cache.size > 24 || this.#bytes > 8 * 1024 * 1024) {
-      const oldest = this.#cache.entries().next().value;
-      if (!oldest) break;
-      this.#cache.delete(oldest[0]);
-      this.#bytes -= oldest[1].size;
-    }
+    this.#cache.set(key, blob, { tier: 3, bytes: blob.size });
   }
 }

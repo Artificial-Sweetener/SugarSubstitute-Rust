@@ -22,11 +22,14 @@ import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
 import type { CanvasAttachmentOptions } from './CanvasAttachmentOptions.js';
 import type { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.js';
 import type { CanvasModelRuntime } from './ComfyCanvasModelRuntime.js';
+import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
 
 export interface BrowserCanvasAttachmentOptions extends CanvasAttachmentOptions {
   readonly allowances: CanvasImageAllowances;
   readonly loader: CanvasImageLoadPort<BrowserCanvasImagePayload, HTMLImageElement>;
   readonly logger: Pick<Console, 'error'>;
+  /** Page allowance that counts this attachment's displayed images as pinned. */
+  readonly memory: MemoryBudgetRegistry;
   readonly models?: CanvasModelRuntime;
   readonly mediaSessions?: BrowserCanvasMediaSessions;
   /** Build the host's validated full-fidelity file URL. */

@@ -19,6 +19,8 @@ import type { ApiJsonResult } from '../../core/CubeLibraryApi.js';
 import { isCurrentRevisionRef } from '../../core/CubeDefinitionKey.js';
 import { readImportPayload, type ImportPayload } from '../../import/PlacementPayload.js';
 import { isRecord } from '../../types/common.js';
+import { BudgetedMemoryCache } from '../../core/memory/BudgetedMemoryCache.js';
+import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
 import { projectCubeVersionOptions } from './CubeVersionOptionProjection.js';
 import type { CubeRevision, CubeVersionOption } from './CubeVersionTypes.js';
 
@@ -28,16 +30,30 @@ export interface CubeVersionApi {
   loadRevision(payload: BodyInit | null, options?: RequestInit): Promise<ApiJsonResult>;
 }
 
-/** Retrieve validated version options and exact prepared artifacts. */
+/**
+ * Retrieve validated version options and exact prepared artifacts.
+ *
+ * Prepared artifacts are fetched data retained for the page lifetime under the shared memory
+ * allowance, so version menus stay instant across workflow switches. Library mutations retire
+ * them through {@link invalidate}.
+ */
 export class CubeVersionRepository {
   readonly #api: CubeVersionApi;
   readonly #logger: Pick<Console, 'warn'>;
-  readonly #artifacts = new Map<string, Promise<ImportPayload>>();
+  readonly #artifacts: BudgetedMemoryCache<string, Promise<ImportPayload>>;
 
-  /** Bind the typed SugarCubes API boundary. */
-  constructor(api: CubeVersionApi, logger: Pick<Console, 'warn'> = console) {
+  /** Bind the typed SugarCubes API boundary and the page memory allowance. */
+  constructor(api: CubeVersionApi, memory: MemoryBudgetRegistry, logger: Pick<Console, 'warn'>) {
     this.#api = api;
     this.#logger = logger;
+    this.#artifacts = new BudgetedMemoryCache({ id: 'cube-version-artifacts', registry: memory });
+  }
+
+  /** Retire prepared artifacts of one Cube, or of every Cube, after a library mutation. */
+  invalidate(cubeId?: string): void {
+    const normalized = cubeId?.trim();
+    if (!normalized) this.#artifacts.clear();
+    else this.#artifacts.deleteWhere((key) => key.startsWith(`${normalized}\u0000`));
   }
 
   /** List unique semantic versions whose exact artifacts pass loader validation. */
@@ -77,11 +93,19 @@ export class CubeVersionRepository {
     const key = `${cubeId}\u0000${option.value}\u0000${option.revisionRef}`;
     const existing = this.#artifacts.get(key);
     if (existing) return existing;
-    const request = this.#loadArtifact(cubeId, option).catch((error: unknown) => {
-      this.#artifacts.delete(key);
-      throw error;
-    });
-    this.#artifacts.set(key, request);
+    const request = this.#loadArtifact(cubeId, option).then(
+      (payload) => {
+        // Size the retained artifact once it exists; UTF-16 text approximates its heap cost.
+        if (this.#artifacts.has(key))
+          this.#artifacts.resize(key, JSON.stringify(payload).length * 2);
+        return payload;
+      },
+      (error: unknown) => {
+        if (this.#artifacts.has(key)) this.#artifacts.delete(key);
+        throw error;
+      },
+    );
+    this.#artifacts.set(key, request, { tier: 3, bytes: 0 });
     return request;
   }
 

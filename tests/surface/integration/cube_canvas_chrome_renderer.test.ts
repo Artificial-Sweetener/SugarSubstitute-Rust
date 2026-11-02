@@ -25,6 +25,8 @@ import { computeCubeCanvasLayout } from '../../../frontend/comfyui/ui/surface/Cu
 import { CubeCanvasChromeRenderer } from '../../../frontend/comfyui/ui/surface/CubeCanvasChromeRenderer.js';
 import { comfyPrimeIconGlyph } from '../../../frontend/comfyui/ui/surface/ComfyPrimeIcons.js';
 import { createDefaultCubeSurfaceState } from '../../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
+import { CubeIconImageStore } from '../../../frontend/comfyui/ui/core/CubeIconImageStore.js';
 
 describe('CubeCanvasChromeRenderer', () => {
   test('draws icon-only actions beside Comfy native editor button without custom outlines', () => {
@@ -59,7 +61,9 @@ describe('CubeCanvasChromeRenderer', () => {
       draw: jest.fn(),
     };
 
-    new CubeCanvasChromeRenderer(new CubeIconResolver()).draw(context, {
+    new CubeCanvasChromeRenderer(
+      new CubeIconResolver({ images: new CubeIconImageStore(new MemoryBudgetRegistry()) }),
+    ).draw(context, {
       node,
       layout,
       chromeActions: {
@@ -132,7 +136,9 @@ describe('CubeCanvasChromeRenderer', () => {
     const layout = computeCubeCanvasLayout(node, state, 30);
     const context = drawingContext();
 
-    new CubeCanvasChromeRenderer(new CubeIconResolver()).draw(context, {
+    new CubeCanvasChromeRenderer(
+      new CubeIconResolver({ images: new CubeIconImageStore(new MemoryBudgetRegistry()) }),
+    ).draw(context, {
       node,
       layout,
       chromeActions: null,

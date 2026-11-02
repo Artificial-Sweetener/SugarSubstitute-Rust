@@ -67,6 +67,7 @@ import type { CubePreviewActions } from './CubePreviewActions.js';
 import { ComfyVueCubeDropTargetBridge } from './ComfyVueCubeDropTargetBridge.js';
 import type { ComfyNode } from '../types/graph.js';
 import { CubeEditorEntryController } from './CubeEditorEntryController.js';
+import type { CubeCanvasImageStores } from './CubeCanvasImageStores.js';
 
 export interface CubeSurfacePresenterOptions {
   document: Document;
@@ -77,6 +78,8 @@ export interface CubeSurfacePresenterOptions {
   setDirtyCanvas?(foreground?: boolean, background?: boolean): void;
   setDropTarget?(node: ComfyNode): void;
   logger: Pick<Console, 'debug' | 'error' | 'warn'>;
+  /** Page-lifetime decoded images borrowed by the Nodes 1.0 host. */
+  images: CubeCanvasImageStores;
   renderer?: NativeNodeCardRenderer;
   createRenderer?(): Promise<NativeNodeCardRenderer>;
   previewCatalog?: CubePreviewCatalog;
@@ -207,6 +210,7 @@ export class CubeSurfacePresenter {
           titleHeight: options.titleHeight ?? 30,
           openEditor: (node) => this.#editorEntry.open(node),
           logger: options.logger,
+          images: options.images,
           ...(options.previewCatalog ? { previewCatalog: options.previewCatalog } : {}),
           ...(options.previewActions ? { previewActions: options.previewActions } : {}),
           ...(options.chromeActions ? { chromeActions: options.chromeActions } : {}),

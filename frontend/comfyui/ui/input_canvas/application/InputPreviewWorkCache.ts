@@ -20,33 +20,48 @@ import {
   canvasRasterByteLength,
   MAX_CANVAS_RASTER_BYTES,
 } from '../../core/embedded/CanvasRuntime.js';
+import { BudgetedMemoryCache } from '../../core/memory/BudgetedMemoryCache.js';
+import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
 interface Job {
   readonly key: string;
   readonly load: () => Promise<CanvasPixelRaster>;
+  readonly fullResolution: boolean;
   readonly promise: Promise<CanvasPixelRaster>;
   readonly resolve: (pixels: CanvasPixelRaster) => void;
   readonly reject: (error: unknown) => void;
 }
-/** Share pending work and retain at most sixteen maximum-size rasters with two concurrent decoders. */
+/**
+ * Share pending work and retain at most sixteen rasters within the raster byte bound.
+ *
+ * One instance serves preview and full-resolution decodes so both share one retained-byte bound
+ * and one memory consumer. Preview decodes run two at a time within the preview size limit; a
+ * full-resolution decode occupies every decoder slot so two such rasters are never decoded at once.
+ */
 export class InputPreviewWorkCache {
-  readonly #ready = new Map<string, CanvasPixelRaster>();
+  readonly #ready: BudgetedMemoryCache<string, CanvasPixelRaster>;
   readonly #jobs = new Map<string, Job>();
   readonly #queue: Job[] = [];
   #active = 0;
-  #bytes = 0;
-  /** Use zero for full-resolution editing while preserving an explicit retained-byte and decoder budget. */
+  /** Register decoded rasters with the page allowance and bound concurrent decoders. */
   constructor(
-    private readonly maximumSize = INPUT_PREVIEW_MAXIMUM,
+    memory: MemoryBudgetRegistry,
     private readonly concurrency = 2,
-  ) {}
+  ) {
+    this.#ready = new BudgetedMemoryCache({
+      id: 'input-canvas-previews',
+      registry: memory,
+      maxEntries: 16,
+      maxBytes: MAX_CANVAS_RASTER_BYTES,
+    });
+  }
   /** Reuse completed pixels or admit one bounded pending decode for this exact file, settings and size. */
-  read(key: string, load: () => Promise<CanvasPixelRaster>): Promise<CanvasPixelRaster> {
+  read(
+    key: string,
+    load: () => Promise<CanvasPixelRaster>,
+    fullResolution = false,
+  ): Promise<CanvasPixelRaster> {
     const ready = this.#ready.get(key);
-    if (ready) {
-      this.#ready.delete(key);
-      this.#ready.set(key, ready);
-      return Promise.resolve(ready);
-    }
+    if (ready) return Promise.resolve(ready);
     const pending = this.#jobs.get(key);
     if (pending) return pending.promise;
     if (this.#jobs.size >= 128)
@@ -57,18 +72,21 @@ export class InputPreviewWorkCache {
       resolve = success;
       reject = failure;
     });
-    const job = { key, load, promise, resolve, reject };
+    const job = { key, load, fullResolution, promise, resolve, reject };
     this.#jobs.set(key, job);
     this.#queue.push(job);
     this.#drain();
     return promise;
   }
-  /** Release a decoder slot on both success and failure before admitting the next queued source. */
+  /** Release decoder slots on both success and failure before admitting the next queued source. */
   #drain(): void {
-    while (this.#active < this.concurrency && this.#queue.length) {
-      const job = this.#queue.shift();
+    while (this.#queue.length) {
+      const job = this.#queue[0];
       if (!job) return;
-      this.#active++;
+      const weight = this.#weight(job);
+      if (this.#active + weight > this.concurrency) return;
+      this.#queue.shift();
+      this.#active += weight;
       void Promise.resolve()
         .then(job.load)
         .then((pixels) => {
@@ -77,30 +95,26 @@ export class InputPreviewWorkCache {
             !Number.isSafeInteger(pixels.height) ||
             pixels.width < 1 ||
             pixels.height < 1 ||
-            (this.maximumSize > 0 &&
-              (pixels.width > this.maximumSize || pixels.height > this.maximumSize))
+            (!job.fullResolution &&
+              (pixels.width > INPUT_PREVIEW_MAXIMUM || pixels.height > INPUT_PREVIEW_MAXIMUM))
           )
             throw new Error('The source preview exceeds its size limit.');
-          this.#ready.set(job.key, pixels);
-          this.#bytes += canvasRasterByteLength(pixels.width, pixels.height, pixels.format);
-          while (this.#ready.size > 16 || this.#bytes > MAX_CANVAS_RASTER_BYTES) {
-            const oldest = this.#ready.entries().next().value;
-            if (!oldest) break;
-            this.#ready.delete(oldest[0]);
-            this.#bytes -= canvasRasterByteLength(
-              oldest[1].width,
-              oldest[1].height,
-              oldest[1].format,
-            );
-          }
+          this.#ready.set(job.key, pixels, {
+            tier: 2,
+            bytes: canvasRasterByteLength(pixels.width, pixels.height, pixels.format),
+          });
           return pixels;
         })
         .then(job.resolve, job.reject)
         .finally(() => {
           this.#jobs.delete(job.key);
-          this.#active--;
+          this.#active -= weight;
           this.#drain();
         });
     }
+  }
+  /** Give full-resolution decodes exclusive use of every decoder slot. */
+  #weight(job: Job): number {
+    return job.fullResolution ? this.concurrency : 1;
   }
 }

@@ -46,6 +46,7 @@ import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard
 import { BrowserImageDownload } from '../../output_saving/BrowserImageDownload.js';
 import type { OutputSavingFeature } from '../../output_saving/OutputSavingFeature.js';
 import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
+import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
 
 export interface ComfyCanvasHostOptions {
   readonly saving: OutputSavingFeature | null;
@@ -54,6 +55,8 @@ export interface ComfyCanvasHostOptions {
   readonly document: Document;
   readonly execution: ComfyWorkflowExecutionRuntime;
   readonly logger: Pick<Console, 'error'>;
+  /** Page allowance shared by browser canvas images and posters. */
+  readonly memory: MemoryBudgetRegistry;
   report(error: unknown): void;
 }
 
@@ -221,7 +224,11 @@ export class ComfyCanvasHost {
           });
         return import('./ComfyBrowserCanvasHost.js').then(({ ComfyBrowserCanvasHost }) => {
           if (!acceptsPreparation()) return null;
-          const browser = (this.#browser ??= new ComfyBrowserCanvasHost(document, logger));
+          const browser = (this.#browser ??= new ComfyBrowserCanvasHost(
+            document,
+            logger,
+            options.memory,
+          ));
           return browser.mount(element, shared);
         });
       },
@@ -262,7 +269,12 @@ export class ComfyCanvasHost {
     return {
       ...this.#primary.diagnostics(),
       inventory: this.#sources.diagnostics(),
-      ...(this.#browser?.diagnostics() ?? { posters: 0, posterBytes: 0 }),
+      ...(this.#browser?.diagnostics() ?? {
+        posters: 0,
+        posterBytes: 0,
+        parkedImages: 0,
+        parkedBytes: 0,
+      }),
     };
   }
 

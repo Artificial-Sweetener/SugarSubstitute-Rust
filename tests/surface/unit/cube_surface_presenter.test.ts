@@ -34,6 +34,7 @@ import type {
   NativeNodeCardRenderer,
 } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import type { ComfyInput } from '../../../frontend/comfyui/ui/types/graph.js';
+import { testCanvasImages } from '../support/CanvasImageStores.js';
 
 describe('CubeSurfacePresenter', () => {
   beforeEach(() => {
@@ -52,6 +53,7 @@ describe('CubeSurfacePresenter', () => {
     const createRenderer = jest.fn(async () => renderer);
     const rootGraph = {};
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -94,6 +96,7 @@ describe('CubeSurfacePresenter', () => {
     });
     const rootGraph = {};
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -138,6 +141,7 @@ describe('CubeSurfacePresenter', () => {
     visibility.reconcile(new Set(member.widgets));
     const mount = jest.fn<NativeNodeCardRenderer['mount']>(() => ({ refresh() {}, unmount() {} }));
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -195,6 +199,7 @@ describe('CubeSurfacePresenter', () => {
     shell.footerButton.addEventListener('click', nativeEnterSubgraph);
     const onBoundaryGeometryChange = jest.fn();
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor,
       rootGraph,
@@ -264,6 +269,7 @@ describe('CubeSurfacePresenter', () => {
     const onEditDenied = jest.fn();
     shell.footerButton.addEventListener('click', nativeEnterSubgraph);
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor,
       rootGraph,
@@ -296,6 +302,7 @@ describe('CubeSurfacePresenter', () => {
     const previewEvents = new EventTarget();
     const snapshot = jest.fn(() => ({ outputs: [] }));
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -338,6 +345,7 @@ describe('CubeSurfacePresenter', () => {
     const setDirtyCanvas = jest.fn();
     const canvasElement = document.createElement('canvas');
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -387,6 +395,7 @@ describe('CubeSurfacePresenter', () => {
     let currentGraph: object = rootGraph;
     const unmount = jest.fn();
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -462,6 +471,7 @@ describe('CubeSurfacePresenter', () => {
     nodes.add(node);
     const mountedNodeIds: string[] = [];
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -499,6 +509,7 @@ describe('CubeSurfacePresenter', () => {
     const rootGraph = {};
     const mount = jest.fn(() => ({ refresh() {}, unmount() {} }));
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -538,6 +549,7 @@ describe('CubeSurfacePresenter', () => {
     nodes.add(node);
     const rootGraph = {};
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -573,6 +585,7 @@ describe('CubeSurfacePresenter', () => {
     let allowedDirection: 'left' | 'right' = 'left';
     const rootGraph = {};
     const activePresenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -631,6 +644,7 @@ describe('CubeSurfacePresenter', () => {
     const rootGraph = {};
     const mount = jest.fn(() => ({ refresh() {}, unmount() {} }));
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -673,6 +687,7 @@ describe('CubeSurfacePresenter', () => {
     const register = jest.spyOn(portPresentation, 'register');
     const canvasElement = document.createElement('canvas');
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -744,6 +759,7 @@ describe('CubeSurfacePresenter', () => {
     });
     const canvasElement = document.createElement('canvas');
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,
@@ -808,6 +824,7 @@ describe('CubeSurfacePresenter', () => {
       throw new Error('Unsupported Comfy renderer');
     });
     const presenter = new CubeSurfacePresenter({
+      images: testCanvasImages(),
       document,
       openEditor: jest.fn(),
       rootGraph,

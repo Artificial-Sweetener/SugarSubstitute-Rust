@@ -18,6 +18,7 @@
  */
 
 import type { CubeGroupMetadataRecord } from '../graph/GroupMetadata.js';
+import type { CubeIconImageStore } from '../core/CubeIconImageStore.js';
 import type { CubeFaceGraphSummary } from '../surface/CubeFaceChromeActions.js';
 import type { ComfyApplication, ComfyCanvas, ComfyGraph } from '../types/graph.js';
 import type { RectBounds, UnknownRecord, Vec2 } from '../types/common.js';
@@ -93,6 +94,8 @@ export interface ChromeAdapter {
 }
 export interface ChromeOverlayOptions {
   adapter?: ChromeAdapter | null;
+  /** Page-lifetime decoded icons; standalone overlays retain their own. */
+  icons?: CubeIconImageStore;
   actions?: ChromeActions;
   resolveSource?: ((metadata: ChromeMetadata) => BadgeSource | null) | null;
 }

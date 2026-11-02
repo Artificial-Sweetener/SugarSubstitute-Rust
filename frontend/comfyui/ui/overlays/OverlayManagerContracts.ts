@@ -28,6 +28,7 @@ import type { CubeBoundsReconciler } from '../layout/CubeBoundsReconciler.js';
 import type { CubeFaceGraphSummary } from '../surface/CubeFaceChromeActions.js';
 import type { CubeWorkflowLibraryState } from '../workflow/CubeWorkflowLibraryState.js';
 import type { CubeWorkflowLibraryActions } from '../workflow/CubeWorkflowLibraryActions.js';
+import type { CubeIconImageStore } from '../core/CubeIconImageStore.js';
 
 export interface OverlayAdapter {
   getApp?(): ComfyApplication | null;
@@ -74,6 +75,8 @@ export interface LayoutCoordinator {
 }
 export interface OverlayManagerOptions {
   adapter?: OverlayAdapter | null;
+  /** Page-lifetime decoded Cube icons shared with workflow runtimes. */
+  icons?: CubeIconImageStore;
   events?: OverlayEvents | null;
   scheduler?: OverlayScheduler | null;
   storage?: NonNullable<ConstructorParameters<typeof ProximityOverlay>[0]>['storage'];

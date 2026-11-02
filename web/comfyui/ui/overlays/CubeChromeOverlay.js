@@ -19,6 +19,8 @@
 import { CubeChromeGroupTitleHook } from './CubeChromeGroupTitleHook.js';
 import { CubeChromeInteraction } from './CubeChromeInteraction.js';
 import { CubeChromePainter } from './CubeChromePainter.js';
+import { CubeIconImageStore } from '../core/CubeIconImageStore.js';
+import { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
 import { CubeChromeRenderer } from './CubeChromeRenderer.js';
 /** Preserve the host-facing Cube chrome API across focused owners. */
 export class CubeChromeOverlay {
@@ -28,10 +30,10 @@ export class CubeChromeOverlay {
     interaction;
     groupTitleHook;
     adapter;
-    constructor({ adapter = null, actions = {}, resolveSource = null } = {}) {
+    constructor({ adapter = null, actions = {}, resolveSource = null, icons = new CubeIconImageStore(new MemoryBudgetRegistry()), } = {}) {
         this.adapter = adapter;
         this.actions = actions || {};
-        this.painter = new CubeChromePainter(() => this.requestRedraw(), (ctx, x, y, size, color) => this.drawCubeIcon(ctx, x, y, size, color));
+        this.painter = new CubeChromePainter(icons, () => this.requestRedraw(), (ctx, x, y, size, color) => this.drawCubeIcon(ctx, x, y, size, color));
         this.renderer = new CubeChromeRenderer({
             getActions: () => this.actions,
             getHoverState: () => this.interaction.getHoverState(),

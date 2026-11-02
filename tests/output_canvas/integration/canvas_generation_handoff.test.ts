@@ -35,6 +35,7 @@ import { CanvasPrimarySurface } from '../../../frontend/comfyui/ui/output_canvas
 import { workflowFinal, workflowResultsFixture } from '../../execution/support/workflow_results.js';
 import { BrowserCanvasPlatformFixture } from '../support/BrowserCanvasPlatformFixture.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
 
 test('background results stay with their workflow and late decodes cannot replace the active canvas', async () => {
   jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -112,6 +113,7 @@ test('background results stay with their workflow and late decodes cannot replac
         connected: () => true,
         url: (item) => `${document.location.origin}/view?filename=${item.file.filename}`,
         open: () => undefined,
+        memory: new MemoryBudgetRegistry(),
         disposeLoader: () => loader.dispose(),
         report,
       });

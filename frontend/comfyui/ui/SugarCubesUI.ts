@@ -55,6 +55,8 @@ import type { UnknownRecord } from './types/common.js';
 import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
 import { CubeGraphAnalysisCache } from './workflow/application/CubeGraphAnalysisCache.js';
 import { CubeGraphApi } from './workflow/infrastructure/CubeGraphApi.js';
+import { MemoryBudgetRegistry } from './core/memory/MemoryBudgetRegistry.js';
+import { ComfyCubeRuntimeCaches } from './cube/ComfyCubeRuntimeCaches.js';
 import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
 import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryPresentation.js';
 import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
@@ -112,6 +114,10 @@ export class SugarCubesUI {
   readonly workflowLibraryState: CubeWorkflowLibraryState;
   /** Share canonical workflow analyses across runtimes so unchanged switches issue no request. */
   readonly workflowGraphAnalyses: CubeGraphAnalysisCache;
+  /** Enforce one page allowance across every SugarCubes in-memory cache. */
+  readonly memory = new MemoryBudgetRegistry();
+  /** Keep workflow-independent Cube runtime caches across workflow switches. */
+  readonly runtimeCaches: ComfyCubeRuntimeCaches;
   readonly workflowLibraryActions: CubeWorkflowLibraryActions;
   readonly workflowLibraryPresentation: CubeWorkflowLibraryPresentation;
   readonly workflowPreconfiguration: CubeWorkflowPreconfiguration;
@@ -136,6 +142,11 @@ export class SugarCubesUI {
       this.adapter.getConsole?.() ?? console,
     );
     this.workflowGraphAnalyses = new CubeGraphAnalysisCache(new CubeGraphApi(this.api));
+    this.runtimeCaches = new ComfyCubeRuntimeCaches(
+      this.memory,
+      this.api,
+      this.adapter.getConsole?.() ?? console,
+    );
     this.workflowLibraryActions = new CubeWorkflowLibraryActions({
       api: this.api,
       state: this.workflowLibraryState,
@@ -303,6 +314,7 @@ export class SugarCubesUI {
       boundsReconciler: this.boundsReconciler,
       workflowLibraryState: this.workflowLibraryState,
       workflowLibraryActions: this.workflowLibraryActions,
+      icons: this.runtimeCaches.images.icons,
     });
   }
 
@@ -350,6 +362,7 @@ export class SugarCubesUI {
   retireWorkflowCatalogResults(): void {
     this.workflowLibraryState.invalidateCatalog();
     this.workflowGraphAnalyses.invalidate();
+    this.runtimeCaches.invalidateLibrary();
   }
 
   dispose(): void {

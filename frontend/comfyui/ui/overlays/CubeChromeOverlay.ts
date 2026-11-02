@@ -20,6 +20,8 @@
 import { CubeChromeGroupTitleHook } from './CubeChromeGroupTitleHook.js';
 import { CubeChromeInteraction } from './CubeChromeInteraction.js';
 import { CubeChromePainter } from './CubeChromePainter.js';
+import { CubeIconImageStore } from '../core/CubeIconImageStore.js';
+import { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
 import { CubeChromeRenderer } from './CubeChromeRenderer.js';
 import type { CubeIconModel } from '../core/CubeIconResolver.js';
 import type { ComfyGroup } from '../types/graph.js';
@@ -52,10 +54,16 @@ export class CubeChromeOverlay {
   private readonly groupTitleHook: CubeChromeGroupTitleHook;
   private readonly adapter: ChromeOverlayOptions['adapter'];
 
-  constructor({ adapter = null, actions = {}, resolveSource = null }: ChromeOverlayOptions = {}) {
+  constructor({
+    adapter = null,
+    actions = {},
+    resolveSource = null,
+    icons = new CubeIconImageStore(new MemoryBudgetRegistry()),
+  }: ChromeOverlayOptions = {}) {
     this.adapter = adapter;
     this.actions = actions || {};
     this.painter = new CubeChromePainter(
+      icons,
       () => this.requestRedraw(),
       (ctx, x, y, size, color) => this.drawCubeIcon(ctx, x, y, size, color),
     );

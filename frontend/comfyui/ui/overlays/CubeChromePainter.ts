@@ -18,6 +18,7 @@
  */
 
 import { CubeIconResolver } from '../core/CubeIconResolver.js';
+import type { CubeIconImageStore } from '../core/CubeIconImageStore.js';
 import { drawFallbackInitialsCanvas } from '../core/CubeFallbackIconRenderer.js';
 import {
   resolveCubeDisplayName,
@@ -40,6 +41,7 @@ export class CubeChromePainter {
   private readonly iconResolver: CubeIconResolver;
 
   constructor(
+    icons: CubeIconImageStore,
     requestRedraw: () => void,
     private readonly paintCubeIcon: (
       ctx: CanvasRenderingContext2D,
@@ -49,7 +51,7 @@ export class CubeChromePainter {
       color: string,
     ) => void,
   ) {
-    this.iconResolver = new CubeIconResolver({ onImageLoad: requestRedraw });
+    this.iconResolver = new CubeIconResolver({ images: icons, onImageLoad: requestRedraw });
   }
 
   drawGroupTitleIcon(

@@ -39,7 +39,7 @@ export class OverlayManager {
     graphHooks;
     nodeMovement;
     groupBounds;
-    constructor({ adapter = null, events = null, scheduler = null, storage = null, libraryCatalog = null, saveService = null, saveDraft, toast = null, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, workflowLibraryState = null, workflowLibraryActions = null, } = {}) {
+    constructor({ adapter = null, events = null, scheduler = null, storage = null, libraryCatalog = null, saveService = null, saveDraft, toast = null, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, workflowLibraryState = null, workflowLibraryActions = null, icons, } = {}) {
         this.proximity = new ProximityOverlay({
             adapter,
             events,
@@ -96,6 +96,7 @@ export class OverlayManager {
         };
         this.chrome = new CubeChromeOverlay({
             adapter,
+            ...(icons ? { icons } : {}),
             actions: chromeActions,
             resolveSource: createCubeSourceResolver(libraryCatalog, workflowLibraryState),
         });

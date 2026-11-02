@@ -17,12 +17,13 @@
 import { jest } from '@jest/globals';
 import { BrowserCanvasMediaPosters } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasMediaPosters.js';
 import { mixedMediaFixture } from '../support/CanvasMixedMediaFixture.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
 
 test('reuses revision-qualified previews while bounding retained encoded bytes and count', async () => {
   const render = jest
     .fn<() => Promise<Blob>>()
     .mockResolvedValue(new Blob(['synthetic'], { type: 'image/webp' }));
-  const posters = new BrowserCanvasMediaPosters({ render });
+  const posters = new BrowserCanvasMediaPosters({ render }, new MemoryBudgetRegistry());
   const item = mixedMediaFixture().items[1]!;
   const signal = new AbortController().signal;
   await posters.read(item, '/view', signal);
@@ -47,12 +48,15 @@ test('reuses revision-qualified previews while bounding retained encoded bytes a
 test('does not retain a capture completed after cancellation', async () => {
   const controller = new AbortController();
   let finish: (blob: Blob) => void = () => {};
-  const posters = new BrowserCanvasMediaPosters({
-    render: () =>
-      new Promise<Blob>((resolve) => {
-        finish = resolve;
-      }),
-  });
+  const posters = new BrowserCanvasMediaPosters(
+    {
+      render: () =>
+        new Promise<Blob>((resolve) => {
+          finish = resolve;
+        }),
+    },
+    new MemoryBudgetRegistry(),
+  );
   const capture = posters.read(mixedMediaFixture().items[2]!, '/view', controller.signal);
   const rejected = expect(capture).rejects.toBeDefined();
   await Promise.resolve();
@@ -71,7 +75,7 @@ test('shares the same artifact capture across batch positions and keeps remainin
       finish = resolve;
     });
   });
-  const posters = new BrowserCanvasMediaPosters({ render });
+  const posters = new BrowserCanvasMediaPosters({ render }, new MemoryBudgetRegistry());
   const item = mixedMediaFixture().items[2]!;
   const first = new AbortController();
   const a = posters.read(item, '/view', first.signal);

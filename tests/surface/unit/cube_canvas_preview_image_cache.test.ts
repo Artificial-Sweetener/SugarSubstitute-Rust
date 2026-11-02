@@ -18,6 +18,8 @@
 import { jest } from '@jest/globals';
 
 import { CubeCanvasPreviewImageCache } from '../../../frontend/comfyui/ui/surface/CubeCanvasPreviewImageCache.js';
+import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
+import { CubePreviewImageStore } from '../../../frontend/comfyui/ui/surface/CubeCanvasPreviewImageCache.js';
 
 describe('CubeCanvasPreviewImageCache', () => {
   test('reuses an already-decoded Comfy image without loading a duplicate', () => {
@@ -28,6 +30,7 @@ describe('CubeCanvasPreviewImageCache', () => {
     });
     const createImage = jest.fn<() => HTMLImageElement>();
     const cache = new CubeCanvasPreviewImageCache({
+      images: new CubePreviewImageStore(new MemoryBudgetRegistry()),
       createImage,
       findLoadedImage: (url) => (url === '/view?filename=output.png' ? loaded : null),
       invalidate: jest.fn(),
@@ -47,6 +50,7 @@ describe('CubeCanvasPreviewImageCache', () => {
     const invalidate = jest.fn();
     const logger = { debug: jest.fn(), warn: jest.fn() };
     const cache = new CubeCanvasPreviewImageCache({
+      images: new CubePreviewImageStore(new MemoryBudgetRegistry()),
       createImage,
       invalidate,
       logger,
@@ -71,6 +75,7 @@ describe('CubeCanvasPreviewImageCache', () => {
     });
     const findLoadedImage = jest.fn<(url: string) => HTMLImageElement | null>(() => loaded);
     const cache = new CubeCanvasPreviewImageCache({
+      images: new CubePreviewImageStore(new MemoryBudgetRegistry()),
       createImage: () => document.createElement('img'),
       findLoadedImage,
       invalidate: jest.fn(),

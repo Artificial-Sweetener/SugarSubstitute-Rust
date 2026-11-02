@@ -73,6 +73,7 @@ export class OverlayManager {
     boundsReconciler = null,
     workflowLibraryState = null,
     workflowLibraryActions = null,
+    icons,
   }: OverlayManagerOptions = {}) {
     this.proximity = new ProximityOverlay({
       adapter,
@@ -138,6 +139,7 @@ export class OverlayManager {
     };
     this.chrome = new CubeChromeOverlay({
       adapter,
+      ...(icons ? { icons } : {}),
       actions: chromeActions,
       resolveSource: createCubeSourceResolver(libraryCatalog, workflowLibraryState),
     });

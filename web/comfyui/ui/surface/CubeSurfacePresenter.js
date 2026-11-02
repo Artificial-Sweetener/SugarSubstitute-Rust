@@ -134,6 +134,7 @@ export class CubeSurfacePresenter {
                 titleHeight: options.titleHeight ?? 30,
                 openEditor: (node) => this.#editorEntry.open(node),
                 logger: options.logger,
+                images: options.images,
                 ...(options.previewCatalog ? { previewCatalog: options.previewCatalog } : {}),
                 ...(options.previewActions ? { previewActions: options.previewActions } : {}),
                 ...(options.chromeActions ? { chromeActions: options.chromeActions } : {}),

@@ -18,6 +18,7 @@ import { isRecord } from '../../types/common.js';
 import { CanvasImageAllowances } from '../application/CanvasImageAllowances.mjs';
 import { BrowserCanvasAttachment } from './BrowserCanvasAttachment.mjs';
 import { BrowserCanvasImageLoader } from './BrowserCanvasImageLoader.mjs';
+import { BrowserCanvasDecodedImages } from './BrowserCanvasDecodedImages.mjs';
 import { BrowserCanvasMediaPosters } from './BrowserCanvasMediaPosters.mjs';
 import { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.mjs';
 import { BrowserCanvasPosterRenderer } from './BrowserCanvasPosterRenderer.mjs';
@@ -27,31 +28,37 @@ import { ComfyCanvasModelRuntime } from './ComfyCanvasModelRuntime.mjs';
 export class ComfyBrowserCanvasHost {
     document;
     logger;
+    memory;
     #allowances = new CanvasImageAllowances();
     #sessions = new BrowserCanvasMediaSessions();
     #models;
     #posters;
+    #images;
     #window;
-    constructor(document, logger) {
+    /** Retain posters and decoded images for the page lifetime under its memory allowance. */
+    constructor(document, logger, memory) {
         this.document = document;
         this.logger = logger;
+        this.memory = memory;
         const window = document.defaultView;
         if (!window)
             throw new Error('Output canvas window is unavailable.');
         this.#window = window;
         this.#models = new ComfyCanvasModelRuntime(() => (isRecord(window) ? window.comfyAPI : null));
-        this.#posters = new BrowserCanvasMediaPosters(new BrowserCanvasPosterRenderer(document, this.#models));
+        this.#posters = new BrowserCanvasMediaPosters(new BrowserCanvasPosterRenderer(document, this.#models), memory);
+        this.#images = new BrowserCanvasDecodedImages(new BrowserCanvasImageLoader(document, {
+            create: (blob) => window.URL.createObjectURL(blob),
+            revoke: (url) => window.URL.revokeObjectURL(url),
+        }, this.#posters), memory);
     }
     /** Mount a browser presenter only after the view's preparation is still current. */
     mount(element, shared) {
-        const loader = new BrowserCanvasImageLoader(this.document, {
-            create: (blob) => this.#window.URL.createObjectURL(blob),
-            revoke: (url) => this.#window.URL.revokeObjectURL(url),
-        }, this.#posters);
+        const loader = this.#images.attachment();
         return new BrowserCanvasAttachment(element, {
             ...shared,
             allowances: this.#allowances,
             loader,
+            memory: this.memory,
             logger: this.logger,
             models: this.#models,
             mediaSessions: this.#sessions,
@@ -64,12 +71,13 @@ export class ComfyBrowserCanvasHost {
     remove(view) {
         this.#allowances.remove(view);
     }
-    /** Report cached browser posters only at an explicit diagnostics boundary. */
+    /** Report cached browser posters and parked images only at an explicit diagnostics boundary. */
     diagnostics() {
-        return this.#posters.diagnostics();
+        return { ...this.#posters.diagnostics(), ...this.#images.diagnostics() };
     }
-    /** Release browser-only session and poster resources with the owning document. */
+    /** Release browser-only session, image and poster resources with the owning document. */
     dispose() {
+        this.#images.dispose();
         this.#posters.dispose();
         this.#sessions.dispose();
     }

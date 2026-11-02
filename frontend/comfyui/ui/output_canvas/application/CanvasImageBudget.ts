@@ -17,6 +17,7 @@
 
 import type { ImageDimensions } from '../../execution/domain/WorkflowOutput.js';
 import { canvasImageBytes } from '../domain/CanvasImageResource.js';
+import type { MemoryConsumer } from '../../core/memory/MemoryBudgetRegistry.js';
 
 /** Bound default owned RGBA estimates, including outgoing and incoming visible images. */
 export const CANVAS_IMAGE_BYTE_LIMIT = 128 * 1024 * 1024;
@@ -131,6 +132,21 @@ export class CanvasImageBudget {
   /** Suspend overview allocations while explicitly approved oversized main images are inspected. */
   get thumbnailsAllowed(): boolean {
     return this.#allowance === CANVAS_IMAGE_BYTE_LIMIT;
+  }
+
+  /**
+   * Report displayed and incoming images to the page allowance.
+   *
+   * These images are on screen or about to be, so they are pinned: they count against the shared
+   * allowance and push other caches out, but are never evicted by it.
+   */
+  memoryConsumer(id: string): MemoryConsumer {
+    return {
+      id,
+      bytes: () => this.estimatedBytes,
+      oldestEvictable: () => null,
+      evict: () => 0,
+    };
   }
 
   /** Release the integration's reservations and explicit selection allowance. */

@@ -1,13 +1,24 @@
-/** Bound cached encoded posters independently of the canvas's decoded-pixel budget. */
+import { BudgetedMemoryCache } from '../../core/memory/BudgetedMemoryCache.js';
+/**
+ * Bound cached encoded posters independently of the canvas's decoded-pixel budget.
+ *
+ * Posters are encoded data, so they are the last tier the page allowance evicts; their own
+ * count and byte bounds still apply.
+ */
 export class BrowserCanvasMediaPosters {
     renderer;
-    #cache = new Map();
+    #cache;
     #pending = new Map();
-    #bytes = 0;
     #disposed = false;
-    /** Inject the actual browser/host capture boundary. */
-    constructor(renderer) {
+    /** Inject the actual browser/host capture boundary and the page memory allowance. */
+    constructor(renderer, memory) {
         this.renderer = renderer;
+        this.#cache = new BudgetedMemoryCache({
+            id: 'output-canvas-posters',
+            registry: memory,
+            maxEntries: 24,
+            maxBytes: 8 * 1024 * 1024,
+        });
     }
     /** Reuse an exact revision's poster and never cache a retired request. */
     async read(item, url, signal) {
@@ -23,11 +34,8 @@ export class BrowserCanvasMediaPosters {
             item.file,
         ]);
         const cached = this.#cache.get(key);
-        if (cached) {
-            this.#cache.delete(key);
-            this.#cache.set(key, cached);
+        if (cached)
             return cached;
-        }
         let capture = this.#pending.get(key);
         if (!capture || capture.controller.signal.aborted) {
             const controller = new AbortController();
@@ -55,7 +63,7 @@ export class BrowserCanvasMediaPosters {
     }
     /** Expose explicit encoded-preview accounting without recurring telemetry. */
     diagnostics() {
-        return { posters: this.#cache.size, posterBytes: this.#bytes };
+        return { posters: this.#cache.size, posterBytes: this.#cache.bytes() };
     }
     /** Release encoded previews with the owning canvas host. */
     dispose() {
@@ -63,8 +71,7 @@ export class BrowserCanvasMediaPosters {
         for (const capture of this.#pending.values())
             capture.controller.abort();
         this.#pending.clear();
-        this.#cache.clear();
-        this.#bytes = 0;
+        this.#cache.dispose();
     }
     /** Keep shared capture alive until its last visible/admitted consumer retires. */
     #subscribe(capture, signal) {
@@ -102,17 +109,6 @@ export class BrowserCanvasMediaPosters {
     #store(key, blob) {
         if (this.#disposed || blob.size > 1024 * 1024)
             return;
-        const previous = this.#cache.get(key);
-        if (previous)
-            this.#bytes -= previous.size;
-        this.#cache.set(key, blob);
-        this.#bytes += blob.size;
-        while (this.#cache.size > 24 || this.#bytes > 8 * 1024 * 1024) {
-            const oldest = this.#cache.entries().next().value;
-            if (!oldest)
-                break;
-            this.#cache.delete(oldest[0]);
-            this.#bytes -= oldest[1].size;
-        }
+        this.#cache.set(key, blob, { tier: 3, bytes: blob.size });
     }
 }

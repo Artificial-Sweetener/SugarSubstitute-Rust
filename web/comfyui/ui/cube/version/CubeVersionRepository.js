@@ -17,16 +17,32 @@
 import { isCurrentRevisionRef } from '../../core/CubeDefinitionKey.js';
 import { readImportPayload } from '../../import/PlacementPayload.js';
 import { isRecord } from '../../types/common.js';
+import { BudgetedMemoryCache } from '../../core/memory/BudgetedMemoryCache.js';
 import { projectCubeVersionOptions } from './CubeVersionOptionProjection.js';
-/** Retrieve validated version options and exact prepared artifacts. */
+/**
+ * Retrieve validated version options and exact prepared artifacts.
+ *
+ * Prepared artifacts are fetched data retained for the page lifetime under the shared memory
+ * allowance, so version menus stay instant across workflow switches. Library mutations retire
+ * them through {@link invalidate}.
+ */
 export class CubeVersionRepository {
     #api;
     #logger;
-    #artifacts = new Map();
-    /** Bind the typed SugarCubes API boundary. */
-    constructor(api, logger = console) {
+    #artifacts;
+    /** Bind the typed SugarCubes API boundary and the page memory allowance. */
+    constructor(api, memory, logger) {
         this.#api = api;
         this.#logger = logger;
+        this.#artifacts = new BudgetedMemoryCache({ id: 'cube-version-artifacts', registry: memory });
+    }
+    /** Retire prepared artifacts of one Cube, or of every Cube, after a library mutation. */
+    invalidate(cubeId) {
+        const normalized = cubeId?.trim();
+        if (!normalized)
+            this.#artifacts.clear();
+        else
+            this.#artifacts.deleteWhere((key) => key.startsWith(`${normalized}\u0000`));
     }
     /** List unique semantic versions whose exact artifacts pass loader validation. */
     async listOptions(cubeId, fallbackVersion) {
@@ -60,11 +76,17 @@ export class CubeVersionRepository {
         const existing = this.#artifacts.get(key);
         if (existing)
             return existing;
-        const request = this.#loadArtifact(cubeId, option).catch((error) => {
-            this.#artifacts.delete(key);
+        const request = this.#loadArtifact(cubeId, option).then((payload) => {
+            // Size the retained artifact once it exists; UTF-16 text approximates its heap cost.
+            if (this.#artifacts.has(key))
+                this.#artifacts.resize(key, JSON.stringify(payload).length * 2);
+            return payload;
+        }, (error) => {
+            if (this.#artifacts.has(key))
+                this.#artifacts.delete(key);
             throw error;
         });
-        this.#artifacts.set(key, request);
+        this.#artifacts.set(key, request, { tier: 3, bytes: 0 });
         return request;
     }
     /** Retrieve and validate one exact prepared artifact from the backend. */

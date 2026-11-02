@@ -165,7 +165,7 @@ export class ComfyCanvasHost {
                 return import('./ComfyBrowserCanvasHost.mjs').then(({ ComfyBrowserCanvasHost }) => {
                     if (!acceptsPreparation())
                         return null;
-                    const browser = (this.#browser ??= new ComfyBrowserCanvasHost(document, logger));
+                    const browser = (this.#browser ??= new ComfyBrowserCanvasHost(document, logger, options.memory));
                     return browser.mount(element, shared);
                 });
             },
@@ -204,7 +204,12 @@ export class ComfyCanvasHost {
         return {
             ...this.#primary.diagnostics(),
             inventory: this.#sources.diagnostics(),
-            ...(this.#browser?.diagnostics() ?? { posters: 0, posterBytes: 0 }),
+            ...(this.#browser?.diagnostics() ?? {
+                posters: 0,
+                posterBytes: 0,
+                parkedImages: 0,
+                parkedBytes: 0,
+            }),
         };
     }
     /** Install one source adapter, catalog coordinator, preview consumer, and primary attachment. */

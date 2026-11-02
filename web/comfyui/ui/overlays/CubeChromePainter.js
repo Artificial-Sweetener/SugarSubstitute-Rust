@@ -25,9 +25,9 @@ import { clampNumber, resolveGroupFontFamily, resolveGroupTitleColor, resolveGro
 export class CubeChromePainter {
     paintCubeIcon;
     iconResolver;
-    constructor(requestRedraw, paintCubeIcon) {
+    constructor(icons, requestRedraw, paintCubeIcon) {
         this.paintCubeIcon = paintCubeIcon;
-        this.iconResolver = new CubeIconResolver({ onImageLoad: requestRedraw });
+        this.iconResolver = new CubeIconResolver({ images: icons, onImageLoad: requestRedraw });
     }
     drawGroupTitleIcon(ctx, group, canvasInstance) {
         const metadata = getGroupSugarcubes(group);

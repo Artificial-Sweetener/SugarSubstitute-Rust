@@ -107,6 +107,20 @@ export class CanvasImageBudget {
     get thumbnailsAllowed() {
         return this.#allowance === CANVAS_IMAGE_BYTE_LIMIT;
     }
+    /**
+     * Report displayed and incoming images to the page allowance.
+     *
+     * These images are on screen or about to be, so they are pinned: they count against the shared
+     * allowance and push other caches out, but are never evicted by it.
+     */
+    memoryConsumer(id) {
+        return {
+            id,
+            bytes: () => this.estimatedBytes,
+            oldestEvictable: () => null,
+            evict: () => 0,
+        };
+    }
     /** Release the integration's reservations and explicit selection allowance. */
     dispose() {
         this.#reservations.clear();

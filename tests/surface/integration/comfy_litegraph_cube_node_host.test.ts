@@ -20,6 +20,7 @@ import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeN
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { ComfyLiteGraphCubeNodeHost } from '../../../frontend/comfyui/ui/surface/ComfyLiteGraphCubeNodeHost.js';
 import type { CubeCanvasPreviewImageProvider } from '../../../frontend/comfyui/ui/surface/CubeCanvasPreviewImageCache.js';
+import { testCanvasImages } from '../support/CanvasImageStores.js';
 
 describe('ComfyLiteGraphCubeNodeHost', () => {
   test('replaces only the generic face hooks while native shell drawing remains owned by Comfy', () => {
@@ -92,6 +93,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       setDirty: jest.fn(),
     };
     const host = new ComfyLiteGraphCubeNodeHost({
+      images: testCanvasImages(),
       canvas,
       document,
       rootGraph,
@@ -159,6 +161,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       expect(inner.bgcolor).toBeUndefined();
     });
     const host = new ComfyLiteGraphCubeNodeHost({
+      images: testCanvasImages(),
       canvas: {
         canvas: canvasElement,
         graph: rootGraph,
@@ -205,6 +208,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       setDirty: jest.fn(),
     };
     const host = new ComfyLiteGraphCubeNodeHost({
+      images: testCanvasImages(),
       canvas,
       document,
       rootGraph,
@@ -242,6 +246,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       setDirty: jest.fn(),
     };
     const host = new ComfyLiteGraphCubeNodeHost({
+      images: testCanvasImages(),
       canvas,
       document,
       rootGraph,
@@ -308,6 +313,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       setDirty: jest.fn(),
     };
     const host = new ComfyLiteGraphCubeNodeHost({
+      images: testCanvasImages(),
       canvas,
       document,
       rootGraph,
@@ -365,6 +371,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       setDirty: jest.fn(),
     };
     const host = new ComfyLiteGraphCubeNodeHost({
+      images: testCanvasImages(),
       canvas,
       document,
       rootGraph,
@@ -419,6 +426,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       setDirty: jest.fn(),
     };
     const host = new ComfyLiteGraphCubeNodeHost({
+      images: testCanvasImages(),
       canvas,
       document,
       rootGraph,
@@ -479,6 +487,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       setDirty: jest.fn(),
     };
     const host = new ComfyLiteGraphCubeNodeHost({
+      images: testCanvasImages(),
       canvas,
       document,
       rootGraph,
