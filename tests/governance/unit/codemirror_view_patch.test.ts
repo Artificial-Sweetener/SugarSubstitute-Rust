@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Verify the pinned selection and viewport patch is reproducible, fail closed and atomic. */
+/** Verify the pinned selection and viewport patch is reproducible, upgradable, fail closed and atomic. */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { codeMirrorPatchManifest } from '../../../scripts/dependencies/codemirror-view-manifest.js';
@@ -88,4 +88,58 @@ test('restores both original entrypoints after a partial second write fails', ()
   expect(() => installCodeMirrorPatch(f.root, 'apply', fs)).toThrow('Partial write');
   for (const entry of codeMirrorPatchManifest.entries)
     expect(sha256(f.fs.read(resolve(f.root, entry.path)))).toBe(entry.beforeSha256);
+});
+
+/** Rewrite the fixture's upstream entrypoints as one superseded installed generation. */
+function installSuperseded(f: ReturnType<typeof fixture>): void {
+  const [generation] = codeMirrorPatchManifest.superseded;
+  if (!generation) throw new Error('Missing superseded patch generation');
+  codeMirrorPatchManifest.entries.forEach((entry, index) => {
+    const path = resolve(f.root, entry.path);
+    let text = f.fs.read(path).toString('utf8');
+    for (const replacement of generation.replacements)
+      text = text.replace(replacement.before, replacement.after);
+    const bytes = Buffer.from(text);
+    expect(sha256(bytes)).toBe(generation.afterSha256[index]);
+    f.files.set(path, bytes);
+  });
+}
+
+test('upgrades a superseded installed generation to the current patch', () => {
+  const f = fixture();
+  installSuperseded(f);
+  expect(() => installCodeMirrorPatch(f.root, 'check', f.fs)).toThrow('CM_PATCH_MISSING');
+  expect(f.writes).toEqual([]);
+  expect(installCodeMirrorPatch(f.root, 'apply', f.fs)).toBe('applied');
+  for (const entry of codeMirrorPatchManifest.entries)
+    expect(sha256(f.fs.read(resolve(f.root, entry.path)))).toBe(entry.afterSha256);
+  expect(installCodeMirrorPatch(f.root, 'check', f.fs)).toBe('verified');
+});
+
+test('restores the superseded generation when an upgrade write fails', () => {
+  const f = fixture();
+  installSuperseded(f);
+  const installed = codeMirrorPatchManifest.entries.map((entry) =>
+    f.fs.read(resolve(f.root, entry.path)),
+  );
+  const fs: PatchFileSystem = {
+    read: f.fs.read,
+    write(path, bytes) {
+      f.fs.write(path, bytes);
+      if (f.writes.length === 2) throw new Error('Partial write');
+    },
+  };
+  expect(() => installCodeMirrorPatch(f.root, 'apply', fs)).toThrow('Partial write');
+  codeMirrorPatchManifest.entries.forEach((entry, index) =>
+    expect(f.fs.read(resolve(f.root, entry.path)).equals(installed[index]!)).toBe(true),
+  );
+});
+
+test('rejects edited bytes of a superseded generation before writing', () => {
+  const f = fixture();
+  installSuperseded(f);
+  const path = resolve(f.root, codeMirrorPatchManifest.entries[1].path);
+  f.files.set(path, Buffer.concat([f.fs.read(path), Buffer.from('\n')]));
+  expect(() => installCodeMirrorPatch(f.root, 'apply', f.fs)).toThrow('CM_ENTRY_DRIFT');
+  expect(f.writes).toEqual([]);
 });

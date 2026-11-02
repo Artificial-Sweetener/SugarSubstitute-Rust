@@ -1249,7 +1249,7 @@ license_file = "third_party/licenses/codemirror-view.LICENSE.txt"
 source = "https://code.haverbeke.berlin/codemirror/view"
 revision = "npm:@codemirror/view@6.43.13"
 version = "6.43.13"
-modifications = "SugarPrompt selection synchronization, public focus, 2048-character wrapped-line DOM overscan and scaled virtual-gap and scroll-anchor geometry patches are applied reproducibly by scripts/dependencies/install-codemirror-view.ts before bundling."
+modifications = "SugarPrompt selection synchronization, public focus, 2048-character wrapped-line DOM overscan with line gaps that never split a replaced range, and scaled virtual-gap and scroll-anchor geometry patches are applied reproducibly by scripts/dependencies/install-codemirror-view.ts before bundling."
 source_paths = ["dist/index.js", "dist/index.cjs"]
 runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
 

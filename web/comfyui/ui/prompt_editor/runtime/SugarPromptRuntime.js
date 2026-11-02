@@ -9853,6 +9853,28 @@ var ViewState = class {
           if (lineStart > from)
             to = lineStart;
         }
+        for (let moved = true; moved && from < to; ) {
+          moved = false;
+          for (let set of this.stateDeco)
+            set.between(from, from, (pointFrom, pointTo, value) => {
+              if (value.point && pointFrom <= from && pointTo > from) {
+                from = pointTo;
+                moved = true;
+              }
+            });
+        }
+        for (let moved = true; moved && from < to; ) {
+          moved = false;
+          for (let set of this.stateDeco)
+            set.between(to, to, (pointFrom, pointTo, value) => {
+              if (value.point && pointFrom < to && pointTo > to) {
+                to = pointFrom;
+                moved = true;
+              }
+            });
+        }
+        if (to - from < halfMargin)
+          return;
         let size = this.gapSize(line, from, to, structure);
         let displaySize = wrapping || size < 2e6 ? size : 2e6;
         gap = new LineGap(from, to, size, displaySize);
