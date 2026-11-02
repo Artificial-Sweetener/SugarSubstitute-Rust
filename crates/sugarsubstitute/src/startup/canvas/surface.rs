@@ -184,13 +184,17 @@ impl NativeSurface {
     }
 
     /// Fence the old attachment before accepting a different or unavailable backend grant.
+    /// Retained output documents belong to the previous backend's outputs and are retired.
     pub(super) fn backend(
         &mut self,
         backend: Option<crate::startup::CanvasBackend>,
-        session: Option<&mut Session>,
+        mut session: Option<&mut Session>,
     ) -> Result<(), Box<dyn Error>> {
         if self.backend == backend {
             return Ok(());
+        }
+        if let Some(session) = session.as_deref_mut() {
+            session.forget_retained();
         }
         let changed_attachment = self
             .binding

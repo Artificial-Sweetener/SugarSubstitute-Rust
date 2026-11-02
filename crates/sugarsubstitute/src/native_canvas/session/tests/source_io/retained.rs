@@ -15,6 +15,8 @@ mod camera;
 mod composition;
 mod frames;
 #[cfg(feature = "native-composition")]
+mod reselection;
+#[cfg(feature = "native-composition")]
 mod transactions;
 
 const FIXTURE_TIME: u64 = 4_000_000_000;
@@ -84,8 +86,14 @@ impl Fixture {
 
     /// Attach an external CPU surface before the same startup begins when requested.
     fn start(attached: bool) -> Result<Self, Box<dyn Error>> {
+        Self::funded(attached, RETAINED_DOCUMENT_BYTES)
+    }
+
+    /// Start like `start`, funding `retained_document_bytes` for retained output documents.
+    fn funded(attached: bool, retained_document_bytes: u64) -> Result<Self, Box<dyn Error>> {
         let (mut session, clock, directory) = session()?;
         session.config.initial = InitialSource::AwaitHost;
+        session.config.retained_document_bytes = retained_document_bytes;
         if attached {
             session.attach_cpu_surface()?;
         }

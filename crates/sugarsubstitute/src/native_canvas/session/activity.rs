@@ -67,6 +67,8 @@ impl Session {
         let restoring = self.advance_document_transaction()? || self.preview_restoring();
         #[cfg(not(feature = "native-composition"))]
         let restoring = false;
+        #[cfg(feature = "native-composition")]
+        self.advance_retained_retirement()?;
         self.submit_retirement()?;
         if restoring
             || self.closing
@@ -97,6 +99,10 @@ impl Session {
             if self.failed.is_none() {
                 self.initialize_gpu()?;
             }
+            return Ok(());
+        }
+        #[cfg(feature = "native-composition")]
+        if self.advance_retained_restore()? {
             return Ok(());
         }
         if self.pending_open.is_some() {
@@ -229,9 +235,14 @@ impl Session {
             || self.composition_shown.is_some();
         #[cfg(not(all(windows, feature = "native-composition")))]
         let composition_retained = false;
+        #[cfg(feature = "native-composition")]
+        let documents_retained = self.retained.has_resources();
+        #[cfg(not(feature = "native-composition"))]
+        let documents_retained = false;
         if self.pending_open.is_some()
             || self.resources.is_some()
             || self.document.has_resources()
+            || documents_retained
             || self.gpu_presentation.is_some()
             || self.pending_gpu_presentation.is_some()
             || graphics_retained
@@ -244,6 +255,8 @@ impl Session {
                 _document: Some(document),
                 #[cfg(feature = "native-composition")]
                 _retained_document: self.take_retained_document(),
+                #[cfg(feature = "native-composition")]
+                _retained: self.retained.take_all(),
                 _resources: self.resources.take(),
                 #[cfg(all(windows, feature = "native-composition"))]
                 _host_graphics: self.host_graphics.take(),

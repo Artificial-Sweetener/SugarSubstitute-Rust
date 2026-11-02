@@ -217,7 +217,7 @@ namespace = "comfy-outputs-v1"
 storage_schema = 1
 compatibility_epoch = 1
 compatibility_inputs = ["backend_process_identity", "encoded_view_target", "png_or_jpeg_original"]
-freshness = "Each selection downloads a fresh bounded PNG or JPEG, as the view target's filename extension names, from the independently qualified current Comfy peer. The entry file name follows that format, so the target-keyed identity never changes format. The canvas image owner validates and hashes the retained original during import."
+freshness = "Each acquired selection downloads a fresh bounded PNG or JPEG, as the view target's filename extension names, from the independently qualified current Comfy peer. Reselecting an output whose canvas document is still retained for the same backend reuses that document and downloads nothing. The entry file name follows that format, so the target-keyed identity never changes format. The canvas image owner validates and hashes the retained original during import."
 retention = "The shared runtime cache admits up to 32 GiB of encoded Comfy output copies, with seven-day idle retention. A retained reader pins its generation during canvas import and reconstruction."
 recovery = "Interrupted or rejected downloads remain unpublished. A fresh generation preserves earlier pinned entries; shared maintenance removes only owned disposable entries and preserves unknown content."
 

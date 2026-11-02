@@ -70,6 +70,7 @@ impl NativeSurface {
         self.binding = None;
         session.revoke_acquirer()?;
         session.revoke_presentation()?;
+        session.forget_retained();
         self.reply(identity, &request, CanvasSurfaceReplyStatus::Applied, claim)
     }
 
@@ -144,6 +145,7 @@ impl NativeSurface {
             }
             session.revoke_acquirer()?;
             session.revoke_presentation()?;
+            session.forget_retained();
         }
         self.binding = None;
         self.retained = None;

@@ -22,7 +22,8 @@ pub(super) struct Options {
 }
 impl Options {
     /// Transfer runtime inputs after the standalone host has retained its proof/window options.
-    /// Fund storage for canvases up to `maximum_extent` physical pixels.
+    /// Fund storage for canvases up to `maximum_extent` physical pixels. Standalone selections
+    /// are local files without host output identities, so the viewer retains no documents.
     pub(super) fn into_config(self, maximum_extent: Extent) -> Config {
         let Self {
             gpu,
@@ -44,6 +45,7 @@ impl Options {
             locale,
             extent,
             maximum_extent,
+            retained_document_bytes: 0,
         }
     }
 

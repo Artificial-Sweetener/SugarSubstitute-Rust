@@ -12,7 +12,7 @@ fn waiting_canvas() -> Result<EmbeddedCanvas, Box<dyn Error>> {
         Arc::new(ClockValue(AtomicU64::new(0))),
         JobSequence::new(),
         ScopeSpec { id: ScopeId::new(1)?, deadline: None },
-        Extent::new(64, 64)?,
+        funding()?,
     );
     canvas.surface = crate::startup::canvas::surface::NativeSurface::new();
     Ok(canvas)

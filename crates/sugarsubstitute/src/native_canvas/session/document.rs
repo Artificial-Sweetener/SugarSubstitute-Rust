@@ -39,6 +39,9 @@ pub(super) struct DocumentState {
     pub(super) rebuilt: bool,
     /// CPU-prepared previews keep CPU backings and display even in a GPU session.
     pub(super) cpu_only: bool,
+    /// Host identity of the output this document shows, when it may be retained for reselection.
+    #[cfg(feature = "native-composition")]
+    pub(super) retention: Option<retention::RetentionKey>,
 }
 
 impl DocumentState {
@@ -72,6 +75,8 @@ impl DocumentState {
             navigation_presented: None,
             rebuilt: false,
             cpu_only: false,
+            #[cfg(feature = "native-composition")]
+            retention: None,
         }
     }
 

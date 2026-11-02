@@ -36,4 +36,7 @@ pub(crate) struct Config {
     /// Largest physical canvas extent whose storage this session funds; normally the box
     /// enclosing every attached display.
     pub(crate) maximum_extent: Extent,
+    /// Storage this session funds for recently shown output documents kept for instant
+    /// reselection, in bytes; zero retains none.
+    pub(crate) retained_document_bytes: u64,
 }

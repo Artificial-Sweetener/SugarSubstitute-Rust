@@ -140,9 +140,12 @@ impl Lifetime for Session {
         if self.runtime.is_some() || self.starting_owner.is_some() || self.closing {
             return Err("Canvas execution cannot be started".into());
         }
-        let capacity =
-            budget::reservation_bytes(self.config.maximum_extent, self.config.gpu.is_some())
-                .saturating_add(STANDALONE_WORKING_BYTES);
+        let capacity = budget::reservation_bytes(
+            self.config.maximum_extent,
+            self.config.gpu.is_some(),
+            self.config.retained_document_bytes,
+        )
+        .saturating_add(STANDALONE_WORKING_BYTES);
         self.starting_owner = Some(ExecutionOwner::with_memory_capacity(
             self.clock.clone(),
             wake,

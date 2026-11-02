@@ -197,9 +197,10 @@ impl<B: StartupBackend> StartupHost<B> {
             return Err("Application canvas cache anchor must be absolute".into());
         }
         let maximum = crate::native_canvas::budget::largest_canvas_extent()?;
+        let retained = crate::native_canvas::budget::RETAINED_DOCUMENT_BYTES;
         // The renderer policy is chosen when the canvas starts, so fund a GPU session.
         self.execution.reserve_canvas_capacity(crate::native_canvas::budget::reservation_bytes(
-            maximum, true,
+            maximum, true, retained,
         ))?;
         self.canvas = Some(canvas::EmbeddedCanvas::new(
             anchor,
@@ -207,7 +208,7 @@ impl<B: StartupBackend> StartupHost<B> {
             self.clock.clone(),
             self.jobs.clone(),
             scope,
-            maximum,
+            canvas::CanvasFunding { maximum_extent: maximum, retained_document_bytes: retained },
         ));
         Ok(())
     }

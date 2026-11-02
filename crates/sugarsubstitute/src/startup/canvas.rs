@@ -31,6 +31,15 @@ pub(super) use surface::RoutedInput;
 #[cfg(test)]
 mod tests;
 
+/// Canvas storage the application's execution capacity funds.
+#[derive(Clone, Copy)]
+pub(super) struct CanvasFunding {
+    /// Largest canvas extent, in physical pixels.
+    pub(super) maximum_extent: Extent,
+    /// Storage for recently shown output documents kept for instant reselection, in bytes.
+    pub(super) retained_document_bytes: u64,
+}
+
 /// One application-owned, initially empty canvas; the desktop owns its eventual native surface.
 pub(super) struct EmbeddedCanvas {
     anchor: PathBuf,
@@ -38,8 +47,7 @@ pub(super) struct EmbeddedCanvas {
     clock: Arc<dyn Clock>,
     jobs: JobSequence,
     scope: ScopeSpec,
-    /// Largest canvas extent the application's execution capacity funds.
-    maximum_extent: Extent,
+    funding: CanvasFunding,
     session: Option<Session>,
     cutoff: Option<Moment>,
     reported_ready: bool,
@@ -59,7 +67,7 @@ impl EmbeddedCanvas {
         clock: Arc<dyn Clock>,
         jobs: JobSequence,
         scope: ScopeSpec,
-        maximum_extent: Extent,
+        funding: CanvasFunding,
     ) -> Self {
         #[cfg(all(feature = "native-composition", test))]
         let surface = surface::NativeSurface::fixture(anchor.join("canvas-qualification-output"));
@@ -71,7 +79,7 @@ impl EmbeddedCanvas {
             clock,
             jobs,
             scope,
-            maximum_extent,
+            funding,
             session: None,
             cutoff: None,
             reported_ready: false,
@@ -153,7 +161,8 @@ impl EmbeddedCanvas {
             initial: InitialSource::AwaitHost,
             locale: locale.to_owned(),
             extent: Extent::new(1, 1)?,
-            maximum_extent: self.maximum_extent,
+            maximum_extent: self.funding.maximum_extent,
+            retained_document_bytes: self.funding.retained_document_bytes,
         };
         let mut session =
             Session::new(config, self.health.clone(), self.clock.clone(), self.jobs.clone())?;

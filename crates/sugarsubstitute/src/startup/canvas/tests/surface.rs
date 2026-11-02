@@ -37,6 +37,7 @@ mod reattached_overview;
 mod reattachment;
 mod rebuild;
 mod replacement;
+mod reselection;
 mod viewport;
 
 struct ClockValue(AtomicU64);
@@ -207,7 +208,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         clock.clone(),
         JobSequence::new(),
         ScopeSpec { id: ScopeId::new(1)?, deadline: None },
-        Extent::new(64, 64)?,
+        funding()?,
     );
     canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;
     while !canvas.reported_ready {

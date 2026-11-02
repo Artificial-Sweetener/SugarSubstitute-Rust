@@ -36,6 +36,10 @@ mod native;
 mod preparation;
 mod presentation;
 mod proof;
+#[cfg(feature = "native-composition")]
+mod retention;
+#[cfg(feature = "native-composition")]
+pub(crate) use retention::RetentionKey;
 pub(crate) mod runtime;
 mod source;
 mod startup;
@@ -76,6 +80,8 @@ struct Open {
     intent: u64,
     reuse: CacheReuse,
     expected: Option<AssetId>,
+    #[cfg(feature = "native-composition")]
+    retention: Option<RetentionKey>,
 }
 
 /// Explicit originals or an inert host adapter that acquires them on a storage worker.
@@ -117,6 +123,8 @@ struct Retired {
     _retained_document: Option<document_transaction::RetainedDocument>,
     #[cfg(feature = "native-composition")]
     _preview: Option<document_transaction::PreviewRetired>,
+    #[cfg(feature = "native-composition")]
+    _retained: Option<retention::Retiring>,
     _packet: Option<Packet>,
     _resources: Option<Resources>,
     _front: Option<Arc<CpuSurface>>,
@@ -147,6 +155,8 @@ struct Loading {
     job: OwnedJob<Scene, WorkError>,
     #[cfg(feature = "native-composition")]
     acquirer: Option<Arc<dyn acquisition::SourceAcquirer>>,
+    #[cfg(feature = "native-composition")]
+    retention: Option<RetentionKey>,
 }
 #[derive(Clone, Copy)]
 struct Presented {
@@ -234,6 +244,12 @@ pub(crate) struct Session {
     document_suspended: bool,
     #[cfg(feature = "native-composition")]
     drag_out: drag_out::DragOut,
+    /// Recently shown output documents kept for instant reselection.
+    #[cfg(feature = "native-composition")]
+    retained: retention::RetainedDocuments,
+    /// Retained output and the selection it becomes once current document work has settled.
+    #[cfg(feature = "native-composition")]
+    pending_restore: Option<(RetentionKey, u64)>,
     rendering: Option<Rendering>,
     displaying: Option<display::Displaying>,
     pending_retirement: Option<Retired>,
@@ -377,6 +393,10 @@ impl Session {
             document_suspended: false,
             #[cfg(feature = "native-composition")]
             drag_out: drag_out::DragOut::default(),
+            #[cfg(feature = "native-composition")]
+            retained: retention::RetainedDocuments::default(),
+            #[cfg(feature = "native-composition")]
+            pending_restore: None,
             rendering: None,
             displaying: None,
             pending_retirement: None,

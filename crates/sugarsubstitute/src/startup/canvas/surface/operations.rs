@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Apply admitted attachment geometry, final selection and commit operations.
 use super::*;
+use crate::native_canvas::session::RetentionKey;
 #[cfg(test)]
 use crate::native_canvas::session::SelectedOriginals;
 use sugarsubstitute_canvas::NavigationCommand;
@@ -120,58 +121,48 @@ impl NativeSurface {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
                 };
                 self.fence_previews(session)?;
-                #[cfg(test)]
-                if let Some(output) = &self.fixture_output {
-                    let (Some(primary), Ok(compared)) = (
-                        fixture_file(output, &file),
-                        compared.map(|file| fixture_file(output, file).ok_or(())).transpose(),
-                    ) else {
-                        return self.reply(
-                            identity,
-                            &request,
-                            CanvasSurfaceReplyStatus::Error,
-                            claim,
-                        );
-                    };
-                    let gated = self
-                        .fixture_acquirers
-                        .iter()
-                        .position(|(name, _)| compared.is_none() && name == file.filename());
-                    let offered = if let Some(index) = gated {
-                        let mut source = Some(self.fixture_acquirers.swap_remove(index).1);
-                        session.offer_acquirer(&mut source, CacheReuse::Compatible)?
-                    } else {
-                        let mut originals = Some(SelectedOriginals {
-                            primary: ImageSource::file(primary),
-                            compared: compared.map(ImageSource::file),
-                            overview: None,
-                        });
-                        session.offer_originals(&mut originals, CacheReuse::Compatible, None)?
-                    };
-                    if !offered {
-                        return self.reply(
-                            identity,
-                            &request,
-                            CanvasSurfaceReplyStatus::Unavailable,
-                            claim,
+                // Only a single output is retained; comparisons are always acquired again.
+                let retention = compared.is_none().then(|| self.retention_key(identity, &target));
+                match retention.flatten() {
+                    Some(key) if session.reselect_retained(&key)? => {
+                        tracing::debug!(
+                            operation = "canvas_selection_retained",
+                            request_id = request.request_id(),
+                            source_intent = session.source_intent_revision(),
+                            "Reselected a retained canvas output without acquiring it"
                         );
                     }
-                } else if !self.offer_comfy(identity, target, compared_target, session)? {
-                    return self.reply(
-                        identity,
-                        &request,
-                        CanvasSurfaceReplyStatus::Unavailable,
-                        claim,
-                    );
-                }
-                #[cfg(not(test))]
-                if !self.offer_comfy(identity, target, compared_target, session)? {
-                    return self.reply(
-                        identity,
-                        &request,
-                        CanvasSurfaceReplyStatus::Unavailable,
-                        claim,
-                    );
+                    retention => {
+                        match self.offer_selection(
+                            identity,
+                            &file,
+                            compared,
+                            target,
+                            compared_target,
+                            session,
+                        )? {
+                            Some(true) => {}
+                            Some(false) => {
+                                return self.reply(
+                                    identity,
+                                    &request,
+                                    CanvasSurfaceReplyStatus::Unavailable,
+                                    claim,
+                                );
+                            }
+                            None => {
+                                return self.reply(
+                                    identity,
+                                    &request,
+                                    CanvasSurfaceReplyStatus::Error,
+                                    claim,
+                                );
+                            }
+                        }
+                        if let Some(key) = retention {
+                            session.retain_selection(key);
+                        }
+                    }
                 }
                 session.frame_selection(inspection.map(|inspection| NavigationCommand::Frame {
                     center: inspection.center(),
@@ -203,6 +194,68 @@ impl NativeSurface {
 }
 
 impl NativeSurface {
+    /// Offer the selected output, with any comparison output, as the session's next source.
+    /// Returns `Some(false)` while the session cannot accept a source and `None` when a
+    /// qualification fixture reference does not resolve inside its output folder.
+    fn offer_selection(
+        &mut self,
+        identity: MainIdentity,
+        file: &CanvasFileReference,
+        compared: Option<&CanvasFileReference>,
+        target: ComfyViewTarget,
+        compared_target: Option<ComfyViewTarget>,
+        session: &mut Session,
+    ) -> Result<Option<bool>, Box<dyn Error>> {
+        #[cfg(test)]
+        if let Some(output) = &self.fixture_output {
+            let (Some(primary), Ok(compared)) = (
+                fixture_file(output, file),
+                compared.map(|file| fixture_file(output, file).ok_or(())).transpose(),
+            ) else {
+                return Ok(None);
+            };
+            let gated = self
+                .fixture_acquirers
+                .iter()
+                .position(|(name, _)| compared.is_none() && name == file.filename());
+            let offered = if let Some(index) = gated {
+                let mut source = Some(self.fixture_acquirers.swap_remove(index).1);
+                session.offer_acquirer(&mut source, CacheReuse::Compatible)?
+            } else {
+                let mut originals = Some(SelectedOriginals {
+                    primary: ImageSource::file(primary),
+                    compared: compared.map(ImageSource::file),
+                    overview: None,
+                });
+                session.offer_originals(&mut originals, CacheReuse::Compatible, None)?
+            };
+            return Ok(Some(offered));
+        }
+        #[cfg(not(test))]
+        let _ = (file, compared);
+        self.offer_comfy(identity, target, compared_target, session).map(Some)
+    }
+
+    /// Identify a single output for retention by the backend that serves it and its output
+    /// reference; qualification fixtures are identified by their reference alone.
+    fn retention_key(
+        &self,
+        identity: MainIdentity,
+        target: &ComfyViewTarget,
+    ) -> Option<RetentionKey> {
+        #[cfg(test)]
+        if self.fixture_output.is_some() {
+            return Some(RetentionKey::new(&format!("fixture/{}", target.as_str())));
+        }
+        let origin = self.backend.filter(|backend| backend.identity == identity)?.origin;
+        Some(RetentionKey::new(&format!(
+            "{:?}:{}/{}",
+            origin.host(),
+            origin.port(),
+            target.as_str()
+        )))
+    }
+
     /// Acquire the next selection of the fixture file `filename` through `source`, so a test
     /// controls when its worker-side acquisition returns.
     #[cfg(test)]

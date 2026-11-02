@@ -140,6 +140,7 @@ impl Session {
             || self.preview.retired.is_some()
             || self.pending_open.is_some()
             || self.loading.is_some()
+            || self.pending_restore.is_some()
         {
             return Ok(PreviewOffer::Busy);
         }

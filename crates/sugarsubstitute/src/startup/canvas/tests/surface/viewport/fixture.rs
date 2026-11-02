@@ -100,7 +100,7 @@ impl Fixture {
             clock.clone(),
             JobSequence::new(),
             ScopeSpec { id: ScopeId::new(1)?, deadline: None },
-            Extent::new(64, 64)?,
+            funding()?,
         );
         if backend.is_some() {
             canvas.surface = crate::startup::canvas::surface::NativeSurface::new();

@@ -198,7 +198,7 @@ fn install_storage(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
     let spec = fixture.session.spec(
         Operation::Infrastructure,
         JobClass::InfrastructureOrdinary,
-        budget::reservation_bytes(display, false),
+        budget::reservation_bytes(display, false, fixture.session.config.retained_document_bytes),
         Duration::from_secs(30),
         None,
     )?;

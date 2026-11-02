@@ -14,6 +14,14 @@ use sugarsubstitute_image_ops::{Extent, ImageError, Pixel, TILE_EDGE};
 
 /// Cached graph tiles each canvas renderer may retain.
 pub(super) const RENDERER_TILES: usize = 512;
+/// Recently shown output documents an embedded canvas keeps for instant reselection.
+#[cfg(feature = "native-composition")]
+pub(super) const RETAINED_DOCUMENTS: usize = 16;
+/// Fixed storage an embedded canvas funds for its retained output documents' backings,
+/// independent of the display extent. Retention evicts the least recently shown document
+/// before its ledger exceeds this allowance.
+#[cfg(any(all(windows, feature = "windows-native-host"), test))]
+pub(crate) const RETAINED_DOCUMENT_BYTES: u64 = 512 * 1024 * 1024;
 /// Document, history, sampling tables and engine metadata independent of canvas size.
 const FIXED_BYTES: u64 = 16 * 1024 * 1024;
 /// Margin-extended canonical surfaces alive together: three document tiers, a replacement in
@@ -59,9 +67,12 @@ pub(crate) fn largest_canvas_extent() -> Result<Extent, ImageError> {
     Extent::new(clamp(width), clamp(height))
 }
 
-/// Whole canvas reservation for a session whose canvas may reach `maximum` physical pixels.
-pub(crate) fn reservation_bytes(maximum: Extent, gpu: bool) -> u64 {
-    retained_bytes(maximum, gpu).saturating_add(presentation_bytes(maximum, gpu))
+/// Whole canvas reservation for a session whose canvas may reach `maximum` physical pixels and
+/// which retains up to `retained_documents` bytes of recently shown document backings.
+pub(crate) fn reservation_bytes(maximum: Extent, gpu: bool, retained_documents: u64) -> u64 {
+    retained_bytes(maximum, gpu)
+        .saturating_add(retained_documents)
+        .saturating_add(presentation_bytes(maximum, gpu))
 }
 
 /// Worker-prepared storage: one renderer's tile cache plus every coexisting canonical surface
@@ -127,9 +138,9 @@ mod tests {
     #[test]
     fn retained_storage_keeps_the_small_canvas_floor_and_grows_with_the_display()
     -> Result<(), Box<dyn std::error::Error>> {
-        // A tiny canvas fits its whole reservation within the original 160 MiB CPU budget.
+        // A tiny canvas fits its working reservation within the original 160 MiB CPU budget.
         let tiny = retained_bytes(Extent::new(1, 1)?, false);
-        assert!(reservation_bytes(Extent::new(1, 1)?, false) <= 160 * MIB);
+        assert!(reservation_bytes(Extent::new(1, 1)?, false, 0) <= 160 * MIB);
         let ultrawide = Extent::new(3440, 1440)?;
         let cpu = retained_bytes(ultrawide, false);
         // Growth is exactly the seven margin-extended canonical surfaces and six display buffers.
@@ -142,12 +153,30 @@ mod tests {
     }
 
     #[test]
+    fn retained_documents_add_their_fixed_allowance_at_every_extent()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for extent in [Extent::new(1, 1)?, Extent::new(3840, 2160)?] {
+            for gpu in [false, true] {
+                assert_eq!(
+                    reservation_bytes(extent, gpu, RETAINED_DOCUMENT_BYTES)
+                        - reservation_bytes(extent, gpu, 0),
+                    512 * MIB
+                );
+            }
+        }
+        // The allowance holds a dozen full-quality 4K detail backings with their fallbacks.
+        let detail = margin_extended(Extent::new(3840, 2160)?) * 4;
+        assert!(RETAINED_DOCUMENT_BYTES >= 12 * (detail + 1024 * 1024 * 4));
+        Ok(())
+    }
+
+    #[test]
     fn reservations_saturate_instead_of_overflowing() -> Result<(), Box<dyn std::error::Error>> {
         let largest = i32::MAX as u32;
-        assert_eq!(reservation_bytes(Extent::new(largest, largest)?, true), u64::MAX);
-        let small = reservation_bytes(Extent::new(1280, 800)?, false);
+        assert_eq!(reservation_bytes(Extent::new(largest, largest)?, true, 0), u64::MAX);
+        let small = reservation_bytes(Extent::new(1280, 800)?, false, RETAINED_DOCUMENT_BYTES);
         let fallback = Extent::new(FALLBACK_EXTENT[0], FALLBACK_EXTENT[1])?;
-        assert!(small < reservation_bytes(fallback, false));
+        assert!(small < reservation_bytes(fallback, false, RETAINED_DOCUMENT_BYTES));
         Ok(())
     }
 }

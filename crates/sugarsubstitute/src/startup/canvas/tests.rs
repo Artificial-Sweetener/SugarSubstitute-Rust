@@ -70,6 +70,14 @@ impl Wake {
     }
 }
 
+/// Fund a small canvas whose retained documents fit the default test execution capacity.
+fn funding() -> Result<CanvasFunding, Box<dyn Error>> {
+    Ok(CanvasFunding {
+        maximum_extent: Extent::new(64, 64)?,
+        retained_document_bytes: 16 * 1024 * 1024,
+    })
+}
+
 fn spec(id: JobId, bytes: u64) -> JobSpec {
     JobSpec {
         id,
@@ -108,7 +116,7 @@ fn embedded_canvas_shares_capacity_and_retires_without_stopping_startup_scope()
         clock,
         jobs.clone(),
         ScopeSpec { id: ScopeId::new(2)?, deadline: None },
-        Extent::new(64, 64)?,
+        funding()?,
     );
     canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;
     loop {
@@ -177,7 +185,7 @@ fn closing_before_start_never_admits_a_new_canvas_scope() -> Result<(), Box<dyn 
         clock,
         JobSequence::new(),
         ScopeSpec { id: ScopeId::new(1)?, deadline: None },
-        Extent::new(64, 64)?,
+        funding()?,
     );
     canvas.close_until(Moment::from_nanos(10))?;
     assert!(

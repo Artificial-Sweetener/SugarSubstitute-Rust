@@ -13,6 +13,9 @@ use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
 use sugarsubstitute_desktop::canvas::{Input, Lifetime};
 use sugarsubstitute_image_ops::Extent;
 
+/// Retained-document allowance that keeps the default test execution capacity's headroom for
+/// fixtures that saturate it; retention tests fund their own allowance.
+const RETAINED_DOCUMENT_BYTES: u64 = 512 * 1024;
 struct TestClock(AtomicU64);
 impl Clock for TestClock {
     fn now(&self) -> Moment {
@@ -38,6 +41,7 @@ fn session_with_sequence(
         locale: "en".into(),
         extent: Extent::new(320, 240)?,
         maximum_extent: Extent::new(64, 64)?,
+        retained_document_bytes: RETAINED_DOCUMENT_BYTES,
     };
     let clock = Arc::new(TestClock(AtomicU64::new(0)));
     let mut session = Session::new(config, DiagnosticHealth::fixture(), clock.clone(), sequence)?;

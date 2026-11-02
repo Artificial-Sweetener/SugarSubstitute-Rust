@@ -48,7 +48,12 @@ impl Session {
         Ok(())
     }
     /// A cache rebuild changes source custody while preserving the document's authored history.
+    /// A new output parks a retainable outgoing document for reselection and starts a fresh one.
     pub(super) fn consume_load(&mut self) -> Result<(), Box<dyn Error>> {
+        #[cfg(feature = "native-composition")]
+        if self.parking_awaits_document_work()? {
+            return Ok(());
+        }
         let Some(completion) =
             self.loading.as_mut().and_then(|loading| loading.job.try_take_completion())
         else {
@@ -94,6 +99,8 @@ impl Session {
                     current.source_revision = scene.source_revision;
                     self.retire(Retired { _scene: Some(scene), ..Default::default() })?;
                 } else {
+                    #[cfg(feature = "native-composition")]
+                    self.adopt_document_for(loading.retention)?;
                     let now = self.navigation_time();
                     self.document.tools.set_content(
                         Some(scene.document.snapshot().extent()),

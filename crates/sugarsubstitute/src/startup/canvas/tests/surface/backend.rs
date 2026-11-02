@@ -79,7 +79,7 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
         clock,
         JobSequence::new(),
         ScopeSpec { id: ScopeId::new(1)?, deadline: None },
-        Extent::new(64, 64)?,
+        funding()?,
     );
     canvas.surface = crate::startup::canvas::surface::NativeSurface::new();
     canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;

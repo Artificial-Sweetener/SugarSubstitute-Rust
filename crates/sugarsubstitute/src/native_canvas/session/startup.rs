@@ -13,7 +13,11 @@ impl Session {
         let spec = self.spec(
             Operation::Infrastructure,
             JobClass::InfrastructureLifecycle,
-            budget::reservation_bytes(self.config.maximum_extent, gpu),
+            budget::reservation_bytes(
+                self.config.maximum_extent,
+                gpu,
+                self.config.retained_document_bytes,
+            ),
             Duration::from_secs(30),
             None,
         )?;
@@ -46,6 +50,8 @@ impl Session {
             OpenSource::Image(_) => None,
             OpenSource::Acquired(owner) => Some(owner.clone()),
         };
+        #[cfg(feature = "native-composition")]
+        let retention = pending.retention.clone();
         #[cfg(feature = "native-composition")]
         let extra = acquirer.as_ref().map_or(0, |owner| owner.reservation_bytes());
         #[cfg(not(feature = "native-composition"))]
@@ -83,6 +89,8 @@ impl Session {
                     job,
                     #[cfg(feature = "native-composition")]
                     acquirer,
+                    #[cfg(feature = "native-composition")]
+                    retention,
                 });
             }
             Err(OwnedInputError::Admission(cause)) if activity::retryable(&cause) => {}

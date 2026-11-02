@@ -84,10 +84,11 @@ impl Session {
             .map(|(_, rebuilt)| rebuilt)
     }
 
-    /// Report whether the latest offered source is still being acquired or decoded.
+    /// Report whether the latest offered source is still being acquired or decoded, or a
+    /// reselected retained document still waits for earlier document work to settle.
     #[cfg(feature = "native-composition")]
     pub(crate) fn source_loading(&self) -> bool {
-        self.pending_open.is_some() || self.loading.is_some()
+        self.pending_open.is_some() || self.loading.is_some() || self.pending_restore.is_some()
     }
 
     /// Fence the host's current acquisition before its backend or attachment is replaced.
@@ -139,6 +140,7 @@ impl Session {
         self.source_sequence = next;
         self.selection = next;
         self.pending_first_image = None;
+        self.pending_restore = None;
         Ok(())
     }
 
@@ -172,6 +174,31 @@ impl Session {
         if source.is_none() {
             return Err("Canvas source is unavailable".into());
         }
+        let Some(intent) = self.supersede_pending_source()? else {
+            return Ok(false);
+        };
+        let source = source.take().ok_or("Canvas source is unavailable")?;
+        self.pending_open = Some(Open {
+            source,
+            intent,
+            reuse,
+            expected,
+            #[cfg(feature = "native-composition")]
+            retention: None,
+        });
+        self.title = self.labels.opening.to_owned();
+        Ok(true)
+    }
+
+    /// Start the next source selection and fence every source-dependent job of the previous one.
+    /// An unadmitted original retires on the existing storage worker; running loads, frames and
+    /// presentations are cancelled and remain observed until their terminal outcomes.
+    /// Returns the new selection, or `None` without any change while the retirement slot that
+    /// must receive a superseded original is occupied.
+    ///
+    /// # Errors
+    /// Rejects exhausted source identities, deadline arithmetic and inconsistent CPU custody.
+    pub(super) fn supersede_pending_source(&mut self) -> Result<Option<u64>, Box<dyn Error>> {
         let next = self.source_sequence.checked_add(1).ok_or("Canvas source revision exhausted")?;
         let retiring = self
             .pending_open
@@ -179,14 +206,13 @@ impl Session {
             .is_some_and(|pending| pending.source.requires_worker_retirement());
         let cutoff = if retiring {
             if self.pending_retirement.is_some() {
-                return Ok(false);
+                return Ok(None);
             }
             Some(self.retirement_cutoff()?)
         } else {
             None
         };
         self.abandon_cpu_frame(self.navigation_time())?;
-        let source = source.take().ok_or("Canvas source is unavailable")?;
         self.input_observed = self.navigation_time();
         self.selection = next;
         self.source_sequence = next;
@@ -197,11 +223,14 @@ impl Session {
         if let Some(Open { source: OpenSource::Acquired(owner), .. }) = &self.pending_open {
             owner.cancel();
         }
-        let previous =
-            self.pending_open.replace(Open { source, intent: self.selection, reuse, expected });
+        let previous = self.pending_open.take();
         if let Some(cutoff) = cutoff {
             self.pending_retirement = Some(Retired { _open: previous, ..Default::default() });
             self.retirement_deadline = Some(cutoff);
+        }
+        #[cfg(feature = "native-composition")]
+        {
+            self.pending_restore = None;
         }
         if let Some(loading) = &self.loading {
             #[cfg(feature = "native-composition")]
@@ -217,7 +246,6 @@ impl Session {
             presenting.job.cancel();
         }
         self.failed = None;
-        self.title = self.labels.opening.to_owned();
-        Ok(true)
+        Ok(Some(next))
     }
 }
