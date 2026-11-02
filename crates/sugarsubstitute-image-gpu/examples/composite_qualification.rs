@@ -77,6 +77,7 @@ struct Selected {
 struct Report {
     adapter: AdapterDescriptor,
     qualification: CompositeQualification,
+    video_memory: Option<sugarsubstitute_image_gpu::VideoMemoryBudget>,
 }
 
 fn main() -> Result {
@@ -142,8 +143,11 @@ fn main() -> Result {
         drop(qualification);
         match outcome {
             JobOutcome::Success(report) => {
+                let (budget, usage) = report
+                    .video_memory
+                    .map_or((0, 0), |memory| (memory.budget_bytes, memory.usage_bytes));
                 println!(
-                    "SUCCESS: adapter={} key={} pixels={} pixel_hash=fnv1a64:{:016x}",
+                    "SUCCESS: adapter={} key={} pixels={} pixel_hash=fnv1a64:{:016x} video_budget_bytes={budget} video_usage_bytes={usage}",
                     report.adapter.name,
                     report.adapter.key(),
                     report.qualification.pixels,
@@ -242,7 +246,8 @@ fn run(device: Arc<GpuDevice>, context: &JobContext) -> Result<Report> {
     )?;
     let fixture = CompositeFixture::new(primary_source, fallback_source, matte)?;
     let qualification = qualify_composite(fixture, context)?;
-    Ok(Report { adapter: device.descriptor().clone(), qualification })
+    let video_memory = device.video_memory_budget();
+    Ok(Report { adapter: device.descriptor().clone(), qualification, video_memory })
 }
 
 struct ReferenceImage {

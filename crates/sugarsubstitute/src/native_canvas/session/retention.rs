@@ -34,6 +34,8 @@ struct Entry {
     key: RetentionKey,
     document: Box<document::DocumentState>,
     bytes: u64,
+    /// The part of `bytes` held in video memory.
+    gpu_bytes: u64,
 }
 
 /// Documents and backings leaving retention; disposed of only on the retirement worker.
@@ -57,9 +59,13 @@ impl Retiring {
 pub(super) struct RetainedDocuments {
     entries: VecDeque<Entry>,
     bytes: u64,
+    gpu_bytes: u64,
     retiring: Retiring,
     /// The memory budget's current limit; `None` until the first budget decision.
     limit: Option<u64>,
+    /// When the device's video memory budget is next read.
+    #[cfg(windows)]
+    pub(super) video_memory_due: Option<Duration>,
 }
 
 impl RetainedDocuments {
@@ -90,6 +96,7 @@ impl RetainedDocuments {
         let index = self.entries.iter().position(|entry| entry.key == *key)?;
         let entry = self.entries.remove(index)?;
         self.bytes = self.bytes.saturating_sub(entry.bytes);
+        self.gpu_bytes = self.gpu_bytes.saturating_sub(entry.gpu_bytes);
         Some(entry.document)
     }
 
@@ -103,9 +110,10 @@ impl RetainedDocuments {
         if let Some(previous) = self.take(&key) {
             self.retiring.documents.push(previous);
         }
-        let bytes = document.retained_bytes();
+        let (bytes, gpu_bytes) = (document.retained_bytes(), document.retained_gpu_bytes());
         self.bytes = self.bytes.saturating_add(bytes);
-        self.entries.push_back(Entry { key, document, bytes });
+        self.gpu_bytes = self.gpu_bytes.saturating_add(gpu_bytes);
+        self.entries.push_back(Entry { key, document, bytes, gpu_bytes });
         self.shed(self.allowance(funded));
     }
 
@@ -120,6 +128,9 @@ impl RetainedDocuments {
                 let bytes = entry.document.retained_bytes();
                 let released = entry.bytes.saturating_sub(bytes);
                 self.bytes = self.bytes.saturating_sub(released);
+                let gpu_bytes = entry.document.retained_gpu_bytes();
+                self.gpu_bytes = self.gpu_bytes.saturating_sub(entry.gpu_bytes - gpu_bytes);
+                entry.gpu_bytes = gpu_bytes;
                 tracing::debug!(
                     operation = "canvas_retained_demotion",
                     released_bytes = released,
@@ -134,6 +145,7 @@ impl RetainedDocuments {
                 break;
             };
             self.bytes = self.bytes.saturating_sub(evicted.bytes);
+            self.gpu_bytes = self.gpu_bytes.saturating_sub(evicted.gpu_bytes);
             tracing::debug!(
                 operation = "canvas_retained_eviction",
                 evicted_bytes = evicted.bytes,
@@ -149,6 +161,41 @@ impl RetainedDocuments {
     fn forget(&mut self) {
         self.retiring.documents.extend(self.entries.drain(..).map(|entry| entry.document));
         self.bytes = 0;
+        self.gpu_bytes = 0;
+    }
+
+    /// Give video memory back until parked GPU backings fit `limit`: demote the least recently
+    /// shown GPU documents to their fallback first, then evict them least recently shown first.
+    /// Documents holding only system memory are untouched.
+    pub(super) fn shed_gpu(&mut self, limit: u64) {
+        for entry in &mut self.entries {
+            if self.gpu_bytes <= limit {
+                return;
+            }
+            if entry.gpu_bytes > 0 && entry.document.demote(&mut self.retiring) {
+                let (bytes, gpu_bytes) =
+                    (entry.document.retained_bytes(), entry.document.retained_gpu_bytes());
+                self.bytes = self.bytes.saturating_sub(entry.bytes.saturating_sub(bytes));
+                self.gpu_bytes = self.gpu_bytes.saturating_sub(entry.gpu_bytes - gpu_bytes);
+                (entry.bytes, entry.gpu_bytes) = (bytes, gpu_bytes);
+            }
+        }
+        while self.gpu_bytes > limit {
+            let Some(index) = self.entries.iter().position(|entry| entry.gpu_bytes > 0) else {
+                break;
+            };
+            let Some(evicted) = self.entries.remove(index) else {
+                break;
+            };
+            self.bytes = self.bytes.saturating_sub(evicted.bytes);
+            self.gpu_bytes = self.gpu_bytes.saturating_sub(evicted.gpu_bytes);
+            self.retiring.documents.push(evicted.document);
+        }
+    }
+
+    /// Video memory bytes parked documents hold.
+    pub(super) fn gpu_bytes(&self) -> u64 {
+        self.gpu_bytes
     }
 
     /// Transfer everything awaiting retirement, if anything is.
@@ -196,6 +243,15 @@ impl document::DocumentState {
                 && shown.tier == BackingTier::Detail
                 && !shown.reconstruction.is_preview()
         }) && self.fallback_presented.as_ref().is_some_and(current)
+    }
+
+    /// The part of [`Self::retained_bytes`] held in video memory.
+    fn retained_gpu_bytes(&self) -> u64 {
+        [&self.gpu_front, &self.fallback_gpu_front, &self.navigation_gpu_front]
+            .into_iter()
+            .flatten()
+            .map(|surface| surface.extent().pixels().saturating_mul(4))
+            .fold(0, u64::saturating_add)
     }
 
     /// Backing bytes charged to the retained-document ledger.

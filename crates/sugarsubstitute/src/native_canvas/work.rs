@@ -129,6 +129,9 @@ pub(super) struct Resources {
     pub(super) engine: Arc<Mutex<Engine>>,
     display: Arc<Mutex<Option<DisplayTarget>>>,
     pub(super) _metadata: Arc<MemoryClaim>,
+    /// The selected device, held apart from the engine so the native thread reads its video
+    /// memory budget without locking preparation state.
+    budget_device: Option<Arc<GpuDevice>>,
 }
 impl Clone for Resources {
     fn clone(&self) -> Self {
@@ -141,6 +144,7 @@ impl Clone for Resources {
             engine: self.engine.clone(),
             display: self.display.clone(),
             _metadata: self._metadata.clone(),
+            budget_device: self.budget_device.clone(),
         }
     }
 }
@@ -216,6 +220,7 @@ impl Resources {
         device: Arc<GpuDevice>,
         window: Option<WindowSurface>,
     ) -> Self {
+        self.budget_device = Some(device.clone());
         self.engine = Arc::new(Mutex::new(Engine {
             renderer: None,
             source_revision: None,
@@ -224,6 +229,13 @@ impl Resources {
         self.display = Arc::new(Mutex::new(window.map(DisplayTarget::Window)));
         self
     }
+    /// The selected device's video memory budget, when a GPU renders and its driver reports one.
+    #[cfg(all(windows, feature = "native-composition"))]
+    pub(super) fn video_memory_budget(
+        &self,
+    ) -> Option<sugarsubstitute_image_gpu::VideoMemoryBudget> {
+        self.budget_device.as_ref().and_then(|device| device.video_memory_budget())
+    }
     /// Bind the selected device and its main-window composition target before preparation.
     #[cfg(all(windows, feature = "native-composition"))]
     pub(super) fn with_composition(
@@ -231,6 +243,7 @@ impl Resources {
         device: Arc<GpuDevice>,
         target: CompositionTarget,
     ) -> Self {
+        self.budget_device = Some(device.clone());
         self.engine = Arc::new(Mutex::new(Engine {
             renderer: None,
             source_revision: None,
@@ -268,6 +281,7 @@ pub(super) fn initialize(
             _metadata: metadata,
             capture,
             verify_native,
+            budget_device: None,
         },
         Scene {
             document,

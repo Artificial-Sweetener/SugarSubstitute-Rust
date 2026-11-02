@@ -67,6 +67,8 @@ impl Session {
         let restoring = self.advance_document_transaction()? || self.preview_restoring();
         #[cfg(not(feature = "native-composition"))]
         let restoring = false;
+        #[cfg(all(windows, feature = "native-composition"))]
+        self.advance_video_memory();
         #[cfg(feature = "native-composition")]
         self.advance_retained_retirement()?;
         self.submit_retirement()?;

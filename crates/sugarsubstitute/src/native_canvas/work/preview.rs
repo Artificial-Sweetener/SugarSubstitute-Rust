@@ -99,6 +99,7 @@ impl Resources {
             })),
             display: Arc::new(Mutex::new(None)),
             _metadata: metadata,
+            budget_device: None,
         })
     }
 }

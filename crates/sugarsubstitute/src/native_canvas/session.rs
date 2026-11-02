@@ -38,6 +38,8 @@ mod presentation;
 mod proof;
 #[cfg(feature = "native-composition")]
 mod retention;
+#[cfg(all(windows, feature = "native-composition"))]
+mod video_memory;
 #[cfg(feature = "native-composition")]
 pub(crate) use retention::RetentionKey;
 pub(crate) mod runtime;

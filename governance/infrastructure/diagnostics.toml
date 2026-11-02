@@ -1054,6 +1054,6 @@ rationale = "Isolated finite CPU qualification reports physical 4K projection co
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:a43be635d1ca11e51442603ac1a83ee6c50f6101c8be76d0a672199e7ecc66b7"
+source_sha256 = "sha256:fdc9380d5b1e83170fce3670211e6ed23f028921c4911fbdf4e0d7c831acb37f"
 disposition = "fixture"
 rationale = "The explicit single-device offscreen composite check reports native adapter identity, exact CPU/GPU pixel agreement and execution retirement; it creates no window or runtime diagnostic sink."

@@ -30,6 +30,9 @@ mod shared_surface;
 mod surface_state;
 mod timing;
 mod transfer;
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod video_memory;
 mod window;
 mod window_configuration;
 mod window_frame;
@@ -55,4 +58,6 @@ pub use shared::{SharedTarget, SharedTextureHandle};
 #[cfg(windows)]
 pub use shared_surface::SharedSurface;
 pub use timing::GpuDiagnostics;
+#[cfg(windows)]
+pub use video_memory::VideoMemoryBudget;
 pub use window::{NativeWindowHandle, WindowFrame, WindowPresentation, WindowSurface};
