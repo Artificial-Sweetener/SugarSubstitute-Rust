@@ -19,18 +19,26 @@ import { describe, expect, jest, test } from '@jest/globals';
 import { CubeCatalogInvalidationCoordinator } from '../../../frontend/comfyui/ui/core/CubeCatalogInvalidationCoordinator.js';
 
 describe('CubeCatalogInvalidationCoordinator', () => {
-  test('refreshes the native picker and library metadata together', async () => {
-    const refreshPicker = jest.fn(async () => undefined);
+  test('retires derived results before refreshing the native picker and library metadata', async () => {
+    const order: string[] = [];
+    const refreshPicker = jest.fn(async () => {
+      order.push('picker');
+    });
     const refreshLibrary = jest.fn(async () => undefined);
+    const retireCatalogResults = jest.fn(() => {
+      order.push('retire');
+    });
     const logger = { warn: jest.fn() };
     const coordinator = new CubeCatalogInvalidationCoordinator({
       refreshPicker,
       refreshLibrary,
+      retireCatalogResults,
       logger,
     });
 
     await coordinator.invalidate();
 
+    expect(order).toEqual(['retire', 'picker']);
     expect(refreshPicker).toHaveBeenCalledTimes(1);
     expect(refreshLibrary).toHaveBeenCalledTimes(1);
     expect(logger.warn).not.toHaveBeenCalled();
@@ -43,6 +51,7 @@ describe('CubeCatalogInvalidationCoordinator', () => {
     const coordinator = new CubeCatalogInvalidationCoordinator({
       refreshPicker: async () => Promise.reject(pickerError),
       refreshLibrary: async () => Promise.reject(libraryError),
+      retireCatalogResults: () => undefined,
       logger,
     });
 

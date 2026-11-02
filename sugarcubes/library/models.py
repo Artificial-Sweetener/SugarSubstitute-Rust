@@ -70,6 +70,7 @@ class CubeLibraryClassReport:
     """Collect deterministic classifications for a canonical workflow."""
 
     definitions: tuple[CubeDefinitionClassification, ...]
+    catalog_revision: str
 
 
 @dataclass(frozen=True)

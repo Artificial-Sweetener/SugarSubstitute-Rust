@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any, Literal, Mapping, cast
@@ -58,8 +59,8 @@ def build_workflow_library_route_handlers(
     async def classify_workflow(request: Any) -> Any:
         try:
             body = await parse_json_body(request)
-            workflow = read_canonical_workflow(body.get("workflow"))
-            report = services.workflow_library.classify_workflow(workflow)
+            # Reading every installed Cube must never stall Comfy's shared event loop.
+            report = await asyncio.to_thread(_classify, services, body.get("workflow"))
             return json_success(_serialize_classification(report), status=200)
         except CanonicalWorkflowError as exc:
             return _workflow_error(exc)
@@ -157,11 +158,20 @@ def build_workflow_library_route_handlers(
     )
 
 
+def _classify(services: BackendServices, workflow: object) -> CubeLibraryClassReport:
+    """Validate and classify one workflow on a worker thread."""
+
+    return services.workflow_library.classify_workflow(
+        read_canonical_workflow(workflow)
+    )
+
+
 def _serialize_classification(report: CubeLibraryClassReport) -> dict[str, Any]:
     """Serialize classifications while normalizing immutable operation sets."""
 
     return {
         "schema_version": 1,
+        "catalog_revision": report.catalog_revision,
         "definitions": [_serialize_definition(item) for item in report.definitions],
     }
 

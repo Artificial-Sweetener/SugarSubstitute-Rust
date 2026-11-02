@@ -47,6 +47,8 @@ import { ComfyCubeSaveAdapter } from './cube/node/ComfyCubeSaveAdapter.js';
 import { CubePackService } from './packs/CubePackService.js';
 import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordinator.js';
 import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
+import { CubeGraphAnalysisCache } from './workflow/application/CubeGraphAnalysisCache.js';
+import { CubeGraphApi } from './workflow/infrastructure/CubeGraphApi.js';
 import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
 import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryPresentation.js';
 import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
@@ -83,6 +85,8 @@ export class SugarCubesUI {
     boundsReconciler;
     rendererGeometry;
     workflowLibraryState;
+    /** Share canonical workflow analyses across runtimes so unchanged switches issue no request. */
+    workflowGraphAnalyses;
     workflowLibraryActions;
     workflowLibraryPresentation;
     workflowPreconfiguration;
@@ -102,6 +106,7 @@ export class SugarCubesUI {
         this._setupDone = false;
         this.workflowNodePackMetadata = new CubeWorkflowNodePackMetadata();
         this.workflowLibraryState = new CubeWorkflowLibraryState(this.api, this.adapter.getConsole?.() ?? console);
+        this.workflowGraphAnalyses = new CubeGraphAnalysisCache(new CubeGraphApi(this.api));
         this.workflowLibraryActions = new CubeWorkflowLibraryActions({
             api: this.api,
             state: this.workflowLibraryState,
@@ -278,6 +283,11 @@ export class SugarCubesUI {
         });
         this.overlayManager.setup();
         this._setupDone = true;
+    }
+    /** Retire workflow results derived from a catalog that a local mutation just changed. */
+    retireWorkflowCatalogResults() {
+        this.workflowLibraryState.invalidateCatalog();
+        this.workflowGraphAnalyses.invalidate();
     }
     dispose() {
         this.workflowLibraryState.clear();

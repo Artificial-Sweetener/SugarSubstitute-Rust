@@ -24,7 +24,8 @@ import type { ModelPickerActions } from './ModelPickerActions.js';
 
 import { modelApiError } from './ModelApiTransport.js';
 import type { ModelApiFetch } from './ModelApiTransport.js';
-import { ModelJobClient, abortableModelDelay } from './ModelJobClient.js';
+import { ModelJobClient } from './ModelJobClient.js';
+import { ModelCatalogSubscription } from './ModelCatalogSubscription.js';
 import { decodeModelReleases } from './ModelReleases.js';
 import type { ModelRelease } from './ModelReleases.js';
 
@@ -34,6 +35,7 @@ export class ModelCatalogClient implements ModelPickerActions {
   readonly #fetch: ModelApiFetch;
   readonly #jobs: ModelJobClient;
   readonly #installed: (() => Promise<void>) | null;
+  readonly #changes: ModelCatalogSubscription;
   #pending: Promise<ModelCatalogSnapshot> | null = null;
   #snapshot: ModelCatalogSnapshot | null = null;
   readonly #prioritized = new Set<string>();
@@ -44,6 +46,7 @@ export class ModelCatalogClient implements ModelPickerActions {
     this.credentials = new CivitaiCredentialClient(fetchApi);
     this.#jobs = new ModelJobClient(fetchApi);
     this.#installed = installed;
+    this.#changes = new ModelCatalogSubscription(fetchApi, (force) => this.load(force));
   }
 
   /** Expose the prepared catalog without starting IO from consumer interaction paths. */
@@ -212,55 +215,12 @@ export class ModelCatalogClient implements ModelPickerActions {
     return result.fileName;
   }
 
-  /** Follow committed catalog generations without repeatedly downloading the full model collection. */
+  /** Follow committed catalog generations through the page's one shared change subscription. */
   watch(
     listener: (snapshot: ModelCatalogSnapshot) => void,
     reportError: (error: unknown) => void,
   ): () => void {
-    const controller = new AbortController();
-    const run = async (): Promise<void> => {
-      let snapshot: ModelCatalogSnapshot | null = null;
-      let failures = 0;
-      while (!controller.signal.aborted) {
-        try {
-          snapshot ??= await this.load();
-          const response = await this.#fetch(
-            `/sugarcubes/v1/models/changes?afterRevision=${String(snapshot.revision)}`,
-            { signal: controller.signal },
-          );
-          if (!response.ok)
-            throw new Error(`Model catalog updates are unavailable (${String(response.status)}).`);
-          const payload: unknown = await response.json();
-          if (
-            !isRecord(payload) ||
-            payload.schemaVersion !== 1 ||
-            typeof payload.revision !== 'number' ||
-            !Number.isSafeInteger(payload.revision) ||
-            payload.revision < 0
-          )
-            throw new Error('Invalid model catalog update response.');
-          if (payload.revision !== snapshot.revision) {
-            snapshot = await this.load(true);
-            if (!controller.signal.aborted) listener(snapshot);
-          }
-          failures = 0;
-        } catch (error: unknown) {
-          if (controller.signal.aborted) return;
-          if (failures === 0) reportError(error);
-          failures += 1;
-          try {
-            await abortableModelDelay(
-              Math.min(30_000, 1_000 * 2 ** Math.min(failures - 1, 5)),
-              controller.signal,
-            );
-          } catch {
-            return;
-          }
-        }
-      }
-    };
-    void run();
-    return () => controller.abort();
+    return this.#changes.watch(listener, reportError);
   }
 
   /** Validate unknown JSON before publishing it to any picker consumer. */

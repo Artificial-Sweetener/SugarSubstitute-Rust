@@ -15,11 +15,23 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own non-persisted library classification for the active workflow. */
 import { isRecord } from '../types/common.js';
-/** Keep machine-derived classification out of serialized workflow properties. */
+import { contentDigest } from '../core/ContentDigest.js';
+const CLASSIFICATION_CACHE_CAPACITY = 16;
+/**
+ * Keep machine-derived classification out of serialized workflow properties.
+ *
+ * Classification depends only on the embedded Cube definitions, their instances and the installed
+ * catalog. Results are retained per classification input under the catalog revision the server
+ * reported, so a workflow switch with unchanged definitions issues no request. A response with a
+ * different revision, or a local catalog mutation, retires every retained result.
+ */
 export class CubeWorkflowLibraryState {
     #api;
     #logger;
     #listeners = new Set();
+    #results = new Map();
+    #catalogRevision = null;
+    #catalogEpoch = 0;
     #byInstanceId = new Map();
     #generation = 0;
     /** Bind the versioned SugarCubes API and a host diagnostic sink. */
@@ -30,12 +42,26 @@ export class CubeWorkflowLibraryState {
     /** Start best-effort enrichment without blocking Comfy graph hydration. */
     begin(workflow) {
         const generation = ++this.#generation;
+        const key = classificationKey(workflow);
+        const retained = key === null ? undefined : this.#results.get(key);
+        if (key !== null && retained) {
+            this.#results.delete(key);
+            this.#results.set(key, retained);
+            this.#replace(retained);
+            return;
+        }
         this.#replace([]);
-        void this.#classify(workflow, generation).catch((error) => {
+        void this.#classify(workflow, key, generation).catch((error) => {
             if (generation !== this.#generation)
                 return;
             this.#logger.warn('SugarCubes: workflow Cube classification unavailable', error);
         });
+    }
+    /** Retire retained classifications after a local catalog mutation. */
+    invalidateCatalog() {
+        this.#catalogEpoch += 1;
+        this.#catalogRevision = null;
+        this.#results.clear();
     }
     /** Read current machine state for one stable instance identity. */
     read(instanceId) {
@@ -57,16 +83,36 @@ export class CubeWorkflowLibraryState {
         this.#replace([]);
     }
     /** Submit an immutable workflow snapshot and apply only the latest response. */
-    async #classify(workflow, generation) {
+    async #classify(workflow, key, generation) {
+        const epoch = this.#catalogEpoch;
         const result = await this.#api.classifyWorkflow(JSON.stringify({ workflow }), {
             headers: { 'Content-Type': 'application/json' },
         });
         if (!result.response.ok) {
             throw new Error(`Workflow Cube classification failed (${String(result.response.status)}).`);
         }
-        const definitions = readClassificationResponse(result.data);
+        const { catalogRevision, definitions } = readClassificationResponse(result.data);
+        // A local catalog mutation during the request makes its answer unsafe to reuse.
+        if (epoch === this.#catalogEpoch)
+            this.#retain(key, catalogRevision, definitions);
         if (generation === this.#generation)
             this.#replace(definitions);
+    }
+    /** Retain one result only while its catalog revision remains the latest one observed. */
+    #retain(key, catalogRevision, definitions) {
+        if (catalogRevision !== this.#catalogRevision) {
+            this.#results.clear();
+            this.#catalogRevision = catalogRevision;
+        }
+        if (key === null || catalogRevision === null)
+            return;
+        this.#results.set(key, definitions);
+        while (this.#results.size > CLASSIFICATION_CACHE_CAPACITY) {
+            const oldest = this.#results.keys().next().value;
+            if (oldest === undefined)
+                break;
+            this.#results.delete(oldest);
+        }
     }
     /** Atomically replace the instance index and notify presentation subscribers. */
     #replace(definitions) {
@@ -85,7 +131,35 @@ function readClassificationResponse(value) {
     if (!isRecord(value) || value.schema_version !== 1 || !Array.isArray(value.definitions)) {
         throw new TypeError('Workflow Cube classification response is invalid.');
     }
-    return value.definitions.map((entry, index) => readClassification(entry, index));
+    const revision = typeof value.catalog_revision === 'string' ? value.catalog_revision.trim() : '';
+    return {
+        catalogRevision: revision || null,
+        definitions: value.definitions.map((entry, index) => readClassification(entry, index)),
+    };
+}
+/**
+ * Identify exactly the inputs classification reads: embedded definitions and root Cube instances.
+ *
+ * Node geometry, values and canvas state are excluded so ordinary edits and view changes keep
+ * reusing the result; any change to a definition or an instance identity changes the key.
+ */
+function classificationKey(workflow) {
+    if (!isRecord(workflow) || !Array.isArray(workflow.nodes))
+        return null;
+    const definitions = isRecord(workflow.definitions) ? workflow.definitions.subgraphs : undefined;
+    const instances = workflow.nodes.map((node) => {
+        if (!isRecord(node))
+            return null;
+        const properties = isRecord(node.properties) ? node.properties : {};
+        return [node.id, node.type, properties.sugarcubes_kind, properties.sugarcubes_cube];
+    });
+    try {
+        return contentDigest(JSON.stringify([definitions ?? null, instances]));
+    }
+    catch {
+        // Unserializable host values cannot be keyed; classification still runs uncached.
+        return null;
+    }
 }
 /** Parse one complete definition classification from an untrusted response. */
 function readClassification(value, index) {

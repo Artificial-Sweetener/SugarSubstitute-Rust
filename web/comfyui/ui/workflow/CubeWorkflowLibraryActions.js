@@ -48,6 +48,7 @@ export class CubeWorkflowLibraryActions {
             const workflow = await this.#workflowSnapshot();
             const result = await this.#api.captureWorkflowCube(requestBody(workflow, classification), jsonRequest());
             requireSuccess(result, 'Cube capture');
+            this.#state.invalidateCatalog();
             this.#state.begin(workflow);
             this.#feedback.push('success', 'Cube captured', `${classification.cubeId} is preserved unchanged and remains read-only.`);
         });
@@ -75,6 +76,7 @@ export class CubeWorkflowLibraryActions {
                 approved: true,
             }), jsonRequest());
             requireSuccess(result, 'Source synchronization');
+            this.#state.invalidateCatalog();
             this.#state.begin(workflow);
             const status = readResultString(result.data, 'status') || 'unknown';
             this.#feedback.push(status === 'exact' ? 'success' : 'warn', 'Cube source synchronized', `Source comparison: ${status}. The workflow copy was not replaced.`);

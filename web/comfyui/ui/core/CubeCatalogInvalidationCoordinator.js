@@ -18,15 +18,18 @@
 export class CubeCatalogInvalidationCoordinator {
     #refreshPicker;
     #refreshLibrary;
+    #retireCatalogResults;
     #logger;
     /** Bind the independent catalog refresh operations. */
     constructor(options) {
         this.#refreshPicker = options.refreshPicker;
         this.#refreshLibrary = options.refreshLibrary;
+        this.#retireCatalogResults = options.retireCatalogResults;
         this.#logger = options.logger;
     }
     /** Refresh every dependent catalog without letting one failure suppress another. */
     async invalidate() {
+        this.#retireCatalogResults();
         const [picker, library] = await Promise.allSettled([
             this.#refreshPicker(),
             this.#refreshLibrary(),

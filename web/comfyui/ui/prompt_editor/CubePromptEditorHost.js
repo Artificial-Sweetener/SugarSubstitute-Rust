@@ -126,10 +126,8 @@ export class CubePromptEditorHost {
                 throw new Error('The prompt component is outside its owning presentation.');
         }));
     }
-    /** Retire native documents before replacing an entire workflow. */
+    /** Retire native documents before replacing an entire workflow; the model catalog is app-wide. */
     beforeConfigureGraph() {
-        this.#stopCatalog?.();
-        this.#stopCatalog = null;
         for (const [widget, session] of [...this.#sessions]) {
             this.#retired.add(widget);
             this.#retire(widget, session);
@@ -139,6 +137,8 @@ export class CubePromptEditorHost {
     dispose() {
         this.#release?.();
         this.#release = null;
+        this.#stopCatalog?.();
+        this.#stopCatalog = null;
         this.beforeConfigureGraph();
     }
     /** Release one session's editor, value observation, measured height and borrowed surfaces. */
