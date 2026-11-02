@@ -35400,10 +35400,9 @@ function dismissCompletion(view) {
   });
   return true;
 }
-function acceptSelected(view, tagsOnly = false) {
-  const option = selectedCompletion(view.state);
+function acceptSelected(view) {
   const session = view.state.field(completionSession);
-  if (!option || !session || tagsOnly && option.kind === "lora") return false;
+  if (!selectedCompletion(view.state) || !session) return false;
   if (acceptCompletionOption(view, session.result, session.selected, "keyboard")) return true;
   if (session.phase === "refreshing") {
     view.dispatch({
@@ -35480,8 +35479,7 @@ var promptCompletions = [
         key: "ArrowRight",
         run: (view) => moveSelection(view, 1, true) || dismissAndNavigate(view)
       },
-      { key: "Tab", run: (view) => acceptSelected(view) },
-      { key: ",", run: (view) => acceptSelected(view, true) },
+      { key: "Tab", run: acceptSelected },
       { key: "Escape", run: dismissCompletion },
       ...["Home", "End", "Enter"].map((key2) => ({
         key: key2,
