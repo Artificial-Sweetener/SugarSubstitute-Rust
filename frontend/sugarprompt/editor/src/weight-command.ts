@@ -230,21 +230,23 @@ export function prepareWeightChange(
         ? decoded + delta
         : replacement.to + delta;
   };
-  const ranges =
-    request.owner === 'pointer' || request.owner === 'wheel'
-      ? state.selection.ranges.map((range, index) => {
-          if (
-            range.to < admitted.entry.logicalStorage.from ||
-            range.from > admitted.entry.logicalStorage.to
-          )
-            return { kind: 'outside' as const, index };
-          const anchor = decodedPosition(range.anchor),
-            head = decodedPosition(range.head);
-          return anchor === null || head === null
-            ? null
-            : { kind: 'decoded' as const, anchor, head };
-        })
-      : [{ kind: 'decoded' as const, anchor: caret, head: caret }];
+  // Spatial edits and an exact edit finished by clicking elsewhere keep the user's own selection.
+  const keepsSelection =
+    request.owner === 'pointer' ||
+    request.owner === 'wheel' ||
+    (request.owner === 'exact' && request.completion === 'outside');
+  const ranges = keepsSelection
+    ? state.selection.ranges.map((range, index) => {
+        if (
+          range.to < admitted.entry.logicalStorage.from ||
+          range.from > admitted.entry.logicalStorage.to
+        )
+          return { kind: 'outside' as const, index };
+        const anchor = decodedPosition(range.anchor),
+          head = decodedPosition(range.head);
+        return anchor === null || head === null ? null : { kind: 'decoded' as const, anchor, head };
+      })
+    : [{ kind: 'decoded' as const, anchor: caret, head: caret }];
   if (ranges.some((range) => range === null)) return [];
   const outcome = prepareDocumentValueEdit(state, {
     publication: { purpose: 'weight' },
@@ -254,8 +256,7 @@ export function prepareWeightChange(
     text: mutation.text.slice(replacement.from, replacement.to + delta),
     selection: {
       ranges: ranges.filter((range) => range !== null),
-      mainIndex:
-        request.owner === 'pointer' || request.owner === 'wheel' ? state.selection.mainIndex : 0,
+      mainIndex: keepsSelection ? state.selection.mainIndex : 0,
     },
   });
   if (

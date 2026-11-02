@@ -64,7 +64,8 @@ test('captured exact neutral intent survives later pointer selection without ado
     -1,
   )!.state;
   assert.equal(readExactSource(changed), '((cat:0.95) dog:1.10)');
-  assert.equal(changed.selection.main.head, 11);
+  // The later pointer caret inside the outer weight is kept, mapped past the inserted shell.
+  assert.equal(changed.selection.main.head, 19);
 });
 
 test('unchanged exact neutral entry retains the inner boundary when its content equals the parent content', () => {

@@ -116,7 +116,8 @@ for (const reentry of [false, true])
           assert.equal(readExactSource(native.view.state), '(cat:1.20), tail');
           await native.flush();
           assert.equal(readExactSource(native.view.state), '(cat:222.33), tail');
-          assert.equal(native.view.state.selection.main.head, 12);
+          // Finishing by clicking elsewhere keeps the caret the click placed, mapped past the edit.
+          assert.equal(native.view.state.selection.main.head, 18);
           assert.equal(undoDepth(native.view.state), 1);
           assert.equal(native.restored(), 0);
           assert.equal(reservations, 2);
