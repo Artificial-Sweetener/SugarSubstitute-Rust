@@ -31957,7 +31957,8 @@ function prepareWeightChange(state, change, request = { owner: "keyboard" }) {
       return contentRange.from + Math.min(decoded - target.range.from, contentRange.to - contentRange.from);
     return decoded <= replacement.from ? decoded : decoded >= replacement.to ? decoded + delta : replacement.to + delta;
   };
-  const ranges = request.owner === "pointer" || request.owner === "wheel" ? state.selection.ranges.map((range2, index) => {
+  const keepsSelection = request.owner === "pointer" || request.owner === "wheel" || request.owner === "exact" && request.completion === "outside";
+  const ranges = keepsSelection ? state.selection.ranges.map((range2, index) => {
     if (range2.to < admitted.entry.logicalStorage.from || range2.from > admitted.entry.logicalStorage.to)
       return { kind: "outside", index };
     const anchor = decodedPosition(range2.anchor), head = decodedPosition(range2.head);
@@ -31972,7 +31973,7 @@ function prepareWeightChange(state, change, request = { owner: "keyboard" }) {
     text: mutation.text.slice(replacement.from, replacement.to + delta),
     selection: {
       ranges: ranges.filter((range2) => range2 !== null),
-      mainIndex: request.owner === "pointer" || request.owner === "wheel" ? state.selection.mainIndex : 0
+      mainIndex: keepsSelection ? state.selection.mainIndex : 0
     }
   });
   if (outcome.status === "rejected" || currentDocumentValueEdit(state, context, outcome.edit) !== null)
