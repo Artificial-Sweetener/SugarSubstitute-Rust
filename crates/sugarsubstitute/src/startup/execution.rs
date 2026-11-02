@@ -12,6 +12,11 @@ use sugarsubstitute_contracts::execution::{
 };
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 
+/// Application storage beside the canvas reservation: the 256 MiB startup working set, a
+/// 48 MiB source import and 48 MiB of retirement work.
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+const APPLICATION_WORKING_BYTES: u64 = 352 * 1024 * 1024;
+
 /// Create only after actual native wake, retaining partial setup through final joins.
 pub(super) struct StartupExecution {
     clock: Arc<dyn Clock>,
@@ -33,17 +38,18 @@ impl StartupExecution {
             shutting_down: false,
         }
     }
-    /// Fund the CPU canvas in addition to the existing startup working set.
+    /// Fund a canvas reservation of `canvas_bytes` in addition to the startup working set.
     /// This sets an admission ceiling; it does not allocate the entire amount.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
-    pub(super) fn reserve_canvas_capacity(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(super) fn reserve_canvas_capacity(
+        &mut self,
+        canvas_bytes: u64,
+    ) -> Result<(), Box<dyn Error>> {
         if self.started {
             return Err("Canvas capacity must be selected before execution starts".into());
         }
-        // The original 256 MiB startup ceiling, 160 MiB retained canvas and 48 MiB
-        // import job fit within this combined ceiling with room for retirement work.
-        self.memory_capacity =
-            Some(NonZeroU64::new(512 * 1024 * 1024).ok_or("Invalid canvas capacity")?);
+        let capacity = APPLICATION_WORKING_BYTES.saturating_add(canvas_bytes);
+        self.memory_capacity = Some(NonZeroU64::new(capacity).ok_or("Invalid canvas capacity")?);
         Ok(())
     }
     /// Start at most once, even if construction or subsequent owner setup fails.

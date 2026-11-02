@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare original assets and viewport pixels exclusively on execution-owned workers.
-use super::{coverage::BackingTier, work_error::WorkError};
+use super::{budget, coverage::BackingTier, work_error::WorkError};
 mod cpu;
 mod display;
 mod gpu;
@@ -35,8 +35,6 @@ use sugarsubstitute_image_ops::{
 };
 use sugarsubstitute_supervision::cache::{CachePolicy, CacheReader, RuntimeCache};
 
-pub(super) const RETAINED_BYTES: u64 = 160 * 1024 * 1024;
-pub(super) const GPU_RETAINED_BYTES: u64 = 304 * 1024 * 1024;
 pub(super) const IMPORT_BYTES: u64 = 48 * 1024 * 1024;
 pub(super) const GPU_PREPARE_BYTES: u64 = 32 * 1024 * 1024;
 pub(super) const GPU_PROOF_BYTES: u64 = 40 * 1024 * 1024;
@@ -124,6 +122,9 @@ pub(super) struct Resources {
     pub(super) capture: bool,
     verify_native: bool,
     pub(super) memory: MemoryLease,
+    /// Storage carved from the same admission for the graphics device and composition
+    /// surfaces, which the UI thread claims without being able to evict cached tiles.
+    pub(super) presentation: MemoryLease,
     pub(super) cache: RuntimeCache,
     pub(super) engine: Arc<Mutex<Engine>>,
     display: Arc<Mutex<Option<DisplayTarget>>>,
@@ -135,6 +136,7 @@ impl Clone for Resources {
             capture: self.capture,
             verify_native: self.verify_native,
             memory: self.memory.clone(),
+            presentation: self.presentation.clone(),
             cache: self.cache.clone(),
             engine: self.engine.clone(),
             display: self.display.clone(),
@@ -244,9 +246,11 @@ pub(super) fn initialize(
     anchor: PathBuf,
     capture: bool,
     verify_native: bool,
+    presentation_bytes: u64,
     context: &JobContext,
 ) -> Result<(Resources, Scene), WorkError> {
     let memory = context.memory().clone();
+    let presentation = memory.claim(presentation_bytes)?.into_lease();
     let metadata = Arc::new(memory.claim(1024 * 1024)?);
     let cache = RuntimeCache::open(&anchor, CachePolicy::default(), context)?;
     #[cfg(feature = "native-composition")]
@@ -257,6 +261,7 @@ pub(super) fn initialize(
     Ok((
         Resources {
             memory,
+            presentation,
             cache,
             engine,
             display: Arc::new(Mutex::new(None)),
@@ -450,7 +455,7 @@ impl CpuTask<Packet, WorkError> for Prepare {
                             .cloned()
                             .collect(),
                     ),
-                    512,
+                    budget::RENDERER_TILES,
                     device.clone(),
                     &self.resources.memory,
                     context,
@@ -464,7 +469,7 @@ impl CpuTask<Packet, WorkError> for Prepare {
                             .cloned()
                             .collect(),
                     ),
-                    512,
+                    budget::RENDERER_TILES,
                     &self.resources.memory,
                 )?)),
             };

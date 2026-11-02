@@ -30,6 +30,6 @@ pub use projection::ViewProjection;
 pub use tools::{
     CanvasTool, ToolButton, ToolCancelReason, ToolContext, ToolId, ToolInput, ToolManager, ToolView,
 };
-pub use viewport::Viewport;
+pub use viewport::{MAX_SURFACE_EDGE, Viewport};
 #[cfg(test)]
 mod tests;

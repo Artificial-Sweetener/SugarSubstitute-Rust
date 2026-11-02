@@ -193,16 +193,19 @@ fn cancelled_selection_retains_native_presentation_until_actual_return_and_rejec
 
 fn install_storage(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
     let anchor = fixture._directory.path().join("cache");
+    let display = fixture.session.config.maximum_extent;
+    let presentation = budget::presentation_bytes(display, false);
     let spec = fixture.session.spec(
         Operation::Infrastructure,
         JobClass::InfrastructureOrdinary,
-        work::RETAINED_BYTES,
+        budget::reservation_bytes(display, false),
         Duration::from_secs(30),
         None,
     )?;
     let runtime = fixture.session.runtime.as_ref().ok_or("Missing execution")?;
     let mut setup = runtime.client.submit_blocking(&runtime.scope, spec, move |context| {
-        work::initialize(anchor, false, false, &context).map(|(resources, _)| resources)
+        work::initialize(anchor, false, false, presentation, &context)
+            .map(|(resources, _)| resources)
     })?;
     let JobOutcome::Success(resources) =
         fixture.wake.completion(&runtime.client, &mut setup)?.outcome

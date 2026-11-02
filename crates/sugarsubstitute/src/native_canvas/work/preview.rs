@@ -90,6 +90,7 @@ impl Resources {
             capture: self.capture,
             verify_native: self.verify_native,
             memory: self.memory.clone(),
+            presentation: self.presentation.clone(),
             cache: self.cache.clone(),
             engine: Arc::new(Mutex::new(Engine {
                 renderer: None,

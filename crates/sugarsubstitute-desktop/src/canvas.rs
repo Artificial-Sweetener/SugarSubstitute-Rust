@@ -81,6 +81,15 @@ pub(crate) mod windows;
 #[cfg(windows)]
 pub use windows::run;
 
+/// Physical `[width, height]` of the box enclosing every attached display, the largest canvas
+/// any window on them can show.
+/// # Errors
+/// Reports a failed or empty native display topology query.
+#[cfg(windows)]
+pub fn desktop_extent() -> Result<[u32; 2], DesktopError> {
+    windows::display::desktop_extent()
+}
+
 /// Native meaning of a borrowed CPU viewport.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CpuFrameKind {

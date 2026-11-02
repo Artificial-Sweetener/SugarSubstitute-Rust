@@ -98,7 +98,7 @@ pub(super) fn run(
             replacement: None,
         },
         move |context| {
-            let (resources, scene) = initialize(anchor, capture, false, &context)?;
+            let (resources, scene) = initialize(anchor, capture, false, 0, &context)?;
             drop(scene);
             Ok::<_, WorkError>(resources)
         },

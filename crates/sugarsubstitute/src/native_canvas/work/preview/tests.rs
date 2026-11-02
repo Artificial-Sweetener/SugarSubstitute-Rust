@@ -7,6 +7,9 @@ use std::error::Error;
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_image_ops::VectorRectangle;
 
+/// Preview fixtures fund the canvas's small-display retained storage without presentation.
+const RETAINED_BYTES: u64 = 160 * 1024 * 1024;
+
 mod harness;
 mod reproject;
 

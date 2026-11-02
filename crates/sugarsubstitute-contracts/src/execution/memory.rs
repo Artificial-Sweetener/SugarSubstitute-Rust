@@ -132,6 +132,22 @@ impl MemoryClaim {
     pub fn reserved_bytes(&self) -> u64 {
         self.lease.bytes()
     }
+    /// Dedicate this claim's bytes to a separate lease.
+    ///
+    /// Claims on the new lease share only these bytes, and claims on the original reservation
+    /// can no longer reach them. The bytes return to the original reservation once the new
+    /// lease and every claim on it have dropped. This admits nothing new.
+    pub fn into_lease(self) -> MemoryLease {
+        MemoryLease::new(self.bytes, Box::new(Partition { _claim: self }))
+    }
+}
+/// Hold an original claim for exactly as long as the lease carved from it.
+struct Partition {
+    _claim: MemoryClaim,
+}
+impl MemoryRelease for Partition {
+    /// The original claim drops with this port, after the carved lease's final release.
+    fn release(&self, _bytes: u64) {}
 }
 
 impl fmt::Debug for MemoryClaim {

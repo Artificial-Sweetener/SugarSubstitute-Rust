@@ -8,6 +8,10 @@ use sugarsubstitute_desktop::canvas::{
 };
 use sugarsubstitute_image_ops::Extent;
 
+/// Standalone viewer storage beside its canvas reservation: source imports, graphics device
+/// preparation and retirement work.
+const STANDALONE_WORKING_BYTES: u64 = 224 * 1024 * 1024;
+
 impl Session {
     /// Borrow pixels only when they represent the latest selected source and viewport.
     /// An older acknowledged projection remains available to the standalone viewer while a
@@ -44,7 +48,7 @@ impl Session {
         {
             return None;
         }
-        Some((frame, &self.resources.as_ref()?.memory))
+        Some((frame, &self.resources.as_ref()?.presentation))
     }
 
     /// Report a retained failure without transferring its original cause or source custody.
@@ -136,12 +140,13 @@ impl Lifetime for Session {
         if self.runtime.is_some() || self.starting_owner.is_some() || self.closing {
             return Err("Canvas execution cannot be started".into());
         }
-        let capacity = if self.config.gpu.is_some() { 512 } else { 384 };
+        let capacity =
+            budget::reservation_bytes(self.config.maximum_extent, self.config.gpu.is_some())
+                .saturating_add(STANDALONE_WORKING_BYTES);
         self.starting_owner = Some(ExecutionOwner::with_memory_capacity(
             self.clock.clone(),
             wake,
-            std::num::NonZeroU64::new(capacity * 1024 * 1024)
-                .ok_or("Invalid canvas execution capacity")?,
+            std::num::NonZeroU64::new(capacity).ok_or("Invalid canvas execution capacity")?,
         )?);
         let spec = ScopeSpec { id: ScopeId::new(1)?, deadline: None };
         self.start_owned(spec)

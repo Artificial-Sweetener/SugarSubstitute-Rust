@@ -24,7 +24,7 @@ pub fn entry() -> ExitCode {
                 visible: !proof_window,
             };
             let mut session = Session::new(
-                options.into_config(),
+                options.into_config(crate::native_canvas::budget::largest_canvas_extent()?),
                 health,
                 sugarsubstitute_execution::MonotonicClock::new(),
                 crate::job_sequence::JobSequence::new(),

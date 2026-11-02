@@ -107,7 +107,7 @@ impl Session {
             target: display.target,
             texture: display.frame.texture(),
         });
-        Some((content, &self.resources.as_ref()?.memory))
+        Some((content, &self.resources.as_ref()?.presentation))
     }
 
     /// Acknowledge the exact selected frame after the composition committed it.

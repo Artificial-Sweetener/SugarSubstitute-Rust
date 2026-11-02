@@ -9,18 +9,20 @@ impl Session {
     /// Startup storage shares the original retained admission used by every later resource.
     pub(super) fn submit_initialization(&mut self) -> Result<(), Box<dyn Error>> {
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
+        let gpu = self.config.gpu.is_some();
         let spec = self.spec(
             Operation::Infrastructure,
             JobClass::InfrastructureLifecycle,
-            if self.config.gpu.is_some() { work::GPU_RETAINED_BYTES } else { work::RETAINED_BYTES },
+            budget::reservation_bytes(self.config.maximum_extent, gpu),
             Duration::from_secs(30),
             None,
         )?;
+        let presentation = budget::presentation_bytes(self.config.maximum_extent, gpu);
         let anchor = self.config.cache.clone();
         let capture = self.config.capture;
         let verify_native = self.config.verify_native;
         match runtime.client.submit_blocking(&runtime.scope, spec, move |context| {
-            work::initialize(anchor, capture, verify_native, &context)
+            work::initialize(anchor, capture, verify_native, presentation, &context)
         }) {
             Ok(job) => {
                 self.initializing = Some(job);

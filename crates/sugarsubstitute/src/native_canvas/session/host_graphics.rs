@@ -37,7 +37,8 @@ impl Session {
             return Ok(());
         }
         let selected = self.composition_device.as_ref().map(|device| device.descriptor().clone());
-        let memory = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.memory.clone();
+        let memory =
+            self.resources.as_ref().ok_or("Canvas storage is unavailable")?.presentation.clone();
         let spec = self.spec(
             Operation::Infrastructure,
             JobClass::InfrastructureOrdinary,

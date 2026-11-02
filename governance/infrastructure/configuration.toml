@@ -912,7 +912,7 @@ rationale = "The transport consumes inherited proxy and bypass variables solely 
 [[records]]
 path = "crates/sugarsubstitute/src/viewer.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2a5be1a5f4e05caa38771b808aebca74ca282811f30e6c3dd6c0c29cf356f73e"
+source_sha256 = "sha256:c2323d388694243a0dc032e90c49c3160a11b5781500d74ad68d8dc799d5b8b1"
 capabilities = ["arguments"]
 rationale = "Standalone viewer entry captures explicit CLI values once and passes typed bounded options to its application lifetime; storage and execution remain with their authoritative owners."
 

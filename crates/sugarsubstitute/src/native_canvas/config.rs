@@ -33,4 +33,7 @@ pub(crate) struct Config {
     pub(crate) locale: String,
     /// Initial native viewport extent in physical pixels.
     pub(crate) extent: Extent,
+    /// Largest physical canvas extent whose storage this session funds; normally the box
+    /// enclosing every attached display.
+    pub(crate) maximum_extent: Extent,
 }

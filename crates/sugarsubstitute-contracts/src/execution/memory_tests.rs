@@ -122,3 +122,30 @@ fn borrowed_reservation_identity_rejects_equal_foreign_bytes_and_retains_origina
     drop(foreign);
     assert_eq!(foreign_releases.calls.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn carved_leases_isolate_their_bytes_until_their_last_claim_drops() -> Result<(), MemoryClaimError>
+{
+    let released = Arc::new(Releases::default());
+    let original = lease(100, &released);
+    let carved = original.claim(40)?.into_lease();
+    assert_eq!(carved.bytes(), 40);
+    assert!(!carved.same_reservation(&original));
+    // The original can no longer reach the carved bytes, and the carved lease cannot grow.
+    assert_eq!(
+        original.claim(61).map(|_| ()),
+        Err(MemoryClaimError { requested_bytes: 61, available_bytes: 60 })
+    );
+    let surface = carved.claim(40)?;
+    assert!(carved.claim(1).is_err());
+    let cache = original.claim(60)?;
+    drop(carved);
+    assert!(original.claim(1).is_err());
+    drop(surface);
+    drop(cache);
+    assert_eq!(original.claim(100)?.bytes(), 100);
+    assert_eq!(released.calls.load(Ordering::SeqCst), 0);
+    drop(original);
+    assert_eq!(released.calls.load(Ordering::SeqCst), 1);
+    Ok(())
+}

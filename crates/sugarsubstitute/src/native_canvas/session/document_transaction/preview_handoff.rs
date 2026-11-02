@@ -22,7 +22,7 @@ impl Session {
         let Stage::Offered(document, resources) = &candidate.stage else {
             return None;
         };
-        Some((document.cpu_frame()?, &resources.as_ref()?.memory))
+        Some((document.cpu_frame()?, &resources.as_ref()?.presentation))
     }
 
     /// Reidentify prepared pixels only when the ordinary display slot becomes idle.

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose one native canvas session independently of its desktop host.
 
+pub(crate) mod budget;
 pub(crate) mod config;
 mod coverage;
 #[cfg(feature = "native-composition")]

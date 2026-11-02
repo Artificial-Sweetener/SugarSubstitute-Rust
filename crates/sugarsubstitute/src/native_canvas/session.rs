@@ -44,6 +44,7 @@ mod tests;
 use self::display::DisplayEvidence;
 use self::runtime::Runtime;
 use super::{
+    budget,
     config::{Config, InitialSource},
     coverage::{self, BackingTier},
     work::{self, Originals, Packet, Resources, Scene},

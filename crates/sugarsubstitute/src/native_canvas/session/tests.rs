@@ -37,6 +37,7 @@ fn session_with_sequence(
         initial: InitialSource::PickFile,
         locale: "en".into(),
         extent: Extent::new(320, 240)?,
+        maximum_extent: Extent::new(64, 64)?,
     };
     let clock = Arc::new(TestClock(AtomicU64::new(0)));
     let mut session = Session::new(config, DiagnosticHealth::fixture(), clock.clone(), sequence)?;

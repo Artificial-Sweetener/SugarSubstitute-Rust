@@ -369,7 +369,7 @@ fn completed_initialization_waits_for_existing_source_disposal_during_shutdown()
         None,
     )?;
     let initialization = fixture.client.submit_blocking(scope, spec, move |context| {
-        work::initialize(anchor, false, false, &context)
+        work::initialize(anchor, false, false, 0, &context)
     })?;
     loop {
         let observed = fixture.wake.revision();

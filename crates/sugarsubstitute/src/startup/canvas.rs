@@ -38,6 +38,8 @@ pub(super) struct EmbeddedCanvas {
     clock: Arc<dyn Clock>,
     jobs: JobSequence,
     scope: ScopeSpec,
+    /// Largest canvas extent the application's execution capacity funds.
+    maximum_extent: Extent,
     session: Option<Session>,
     cutoff: Option<Moment>,
     reported_ready: bool,
@@ -57,6 +59,7 @@ impl EmbeddedCanvas {
         clock: Arc<dyn Clock>,
         jobs: JobSequence,
         scope: ScopeSpec,
+        maximum_extent: Extent,
     ) -> Self {
         #[cfg(all(feature = "native-composition", test))]
         let surface = surface::NativeSurface::fixture(anchor.join("canvas-qualification-output"));
@@ -68,6 +71,7 @@ impl EmbeddedCanvas {
             clock,
             jobs,
             scope,
+            maximum_extent,
             session: None,
             cutoff: None,
             reported_ready: false,
@@ -149,6 +153,7 @@ impl EmbeddedCanvas {
             initial: InitialSource::AwaitHost,
             locale: locale.to_owned(),
             extent: Extent::new(1, 1)?,
+            maximum_extent: self.maximum_extent,
         };
         let mut session =
             Session::new(config, self.health.clone(), self.clock.clone(), self.jobs.clone())?;

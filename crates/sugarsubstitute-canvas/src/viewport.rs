@@ -6,7 +6,8 @@ use sugarsubstitute_image_ops::Extent;
 
 const MIN_ZOOM: f64 = 1e-9;
 const MAX_ZOOM: f64 = 16384.0;
-pub(crate) const MAX_SURFACE_EDGE: u32 = 16384;
+/// Largest physical viewport edge, in pixels, on either axis.
+pub const MAX_SURFACE_EDGE: u32 = 16384;
 
 /// Immutable camera state. Origin is the document coordinate at the device viewport's top-left.
 /// Zoom is physical device pixels per document pixel; device scale is handled at the input boundary.
