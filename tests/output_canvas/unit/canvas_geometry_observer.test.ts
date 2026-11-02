@@ -257,7 +257,7 @@ test('clips the native allocation to the inner area of scrolling ancestors', () 
   });
   const observer = new CanvasSurfaceGeometryObserver(element, new CanvasFrameFixture(), () => {});
   try {
-    expect(observer.read().clip).toEqual({ x: 36, y: 46, width: 118, height: 78 });
+    expect(observer.read().clip).toEqual({ x: 35, y: 45, width: 120, height: 80 });
   } finally {
     observer.dispose();
     parent.remove();
@@ -489,12 +489,12 @@ test('tracks the clipping ancestry when a surface moves between shadow slots', a
   const changed = jest.fn<(geometry: ReturnType<CanvasSurfaceGeometryObserver['read']>) => void>();
   const observer = new CanvasSurfaceGeometryObserver(element, frames, changed);
   try {
-    expect(observer.read().clip).toEqual({ x: 11, y: 11, width: 118, height: 68 });
+    expect(observer.read().clip).toEqual({ x: 10, y: 10, width: 120, height: 70 });
     element.slot = 'second';
     await Promise.resolve();
     expect(frames.pending).toBe(1);
     frames.advance(16);
-    expect(changed.mock.calls.at(-1)?.[0].clip).toEqual({ x: 41, y: 21, width: 98, height: 58 });
+    expect(changed.mock.calls.at(-1)?.[0].clip).toEqual({ x: 40, y: 20, width: 100, height: 60 });
     second.style.visibility = 'hidden';
     await Promise.resolve();
     expect(frames.pending).toBe(1);

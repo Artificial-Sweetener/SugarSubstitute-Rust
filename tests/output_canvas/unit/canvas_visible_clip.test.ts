@@ -101,6 +101,58 @@ test('an absolute surface escapes a static clipping ancestor but not a positione
   expect(positioned.clip.width).toBe(0);
 });
 
+test('a pixel-aligned clipping ancestor keeps the surface through its edges', () => {
+  jest.replaceProperty(window, 'innerWidth', 1000);
+  jest.replaceProperty(window, 'innerHeight', 800);
+  const root = document.createElement('div');
+  root.style.overflow = 'clip';
+  jest.spyOn(root, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 800));
+  for (const [name, value] of [
+    ['offsetWidth', 1000],
+    ['offsetHeight', 800],
+    ['clientWidth', 1000],
+    ['clientHeight', 800],
+  ] as const)
+    Object.defineProperty(root, name, { configurable: true, value });
+  const surface = document.createElement('div');
+  root.append(surface);
+  document.body.append(root);
+  try {
+    expect(canvasVisibleClip(surface, rect(600, 100, 400, 700))).toEqual({
+      clip: { x: 600, y: 100, width: 400, height: 700 },
+      visible: true,
+    });
+  } finally {
+    root.remove();
+    jest.restoreAllMocks();
+  }
+});
+
+test('a fractional clipping ancestor insets its rounded client edges by one pixel', () => {
+  jest.replaceProperty(window, 'innerWidth', 1000);
+  jest.replaceProperty(window, 'innerHeight', 800);
+  const root = document.createElement('div');
+  root.style.overflow = 'clip';
+  jest.spyOn(root, 'getBoundingClientRect').mockReturnValue(rect(0.5, 0, 999.5, 800));
+  for (const [name, value] of [
+    ['offsetWidth', 1000],
+    ['offsetHeight', 800],
+    ['clientWidth', 1000],
+    ['clientHeight', 800],
+  ] as const)
+    Object.defineProperty(root, name, { configurable: true, value });
+  const surface = document.createElement('div');
+  root.append(surface);
+  document.body.append(root);
+  try {
+    const { clip } = canvasVisibleClip(surface, rect(600, 100, 400, 700));
+    expect(clip.x + clip.width).toBeLessThan(1000);
+  } finally {
+    root.remove();
+    jest.restoreAllMocks();
+  }
+});
+
 test('an in-flow surface stays clipped by its overflow-clipping ancestor', () => {
   const result = measure((root, surface) => {
     root.append(surface);
