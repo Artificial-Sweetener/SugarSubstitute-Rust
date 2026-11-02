@@ -83,11 +83,9 @@ impl super::MainActor {
         if self.identity() != frame.identity || !self.revealed || self.admission.closing() {
             return Ok(None);
         }
-        if self.canvas_allocation()? != frame.allocation {
-            self.hide_canvas()?;
-            return Ok(None);
-        }
-        if !self.inside_window(frame.placement)? {
+        // A frame laid out before the latest resize still lands where the page placed it and
+        // shows until the next frame; Windows clips it to the current client area.
+        if super::scale::stale(Some(frame.allocation), self.canvas_allocation()?) {
             self.hide_canvas()?;
             return Ok(None);
         }
@@ -95,16 +93,6 @@ impl super::MainActor {
             .as_mut()
             .ok_or_else(|| missing("browser_composition"))?
             .present_canvas(frame)
-    }
-
-    /// Whether a placement's clip lies inside the current client area.
-    fn inside_window(&self, placement: CanvasPlacement) -> Result<bool, DesktopError> {
-        let size = self.window()?.inner_size();
-        let clip = placement.clip;
-        Ok(clip.x >= 0
-            && clip.y >= 0
-            && i64::from(clip.x) + i64::from(clip.width) <= i64::from(size.width)
-            && i64::from(clip.y) + i64::from(clip.height) <= i64::from(size.height))
     }
 
     /// Fence previous pixels when no current application frame owns the viewport.
@@ -190,8 +178,7 @@ impl super::MainActor {
         let current = self.identity() == retained.identity
             && self.revealed
             && !self.admission.closing()
-            && self.canvas_allocation()? == retained.allocation
-            && self.inside_window(retained.shown)?
+            && !super::scale::stale(Some(retained.allocation), self.canvas_allocation()?)
             && self
                 .composition
                 .as_ref()

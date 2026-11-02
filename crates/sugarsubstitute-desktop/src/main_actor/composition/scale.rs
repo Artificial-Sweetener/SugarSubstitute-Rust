@@ -6,10 +6,9 @@
 //! The host owns the browser's scale: WebView2's monitor detection is disabled and every window
 //! DPI change sets `RasterizationScale` before Tao applies the new client size. Bounds stay in
 //! raw physical pixels, so the page's device pixel ratio is the rasterization scale times the
-//! page zoom. The page republishes its geometry when that ratio or its layout changes; until the
-//! canvas owner acknowledges the new geometry, shown native pixels no longer match the browser's
-//! allocation and are withdrawn together with their input region rather than shown at a stale
-//! size or density.
+//! page zoom. The page republishes its geometry when that ratio or its layout changes. A resize
+//! keeps the latest native pixels on screen until a frame at the new geometry replaces them; a
+//! density change withdraws them rather than showing them at a stale size.
 
 use super::*;
 use crate::canvas::placement::{PhysicalRect, WebViewAllocation};
@@ -98,9 +97,18 @@ pub(super) fn allocation(browser: &impl Browser) -> Result<WebViewAllocation, De
     })
 }
 
-/// Whether shown native pixels were placed against an allocation the browser no longer has.
+/// Whether shown native pixels were placed in a coordinate space the browser no longer has.
+///
+/// A browser resized about the same origin and density lays its page out in the same physical
+/// client pixels, so the latest frame stays on screen until one at the new geometry replaces
+/// it, and Windows clips anything beyond a shrunken client area. An origin or density change
+/// would show the pixels at the wrong place or size, so it withdraws them.
 pub(super) fn stale(shown: Option<WebViewAllocation>, current: WebViewAllocation) -> bool {
-    shown.is_some_and(|shown| shown != current)
+    shown.is_some_and(|shown| {
+        [shown.bounds.x, shown.bounds.y] != [current.bounds.x, current.bounds.y]
+            || shown.physical_pixels_per_css_pixel.to_bits()
+                != current.physical_pixels_per_css_pixel.to_bits()
+    })
 }
 
 impl super::Composition {
@@ -146,8 +154,8 @@ impl super::MainActor {
         )
     }
 
-    /// Withdraw native pixels and their input region once the browser's allocation changed
-    /// under them, so no stale-size or stale-density frame stays on screen.
+    /// Withdraw native pixels and their input region once the browser's origin or density
+    /// changed under them, so no frame stays on screen at the wrong place or size.
     pub(in crate::main_actor) fn withdraw_stale_canvas(&mut self) -> Result<(), DesktopError> {
         let Some(shown) = self.composition.as_ref().and_then(|tree| tree.shown) else {
             return Ok(());

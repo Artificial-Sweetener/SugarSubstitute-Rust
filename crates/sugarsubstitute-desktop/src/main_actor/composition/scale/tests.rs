@@ -51,7 +51,7 @@ impl Browser for Fake {
 }
 
 #[test]
-fn a_dpi_change_rescales_the_browser_and_moves_the_allocation_off_shown_pixels() -> TestResult {
+fn a_dpi_change_withdraws_shown_pixels_but_a_resize_keeps_them() -> TestResult {
     let browser = Fake::new(1.0, 1.0, (800, 600));
     let shown = allocation(&browser)?;
     assert_eq!(
@@ -72,10 +72,22 @@ fn a_dpi_change_rescales_the_browser_and_moves_the_allocation_off_shown_pixels()
     browser.size.set((1200, 900));
     let resized = allocation(&browser)?;
     assert_eq!(resized.bounds, PhysicalRect { x: 0, y: 0, width: 1200, height: 900 });
-    assert!(stale(Some(shown), resized));
-    assert!(!stale(Some(resized), resized), "geometry acknowledged at the new allocation");
+    assert!(
+        !stale(Some(rescaled), resized),
+        "a resize keeps shown pixels until a frame at the new geometry replaces them"
+    );
     assert!(!stale(None, resized), "nothing shown, nothing to withdraw");
     Ok(())
+}
+
+#[test]
+fn a_moved_browser_origin_withdraws_shown_pixels() {
+    let shown = WebViewAllocation {
+        bounds: PhysicalRect { x: 0, y: 0, width: 800, height: 600 },
+        physical_pixels_per_css_pixel: 1.0,
+    };
+    let moved = WebViewAllocation { bounds: PhysicalRect { x: 0, y: 34, ..shown.bounds }, ..shown };
+    assert!(stale(Some(shown), moved));
 }
 
 #[test]
