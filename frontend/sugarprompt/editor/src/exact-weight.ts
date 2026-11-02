@@ -137,8 +137,11 @@ class ExactWeights {
       input = this.input;
     if (!target || !input) return;
     const text = input.element.value;
+    // Confirming an untouched existing weight leaves its authored spelling alone; Space still
+    // commits so the following space lands after the weight.
+    const untouched = text === this.initial && !target.neutral && completion !== 'space';
     const value =
-      !cancel && (validWeightDraft(text) || text === this.initial)
+      !cancel && !untouched && (validWeightDraft(text) || text === this.initial)
         ? parseWeight(text, false) === null
           ? null
           : text

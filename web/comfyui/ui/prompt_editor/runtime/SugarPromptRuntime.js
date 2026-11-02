@@ -33399,7 +33399,8 @@ var ExactWeights = class {
     const target = this.target, input = this.input;
     if (!target || !input) return;
     const text = input.element.value;
-    const value = !cancel && (validWeightDraft(text) || text === this.initial) ? parseWeight(text, false) === null ? null : text : null;
+    const untouched = text === this.initial && !target.neutral && completion !== "space";
+    const value = !cancel && !untouched && (validWeightDraft(text) || text === this.initial) ? parseWeight(text, false) === null ? null : text : null;
     const handoff = this.handoff;
     if (handoff === null) throw new Error("Native weight input handoff missing");
     this.handoff = null;
