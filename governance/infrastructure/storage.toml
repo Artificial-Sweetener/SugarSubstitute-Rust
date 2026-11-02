@@ -59,7 +59,7 @@ owner = "sugarsubstitute-execution"
 identity = "tokio"
 binding = "tokio"
 kind = "normal"
-source_sha256 = "sha256:9a648645731a9fc123e6a34a1fd25e0879654ba5ab902d953da2be429edc5d95"
+source_sha256 = "sha256:c615c376d6519f4f947c3b29a252e1fa8f456e648c7c189fa2091fa2db1b03d6"
 rationale = "Execution-owned async runtime and network integration; filesystem APIs remain restricted by authored source reviews."
 
 [[dependencies]]
@@ -67,7 +67,7 @@ owner = "sugarsubstitute-execution"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:9a648645731a9fc123e6a34a1fd25e0879654ba5ab902d953da2be429edc5d95"
+source_sha256 = "sha256:c615c376d6519f4f947c3b29a252e1fa8f456e648c7c189fa2091fa2db1b03d6"
 rationale = "Native OS adapter bindings for sugarsubstitute-execution; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]

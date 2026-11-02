@@ -69,6 +69,7 @@ mod fixture_session;
 mod lifecycle_pipe;
 mod mailbox;
 mod memory;
+pub mod memory_budget;
 mod native_resources;
 #[cfg(any(windows, test))]
 pub mod process_creation;

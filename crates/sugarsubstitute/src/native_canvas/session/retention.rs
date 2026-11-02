@@ -6,7 +6,12 @@
 //! its camera and its full-quality detail and whole-document fallback backings, whose memory
 //! claims stay funded by the session's retained-document allowance. Display custody (the
 //! projection, its buffers and acknowledged evidence) always stays with the current document.
-//! Eviction, forgetting and close hand documents to the existing retirement worker.
+//!
+//! The application memory budget narrows the funded allowance as system pressure rises.
+//! Retention then gives memory back cheapest-to-rebuild first: it demotes the least recently
+//! shown documents to their whole-document fallback, whose detail is re-rendered from the
+//! retained source on reselection, and evicts whole documents only once every parked document
+//! is demoted. Eviction, forgetting and close hand documents to the existing retirement worker.
 
 use super::*;
 use std::collections::VecDeque;
@@ -46,13 +51,15 @@ impl Retiring {
     }
 }
 
-/// Parked documents ordered from least to most recently shown, bounded by a count and by a byte
-/// ledger of their backings (four bytes per backing pixel, as the canvas budget funds them).
+/// Parked documents ordered from least to most recently shown, bounded by a byte ledger of
+/// their backings (four bytes per backing pixel, as the canvas budget funds them).
 #[derive(Default)]
 pub(super) struct RetainedDocuments {
     entries: VecDeque<Entry>,
     bytes: u64,
     retiring: Retiring,
+    /// The memory budget's current limit; `None` until the first budget decision.
+    limit: Option<u64>,
 }
 
 impl RetainedDocuments {
@@ -68,7 +75,6 @@ impl RetainedDocuments {
     }
 
     /// Backing bytes the parked documents charge to the retained-document allowance.
-    #[cfg(test)]
     pub(super) fn bytes(&self) -> u64 {
         self.bytes
     }
@@ -87,22 +93,43 @@ impl RetainedDocuments {
         Some(entry.document)
     }
 
-    /// Park `document` as the most recently shown, then evict the least recently shown documents
-    /// while more than `count` remain or their backings exceed `allowance` bytes.
-    fn park(
-        &mut self,
-        key: RetentionKey,
-        document: Box<document::DocumentState>,
-        count: usize,
-        allowance: u64,
-    ) {
+    /// The bytes parked documents may hold: the funded allowance narrowed by the budget's limit.
+    fn allowance(&self, funded: u64) -> u64 {
+        self.limit.map_or(funded, |limit| limit.min(funded))
+    }
+
+    /// Park `document` as the most recently shown, then shed to the `funded` allowance.
+    fn park(&mut self, key: RetentionKey, document: Box<document::DocumentState>, funded: u64) {
         if let Some(previous) = self.take(&key) {
             self.retiring.documents.push(previous);
         }
         let bytes = document.retained_bytes();
         self.bytes = self.bytes.saturating_add(bytes);
         self.entries.push_back(Entry { key, document, bytes });
-        while self.entries.len() > count || self.bytes > allowance {
+        self.shed(self.allowance(funded));
+    }
+
+    /// Give memory back until the parked backings fit `allowance`: demote the least recently
+    /// shown documents to their fallback first, then evict the least recently shown documents.
+    fn shed(&mut self, allowance: u64) {
+        for entry in &mut self.entries {
+            if self.bytes <= allowance {
+                return;
+            }
+            if entry.document.demote(&mut self.retiring) {
+                let bytes = entry.document.retained_bytes();
+                let released = entry.bytes.saturating_sub(bytes);
+                self.bytes = self.bytes.saturating_sub(released);
+                tracing::debug!(
+                    operation = "canvas_retained_demotion",
+                    released_bytes = released,
+                    retained_bytes = self.bytes,
+                    "Demoted a retained canvas document to its fallback backing"
+                );
+                entry.bytes = bytes;
+            }
+        }
+        while self.bytes > allowance {
             let Some(evicted) = self.entries.pop_front() else {
                 break;
             };
@@ -182,6 +209,18 @@ impl document::DocumentState {
             .flatten()
             .map(|surface| surface.extent().pixels());
         cpu.chain(gpu).fold(0, |total: u64, pixels| total.saturating_add(pixels.saturating_mul(4)))
+    }
+
+    /// Release the full-quality detail backing, keeping the whole-document fallback and the
+    /// source it is re-rendered from. Returns whether a detail backing was released.
+    fn demote(&mut self, retiring: &mut Retiring) -> bool {
+        if self.front.is_none() && self.gpu_front.is_none() {
+            return false;
+        }
+        retiring.surfaces.extend(self.front.take());
+        retiring.gpu_surfaces.extend(self.gpu_front.take());
+        self.presented = None;
+        true
     }
 
     /// Release the navigation tier, which only serves motion and is rebuilt on demand.
@@ -267,6 +306,32 @@ impl Session {
         };
         self.pending_restore = Some((key.clone(), intent));
         Ok(true)
+    }
+
+    /// Bound parked documents to the memory budget's current `limit`, shedding at once.
+    ///
+    /// The effective allowance never exceeds the funded retained-document admission.
+    pub(crate) fn set_retained_limit(&mut self, limit: u64) {
+        self.retained.limit = Some(limit);
+        self.retained.shed(self.retained.allowance(self.config.retained_document_bytes));
+    }
+
+    /// The parked CPU detail backing for `key`, observed without retaining it.
+    #[cfg(test)]
+    pub(super) fn retained_detail(
+        &self,
+        key: &RetentionKey,
+    ) -> Option<std::sync::Weak<CpuSurface>> {
+        self.retained
+            .entries
+            .iter()
+            .find(|entry| entry.key == *key)
+            .and_then(|entry| entry.document.front.as_ref().map(Arc::downgrade))
+    }
+
+    /// Backing bytes parked documents currently hold, as charged to the memory budget.
+    pub(crate) fn retained_bytes(&self) -> u64 {
+        self.retained.bytes()
     }
 
     /// Retire every retained document, as when the outputs' backend changes. A pending
@@ -368,12 +433,7 @@ impl Session {
         match document.retention.clone() {
             Some(key) if !self.closing && self.retains(&document) => {
                 document.trim(&mut self.retained.retiring);
-                self.retained.park(
-                    key,
-                    document,
-                    budget::RETAINED_DOCUMENTS,
-                    self.config.retained_document_bytes,
-                );
+                self.retained.park(key, document, self.config.retained_document_bytes);
             }
             _ => self.retained.retiring.documents.push(document),
         }

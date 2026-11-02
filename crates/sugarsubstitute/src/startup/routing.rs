@@ -34,6 +34,8 @@ impl<B: StartupBackend> StartupHost<B> {
             .map_or(Ok(()), |composition| composition.advance(self.clock.now()));
         #[cfg(not(all(windows, feature = "native-composition")))]
         let composition = Ok(());
+        #[cfg(all(windows, feature = "native-composition"))]
+        self.govern_memory();
         #[cfg(windows)]
         let canvas = self.canvas.as_mut().map_or(Ok(()), canvas::EmbeddedCanvas::poll);
         #[cfg(not(windows))]
@@ -251,6 +253,47 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         Ok(())
     }
+    /// The canvas's refinement deadline and the memory budget's next sample, whichever is first.
+    pub(super) fn owned_deadlines(&self) -> Option<Instant> {
+        #[cfg(windows)]
+        {
+            let canvas = self.canvas.as_ref().and_then(canvas::EmbeddedCanvas::next_deadline);
+            #[cfg(feature = "native-composition")]
+            let memory = self
+                .memory
+                .as_ref()
+                .filter(|_| !self.closing)
+                .map(super::memory::MemoryGovernor::next_deadline);
+            #[cfg(not(feature = "native-composition"))]
+            let memory = None;
+            canvas.into_iter().chain(memory).min()
+        }
+        #[cfg(not(windows))]
+        None
+    }
+
+    /// Sample memory when due and narrow or widen what retained canvas documents may keep.
+    #[cfg(all(windows, feature = "native-composition"))]
+    fn govern_memory(&mut self) {
+        let (Some(memory), Some(canvas)) = (&mut self.memory, &mut self.canvas) else {
+            return;
+        };
+        if self.closing {
+            return;
+        }
+        let charge = sugarsubstitute_execution::memory_budget::CacheCharge {
+            native_bytes: canvas.retained_bytes(),
+            ..Default::default()
+        };
+        match memory.poll(std::time::Instant::now(), self.clock.now(), charge) {
+            Ok(Some(decision)) => canvas.limit_retained(decision.native_bytes),
+            Ok(None) => {}
+            // A failed sample keeps the previous allowance; the canvas itself stays healthy.
+            Err(error) => tracing::warn!(operation = "memory_budget_sample", %error,
+                "System memory could not be sampled; the previous cache allowance remains"),
+        }
+    }
+
     /// Map the actual owner epoch; failed arithmetic is returned rather than hidden.
     pub(super) fn refresh_deadline(&mut self) -> Result<(), Box<dyn Error>> {
         let child = self.child.next_deadline();

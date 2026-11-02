@@ -14,14 +14,16 @@ use sugarsubstitute_image_ops::{Extent, ImageError, Pixel, TILE_EDGE};
 
 /// Cached graph tiles each canvas renderer may retain.
 pub(super) const RENDERER_TILES: usize = 512;
-/// Recently shown output documents an embedded canvas keeps for instant reselection.
-#[cfg(feature = "native-composition")]
-pub(super) const RETAINED_DOCUMENTS: usize = 16;
-/// Fixed storage an embedded canvas funds for its retained output documents' backings,
-/// independent of the display extent. Retention evicts the least recently shown document
-/// before its ledger exceeds this allowance.
-#[cfg(any(all(windows, feature = "windows-native-host"), test))]
-pub(crate) const RETAINED_DOCUMENT_BYTES: u64 = 512 * 1024 * 1024;
+/// Retained-document admission an embedded canvas funds on a machine with `total_physical_bytes`:
+/// the largest application ceiling any memory preference can select. This is an admission
+/// ceiling, not an allocation; the memory budget's live limit decides how much of it parked
+/// documents hold.
+#[cfg(any(all(windows, feature = "windows-native-host", feature = "native-composition"), test))]
+pub(crate) fn retained_document_funding(total_physical_bytes: u64) -> u64 {
+    sugarsubstitute_execution::memory_budget::MemoryPreference::largest_ceiling(
+        total_physical_bytes,
+    )
+}
 /// Document, history, sampling tables and engine metadata independent of canvas size.
 const FIXED_BYTES: u64 = 16 * 1024 * 1024;
 /// Margin-extended canonical surfaces alive together: three document tiers, a replacement in
@@ -153,20 +155,19 @@ mod tests {
     }
 
     #[test]
-    fn retained_documents_add_their_fixed_allowance_at_every_extent()
+    fn retained_documents_add_their_funded_allowance_at_every_extent()
     -> Result<(), Box<dyn std::error::Error>> {
+        let funded = retained_document_funding(64 * 1024 * MIB);
+        // Three quarters of physical memory: the largest ceiling a preference can select.
+        assert_eq!(funded, 48 * 1024 * MIB);
         for extent in [Extent::new(1, 1)?, Extent::new(3840, 2160)?] {
             for gpu in [false, true] {
                 assert_eq!(
-                    reservation_bytes(extent, gpu, RETAINED_DOCUMENT_BYTES)
-                        - reservation_bytes(extent, gpu, 0),
-                    512 * MIB
+                    reservation_bytes(extent, gpu, funded) - reservation_bytes(extent, gpu, 0),
+                    funded
                 );
             }
         }
-        // The allowance holds a dozen full-quality 4K detail backings with their fallbacks.
-        let detail = margin_extended(Extent::new(3840, 2160)?) * 4;
-        assert!(RETAINED_DOCUMENT_BYTES >= 12 * (detail + 1024 * 1024 * 4));
         Ok(())
     }
 
@@ -174,9 +175,10 @@ mod tests {
     fn reservations_saturate_instead_of_overflowing() -> Result<(), Box<dyn std::error::Error>> {
         let largest = i32::MAX as u32;
         assert_eq!(reservation_bytes(Extent::new(largest, largest)?, true, 0), u64::MAX);
-        let small = reservation_bytes(Extent::new(1280, 800)?, false, RETAINED_DOCUMENT_BYTES);
+        let funded = retained_document_funding(16 * 1024 * MIB);
+        let small = reservation_bytes(Extent::new(1280, 800)?, false, funded);
         let fallback = Extent::new(FALLBACK_EXTENT[0], FALLBACK_EXTENT[1])?;
-        assert!(small < reservation_bytes(fallback, false, RETAINED_DOCUMENT_BYTES));
+        assert!(small < reservation_bytes(fallback, false, funded));
         Ok(())
     }
 }

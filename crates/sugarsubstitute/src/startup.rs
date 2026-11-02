@@ -24,6 +24,8 @@ mod delivery;
 mod execution;
 #[path = "startup/lifetime.rs"]
 mod lifetime;
+#[cfg(all(windows, feature = "native-composition"))]
+mod memory;
 #[path = "startup/policy.rs"]
 mod policy;
 #[path = "startup/routing.rs"]
@@ -72,6 +74,9 @@ mod platform_tests;
 pub struct StartupHost<B: StartupBackend> {
     #[cfg(windows)]
     canvas: Option<canvas::EmbeddedCanvas>,
+    /// The application memory budget, governing once a canvas exists.
+    #[cfg(all(windows, feature = "native-composition"))]
+    memory: Option<memory::MemoryGovernor>,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
     policy: StartupPolicy,
@@ -140,6 +145,8 @@ impl<B: StartupBackend> StartupHost<B> {
             #[cfg(windows)]
             canvas: None,
             #[cfg(all(windows, feature = "native-composition"))]
+            memory: None,
+            #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
             policy: StartupPolicy::new(run, launch),
             startup: None,
@@ -197,7 +204,11 @@ impl<B: StartupBackend> StartupHost<B> {
             return Err("Application canvas cache anchor must be absolute".into());
         }
         let maximum = crate::native_canvas::budget::largest_canvas_extent()?;
-        let retained = crate::native_canvas::budget::RETAINED_DOCUMENT_BYTES;
+        // Only composition-hosted canvases retain documents for the memory budget to govern.
+        #[cfg(feature = "native-composition")]
+        let (governor, retained) = memory::MemoryGovernor::open()?;
+        #[cfg(not(feature = "native-composition"))]
+        let retained = 0;
         // The renderer policy is chosen when the canvas starts, so fund a GPU session.
         self.execution.reserve_canvas_capacity(crate::native_canvas::budget::reservation_bytes(
             maximum, true, retained,
@@ -210,6 +221,8 @@ impl<B: StartupBackend> StartupHost<B> {
             scope,
             canvas::CanvasFunding { maximum_extent: maximum, retained_document_bytes: retained },
         ));
+        #[cfg(feature = "native-composition")]
+        let _first = self.memory.replace(governor);
         Ok(())
     }
 
@@ -508,16 +521,7 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     fn next_deadline(&self) -> Option<Instant> {
         self.next_deadline
             .into_iter()
-            .chain({
-                #[cfg(windows)]
-                {
-                    self.canvas.as_ref().and_then(canvas::EmbeddedCanvas::next_deadline)
-                }
-                #[cfg(not(windows))]
-                {
-                    None
-                }
-            })
+            .chain(self.owned_deadlines())
             .chain(
                 self.view
                     .as_ref()

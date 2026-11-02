@@ -49,6 +49,9 @@ pub(super) struct EmbeddedCanvas {
     scope: ScopeSpec,
     funding: CanvasFunding,
     session: Option<Session>,
+    /// The memory budget's latest retained-document limit, applied to every session.
+    #[cfg(feature = "native-composition")]
+    retained_limit: Option<u64>,
     cutoff: Option<Moment>,
     reported_ready: bool,
     /// The showing display's refresh rate, kept for a session created after it was reported.
@@ -81,6 +84,8 @@ impl EmbeddedCanvas {
             scope,
             funding,
             session: None,
+            #[cfg(feature = "native-composition")]
+            retained_limit: None,
             cutoff: None,
             reported_ready: false,
             #[cfg(feature = "native-composition")]
@@ -172,12 +177,31 @@ impl EmbeddedCanvas {
         session.attach_cpu_surface()?;
         session.input(Input::Drawable(false))?;
         #[cfg(feature = "native-composition")]
+        if let Some(limit) = self.retained_limit {
+            session.set_retained_limit(limit);
+        }
+        #[cfg(feature = "native-composition")]
         if let Some(hertz) = self.display {
             session.input(Input::DisplayRefresh(hertz))?;
         }
         self.session = Some(session);
         let runtime = Runtime::shared(client, self.scope)?;
         self.session.as_mut().ok_or("Application canvas disappeared")?.start_runtime(runtime)
+    }
+
+    /// Bound retained output documents to the memory budget's native allowance, in bytes.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn limit_retained(&mut self, bytes: u64) {
+        self.retained_limit = Some(bytes);
+        if let Some(session) = &mut self.session {
+            session.set_retained_limit(bytes);
+        }
+    }
+
+    /// Bytes retained output documents hold, as charged to the memory budget.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn retained_bytes(&self) -> u64 {
+        self.session.as_ref().map_or(0, Session::retained_bytes)
     }
 
     /// Advance the canvas after the application's single completion drain.

@@ -4,10 +4,12 @@
 
 use super::*;
 use crate::native_canvas::session::{RetentionKey, SelectedOriginals, acquisition::SourceAcquirer};
-use std::{io, sync::Weak};
+use std::io;
 use sugarsubstitute_canvas::NavigationCommand;
 
-/// Enough retained-document storage for every 8x8 test document the count limit keeps.
+mod budget;
+
+/// Enough retained-document storage for every 8x8 test document these tests park.
 const FUNDED: u64 = 8 * 1024 * 1024;
 
 /// One frame acknowledged on the native CPU path, with its centre pixel.
@@ -407,50 +409,6 @@ fn returning_while_another_output_renders_restores_after_it_ends_without_showing
     assert!(!fixture.session.retained.contains(&key("c")));
     assert!(fixture.session.retained.contains(&key("b")));
     fixture.settle()?;
-    let _directory = fixture.finish()?;
-    Ok(())
-}
-
-#[test]
-fn retention_evicts_the_least_recently_shown_documents_beyond_its_count()
--> Result<(), Box<dyn Error>> {
-    let mut fixture = Fixture::retaining()?;
-    let mut first: Option<Weak<CpuSurface>> = None;
-    for index in 0..18_u8 {
-        fixture.show([255, index * 8, 0], &format!("output-{index}"))?;
-        if index == 0 {
-            first = fixture.session.document.front.as_ref().map(Arc::downgrade);
-        }
-    }
-    assert_eq!(fixture.session.retained.count(), budget::RETAINED_DOCUMENTS);
-    assert!(!fixture.session.retained.contains(&key("output-0")));
-    for index in 1..17 {
-        assert!(fixture.session.retained.contains(&key(&format!("output-{index}"))));
-    }
-    fixture.settle_retirement()?;
-    let first = first.ok_or("First detail backing absent")?;
-    assert!(first.upgrade().is_none(), "Evicted document backings were not retired");
-    assert!(!fixture.session.reselect_retained(&key("output-0"))?);
-    let _directory = fixture.finish()?;
-    Ok(())
-}
-
-#[test]
-fn retention_evicts_the_least_recently_shown_documents_beyond_its_byte_allowance()
--> Result<(), Box<dyn Error>> {
-    let mut fixture = Fixture::retaining()?;
-    fixture.show([255, 0, 0], "a")?;
-    fixture.show([0, 255, 0], "b")?;
-    let one = fixture.session.retained.bytes();
-    assert!(one > 0);
-    fixture.session.config.retained_document_bytes = 2 * one + one / 2;
-    fixture.show([0, 0, 255], "c")?;
-    fixture.show([255, 255, 0], "d")?;
-    assert_eq!(fixture.session.retained.count(), 2);
-    assert!(!fixture.session.retained.contains(&key("a")));
-    assert!(fixture.session.retained.contains(&key("b")));
-    assert!(fixture.session.retained.contains(&key("c")));
-    assert!(fixture.session.retained.bytes() <= fixture.session.config.retained_document_bytes);
     let _directory = fixture.finish()?;
     Ok(())
 }
