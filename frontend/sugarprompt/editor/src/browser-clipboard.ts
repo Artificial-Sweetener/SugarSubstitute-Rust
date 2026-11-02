@@ -29,6 +29,8 @@ function unavailable(owner: Window & typeof globalThis, cause: unknown): 'denied
   if (cause instanceof owner.DOMException) {
     if (cause.name === 'NotAllowedError' || cause.name === 'SecurityError') return 'denied';
     if (cause.name === 'NotSupportedError') return 'unavailable';
+    // Chromium rejects reading an item after the system clipboard changed beneath it.
+    if (cause.name === 'InvalidStateError') return 'unavailable';
   }
   throw cause;
 }

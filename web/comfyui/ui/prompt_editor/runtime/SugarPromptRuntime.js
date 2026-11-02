@@ -23289,6 +23289,7 @@ function unavailable2(owner, cause) {
   if (cause instanceof owner.DOMException) {
     if (cause.name === "NotAllowedError" || cause.name === "SecurityError") return "denied";
     if (cause.name === "NotSupportedError") return "unavailable";
+    if (cause.name === "InvalidStateError") return "unavailable";
   }
   throw cause;
 }
