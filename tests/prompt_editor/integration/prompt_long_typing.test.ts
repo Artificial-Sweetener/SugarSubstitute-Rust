@@ -87,7 +87,7 @@ async function settle(page: Page): Promise<void> {
 }
 
 test.each(['nodes-1', 'nodes-2'] as const)(
-  '%s typing at the end of a long prompt rebuilds no distant widgets',
+  '%s typing at the end of a long prompt rebuilds no distant widgets and re-measures no settled layout',
   async (renderer) => {
     const page = await mountPrompt(fixture, renderer, longPrompt);
     try {
@@ -104,6 +104,8 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await expectSource(page, longPrompt + typed);
       const observed = await work();
       expect(observed.widgets).toBe(0);
+      // Settled word groups keep their measured widths; a full re-measure reads hundreds.
+      expect(observed.reads).toBeLessThan(typed.length * 40);
       expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
     } finally {
       await page.close();
