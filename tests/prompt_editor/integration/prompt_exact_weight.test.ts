@@ -75,6 +75,40 @@ async function characterPoint(
 }
 
 test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s leaves an untouched weight unchanged on Enter and commits an edited one',
+  async (renderer) => {
+    const page = await mountPrompt(fixture, renderer, source);
+    try {
+      const before = await page.evaluate(() => window.promptBrowserProof.read().callbacks);
+      await editWeight(page);
+      await page.keyboard.press('Enter');
+      // Focus returns to the prompt only after any committed weight has been published.
+      await page.waitForFunction(
+        () => document.activeElement?.classList.contains('cm-content') === true,
+      );
+      expect(await page.evaluate(() => window.promptBrowserProof.read())).toMatchObject({
+        source,
+        callbacks: before,
+      });
+      await editWeight(page);
+      await page.keyboard.press('Control+a');
+      await page.keyboard.type('1.45');
+      await page.keyboard.press('Enter');
+      await expectSource(page, source.replace('1.2', '1.45'));
+      await page.keyboard.press('Control+z');
+      // Undo reaches the original spelling, proving the untouched Enter added no history step.
+      await expectSource(page, source);
+      await page.keyboard.press('Control+z');
+      await expectSource(page, source);
+      expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+  30_000,
+);
+
+test.each(['nodes-1', 'nodes-2'] as const)(
   '%s commits an edited weight and places the caret where the prompt was clicked',
   async (renderer) => {
     const page = await mountPrompt(fixture, renderer, source);
