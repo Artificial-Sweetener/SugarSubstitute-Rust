@@ -115,7 +115,7 @@ test('selected tabs share the opaque toolbar surface in either palette and while
   );
 });
 
-test('Substitute workspace removes native side margins without moving unrelated splitters', () => {
+test('Substitute workspace fills the frame edge to edge without moving unrelated splitters', () => {
   const nativeStyle = document.createElement('style');
   nativeStyle.textContent = '.splitter-overlay-bottom { margin:0 4px 4px; }';
   const frameStyle = document.createElement('style');
@@ -132,11 +132,13 @@ test('Substitute workspace removes native side margins without moving unrelated 
   document.documentElement.setAttribute('data-sc-substitute-frame', '');
   expect(getComputedStyle(workspace).marginLeft).toBe('0px');
   expect(getComputedStyle(workspace).marginRight).toBe('0px');
-  expect(getComputedStyle(workspace).marginBottom).toBe('4px');
+  expect(getComputedStyle(workspace).marginBottom).toBe('0px');
   expect(getComputedStyle(unrelated).marginLeft).toBe('4px');
+  expect(getComputedStyle(unrelated).marginBottom).toBe('4px');
   document.documentElement.removeAttribute('data-sc-substitute-frame');
   expect(getComputedStyle(workspace).marginLeft).toBe('4px');
   expect(getComputedStyle(workspace).marginRight).toBe('4px');
+  expect(getComputedStyle(workspace).marginBottom).toBe('4px');
 });
 
 test('workflow and native toolbar wrappers receive reversible marks without moving host controls', async () => {

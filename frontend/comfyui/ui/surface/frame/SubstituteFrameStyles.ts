@@ -104,7 +104,7 @@ export const substituteFrameCss = `
   .sc-substitute-frame .sc-orb-chevron { position:absolute; left:10px; top:29px; width:3.5px; height:3.5px; border:solid currentColor; border-width:0 1.1px 1.1px 0; transform:rotate(45deg); }
   :root[data-sc-substitute-frame] .sc-cube-stack-host { left:0; top:6px; bottom:6px; padding:0; border:0; border-radius:0;
     background:transparent; box-shadow:none; scrollbar-width:none; }
-  :root[data-sc-substitute-frame] .splitter-overlay-bottom:has(> .graph-canvas-panel) { margin-left:0; margin-right:0; }
+  :root[data-sc-substitute-frame] .splitter-overlay-bottom:has(> .graph-canvas-panel) { margin-left:0; margin-right:0; margin-bottom:0; }
   :root[data-sc-substitute-frame] .sc-cube-stack-host::-webkit-scrollbar { display:none; }
   :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'] .sc-cube-stack__toolbar { display:none; }
   :root[data-sc-substitute-frame] .sc-cube-stack:not([data-compact]) .sc-cube-stack-row { border-radius:4px; }
