@@ -316,6 +316,16 @@ impl Session {
         if !finished || !self.retains(&self.document) || self.document_parkable() {
             return Ok(false);
         }
+        self.fence_document_work()?;
+        Ok(true)
+    }
+
+    /// Cancel the current document's rendering and display work and withdraw its unpresented
+    /// frames, so its custody can move once their cancellations are observed.
+    ///
+    /// # Errors
+    /// Preserves CPU and composition frame withdrawal failures.
+    fn fence_document_work(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(displaying) = &self.displaying {
             displaying.job.cancel();
         }
@@ -327,7 +337,7 @@ impl Session {
         self.abandon_cpu_frame(now)?;
         #[cfg(windows)]
         self.abandon_composition_frame(now)?;
-        Ok(true)
+        Ok(())
     }
 
     /// Prepare the current document to receive a newly loaded output tagged `retention`.
@@ -387,8 +397,12 @@ impl Session {
             || self.document_suspended
             || self.document_transaction.is_some()
             || self.preview_pending()
-            || !self.document_parkable()
         {
+            return Ok(true);
+        }
+        if !self.document_parkable() {
+            // The outgoing document's remaining work can no longer be shown.
+            self.fence_document_work()?;
             return Ok(true);
         }
         let Some((key, intent)) = self.pending_restore.take() else {
