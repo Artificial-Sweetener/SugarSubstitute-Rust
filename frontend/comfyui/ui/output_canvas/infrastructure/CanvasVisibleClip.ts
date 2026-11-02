@@ -132,6 +132,7 @@ export function canvasVisibleClip(
         ancestor.offsetWidth,
         ancestor.clientLeft,
         ancestor.clientWidth,
+        [style.borderLeftWidth, style.borderRightWidth],
       );
       if (!edge) representable = false;
       else {
@@ -146,6 +147,7 @@ export function canvasVisibleClip(
         ancestor.offsetHeight,
         ancestor.clientTop,
         ancestor.clientHeight,
+        [style.borderTopWidth, style.borderBottomWidth],
       );
       if (!edge) representable = false;
       else {
@@ -208,13 +210,18 @@ function insetClip(
     rect.bottom - bottom - yScale,
   ];
 }
-/** Client sizes are integer-rounded, so inset their transformed clip by one CSS pixel. */
+/**
+ * Client sizes are integer-rounded, so a fractional or transformed box insets its clip by one
+ * CSS pixel. An untransformed box on whole pixels with whole-pixel borders reports exact client
+ * sizes, so its clip reaches its padding edges and a full-window ancestor clips nothing away.
+ */
 function innerEdges(
   start: number,
   extent: number,
   outer: number,
   border: number,
   inner: number,
+  borders: readonly [string, string],
 ): readonly [number, number] | null {
   if (
     ![start, extent, outer, border, inner].every(Number.isFinite) ||
@@ -226,7 +233,13 @@ function innerEdges(
   )
     return null;
   const scale = extent / outer;
-  return [start + (border + 1) * scale, start + (border + inner - 1) * scale];
+  const exact =
+    extent === outer &&
+    Number.isInteger(start) &&
+    Number.isInteger(extent) &&
+    borders.every((width) => Number.isInteger(Number.parseFloat(width || '0')));
+  const rounding = exact ? 0 : 1;
+  return [start + (border + rounding) * scale, start + (border + inner - rounding) * scale];
 }
 
 function active(value: string): boolean {

@@ -119,7 +119,7 @@ export function canvasVisibleClip(element, bounds) {
         }
         const rect = ancestor.getBoundingClientRect();
         if (clipX) {
-            const edge = innerEdges(rect.left, rect.width, ancestor.offsetWidth, ancestor.clientLeft, ancestor.clientWidth);
+            const edge = innerEdges(rect.left, rect.width, ancestor.offsetWidth, ancestor.clientLeft, ancestor.clientWidth, [style.borderLeftWidth, style.borderRightWidth]);
             if (!edge)
                 representable = false;
             else {
@@ -128,7 +128,7 @@ export function canvasVisibleClip(element, bounds) {
             }
         }
         if (clipY) {
-            const edge = innerEdges(rect.top, rect.height, ancestor.offsetHeight, ancestor.clientTop, ancestor.clientHeight);
+            const edge = innerEdges(rect.top, rect.height, ancestor.offsetHeight, ancestor.clientTop, ancestor.clientHeight, [style.borderTopWidth, style.borderBottomWidth]);
             if (!edge)
                 representable = false;
             else {
@@ -191,8 +191,12 @@ function insetClip(element, value) {
         rect.bottom - bottom - yScale,
     ];
 }
-/** Client sizes are integer-rounded, so inset their transformed clip by one CSS pixel. */
-function innerEdges(start, extent, outer, border, inner) {
+/**
+ * Client sizes are integer-rounded, so a fractional or transformed box insets its clip by one
+ * CSS pixel. An untransformed box on whole pixels with whole-pixel borders reports exact client
+ * sizes, so its clip reaches its padding edges and a full-window ancestor clips nothing away.
+ */
+function innerEdges(start, extent, outer, border, inner, borders) {
     if (![start, extent, outer, border, inner].every(Number.isFinite) ||
         extent <= 0 ||
         outer <= 0 ||
@@ -201,7 +205,12 @@ function innerEdges(start, extent, outer, border, inner) {
         border + inner > outer + 1)
         return null;
     const scale = extent / outer;
-    return [start + (border + 1) * scale, start + (border + inner - 1) * scale];
+    const exact = extent === outer &&
+        Number.isInteger(start) &&
+        Number.isInteger(extent) &&
+        borders.every((width) => Number.isInteger(Number.parseFloat(width || '0')));
+    const rounding = exact ? 0 : 1;
+    return [start + (border + rounding) * scale, start + (border + inner - rounding) * scale];
 }
 function active(value) {
     return value !== '' && value !== 'none' && value !== 'normal';
