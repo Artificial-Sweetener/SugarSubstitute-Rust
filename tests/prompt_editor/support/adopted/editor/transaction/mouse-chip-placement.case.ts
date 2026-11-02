@@ -68,8 +68,8 @@ function acquireChipFixture() {
   const coordinates: number[][] = [];
   let domReads = 0;
   try {
-    const hit = native.view.posAtCoords.bind(native.view);
-    Object.defineProperty(native.view, 'posAtCoords', {
+    const hit = native.view.posAndSideAtCoords.bind(native.view);
+    Object.defineProperty(native.view, 'posAndSideAtCoords', {
       value: (point: { x: number; y: number }) => {
         coordinates.push([point.x, point.y]);
         return hit(point);
