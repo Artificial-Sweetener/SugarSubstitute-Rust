@@ -18,61 +18,22 @@
  * Prove rich editing, decoded banners and Alt dragging through both renderer adapters.
  * @jest-environment node
  */
-import { createServer, type Server } from 'node:http';
-import { build } from 'esbuild';
-import { chromium, type Browser, type Page } from '@playwright/test';
-import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
-import type {} from '../support/BrowserProof.js';
-import { closeBrowserFixture } from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import type { Browser, Page } from '@playwright/test';
+import { startPromptBrowser, type PromptBrowserFixture } from '../support/PromptBrowserServer.js';
 
-let server: Server;
+let fixture: PromptBrowserFixture;
 let browser: Browser;
 let address: string;
 const source = 'a cat, (bright eyes:1.2), <lora:example:0.8>, {colors}, tail';
 
 beforeAll(async () => {
-  const result = await build({
-    entryPoints: ['tests/prompt_editor/support/BrowserProof.ts'],
-    bundle: true,
-    format: 'esm',
-    platform: 'browser',
-    target: 'es2022',
-    write: false,
-    loader: { '.txt': 'text' },
-    define: {
-      'process.env.NODE_ENV': '"production"',
-      __VUE_OPTIONS_API__: 'false',
-      __VUE_PROD_DEVTOOLS__: 'false',
-      __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
-    },
-  });
-  const script = result.outputFiles[0]?.contents;
-  if (!script) throw new Error('Missing prompt browser fixture');
-  server = createServer((request, response) => {
-    if (request.url === '/fixture.js') {
-      response.writeHead(200, { 'Content-Type': 'application/javascript' });
-      response.end(script);
-    } else if (request.url?.startsWith('/proof/')) {
-      response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-      response.end(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="128"><rect width="512" height="128" fill="#3060a0"/><path d="M0 128L160 0 320 128Z" fill="#e09040"/></svg>',
-      );
-    } else {
-      response.writeHead(200, { 'Content-Type': 'text/html' });
-      response.end(
-        '<!doctype html><html class="dark-theme" style="color-scheme:dark"><meta charset="utf-8"><style>body{margin:24px;background:#202020;color:#eee}textarea{width:700px}</style><script type="module" src="/fixture.js"></script></html>',
-      );
-    }
-  });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const listening = server.address();
-  if (!listening || typeof listening === 'string') throw new Error('Missing fixture address');
-  address = `http://127.0.0.1:${String(listening.port)}`;
-  browser = await launchHeadlessBrowser(chromium);
+  fixture = await startPromptBrowser();
+  browser = fixture.browser;
+  address = fixture.address;
 }, 60_000);
 
 afterAll(async () => {
-  await closeBrowserFixture(browser, server);
+  await fixture.close();
 }, 30_000);
 
 test.each(['nodes-1', 'nodes-2'] as const)(
