@@ -20,6 +20,7 @@ import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../core/ComfyRendererMode.js';
 import { ModelPickerAppearance } from './ModelPickerAppearance.js';
 import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
+import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
 import { modelPickerChoices } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
 import { ModelPickerSessions } from './ModelPickerSessions.js';
@@ -237,10 +238,11 @@ export class ModelPickerHost {
                     for (const [anchor, mount] of this.#mounts)
                         if (!anchor.isConnected || !mount.root.isConnected)
                             this.#release(anchor);
+                    const nodes = new ComfyNodeVNodeIndex();
                     for (const root of this.#dirty) {
                         if (!root.isConnected)
                             continue;
-                        const bindings = readComfyModelFields(root, this.#snapshot);
+                        const bindings = readComfyModelFields(root, this.#snapshot, nodes);
                         const live = new Set(bindings.map((binding) => binding.anchor));
                         for (const [anchor, mount] of this.#mounts)
                             if (mount.root === root && !live.has(anchor))

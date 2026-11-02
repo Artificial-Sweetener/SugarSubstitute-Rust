@@ -31,12 +31,43 @@ export function findMountedNodeVNode(root) {
 }
 /** Resolve exact production card mounts when Vue omits development-only component ancestry. */
 export function findNativeNodeVNode(root) {
-    const direct = findMountedNodeVNode(root);
-    if (direct)
-        return direct;
-    const mount = root.closest('.sugarcubes-native-node-card') ?? root.ownerDocument.getElementById('vue-app');
-    const record = isRecord(mount) ? mount : {};
-    return (findVueComponents(record._vnode, 'LGraphNode').find((vnode) => resolveVueElement(vnode) === root) ?? null);
+    return new ComfyNodeVNodeIndex().resolve(root);
+}
+/**
+ * Resolve native node components for one coalesced batch of node roots.
+ *
+ * Production Vue records no element-to-component back reference, so graph nodes can only be
+ * reached from their render container. Projected cards are their own containers and are searched
+ * alone. Graph nodes share the application container: its tree is indexed at most once per batch,
+ * and the walk stops at every node component, so each node's subtree is visited only when that
+ * node's own fields are read.
+ */
+export class ComfyNodeVNodeIndex {
+    #application = null;
+    /** Return the exact LGraphNode component VNode rendering one `.lg-node` root. */
+    resolve(root) {
+        const direct = findMountedNodeVNode(root);
+        if (direct)
+            return direct;
+        const card = root.closest('.sugarcubes-native-node-card');
+        if (card)
+            return indexNodeVNodes(Reflect.get(card, '_vnode')).get(root) ?? null;
+        this.#application ??= indexNodeVNodes(Reflect.get(root.ownerDocument.getElementById('vue-app') ?? {}, '_vnode'));
+        return this.#application.get(root) ?? null;
+    }
+}
+/** Map each mounted node component by its root element without descending into node subtrees. */
+function indexNodeVNodes(value) {
+    const nodes = new Map();
+    const desired = new Set(['LGraphNode']);
+    for (const candidate of mountedVueNodes(value, (vnode) => hasVueComponentName(vnode, desired))) {
+        if (!hasVueComponentName(candidate, desired))
+            continue;
+        const element = resolveVueElement(candidate);
+        if (element)
+            nodes.set(element, candidate);
+    }
+    return nodes;
 }
 /** Narrow a mounted component's actual element across native and wrapped Vue VNodes. */
 export function resolveVueElement(vnode) {
@@ -80,7 +111,7 @@ function hasVueComponentName(candidate, desired) {
         (typeof value.name === 'string' && desired.has(value.name)));
 }
 /** Share one cycle-safe traversal between early lookup and batched type discovery. */
-function* mountedVueNodes(value) {
+function* mountedVueNodes(value, isLeaf = () => false) {
     const pending = [value];
     const visited = new Set();
     while (pending.length > 0) {
@@ -89,7 +120,8 @@ function* mountedVueNodes(value) {
             continue;
         visited.add(candidate);
         yield candidate;
-        enqueueVueChildren(candidate, pending);
+        if (!isLeaf(candidate))
+            enqueueVueChildren(candidate, pending);
     }
 }
 /** Add known Vue tree edges without invoking slots or component code. */

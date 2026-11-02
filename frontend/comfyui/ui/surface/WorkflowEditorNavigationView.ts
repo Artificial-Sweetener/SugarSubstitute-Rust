@@ -86,10 +86,18 @@ export class WorkflowEditorNavigationView {
     );
   }
 
+  /** Detach the trail and forget borrowed breadcrumb entries until the next nested path. */
+  clear(): void {
+    this.element.remove();
+    this.#items = [];
+    this.#signature = '';
+    this.#trail.replaceChildren();
+  }
+
   /** Release owned controls without touching native navigation state. */
   dispose(): void {
     this.#stopStyle();
-    this.element.remove();
+    this.clear();
   }
 
   /** Keep the parent action alongside the breadcrumb trail with provider-owned keyboard and focus behavior. */

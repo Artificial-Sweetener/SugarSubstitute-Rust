@@ -112,6 +112,8 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       }
     });
     let pending: { nodeData: UnknownRecord; widgets: readonly string[] } | null = null;
+    // Comfy retains rendered nodeData beyond unmount; its callbacks must not retain this mount.
+    const advancedRefresh = revocableCallback(() => renderCard());
     /** Prepare one current native projection for both geometry admission and rendering. */
     const prepareCard = (): { nodeData: UnknownRecord; widgets: readonly string[] } => {
       const nodeData = createCubeFaceNodeData(
@@ -124,7 +126,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
           };
         }),
         node,
-        renderCard,
+        advancedRefresh.invoke,
         options.allowCollapse,
       );
       nodeData.widgets = projectNativeWidgetEdits(node, nodeData.widgets);
@@ -222,6 +224,8 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       unmount: () => {
         if (disposed) return;
         disposed = true;
+        advancedRefresh.revoke();
+        pending = null;
         observer.disconnect();
         releaseNativeRefresh();
         target.querySelector('.lg-node')?.dispatchEvent(new Event(NATIVE_NODE_CARD_DISPOSE_EVENT));
@@ -335,6 +339,17 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     root.addEventListener('contextmenu', stopAtControl);
     this.#interactiveRoots.add(root);
   }
+}
+
+/** Expose a callback whose target can be released while host-retained holders keep the invoker. */
+function revocableCallback(callback: () => void): { invoke: () => void; revoke: () => void } {
+  const holder: { callback: (() => void) | null } = { callback };
+  return {
+    invoke: () => holder.callback?.(),
+    revoke: () => {
+      holder.callback = null;
+    },
+  };
 }
 
 /** Identify the native header's bypass badge while leaving custom and pricing badges intact. */

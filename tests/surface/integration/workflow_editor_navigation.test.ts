@@ -157,6 +157,8 @@ test.each(['fluent', 'spectrum'] as const)(
     await settle();
     expect(f.commands).toHaveBeenLastCalledWith(0);
     expect(f.bar.querySelector('nav')).toBeNull();
+    // The hidden trail must not retain the replaced native breadcrumb entries.
+    expect(nav.querySelectorAll('li')).toHaveLength(0);
     expect(f.pin.hasAttribute('data-sc-editor-native')).toBe(false);
     expect(f.pin.hasAttribute('disabled')).toBe(false);
     expect(f.suspendOverrides).toHaveBeenLastCalledWith(false);

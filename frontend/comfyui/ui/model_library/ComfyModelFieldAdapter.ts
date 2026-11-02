@@ -16,7 +16,7 @@
 /** Adapt native Comfy dropdowns through their own reactive value and callback path. */
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
-import { findVueComponents } from '../surface/ComfyVueTree.js';
+import { ComfyNodeVNodeIndex, findVueComponents } from '../surface/ComfyVueTree.js';
 import { readNativeWidgetOrigins } from '../surface/NativeWidgetOrigins.js';
 import { recognizeModelField } from './ModelFieldRecognition.js';
 import type { ModelCatalogSnapshot } from './ModelCatalog.js';
@@ -28,18 +28,18 @@ export interface ComfyModelFieldBinding extends ModelPickerBinding {
   enhancementReady(): boolean;
 }
 
-/** Return only native fields mounted within the requested graph or projected node card. */
+/**
+ * Return only native fields mounted within the requested graph or projected node card.
+ *
+ * Callers reading many roots in one batch share `nodes` so the application tree is indexed once.
+ */
 export function readComfyModelFields(
   root: HTMLElement,
   snapshot: ModelCatalogSnapshot,
+  nodes: ComfyNodeVNodeIndex = new ComfyNodeVNodeIndex(),
 ): readonly ComfyModelFieldBinding[] {
-  const mount =
-    root.closest('.sugarcubes-native-node-card') ?? root.ownerDocument.getElementById('vue-app');
-  const record: UnknownRecord = isRecord(mount) ? mount : {};
-  const nodeVNode = findVueComponents(record._vnode, 'LGraphNode').find(
-    (vnode) => elementOf(vnode) === root,
-  );
-  if (!nodeVNode) return [];
+  const nodeVNode = nodes.resolve(root);
+  if (!nodeVNode || elementOf(nodeVNode) !== root) return [];
   const component = isRecord(nodeVNode.component) ? nodeVNode.component : {};
   const nodeProps = isRecord(component.props) ? component.props : {};
   const nodeData = isRecord(nodeProps.nodeData) ? nodeProps.nodeData : {};

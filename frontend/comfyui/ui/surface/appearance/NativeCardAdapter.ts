@@ -17,6 +17,7 @@
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
 import {
+  ComfyNodeVNodeIndex,
   findVueComponents,
   findMountedNodeVNode,
   findNativeNodeVNode,
@@ -62,7 +63,7 @@ export class NativeCardAdapter {
   }
 
   /** Index graph component roots once for a coalesced host update. */
-  beginBatch(documentRef: Document, roots: readonly HTMLElement[]): void {
+  beginBatch(roots: readonly HTMLElement[]): void {
     this.#seeds.beginBatch();
     const unresolved = roots.filter((root) => {
       if (this.#vnodes.has(root)) return false;
@@ -70,12 +71,10 @@ export class NativeCardAdapter {
       if (vnode) this.#vnodes.set(root, vnode);
       return !vnode;
     });
-    if (!unresolved.length) return;
-    const mount = documentRef.getElementById('vue-app');
-    const record: UnknownRecord = isRecord(mount) ? mount : {};
-    for (const vnode of findVueComponents(record._vnode, 'LGraphNode')) {
-      const element = resolveVueElement(vnode);
-      if (element && unresolved.includes(element)) this.#graphNodes.set(element, vnode);
+    const nodes = new ComfyNodeVNodeIndex();
+    for (const root of unresolved) {
+      const vnode = nodes.resolve(root);
+      if (vnode) this.#graphNodes.set(root, vnode);
     }
   }
 

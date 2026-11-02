@@ -18,6 +18,7 @@
 import { describe, expect, jest, test } from '@jest/globals';
 
 import { NativeNodeCardHost } from '../../../frontend/comfyui/ui/surface/NativeNodeCardHost.js';
+import { readNativeNodeCard } from '../../../frontend/comfyui/ui/surface/NativeNodeCardBoundary.js';
 import type {
   NativeNodeCardMount,
   NativeNodeCardMountOptions,
@@ -120,6 +121,47 @@ describe('NativeNodeCardHost', () => {
     expect(activation?.textContent).toContain('Enabled');
     expect(switchRoot?.classList.contains('p-toggleswitch-checked')).toBe(true);
     expect(onActivationChange).toHaveBeenCalledWith(node, true);
+  });
+
+  test('returns card leases, cells and native mounts to the live count across configure cycles', () => {
+    let liveMounts = 0;
+    const renderer: NativeNodeCardRenderer = {
+      mount: () => {
+        liveMounts += 1;
+        let mounted = true;
+        return {
+          refresh: jest.fn(),
+          unmount: () => {
+            if (mounted) liveMounts -= 1;
+            mounted = false;
+          },
+        };
+      },
+      dispose: jest.fn(),
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const retired: HTMLElement[] = [];
+    try {
+      for (let cycle = 0; cycle < 10; cycle++) {
+        const host = new NativeNodeCardHost(renderer);
+        const nodes: ComfyNode[] = [1, 2, 3].map((id) => ({
+          id: `${String(cycle)}-${String(id)}`,
+        }));
+        const cells = host.mount(container, nodes.map(card), jest.fn());
+        expect(liveMounts).toBe(3);
+        expect(cells.map((cell) => readNativeNodeCard(cell)?.node)).toEqual(nodes);
+        host.dispose();
+        retired.push(...cells);
+        expect(liveMounts).toBe(0);
+        expect(container.childElementCount).toBe(0);
+      }
+      expect(retired.every((cell) => !cell.isConnected && readNativeNodeCard(cell) === null)).toBe(
+        true,
+      );
+    } finally {
+      container.remove();
+    }
   });
 });
 

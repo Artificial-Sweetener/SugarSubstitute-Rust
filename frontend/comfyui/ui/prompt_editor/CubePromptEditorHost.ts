@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own Cube prompt editor sessions independently of renderer-specific native controls. */
-import type { ComfyWidget } from '../types/graph.js';
+import type { ComfyNode, ComfyWidget } from '../types/graph.js';
 import type { ModelCatalogClient } from '../model_library/ModelCatalogClient.js';
 import type { ModelCatalogSnapshot } from '../model_library/ModelCatalog.js';
 import { PromptWidgetBinding } from './PromptWidgetBinding.js';
@@ -46,6 +46,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   readonly #catalog: Pick<ModelCatalogClient, 'load' | 'watch' | 'prioritize'>;
   readonly #report: (error: unknown) => void;
   readonly #sessions = new Map<ComfyWidget, PromptSession>();
+  readonly #retired = new WeakSet<ComfyWidget>();
   readonly #restoreSurfaces = new Map<PromptEditorSurface, () => void>();
   #release: (() => void) | null = null;
   #catalogSnapshot: object | null = null;
@@ -70,7 +71,9 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   }
 
   /** Acquire a field presentation without duplicating its native editor or serialized value. */
-  mount(surface: PromptEditorSurface): () => void {
+  mount(surface: PromptEditorSurface): (() => void) | null {
+    // Cards of a replaced workflow can re-render during their deferred teardown; keep them native.
+    if (this.#retired.has(surface.widget)) return null;
     const hidden = surface.textarea.hidden;
     const display = surface.textarea.style.getPropertyValue('display');
     const priority = surface.textarea.style.getPropertyPriority('display');
@@ -121,6 +124,10 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
       session.surfaces.delete(surface);
       this.#restoreSurfaces.get(surface)?.();
       this.#restoreSurfaces.delete(surface);
+      if (!session.surfaces.size && !belongsToGraph(surface.node)) {
+        this.#retire(surface.widget, session);
+        return;
+      }
       if (session.active === surface) {
         const remaining = [...session.surfaces];
         session.active =
@@ -165,15 +172,10 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   beforeConfigureGraph(): void {
     this.#stopCatalog?.();
     this.#stopCatalog = null;
-    for (const [widget, session] of this.#sessions) {
-      session.disposed = true;
-      session.editor?.dispose();
-      session.binding.dispose();
-      clearCubePromptWidgetHeight(widget);
-      for (const surface of session.surfaces) this.#restoreSurfaces.get(surface)?.();
+    for (const [widget, session] of [...this.#sessions]) {
+      this.#retired.add(widget);
+      this.#retire(widget, session);
     }
-    this.#sessions.clear();
-    this.#restoreSurfaces.clear();
   }
 
   /** Release the document registration and every editor-owned resource. */
@@ -181,6 +183,22 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     this.#release?.();
     this.#release = null;
     this.beforeConfigureGraph();
+  }
+
+  /** Release one session's editor, value observation, measured height and borrowed surfaces. */
+  #retire(widget: ComfyWidget, session: PromptSession): void {
+    session.disposed = true;
+    session.editor?.dispose();
+    session.editor = null;
+    session.active = null;
+    session.binding.dispose();
+    clearCubePromptWidgetHeight(widget);
+    for (const surface of session.surfaces) {
+      this.#restoreSurfaces.get(surface)?.();
+      this.#restoreSurfaces.delete(surface);
+    }
+    session.surfaces.clear();
+    if (this.#sessions.get(widget) === session) this.#sessions.delete(widget);
   }
 
   /** Load the bundled engine once and adapt the current shared model snapshot outside input. */
@@ -247,6 +265,14 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
       surface.widget.computedDisabled === true
     );
   }
+}
+
+/** Report whether a node is still a member of the graph it names, independent of renderer DOM. */
+function belongsToGraph(node: ComfyNode): boolean {
+  const graph = node.graph;
+  if (!graph) return false;
+  const nodes = graph._nodes ?? graph.nodes;
+  return !Array.isArray(nodes) || nodes.includes(node);
 }
 
 /** Keep late detached or inert graph preparations from taking a connected interactive editor. */

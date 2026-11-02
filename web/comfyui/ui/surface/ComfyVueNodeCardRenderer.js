@@ -68,6 +68,8 @@ export class ComfyVueNodeCardRenderer {
             }
         });
         let pending = null;
+        // Comfy retains rendered nodeData beyond unmount; its callbacks must not retain this mount.
+        const advancedRefresh = revocableCallback(() => renderCard());
         /** Prepare one current native projection for both geometry admission and rendering. */
         const prepareCard = () => {
             const nodeData = createCubeFaceNodeData(withNativePresentationWidgets(node, () => {
@@ -77,7 +79,7 @@ export class ComfyVueNodeCardRenderer {
                     ...data,
                     widgets: Array.isArray(data.widgets) ? [...data.widgets] : data.widgets,
                 };
-            }), node, renderCard, options.allowCollapse);
+            }), node, advancedRefresh.invoke, options.allowCollapse);
             nodeData.widgets = projectNativeWidgetEdits(node, nodeData.widgets);
             nodeData.sugarcubesEditorWidgets = projectNativeWidgetEdits(node, nodeData.sugarcubesEditorWidgets);
             for (const source of options.widgetSources ?? []) {
@@ -137,6 +139,8 @@ export class ComfyVueNodeCardRenderer {
                 if (disposed)
                     return;
                 disposed = true;
+                advancedRefresh.revoke();
+                pending = null;
                 observer.disconnect();
                 releaseNativeRefresh();
                 target.querySelector('.lg-node')?.dispatchEvent(new Event(NATIVE_NODE_CARD_DISPOSE_EVENT));
@@ -227,6 +231,16 @@ export class ComfyVueNodeCardRenderer {
         root.addEventListener('contextmenu', stopAtControl);
         this.#interactiveRoots.add(root);
     }
+}
+/** Expose a callback whose target can be released while host-retained holders keep the invoker. */
+function revocableCallback(callback) {
+    const holder = { callback };
+    return {
+        invoke: () => holder.callback?.(),
+        revoke: () => {
+            holder.callback = null;
+        },
+    };
 }
 /** Identify the native header's bypass badge while leaving custom and pricing badges intact. */
 function annotateNativeBypassBadge(vnode, nativeRoot) {

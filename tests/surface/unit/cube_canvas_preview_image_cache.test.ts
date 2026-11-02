@@ -62,4 +62,21 @@ describe('CubeCanvasPreviewImageCache', () => {
     expect(cache.get('/view?filename=failed.png')).toBeNull();
     expect(createImage).toHaveBeenCalledTimes(2);
   });
+
+  test('answers a decoded entry without rescanning Comfy-owned images', () => {
+    const loaded = document.createElement('img');
+    Object.defineProperties(loaded, {
+      naturalWidth: { value: 64 },
+      naturalHeight: { value: 64 },
+    });
+    const findLoadedImage = jest.fn<(url: string) => HTMLImageElement | null>(() => loaded);
+    const cache = new CubeCanvasPreviewImageCache({
+      createImage: () => document.createElement('img'),
+      findLoadedImage,
+      invalidate: jest.fn(),
+    });
+    for (let frame = 0; frame < 20; frame++)
+      expect(cache.get('/view?filename=output.png', '7')).toBe(loaded);
+    expect(findLoadedImage).toHaveBeenCalledTimes(1);
+  });
 });

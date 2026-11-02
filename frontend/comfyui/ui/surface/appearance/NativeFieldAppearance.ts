@@ -50,8 +50,8 @@ export class NativeFieldAppearance {
   }
 
   /** Index only native graph cards whose identified presentation is being refreshed. */
-  beginBatch(document: Document, roots: readonly HTMLElement[]): void {
-    if (this.kind === 'card' && roots.length) this.#adapter.beginBatch(document, roots);
+  beginBatch(roots: readonly HTMLElement[]): void {
+    if (this.kind === 'card' && roots.length) this.#adapter.beginBatch(roots);
   }
 
   /** Release transient indexes after each presentation batch. */

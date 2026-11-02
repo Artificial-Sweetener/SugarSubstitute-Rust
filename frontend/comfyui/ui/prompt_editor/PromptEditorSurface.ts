@@ -27,7 +27,8 @@ export interface PromptEditorSurface {
 
 /** One document's prompt component owns all registered renderer presentations. */
 export interface PromptEditorSurfaceOwner {
-  mount(surface: PromptEditorSurface): () => void;
+  /** Return the presentation release, or null when the native control must remain authoritative. */
+  mount(surface: PromptEditorSurface): (() => void) | null;
   refresh(surface: PromptEditorSurface): boolean;
   ready(root: HTMLElement): Promise<void>;
   dispose(): void;

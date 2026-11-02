@@ -322,10 +322,7 @@ export class AppearanceHost {
       this.#themes.prune();
       const themed = this.#selectedStyle !== 'comfy';
       if (this.#nativeCards && [...this.#dirty].some((element) => element.matches('.lg-node')))
-        this.#nodes.beginBatch(
-          this.#options.document,
-          [...this.#dirty].filter((element) => element.matches('.lg-node')),
-        );
+        this.#nodes.beginBatch([...this.#dirty].filter((element) => element.matches('.lg-node')));
       for (const element of this.#dirty) {
         if (!element.isConnected) continue;
         if (themed) this.#themes.retain(element);

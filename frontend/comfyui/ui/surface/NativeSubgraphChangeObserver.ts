@@ -32,16 +32,98 @@ export interface ObservableNativeSubgraph {
   remove?: (...args: never[]) => unknown;
 }
 
-/** Chain one presentation notification onto Comfy's authoritative callback. */
+type NativeGraphTapListener = (kind: NativeGraphChangeKind, info: unknown) => void;
+type TappedMethod = 'onAfterChange' | 'add' | 'remove';
+
+/**
+ * Own the single interception of one native graph's change methods.
+ *
+ * Observers with unrelated lifetimes (runtime, masonry, relations, canvases) observe the same
+ * persistent root graph. Chaining one wrapper per observer strands disposed observers, and their
+ * closures, whenever they do not dispose in reverse order. One tap per graph keeps every wrapper
+ * free of observer state, so a wrapper that cannot be removed retains nothing but the tap.
+ */
+class NativeGraphTap {
+  readonly #graph: ObservableNativeSubgraph;
+  readonly #listeners = new Set<NativeGraphTapListener>();
+  readonly #wrappers = new Map<TappedMethod, { wrapper: unknown; previous: unknown }>();
+
+  /** Bind one graph without installing wrappers until an observer registers. */
+  constructor(graph: ObservableNativeSubgraph) {
+    this.#graph = graph;
+  }
+
+  /** Add one listener and ensure the current graph methods report to this tap. */
+  register(listener: NativeGraphTapListener): () => void {
+    this.#listeners.add(listener);
+    this.#install();
+    return () => {
+      if (!this.#listeners.delete(listener) || this.#listeners.size) return;
+      this.#restore();
+    };
+  }
+
+  /** Wrap only methods whose current value is not already this tap's active wrapper. */
+  #install(): void {
+    const graph = this.#graph;
+    if (graph.onAfterChange !== this.#wrappers.get('onAfterChange')?.wrapper) {
+      const previous = typeof graph.onAfterChange === 'function' ? graph.onAfterChange : null;
+      const wrapper: NativeAfterChange = (changed, info) => {
+        previous?.call(graph, changed, info);
+        if (this.#current('onAfterChange', wrapper)) this.#notify('change', info);
+      };
+      this.#wrappers.set('onAfterChange', { wrapper, previous });
+      graph.onAfterChange = wrapper;
+    }
+    for (const method of ['add', 'remove'] as const) {
+      if (graph[method] === this.#wrappers.get(method)?.wrapper) continue;
+      const previous = graph[method] as NativeMutation;
+      const wrapper: NativeMutation = (...args) => {
+        const result = previous.apply(graph, args);
+        if (this.#current(method, wrapper)) this.#notify(method, args[0]);
+        return result;
+      };
+      this.#wrappers.set(method, { wrapper, previous });
+      graph[method] = wrapper;
+    }
+  }
+
+  /** Restore each method still owned by this tap; buried wrappers stay inert pass-throughs. */
+  #restore(): void {
+    for (const [method, { wrapper, previous }] of this.#wrappers) {
+      if (this.#graph[method] !== wrapper) continue;
+      Reflect.set(this.#graph, method, previous);
+      this.#wrappers.delete(method);
+    }
+  }
+
+  /** Report only through the newest wrapper so re-wrapping never duplicates a notification. */
+  #current(method: TappedMethod, wrapper: unknown): boolean {
+    return this.#wrappers.get(method)?.wrapper === wrapper;
+  }
+
+  /** Fan one native mutation out to the observers registered at call time. */
+  #notify(kind: NativeGraphChangeKind, info: unknown): void {
+    for (const listener of [...this.#listeners]) listener(kind, info);
+  }
+}
+
+const taps = new WeakMap<ObservableNativeSubgraph, NativeGraphTap>();
+
+/** Resolve the one tap owning a graph's native change interception. */
+function graphTap(graph: ObservableNativeSubgraph): NativeGraphTap {
+  let tap = taps.get(graph);
+  if (!tap) {
+    tap = new NativeGraphTap(graph);
+    taps.set(graph, tap);
+  }
+  return tap;
+}
+
+/** Deliver coalesced native graph changes to one presentation owner. */
 export class NativeSubgraphChangeObserver {
-  readonly #subgraph: ObservableNativeSubgraph;
-  readonly #previous: NativeAfterChange | null;
-  readonly #listener: NativeAfterChange;
-  readonly #previousAdd: NativeMutation;
-  readonly #addListener: NativeMutation;
-  readonly #previousRemove: NativeMutation;
-  readonly #removeListener: NativeMutation;
   readonly #deliver: () => void;
+  readonly #release: () => void;
   #notificationQueued = false;
   readonly #changes: NativeGraphChange[] = [];
   #active = true;
@@ -55,40 +137,19 @@ export class NativeSubgraphChangeObserver {
     if (typeof subgraph.add !== 'function' || typeof subgraph.remove !== 'function') {
       throw new TypeError('Comfy native subgraph topology methods are unavailable.');
     }
-    this.#subgraph = subgraph;
     this.#deliver = () => {
       this.#notificationQueued = false;
       const changes = Object.freeze(this.#changes.splice(0));
       if (this.#active && changes.length) onChange(changes);
     };
-    const notify = (kind: NativeGraphChangeKind, info: unknown): void => {
+    this.#release = graphTap(subgraph).register((kind, info) => {
       if (!this.#active || !accepts(kind)) return;
       if (!this.#changes.some((change) => change.kind === kind && change.info === info))
         this.#changes.push(Object.freeze({ kind, info }));
       if (this.#notificationQueued) return;
       this.#notificationQueued = true;
       queueMicrotask(this.#deliver);
-    };
-    this.#previous = typeof subgraph.onAfterChange === 'function' ? subgraph.onAfterChange : null;
-    this.#listener = (graph, info): void => {
-      this.#previous?.call(subgraph, graph, info);
-      notify('change', info);
-    };
-    this.#previousAdd = subgraph.add as NativeMutation;
-    this.#addListener = (...args): unknown => {
-      const result = this.#previousAdd.apply(subgraph, args);
-      notify('add', args[0]);
-      return result;
-    };
-    this.#previousRemove = subgraph.remove as NativeMutation;
-    this.#removeListener = (...args): unknown => {
-      const result = this.#previousRemove.apply(subgraph, args);
-      notify('remove', args[0]);
-      return result;
-    };
-    subgraph.onAfterChange = this.#listener;
-    subgraph.add = this.#addListener;
-    subgraph.remove = this.#removeListener;
+    });
   }
 
   /** Deliver identified pending mutations before their native transaction commits. */
@@ -96,18 +157,11 @@ export class NativeSubgraphChangeObserver {
     this.#deliver();
   }
 
-  /** Restore the callback only while this observer still owns the boundary. */
+  /** Stop delivery and release this observer from the graph's shared interception. */
   dispose(): void {
+    if (!this.#active) return;
     this.#active = false;
     this.#changes.length = 0;
-    if (this.#subgraph.onAfterChange === this.#listener) {
-      this.#subgraph.onAfterChange = this.#previous;
-    }
-    if (this.#subgraph.add === this.#addListener) {
-      this.#subgraph.add = this.#previousAdd;
-    }
-    if (this.#subgraph.remove === this.#removeListener) {
-      this.#subgraph.remove = this.#previousRemove;
-    }
+    this.#release();
   }
 }

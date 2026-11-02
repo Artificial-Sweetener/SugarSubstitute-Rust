@@ -15,29 +15,20 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Resolve canonical native widget rows through their own mounted Vue boundary. */
 import { isRecord } from '../types/common.js';
-import { findVueComponents, findMountedNodeVNode } from './ComfyVueTree.js';
+import { ComfyNodeVNodeIndex, findVueComponents } from './ComfyVueTree.js';
 import { NATIVE_FIELD_COMPONENTS } from './appearance/NativeFieldPresentation.js';
 
 /** Share identified row lookup between native appearance consumers without graph candidate discovery. */
-export function nativeNodeFieldRows(root: HTMLElement): ReadonlyMap<string, HTMLElement> {
-  const document = root.ownerDocument;
+export function nativeNodeFieldRows(
+  root: HTMLElement,
+  nodes: ComfyNodeVNodeIndex = new ComfyNodeVNodeIndex(),
+): ReadonlyMap<string, HTMLElement> {
   const card = root.matches('.lg-node') ? root : root.querySelector<HTMLElement>('.lg-node');
   const rows = new Map<string, HTMLElement>();
   const vnodeRoot =
     root.querySelector<HTMLElement>('.sugarcubes-cube-face__native-card-mount') ?? card;
   const localVNode: unknown = vnodeRoot ? Reflect.get(vnodeRoot, '_vnode') : null;
-  const appRoot = document.getElementById('vue-app');
-  const appVNode: unknown = appRoot ? Reflect.get(appRoot, '_vnode') : null;
-  const vnode =
-    localVNode ??
-    (card ? findMountedNodeVNode(card) : null) ??
-    (card
-      ? findVueComponents(appVNode, 'LGraphNode').find((candidate) => {
-          const component = isRecord(candidate.component) ? candidate.component : {};
-          const subtree = isRecord(component.subTree) ? component.subTree : {};
-          return subtree.el === card;
-        })
-      : undefined);
+  const vnode = localVNode ?? (card ? nodes.resolve(card) : null);
   if (vnode)
     for (const container of findVueComponents(vnode, 'NodeWidgets')) {
       const component = isRecord(container.component) ? container.component : {},
