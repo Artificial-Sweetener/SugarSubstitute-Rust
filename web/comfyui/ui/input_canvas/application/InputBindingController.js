@@ -12,7 +12,7 @@ export class InputBindingController {
     nextId;
     report;
     maskEditing;
-    editableCanvas;
+    canvases;
     refreshPreviews;
     preview;
     #listeners = new Set();
@@ -25,7 +25,7 @@ export class InputBindingController {
     #disposed = false;
     #generation = 0;
     /** Bind persistence and external capabilities without browser or Comfy globals. */
-    constructor(loader, port, initial, host, files, nextId, report, maskEditing, editableCanvas, refreshPreviews) {
+    constructor(loader, port, initial, host, files, nextId, report, maskEditing, canvases, refreshPreviews) {
         this.loader = loader;
         this.port = port;
         this.initial = initial;
@@ -33,7 +33,7 @@ export class InputBindingController {
         this.nextId = nextId;
         this.report = report;
         this.maskEditing = maskEditing;
-        this.editableCanvas = editableCanvas;
+        this.canvases = canvases;
         this.refreshPreviews = refreshPreviews;
         this.preview = new InputPreviewInterpretation(loader, files, () => port.settings());
         this.#stopWidgets = port.subscribe((intent) => {
@@ -60,7 +60,7 @@ export class InputBindingController {
     /** Require actual positioned layer support rather than inferring editing from selection reads. */
     get canEditMask() {
         const id = this.#canvas?.canvasId ?? this.host()?.canvasId;
-        return Boolean(id && this.editableCanvas(id));
+        return Boolean(id && this.canvases.editable(id));
     }
     /** Supply layer choices without teaching presentation about native APIs. */
     get context() {
@@ -100,7 +100,7 @@ export class InputBindingController {
                 return;
             if (saved)
                 this.#save(saved);
-            else if (canvas && this.#context?.supported) {
+            else if (canvas && this.#context?.supported && !this.canvases.provisions(canvas.canvasId)) {
                 const state = this.state;
                 const entries = (state.entries.length
                     ? state.entries
@@ -163,7 +163,47 @@ export class InputBindingController {
         const entries = state.entries.length
             ? state.entries.map((entry) => (entry.id === selected ? { ...entry, source } : entry))
             : [{ id: selected, label: inputLabel(this.loader.kind) + ' 1', source }];
-        this.#save({ ...state, entries, selected });
+        this.#save({ ...state, entries, selected, explicit: true });
+    }
+    /**
+     * Bind canvas sources that workflow provisioning created for this loader's entries.
+     *
+     * Sources are keyed by entry identity for ordered loaders and by null for a scalar loader.
+     * An explicit picker choice is kept unless it already names the provisioned source, in which
+     * case provisioning resumes ownership. Entries without a provisioned source keep their source.
+     */
+    provision(sources) {
+        const state = this.state;
+        const entries = state.entries.length
+            ? state.entries
+            : [
+                {
+                    id: state.selected ?? this.nextId(),
+                    label: inputLabel(this.loader.kind) + ' 1',
+                    source: { kind: 'file', file: null },
+                },
+            ];
+        const provisioned = entries.map((entry) => {
+            const source = sources.get(this.loader.ordered ? entry.id : null);
+            return source ? { ...entry, source } : entry;
+        });
+        if (state.explicit &&
+            JSON.stringify(provisioned.map((entry) => entry.source)) !==
+                JSON.stringify(entries.map((entry) => entry.source)))
+            return;
+        const next = {
+            version: 2,
+            field: state.field,
+            files: state.files,
+            entries: provisioned,
+            selected: state.selected ?? provisioned[0]?.id ?? null,
+            ...(state.edits ? { edits: state.edits } : {}),
+        };
+        if (JSON.stringify(next) === JSON.stringify(state))
+            return;
+        this.#generation++;
+        this.#error = null;
+        this.#save(next);
     }
     /** Select an ordered entry without changing native document state. */
     select(id) {
@@ -180,7 +220,9 @@ export class InputBindingController {
         const entry = {
             id: this.nextId(),
             label: `${inputLabel(this.loader.kind)} ${String(state.entries.length + 1)}`,
-            source: defaultCanvasInput(this.canvasId, this.#context, null, this.loader.kind === 'mask' ? 'selection' : 'composition'),
+            source: this.canvasId && this.canvases.provisions(this.canvasId)
+                ? { kind: 'file', file: null }
+                : defaultCanvasInput(this.canvasId, this.#context, null, this.loader.kind === 'mask' ? 'selection' : 'composition'),
         };
         this.#save({ ...state, entries: [...state.entries, entry], selected: entry.id });
     }

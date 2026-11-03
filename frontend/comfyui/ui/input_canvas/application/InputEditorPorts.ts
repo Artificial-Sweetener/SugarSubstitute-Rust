@@ -39,6 +39,26 @@ export interface InputPreviewPort {
   ): Promise<CanvasPixelRaster>;
 }
 
+/** Answer per-canvas capability questions that change how sources are defaulted and edited. */
+export interface InputCanvasCapabilities {
+  /** Whether the canvas positions inserted layers, which mask-pair editing requires. */
+  editable(canvasId: string): boolean;
+  /** Whether the canvas provisions workflow surfaces, which then own loader source defaults. */
+  provisions(canvasId: string): boolean;
+}
+
+/** Connect one loader card to the input surfaces a workflow-surface canvas holds for it. */
+export interface InputSurfaceCardPort {
+  /** Show the loader's surface on the Input route; entry names a region of an ordered mask. */
+  activate(entry: string | null): void;
+  /** Highlight a region of an ordered mask loader, or clear the highlight. */
+  hover(entry: string | null): void;
+  /** The loader's visual opacity in 0..1, or null while it has no provisioned masks. */
+  opacity(): number | null;
+  changeOpacity(opacity: number): void;
+  subscribe(listener: () => void): () => void;
+}
+
 /** Describe authored source choices independently of the underlying canvas API. */
 export interface InputEditorBinding {
   readonly loader: InputLoader;
@@ -59,6 +79,7 @@ export interface InputEditorBinding {
   remove(): void;
   move(delta: number): void;
   changeMaskEdits(settings: MaskEditSettings): void;
+  provision(sources: ReadonlyMap<string | null, CanvasInputSource>): void;
 }
 
 /** Query one graph-derived image relationship without exposing host nodes or reimplementing pairing policy. */

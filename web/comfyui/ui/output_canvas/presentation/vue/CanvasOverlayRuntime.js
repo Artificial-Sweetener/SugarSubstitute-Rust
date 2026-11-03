@@ -1,13 +1,14 @@
 import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-3NCH6UDE.js";
+} from "../../../chunk-HS2FI4KU.js";
 import {
   canvasContextActions,
   canvasMediaItem
 } from "../../../chunk-NKMV6DCZ.js";
 import {
   CanvasOverlay
-} from "../../../chunk-IYFUSGJ6.js";
+} from "../../../chunk-BLQJSKWP.js";
+import "../../../chunk-ZAF7C7KA.js";
 import "../../../chunk-T26L5BHO.js";
 import "../../../chunk-WIEFPHCO.js";
 import "../../../chunk-CIRP6VLK.js";
@@ -49,10 +50,14 @@ function sameCanvasAttachment(left, right) {
 }
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
-function mountCanvasOverlay(element, port, reportFailure, interactionSurface = element, contextTarget = () => "primary") {
+function mountCanvasOverlay(element, port, reportFailure, interactionSurface = element, contextTarget = () => "primary", route = null) {
   ensureCanvasOverlayStyles(element.ownerDocument);
   const initial = port.read();
   const state = shallowRef(initial);
+  const routeState = shallowRef(route?.read() ?? null);
+  const stopRoute = route?.subscribe(() => {
+    if (active) routeState.value = route.read();
+  });
   const announcement = shallowRef("");
   let active = true;
   let sequence = 0;
@@ -120,7 +125,11 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
       snapshot: state.value,
       capabilities: port.capabilities,
       send,
-      announcement: announcement.value
+      announcement: announcement.value,
+      route: routeState.value,
+      chooseRoute: (value) => {
+        if (active) route?.choose(value);
+      }
     })
   });
   try {
@@ -129,6 +138,7 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
     active = false;
     closeInteraction();
     unsubscribe();
+    stopRoute?.();
     reportFailure(error, null);
     throw error;
   }
@@ -139,6 +149,7 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
       active = false;
       closeInteraction();
       unsubscribe();
+      stopRoute?.();
       app.unmount();
     }
   };

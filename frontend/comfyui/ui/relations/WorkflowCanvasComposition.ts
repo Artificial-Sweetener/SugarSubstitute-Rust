@@ -30,6 +30,8 @@ export function createWorkflowCanvasComposition(
     api: unknown;
     logger: Pick<Console, 'error' | 'warn'>;
     notifyCanvas(message: string): void;
+    /** Warn about rejected input files with a title and detail. */
+    notifyInput(title: string, message: string): void;
   },
 ): {
   workflowExecution: ReturnType<typeof createComfyWorkflowExecutionRuntime>;
@@ -55,10 +57,16 @@ export function createWorkflowCanvasComposition(
   const canvasInputs = createCanvasInputs({
     document: options.document,
     host: (id) => workflowExecution.canvases.sourceHost(id),
-    editable: (id) => {
-      const capabilities = workflowExecution.canvases.layerHost(id)?.readCanvas()?.capabilities;
-      return Boolean(capabilities?.insertImageLayer && capabilities.positionImageLayer);
+    canvases: {
+      editable: (id) => {
+        const capabilities = workflowExecution.canvases.layerHost(id)?.readCanvas()?.capabilities;
+        return Boolean(capabilities?.insertImageLayer && capabilities.positionImageLayer);
+      },
+      provisions: (id) => workflowExecution.canvases.workflowHost(id) !== null,
     },
+    workflowHost: () => workflowExecution.canvases.workflowHost(),
+    accent: () => workflowFields.appearance.palette.theme.color,
+    notice: (title, message) => options.notifyInput(title, message),
     legacyHost: (id) => workflowExecution.canvases.maskHost(id),
     graph: () => options.app?.graph,
     report: options.reportPresentationError,

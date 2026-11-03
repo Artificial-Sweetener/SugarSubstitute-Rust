@@ -28,8 +28,12 @@ export class ComfyInputSourceDefaults {
   constructor(
     private readonly host: () => CanvasSourceHost | null,
     private readonly legacy: Pick<LegacyMaskMigration, 'read'>,
+    private readonly provisions: (canvasId: string) => boolean,
   ) {}
-  /** Preserve explicit choices and prefer current selection only for unconfigured capable canvases. */
+  /**
+   * Preserve explicit choices and prefer current selection only for unconfigured capable canvases.
+   * A canvas that provisions workflow surfaces keeps unconfigured loaders on their files.
+   */
   async resolve(
     properties: unknown,
     loader: InputLoader,
@@ -40,7 +44,7 @@ export class ComfyInputSourceDefaults {
       (loader.kind === 'mask' ? await this.legacy.read(properties) : null);
     if (saved) return saved;
     const canvas = this.host();
-    if (!canvas) return null;
+    if (!canvas || this.provisions(canvas.canvasId)) return null;
     const context = await canvas.execute({ type: 'context' });
     if (context.kind === 'failure') throw new Error(context.message);
     if (

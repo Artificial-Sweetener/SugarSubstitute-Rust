@@ -26,6 +26,7 @@ import { InputLoaderPresentation } from './InputLoaderPresentation.js';
 import type { ComfyNode } from '../../types/graph.js';
 import type { ComfyInputBindings } from './ComfyInputBindings.js';
 import type { ComfyInputAssociations } from './ComfyInputAssociations.js';
+import type { ComfyInputSurfaceCards } from './ComfyInputSurfaceCards.js';
 import { refreshNativeNodeCards } from '../../surface/NativeNodeCardRefresh.js';
 
 /** Mount previews only in masonry and leave every unsupported canvas's capabilities unchanged. */
@@ -50,6 +51,7 @@ export class MasonryInputHost {
     private readonly report: (error: unknown) => void,
     private readonly bindings: ComfyInputBindings,
     private readonly associations: ComfyInputAssociations,
+    private readonly surfaces: ComfyInputSurfaceCards | null = null,
   ) {}
   /** Observe card mounts and scoped native value changes, excluding owned preview rendering. */
   setup(): void {
@@ -143,6 +145,7 @@ export class MasonryInputHost {
           root,
           loader.kind === 'mask' ? this.associations.image(node, loader.field) : null,
           loaders.length > 1,
+          this.surfaces?.port(node, loader) ?? null,
         );
         root.append(editor.element);
         editors.set(loader.field, { editor, binding });

@@ -62,7 +62,8 @@ function parseBinding(value: unknown): InputBinding | null {
     value.files.length > 64 ||
     value.files.some((file: unknown) => typeof file !== 'string' || file.length > 4096) ||
     value.entries.length > 64 ||
-    (value.selected !== null && typeof value.selected !== 'string')
+    (value.selected !== null && typeof value.selected !== 'string') ||
+    (value.explicit !== undefined && value.explicit !== true)
   )
     throw new Error('Invalid canvas source binding.');
   const entries: InputEntry[] = [];
@@ -91,6 +92,7 @@ function parseBinding(value: unknown): InputBinding | null {
     entries,
     files: value.files.filter((file): file is string => typeof file === 'string'),
     ...(value.edits === undefined ? {} : { edits: readMaskEditSettings(value.edits) }),
+    ...(value.explicit === true ? { explicit: true as const } : {}),
   };
 }
 

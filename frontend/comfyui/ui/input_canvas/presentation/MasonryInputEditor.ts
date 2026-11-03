@@ -14,7 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present actual image sources and effective masks with reusable source choices and ordered collection controls. */
-import type { InputEditorBinding, InputImageAssociation } from '../application/InputEditorPorts.js';
+import type {
+  InputEditorBinding,
+  InputImageAssociation,
+  InputSurfaceCardPort,
+} from '../application/InputEditorPorts.js';
+import { MaskOpacityField, maskOpacityLabel } from './MaskOpacityField.js';
 import type { CanvasSourcePreviews } from '../application/CanvasSourcePreviews.js';
 import { inputLabel } from '../domain/InputLoader.js';
 import { InputPreviewRows } from './InputPreviewRows.js';
@@ -38,6 +43,7 @@ export class MasonryInputEditor {
   readonly #stop: () => void;
   readonly #entryField: NativeNodeChoiceMount | null;
   readonly #maskFields: MaskEditFields;
+  readonly #opacity: MaskOpacityField | null;
 
   /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
   constructor(
@@ -50,6 +56,7 @@ export class MasonryInputEditor {
     fieldRoot: HTMLElement,
     association: InputImageAssociation | null,
     showField = false,
+    surface: InputSurfaceCardPort | null = null,
   ) {
     ensureInputEditorStyles(document);
     this.element = document.createElement('section');
@@ -130,7 +137,16 @@ export class MasonryInputEditor {
       }
       this.#controls.append(actions);
     }
-    this.#rows = new InputPreviewRows(document, binding, previews, report, association);
+    this.#rows = new InputPreviewRows(document, binding, previews, report, association, surface);
+    this.#opacity =
+      surface && binding.loader.kind === 'mask'
+        ? new MaskOpacityField(
+            surface,
+            fields,
+            maskOpacityLabel(showField ? binding.loader.field : null),
+            report,
+          )
+        : null;
     this.#maskFields = new MaskEditFields(
       binding,
       association,
@@ -186,6 +202,7 @@ export class MasonryInputEditor {
     this.#stop();
     this.#picker.dispose();
     this.#maskFields.dispose();
+    this.#opacity?.dispose();
     this.#entryField?.dispose();
     for (const command of this.#commands) command.dispose();
     this.#controls.remove();

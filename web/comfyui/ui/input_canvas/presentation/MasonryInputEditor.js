@@ -1,3 +1,4 @@
+import { MaskOpacityField, maskOpacityLabel } from './MaskOpacityField.js';
 import { inputLabel } from '../domain/InputLoader.js';
 import { InputPreviewRows } from './InputPreviewRows.js';
 import { CanvasSourcePicker } from './CanvasSourcePicker.js';
@@ -18,8 +19,9 @@ export class MasonryInputEditor {
     #stop;
     #entryField;
     #maskFields;
+    #opacity;
     /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
-    constructor(document, binding, previews, upload, report, fields, fieldRoot, association, showField = false) {
+    constructor(document, binding, previews, upload, report, fields, fieldRoot, association, showField = false, surface = null) {
         this.binding = binding;
         ensureInputEditorStyles(document);
         this.element = document.createElement('section');
@@ -88,7 +90,11 @@ export class MasonryInputEditor {
             }
             this.#controls.append(actions);
         }
-        this.#rows = new InputPreviewRows(document, binding, previews, report, association);
+        this.#rows = new InputPreviewRows(document, binding, previews, report, association, surface);
+        this.#opacity =
+            surface && binding.loader.kind === 'mask'
+                ? new MaskOpacityField(surface, fields, maskOpacityLabel(showField ? binding.loader.field : null), report)
+                : null;
         this.#maskFields = new MaskEditFields(binding, association, fields, fieldRoot, showField, (mode) => this.#rows.setMaskMode(mode), report);
         this.#status = document.createElement('div');
         this.#status.className = 'sc-input-editor__status';
@@ -128,6 +134,7 @@ export class MasonryInputEditor {
         this.#stop();
         this.#picker.dispose();
         this.#maskFields.dispose();
+        this.#opacity?.dispose();
         this.#entryField?.dispose();
         for (const command of this.#commands)
             command.dispose();

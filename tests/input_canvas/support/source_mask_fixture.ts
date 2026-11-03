@@ -116,7 +116,11 @@ export function sourceMaskFixture(observesChanges = true) {
     'SimpleSyrup.LoadMaskBatch': { output: ['MASK'] },
     LoadImageMask: { output: ['MASK'] },
   });
-  const defaults = new ComfyInputSourceDefaults(() => host, legacy);
+  const defaults = new ComfyInputSourceDefaults(
+    () => host,
+    legacy,
+    () => false,
+  );
   const sourcePreparation = new InputSourcePreparation(capture, assets);
   const previews = new CanvasSourcePreviews(capture, () => host, report);
   const files = {
@@ -178,7 +182,7 @@ export function sourceMaskFixture(observesChanges = true) {
     ),
     ports: {
       host: () => host,
-      editable: () => true,
+      canvases: { editable: () => true, provisions: () => false },
       refreshPreviews: (sources: readonly CanvasInputSource[]) => previews.refreshSources(sources),
       files,
       maskEditing,

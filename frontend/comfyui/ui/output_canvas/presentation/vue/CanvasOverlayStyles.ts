@@ -31,6 +31,7 @@ export function ensureCanvasOverlayStyles(document: Document): void {
     }
     .sc-output-tabstrip { position:absolute; bottom:8px; left:8px;
       max-width:calc(100% - 16px); padding:4px; z-index:2; }
+    .sc-output-tabstrip.sc-output-route { top:8px; bottom:auto; }
     .sc-output-selection-picker { display:flex; gap:4px; min-width:0; }
     .sc-output-tabs-measure { position:absolute; visibility:hidden; pointer-events:none; width:max-content; }
     .sc-output-tabstrip.sc-output-compare-first { max-width:calc(50% - 12px); }

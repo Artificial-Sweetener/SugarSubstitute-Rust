@@ -291,6 +291,7 @@ export class BrowserCanvasAttachment {
         element,
         (target) =>
           this.#overview.contextTarget(target) ?? this.#images.contextTarget(target) ?? 'primary',
+        options.route ?? null,
       );
       cleanup.push(() => this.#overlay.dispose());
       this.#input = new BrowserCanvasInput(this.viewport, {

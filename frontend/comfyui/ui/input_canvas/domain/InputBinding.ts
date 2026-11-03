@@ -32,6 +32,8 @@ export interface InputBinding {
   readonly files: readonly string[];
   /** Preserve optional preparation intent alongside its owning mask loader's sources. */
   readonly edits?: MaskEditSettings;
+  /** Mark sources the user chose in the source picker; workflow provisioning never replaces them. */
+  readonly explicit?: true;
 }
 /** Identify durable source associations on their owning workflow node. */
 export const MASK_BINDING_KEY = 'sugarcubes_canvas_masks';

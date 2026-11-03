@@ -234,7 +234,7 @@ export class BrowserCanvasAttachment {
             () => this.port.dispose(),
         ];
         try {
-            this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element, (target) => this.#overview.contextTarget(target) ?? this.#images.contextTarget(target) ?? 'primary');
+            this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element, (target) => this.#overview.contextTarget(target) ?? this.#images.contextTarget(target) ?? 'primary', options.route ?? null);
             cleanup.push(() => this.#overlay.dispose());
             this.#input = new BrowserCanvasInput(this.viewport, {
                 navigable: () => this.#camera.navigable(),

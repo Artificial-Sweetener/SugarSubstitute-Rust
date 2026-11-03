@@ -23,6 +23,8 @@ import type {
   CanvasResourceStatus,
 } from '../../domain/CanvasViewPort.js';
 import { CanvasSourceTabs } from './CanvasSourceTabs.js';
+import { CanvasRouteTabs } from './CanvasRouteTabs.js';
+import type { CanvasRouteId, CanvasRouteState } from '../../domain/CanvasRoute.js';
 import { CanvasComparisonNavigation } from './CanvasComparisonNavigation.js';
 import { CanvasWipeSeparator } from './CanvasWipeSeparator.js';
 import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
@@ -43,6 +45,11 @@ export const CanvasOverlay = defineComponent({
     capabilities: { type: Object as PropType<CanvasCapabilities>, required: true },
     send: { type: Function as PropType<(command: CanvasCommand) => void>, required: true },
     announcement: { type: String, default: '' },
+    route: { type: Object as PropType<CanvasRouteState | null>, default: null },
+    chooseRoute: {
+      type: Function as PropType<(route: CanvasRouteId) => void>,
+      default: () => undefined,
+    },
   },
   /** Compose reported surface status with capability-gated control groups. */
   setup(props) {
@@ -55,6 +62,7 @@ export const CanvasOverlay = defineComponent({
         snapshot.zoom?.dimensions && snapshot.zoom.physicalScale > 0 ? snapshot.zoom : null;
       const primaryMessage = resourceMessage(snapshot.resource);
       const secondaryMessage = resourceMessage(snapshot.secondaryResource);
+      const input = props.route?.route === 'input';
       return h(
         'div',
         {
@@ -66,18 +74,26 @@ export const CanvasOverlay = defineComponent({
           'data-canvas-image-height': zoom?.dimensions?.height,
         },
         [
+          props.route
+            ? h(CanvasRouteTabs, {
+                state: props.route,
+                choose: (value: CanvasRouteId) => props.chooseRoute?.(value),
+              })
+            : null,
+          !input &&
           snapshot.view.mode === 'image' &&
           snapshot.view.comparison &&
           props.capabilities.commands.includes('wipe')
             ? h(CanvasWipeSeparator, { snapshot, send: props.send })
             : null,
-          !snapshot.connected ||
-          Boolean(primaryMessage) ||
-          snapshot.resource.canRetry ||
-          snapshot.resource.canAdmitLargeImage ||
-          Boolean(secondaryMessage) ||
-          snapshot.secondaryResource?.canRetry ||
-          snapshot.secondaryResource?.canAdmitLargeImage
+          !input &&
+          (!snapshot.connected ||
+            Boolean(primaryMessage) ||
+            snapshot.resource.canRetry ||
+            snapshot.resource.canAdmitLargeImage ||
+            Boolean(secondaryMessage) ||
+            snapshot.secondaryResource?.canRetry ||
+            snapshot.secondaryResource?.canAdmitLargeImage)
             ? h('div', { class: 'sc-output-status' }, [
                 snapshot.connected ? null : h('span', 'Disconnected'),
                 h('span', primaryMessage),
@@ -117,6 +133,7 @@ export const CanvasOverlay = defineComponent({
             : null,
           h(CanvasLoadingIndicator, {
             loading:
+              !input &&
               snapshot.connected &&
               (snapshot.resource.state === 'loading' ||
                 snapshot.secondaryResource?.state === 'loading'),
@@ -131,16 +148,18 @@ export const CanvasOverlay = defineComponent({
             },
             props.announcement,
           ),
-          snapshot.view.comparison && props.capabilities.commands.includes('select-comparison')
-            ? h(CanvasComparisonNavigation, { snapshot: navigation.value, send: props.send })
-            : props.capabilities.commands.includes('select-source') &&
-                (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1)
-              ? h(CanvasSourceTabs, {
-                  snapshot: navigation.value,
-                  capabilities: props.capabilities,
-                  send: props.send,
-                })
-              : null,
+          input
+            ? null
+            : snapshot.view.comparison && props.capabilities.commands.includes('select-comparison')
+              ? h(CanvasComparisonNavigation, { snapshot: navigation.value, send: props.send })
+              : props.capabilities.commands.includes('select-source') &&
+                  (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1)
+                ? h(CanvasSourceTabs, {
+                    snapshot: navigation.value,
+                    capabilities: props.capabilities,
+                    send: props.send,
+                  })
+                : null,
         ],
       );
     };

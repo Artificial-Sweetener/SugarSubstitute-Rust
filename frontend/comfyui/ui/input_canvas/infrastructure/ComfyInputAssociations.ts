@@ -27,6 +27,7 @@ import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
 import { ComfyInputAssociationGraph } from './ComfyInputAssociationGraph.js';
 import { ComfyInputAssociationObserver } from './ComfyInputAssociationObserver.js';
 import { readInputBinding } from './InputBindingMetadata.js';
+import type { SpatialTopology } from '../domain/CanvasDimensionAuthority.js';
 
 /** Own lifecycle and host translation while application policy owns every relationship decision. */
 export class ComfyInputAssociations implements InputAssetBindingLookup {
@@ -35,6 +36,8 @@ export class ComfyInputAssociations implements InputAssetBindingLookup {
   readonly #observers = new Map<ComfyGraph, ComfyInputAssociationObserver>();
   readonly #facts = new Map<ComfyGraph, InputAssetAssociationGraph>();
   readonly #dirty = new Set<ComfyGraph>();
+  readonly #spatial = new Map<ComfyGraph, SpatialTopology>();
+  readonly #topologyListeners = new Set<() => void>();
   #membership = true;
   #scheduled = false;
   #active = false;
@@ -51,6 +54,33 @@ export class ComfyInputAssociations implements InputAssetBindingLookup {
     logger: Pick<Console, 'warn'>,
   ) {
     this.#graph = new ComfyInputAssociationGraph(loaders, logger);
+  }
+
+  /** Report whether a configured workflow is being observed; false while a workflow loads. */
+  get active(): boolean {
+    return this.#active;
+  }
+
+  /** Expose the field inventory and flattened workflow paths read at the last settled flush. */
+  get inventory(): Pick<ComfyInputAssociationGraph, 'fields' | 'workflowKey' | 'path' | 'node'> {
+    return this.#graph;
+  }
+
+  /** Merge every observed scope's spatial connections from the last settled flush. */
+  topology(): SpatialTopology {
+    const scopes = [...this.#spatial.values()];
+    return {
+      nodes: scopes.flatMap((scope) => scope.nodes),
+      edges: scopes.flatMap((scope) => scope.edges),
+    };
+  }
+
+  /** Observe every settled topology flush, including changes that leave associations unchanged. */
+  subscribeTopology(listener: () => void): () => void {
+    this.#topologyListeners.add(listener);
+    return () => {
+      this.#topologyListeners.delete(listener);
+    };
   }
 
   /** Expose the same opaque field identity to future application consumers. */
@@ -147,9 +177,11 @@ export class ComfyInputAssociations implements InputAssetBindingLookup {
     for (const observer of this.#observers.values()) observer.dispose();
     this.#observers.clear();
     this.#facts.clear();
+    this.#spatial.clear();
     this.#dirty.clear();
     this.#graph.reconcile(null);
     this.relationships.replace([]);
+    this.#topologyChanged();
   }
 
   /** Release all graph ownership when the browser host is retired. */
@@ -192,6 +224,7 @@ export class ComfyInputAssociations implements InputAssetBindingLookup {
             this.#observers.delete(graph);
           }
         this.#facts.clear();
+        this.#spatial.clear();
         for (const { graph } of scopes) {
           if (!this.#observers.has(graph))
             this.#observers.set(
@@ -218,12 +251,25 @@ export class ComfyInputAssociations implements InputAssetBindingLookup {
       this.#dirty.clear();
       for (const graph of dirty) {
         this.#facts.set(graph, this.#graph.read(graph));
+        this.#spatial.set(graph, this.#graph.spatial(graph));
         this.#topologyReads++;
       }
       this.relationships.replace([...this.#facts.values()]);
     } catch (error: unknown) {
+      this.#spatial.clear();
       this.relationships.replace([]);
       this.report(error);
     }
+    this.#topologyChanged();
+  }
+
+  /** Notify topology observers, isolating their failures. */
+  #topologyChanged(): void {
+    for (const listener of this.#topologyListeners)
+      try {
+        listener();
+      } catch (error: unknown) {
+        this.report(error);
+      }
   }
 }

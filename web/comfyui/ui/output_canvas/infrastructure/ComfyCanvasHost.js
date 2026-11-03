@@ -153,6 +153,7 @@ export class ComfyCanvasHost {
                         };
                     },
                     report: (error) => report(error),
+                    ...(options.route ? { route: options.route } : {}),
                 };
                 if (nativePresenter())
                     return new NativeCanvasAttachment(element, {

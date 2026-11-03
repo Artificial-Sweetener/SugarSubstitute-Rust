@@ -18,7 +18,7 @@ import { isSerializedWidget } from '../../graph/WidgetValueSerialization.js';
 import type { ComfyNode } from '../../types/graph.js';
 import { inputLabel, type InputLoader } from '../domain/InputLoader.js';
 import { inputLoaderSettings } from '../domain/InputLoaderSettings.js';
-import type { InputPreviewPort } from '../application/InputEditorPorts.js';
+import type { InputCanvasCapabilities, InputPreviewPort } from '../application/InputEditorPorts.js';
 import type { MaskEditingPort } from '../application/MaskEditingPort.js';
 import { InputBindingController } from '../application/InputBindingController.js';
 import type { CanvasSourceHost } from '../../core/embedded/CanvasRuntime.js';
@@ -30,7 +30,7 @@ import type { LegacyMaskMigration } from './LegacyMaskMigration.js';
 /** Supply native boundaries without leaking editor or browser APIs into source-state policy. */
 export interface ComfyInputBindingPorts {
   host(id?: string): CanvasSourceHost | null;
-  editable(canvasId: string): boolean;
+  readonly canvases: InputCanvasCapabilities;
   readonly files: InputPreviewPort;
   readonly maskEditing: MaskEditingPort;
   readonly legacy: Pick<LegacyMaskMigration, 'read'>;
@@ -142,7 +142,7 @@ export function createComfyInputBinding(
     () => crypto.randomUUID(),
     ports.report,
     ports.maskEditing,
-    ports.editable,
+    ports.canvases,
     (sources) => ports.refreshPreviews(sources),
   );
 }

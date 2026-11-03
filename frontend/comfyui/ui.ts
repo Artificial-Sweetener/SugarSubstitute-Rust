@@ -105,6 +105,7 @@ const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
 const { workflowExecution, workflowFields, canvasInputs } = createWorkflowCanvasComposition({
   api,
   notifyCanvas: (message) => pushToastMessage('error', 'Canvas delivery failed', message),
+  notifyInput: (title, message) => pushToastMessage('warn', title, message),
   app: appRef,
   document: documentRef ?? document,
   getLiteGraph: () => adapter.getLiteGraph?.(),
@@ -310,6 +311,7 @@ const workflowWorkspace = new ComfyWorkflowWorkspace(
     app: appRef,
     document: documentRef ?? document,
     execution: workflowExecution,
+    route: canvasInputs.surfaces.route,
     logger,
     report: (error) => {
       logger.error('SugarCubes output canvas failed', { error });
