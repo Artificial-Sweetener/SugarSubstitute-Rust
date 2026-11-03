@@ -30,6 +30,7 @@ import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
 import { canvasMediaItem, type CanvasMediaTarget } from '../../domain/CanvasMedia.js';
 import { CanvasOverlay } from './CanvasOverlay.js';
 import { ensureCanvasOverlayStyles } from './CanvasOverlayStyles.js';
+import type { CanvasRouteId, CanvasRoutePort } from '../../domain/CanvasRoute.js';
 
 export interface MountedCanvasOverlay {
   /** Release this root's subscription and controls without releasing its surface. */
@@ -43,10 +44,15 @@ export function mountCanvasOverlay(
   reportFailure: (error: unknown, request: CanvasCommandRequest | null) => void,
   interactionSurface: HTMLElement = element,
   contextTarget: (target: EventTarget | null) => CanvasMediaTarget = () => 'primary',
+  route: CanvasRoutePort | null = null,
 ): MountedCanvasOverlay {
   ensureCanvasOverlayStyles(element.ownerDocument);
   const initial = port.read();
   const state = shallowRef(initial);
+  const routeState = shallowRef(route?.read() ?? null);
+  const stopRoute = route?.subscribe(() => {
+    if (active) routeState.value = route.read();
+  });
   const announcement = shallowRef('');
   let active = true;
   let sequence = 0;
@@ -141,6 +147,10 @@ export function mountCanvasOverlay(
         capabilities: port.capabilities,
         send,
         announcement: announcement.value,
+        route: routeState.value,
+        chooseRoute: (value: CanvasRouteId) => {
+          if (active) route?.choose(value);
+        },
       }),
   });
   try {
@@ -149,6 +159,7 @@ export function mountCanvasOverlay(
     active = false;
     closeInteraction();
     unsubscribe();
+    stopRoute?.();
     reportFailure(error, null);
     throw error;
   }
@@ -159,6 +170,7 @@ export function mountCanvasOverlay(
       active = false;
       closeInteraction();
       unsubscribe();
+      stopRoute?.();
       app.unmount();
     },
   };

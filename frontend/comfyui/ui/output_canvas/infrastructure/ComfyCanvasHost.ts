@@ -47,6 +47,7 @@ import { BrowserImageDownload } from '../../output_saving/BrowserImageDownload.j
 import type { OutputSavingFeature } from '../../output_saving/OutputSavingFeature.js';
 import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
 import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
+import type { CanvasRoutePort } from '../domain/CanvasRoute.js';
 
 export interface ComfyCanvasHostOptions {
   readonly saving: OutputSavingFeature | null;
@@ -57,6 +58,8 @@ export interface ComfyCanvasHostOptions {
   readonly logger: Pick<Console, 'error'>;
   /** Page allowance shared by browser canvas images and posters. */
   readonly memory: MemoryBudgetRegistry;
+  /** The workflow-surface Input/Output route shown in the canvas tab controls. */
+  readonly route?: CanvasRoutePort;
   report(error: unknown): void;
 }
 
@@ -213,6 +216,7 @@ export class ComfyCanvasHost {
             };
           },
           report: (error: unknown) => report(error),
+          ...(options.route ? { route: options.route } : {}),
         };
         if (nativePresenter())
           return new NativeCanvasAttachment(element, {

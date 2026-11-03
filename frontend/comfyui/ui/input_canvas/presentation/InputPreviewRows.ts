@@ -14,7 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Reconcile persistent loader previews while the content owner coordinates sources and interpretation. */
-import type { InputEditorBinding, InputImageAssociation } from '../application/InputEditorPorts.js';
+import type {
+  InputEditorBinding,
+  InputImageAssociation,
+  InputSurfaceCardPort,
+} from '../application/InputEditorPorts.js';
 import type { CanvasSourcePreviews } from '../application/CanvasSourcePreviews.js';
 import { InputPreviewContent } from '../application/InputPreviewContent.js';
 import type { InputEntry } from '../domain/InputBinding.js';
@@ -44,6 +48,7 @@ export class InputPreviewRows {
     private readonly previews: CanvasSourcePreviews,
     private readonly report: (error: unknown) => void,
     private readonly association: InputImageAssociation | null,
+    private readonly surface: InputSurfaceCardPort | null = null,
   ) {
     this.element = document.createElement('div');
     this.element.className = 'sc-input-editor__rows';
@@ -174,6 +179,10 @@ export class InputPreviewRows {
       () => this.#select(entry.id),
     );
     surface.element.dataset.inputEntry = entry.id;
+    if (this.binding.loader.kind === 'mask' && this.binding.loader.ordered) {
+      surface.element.addEventListener('pointerenter', () => this.surface?.hover(entry.id));
+      surface.element.addEventListener('pointerleave', () => this.surface?.hover(null));
+    }
     const document = this.binding.context?.document;
     if (document) surface.frame(document.width, document.height);
     if (this.binding.loader.kind === 'mask') surface.black();
@@ -184,10 +193,11 @@ export class InputPreviewRows {
       content: null,
     };
   }
-  /** Preserve ordinary browser entry selection without attaching actions to plugin previews. */
+  /** Select the entry, then show its input surface when a workflow-surface canvas holds it. */
   #select(id: string): void {
     try {
       this.binding.select(id);
+      this.surface?.activate(this.binding.loader.ordered ? id : null);
     } catch (error: unknown) {
       this.report(error);
     }

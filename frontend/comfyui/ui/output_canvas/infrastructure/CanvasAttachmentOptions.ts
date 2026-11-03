@@ -26,6 +26,7 @@ import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
 import type { CanvasCommandRequest } from '../domain/CanvasViewPort.js';
 import type { CanvasOutputDragPayload } from '../presentation/CanvasOutputDrag.js';
 import type { CanvasMediaOptions } from './CanvasMediaActions.js';
+import type { CanvasRoutePort } from '../domain/CanvasRoute.js';
 
 /** Keep workflow ownership and transfer actions independent of image presentation. */
 export interface CanvasAttachmentOptions {
@@ -48,6 +49,8 @@ export interface CanvasAttachmentOptions {
   drag?(item: WorkflowOutputItem, signal: AbortSignal): Promise<CanvasOutputDragPayload | null>;
   /** Invalidate prepared transfers after an accepted shared preference change. */
   transferChanged?(listener: () => void): () => void;
+  /** Show the Input/Output route when a workflow-surface canvas holds the workflow's inputs. */
+  route?: CanvasRoutePort;
   /** Report product feedback through the existing SugarCubes services. */
   report(error: unknown, request: CanvasCommandRequest | null): void;
 }

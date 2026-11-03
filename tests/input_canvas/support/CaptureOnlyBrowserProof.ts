@@ -112,7 +112,7 @@ async function mount(): Promise<void> {
   );
   const binding = createComfyInputBinding(node, loader, {
     host: () => host,
-    editable: () => true,
+    canvases: { editable: () => true, provisions: () => false },
     maskEditing: { prepare: async (source, settings) => editMaskInput(source, settings) },
     report,
     legacy: { read: async () => null },

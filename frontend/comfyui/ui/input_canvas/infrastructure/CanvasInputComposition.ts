@@ -35,12 +35,20 @@ import { ComfyInputReturnPreparation } from './ComfyInputReturnPreparation.js';
 import { ComfyInputAssociations } from './ComfyInputAssociations.js';
 import type { ComfyGraph } from '../../types/graph.js';
 import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
+import type { CanvasWorkflowHost } from '../../../../../integrations/contracts/CanvasWorkflowSurfaces.js';
+import type { InputCanvasCapabilities } from '../application/InputEditorPorts.js';
+import type { WorkflowSurfaceNotice } from '../application/WorkflowSurfaceProvisioning.js';
+import { createWorkflowSurfaces, type WorkflowSurfaces } from './WorkflowSurfaceComposition.js';
 
 /** Supply host capabilities and native root access at the composition boundary. */
 export interface CanvasInputHostOptions {
   readonly document: Document;
   host(id?: string): CanvasSourceHost | null;
-  editable(canvasId: string): boolean;
+  readonly canvases: InputCanvasCapabilities;
+  workflowHost(): CanvasWorkflowHost | null;
+  /** Theme accent that colours the first mask of each input surface. */
+  accent(): string;
+  notice: WorkflowSurfaceNotice;
   legacyHost(id?: string): CanvasMaskHost | null;
   graph(): ComfyGraph | null | undefined;
   report(error: unknown): void;
@@ -56,6 +64,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
   masonry: MasonryInputHost;
   bindings: ComfyInputBindings;
   associations: ComfyInputAssociations;
+  surfaces: WorkflowSurfaces;
   define(definitions: unknown): void;
   setup(): void;
   beforeConfigureGraph(): void;
@@ -64,15 +73,19 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
   const { document, host, legacyHost, report } = options;
   const loaders = new ComfyInputLoaders();
   const assets = new BrowserCanvasSourceAssets((input, init) => fetch(input, init));
-  const capture = new CanvasSourceCapture(host);
+  const capture = new CanvasSourceCapture(host, (canvasId, documentId) =>
+    surfaces.provisioning.document(canvasId, documentId),
+  );
   const rasters = new BrowserInputRasters(document, (input, init) => fetch(input, init));
   const maskEditing = new BrowserMaskEditing();
   const previews = new CanvasSourcePreviews(capture, host, report);
   const legacy = new LegacyMaskMigration(legacyHost, assets);
-  const defaults = new ComfyInputSourceDefaults(host, legacy);
+  const defaults = new ComfyInputSourceDefaults(host, legacy, (id) =>
+    options.canvases.provisions(id),
+  );
   const bindings = new ComfyInputBindings(loaders, {
     host,
-    editable: options.editable,
+    canvases: options.canvases,
     refreshPreviews: (sources) => previews.refreshSources(sources),
     files: new BrowserInputPreviews((source) => assets.stage(source), rasters, options.memory),
     maskEditing,
@@ -88,6 +101,17 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     report,
     options.logger,
   );
+  const surfaces = createWorkflowSurfaces({
+    document,
+    associations,
+    bindings,
+    loaders,
+    graph: options.graph,
+    workflowHost: options.workflowHost,
+    accent: options.accent,
+    notice: options.notice,
+    report,
+  });
   const masonry = new MasonryInputHost(
     document,
     loaders,
@@ -96,10 +120,17 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     report,
     bindings,
     associations,
+    surfaces.cards,
   );
+  const canvasReady = (): void => {
+    void surfaces.provisioning.refresh();
+  };
+  document.addEventListener('sugarcubes-canvas-ready', canvasReady);
   document.defaultView?.addEventListener(
     'pagehide',
     () => {
+      document.removeEventListener('sugarcubes-canvas-ready', canvasReady);
+      surfaces.dispose();
       associations.dispose();
       bindings.clear();
       maskEditing.dispose();
@@ -126,6 +157,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     masonry,
     bindings,
     associations,
+    surfaces,
     define: (definitions) => {
       loaders.define(definitions);
       associations.definitionsChanged();
@@ -133,6 +165,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     setup: () => {
       associations.start();
       masonry.setup();
+      void surfaces.provisioning.refresh();
     },
     beforeConfigureGraph: () => {
       masonry.beforeConfigureGraph();
@@ -141,6 +174,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     },
     afterConfigureGraph: async () => {
       associations.start();
+      void surfaces.provisioning.refresh();
       await bindings.ready();
     },
   };

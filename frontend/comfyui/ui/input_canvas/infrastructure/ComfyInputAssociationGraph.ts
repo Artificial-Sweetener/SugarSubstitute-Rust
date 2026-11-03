@@ -25,6 +25,13 @@ import type {
   InputAssetConsumerInput,
 } from '../domain/InputAssetAssociation.js';
 import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
+import { isSerializedWidget } from '../../graph/WidgetValueSerialization.js';
+import {
+  inferDimensionFieldPair,
+  type SpatialEdge,
+  type SpatialNode,
+  type SpatialTopology,
+} from '../domain/CanvasDimensionAuthority.js';
 
 /** Keep native source-state lookup behind the graph adapter. */
 export interface ComfyInputAssetField {
@@ -70,9 +77,91 @@ export class ComfyInputAssociationGraph {
   /** Translate a cached native field identity to the same authored path used by queue projection. */
   workflowKey(key: string): string | null {
     const field = this.#fields.get(key);
-    if (!field) return null;
-    const paths = [...this.#paths].filter(([, node]) => node === field.node).map(([path]) => path);
-    return paths.length === 1 ? JSON.stringify([paths[0], field.loader.field]) : null;
+    const path = field ? this.path(field.node) : null;
+    return field && path !== null ? JSON.stringify([path, field.loader.field]) : null;
+  }
+
+  /** List every loader field owned by the current workflow inventory. */
+  fields(): readonly ComfyInputAssetField[] {
+    return [...this.#fields.values()];
+  }
+
+  /** Resolve a live node's unique flattened workflow path. */
+  path(node: ComfyNode): string | null {
+    const paths = [...this.#paths].filter(([, value]) => value === node).map(([path]) => path);
+    return paths.length === 1 ? (paths[0] ?? null) : null;
+  }
+
+  /** Resolve a flattened workflow path to its unique live node. */
+  node(path: string): ComfyNode | null {
+    return this.#paths.get(path) ?? null;
+  }
+
+  /**
+   * Read one scope's spatial connections and authored size fields under flattened paths.
+   *
+   * Connections that cross subgraph boundaries are resolved to the inner nodes, as in `read`.
+   * Size fields count only when their widget is serialized and not driven by a link.
+   */
+  spatial(graph: ComfyGraph): SpatialTopology {
+    const scope = this.#scopes.get(graph);
+    if (!scope || this.#invalid.has(graph)) return { nodes: [], edges: [] };
+    const nodes = getGraphNodes(graph);
+    const byId = new Map(
+      nodes.filter((node) => validNodeId(node.id)).map((node) => [String(node.id), node]),
+    );
+    const spatialNodes: SpatialNode[] = nodes.flatMap((node) => {
+      if (!validNodeId(node.id) || isRecord(node.subgraph)) return [];
+      const key = scope.prefix + String(node.id);
+      if (this.#paths.get(key) !== node) return [];
+      const linked = new Set(
+        (node.inputs ?? []).flatMap((input) =>
+          input.link !== null && input.link !== undefined ? [input.widget?.name ?? input.name] : [],
+        ),
+      );
+      const pair = inferDimensionFieldPair(
+        (node.widgets ?? []).flatMap((widget) =>
+          widget.name && isSerializedWidget(widget) && !linked.has(widget.name)
+            ? [widget.name]
+            : [],
+        ),
+      );
+      return [
+        {
+          key,
+          outputs: (node.outputs ?? []).map((output) =>
+            typeof output.type === 'string' ? output.type.toUpperCase() : null,
+          ),
+          dimensions: pair ? [pair] : [],
+        },
+      ];
+    });
+    const edges: SpatialEdge[] = [];
+    for (const link of collectGraphLinks(graph)) {
+      const provider = byId.get(String(link.origin_id ?? link.origin)),
+        consumer = byId.get(String(link.target_id ?? link.target));
+      if (!provider || !consumer || !validSlot(link.origin_slot) || !validSlot(link.target_slot))
+        continue;
+      const origin = this.#boundaries.resolveOutput(provider, link.origin_slot);
+      const sourceKey = origin ? scope.prefix + String(origin.nodeId) : null;
+      const source = sourceKey ? this.#paths.get(sourceKey) : null;
+      if (!origin || !sourceKey || !source) continue;
+      const type = source.outputs?.[origin.slot]?.type;
+      for (const target of this.#boundaries.resolveInputTargets(consumer, link.target_slot)) {
+        const targetKey = scope.prefix + String(target.nodeId);
+        const node = this.#paths.get(targetKey);
+        if (!node) continue;
+        const inputType = node.inputs?.[target.inputSlot]?.type;
+        edges.push({
+          source: sourceKey,
+          output: origin.slot,
+          type: typeof type === 'string' ? type.toUpperCase() : null,
+          target: targetKey,
+          inputType: typeof inputType === 'string' ? inputType.toUpperCase() : null,
+        });
+      }
+    }
+    return { nodes: spatialNodes, edges };
   }
 
   /** Inventory membership at explicit workflow, node-membership or definition lifecycles. */

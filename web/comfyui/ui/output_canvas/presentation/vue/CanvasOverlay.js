@@ -1,6 +1,7 @@
 import {
   CanvasOverlay
-} from "../../../chunk-IYFUSGJ6.js";
+} from "../../../chunk-BLQJSKWP.js";
+import "../../../chunk-ZAF7C7KA.js";
 import "../../../chunk-T26L5BHO.js";
 import "../../../chunk-WIEFPHCO.js";
 import "../../../chunk-CIRP6VLK.js";

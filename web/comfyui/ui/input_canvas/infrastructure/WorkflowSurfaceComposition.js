@@ -1,0 +1,45 @@
+import { WorkflowInputRoute } from '../application/WorkflowInputRoute.js';
+import { WorkflowMaskAppearance } from '../application/WorkflowMaskAppearance.js';
+import { WORKFLOW_SURFACE_COPY } from '../application/WorkflowSurfaceCopy.js';
+import { WorkflowSurfaceProvisioning, } from '../application/WorkflowSurfaceProvisioning.js';
+import { BrowserWorkflowFileDimensions } from './BrowserWorkflowFileDimensions.js';
+import { ComfyInputSurfaceCards } from './ComfyInputSurfaceCards.js';
+import { ComfyWorkflowInputState } from './ComfyWorkflowInputState.js';
+import { ComfyWorkflowSurfaceGraph } from './ComfyWorkflowSurfaceGraph.js';
+/** Build provisioning over the existing association and binding owners. */
+export function createWorkflowSurfaces(options) {
+    const { associations, workflowHost, report } = options;
+    const state = new ComfyWorkflowInputState(options.graph, () => crypto.randomUUID());
+    const graph = new ComfyWorkflowSurfaceGraph(associations, options.bindings, options.loaders, state, report);
+    const provisioning = new WorkflowSurfaceProvisioning(graph, workflowHost, options.accent, new BrowserWorkflowFileDimensions(options.document), options.notice, report);
+    const route = new WorkflowInputRoute(provisioning, workflowHost, state, report);
+    const appearance = new WorkflowMaskAppearance(provisioning, workflowHost, graph, report);
+    return {
+        provisioning,
+        route: {
+            read: () => {
+                const view = route.read();
+                return view
+                    ? {
+                        route: view.route,
+                        inputAvailable: view.available,
+                        reason: view.reason,
+                        labels: {
+                            input: WORKFLOW_SURFACE_COPY.inputRoute,
+                            output: WORKFLOW_SURFACE_COPY.outputRoute,
+                            group: WORKFLOW_SURFACE_COPY.routeLabel,
+                        },
+                    }
+                    : null;
+            },
+            subscribe: (listener) => route.subscribe(listener),
+            choose: (value) => route.chooseRoute(value),
+        },
+        cards: new ComfyInputSurfaceCards(associations, route, appearance, provisioning),
+        dispose: () => {
+            route.dispose();
+            provisioning.dispose();
+            graph.dispose();
+        },
+    };
+}

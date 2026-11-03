@@ -279,7 +279,14 @@ export class NativeCanvasAttachment {
       this.#stopTransfer,
     ];
     try {
-      this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element);
+      this.#overlay = mountCanvasOverlay(
+        overlay,
+        this.port,
+        options.report,
+        element,
+        undefined,
+        options.route ?? null,
+      );
       cleanup.push(() => this.#overlay.dispose());
       this.#geometry = new CanvasSurfaceGeometryObserver(
         this.viewport,

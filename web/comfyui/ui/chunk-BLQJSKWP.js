@@ -1,4 +1,7 @@
 import {
+  CanvasRouteTabs
+} from "./chunk-ZAF7C7KA.js";
+import {
   CanvasSourceTabs
 } from "./chunk-T26L5BHO.js";
 import {
@@ -29,7 +32,12 @@ var CanvasOverlay = defineComponent({
     snapshot: { type: Object, required: true },
     capabilities: { type: Object, required: true },
     send: { type: Function, required: true },
-    announcement: { type: String, default: "" }
+    announcement: { type: String, default: "" },
+    route: { type: Object, default: null },
+    chooseRoute: {
+      type: Function,
+      default: () => void 0
+    }
   },
   /** Compose reported surface status with capability-gated control groups. */
   setup(props) {
@@ -41,6 +49,7 @@ var CanvasOverlay = defineComponent({
       const zoom = snapshot.zoom?.dimensions && snapshot.zoom.physicalScale > 0 ? snapshot.zoom : null;
       const primaryMessage = resourceMessage(snapshot.resource);
       const secondaryMessage = resourceMessage(snapshot.secondaryResource);
+      const input = props.route?.route === "input";
       return h(
         "div",
         {
@@ -52,8 +61,12 @@ var CanvasOverlay = defineComponent({
           "data-canvas-image-height": zoom?.dimensions?.height
         },
         [
-          snapshot.view.mode === "image" && snapshot.view.comparison && props.capabilities.commands.includes("wipe") ? h(CanvasWipeSeparator, { snapshot, send: props.send }) : null,
-          !snapshot.connected || Boolean(primaryMessage) || snapshot.resource.canRetry || snapshot.resource.canAdmitLargeImage || Boolean(secondaryMessage) || snapshot.secondaryResource?.canRetry || snapshot.secondaryResource?.canAdmitLargeImage ? h("div", { class: "sc-output-status" }, [
+          props.route ? h(CanvasRouteTabs, {
+            state: props.route,
+            choose: (value) => props.chooseRoute?.(value)
+          }) : null,
+          !input && snapshot.view.mode === "image" && snapshot.view.comparison && props.capabilities.commands.includes("wipe") ? h(CanvasWipeSeparator, { snapshot, send: props.send }) : null,
+          !input && (!snapshot.connected || Boolean(primaryMessage) || snapshot.resource.canRetry || snapshot.resource.canAdmitLargeImage || Boolean(secondaryMessage) || snapshot.secondaryResource?.canRetry || snapshot.secondaryResource?.canAdmitLargeImage) ? h("div", { class: "sc-output-status" }, [
             snapshot.connected ? null : h("span", "Disconnected"),
             h("span", primaryMessage),
             h("span", secondaryMessage),
@@ -77,7 +90,7 @@ var CanvasOverlay = defineComponent({
             ) : null
           ]) : null,
           h(CanvasLoadingIndicator, {
-            loading: snapshot.connected && (snapshot.resource.state === "loading" || snapshot.secondaryResource?.state === "loading")
+            loading: !input && snapshot.connected && (snapshot.resource.state === "loading" || snapshot.secondaryResource?.state === "loading")
           }),
           h(
             "span",
@@ -89,7 +102,7 @@ var CanvasOverlay = defineComponent({
             },
             props.announcement
           ),
-          snapshot.view.comparison && props.capabilities.commands.includes("select-comparison") ? h(CanvasComparisonNavigation, { snapshot: navigation.value, send: props.send }) : props.capabilities.commands.includes("select-source") && (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1) ? h(CanvasSourceTabs, {
+          input ? null : snapshot.view.comparison && props.capabilities.commands.includes("select-comparison") ? h(CanvasComparisonNavigation, { snapshot: navigation.value, send: props.send }) : props.capabilities.commands.includes("select-source") && (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1) ? h(CanvasSourceTabs, {
             snapshot: navigation.value,
             capabilities: props.capabilities,
             send: props.send

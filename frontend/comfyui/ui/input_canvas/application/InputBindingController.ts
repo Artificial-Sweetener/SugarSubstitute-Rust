@@ -17,7 +17,7 @@
 import type { InputBindingStatePort } from './InputBindingStatePort.js';
 import { InputPreviewInterpretation } from './InputPreviewInterpretation.js';
 import { inputLabel } from '../domain/InputLoader.js';
-import type { InputPreviewPort } from './InputEditorPorts.js';
+import type { InputCanvasCapabilities, InputPreviewPort } from './InputEditorPorts.js';
 import type { MaskEditingPort } from './MaskEditingPort.js';
 import type { InputLoader } from '../domain/InputLoader.js';
 import { moveInputEntry, type InputBinding, type InputEntry } from '../domain/InputBinding.js';
@@ -52,7 +52,7 @@ export class InputBindingController {
     private readonly nextId: () => string,
     private readonly report: (error: unknown) => void,
     readonly maskEditing: MaskEditingPort,
-    private readonly editableCanvas: (canvasId: string) => boolean,
+    private readonly canvases: InputCanvasCapabilities,
     private readonly refreshPreviews: (sources: readonly CanvasInputSource[]) => void,
   ) {
     this.preview = new InputPreviewInterpretation(loader, files, () => port.settings());
@@ -81,7 +81,7 @@ export class InputBindingController {
   /** Require actual positioned layer support rather than inferring editing from selection reads. */
   get canEditMask(): boolean {
     const id = this.#canvas?.canvasId ?? this.host()?.canvasId;
-    return Boolean(id && this.editableCanvas(id));
+    return Boolean(id && this.canvases.editable(id));
   }
   /** Supply layer choices without teaching presentation about native APIs. */
   get context(): CanvasSourceContext | null {
@@ -118,7 +118,7 @@ export class InputBindingController {
         const saved = await this.port.load();
         if (this.#disposed || generation !== this.#generation) return;
         if (saved) this.#save(saved);
-        else if (canvas && this.#context?.supported) {
+        else if (canvas && this.#context?.supported && !this.canvases.provisions(canvas.canvasId)) {
           const state = this.state;
           const entries = (
             state.entries.length
@@ -184,7 +184,48 @@ export class InputBindingController {
     const entries = state.entries.length
       ? state.entries.map((entry) => (entry.id === selected ? { ...entry, source } : entry))
       : [{ id: selected, label: inputLabel(this.loader.kind) + ' 1', source }];
-    this.#save({ ...state, entries, selected });
+    this.#save({ ...state, entries, selected, explicit: true });
+  }
+  /**
+   * Bind canvas sources that workflow provisioning created for this loader's entries.
+   *
+   * Sources are keyed by entry identity for ordered loaders and by null for a scalar loader.
+   * An explicit picker choice is kept unless it already names the provisioned source, in which
+   * case provisioning resumes ownership. Entries without a provisioned source keep their source.
+   */
+  provision(sources: ReadonlyMap<string | null, CanvasInputSource>): void {
+    const state = this.state;
+    const entries = state.entries.length
+      ? state.entries
+      : [
+          {
+            id: state.selected ?? this.nextId(),
+            label: inputLabel(this.loader.kind) + ' 1',
+            source: { kind: 'file', file: null } as const,
+          },
+        ];
+    const provisioned = entries.map((entry) => {
+      const source = sources.get(this.loader.ordered ? entry.id : null);
+      return source ? { ...entry, source } : entry;
+    });
+    if (
+      state.explicit &&
+      JSON.stringify(provisioned.map((entry) => entry.source)) !==
+        JSON.stringify(entries.map((entry) => entry.source))
+    )
+      return;
+    const next: InputBinding = {
+      version: 2,
+      field: state.field,
+      files: state.files,
+      entries: provisioned,
+      selected: state.selected ?? provisioned[0]?.id ?? null,
+      ...(state.edits ? { edits: state.edits } : {}),
+    };
+    if (JSON.stringify(next) === JSON.stringify(state)) return;
+    this.#generation++;
+    this.#error = null;
+    this.#save(next);
   }
   /** Select an ordered entry without changing native document state. */
   select(id: string): void {
@@ -200,12 +241,15 @@ export class InputBindingController {
     const entry: InputEntry = {
       id: this.nextId(),
       label: `${inputLabel(this.loader.kind)} ${String(state.entries.length + 1)}`,
-      source: defaultCanvasInput(
-        this.canvasId,
-        this.#context,
-        null,
-        this.loader.kind === 'mask' ? 'selection' : 'composition',
-      ),
+      source:
+        this.canvasId && this.canvases.provisions(this.canvasId)
+          ? { kind: 'file', file: null }
+          : defaultCanvasInput(
+              this.canvasId,
+              this.#context,
+              null,
+              this.loader.kind === 'mask' ? 'selection' : 'composition',
+            ),
     };
     this.#save({ ...state, entries: [...state.entries, entry], selected: entry.id });
   }

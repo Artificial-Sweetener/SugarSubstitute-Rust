@@ -5,19 +5,24 @@ import { defaultCanvasInput } from '../domain/CanvasInputSource.js';
 export class ComfyInputSourceDefaults {
     host;
     legacy;
+    provisions;
     /** Resolve native capabilities and existing persisted values at their adapter boundary. */
-    constructor(host, legacy) {
+    constructor(host, legacy, provisions) {
         this.host = host;
         this.legacy = legacy;
+        this.provisions = provisions;
     }
-    /** Preserve explicit choices and prefer current selection only for unconfigured capable canvases. */
+    /**
+     * Preserve explicit choices and prefer current selection only for unconfigured capable canvases.
+     * A canvas that provisions workflow surfaces keeps unconfigured loaders on their files.
+     */
     async resolve(properties, loader, files) {
         const saved = readInputBinding(properties, loader.kind, loader.field) ??
             (loader.kind === 'mask' ? await this.legacy.read(properties) : null);
         if (saved)
             return saved;
         const canvas = this.host();
-        if (!canvas)
+        if (!canvas || this.provisions(canvas.canvasId))
             return null;
         const context = await canvas.execute({ type: 'context' });
         if (context.kind === 'failure')

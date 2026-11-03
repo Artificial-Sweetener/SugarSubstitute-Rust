@@ -53,7 +53,8 @@ function parseBinding(value) {
         value.files.length > 64 ||
         value.files.some((file) => typeof file !== 'string' || file.length > 4096) ||
         value.entries.length > 64 ||
-        (value.selected !== null && typeof value.selected !== 'string'))
+        (value.selected !== null && typeof value.selected !== 'string') ||
+        (value.explicit !== undefined && value.explicit !== true))
         throw new Error('Invalid canvas source binding.');
     const entries = [];
     const ids = new Set();
@@ -79,6 +80,7 @@ function parseBinding(value) {
         entries,
         files: value.files.filter((file) => typeof file === 'string'),
         ...(value.edits === undefined ? {} : { edits: readMaskEditSettings(value.edits) }),
+        ...(value.explicit === true ? { explicit: true } : {}),
     };
 }
 /** Replace only the owning field's metadata and retain every sibling field and unrelated node property. */

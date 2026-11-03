@@ -30,12 +30,13 @@ export class MasonryInputHost {
     report;
     bindings;
     associations;
+    surfaces;
     #views = new Map();
     #retired = new WeakMap();
     #observer = null;
     #fields = new WeakMap();
     /** Share the registration catalog and peer capability resolver with execution preparation. */
-    constructor(document, loaders, previews, upload, report, bindings, associations) {
+    constructor(document, loaders, previews, upload, report, bindings, associations, surfaces = null) {
         this.document = document;
         this.loaders = loaders;
         this.previews = previews;
@@ -43,6 +44,7 @@ export class MasonryInputHost {
         this.report = report;
         this.bindings = bindings;
         this.associations = associations;
+        this.surfaces = surfaces;
     }
     /** Observe card mounts and scoped native value changes, excluding owned preview rendering. */
     setup() {
@@ -115,7 +117,7 @@ export class MasonryInputHost {
             const editors = new Map();
             for (const loader of loaders) {
                 const binding = this.bindings.get(node, loader);
-                const editor = new MasonryInputEditor(this.document, binding, this.previews, this.upload, this.report, this.#fieldScope(node, loader.field, loader.kind === 'mask' ? loader.channel : null), root, loader.kind === 'mask' ? this.associations.image(node, loader.field) : null, loaders.length > 1);
+                const editor = new MasonryInputEditor(this.document, binding, this.previews, this.upload, this.report, this.#fieldScope(node, loader.field, loader.kind === 'mask' ? loader.channel : null), root, loader.kind === 'mask' ? this.associations.image(node, loader.field) : null, loaders.length > 1, this.surfaces?.port(node, loader) ?? null);
                 root.append(editor.element);
                 editors.set(loader.field, { editor, binding });
             }

@@ -8,6 +8,7 @@ export class InputPreviewRows {
     previews;
     report;
     association;
+    surface;
     element;
     #empty;
     #entries = new Map();
@@ -15,11 +16,12 @@ export class InputPreviewRows {
     #refreshingNativeSource = false;
     #mode = 'context';
     /** Bind pixels and state through the existing source and interpretation owners. */
-    constructor(document, binding, previews, report, association) {
+    constructor(document, binding, previews, report, association, surface = null) {
         this.binding = binding;
         this.previews = previews;
         this.report = report;
         this.association = association;
+        this.surface = surface;
         this.element = document.createElement('div');
         this.element.className = 'sc-input-editor__rows';
         this.#empty = new InputPreviewSurface(document, true, () => { });
@@ -144,6 +146,10 @@ export class InputPreviewRows {
     #row(entry) {
         const surface = new InputPreviewSurface(this.element.ownerDocument, readPluginMode(this.element.ownerDocument), () => this.#select(entry.id));
         surface.element.dataset.inputEntry = entry.id;
+        if (this.binding.loader.kind === 'mask' && this.binding.loader.ordered) {
+            surface.element.addEventListener('pointerenter', () => this.surface?.hover(entry.id));
+            surface.element.addEventListener('pointerleave', () => this.surface?.hover(null));
+        }
         const document = this.binding.context?.document;
         if (document)
             surface.frame(document.width, document.height);
@@ -156,10 +162,11 @@ export class InputPreviewRows {
             content: null,
         };
     }
-    /** Preserve ordinary browser entry selection without attaching actions to plugin previews. */
+    /** Select the entry, then show its input surface when a workflow-surface canvas holds it. */
     #select(id) {
         try {
             this.binding.select(id);
+            this.surface?.activate(this.binding.loader.ordered ? id : null);
         }
         catch (error) {
             this.report(error);
