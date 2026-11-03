@@ -29,6 +29,7 @@ export function ensureInputEditorStyles(document) {
   .sc-input-editor__rows {display:flex;flex-direction:column;gap:4px;}
   .sc-input-editor__row {display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;padding:6px 8px 6px 10px;border:0;border-left:4px solid var(--sc-mask-color,var(--p-primary-color,currentColor));background:transparent;color:inherit;cursor:pointer;min-height:44px;text-align:left;}
   .sc-input-editor__row[data-passive=false]:hover {background:color-mix(in srgb,currentColor 9%,transparent);}
+  .sc-input-editor__row[data-passive=false][data-linked-hover=true]:not([data-selected=true]) {background:color-mix(in srgb,currentColor 9%,transparent);}
   .sc-input-editor__row[data-selected=true] {grid-template-columns:1fr;background:color-mix(in srgb,currentColor 13%,transparent);}
   .sc-input-editor__row[data-selected=true] .sc-input-editor__label {grid-row:1;}
   .sc-input-editor__frame {position:relative;width:44px;max-width:100%;justify-self:center;overflow:hidden;background:#000;border-radius:6px;}

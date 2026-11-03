@@ -20,7 +20,7 @@ import type {
 } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import type { CanvasSurfaceFileReference } from '../../../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
 import type { DimensionAuthority, DimensionAuthorityNode } from './CanvasDimensionAuthority.js';
-import { maskColor } from './MaskColorScheme.js';
+import { maskColor, regionMaskColor } from './MaskColorScheme.js';
 import type { RegionalPromptDemand } from './RegionalPromptDemand.js';
 
 /** At most this many surfaces cross the wire in one sync, per the canvas contract. */
@@ -98,8 +98,9 @@ export interface WorkflowSurfacePlan {
  *
  * A mask paired with an image joins that image's surface. An unpaired mask joins the mask-only
  * surface of its resolved size authority, so masks sized by the same nodes share one surface.
- * Ambiguous pairings and unresolved sizes are rejected rather than guessed. Colours rotate over
- * each surface's complete mask list, starting from the accent.
+ * Ambiguous pairings and unresolved sizes are rejected rather than guessed. Scalar mask colours
+ * rotate over each surface's complete mask list, starting from the accent; the regions of an
+ * ordered loader take the regional palette over that loader's own regions, as their prompts do.
  */
 export function planWorkflowSurfaces(
   facts: WorkflowSurfaceFacts,
@@ -149,7 +150,12 @@ export function planWorkflowSurfaces(
     const entries = masks.flatMap((mask) =>
       mask.entries.map(
         (entry, index) =>
-          ({ mask, entry, label: mask.regions?.names[index] ?? entry.label }) as const,
+          ({
+            mask,
+            entry,
+            label: mask.regions?.names[index] ?? entry.label,
+            region: mask.regions ? regionMaskColor(index, mask.entries.length) : null,
+          }) as const,
       ),
     );
     const admitted = entries.slice(0, MAX_SURFACE_MASKS);
@@ -157,12 +163,12 @@ export function planWorkflowSurfaces(
       rejected.push({ endpoint: mask, reason: 'limit' });
     surfaces.push({
       ...surface,
-      masks: admitted.map(({ mask, entry, label }, index) => ({
+      masks: admitted.map(({ mask, entry, label, region }, index) => ({
         key: workflowMaskKey(mask.key, entry.entry),
         endpoint: mask.key,
         entry: entry.entry,
         label,
-        color: maskColor(accent, index, admitted.length),
+        color: region ?? maskColor(accent, index, admitted.length),
         opacity: mask.opacity,
         initial: entry.initial,
         channel: mask.channel,

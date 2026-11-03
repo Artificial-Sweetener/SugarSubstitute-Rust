@@ -12,6 +12,8 @@ export class CubePromptEditorHost {
     #retired = new WeakSet();
     #restoreSurfaces = new Map();
     #release = null;
+    #regions = null;
+    #releaseRegions = null;
     #catalogSnapshot = null;
     #loraCatalog = null;
     #stopCatalog = null;
@@ -22,9 +24,13 @@ export class CubePromptEditorHost {
         this.#catalog = catalog;
         this.#report = report;
     }
-    /** Enable prompt enhancement before the host renders Cube fields. */
-    setup() {
+    /** Enable prompt enhancement and regional links before the host renders Cube fields. */
+    setup(regions = null) {
         this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
+        if (regions && !this.#regions) {
+            this.#regions = regions;
+            this.#releaseRegions = regions.connectPrompts(this);
+        }
     }
     /** Acquire a field presentation without duplicating its native editor or serialized value. */
     mount(surface) {
@@ -48,6 +54,7 @@ export class CubePromptEditorHost {
         let session = this.#sessions.get(surface.widget);
         if (!session) {
             const created = {
+                node: surface.node,
                 binding: new PromptWidgetBinding(surface.node, surface.widget, (source) => {
                     created.editor?.refresh(source, this.#readOnly(created.active));
                 }),
@@ -126,6 +133,12 @@ export class CubePromptEditorHost {
                 throw new Error('The prompt component is outside its owning presentation.');
         }));
     }
+    /** Show a region hovered in another view on the matching separator of these prompts' editors. */
+    highlightRegions(prompts, ordinal) {
+        for (const session of this.#sessions.values())
+            if (prompts.has(session.node))
+                session.editor?.highlightRegion(ordinal);
+    }
     /** Retire native documents before replacing an entire workflow; the model catalog is app-wide. */
     beforeConfigureGraph() {
         for (const [widget, session] of [...this.#sessions]) {
@@ -137,6 +150,9 @@ export class CubePromptEditorHost {
     dispose() {
         this.#release?.();
         this.#release = null;
+        this.#releaseRegions?.();
+        this.#releaseRegions = null;
+        this.#regions = null;
         this.#stopCatalog?.();
         this.#stopCatalog = null;
         this.beforeConfigureGraph();
@@ -174,6 +190,14 @@ export class CubePromptEditorHost {
             },
             report: this.#report,
             appearance: this.appearance,
+            regionHover: (ordinal) => {
+                try {
+                    this.#regions?.hoverPrompt(session.node, ordinal);
+                }
+                catch (error) {
+                    this.#report(error);
+                }
+            },
         });
         if (session.active)
             this.#present(session, session.active);

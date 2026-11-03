@@ -55,6 +55,7 @@ import {
 } from './semantic-inspection.js';
 import { installSceneErrors, prepareSceneErrors } from './scene-errors.js';
 import { regionHost } from './region-host.js';
+import { showLinkedRegionHover } from './region-hover.js';
 import { nativeCompositionStarted } from './input-settlement.js';
 import { NativeEditingPermission } from './native-editing-permission.js';
 import type { NativeDocumentSeed } from './document-state.js';
@@ -148,6 +149,7 @@ export function mountEditor(parent: HTMLElement, options: EditorOptions): Prompt
       revision: () => revision,
       ...(options.clipboardObserver ? { clipboardObserver: options.clipboardObserver } : {}),
       ...(options.onRegionNameChange ? { onRegionNameChange: options.onRegionNameChange } : {}),
+      ...(options.onRegionHover ? { onRegionHover: options.onRegionHover } : {}),
       /** The view lifetime publishes snapshots and accepted-input education intent. */
       update: (update) => {
         if (update.transactions.some(changesExactSource)) revision++;
@@ -318,6 +320,11 @@ export function mountEditor(parent: HTMLElement, options: EditorOptions): Prompt
       const owner = surface.view.plugin(regionHost);
       if (!owner) throw new Error('Regional host owner unavailable');
       return owner.synchronize(names, target);
+    },
+    /** Linked hover is transient presentation; it never changes source, selection or history. */
+    setLinkedRegionHover(ordinal) {
+      alive();
+      return showLinkedRegionHover(surface.view, ordinal);
     },
     /** Captured host classification retires source-bound work while the parser's actual document stays reusable. */
     setConditioningContext(value) {

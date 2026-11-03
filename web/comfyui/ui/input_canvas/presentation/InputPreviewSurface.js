@@ -27,6 +27,8 @@ export class InputPreviewSurface {
     #crop;
     #passive;
     #painted = false;
+    #color = null;
+    #linked = false;
     #rendered = null;
     /** Use native button semantics only when entry selection belongs to the preview. */
     constructor(document, passive, select) {
@@ -68,6 +70,7 @@ export class InputPreviewSurface {
             this.element.append(this.#label, this.#frame);
             previous.replaceWith(this.element);
             this.#passive = passive;
+            this.#applyRegion();
         }
         this.#label.textContent = label;
         this.canvas.setAttribute('aria-label', label + ' preview');
@@ -76,6 +79,12 @@ export class InputPreviewSurface {
             this.element.setAttribute('aria-pressed', String(selected));
             this.element.disabled = busy;
         }
+    }
+    /** Colour the row's rail with its region colour and show a hover linked from another view. */
+    region(color, linked) {
+        this.#color = color;
+        this.#linked = linked;
+        this.#applyRegion();
     }
     /** Supply the persistent content box to the display-resolution observer. */
     get frameElement() {
@@ -177,6 +186,14 @@ export class InputPreviewSurface {
         this.#message.textContent = '';
         this.#frame.dataset.content = 'pixels';
         this.#frame.setAttribute('aria-busy', 'false');
+    }
+    /** Apply region identity to the current container, which passive-mode changes replace. */
+    #applyRegion() {
+        if (this.#color)
+            this.element.style.setProperty('--sc-mask-color', this.#color);
+        else
+            this.element.style.removeProperty('--sc-mask-color');
+        this.element.dataset.linkedHover = String(this.#linked);
     }
     /** Keep plugin previews outside the focus and command paths. */
     #container(document, passive, select) {

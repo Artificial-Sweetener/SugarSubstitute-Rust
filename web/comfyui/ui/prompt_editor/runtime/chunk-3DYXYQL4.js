@@ -3950,6 +3950,41 @@ function applyRegionNames(document, names) {
   return Object.freeze({ source, replacements: Object.freeze(replacements) });
 }
 
+// frontend/sugarprompt/core/src/prompt/region-palette.ts
+var REGION_PALETTE_BASE = Object.freeze({ r: 79, g: 109, b: 245 });
+function regionHue(base, ordinal, total) {
+  const hue = (base % 360 + 360) % 360;
+  const offset = ordinal <= 0 ? 0 : total === 2 ? 180 : total === 3 ? ordinal === 1 ? 150 : 210 : total === 4 ? ordinal * 90 : total >= 5 ? ordinal * 360 / total : 0;
+  return Math.floor((hue + offset) % 360);
+}
+function regionPaletteColor(base, ordinal, total) {
+  if (ordinal <= 0) return Object.freeze({ ...base });
+  const { h, s, v } = rgbToHsv(base);
+  return hsvToRgb(regionHue(h, ordinal, total), Math.max(s, 200), Math.max(v, 220));
+}
+function rgbToHsv({ r, g, b }) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+  if (delta === 0) return { h: -1, s: 0, v: max };
+  let hue;
+  if (max === r) hue = (g - b) / delta % 6;
+  else if (max === g) hue = (b - r) / delta + 2;
+  else hue = (r - g) / delta + 4;
+  return {
+    h: Math.round((hue * 60 + 360) % 360) % 360,
+    s: Math.round(delta * 255 / max),
+    v: max
+  };
+}
+function hsvToRgb(h, s, v) {
+  const saturation = s / 255, value = v / 255, sector = h % 360 / 60, chroma = saturation * value, x = chroma * (1 - Math.abs(sector % 2 - 1)), minimum = value - chroma;
+  const [r, g, b] = sector < 1 ? [chroma, x, 0] : sector < 2 ? [x, chroma, 0] : sector < 3 ? [0, chroma, x] : sector < 4 ? [0, x, chroma] : sector < 5 ? [x, 0, chroma] : [chroma, 0, x];
+  return Object.freeze({
+    r: Math.round((r + minimum) * 255),
+    g: Math.round((g + minimum) * 255),
+    b: Math.round((b + minimum) * 255)
+  });
+}
+
 // frontend/sugarprompt/core/src/prompt/conditioning.ts
 var ConditioningTopology = class {
   mode;
@@ -7388,6 +7423,8 @@ export {
   regionNameIdentities,
   changedRegionIdentities,
   applyRegionNames,
+  REGION_PALETTE_BASE,
+  regionPaletteColor,
   ConditioningTopology,
   reorderOriginBoundary,
   prepareDocumentValueReorders,

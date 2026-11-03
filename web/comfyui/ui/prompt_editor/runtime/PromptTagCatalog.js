@@ -1,6 +1,6 @@
 import {
   preparePromptTagCatalog
-} from "./chunk-T4QWWIIS.js";
+} from "./chunk-3DYXYQL4.js";
 export {
   preparePromptTagCatalog
 };

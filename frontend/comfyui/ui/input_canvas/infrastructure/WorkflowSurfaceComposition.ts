@@ -20,6 +20,10 @@ import type { ComfyGraph } from '../../types/graph.js';
 import { isRecord } from '../../types/common.js';
 import { WorkflowInputRoute } from '../application/WorkflowInputRoute.js';
 import { WorkflowMaskAppearance } from '../application/WorkflowMaskAppearance.js';
+import { WorkflowRegionalHover } from '../application/WorkflowRegionalHover.js';
+import { WorkflowRegionalPrompts } from '../application/WorkflowRegionalPrompts.js';
+import { ComfyRegionalPromptLinks } from './ComfyRegionalPromptLinks.js';
+import { ComfyRegionalPromptNames } from './ComfyRegionalPromptNames.js';
 import { WORKFLOW_SURFACE_COPY } from '../application/WorkflowSurfaceCopy.js';
 import {
   WorkflowSurfaceProvisioning,
@@ -70,6 +74,8 @@ export interface WorkflowSurfaces {
   readonly provisioning: WorkflowSurfaceProvisioning;
   readonly route: CanvasRoutePort;
   readonly cards: ComfyInputSurfaceCards;
+  /** Link prompt editors' separator hover with mask rows and canvas masks. */
+  readonly regions: ComfyRegionalPromptLinks;
   /** Offer "Change canvas resolution" for width/height fields that size a mask-only surface. */
   resolutionEntries(targets: readonly CanvasResolutionFieldTarget[]): ContextMenuEntry[];
   /** Append input-canvas node actions to the host's node context-menu items. */
@@ -106,6 +112,14 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
   );
   const route = new WorkflowInputRoute(provisioning, workflowHost, state, report);
   const appearance = new WorkflowMaskAppearance(provisioning, workflowHost, graph, report);
+  const regionalPrompts = new WorkflowRegionalPrompts(graph, report);
+  const regionalHover = new WorkflowRegionalHover(regionalPrompts, appearance, report);
+  const promptNames = new ComfyRegionalPromptNames(
+    regionalPrompts,
+    (path) => associations.inventory.node(path),
+    options.graph,
+    report,
+  );
   const resolution = new WorkflowCanvasResolution(
     provisioning,
     workflowHost,
@@ -138,9 +152,12 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
       route,
       appearance,
       provisioning,
+      regionalPrompts,
+      regionalHover,
       new WorkflowMaskImport(provisioning, new BrowserMaskImport(options.document), options.assets),
       options.bindings,
     ),
+    regions: new ComfyRegionalPromptLinks(associations, regionalHover),
     resolutionEntries: (targets) => canvasResolutionEntries(targets, resolution, dialog, report),
     withNodeMenuItems: (node, items) => [
       ...items,
@@ -153,6 +170,9 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
     ],
     dispose: () => {
       dialog.close();
+      promptNames.dispose();
+      regionalHover.dispose();
+      regionalPrompts.dispose();
       route.dispose();
       provisioning.dispose();
       graph.dispose();

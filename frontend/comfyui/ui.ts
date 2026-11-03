@@ -497,7 +497,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     return canvasInputs.surfaces.withNodeMenuItems(node, cubeAffordances.getNodeMenuItems(node));
   },
   async setup() {
-    promptEditors.setup();
+    promptEditors.setup(canvasInputs.surfaces.regions);
     await extensionSetupLifecycle.setup();
     workflowHistory.install();
     relations.setup();

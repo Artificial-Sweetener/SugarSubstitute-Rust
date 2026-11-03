@@ -21,6 +21,7 @@ export class MasonryInputEditor {
     #entryField;
     #maskFields;
     #opacity;
+    #surface;
     #import = null;
     /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
     constructor(document, binding, previews, upload, report, fields, fieldRoot, association, showField = false, surface = null) {
@@ -113,9 +114,12 @@ export class MasonryInputEditor {
                 root.addEventListener(name, (event) => event.stopPropagation());
         const stopBinding = binding.subscribe(() => this.refresh());
         const stopMode = subscribePluginMode(document, () => this.refresh());
+        const stopSurface = surface?.subscribe(() => this.refresh());
+        this.#surface = surface;
         this.#stop = () => {
             stopBinding();
             stopMode();
+            stopSurface?.();
         };
         this.refresh();
     }
@@ -131,7 +135,11 @@ export class MasonryInputEditor {
             command.setDisabled(this.binding.busy);
         this.#picker.refresh();
         this.#maskFields.refresh();
-        this.#entryField?.update(state.selected ?? '', state.entries.map((entry) => ({ value: entry.id, label: entry.label, blockers: [] })), this.binding.busy, passive);
+        this.#entryField?.update(state.selected ?? '', state.entries.map((entry) => ({
+            value: entry.id,
+            label: this.#surface?.region(entry.id)?.label ?? entry.label,
+            blockers: [],
+        })), this.binding.busy, passive);
         this.#rows.refresh();
         this.#status.textContent = this.binding.busy
             ? 'Loading canvas sources…'

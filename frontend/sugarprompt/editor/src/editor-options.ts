@@ -53,6 +53,8 @@ export interface EditorOptions extends Omit<HostConfiguration, 'tagLexicon'> {
   readonly onSpellcheckError?: (cause: unknown) => void;
   /** Authored regional transitions remain source-current; baselines and canonical peer loading emit no rename. */
   readonly onRegionNameChange?: (change: RegionNameChange) => void;
+  /** Observe pointer hover of a prompt document's separator ordinal, and null when it ends; host-linked hover is silent. */
+  readonly onRegionHover?: (ordinal: number | null) => void;
   /** Source-free expected clipboard outcomes and unexpected failures belong to the mounted host. */
   readonly clipboardObserver?: ClipboardObserver;
 }

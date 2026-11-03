@@ -24,6 +24,7 @@ import type {
 } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import type { InputPreviewInterpretation } from './InputPreviewInterpretation.js';
 import type { MaskEditingPort } from './MaskEditingPort.js';
+import type { RegionPresentation } from './WorkflowRegionalPrompts.js';
 
 /** Read image source files and effective masks through their native codecs. */
 export interface InputPreviewPort {
@@ -51,8 +52,14 @@ export interface InputCanvasCapabilities {
 export interface InputSurfaceCardPort {
   /** Show the loader's surface on the Input route; entry names a region of an ordered mask. */
   activate(entry: string | null): void;
-  /** Highlight a region of an ordered mask loader, or clear the highlight. */
+  /** Hover a region of an ordered mask loader in every linked view, or clear the hover. */
   hover(entry: string | null): void;
+  /** The region entry another linked view currently shows as hovered, or null. */
+  hovered(): string | null;
+  /** Observe changes to the linked hover. */
+  subscribeHover(listener: () => void): () => void;
+  /** Name and colour a region of an ordered mask loader, or null for other entries. */
+  region(entry: string): RegionPresentation | null;
   /** The loader's visual opacity in 0..1, or null while it has no provisioned masks. */
   opacity(): number | null;
   changeOpacity(opacity: number): void;

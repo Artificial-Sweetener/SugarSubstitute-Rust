@@ -52,6 +52,8 @@ export interface SugarPromptMountOptions {
   readonly layout: (height: number) => void;
   readonly report: (cause: unknown) => void;
   readonly appearance: AppearanceSource;
+  /** Observe pointer hover of the prompt's separator ordinals, and null when it ends. */
+  readonly regionHover: (ordinal: number | null) => void;
 }
 
 /** One field retains its native document across renderer presentations. */
@@ -124,6 +126,7 @@ export class SugarPromptEditor {
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
       onLoraMediaError: options.report,
+      onRegionHover: options.regionHover,
     });
     markComfyPromptInput(this.element);
   }
@@ -162,6 +165,11 @@ export class SugarPromptEditor {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
     this.#queueResources();
+  }
+
+  /** Show the hover of a region hovered in another view on separator `ordinal`, or clear it. */
+  highlightRegion(ordinal: number | null): void {
+    if (!this.#disposed) this.#api.setLinkedRegionHover(ordinal);
   }
 
   /** Expose a source observation for host diagnostics and behavioral tests. */

@@ -21,16 +21,16 @@
  * non-blank name any prompt gives its separator `i`; the requirement is the largest count.
  */
 export function regionalPromptDemand(prompts) {
-    const required = Math.max(0, ...prompts.map((separators) => separators.length));
+    const required = Math.max(0, ...prompts.map(({ separators }) => separators.length));
     const names = Array.from({ length: required }, (_, index) => {
-        for (const separators of prompts) {
+        for (const { separators } of prompts) {
             const name = separators[index]?.trim();
             if (name)
                 return name;
         }
         return null;
     });
-    return { names, required };
+    return { names, required, prompts: prompts.map(({ path }) => path) };
 }
 /** Count regions a prompt declares beyond the masks a loader holds. */
 export function missingRegionMasks(demand, masks) {

@@ -234,21 +234,21 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
-  // Regional mask labels read prompt separators through SugarPrompt's parser, bundled privately.
+  // Regional prompts read, name and colour regions through SugarPrompt, bundled privately with
+  // one shared chunk so its parser loads once.
+  const inputCanvasRoot = path.join(repositoryRoot, 'frontend/comfyui/ui/input_canvas');
   await build({
     ...browserDependencyResolution,
     entryPoints: [
-      path.join(
-        repositoryRoot,
-        'frontend/comfyui/ui/input_canvas/infrastructure/ComfyRegionalPrompts.ts',
-      ),
-    ],
-    outfile: path.join(
-      generatedRoot,
-      'comfyui/ui/input_canvas/infrastructure/ComfyRegionalPrompts.js',
-    ),
+      'infrastructure/ComfyRegionalPrompts.ts',
+      'domain/RegionalPromptNames.ts',
+      'domain/MaskColorScheme.ts',
+    ].map((entry) => path.join(inputCanvasRoot, entry)),
+    outbase: inputCanvasRoot,
+    outdir: path.join(generatedRoot, 'comfyui/ui/input_canvas'),
     external: ['../domain/RegionalPromptDemand.js'],
     bundle: true,
+    splitting: true,
     format: 'esm',
     platform: 'browser',
     target: 'es2022',

@@ -840,6 +840,9 @@ var identityWhitespace = new RegExp(whitespace.source + "+", "gu");
 // frontend/sugarprompt/core/src/diagnostics/visibility.ts
 var punctuation = new Set(Array.from(`,;:.!?)]}"'`));
 
+// frontend/sugarprompt/core/src/prompt/region-palette.ts
+var REGION_PALETTE_BASE = Object.freeze({ r: 79, g: 109, b: 245 });
+
 // frontend/sugarprompt/services/src/text/substring-index.ts
 function grams(value, size) {
   const characters = Array.from(value), result = [];
