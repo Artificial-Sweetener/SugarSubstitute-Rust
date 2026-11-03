@@ -19,6 +19,10 @@ export class WorkflowCanvasResolution {
     surface(node, field) {
         return (this.surfaces.state?.surfaces.find((surface) => surface.authority?.some((item) => item.node === node && (item.width === field || item.height === field))) ?? null);
     }
+    /** Find the mask-only surface that any size field of a node sizes. */
+    surfaceSizedBy(node) {
+        return (this.surfaces.state?.surfaces.find((surface) => surface.authority?.some((item) => item.node === node)) ?? null);
+    }
     /** Resize one mask-only surface; failures leave the workflow unchanged and explain why. */
     async resize(key, width, height, mode) {
         for (const value of [width, height])

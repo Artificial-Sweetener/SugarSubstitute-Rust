@@ -97,6 +97,8 @@ test('authority fields find their mask-only surface; other fields find none', ()
   expect(f.resolution.surface('9:2', 'target_width')?.key).toBe(surface.key);
   expect(f.resolution.surface('4', 'batch_size')).toBeNull();
   expect(f.resolution.surface('5', 'width')).toBeNull();
+  expect(f.resolution.surfaceSizedBy('9:2')?.key).toBe(surface.key);
+  expect(f.resolution.surfaceSizedBy('5')).toBeNull();
 });
 
 test('the canvas resizes first and every authority receives the new size', async () => {

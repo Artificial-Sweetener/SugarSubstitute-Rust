@@ -494,7 +494,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     return cubeAuthoringCommands.getCanvasMenuItems(canvas);
   },
   getNodeMenuItems(node) {
-    return cubeAffordances.getNodeMenuItems(node);
+    return canvasInputs.surfaces.withNodeMenuItems(node, cubeAffordances.getNodeMenuItems(node));
   },
   async setup() {
     promptEditors.setup();

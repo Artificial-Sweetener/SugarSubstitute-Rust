@@ -59,6 +59,15 @@ export class WorkflowCanvasResolution {
     );
   }
 
+  /** Find the mask-only surface that any size field of a node sizes. */
+  surfaceSizedBy(node: string): ProvisionedSurface | null {
+    return (
+      this.surfaces.state?.surfaces.find((surface) =>
+        surface.authority?.some((item) => item.node === node),
+      ) ?? null
+    );
+  }
+
   /** Resize one mask-only surface; failures leave the workflow unchanged and explain why. */
   async resize(
     key: string,

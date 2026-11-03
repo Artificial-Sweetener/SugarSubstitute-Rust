@@ -16,7 +16,10 @@
 /** Prove the "Change canvas resolution" entry, dialog and authority write-back. */
 import { jest } from '@jest/globals';
 import { CanvasResolutionDialog } from '../../../frontend/comfyui/ui/input_canvas/presentation/CanvasResolutionDialog.js';
-import { canvasResolutionEntries } from '../../../frontend/comfyui/ui/input_canvas/presentation/CanvasResolutionMenu.js';
+import {
+  canvasResolutionEntries,
+  canvasResolutionNodeMenuItems,
+} from '../../../frontend/comfyui/ui/input_canvas/presentation/CanvasResolutionMenu.js';
 import { ComfyDimensionAuthorityWriter } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyDimensionAuthorityWriter.js';
 import type { ProvisionedSurface } from '../../../frontend/comfyui/ui/input_canvas/application/WorkflowSurfaceProvisioning.js';
 import type { ComfyGraph, ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
@@ -140,4 +143,26 @@ test('authority fields are written as one history step through their native call
   expect(() =>
     writer.write([{ node: 'gone', output: 0, width: 'width', height: 'height' }], 64, 64),
   ).toThrow('no longer in the workflow');
+});
+
+test('the node context menu of a sizing node offers the same dialog in either renderer', async () => {
+  const resolution = {
+    surfaceSizedBy: jest.fn((node: string) => (node === '4' ? surface : null)),
+    resize: jest.fn(async () => {}),
+  };
+  const dialog = new CanvasResolutionDialog(document);
+  expect(canvasResolutionNodeMenuItems('7', resolution, dialog, jest.fn())).toEqual([]);
+  expect(canvasResolutionNodeMenuItems(null, resolution, dialog, jest.fn())).toEqual([]);
+  const [item] = canvasResolutionNodeMenuItems('4', resolution, dialog, jest.fn());
+  expect(item?.content).toBe('Change canvas resolution…');
+  item?.callback();
+  const view = controls();
+  expect(view.inputs.map((input) => input.value)).toEqual(['512', '512']);
+  set(view.inputs[1]!, '256');
+  view.confirm?.click();
+  await Promise.resolve();
+  expect(resolution.resize).toHaveBeenCalledWith('mask-only', 512, 256, {
+    kind: 'canvas',
+    anchor: 'center',
+  });
 });

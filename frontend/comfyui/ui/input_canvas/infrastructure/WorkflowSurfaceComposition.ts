@@ -17,6 +17,7 @@
 import type { CanvasWorkflowHost } from '../../../../../integrations/contracts/CanvasWorkflowSurfaces.js';
 import type { CanvasRoutePort } from '../../output_canvas/domain/CanvasRoute.js';
 import type { ComfyGraph } from '../../types/graph.js';
+import { isRecord } from '../../types/common.js';
 import { WorkflowInputRoute } from '../application/WorkflowInputRoute.js';
 import { WorkflowMaskAppearance } from '../application/WorkflowMaskAppearance.js';
 import { WORKFLOW_SURFACE_COPY } from '../application/WorkflowSurfaceCopy.js';
@@ -39,7 +40,9 @@ import { WorkflowCanvasResolution } from '../application/WorkflowCanvasResolutio
 import { CanvasResolutionDialog } from '../presentation/CanvasResolutionDialog.js';
 import {
   canvasResolutionEntries,
+  canvasResolutionNodeMenuItems,
   type CanvasResolutionFieldTarget,
+  type CanvasResolutionNodeMenuItem,
 } from '../presentation/CanvasResolutionMenu.js';
 import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
 
@@ -69,6 +72,11 @@ export interface WorkflowSurfaces {
   readonly cards: ComfyInputSurfaceCards;
   /** Offer "Change canvas resolution" for width/height fields that size a mask-only surface. */
   resolutionEntries(targets: readonly CanvasResolutionFieldTarget[]): ContextMenuEntry[];
+  /** Append input-canvas node actions to the host's node context-menu items. */
+  withNodeMenuItems<Item>(
+    node: unknown,
+    items: readonly Item[],
+  ): (Item | CanvasResolutionNodeMenuItem)[];
   dispose(): void;
 }
 
@@ -134,6 +142,15 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
       options.bindings,
     ),
     resolutionEntries: (targets) => canvasResolutionEntries(targets, resolution, dialog, report),
+    withNodeMenuItems: (node, items) => [
+      ...items,
+      ...canvasResolutionNodeMenuItems(
+        isRecord(node) ? associations.inventory.path(node) : null,
+        resolution,
+        dialog,
+        report,
+      ),
+    ],
     dispose: () => {
       dialog.close();
       route.dispose();
