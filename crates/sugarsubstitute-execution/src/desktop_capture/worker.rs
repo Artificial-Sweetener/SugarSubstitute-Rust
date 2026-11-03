@@ -238,7 +238,7 @@ impl DesktopCaptureActive {
         }
         if let Some(outcome) = self.outcome.take() {
             self.terminal = true;
-            self.work.job.finish_at(&self.context, Some(self.started), now, outcome);
+            self.work.job.finish_in_custody_at(&self.context, Some(self.started), now, outcome);
         }
     }
 }

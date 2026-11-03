@@ -6,19 +6,31 @@
 use crate::{
     admission::{Core, State},
     scope::lock,
-    task::{self, Work},
+    task::{self, QueuedJob, Work},
     worker_exit::WorkerExit,
 };
 use std::{future::Future, sync::Arc};
-use sugarsubstitute_contracts::execution::{JobClass, JobPhase, Moment};
-use tokio::task::JoinHandle;
+use sugarsubstitute_contracts::execution::{JobClass, JobPhase, Moment, PanicCause};
+use tokio::task::{JoinError, JoinHandle};
 
+/// A dispatched job's join. Its contexts moved into the task, so supervising it holds no
+/// reservation; the task hands them to its jobs when it publishes their terminal outcomes.
 struct Running {
     handle: JoinHandle<()>,
-    context: sugarsubstitute_contracts::execution::JobContext,
     job: Arc<dyn task::ErasedJob>,
     started: Moment,
-    receiving: Option<(sugarsubstitute_contracts::execution::JobContext, Arc<dyn task::ErasedJob>)>,
+    receiving: Option<Arc<dyn task::ErasedJob>>,
+}
+
+impl Running {
+    /// Publish a panic or abort that ended the task before it published its own outcome.
+    fn unwound(&self, error: &JoinError) {
+        let cause = PanicCause::new(error.to_string());
+        if let Some(receiving) = &self.receiving {
+            receiving.panicked_unwound(self.started, cause.clone());
+        }
+        self.job.panicked_unwound(self.started, cause);
+    }
 }
 
 /// The exit guard is the first parameter, so it drops after every retained join.
@@ -33,22 +45,9 @@ pub(super) async fn supervise(_exit: WorkerExit, core: Arc<Core>) {
         let mut index = 0;
         while index < running.len() {
             if running[index].handle.is_finished() {
-                let stopped = running.swap_remove(index);
-                if let Err(error) = stopped.handle.await {
-                    if let Some((context, job)) = &stopped.receiving {
-                        job.panicked(
-                            context,
-                            stopped.started,
-                            sugarsubstitute_contracts::execution::PanicCause::new(
-                                error.to_string(),
-                            ),
-                        );
-                    }
-                    stopped.job.panicked(
-                        &stopped.context,
-                        stopped.started,
-                        sugarsubstitute_contracts::execution::PanicCause::new(error.to_string()),
-                    );
+                let mut stopped = running.swap_remove(index);
+                if let Err(error) = (&mut stopped.handle).await {
+                    stopped.unwound(&error);
                 }
             } else {
                 index += 1;
@@ -70,26 +69,23 @@ pub(super) async fn supervise(_exit: WorkerExit, core: Arc<Core>) {
                 continue;
             }
             let started = core.clock.retirement_now();
-            let receiving = match &queued.work {
-                Work::ReportExportPair(pair) => Some((pair.context.clone(), pair.job.clone())),
-                _ => None,
-            };
-            let future = match queued.work {
-                Work::ReportExportPair(pair) => (pair.factory)(queued.context.clone(), started),
+            let QueuedJob { context, job, work } = queued;
+            let (future, receiving) = match work {
+                Work::ReportExportPair(pair) => {
+                    // The pair task owns its receiving context; this admission copy only served
+                    // the queued stop check.
+                    let crate::report_export::pair::Work { context: _, job: receiving, factory } =
+                        *pair;
+                    (factory(context, started), Some(receiving))
+                }
                 Work::Async(factory) | Work::Blocking(factory) | Work::BlockingHeld(factory) => {
-                    factory(queued.context.clone(), started)
+                    (factory(context, started), None)
                 }
                 Work::Cpu(_) => continue,
                 #[cfg(any(windows, test))]
                 Work::Native(_) => continue,
             };
-            running.push(Running {
-                handle: tokio::spawn(future),
-                context: queued.context,
-                job: queued.job,
-                started,
-                receiving,
-            });
+            running.push(Running { handle: tokio::spawn(future), job, started, receiving });
         }
         let now = core.clock.retirement_now();
         let (stopping, deadline, expired_native, custody_notice) = {
@@ -176,7 +172,7 @@ pub(super) async fn supervise(_exit: WorkerExit, core: Arc<Core>) {
             () = deadline_wait => { core.changed(); },
             (index, result) = stopped, if has_running => {
                 let stopped = running.swap_remove(index);
-                if let Err(error) = result { if let Some((context, job)) = &stopped.receiving { job.panicked(context, stopped.started, sugarsubstitute_contracts::execution::PanicCause::new(error.to_string())); } stopped.job.panicked(&stopped.context, stopped.started, sugarsubstitute_contracts::execution::PanicCause::new(error.to_string())); }
+                if let Err(error) = result { stopped.unwound(&error); }
             }
         }
     }

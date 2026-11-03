@@ -91,7 +91,7 @@ fn actual_client_cancellation_cannot_be_overridden_by_matching_context_ports() -
     assert_eq!(ports.0.load(Ordering::Acquire), 0);
     assert_eq!(scope.snapshot().reserved_bytes, PREPARATION_BYTES);
     core.flush_notifications();
-    queued.job.stop(&queued.context, Some(Moment::from_nanos(0)), Stop::Cancelled);
+    queued.job.stop(queued.context.clone(), Some(Moment::from_nanos(0)), Stop::Cancelled);
     let completion = job.try_take_completion().ok_or("Actual cancelled job completion absent")?;
     assert!(matches!(completion.outcome, JobOutcome::Cancelled));
     drop(completion);

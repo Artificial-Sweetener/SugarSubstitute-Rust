@@ -37,6 +37,10 @@ mod tests;
 #[path = "terminal_publication_tests.rs"]
 mod terminal_tests;
 
+#[cfg(test)]
+#[path = "terminal_release_tests.rs"]
+mod release_tests;
+
 pub(crate) struct QueuedJob {
     pub(crate) context: JobContext,
     pub(crate) job: Arc<dyn ErasedJob>,
@@ -86,20 +90,24 @@ pub(crate) fn stop_queued(queued: QueuedJob, reason: Stop) {
             *pair;
         match catch_unwind(AssertUnwindSafe(|| drop(factory))) {
             Ok(()) => {
-                job.stop(&context, None, reason);
-                receiving_job.stop(&receiving, None, reason);
+                job.stop(context, None, reason);
+                receiving_job.stop(receiving, None, reason);
             }
             Err(payload) => {
                 let cause = panic_cause(payload);
-                job.panicked(&context, context.now(), cause.clone());
-                receiving_job.panicked(&receiving, receiving.now(), cause);
+                let (source_now, receiving_now) = (context.now(), receiving.now());
+                job.panicked(context, source_now, cause.clone());
+                receiving_job.panicked(receiving, receiving_now, cause);
             }
         }
         return;
     }
     match catch_unwind(AssertUnwindSafe(|| drop(work))) {
-        Ok(()) => job.stop(&context, None, reason),
-        Err(payload) => job.panicked(&context, context.now(), panic_cause(payload)),
+        Ok(()) => job.stop(context, None, reason),
+        Err(payload) => {
+            let now = context.now();
+            job.panicked(context, now, panic_cause(payload));
+        }
     }
 }
 
@@ -124,9 +132,14 @@ pub(crate) trait ErasedJob: Send + Sync {
     fn abandon(&self);
     fn status(&self) -> JobStatus;
     fn running(&self);
-    fn stop(&self, context: &JobContext, started: Option<Moment>, reason: Stop);
+    /// Publish a stop, consuming the worker-side context before the terminal outcome is installed.
+    fn stop(&self, context: JobContext, started: Option<Moment>, reason: Stop);
     fn cancel(&self);
-    fn panicked(&self, context: &JobContext, started: Moment, cause: PanicCause);
+    /// Publish a panic, consuming the worker-side context before the terminal outcome is installed.
+    fn panicked(&self, context: JobContext, started: Moment, cause: PanicCause);
+    /// Publish a panic that unwound the job's own future, which already dropped its context;
+    /// the supervising handle holds no reservation.
+    fn panicked_unwound(&self, started: Moment, cause: PanicCause);
 }
 
 struct Cell<T, E> {
@@ -165,9 +178,10 @@ impl<T: Send + 'static, E: Send + 'static> Job<T, E> {
         })
     }
 
+    /// Publish an ordinary job's terminal outcome now, consuming its worker-side context first.
     pub(crate) fn finish(
         &self,
-        context: &JobContext,
+        context: JobContext,
         started: Option<Moment>,
         outcome: JobOutcome<T, E>,
     ) {
@@ -219,7 +233,7 @@ impl<T: Send + 'static, E: Send + 'static> ErasedJob for Job<T, E> {
     fn running(&self) {
         lock(&self.cell).phase = JobPhase::Running;
     }
-    fn stop(&self, context: &JobContext, started: Option<Moment>, reason: Stop) {
+    fn stop(&self, context: JobContext, started: Option<Moment>, reason: Stop) {
         let outcome = stopped_outcome(reason);
         self.finish(context, started, outcome);
     }
@@ -228,8 +242,11 @@ impl<T: Send + 'static, E: Send + 'static> ErasedJob for Job<T, E> {
             core.cancel_job(self.spec.id);
         }
     }
-    fn panicked(&self, context: &JobContext, started: Moment, cause: PanicCause) {
+    fn panicked(&self, context: JobContext, started: Moment, cause: PanicCause) {
         self.finish(context, Some(started), JobOutcome::Panicked(cause));
+    }
+    fn panicked_unwound(&self, started: Moment, cause: PanicCause) {
+        self.finish_unwound(started, cause);
     }
 }
 

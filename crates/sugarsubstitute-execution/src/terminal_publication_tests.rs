@@ -51,7 +51,8 @@ fn symbol_duplicate_terminal_preserves_first_actual_result_and_drops_outside_cor
         .get(&actual.spec().id)
         .map(|record| record.job.clone())
         .ok_or("Actual terminal owner absent")?;
-    job.panicked(&context, context.now(), panic_cause(Box::new("duplicate".to_owned())));
+    let now = context.now();
+    job.panicked(context.clone(), now, panic_cause(Box::new("duplicate".to_owned())));
     assert_eq!(dropped.load(Ordering::Acquire), 0);
     assert_eq!(actual.status().phase, JobPhase::Terminal(TerminalKind::Success));
     let completion = rig.completion(&mut actual)?;

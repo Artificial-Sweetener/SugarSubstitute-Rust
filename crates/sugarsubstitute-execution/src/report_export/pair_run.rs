@@ -131,6 +131,6 @@ pub(crate) async fn run<E, M>(
         }
     };
     let ended = source.now();
-    source_job.finish_at(&source, Some(started), ended, outcome);
-    receiving_job.finish_at(&receiving, Some(started), ended, receiving_outcome);
+    source_job.finish_at(source, Some(started), ended, outcome);
+    receiving_job.finish_at(receiving, Some(started), ended, receiving_outcome);
 }

@@ -56,7 +56,7 @@ impl Owner {
         facts: RetiredFacts,
     ) {
         match self {
-            Self::Desktop(job) => job.finish_at(
+            Self::Desktop(job) => job.finish_in_custody_at(
                 context,
                 Some(started),
                 ended,
@@ -69,7 +69,7 @@ impl Owner {
                     },
                 ),
             ),
-            Self::Diagnostic(job) => job.finish_at(
+            Self::Diagnostic(job) => job.finish_in_custody_at(
                 context,
                 Some(started),
                 ended,
@@ -82,7 +82,7 @@ impl Owner {
                     },
                 ),
             ),
-            Self::BackendCustody(job) => job.finish_at(
+            Self::BackendCustody(job) => job.finish_in_custody_at(
                 context,
                 Some(started),
                 ended,
@@ -95,7 +95,7 @@ impl Owner {
                     },
                 ),
             ),
-            Self::Recovery(job) => job.finish_at(
+            Self::Recovery(job) => job.finish_in_custody_at(
                 context,
                 Some(started),
                 ended,

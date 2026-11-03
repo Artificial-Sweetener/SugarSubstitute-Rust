@@ -98,7 +98,8 @@ fn worker<T: Send + 'static, E: Send + 'static>(
                         Ok(value) => JobOutcome::Success(value),
                         Err(cause) => JobOutcome::Failure(cause),
                     };
-                    delivery.finish_at(&context, Some(started), context.now(), outcome);
+                    let ended = context.now();
+                    delivery.finish_at(context, Some(started), ended, outcome);
                     Box::pin(std::future::ready(()))
                 })),
             };

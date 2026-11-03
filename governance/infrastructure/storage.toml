@@ -437,7 +437,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/coordinator_entry/worker/source_staging/tests/support.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:bd01211e9bd0e9b203939b773b7995b575b8e6df026c13e07b36c1d00052df65"
+source_sha256 = "sha256:5dbc164ad34eb44424d1c3cb1d6be94c793f7c88c9cc4d9d6b9f26501b91a337"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Own actual admitted fixtures and fake only external native effects. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -453,7 +453,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Dri
 [[records]]
 path = "crates/sugarsubstitute-execution/src/desktop_capture/dispatch_tests.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:6e939d409924ac6fbc84b8156923dda90d8c4f3bf77c60e9cbb4bfe6dff599d0"
+source_sha256 = "sha256:a94fde4158337ab7096684321ece25207437c5cf323120988f75a78b2053c5df"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Preserve actual infrastructure concurrency when native work shares that class. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -486,7 +486,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-execution/src/desktop_capture/worker.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:e21596617752aa8b8ea6b9b6f4c5b6bdb32b0a770d819d8e5063a0e5645b7ecd"
+source_sha256 = "sha256:6bd033013eaf008842f50ab446ef44f89e172c6bb4bb12d52789f2c4add47c3f"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Keep actual temporary outputs and the original permanent capsule on the native worker. This receiver does not inspect filesystem state."
@@ -573,7 +573,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/native_worker.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:f56e0d65bf5886fcc66f134ae9434665a5058d994f4dc642a3b336614ca87209"
+source_sha256 = "sha256:8cdff23882c3562bac254bbfcdd4e4d93d104406fdb70952d4195e76965c926b"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Own one bounded process-registration retirement thread through its actual join. This receiver does not inspect filesystem state."
@@ -672,7 +672,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/report_export/pair_run.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:b9b8bb574188ae40e909414b7d6a0ae23e8924a866de27fa6a1ac94101a1c03a"
+source_sha256 = "sha256:403e305e22d912af2f7476c432cbdb27013bb54086031efb6399b6bbfa346172"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Observe one actual blocking worker and both independently owned logical outcomes. This receiver does not inspect filesystem state."

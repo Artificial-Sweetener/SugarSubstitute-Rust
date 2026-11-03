@@ -32,21 +32,22 @@ impl CompletionWake for ControlledWake {
 }
 
 #[test]
-fn terminal_context_release_and_entered_capacity_wake_remain_owned_through_shutdown() -> TestResult
+fn abandoned_terminal_release_and_entered_capacity_wake_remain_owned_through_shutdown() -> TestResult
 {
     let wake = Arc::new(ControlledWake::default());
     let owner =
         ExecutionOwner::new(Arc::new(ClockPort(Arc::new(ManualClock::default()))), wake.clone())?;
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-    let mut job = client.submit_blocking(
+    let job = client.submit_blocking(
         &scope,
         spec(1, JobClass::InfrastructureLifecycle, LIMIT)?,
         |_| Ok::<_, ()>(()),
     )?;
     wake.entered[0].wait()?;
-    drop(job.try_take_completion().ok_or("Terminal result not published before native wake")?);
-    assert_eq!(scope.snapshot().terminal_unobserved, 0);
+    // The worker handed its context to the job before installing the terminal, so only the
+    // undelivered completion still holds the reservation while its wake is held outside Core.
+    assert!(matches!(job.status().phase, JobPhase::Terminal(_)));
     assert_eq!(scope.snapshot().reserved_bytes, LIMIT);
     assert!(matches!(
         client.submit_async(&scope, spec(2, JobClass::IoLifecycle, 16)?, |_| async {
@@ -54,16 +55,20 @@ fn terminal_context_release_and_entered_capacity_wake_remain_owned_through_shutd
         }),
         Err(AdmissionError::MemorySaturated { .. })
     ));
-    assert!(client.drain_completions(NonZeroUsize::MIN)?.notifications.is_empty());
-    wake.release[0].open();
+    let delivered = client.drain_completions(NonZeroUsize::MIN)?.notifications;
+    assert_eq!(delivered.iter().map(|notice| notice.job_id).collect::<Vec<_>>(), [JobId::new(1)?]);
+    // Abandoning the finished job hands its completion to an execution worker, whose disposal
+    // releases the reservation and enters the capacity wake for the refused admission.
+    drop(job);
     wake.entered[1].wait()?;
     assert_eq!(scope.snapshot().reserved_bytes, 0);
+    wake.release[0].open();
     let mut owner = owner;
     owner.request_shutdown(Moment::from_nanos(0));
     let progress = owner.poll_shutdown()?;
     assert!(!progress.settled);
-    assert!(progress.unresolved_job_ids.is_empty());
-    assert_eq!((progress.queued, progress.running), (0, 0));
+    assert_eq!(progress.unresolved_job_ids, vec![JobId::new(1)?]);
+    assert_eq!((progress.queued, progress.running), (0, 1));
     assert!(client.drain_completions(NonZeroUsize::MIN)?.notifications.is_empty());
     wake.release[1].open();
     drop(owner);

@@ -22,14 +22,15 @@ use sugarsubstitute_contracts::execution::{
 /// Distinguish retained step state from actual terminal work.
 pub(crate) enum CpuProgress {
     /// The same task remains owned, with its running admission credit.
-    Yield,
+    Yield(Box<dyn CpuWork>),
     /// Actual task destruction and terminal publication have finished.
     Stopped,
 }
 /// Erase task payloads only inside the execution-owned worker.
 pub(crate) trait CpuWork: Send {
-    /// Run one bounded step and observe its cancellation/destruction boundaries.
-    fn step(&mut self) -> CpuProgress;
+    /// Run one bounded step and observe its cancellation/destruction boundaries. Stopping
+    /// consumes the work, so its worker-side context is gone before the terminal is installed.
+    fn step(self: Box<Self>) -> CpuProgress;
 }
 
 /// Retain a single factory and its constructed task through cooperative yields.
@@ -55,8 +56,8 @@ where
     C: CpuTask<T, E>,
     M: FnOnce(JobContext) -> C + Send + 'static,
 {
-    /// Destroy actual task state before reporting success, failure or cancellation.
-    fn finish(&mut self, outcome: JobOutcome<T, E>) -> CpuProgress {
+    /// Destroy actual task state, then hand the worker-side context to the job with the outcome.
+    fn finish(mut self, outcome: JobOutcome<T, E>) -> CpuProgress {
         let task_failure = dispose(self.task.take()).err();
         let factory_failure = dispose(self.factory.take()).err();
         // Factory/task ownership is exclusive, so at most one destructor can fail.
@@ -74,12 +75,13 @@ where
             }
             None => outcome,
         };
-        self.job.finish(&self.context, Some(self.started), outcome);
+        let Self { job, context, started, .. } = self;
+        job.finish(context, Some(started), outcome);
         CpuProgress::Stopped
     }
 
     /// Drop a discarded step result under supervision when a stop request won during work.
-    fn stopped(&mut self, reason: Stop, result: Option<Result<CpuStep<T>, E>>) -> CpuProgress {
+    fn stopped(self, reason: Stop, result: Option<Result<CpuStep<T>, E>>) -> CpuProgress {
         let outcome = match dispose(result) {
             Err(cause) => JobOutcome::Panicked(cause),
             Ok(()) => match reason {
@@ -99,9 +101,9 @@ where
     C: CpuTask<T, E>,
     M: FnOnce(JobContext) -> C + Send + 'static,
 {
-    fn step(&mut self) -> CpuProgress {
+    fn step(mut self: Box<Self>) -> CpuProgress {
         if let Some(reason) = stop_reason(&self.context) {
-            return self.stopped(reason, None);
+            return (*self).stopped(reason, None);
         }
         let result = catch_unwind(AssertUnwindSafe(|| {
             if let Some(factory) = self.factory.take() {
@@ -110,20 +112,19 @@ where
             self.task.as_mut().map(|task| task.step(&self.context))
         }));
         match result {
-            Err(payload) => self.finish(JobOutcome::Panicked(panic_cause(payload))),
+            Err(payload) => (*self).finish(JobOutcome::Panicked(panic_cause(payload))),
             Ok(Some(result)) => {
                 if let Some(reason) = stop_reason(&self.context) {
-                    return self.stopped(reason, Some(result));
+                    return (*self).stopped(reason, Some(result));
                 }
                 match result {
-                    Ok(CpuStep::Yield) => CpuProgress::Yield,
-                    Ok(CpuStep::Complete(value)) => self.finish(JobOutcome::Success(value)),
-                    Err(error) => self.finish(JobOutcome::Failure(error)),
+                    Ok(CpuStep::Yield) => CpuProgress::Yield(self),
+                    Ok(CpuStep::Complete(value)) => (*self).finish(JobOutcome::Success(value)),
+                    Err(error) => (*self).finish(JobOutcome::Failure(error)),
                 }
             }
-            Ok(None) => {
-                self.finish(JobOutcome::Panicked(PanicCause::new("Missing owned CPU task".into())))
-            }
+            Ok(None) => (*self)
+                .finish(JobOutcome::Panicked(PanicCause::new("Missing owned CPU task".into()))),
         }
     }
 }
@@ -242,12 +243,13 @@ fn start(queued: QueuedJob) -> Option<Box<dyn CpuWork>> {
         stop_queued(queued, reason);
         return None;
     }
-    match queued.work {
+    let QueuedJob { context, job, work } = queued;
+    match work {
         Work::Cpu(factory) => {
-            match catch_unwind(AssertUnwindSafe(|| factory(queued.context.clone(), started))) {
+            match catch_unwind(AssertUnwindSafe(|| factory(context.clone(), started))) {
                 Ok(work) => Some(work),
                 Err(payload) => {
-                    queued.job.panicked(&queued.context, started, panic_cause(payload));
+                    job.panicked(context, started, panic_cause(payload));
                     None
                 }
             }
@@ -256,7 +258,7 @@ fn start(queued: QueuedJob) -> Option<Box<dyn CpuWork>> {
             let cause = dispose(other)
                 .err()
                 .unwrap_or_else(|| PanicCause::new("Non-CPU work reached CPU worker".into()));
-            queued.job.panicked(&queued.context, started, cause);
+            job.panicked(context, started, cause);
             None
         }
     }
@@ -272,10 +274,12 @@ fn cleanup(core: &Core, lane: CpuLane, retired_first: bool) -> bool {
         if let Some(reason) = stop_reason(&queued.context) {
             stop_queued(queued, reason);
         } else {
-            let cause = dispose(queued.work).err().unwrap_or_else(|| {
+            let QueuedJob { context, job, work } = queued;
+            let cause = dispose(work).err().unwrap_or_else(|| {
                 PanicCause::new("Stopped CPU admission lost its stop reason".into())
             });
-            queued.job.panicked(&queued.context, queued.context.now(), cause);
+            let now = context.now();
+            job.panicked(context, now, cause);
         }
         return true;
     }
@@ -308,15 +312,12 @@ fn worker(_exit: WorkerExit, core: Arc<Core>, lane: CpuLane) {
                 *slot = start(queued);
             }
         }
-        if let Some(work) = &mut interactive
-            && matches!(work.step(), CpuProgress::Stopped)
-        {
-            interactive = None;
-        }
-        if let Some(work) = &mut decode
-            && matches!(work.step(), CpuProgress::Stopped)
-        {
-            decode = None;
+        for slot in [&mut interactive, &mut decode] {
+            if let Some(work) = slot.take()
+                && let CpuProgress::Yield(work) = work.step()
+            {
+                *slot = Some(work);
+            }
         }
         if interactive.is_some() || decode.is_some() {
             continue;

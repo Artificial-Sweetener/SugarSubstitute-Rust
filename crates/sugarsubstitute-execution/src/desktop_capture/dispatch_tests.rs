@@ -57,7 +57,7 @@ fn child_native_dispatch_obeys_actual_infrastructure_capacity_and_factory_routin
     assert!(core.take(|class| class == JobClass::InfrastructureLifecycle).is_none());
     assert_eq!(scope.snapshot().running, 2);
 
-    first_running.job.stop(&first_running.context, Some(now), Stop::Cancelled);
+    first_running.job.stop(first_running.context.clone(), Some(now), Stop::Cancelled);
     let first_completion = first.try_take_completion().ok_or("Finite completion missing")?;
     assert!(matches!(first_completion.outcome, JobOutcome::Cancelled));
     drop(first_completion);
@@ -85,7 +85,7 @@ fn child_native_dispatch_obeys_actual_infrastructure_capacity_and_factory_routin
     drop(queued.job);
     drop(child);
     assert_eq!(scope.snapshot().reserved_bytes, 4096);
-    second_running.job.stop(&second_running.context, Some(now), Stop::Cancelled);
+    second_running.job.stop(second_running.context.clone(), Some(now), Stop::Cancelled);
     let second_completion =
         second.try_take_completion().ok_or("Second finite completion missing")?;
     assert!(matches!(second_completion.outcome, JobOutcome::Cancelled));
@@ -179,11 +179,11 @@ fn stopped_child_routes_to_native_owner_at_capacity_and_returns_only_unused_loan
     drop(queued.job);
     drop(child);
     assert_eq!(scope.snapshot().reserved_bytes, 8192);
-    first_running.job.stop(&first_running.context, Some(now), Stop::Cancelled);
+    first_running.job.stop(first_running.context.clone(), Some(now), Stop::Cancelled);
     drop(first.try_take_completion().ok_or("First finite completion missing")?);
     drop(first_running);
     drop(first);
-    second_running.job.stop(&second_running.context, Some(now), Stop::Cancelled);
+    second_running.job.stop(second_running.context.clone(), Some(now), Stop::Cancelled);
     drop(second.try_take_completion().ok_or("Second finite completion missing")?);
     drop(second_running);
     drop(second);

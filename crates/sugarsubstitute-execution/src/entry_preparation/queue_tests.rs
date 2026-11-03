@@ -76,7 +76,11 @@ impl Fixture {
     fn stop(&self) {
         self.core.cancel_job(self.queued.context.job_id());
         self.core.flush_notifications();
-        self.queued.job.stop(&self.queued.context, Some(Moment::from_nanos(0)), Stop::Cancelled);
+        self.queued.job.stop(
+            self.queued.context.clone(),
+            Some(Moment::from_nanos(0)),
+            Stop::Cancelled,
+        );
     }
     fn assert_one_native_entry(&self) {
         let state = lock(&self.core.state);

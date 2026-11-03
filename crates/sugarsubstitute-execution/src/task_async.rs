@@ -79,7 +79,7 @@ pub(crate) async fn run_async<T, E, F, M>(
             Ok(()) => stopped_outcome(reason),
             Err(payload) => JobOutcome::Panicked(panic_cause(payload)),
         };
-        job.finish(&context, Some(started), outcome);
+        job.finish(context, Some(started), outcome);
         return;
     }
     let constructed = catch_unwind(AssertUnwindSafe(|| factory(context.clone())));
@@ -122,7 +122,7 @@ pub(crate) async fn run_async<T, E, F, M>(
             }
         }
     };
-    job.finish(&context, Some(started), outcome);
+    job.finish(context, Some(started), outcome);
 }
 
 /// Classify a failure that completed while a stop was already requested as that stop.

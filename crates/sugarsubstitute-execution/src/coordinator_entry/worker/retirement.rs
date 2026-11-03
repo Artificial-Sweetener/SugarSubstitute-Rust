@@ -203,7 +203,7 @@ impl Active {
             if matches!(outcome, JobOutcome::Success(_)) {
                 outcome = JobOutcome::Success(self.report);
             }
-            self.work.job.finish_at(&self.context, Some(self.started), ended, outcome);
+            self.work.job.finish_in_custody_at(&self.context, Some(self.started), ended, outcome);
         }
     }
 }

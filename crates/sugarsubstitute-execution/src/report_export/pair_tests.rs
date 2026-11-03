@@ -103,3 +103,27 @@ fn paired_originals_issue_while_both_running_and_deliver_distinct_credits() -> T
     assert!(matches!(rig.completion(&mut receiving_cleanup)?.outcome, JobOutcome::Success(true)));
     Ok(())
 }
+
+#[test]
+fn paired_jobs_release_both_reservations_once_their_terminals_are_visible() -> TestResult {
+    for _ in 0..16 {
+        let setup = super::pair_test_support::Setup::new()?;
+        let (mut source, mut receiving) =
+            setup.submit(|_, _| Ok::<_, u8>(true)).map_err(|rejected| rejected.error)?;
+        // The receiving role is published last, so its worker-side context is the latest to go.
+        let receiving_completion = setup.rig.completion(&mut receiving)?;
+        assert!(matches!(receiving_completion.outcome, JobOutcome::Success(true)));
+        assert_eq!(
+            setup.receiving_scope.snapshot().reserved_bytes,
+            setup.receiving_spec.reservation_bytes
+        );
+        drop(receiving_completion);
+        assert_eq!(setup.receiving_scope.snapshot().reserved_bytes, 0);
+        let source_completion = setup.rig.completion(&mut source)?;
+        assert!(matches!(source_completion.outcome, JobOutcome::Success(true)));
+        assert_eq!(setup.rig.scope.snapshot().reserved_bytes, setup.source_spec.reservation_bytes);
+        drop(source_completion);
+        assert_eq!(setup.rig.scope.snapshot().reserved_bytes, 0);
+    }
+    Ok(())
+}

@@ -40,9 +40,9 @@ pub(crate) async fn run<T, E, P>(
         prepare(core, worker_context, setup, dispatched, factory)
     });
     match worker.await {
-        Ok((started, ended, outcome)) => job.finish_at(&context, Some(started), ended, outcome),
+        Ok((started, ended, outcome)) => job.finish_at(context, Some(started), ended, outcome),
         Err(error) => job.finish_at(
-            &context,
+            context,
             Some(dispatched),
             dispatched,
             JobOutcome::Panicked(sugarsubstitute_contracts::execution::PanicCause::new(

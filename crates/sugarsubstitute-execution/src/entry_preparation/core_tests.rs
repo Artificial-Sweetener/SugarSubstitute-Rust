@@ -165,3 +165,21 @@ fn generic_success_destroys_actual_data_before_releasing_whole_claim() -> TestRe
     drop(client);
     Ok(())
 }
+
+#[test]
+fn preparation_releases_its_reservation_once_its_terminal_and_result_are_dropped() -> TestResult {
+    let rig = Rig::new()?;
+    for id in 1..=32 {
+        let (request, setup) = request(id)?;
+        let mut job = rig
+            .client
+            .submit_entry_preparation(&rig.scope, request, setup, |_| Ok::<_, io::Error>(()))
+            .map_err(|rejected| rejected.error)?;
+        let completion = rig.completion(&mut job)?;
+        assert!(matches!(completion.outcome, JobOutcome::Success(_)));
+        assert_eq!(rig.scope.snapshot().reserved_bytes, PREPARATION_BYTES);
+        drop(completion);
+        assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
+    }
+    Ok(())
+}

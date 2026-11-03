@@ -68,7 +68,7 @@ impl Drop for Fixture {
         drop(self.session.completion.try_take_completion());
         self.core.cancel_job(self.prepared.queued.context.job_id());
         self.prepared.queued.job.stop(
-            &self.prepared.queued.context,
+            self.prepared.queued.context.clone(),
             Some(Moment::from_nanos(0)),
             Stop::Cancelled,
         );

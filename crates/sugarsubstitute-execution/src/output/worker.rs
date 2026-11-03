@@ -303,7 +303,7 @@ impl Active {
                     lock(&self.work.shared.state).report(self.work.shared.identity),
                 );
             }
-            self.work.job.finish_at(&self.context, Some(self.started), ended, outcome);
+            self.work.job.finish_in_custody_at(&self.context, Some(self.started), ended, outcome);
         }
         self.completed = true;
     }

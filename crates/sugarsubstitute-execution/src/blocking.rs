@@ -99,5 +99,5 @@ async fn run_with_priority<T, E, M>(
             (started, outcome)
         }
     };
-    job.finish(&context, Some(started), outcome);
+    job.finish(context, Some(started), outcome);
 }

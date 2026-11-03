@@ -109,7 +109,7 @@ impl Active {
         let ended = if clock_available { core.clock.now() } else { now };
         self.completed = true;
         if let Some(outcome) = self.outcome.take() {
-            self.work.job.finish_at(&self.context, Some(self.started), ended, outcome);
+            self.work.job.finish_in_custody_at(&self.context, Some(self.started), ended, outcome);
         }
     }
     fn protocol(&mut self, core: &Core) {

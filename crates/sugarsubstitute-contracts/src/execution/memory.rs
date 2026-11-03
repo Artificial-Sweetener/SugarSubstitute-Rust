@@ -26,6 +26,12 @@ pub trait MemoryRelease: Send + Sync {
 ///
 /// Cloning shares the same charge. Acknowledging terminal delivery does not release
 /// it. The adapter receives one release after the last completion/result guard drops.
+///
+/// Ordinary blocking, async, CPU and paired jobs give up their worker-side context before
+/// their terminal outcome is installed. Once that outcome is visible, the charge is held only
+/// by the completion, the result and guards the job's own work retained, so dropping those
+/// releases it. Native custody jobs keep the charge through their custody guards after their
+/// terminal outcome is installed and release it when that custody settles.
 #[derive(Clone)]
 #[must_use = "Keep the memory guard with every retained admitted result"]
 pub struct MemoryLease(Arc<ReservationState>);
