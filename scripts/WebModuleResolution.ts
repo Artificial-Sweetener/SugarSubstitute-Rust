@@ -13,19 +13,21 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove every deployed relative module reference resolves inside the served extension tree. */
+/** Prove every deployed module reference resolves inside the served extension tree or the host. */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { walkArtifactFiles } from './WebArtifactSynchronization.js';
 
 /**
- * Reject relative imports that leave the root or name a missing module.
+ * Reject relative imports that leave the root or name a missing module, and bare specifiers.
  *
  * Comfy eagerly imports every deployed `.js` extension module, so one unresolved reference
- * fails the whole extension in every host. All failures are reported together.
+ * fails the whole extension in every host. Comfy serves no import map, so a bare package
+ * specifier such as `vue` never resolves; package code must be bundled. Absolute paths name
+ * host-served modules such as `/scripts/app.js`. All failures are reported together.
  */
-export function assertRelativeModulesResolve(root: string): void {
+export function assertDeployedModulesResolve(root: string): void {
   if (!path.isAbsolute(root)) throw new Error('Artifact root must be absolute.');
   const unresolved: string[] = [];
   const modules = walkArtifactFiles(root).filter(
@@ -50,11 +52,8 @@ export function assertRelativeModulesResolve(root: string): void {
       ) {
         specifier = node.arguments[0];
       }
-      if (specifier && ts.isStringLiteralLike(specifier) && specifier.text.startsWith('.')) {
-        const target = path.resolve(path.dirname(file), specifier.text);
-        const within = path.relative(root, target);
-        const escapes = within === '..' || within.startsWith(`..${path.sep}`);
-        if (escapes || !existsSync(target) || !statSync(target).isFile())
+      if (specifier && ts.isStringLiteralLike(specifier) && !specifier.text.startsWith('/')) {
+        if (!resolvesWithin(root, file, specifier.text))
           unresolved.push(`${path.relative(root, file)} -> ${specifier.text}`);
       }
       ts.forEachChild(node, visit);
@@ -63,4 +62,13 @@ export function assertRelativeModulesResolve(root: string): void {
   }
   if (unresolved.length > 0)
     throw new Error(`Unresolved deployed module references:\n${unresolved.join('\n')}`);
+}
+
+/** Resolve one relative specifier to an existing file inside the served tree. */
+function resolvesWithin(root: string, file: string, specifier: string): boolean {
+  if (!specifier.startsWith('.')) return false;
+  const target = path.resolve(path.dirname(file), specifier);
+  const within = path.relative(root, target);
+  const escapes = within === '..' || within.startsWith(`..${path.sep}`);
+  return !escapes && existsSync(target) && statSync(target).isFile();
 }

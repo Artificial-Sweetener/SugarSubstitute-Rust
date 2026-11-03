@@ -23,7 +23,7 @@ import { browserDependencyResolution } from './BrowserBuildEnvironment.js';
 import { walkArtifactFiles, synchronizeWebArtifacts } from './WebArtifactSynchronization.js';
 import { browserSharedModulePlugin, publishBrowserBundle } from './BrowserSharedModules.js';
 import { deferBrowserCanvasModules } from './DeferredComfyModules.js';
-import { assertRelativeModulesResolve } from './WebModuleResolution.js';
+import { assertDeployedModulesResolve } from './WebModuleResolution.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 const runtimeRoot = path.join(repositoryRoot, 'web');
@@ -255,13 +255,19 @@ async function main(): Promise<void> {
     legalComments: 'inline',
   });
   rmSync(path.join(generatedRoot, 'sugarprompt'), { force: true, recursive: true });
+  // The canvas editing chrome mounts beside the output overlay, so both share one Vue runtime.
   await bundleVueSurface(
-    ['surface/stack/vue', 'picker/vue', 'output_canvas/presentation/vue'],
+    [
+      'surface/stack/vue',
+      'picker/vue',
+      'output_canvas/presentation/vue',
+      'canvas_editing/presentation',
+    ],
     ['menus/ContextMenu.js', 'menus/FloatingSurface.js'],
   );
   deferBrowserCanvasModules(generatedRoot);
   stageStaticAssets();
-  assertRelativeModulesResolve(generatedRoot);
+  assertDeployedModulesResolve(generatedRoot);
   await synchronizeWebArtifacts(generatedRoot, runtimeRoot, checkOnly);
   console.log(checkOnly ? 'Web artifacts are current.' : 'Web artifacts updated.');
 }
