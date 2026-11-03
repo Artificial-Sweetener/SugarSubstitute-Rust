@@ -31,6 +31,14 @@ import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
 import { ComfyInputSurfaceCards } from './ComfyInputSurfaceCards.js';
 import { ComfyWorkflowInputState } from './ComfyWorkflowInputState.js';
 import { ComfyWorkflowSurfaceGraph } from './ComfyWorkflowSurfaceGraph.js';
+import { ComfyDimensionAuthorityWriter } from './ComfyDimensionAuthorityWriter.js';
+import { WorkflowCanvasResolution } from '../application/WorkflowCanvasResolution.js';
+import { CanvasResolutionDialog } from '../presentation/CanvasResolutionDialog.js';
+import {
+  canvasResolutionEntries,
+  type CanvasResolutionFieldTarget,
+} from '../presentation/CanvasResolutionMenu.js';
+import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
 
 /** Host collaborators of workflow input surfaces. */
 export interface WorkflowSurfaceOptions {
@@ -50,6 +58,8 @@ export interface WorkflowSurfaces {
   readonly provisioning: WorkflowSurfaceProvisioning;
   readonly route: CanvasRoutePort;
   readonly cards: ComfyInputSurfaceCards;
+  /** Offer "Change canvas resolution" for width/height fields that size a mask-only surface. */
+  resolutionEntries(targets: readonly CanvasResolutionFieldTarget[]): ContextMenuEntry[];
   dispose(): void;
 }
 
@@ -74,6 +84,12 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
   );
   const route = new WorkflowInputRoute(provisioning, workflowHost, state, report);
   const appearance = new WorkflowMaskAppearance(provisioning, workflowHost, graph, report);
+  const resolution = new WorkflowCanvasResolution(
+    provisioning,
+    workflowHost,
+    new ComfyDimensionAuthorityWriter((path) => associations.inventory.node(path), options.graph),
+  );
+  const dialog = new CanvasResolutionDialog(options.document);
   return {
     provisioning,
     route: {
@@ -96,7 +112,9 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
       choose: (value) => route.chooseRoute(value),
     },
     cards: new ComfyInputSurfaceCards(associations, route, appearance, provisioning),
+    resolutionEntries: (targets) => canvasResolutionEntries(targets, resolution, dialog, report),
     dispose: () => {
+      dialog.close();
       route.dispose();
       provisioning.dispose();
       graph.dispose();

@@ -93,10 +93,9 @@ const logger = adapter.getConsole() ?? console;
 const hostFeedback = new CubeHostFeedback({ toast: ui.toast });
 const cubePreconfiguration = ui.workflowPreconfiguration;
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-const { workflowExecution, workflowFields, canvasInputs } = createWorkflowCanvasComposition({
+const { workflowExecution, workflowFields, canvasInputs, editorDimensions } = createWorkflowCanvasComposition({
     api,
-    notifyCanvas: (message) => pushToastMessage('error', 'Canvas delivery failed', message),
-    notifyInput: (title, message) => pushToastMessage('warn', title, message),
+    notify: (severity, title, message) => pushToastMessage(severity, title, message),
     app: appRef,
     document: documentRef ?? document,
     getLiteGraph: () => adapter.getLiteGraph?.(),
@@ -365,7 +364,7 @@ const modelPickers = new ModelPickerHost({
         cubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
     },
 });
-const editorActions = createEditorActionsRuntime(adapter, modelCatalog, logger, hostFeedback, modelPickers, workflowExecution, prepareAnalysisPrompt);
+const editorActions = createEditorActionsRuntime(adapter, modelCatalog, logger, hostFeedback, modelPickers, editorDimensions, prepareAnalysisPrompt);
 /** Compose shared model-root settings without duplicating persistence or dialog policy. */
 const modelLibrarySettings = new ModelLibrarySettings({
     app: appRef,

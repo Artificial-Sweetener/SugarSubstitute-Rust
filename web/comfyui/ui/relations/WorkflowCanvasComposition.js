@@ -35,7 +35,7 @@ export function createWorkflowCanvasComposition(options) {
     });
     const window = options.document.defaultView;
     if (window)
-        workflowExecution.bindCanvas(workflowFields.canvas, window, options.notifyCanvas);
+        workflowExecution.bindCanvas(workflowFields.canvas, window, (message) => options.notify('error', 'Canvas delivery failed', message));
     const canvasInputs = createCanvasInputs({
         document: options.document,
         host: (id) => workflowExecution.canvases.sourceHost(id),
@@ -48,12 +48,21 @@ export function createWorkflowCanvasComposition(options) {
         },
         workflowHost: () => workflowExecution.canvases.workflowHost(),
         accent: () => workflowFields.appearance.palette.theme.color,
-        notice: (title, message) => options.notifyInput(title, message),
+        notice: (title, message) => options.notify('warn', title, message),
         legacyHost: (id) => workflowExecution.canvases.maskHost(id),
         graph: () => options.app?.graph,
         report: options.reportPresentationError,
         logger: options.logger,
         memory: options.memory,
     });
-    return { workflowExecution, workflowFields, canvasInputs };
+    return {
+        workflowExecution,
+        workflowFields,
+        canvasInputs,
+        editorDimensions: {
+            canvases: workflowExecution.canvases,
+            sessions: workflowExecution.sessions,
+            contributions: (targets) => canvasInputs.surfaces.resolutionEntries(targets),
+        },
+    };
 }
