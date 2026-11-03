@@ -86,7 +86,12 @@ impl OverlayPixels {
                 view.device_at([f64::from(document.width()), f64::from(document.height())])?;
             let clip = Some([left.floor(), top.floor(), right.ceil(), bottom.ceil()]);
             let points = outline_points(outline, view)?;
-            raster.closed(&points, Stroke::Outline, clip)?;
+            match outline {
+                OverlayOutline::Line(_) => {
+                    raster.segment(points[0], points[1], 0.0, Stroke::Outline, clip, None)?;
+                }
+                _ => raster.closed(&points, Stroke::Outline, clip)?,
+            }
         }
         Ok(Self { extent, pixels: raster.pixels, _memory: raster.memory })
     }
@@ -125,8 +130,8 @@ impl CpuProjection {
     }
 }
 
-/// A shape's closed outline in device coordinates; ellipses are flattened in device space so
-/// they stay smooth at every zoom.
+/// A shape's outline in device coordinates: a closed polyline, or a line's two end points.
+/// Ellipses are flattened in device space so they stay smooth at every zoom.
 fn outline_points(outline: &OverlayOutline, view: Viewport) -> Result<Vec<[f64; 2]>, RenderError> {
     Ok(match outline {
         OverlayOutline::Rectangle([left, top, right, bottom]) => vec![
@@ -152,6 +157,7 @@ fn outline_points(outline: &OverlayOutline, view: Viewport) -> Result<Vec<[f64; 
         OverlayOutline::Polygon(points) => {
             points.iter().map(|point| view.device_at(*point)).collect::<Result<_, _>>()?
         }
+        OverlayOutline::Line([from, to]) => vec![view.device_at(*from)?, view.device_at(*to)?],
     })
 }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Own one native window's canvas cursors: the shared Windows arrow, DPI-sized Qt hands and the
-//! rendered editing cursors.
+//! Own one native window's canvas cursors: the shared Windows arrow and forbidden cursors,
+//! DPI-sized Qt hands and the rendered editing cursors.
 //!
 //! The standalone canvas peer and the composed main window each own one cache.
 
@@ -12,8 +12,8 @@ mod resource;
 use ::windows::Win32::UI::{
     HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
     WindowsAndMessaging::{
-        DestroyCursor, GetCursor, HCURSOR, IDC_ARROW, LoadCursorW, SM_CXCURSOR, SM_CYCURSOR,
-        SetCursor,
+        DestroyCursor, GetCursor, HCURSOR, IDC_ARROW, IDC_NO, LoadCursorW, SM_CXCURSOR,
+        SM_CYCURSOR, SetCursor,
     },
 };
 use resource::load_cursor;
@@ -106,6 +106,7 @@ struct CursorPair {
 
 struct Cache {
     arrow: HCURSOR,
+    forbidden: HCURSOR,
     pair: Option<CursorPair>,
     rendered: generated::Rendered,
 }
@@ -132,9 +133,12 @@ impl Cursors {
     fn sized(metrics: Metrics) -> Result<Self, Box<dyn Error>> {
         // SAFETY: IDC_ARROW requests a shared Windows cursor that callers never destroy.
         let arrow = unsafe { LoadCursorW(None, IDC_ARROW)? };
+        // SAFETY: IDC_NO requests a shared Windows cursor that callers never destroy.
+        let forbidden = unsafe { LoadCursorW(None, IDC_NO)? };
         let pair = CursorPair::new(metrics.size)?;
         Ok(Self(RefCell::new(Cache {
             arrow,
+            forbidden,
             pair: Some(pair),
             rendered: generated::Rendered::default(),
         })))
@@ -167,6 +171,7 @@ impl Cursors {
         Ok(match intent {
             CursorIntent::OpenHand => CursorResource::Owned(pair.open.clone()),
             CursorIntent::ClosedHand => CursorResource::Owned(pair.closed.clone()),
+            CursorIntent::Forbidden => CursorResource::Shared(cache.forbidden),
             _ => CursorResource::Shared(cache.arrow),
         })
     }

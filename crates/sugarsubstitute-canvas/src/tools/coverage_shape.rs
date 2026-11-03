@@ -275,15 +275,16 @@ impl CanvasTool for CoverageShapeTool {
     }
 }
 
-/// The native cursor for shape feedback. Until precise and selection-translate artwork exists,
-/// every shape state uses the arrow.
+/// The native cursor for shape feedback, following CuteCanvas: crosshairs marked by the combine
+/// mode, the translate cursor over a draggable outline and the forbidden cursor with nothing to
+/// edit.
 const fn intent(feedback: Feedback) -> CursorIntent {
     match feedback {
-        Feedback::Unavailable
-        | Feedback::Precise
-        | Feedback::PreciseAdd
-        | Feedback::PreciseSubtract
-        | Feedback::Translate => CursorIntent::Arrow,
+        Feedback::Unavailable => CursorIntent::Forbidden,
+        Feedback::Precise => CursorIntent::Precise,
+        Feedback::PreciseAdd => CursorIntent::PreciseAdd,
+        Feedback::PreciseSubtract => CursorIntent::PreciseSubtract,
+        Feedback::Translate => CursorIntent::SelectionTranslate,
     }
 }
 

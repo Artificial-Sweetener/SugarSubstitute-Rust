@@ -53,10 +53,13 @@ fn a_multi_update_gesture_publishes_once_and_undo_redo_restore_whole_changes() -
         assert!(doc.snapshot().layers().is_empty());
         assert_eq!(edit.preview().layers()[0].opacity(), 0.5);
         assert_eq!(edit.preview().base().revision(), doc.snapshot().revision());
+        assert_eq!(doc.history(), [false, false]);
         assert!(doc.commit_edit(edit)?);
         assert_eq!(doc.snapshot().revision(), 2);
+        assert_eq!(doc.history(), [true, false]);
         assert!(doc.undo()?);
         assert!(doc.snapshot().layers().is_empty());
+        assert_eq!(doc.history(), [false, true]);
         assert!(!doc.undo()?);
         assert!(doc.redo()?);
         assert_eq!(doc.snapshot().layers()[0].opacity(), 0.5);

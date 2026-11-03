@@ -17,7 +17,10 @@ const BYTE_BUDGET: u64 = 32 << 20;
 /// The artwork a custom canvas intent renders, or `None` for system and bundled cursors.
 pub(super) fn art(intent: CursorIntent) -> Option<CursorArt> {
     Some(match intent {
-        CursorIntent::Arrow | CursorIntent::OpenHand | CursorIntent::ClosedHand => return None,
+        CursorIntent::Arrow
+        | CursorIntent::OpenHand
+        | CursorIntent::ClosedHand
+        | CursorIntent::Forbidden => return None,
         CursorIntent::BrushOutline(outline) => CursorArt::BrushOutline {
             diameter: outline.diameter(),
             color: outline.color(),

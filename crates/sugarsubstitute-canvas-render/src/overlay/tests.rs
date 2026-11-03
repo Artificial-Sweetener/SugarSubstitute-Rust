@@ -73,6 +73,25 @@ fn drawn_outlines_dash_eight_white_four_black_and_clip_to_the_document() -> harn
 }
 
 #[test]
+fn a_previewed_line_is_one_open_dashed_segment_clipped_to_the_document() -> harness::TestResult {
+    run(|context| {
+        let surface = Extent::new(40, 30)?;
+        let document = Extent::new(30, 20)?;
+        let line = outline(document, OverlayOutline::Line([[2.0, 5.5], [36.0, 5.5]]));
+        let overlay = OverlayPixels::rasterize(&line, Viewport::new(surface)?, context)?;
+        let pixels = painted(&overlay)?;
+        let row: Vec<u32> = (2..30).map(|x| pixels[5 * 40 + x]).collect();
+        assert_eq!(row[..8], [word(WHITE); 8]);
+        assert_eq!(row[8..12], [word(BLACK); 4]);
+        assert_eq!(row[12..20], [word(WHITE); 8]);
+        // Nothing closes the segment, and the part beyond the document is clipped.
+        assert!(overlay.pixels().iter().all(|pixel| pixel.y == 5 && pixel.x < 30));
+        assert_eq!(overlay.pixels().len(), 28);
+        Ok(())
+    })
+}
+
+#[test]
 fn ants_dash_each_boundary_run_through_the_camera_and_phase() -> harness::TestResult {
     run(|context| {
         let document = Extent::new(32, 32)?;

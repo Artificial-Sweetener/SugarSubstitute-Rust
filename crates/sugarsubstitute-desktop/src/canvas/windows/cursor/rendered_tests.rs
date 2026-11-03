@@ -79,6 +79,9 @@ fn editing_intents_share_artwork_and_reuse_one_native_cursor_per_dpi() -> Result
     assert_eq!(cursors.0.borrow().rendered.len(), 1, "other DPIs leave the cache");
     assert!(translate.owned().is_some(), "a displaced cursor lives while still held");
     assert_eq!(cursors.resolve(LARGE, CursorIntent::Arrow)?.handle(), cursors.arrow());
+    let forbidden = cursors.resolve(LARGE, CursorIntent::Forbidden)?;
+    assert!(forbidden.owned().is_none(), "the forbidden cursor is the shared system one");
+    assert!(![cursors.arrow(), translate.handle()].contains(&forbidden.handle()));
     Ok(())
 }
 

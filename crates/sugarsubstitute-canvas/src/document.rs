@@ -390,6 +390,10 @@ impl Document {
         let highlight = self.current.highlight.filter(|layer| content.contains(*layer));
         DocumentSnapshot { identity: self.current.identity, revision, stage: 0, content, highlight }
     }
+    /// Whether undo and redo each have a step to restore, as the editing UI reports them.
+    pub fn history(&self) -> [bool; 2] {
+        [!self.undo.is_empty(), !self.redo.is_empty()]
+    }
     /// Restore preceding authored content and publish a fresh revision, without raster copies.
     /// # Errors
     /// Rejects exhausted revision identity without changing history.

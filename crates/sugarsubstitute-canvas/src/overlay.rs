@@ -35,6 +35,9 @@ pub enum OverlayShape<'a> {
     Ellipse([f64; 4]),
     /// Closed polygon through these points.
     Polygon(&'a [[f64; 2]]),
+    /// Open segment from the first point to the second, such as the straight line a Shift-click
+    /// brush stroke would paint.
+    Line([[f64; 2]; 2]),
 }
 
 /// Transient feedback the effective tool asks presentation to draw.
@@ -102,6 +105,8 @@ pub enum OverlayOutline {
     Ellipse([f64; 4]),
     /// Closed polygon through these points.
     Polygon(Arc<[[f64; 2]]>),
+    /// Open segment from the first point to the second.
+    Line([[f64; 2]; 2]),
 }
 impl From<OverlayShape<'_>> for OverlayOutline {
     fn from(shape: OverlayShape<'_>) -> Self {
@@ -109,6 +114,7 @@ impl From<OverlayShape<'_>> for OverlayOutline {
             OverlayShape::Rectangle(bounds) => Self::Rectangle(bounds),
             OverlayShape::Ellipse(bounds) => Self::Ellipse(bounds),
             OverlayShape::Polygon(points) => Self::Polygon(Arc::from(points)),
+            OverlayShape::Line(points) => Self::Line(points),
         }
     }
 }

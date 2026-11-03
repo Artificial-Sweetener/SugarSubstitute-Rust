@@ -1,9 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Space commits a stroke, and Shift with a mouse press paints CuteCanvas's straight lines.
+//! Space commits a stroke, and Shift with a mouse previews and paints CuteCanvas's straight lines.
 use super::*;
 
 const SHIFT: ToolModifiers = ToolModifiers { shift: true, ctrl: false, alt: false };
+
+#[test]
+fn holding_shift_previews_the_line_a_shift_click_would_paint() -> harness::TestResult {
+    run(|memory| {
+        let mut canvas = Canvas::new(memory, 0)?;
+        canvas.mouse([20.0, 20.0], SHIFT)?;
+        assert_eq!(canvas.tools.overlay(), None, "no line before the first stroke");
+        canvas.stroke(&[[20.0, 20.0], [40.0, 20.0]], NONE)?;
+        canvas.mouse([120.0, 80.0], NONE)?;
+        assert_eq!(canvas.tools.overlay(), None, "no line without Shift");
+        canvas.mouse([120.0, 80.0], SHIFT)?;
+        let line = OverlayShape::Line([[40.0, 20.0], [120.0, 80.0]]);
+        assert_eq!(canvas.tools.overlay(), Some(ToolOverlay::Outline(line)));
+        let pen = PointerSample { kind: PointerKind::Pen, ..PointerSample::mouse([0.0; 2], SHIFT) };
+        canvas.sample(pen, [120.0, 80.0])?;
+        assert_eq!(canvas.tools.overlay(), None, "pens paint no Shift lines");
+        Ok(())
+    })
+}
 
 #[test]
 fn space_commits_the_stroke_before_temporary_navigation() -> harness::TestResult {

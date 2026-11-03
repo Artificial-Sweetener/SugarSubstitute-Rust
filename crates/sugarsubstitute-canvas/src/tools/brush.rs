@@ -17,6 +17,7 @@ pub use options::BrushOptions;
 use super::*;
 use crate::{
     BrushOutline, Layer, LayerContent, MaskAppearance,
+    overlay::OverlayShape,
     paint::{self, Contact, DabStyle, StrokeRaster},
 };
 
@@ -38,6 +39,8 @@ pub struct BrushTool {
     stroke: Option<Stroke>,
     /// Where the last stroke ended, in document pixels: the start of a Shift-click line.
     anchor: Option<[f64; 2]>,
+    /// The latest pointer position in document pixels: the end of the previewed Shift line.
+    hover: Option<[f64; 2]>,
     wheel: f64,
 }
 
@@ -53,7 +56,7 @@ struct Stroke {
 impl BrushTool {
     /// A brush in `mode` with `options`.
     pub const fn new(mode: BrushMode, options: BrushOptions) -> Self {
-        Self { mode, options, pointer: None, stroke: None, anchor: None, wheel: 0.0 }
+        Self { mode, options, pointer: None, stroke: None, anchor: None, hover: None, wheel: 0.0 }
     }
     /// Whether this tool paints or erases.
     pub const fn mode(&self) -> BrushMode {
@@ -214,6 +217,7 @@ impl CanvasTool for BrushTool {
             ToolInput::Pointer(sample) => {
                 context.navigate(NavigationInput::Pointer(sample.position))?;
                 self.pointer = Some(sample);
+                self.hover = context.navigation().viewport().document_at(sample.position).ok();
                 if self.stroke.is_some() {
                     self.extend(sample, context)?;
                 }
@@ -294,6 +298,16 @@ impl CanvasTool for BrushTool {
         let ToolOptions::Brush(options) = options;
         self.options = options;
         Ok(())
+    }
+
+    /// While Shift is held with a mouse after a stroke, the straight line a Shift-click would
+    /// paint from where that stroke ended, as CuteCanvas previews it.
+    fn overlay(&self) -> Option<ToolOverlay<'_>> {
+        let shifted = self
+            .pointer
+            .is_some_and(|pointer| pointer.kind == PointerKind::Mouse && pointer.modifiers.shift);
+        let line = [self.anchor?, self.hover?];
+        shifted.then_some(ToolOverlay::Outline(OverlayShape::Line(line)))
     }
 }
 

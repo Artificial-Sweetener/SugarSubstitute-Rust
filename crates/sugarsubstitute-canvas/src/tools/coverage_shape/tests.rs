@@ -314,6 +314,27 @@ fn feedback_reports_precise_modes_translation_and_unavailability() -> harness::T
 }
 
 #[test]
+fn the_manager_cursor_shows_each_feedback_as_its_native_intent() -> harness::TestResult {
+    run(|context| {
+        let mut shapes = canvas(context, ShapeTarget::Selection, ShapeKind::Rectangle)?;
+        let mut mask = canvas(context, ShapeTarget::Mask, ShapeKind::Rectangle)?;
+        let cursor = |canvas: &Canvas| canvas.tools.cursor(Some(&canvas.document));
+        shapes.point([40.0, 40.0], NONE)?;
+        assert_eq!(cursor(&shapes), CursorIntent::Precise);
+        shapes.point([40.0, 40.0], modifiers(true, false, false))?;
+        assert_eq!(cursor(&shapes), CursorIntent::PreciseAdd);
+        assert!(shapes.drag(&[[20.0, 20.0], [60.0, 60.0]], NONE, context)?);
+        shapes.point([40.0, 40.0], NONE)?;
+        assert_eq!(cursor(&shapes), CursorIntent::SelectionTranslate);
+        shapes.point([100.0, 100.0], modifiers(false, false, true))?;
+        assert_eq!(cursor(&shapes), CursorIntent::PreciseSubtract);
+        mask.point([40.0, 40.0], NONE)?;
+        assert_eq!(cursor(&mask), CursorIntent::Forbidden, "no editable mask");
+        Ok(())
+    })
+}
+
+#[test]
 fn visible_mask_content_bounds_are_snap_targets() -> harness::TestResult {
     run(|context| {
         let mut canvas = canvas(context, ShapeTarget::Selection, ShapeKind::Rectangle)?;

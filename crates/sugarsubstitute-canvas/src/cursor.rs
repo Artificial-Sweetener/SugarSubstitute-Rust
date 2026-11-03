@@ -28,6 +28,8 @@ pub enum CursorIntent {
     Move,
     /// The pointer moves selected content out of its layer, leaving the area behind empty.
     MoveCut,
+    /// The tool has nothing it may edit here, such as a mask shape without an editable mask.
+    Forbidden,
 }
 
 /// The ring a brush cursor draws: the brush footprint as it appears on screen.
