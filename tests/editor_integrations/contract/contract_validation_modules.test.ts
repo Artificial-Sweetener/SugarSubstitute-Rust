@@ -139,6 +139,56 @@ test.each(
   },
 );
 
+test('imports each external guard only into the modules whose validators reference it', async () => {
+  const external = {
+    names: ['FixtureSurfaceMessage', 'FixtureFile'],
+    typesImport: './Surface.generated.js',
+    validationImport: './SurfaceValidation.generated.js',
+  };
+  const text = JSON.stringify({
+    $defs: {
+      ...schema.$defs,
+      FixtureUpload: {
+        type: 'object',
+        properties: { file: { $ref: '#/$defs/FixtureFile' } },
+        required: ['file'],
+        additionalProperties: false,
+      },
+    },
+    oneOf: [...schema.oneOf, { $ref: '#/$defs/FixtureSurfaceMessage' }],
+  });
+  const split = await contractBindings(text, {
+    ...options,
+    external,
+    validationModules: [
+      ...modules,
+      { file: 'Upload.generated.ts', definitions: ['FixtureUpload'] },
+    ],
+  });
+  expect(split['types.ts']).toContain(
+    "import type { FixtureSurfaceMessage, FixtureFile } from './Surface.generated.js';",
+  );
+  expect(split['Upload.generated.ts']).toContain(
+    "import { isFixtureFile } from './SurfaceValidation.generated.js';",
+  );
+  expect(split['validation.ts']).toContain(
+    "import { isFixtureSurfaceMessage } from './SurfaceValidation.generated.js';",
+  );
+  expect(split['Geometry.generated.ts']).not.toContain('SurfaceValidation');
+  await expect(
+    contractBindings(text, {
+      ...options,
+      external: { ...external, names: [...external.names, 'FixtureUnused'] },
+    }),
+  ).rejects.toThrow('Invalid external contract definitions');
+  await expect(
+    contractBindings(text, {
+      ...options,
+      external: { ...external, names: ['FixturePoint', 'FixtureFile'] },
+    }),
+  ).rejects.toThrow('Invalid external contract definitions');
+});
+
 test('rejects a validator module that overwrites generated type declarations', async () => {
   await expect(
     contractBindings(JSON.stringify(schema), {

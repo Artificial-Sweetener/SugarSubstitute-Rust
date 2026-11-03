@@ -24,6 +24,8 @@ import type { CanvasMaskHost } from './CanvasMasks.js';
 import type { CanvasSourceHost } from './CanvasSources.js';
 import type { CanvasGeometryHost } from './CanvasGeometry.js';
 import type { CanvasSurfaceHost } from './CanvasSurface.js';
+import type { CanvasEditHost } from './CanvasEditing.js';
+import type { CanvasWorkflowHost } from './CanvasWorkflowSurfaces.js';
 /** Expose common discovery without requiring document editing from display-only canvases. */
 export interface CanvasHost {
   readCanvas(): CanvasDescriptor | null;
@@ -35,6 +37,10 @@ export interface CanvasLayerHost extends CanvasHost {
   readonly geometry?: CanvasGeometryHost | null;
   readonly masks?: CanvasMaskHost | null;
   readonly sources?: CanvasSourceHost | null;
+  /** Editing commands; exposed to consumers only when the descriptor advertises editing. */
+  readonly editing?: CanvasEditHost | null;
+  /** Workflow surface provisioning; exposed only when the descriptor advertises it. */
+  readonly workflow?: CanvasWorkflowHost | null;
   readContext(): Promise<CanvasContext>;
   insertImage(
     image: CanvasInsertImage,

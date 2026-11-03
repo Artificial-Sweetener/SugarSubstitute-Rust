@@ -1,16 +1,6 @@
 schema = 1
 
 [[waiver]]
-id = "SC-CANVAS-GENERATED-VALIDATION"
-kind = "structural"
-rule = "STRUCT003"
-path = "integrations/shared/CanvasValidation.generated.ts"
-owner = "SugarCubes portable canvas contract compiler"
-justification = "This compiler-owned module contains only closed-schema type guards generated from canvas.schema.json. Request dispatch, source capture, native translation, subscriptions, and consumer policy live in separate authored owners. Keeping the mechanically expanded guards together preserves one generated validation entry point; exact regeneration is checked by the integration build."
-review_by = 2026-11-30
-max_lines = 811
-
-[[waiver]]
 id = "SC-WAIVER-006"
 kind = "structural"
 rule = "STRUCT003"
@@ -140,6 +130,16 @@ owner = "SugarPrompt native drag measurement"
 justification = "Reviewed the adopted 574-line mounted measurement owner and its source assessment REORDERMEASUREMENTOWNER001. The module owns one native measurement/resource lifetime: supported READ/WRITE scheduling, capture, finite edge scrolling and retirement. Geometry, source transformations, paint and gesture authority remain delegated to focused collaborators. Keeping this resource lifetime together preserves epoch and all-attempt cleanup invariants."
 review_by = 2027-01-10
 max_lines = 574
+
+[[waiver]]
+id = "SC-CANVAS-GENERATED-NATIVE-PROTOCOL"
+kind = "structural"
+rule = "STRUCT003"
+path = "integrations/contracts/CanvasNativeProtocol.generated.rs"
+owner = "SugarCubes portable canvas contract compiler"
+justification = "This compiler-owned closed version 3 wire-value module contains only schema-derived serde types and shape/bound validation for the document-canvas messages a native host decodes: context, sources, geometry, editing, workflow surfaces and error replies. They share the capability, document, file-reference and failure vocabulary, so one generated module keeps a single Rust type per wire value. Document lifecycle, editing, provisioning and transport policy remain in authored host owners; regeneration and shared vectors verify parity."
+review_by = 2026-11-30
+max_lines = 945
 
 [[waiver]]
 id = "SC-CANVAS-GENERATED-RUST-PROTOCOL"

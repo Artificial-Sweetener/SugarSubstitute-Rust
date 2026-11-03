@@ -3,6 +3,141 @@ function isRecord(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+// integrations/shared/CanvasDocumentValidation.generated.ts
+function isCanvasDocument(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "id") && typeof value["id"] === "string" && value["id"].length <= 128 && Object.hasOwn(value, "geometryRevision") && typeof value["geometryRevision"] === "string" && value["geometryRevision"].length <= 512 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
+}
+
+// integrations/shared/CanvasContextValidation.generated.ts
+function isCanvasLayerCapabilities(value) {
+  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "displayOutput") && typeof value["displayOutput"] === "boolean" && Object.hasOwn(value, "insertImageLayer") && typeof value["insertImageLayer"] === "boolean" && Object.hasOwn(value, "positionImageLayer") && typeof value["positionImageLayer"] === "boolean";
+}
+function isCanvasGeometryCapabilities(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "displayOutput") && typeof value["displayOutput"] === "boolean" && Object.hasOwn(value, "insertImageLayer") && typeof value["insertImageLayer"] === "boolean" && Object.hasOwn(value, "positionImageLayer") && typeof value["positionImageLayer"] === "boolean" && Object.hasOwn(value, "geometry") && typeof value["geometry"] === "boolean";
+}
+function isCanvasEditingCapabilities(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "displayOutput") && typeof value["displayOutput"] === "boolean" && Object.hasOwn(value, "insertImageLayer") && typeof value["insertImageLayer"] === "boolean" && Object.hasOwn(value, "positionImageLayer") && typeof value["positionImageLayer"] === "boolean" && Object.hasOwn(value, "geometry") && typeof value["geometry"] === "boolean" && Object.hasOwn(value, "editing") && typeof value["editing"] === "boolean" && Object.hasOwn(value, "workflowSurfaces") && typeof value["workflowSurfaces"] === "boolean";
+}
+function isCanvasCapabilities(value) {
+  return isCanvasLayerCapabilities(value) || isCanvasGeometryCapabilities(value) || isCanvasEditingCapabilities(value);
+}
+function isCanvasDescriptor(value) {
+  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "id") && typeof value["id"] === "string" && value["id"].length <= 128 && Object.hasOwn(value, "label") && typeof value["label"] === "string" && value["label"].length <= 128 && Object.hasOwn(value, "capabilities") && isCanvasCapabilities(value["capabilities"]);
+}
+function isCanvasContext(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "canvas") && isCanvasDescriptor(value["canvas"]) && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null);
+}
+
+// integrations/shared/CanvasSourceValidation.generated.ts
+function isCanvasSourceTarget(value) {
+  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "selection" || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "current-layer" || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "layer" && Object.hasOwn(value, "layerId") && typeof value["layerId"] === "string" && value["layerId"].length <= 128 || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "composition" || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "composition-from-layer" && Object.hasOwn(value, "layerId") && typeof value["layerId"] === "string" && value["layerId"].length <= 128;
+}
+function isCanvasInputTarget(value) {
+  return isCanvasSourceTarget(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "file" && Object.hasOwn(value, "file") && (typeof value["file"] === "string" && value["file"].length <= 4096 || value["file"] === null);
+}
+function isCanvasPixelRaster(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 65536 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 65536 && Object.hasOwn(value, "format") && (value["format"] === "rgba8" || value["format"] === "coverage8") && Object.hasOwn(value, "data") && typeof value["data"] === "string" && value["data"].length <= 89478488;
+}
+function isCanvasSourceLayer(value) {
+  return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "id") && typeof value["id"] === "string" && value["id"].length <= 128 && Object.hasOwn(value, "name") && typeof value["name"] === "string" && value["name"].length <= 256 && Object.hasOwn(value, "parentId") && (typeof value["parentId"] === "string" && value["parentId"].length <= 128 || value["parentId"] === null) && Object.hasOwn(value, "depth") && typeof value["depth"] === "number" && Number.isSafeInteger(value["depth"]) && value["depth"] >= 0 && value["depth"] <= 128 && Object.hasOwn(value, "visible") && typeof value["visible"] === "boolean";
+}
+function isCanvasSourceContext(value) {
+  return isRecord(value) && Object.keys(value).length === 8 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "targets") && Array.isArray(value["targets"]) && value["targets"].length <= 5 && value["targets"].every(
+    (item) => item === "selection" || item === "current-layer" || item === "layer" || item === "composition" || item === "composition-from-layer"
+  ) && Object.hasOwn(value, "layers") && Array.isArray(value["layers"]) && value["layers"].length <= 4096 && value["layers"].every((item) => isCanvasSourceLayer(item)) && Object.hasOwn(value, "currentLayerId") && (typeof value["currentLayerId"] === "string" && value["currentLayerId"].length <= 128 || value["currentLayerId"] === null) && Object.hasOwn(value, "observesChanges") && typeof value["observesChanges"] === "boolean";
+}
+function isCanvasSourceSnapshot(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "target") && isCanvasSourceTarget(value["target"]) && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "pixels") && isCanvasPixelRaster(value["pixels"]);
+}
+function isCanvasSourceCommand(value) {
+  return isCanvasSourceQuery(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "watch" && Object.hasOwn(value, "enabled") && typeof value["enabled"] === "boolean";
+}
+function isCanvasSourceResult(value) {
+  return isCanvasSourceContext(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "captured" && Object.hasOwn(value, "snapshots") && Array.isArray(value["snapshots"]) && value["snapshots"].length <= 64 && value["snapshots"].every((item) => isCanvasSourceSnapshot(item)) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "watching" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
+}
+function isCanvasSourceRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "source.request" && Object.hasOwn(value, "command") && isCanvasSourceCommand(value["command"]);
+}
+function isCanvasSourceReply(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "source.reply" && Object.hasOwn(value, "result") && isCanvasSourceResult(value["result"]);
+}
+function isCanvasSourceChanged(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && value["requestId"] === 0 && Object.hasOwn(value, "type") && value["type"] === "source.changed" && Object.hasOwn(value, "change") && isCanvasSourceChange(value["change"]);
+}
+function isCanvasSourceChange(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "documentId") && (typeof value["documentId"] === "string" && value["documentId"].length <= 128 || value["documentId"] === null) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512;
+}
+function isCanvasSourceQuery(value) {
+  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "context" || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "type") && value["type"] === "capture" && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "targets") && Array.isArray(value["targets"]) && value["targets"].length <= 64 && value["targets"].every((item) => isCanvasSourceTarget(item)) && Object.hasOwn(value, "maximumSize") && typeof value["maximumSize"] === "number" && Number.isSafeInteger(value["maximumSize"]) && value["maximumSize"] >= 0 && value["maximumSize"] <= 1024;
+}
+function isCanvasInputSource(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "file" && Object.hasOwn(value, "file") && (typeof value["file"] === "string" && value["file"].length <= 4096 || value["file"] === null) || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "kind") && value["kind"] === "canvas" && Object.hasOwn(value, "canvasId") && typeof value["canvasId"] === "string" && value["canvasId"].length <= 128 && Object.hasOwn(value, "documentId") && (typeof value["documentId"] === "string" && value["documentId"].length <= 128 || value["documentId"] === null) && Object.hasOwn(value, "target") && isCanvasSourceTarget(value["target"]);
+}
+
+// integrations/shared/CanvasGeometryValidation.generated.ts
+function isCanvasDimensions(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
+}
+function isCanvasSelectionBounds(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "left") && typeof value["left"] === "number" && Number.isSafeInteger(value["left"]) && value["left"] >= -3e5 && value["left"] <= 3e5 && Object.hasOwn(value, "top") && typeof value["top"] === "number" && Number.isSafeInteger(value["top"]) && value["top"] >= -3e5 && value["top"] <= 3e5 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
+}
+function isCanvasGeometryCommand(value) {
+  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "context" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "resize" && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "size") && isCanvasDimensions(value["size"]);
+}
+function isCanvasGeometryResult(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "resize") && typeof value["resize"] === "boolean" && Object.hasOwn(value, "selectionSupported") && typeof value["selectionSupported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null) && Object.hasOwn(value, "selection") && (isCanvasSelectionBounds(value["selection"]) || value["selection"] === null) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "resized" && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
+}
+function isCanvasGeometryRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "geometry.request" && Object.hasOwn(value, "command") && isCanvasGeometryCommand(value["command"]);
+}
+function isCanvasGeometryReply(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "geometry.reply" && Object.hasOwn(value, "result") && isCanvasGeometryResult(value["result"]);
+}
+
+// integrations/shared/CanvasEditValidation.generated.ts
+function isCanvasToolId(value) {
+  return value === "pan-zoom" || value === "move" || value === "brush" || value === "eraser" || value === "select-rectangle" || value === "select-ellipse" || value === "select-lasso" || value === "mask-rectangle" || value === "mask-ellipse" || value === "mask-lasso" || value === "transform" || value === "shared-edges";
+}
+function isCanvasBrushOptions(value) {
+  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "size") && typeof value["size"] === "number" && Number.isSafeInteger(value["size"]) && value["size"] >= 1 && value["size"] <= 1e3 && Object.hasOwn(value, "hardness") && typeof value["hardness"] === "number" && Number.isSafeInteger(value["hardness"]) && value["hardness"] >= 0 && value["hardness"] <= 100 && Object.hasOwn(value, "opacity") && typeof value["opacity"] === "number" && Number.isSafeInteger(value["opacity"]) && value["opacity"] >= 0 && value["opacity"] <= 100;
+}
+function isCanvasEditCommand(value) {
+  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "state" || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "tool" && Object.hasOwn(value, "tool") && isCanvasToolId(value["tool"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "options" && Object.hasOwn(value, "tool") && (value["tool"] === "brush" || value["tool"] === "eraser") && Object.hasOwn(value, "options") && isCanvasBrushOptions(value["options"]) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "history" && Object.hasOwn(value, "action") && (value["action"] === "undo" || value["action"] === "redo") || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "commit" || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "cancel" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "nudge" && Object.hasOwn(value, "dx") && typeof value["dx"] === "number" && Number.isSafeInteger(value["dx"]) && value["dx"] >= -100 && value["dx"] <= 100 && Object.hasOwn(value, "dy") && typeof value["dy"] === "number" && Number.isSafeInteger(value["dy"]) && value["dy"] >= -100 && value["dy"] <= 100 || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "selection" && Object.hasOwn(value, "action") && (value["action"] === "deselect" || value["action"] === "clear") || isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "type") && value["type"] === "modify" && Object.hasOwn(value, "target") && (value["target"] === "selection" || value["target"] === "mask") && Object.hasOwn(value, "operation") && (value["operation"] === "expand" || value["operation"] === "contract" || value["operation"] === "feather") && Object.hasOwn(value, "pixels") && typeof value["pixels"] === "number" && Number.isSafeInteger(value["pixels"]) && value["pixels"] >= 1 && value["pixels"] <= 999 && Object.hasOwn(value, "phase") && (value["phase"] === "preview" || value["phase"] === "apply" || value["phase"] === "cancel") || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "mode" && Object.hasOwn(value, "mode") && (value["mode"] === "none" || value["mode"] === "coverage") || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "transform" && Object.hasOwn(value, "action") && (value["action"] === "rotate-left" || value["action"] === "rotate-right" || value["action"] === "flip-horizontal" || value["action"] === "flip-vertical") || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "session" && Object.hasOwn(value, "action") && (value["action"] === "undo" || value["action"] === "redo" || value["action"] === "apply" || value["action"] === "cancel") || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "navigation" && Object.hasOwn(value, "held") && typeof value["held"] === "boolean";
+}
+function isCanvasEditTool(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "id") && isCanvasToolId(value["id"]) && Object.hasOwn(value, "available") && typeof value["available"] === "boolean";
+}
+function isCanvasEditToolOptions(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "brush") && isCanvasBrushOptions(value["brush"]) && Object.hasOwn(value, "eraser") && isCanvasBrushOptions(value["eraser"]);
+}
+function isCanvasEditSelectionBounds(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "left") && typeof value["left"] === "number" && Number.isFinite(value["left"]) && value["left"] >= -1e6 && value["left"] <= 1e6 && Object.hasOwn(value, "top") && typeof value["top"] === "number" && Number.isFinite(value["top"]) && value["top"] >= -1e6 && value["top"] <= 1e6 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isFinite(value["width"]) && value["width"] > 0 && value["width"] <= 1e6 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isFinite(value["height"]) && value["height"] > 0 && value["height"] <= 1e6;
+}
+function isCanvasEditSelection(value) {
+  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "bounds") && isCanvasEditSelectionBounds(value["bounds"]);
+}
+function isCanvasEditHistory(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "undo") && typeof value["undo"] === "boolean" && Object.hasOwn(value, "redo") && typeof value["redo"] === "boolean";
+}
+function isCanvasEditSession(value) {
+  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && (value["kind"] === "move" || value["kind"] === "transform" || value["kind"] === "shared-edges" || value["kind"] === "modify") && Object.hasOwn(value, "undo") && typeof value["undo"] === "boolean" && Object.hasOwn(value, "redo") && typeof value["redo"] === "boolean";
+}
+function isCanvasEditState(value) {
+  return isRecord(value) && Object.keys(value).length === 10 && Object.hasOwn(value, "revision") && typeof value["revision"] === "number" && Number.isSafeInteger(value["revision"]) && value["revision"] >= 0 && value["revision"] <= 9007199254740991 && Object.hasOwn(value, "document") && (typeof value["document"] === "string" && value["document"].length <= 128 || value["document"] === null) && Object.hasOwn(value, "activeMask") && (typeof value["activeMask"] === "string" && value["activeMask"].length <= 128 || value["activeMask"] === null) && Object.hasOwn(value, "tool") && isCanvasToolId(value["tool"]) && Object.hasOwn(value, "tools") && Array.isArray(value["tools"]) && value["tools"].length <= 12 && value["tools"].every((item) => isCanvasEditTool(item)) && Object.hasOwn(value, "options") && isCanvasEditToolOptions(value["options"]) && Object.hasOwn(value, "selection") && (isCanvasEditSelection(value["selection"]) || value["selection"] === null) && Object.hasOwn(value, "history") && isCanvasEditHistory(value["history"]) && Object.hasOwn(value, "session") && (isCanvasEditSession(value["session"]) || value["session"] === null) && Object.hasOwn(value, "mode") && (value["mode"] === "none" || value["mode"] === "coverage");
+}
+function isCanvasEditResult(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "state" && Object.hasOwn(value, "state") && isCanvasEditState(value["state"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
+}
+function isCanvasEditRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "edit.request" && Object.hasOwn(value, "command") && isCanvasEditCommand(value["command"]);
+}
+function isCanvasEditReply(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "edit.reply" && Object.hasOwn(value, "result") && isCanvasEditResult(value["result"]);
+}
+function isCanvasEditChanged(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && value["requestId"] === 0 && Object.hasOwn(value, "type") && value["type"] === "edit.changed" && Object.hasOwn(value, "state") && isCanvasEditState(value["state"]);
+}
+
 // integrations/shared/CanvasSurfaceGeometryValidation.generated.ts
 function isCanvasSurfaceAddress(value) {
   return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "sessionId") && typeof value["sessionId"] === "string" && value["sessionId"].length <= 512 && Array.from(value["sessionId"]).length <= 256 && new RegExp(
@@ -184,16 +319,42 @@ function isCanvasSurfaceMessage(value) {
   return isCanvasSurfacePreviewBeginRequest(value) || isCanvasSurfacePreviewChunkRequest(value) || isCanvasSurfacePreviewEndRequest(value) || isCanvasSurfacePreviewWithdrawRequest(value) || isCanvasSurfacePresentationRequest(value) || isCanvasSurfacePresentationReply(value) || isCanvasSurfacePresentationChanged(value) || isCanvasSurfaceCapabilitiesRequest(value) || isCanvasSurfaceCapabilitiesReply(value) || isCanvasSurfacePrepareRequest(value) || isCanvasSurfaceGeometryRequest(value) || isCanvasSurfaceSelectRequest(value) || isCanvasSurfaceOverviewRequest(value) || isCanvasSurfaceCommitRequest(value) || isCanvasSurfaceReleaseRequest(value) || isCanvasSurfaceReply(value) || isCanvasSurfaceViewportRequest(value) || isCanvasSurfaceViewportReply(value) || isCanvasSurfaceCameraChanged(value);
 }
 
+// integrations/shared/CanvasWorkflowValidation.generated.ts
+function isCanvasWorkflowSurfaceBase(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "file" && Object.hasOwn(value, "file") && isCanvasSurfaceFileReference(value["file"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "blank" && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
+}
+function isCanvasWorkflowMask(value) {
+  return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "key") && typeof value["key"] === "string" && value["key"].length <= 256 && Object.hasOwn(value, "label") && typeof value["label"] === "string" && value["label"].length <= 256 && Object.hasOwn(value, "color") && typeof value["color"] === "string" && value["color"].length <= 7 && new RegExp("^#[a-fA-F0-9]{6}$").test(value["color"]) && Object.hasOwn(value, "opacity") && typeof value["opacity"] === "number" && Number.isFinite(value["opacity"]) && value["opacity"] >= 0 && value["opacity"] <= 1 && Object.hasOwn(value, "initial") && (isCanvasSurfaceFileReference(value["initial"]) || value["initial"] === null);
+}
+function isCanvasWorkflowSurface(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "key") && typeof value["key"] === "string" && value["key"].length <= 256 && Object.hasOwn(value, "label") && typeof value["label"] === "string" && value["label"].length <= 256 && Object.hasOwn(value, "base") && isCanvasWorkflowSurfaceBase(value["base"]) && Object.hasOwn(value, "masks") && Array.isArray(value["masks"]) && value["masks"].length <= 32 && value["masks"].every((item) => isCanvasWorkflowMask(item));
+}
+function isCanvasWorkflowAppearance(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "surface") && typeof value["surface"] === "string" && value["surface"].length <= 256 && Object.hasOwn(value, "mask") && typeof value["mask"] === "string" && value["mask"].length <= 256 && Object.hasOwn(value, "color") && typeof value["color"] === "string" && value["color"].length <= 7 && new RegExp("^#[a-fA-F0-9]{6}$").test(value["color"]) && Object.hasOwn(value, "opacity") && typeof value["opacity"] === "number" && Number.isFinite(value["opacity"]) && value["opacity"] >= 0 && value["opacity"] <= 1;
+}
+function isCanvasWorkflowResizeMode(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "canvas" && Object.hasOwn(value, "anchor") && (value["anchor"] === "top-left" || value["anchor"] === "top" || value["anchor"] === "top-right" || value["anchor"] === "left" || value["anchor"] === "center" || value["anchor"] === "right" || value["anchor"] === "bottom-left" || value["anchor"] === "bottom" || value["anchor"] === "bottom-right") || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "scale" && Object.hasOwn(value, "resampling") && (value["resampling"] === "nearest" || value["resampling"] === "smooth");
+}
+function isCanvasWorkflowCommand(value) {
+  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "sync" && Object.hasOwn(value, "workflow") && typeof value["workflow"] === "string" && value["workflow"].length <= 256 && Object.hasOwn(value, "surfaces") && Array.isArray(value["surfaces"]) && value["surfaces"].length <= 64 && value["surfaces"].every((item) => isCanvasWorkflowSurface(item)) || isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "type") && value["type"] === "activate" && Object.hasOwn(value, "workflow") && typeof value["workflow"] === "string" && value["workflow"].length <= 256 && Object.hasOwn(value, "route") && (value["route"] === "input" || value["route"] === "output") && Object.hasOwn(value, "surface") && (typeof value["surface"] === "string" && value["surface"].length <= 256 || value["surface"] === null) && Object.hasOwn(value, "mask") && (typeof value["mask"] === "string" && value["mask"].length <= 256 || value["mask"] === null) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "appearance" && Object.hasOwn(value, "workflow") && typeof value["workflow"] === "string" && value["workflow"].length <= 256 && Object.hasOwn(value, "masks") && Array.isArray(value["masks"]) && value["masks"].length >= 1 && value["masks"].length <= 2048 && value["masks"].every((item) => isCanvasWorkflowAppearance(item)) || isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "type") && value["type"] === "resize" && Object.hasOwn(value, "workflow") && typeof value["workflow"] === "string" && value["workflow"].length <= 256 && Object.hasOwn(value, "surface") && typeof value["surface"] === "string" && value["surface"].length <= 256 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5 && Object.hasOwn(value, "mode") && isCanvasWorkflowResizeMode(value["mode"]) || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "type") && value["type"] === "hover" && Object.hasOwn(value, "workflow") && typeof value["workflow"] === "string" && value["workflow"].length <= 256 && Object.hasOwn(value, "surface") && typeof value["surface"] === "string" && value["surface"].length <= 256 && Object.hasOwn(value, "mask") && (typeof value["mask"] === "string" && value["mask"].length <= 256 || value["mask"] === null);
+}
+function isCanvasWorkflowMaskLayer(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "key") && typeof value["key"] === "string" && value["key"].length <= 256 && Object.hasOwn(value, "layerId") && typeof value["layerId"] === "string" && value["layerId"].length <= 128;
+}
+function isCanvasWorkflowSyncedSurface(value) {
+  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "key") && typeof value["key"] === "string" && value["key"].length <= 256 && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "masks") && Array.isArray(value["masks"]) && value["masks"].length <= 32 && value["masks"].every((item) => isCanvasWorkflowMaskLayer(item));
+}
+function isCanvasWorkflowResult(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "synced" && Object.hasOwn(value, "surfaces") && Array.isArray(value["surfaces"]) && value["surfaces"].length <= 64 && value["surfaces"].every((item) => isCanvasWorkflowSyncedSurface(item)) || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "activated" || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "applied" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
+}
+function isCanvasWorkflowRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "workflow.request" && Object.hasOwn(value, "command") && isCanvasWorkflowCommand(value["command"]);
+}
+function isCanvasWorkflowReply(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "workflow.reply" && Object.hasOwn(value, "result") && isCanvasWorkflowResult(value["result"]);
+}
+
 // integrations/shared/CanvasValidation.generated.ts
-function isCanvasCapabilities(value) {
-  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "displayOutput") && typeof value["displayOutput"] === "boolean" && Object.hasOwn(value, "insertImageLayer") && typeof value["insertImageLayer"] === "boolean" && Object.hasOwn(value, "positionImageLayer") && typeof value["positionImageLayer"] === "boolean" || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "displayOutput") && typeof value["displayOutput"] === "boolean" && Object.hasOwn(value, "insertImageLayer") && typeof value["insertImageLayer"] === "boolean" && Object.hasOwn(value, "positionImageLayer") && typeof value["positionImageLayer"] === "boolean" && Object.hasOwn(value, "geometry") && typeof value["geometry"] === "boolean";
-}
-function isCanvasDescriptor(value) {
-  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "id") && typeof value["id"] === "string" && value["id"].length <= 128 && Object.hasOwn(value, "label") && typeof value["label"] === "string" && value["label"].length <= 128 && Object.hasOwn(value, "capabilities") && isCanvasCapabilities(value["capabilities"]);
-}
-function isCanvasDocument(value) {
-  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "id") && typeof value["id"] === "string" && value["id"].length <= 128 && Object.hasOwn(value, "geometryRevision") && typeof value["geometryRevision"] === "string" && value["geometryRevision"].length <= 512 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
-}
 function isCanvasFailure(value) {
   return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
 }
@@ -202,9 +363,6 @@ function isCanvasInsertedLayer(value) {
 }
 function isCanvasInsertResult(value) {
   return isCanvasInsertedLayer(value) || isCanvasFailure(value);
-}
-function isCanvasContext(value) {
-  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "canvas") && isCanvasDescriptor(value["canvas"]) && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null);
 }
 function isCanvasInsertImage(value) {
   return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "image") && isCanvasEncodedImage(value["image"]) && Object.hasOwn(value, "layerName") && typeof value["layerName"] === "string" && value["layerName"].length <= 128 && Object.hasOwn(value, "position") && (value["position"] === null || isCanvasImagePosition(value["position"]));
@@ -230,73 +388,11 @@ function isCanvasErrorReply(value) {
 function isCanvasEncodedImage(value) {
   return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "format") && value["format"] === "png" && Object.hasOwn(value, "encoding") && value["encoding"] === "base64" && Object.hasOwn(value, "data") && typeof value["data"] === "string" && value["data"].length <= 89478488;
 }
-function isCanvasSourceTarget(value) {
-  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "selection" || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "current-layer" || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "layer" && Object.hasOwn(value, "layerId") && typeof value["layerId"] === "string" && value["layerId"].length <= 128 || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "composition" || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "composition-from-layer" && Object.hasOwn(value, "layerId") && typeof value["layerId"] === "string" && value["layerId"].length <= 128;
-}
-function isCanvasInputTarget(value) {
-  return isCanvasSourceTarget(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "file" && Object.hasOwn(value, "file") && (typeof value["file"] === "string" && value["file"].length <= 4096 || value["file"] === null);
-}
-function isCanvasPixelRaster(value) {
-  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 65536 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 65536 && Object.hasOwn(value, "format") && (value["format"] === "rgba8" || value["format"] === "coverage8") && Object.hasOwn(value, "data") && typeof value["data"] === "string" && value["data"].length <= 89478488;
-}
-function isCanvasSourceLayer(value) {
-  return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "id") && typeof value["id"] === "string" && value["id"].length <= 128 && Object.hasOwn(value, "name") && typeof value["name"] === "string" && value["name"].length <= 256 && Object.hasOwn(value, "parentId") && (typeof value["parentId"] === "string" && value["parentId"].length <= 128 || value["parentId"] === null) && Object.hasOwn(value, "depth") && typeof value["depth"] === "number" && Number.isSafeInteger(value["depth"]) && value["depth"] >= 0 && value["depth"] <= 128 && Object.hasOwn(value, "visible") && typeof value["visible"] === "boolean";
-}
-function isCanvasSourceContext(value) {
-  return isRecord(value) && Object.keys(value).length === 8 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "targets") && Array.isArray(value["targets"]) && value["targets"].length <= 5 && value["targets"].every(
-    (item) => item === "selection" || item === "current-layer" || item === "layer" || item === "composition" || item === "composition-from-layer"
-  ) && Object.hasOwn(value, "layers") && Array.isArray(value["layers"]) && value["layers"].length <= 4096 && value["layers"].every((item) => isCanvasSourceLayer(item)) && Object.hasOwn(value, "currentLayerId") && (typeof value["currentLayerId"] === "string" && value["currentLayerId"].length <= 128 || value["currentLayerId"] === null) && Object.hasOwn(value, "observesChanges") && typeof value["observesChanges"] === "boolean";
-}
-function isCanvasSourceSnapshot(value) {
-  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "target") && isCanvasSourceTarget(value["target"]) && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "pixels") && isCanvasPixelRaster(value["pixels"]);
-}
-function isCanvasSourceCommand(value) {
-  return isCanvasSourceQuery(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "watch" && Object.hasOwn(value, "enabled") && typeof value["enabled"] === "boolean";
-}
-function isCanvasSourceResult(value) {
-  return isCanvasSourceContext(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "captured" && Object.hasOwn(value, "snapshots") && Array.isArray(value["snapshots"]) && value["snapshots"].length <= 64 && value["snapshots"].every((item) => isCanvasSourceSnapshot(item)) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "watching" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
-}
-function isCanvasSourceRequest(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "source.request" && Object.hasOwn(value, "command") && isCanvasSourceCommand(value["command"]);
-}
-function isCanvasSourceReply(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "source.reply" && Object.hasOwn(value, "result") && isCanvasSourceResult(value["result"]);
-}
-function isCanvasSourceChanged(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && value["requestId"] === 0 && Object.hasOwn(value, "type") && value["type"] === "source.changed" && Object.hasOwn(value, "change") && isCanvasSourceChange(value["change"]);
-}
-function isCanvasSourceChange(value) {
-  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "documentId") && (typeof value["documentId"] === "string" && value["documentId"].length <= 128 || value["documentId"] === null) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512;
-}
-function isCanvasSourceQuery(value) {
-  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "context" || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "type") && value["type"] === "capture" && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "targets") && Array.isArray(value["targets"]) && value["targets"].length <= 64 && value["targets"].every((item) => isCanvasSourceTarget(item)) && Object.hasOwn(value, "maximumSize") && typeof value["maximumSize"] === "number" && Number.isSafeInteger(value["maximumSize"]) && value["maximumSize"] >= 0 && value["maximumSize"] <= 1024;
-}
-function isCanvasInputSource(value) {
-  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "file" && Object.hasOwn(value, "file") && (typeof value["file"] === "string" && value["file"].length <= 4096 || value["file"] === null) || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "kind") && value["kind"] === "canvas" && Object.hasOwn(value, "canvasId") && typeof value["canvasId"] === "string" && value["canvasId"].length <= 128 && Object.hasOwn(value, "documentId") && (typeof value["documentId"] === "string" && value["documentId"].length <= 128 || value["documentId"] === null) && Object.hasOwn(value, "target") && isCanvasSourceTarget(value["target"]);
-}
 function isCanvasImagePosition(value) {
   return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "left") && typeof value["left"] === "number" && Number.isSafeInteger(value["left"]) && value["left"] >= -3e5 && value["left"] <= 3e5 && Object.hasOwn(value, "top") && typeof value["top"] === "number" && Number.isSafeInteger(value["top"]) && value["top"] >= -3e5 && value["top"] <= 3e5;
 }
-function isCanvasDimensions(value) {
-  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
-}
-function isCanvasSelectionBounds(value) {
-  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "left") && typeof value["left"] === "number" && Number.isSafeInteger(value["left"]) && value["left"] >= -3e5 && value["left"] <= 3e5 && Object.hasOwn(value, "top") && typeof value["top"] === "number" && Number.isSafeInteger(value["top"]) && value["top"] >= -3e5 && value["top"] <= 3e5 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
-}
-function isCanvasGeometryCommand(value) {
-  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "context" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "resize" && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "size") && isCanvasDimensions(value["size"]);
-}
-function isCanvasGeometryResult(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "resize") && typeof value["resize"] === "boolean" && Object.hasOwn(value, "selectionSupported") && typeof value["selectionSupported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null) && Object.hasOwn(value, "selection") && (isCanvasSelectionBounds(value["selection"]) || value["selection"] === null) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "resized" && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
-}
-function isCanvasGeometryRequest(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "geometry.request" && Object.hasOwn(value, "command") && isCanvasGeometryCommand(value["command"]);
-}
-function isCanvasGeometryReply(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "geometry.reply" && Object.hasOwn(value, "result") && isCanvasGeometryResult(value["result"]);
-}
 function isCanvasMessage(value) {
-  return isCanvasReadRequest(value) || isCanvasReadReply(value) || isCanvasInsertRequest(value) || isCanvasInsertReply(value) || isCanvasCancelRequest(value) || isCanvasErrorReply(value) || isCanvasSourceRequest(value) || isCanvasSourceReply(value) || isCanvasSourceChanged(value) || isCanvasGeometryRequest(value) || isCanvasGeometryReply(value) || isCanvasSurfaceMessage(value);
+  return isCanvasReadRequest(value) || isCanvasReadReply(value) || isCanvasInsertRequest(value) || isCanvasInsertReply(value) || isCanvasCancelRequest(value) || isCanvasErrorReply(value) || isCanvasSourceRequest(value) || isCanvasSourceReply(value) || isCanvasSourceChanged(value) || isCanvasGeometryRequest(value) || isCanvasGeometryReply(value) || isCanvasEditRequest(value) || isCanvasEditReply(value) || isCanvasEditChanged(value) || isCanvasWorkflowRequest(value) || isCanvasWorkflowReply(value) || isCanvasSurfaceMessage(value);
 }
 
 // integrations/shared/CanvasRemoteChanges.ts
@@ -758,21 +854,171 @@ async function discoverCanvasSurface(port) {
   }
 }
 
+// integrations/shared/CanvasEditConnection.ts
+var CanvasEditConnection = class {
+  /** Borrow the session transport; the client remains the sole owner of request identities. */
+  constructor(port) {
+    this.port = port;
+    this.changes = {
+      subscribe: (listener) => {
+        if (this.#disposed) return { ready: Promise.resolve("unavailable"), stop: () => {
+        } };
+        const entry = { notify: listener };
+        this.#listeners.add(entry);
+        return {
+          ready: Promise.resolve("observing"),
+          stop: () => {
+            this.#listeners.delete(entry);
+          }
+        };
+      }
+    };
+  }
+  changes;
+  #listeners = /* @__PURE__ */ new Set();
+  #revision = -1;
+  #disposed = false;
+  /** Resolve identity from the connected canvas rather than an editor-specific name. */
+  get canvasId() {
+    return this.port.identity();
+  }
+  /** Execute once through the client; a closed connection answers without transport. */
+  execute(command, cancellation) {
+    if (this.#disposed)
+      return Promise.resolve({
+        kind: "failure",
+        status: "unavailable",
+        message: "Canvas edit connection closed."
+      });
+    return this.port.execute(command, cancellation);
+  }
+  /** Publish one pushed state; stale revisions and states from a non-editing canvas are refused. */
+  publish(state) {
+    if (this.#disposed || !this.port.advertised() || state.revision <= this.#revision) return false;
+    this.#revision = state.revision;
+    const snapshot = snapshotCanvasEditState(state);
+    for (const entry of [...this.#listeners])
+      if (this.#listeners.has(entry)) entry.notify(snapshot);
+    return true;
+  }
+  /** Retire every listener before the client rejects its pending requests. */
+  dispose() {
+    this.#disposed = true;
+    this.#listeners.clear();
+  }
+};
+function snapshotCanvasEditState(state) {
+  return Object.freeze({
+    ...state,
+    tools: Object.freeze(state.tools.map((tool) => Object.freeze({ ...tool }))),
+    options: Object.freeze({
+      brush: Object.freeze({ ...state.options.brush }),
+      eraser: Object.freeze({ ...state.options.eraser })
+    }),
+    selection: state.selection ? Object.freeze({ bounds: Object.freeze({ ...state.selection.bounds }) }) : null,
+    history: Object.freeze({ ...state.history }),
+    session: state.session ? Object.freeze({ ...state.session }) : null
+  });
+}
+
+// integrations/shared/CanvasCancelledReplies.ts
+var CANCELLED_INSERT = Object.freeze({
+  status: "cancelled",
+  message: "Canvas insertion cancelled."
+});
+var CANCELLED_GEOMETRY = Object.freeze({
+  kind: "failure",
+  status: "cancelled",
+  message: "Canvas sizing cancelled."
+});
+var CANCELLED_EDIT = Object.freeze({
+  kind: "failure",
+  status: "cancelled",
+  message: "Canvas edit cancelled."
+});
+var CANCELLED_WORKFLOW = Object.freeze({
+  kind: "failure",
+  status: "cancelled",
+  message: "Canvas workflow request cancelled."
+});
+function cancelledCanvasReply(request, session, requestId) {
+  const envelope = { protocol: "sugarcubes.canvas", version: 3, session, requestId };
+  if (request === "geometry.request")
+    return { ...envelope, type: "geometry.reply", result: CANCELLED_GEOMETRY };
+  if (request === "edit.request")
+    return { ...envelope, type: "edit.reply", result: CANCELLED_EDIT };
+  if (request === "workflow.request")
+    return { ...envelope, type: "workflow.reply", result: CANCELLED_WORKFLOW };
+  return { ...envelope, type: "image.reply", result: CANCELLED_INSERT };
+}
+
+// integrations/shared/CanvasCommandHosts.ts
+function canvasGeometryCommands(port) {
+  return {
+    get canvasId() {
+      return port.identity();
+    },
+    async execute(command, cancellation) {
+      if (cancellation?.cancelled()) return CANCELLED_GEOMETRY;
+      const reply = await port.request(
+        { type: "geometry.request", command },
+        "geometry.reply",
+        cancellation
+      );
+      if (reply.type !== "geometry.reply") throw new Error("Invalid canvas geometry reply.");
+      return reply.result;
+    }
+  };
+}
+function canvasWorkflowCommands(port) {
+  return {
+    get canvasId() {
+      return port.identity();
+    },
+    async execute(command, cancellation) {
+      if (cancellation?.cancelled()) return CANCELLED_WORKFLOW;
+      const reply = await port.request(
+        { type: "workflow.request", command },
+        "workflow.reply",
+        cancellation
+      );
+      if (reply.type !== "workflow.reply") throw new Error("Invalid canvas workflow reply.");
+      return reply.result;
+    }
+  };
+}
+function canvasEditCommands(port) {
+  return async (command, cancellation) => {
+    if (cancellation?.cancelled()) return CANCELLED_EDIT;
+    const reply = await port.request({ type: "edit.request", command }, "edit.reply", cancellation);
+    if (reply.type !== "edit.reply") throw new Error("Invalid canvas edit reply.");
+    return reply.result;
+  };
+}
+
 // integrations/shared/CanvasClient.ts
 var CanvasClient = class {
   /** Bind an authenticated session and injected clock without claiming its transport lifetime. */
   constructor(session, port) {
     this.session = session;
     this.port = port;
-    this.geometry = {
-      get canvasId() {
-        return readIdentity();
-      },
-      execute: (command, cancellation) => this.#geometryRequest(command, cancellation)
-    };
     const readIdentity = () => this.#context?.canvas.id ?? "";
+    const commands = {
+      identity: readIdentity,
+      request: (request, reply, cancellation) => this.#request(request, reply, cancellation)
+    };
+    this.geometry = canvasGeometryCommands(commands);
+    this.workflow = canvasWorkflowCommands(commands);
+    this.editing = new CanvasEditConnection({
+      identity: readIdentity,
+      advertised: () => {
+        const capabilities = this.#context?.canvas.capabilities;
+        return !!capabilities && "editing" in capabilities && capabilities.editing;
+      },
+      execute: canvasEditCommands(commands)
+    });
     this.sources = new CanvasSourceConnection({
-      identity: () => this.#context?.canvas.id ?? "",
+      identity: readIdentity,
       execute: (command) => this.#sourceRequest(command),
       listen: (listener) => {
         this.#sourceListeners.add(listener);
@@ -787,6 +1033,8 @@ var CanvasClient = class {
   }
   geometry;
   sources;
+  editing;
+  workflow;
   #surface = null;
   #pending = /* @__PURE__ */ new Map();
   #sourceListeners = /* @__PURE__ */ new Set();
@@ -883,8 +1131,7 @@ var CanvasClient = class {
   }
   /** Insert once using the caller's captured destination rather than a later active document. */
   async insertImage(image, cancellation) {
-    if (cancellation?.cancelled())
-      return { status: "cancelled", message: "Canvas insertion cancelled." };
+    if (cancellation?.cancelled()) return CANCELLED_INSERT;
     const reply = await this.#request({ type: "image.insert", image }, "image.reply", cancellation);
     if (reply.type !== "image.reply") throw new Error("Invalid canvas image reply.");
     return reply.result;
@@ -896,6 +1143,7 @@ var CanvasClient = class {
       for (const listener of this.#sourceListeners) listener(value.change);
       return true;
     }
+    if (value.type === "edit.changed") return this.editing.publish(value.state);
     if (value.type === "surface.presentation.changed") {
       if (!validCanvasSurfacePresentation(value.change) || value.change.sequence <= this.#presentationSequence)
         return false;
@@ -940,13 +1188,13 @@ var CanvasClient = class {
   dispose() {
     if (this.#disposed) return;
     this.sources.dispose();
+    this.editing.dispose();
     this.#presentation?.dispose();
     this.#presentation = null;
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();
-      if (pending.type === "context.reply" || pending.type === "image.reply" || pending.type === "geometry.reply" || pending.type === "surface.reply" || pending.type === "surface.viewport.reply" || pending.type === "surface.presentation.reply" || pending.type === "surface.capabilities.reply")
-        pending.cancel();
+      if (pending.type !== "source.reply") pending.cancel();
       pending.reject(new Error("Canvas connection closed."));
     }
     this.#pending.clear();
@@ -968,18 +1216,6 @@ var CanvasClient = class {
         message: error instanceof Error ? error.message.slice(0, 512) : "Canvas source request failed."
       };
     }
-  }
-  /** Delegate geometry and native sizing through the existing correlated host transport. */
-  async #geometryRequest(command, cancellation) {
-    if (cancellation?.cancelled())
-      return { kind: "failure", status: "cancelled", message: "Canvas sizing cancelled." };
-    const reply = await this.#request(
-      { type: "geometry.request", command },
-      "geometry.reply",
-      cancellation
-    );
-    if (reply.type !== "geometry.reply") throw new Error("Invalid canvas geometry reply.");
-    return reply.result;
   }
   /** Register reply ownership before synchronous transports can answer, and bound every request. */
   #request(request, reply, cancellation) {
@@ -1009,8 +1245,7 @@ var CanvasClient = class {
       stopDeadline = this.port.later(3e4, () => {
         this.#pending.delete(requestId);
         stop();
-        if (request.type === "context.request" || request.type === "image.insert" || request.type === "geometry.request" || request.type.startsWith("surface."))
-          cancel();
+        if (request.type !== "source.request") cancel();
         reject(new Error("Canvas request timed out; it was not retried."));
       });
       stopCancellation = cancellation?.subscribe(() => {
@@ -1038,25 +1273,9 @@ var CanvasClient = class {
           return;
         }
         cancel();
-        if (request.type === "geometry.request") {
-          resolve({
-            protocol: "sugarcubes.canvas",
-            version: 3,
-            session: this.session,
-            requestId,
-            type: "geometry.reply",
-            result: { kind: "failure", status: "cancelled", message: "Canvas sizing cancelled." }
-          });
-          return;
-        }
-        resolve({
-          protocol: "sugarcubes.canvas",
-          version: 3,
-          session: this.session,
-          requestId,
-          type: "image.reply",
-          result: { status: "cancelled", message: "Canvas insertion cancelled." }
-        });
+        if (request.type === "image.insert" || request.type === "geometry.request" || request.type === "edit.request" || request.type === "workflow.request")
+          resolve(cancelledCanvasReply(request.type, this.session, requestId));
+        else reject(new Error("Canvas request cancelled."));
       }) ?? (() => {
       });
       if (!this.#pending.has(requestId)) return;
@@ -1068,8 +1287,8 @@ var CanvasClient = class {
           requestId
         };
         const message = { ...envelope, ...request };
-        if (request.type.startsWith("surface.") && !isCanvasMessage(message))
-          throw new Error("Canvas surface request is invalid.");
+        if ((request.type.startsWith("surface.") || request.type === "edit.request" || request.type === "workflow.request") && !isCanvasMessage(message))
+          throw new Error(`Canvas ${request.type.split(".")[0] ?? ""} request is invalid.`);
         if (isSurfaceRequest(request) && isCanvasPreviewCommand(request) && !canvasPreviewMessageFits(message))
           throw new Error("Canvas preview request exceeds the native transport bounds.");
         if (request.type === "surface.overview" && !canvasSurfaceOverviewMessageFits(message))

@@ -169,8 +169,8 @@ fn valid_panel_rejected_reason(value: &str) -> bool {
 }
 
 /// Preserve a required nullable field instead of defaulting a missing member to null.
-fn deserialize_required_option<'de, D: serde::Deserializer<'de>>(
+fn deserialize_required_option<'de, D: serde::Deserializer<'de>, T: serde::Deserialize<'de>>(
     deserializer: D,
-) -> Result<Option<String>, D::Error> {
+) -> Result<Option<T>, D::Error> {
     serde::Deserialize::deserialize(deserializer)
 }

@@ -55,10 +55,19 @@ import {
   discoverCanvasSurface,
 } from './CanvasSurfaceDiscovery.js';
 import type {
-  CanvasGeometryCommand,
+  CanvasEditRequest,
   CanvasGeometryRequest,
-  CanvasGeometryResult,
+  CanvasWorkflowRequest,
 } from '../contracts/CanvasProtocol.generated.js';
+import type { CanvasWorkflowHost } from '../contracts/CanvasWorkflowSurfaces.js';
+import { CanvasEditConnection } from './CanvasEditConnection.js';
+import { CANCELLED_INSERT, cancelledCanvasReply } from './CanvasCancelledReplies.js';
+import {
+  canvasEditCommands,
+  canvasGeometryCommands,
+  canvasWorkflowCommands,
+  type CanvasCommandPort,
+} from './CanvasCommandHosts.js';
 /** Supply transport and deadlines from their owning runtime. */
 export interface CanvasClientPort {
   send(message: CanvasMessage): void;
@@ -71,6 +80,8 @@ interface Pending {
     | 'image.reply'
     | 'source.reply'
     | 'geometry.reply'
+    | 'edit.reply'
+    | 'workflow.reply'
     | 'surface.capabilities.reply'
     | 'surface.viewport.reply'
     | 'surface.presentation.reply'
@@ -85,6 +96,8 @@ type Request =
   | Pick<CanvasInsertRequest, 'type' | 'image'>
   | Pick<CanvasSourceRequest, 'type' | 'command'>
   | Pick<CanvasGeometryRequest, 'type' | 'command'>
+  | Pick<CanvasEditRequest, 'type' | 'command'>
+  | Pick<CanvasWorkflowRequest, 'type' | 'command'>
   | { readonly type: 'surface.capabilities.request'; readonly schema: 1 }
   | { readonly type: 'surface.presentation.request'; readonly schema: 1; readonly enabled: boolean }
   | CanvasSurfaceCommand;
@@ -92,6 +105,8 @@ type Request =
 export class CanvasClient implements CanvasLayerHost {
   readonly geometry: CanvasGeometryHost;
   readonly sources: CanvasSourceConnection;
+  readonly editing: CanvasEditConnection;
+  readonly workflow: CanvasWorkflowHost;
   #surface: CanvasSurfaceHost | null = null;
   readonly #pending = new Map<number, Pending>();
   readonly #sourceListeners = new Set<(change: CanvasSourceChange) => void>();
@@ -108,15 +123,23 @@ export class CanvasClient implements CanvasLayerHost {
     private readonly session: string,
     private readonly port: CanvasClientPort,
   ) {
-    this.geometry = {
-      get canvasId() {
-        return readIdentity();
-      },
-      execute: (command, cancellation) => this.#geometryRequest(command, cancellation),
-    };
     const readIdentity = (): string => this.#context?.canvas.id ?? '';
+    const commands: CanvasCommandPort = {
+      identity: readIdentity,
+      request: (request, reply, cancellation) => this.#request(request, reply, cancellation),
+    };
+    this.geometry = canvasGeometryCommands(commands);
+    this.workflow = canvasWorkflowCommands(commands);
+    this.editing = new CanvasEditConnection({
+      identity: readIdentity,
+      advertised: () => {
+        const capabilities = this.#context?.canvas.capabilities;
+        return !!capabilities && 'editing' in capabilities && capabilities.editing;
+      },
+      execute: canvasEditCommands(commands),
+    });
     this.sources = new CanvasSourceConnection({
-      identity: () => this.#context?.canvas.id ?? '',
+      identity: readIdentity,
       execute: (command) => this.#sourceRequest(command),
       listen: (listener) => {
         this.#sourceListeners.add(listener);
@@ -219,8 +242,7 @@ export class CanvasClient implements CanvasLayerHost {
     image: CanvasInsertImage,
     cancellation?: CanvasCancellationSource,
   ): Promise<CanvasInsertResult> {
-    if (cancellation?.cancelled())
-      return { status: 'cancelled', message: 'Canvas insertion cancelled.' };
+    if (cancellation?.cancelled()) return CANCELLED_INSERT;
     const reply = await this.#request({ type: 'image.insert', image }, 'image.reply', cancellation);
     if (reply.type !== 'image.reply') throw new Error('Invalid canvas image reply.');
     return reply.result;
@@ -232,6 +254,7 @@ export class CanvasClient implements CanvasLayerHost {
       for (const listener of this.#sourceListeners) listener(value.change);
       return true;
     }
+    if (value.type === 'edit.changed') return this.editing.publish(value.state);
     if (value.type === 'surface.presentation.changed') {
       if (
         !validCanvasSurfacePresentation(value.change) ||
@@ -287,21 +310,15 @@ export class CanvasClient implements CanvasLayerHost {
   dispose(): void {
     if (this.#disposed) return;
     this.sources.dispose();
+    this.editing.dispose();
     this.#presentation?.dispose();
     this.#presentation = null;
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();
-      if (
-        pending.type === 'context.reply' ||
-        pending.type === 'image.reply' ||
-        pending.type === 'geometry.reply' ||
-        pending.type === 'surface.reply' ||
-        pending.type === 'surface.viewport.reply' ||
-        pending.type === 'surface.presentation.reply' ||
-        pending.type === 'surface.capabilities.reply'
-      )
-        pending.cancel();
+      // Source reads and observation acknowledgements end with the session; every other
+      // request may own native work that the host must release.
+      if (pending.type !== 'source.reply') pending.cancel();
       pending.reject(new Error('Canvas connection closed.'));
     }
     this.#pending.clear();
@@ -324,21 +341,6 @@ export class CanvasClient implements CanvasLayerHost {
           error instanceof Error ? error.message.slice(0, 512) : 'Canvas source request failed.',
       };
     }
-  }
-  /** Delegate geometry and native sizing through the existing correlated host transport. */
-  async #geometryRequest(
-    command: CanvasGeometryCommand,
-    cancellation?: CanvasCancellationSource,
-  ): Promise<CanvasGeometryResult> {
-    if (cancellation?.cancelled())
-      return { kind: 'failure', status: 'cancelled', message: 'Canvas sizing cancelled.' };
-    const reply = await this.#request(
-      { type: 'geometry.request', command },
-      'geometry.reply',
-      cancellation,
-    );
-    if (reply.type !== 'geometry.reply') throw new Error('Invalid canvas geometry reply.');
-    return reply.result;
   }
   /** Register reply ownership before synchronous transports can answer, and bound every request. */
   #request(
@@ -370,13 +372,7 @@ export class CanvasClient implements CanvasLayerHost {
       stopDeadline = this.port.later(30000, () => {
         this.#pending.delete(requestId);
         stop();
-        if (
-          request.type === 'context.request' ||
-          request.type === 'image.insert' ||
-          request.type === 'geometry.request' ||
-          request.type.startsWith('surface.')
-        )
-          cancel();
+        if (request.type !== 'source.request') cancel();
         reject(new Error('Canvas request timed out; it was not retried.'));
       });
       stopCancellation =
@@ -405,25 +401,14 @@ export class CanvasClient implements CanvasLayerHost {
             return;
           }
           cancel();
-          if (request.type === 'geometry.request') {
-            resolve({
-              protocol: 'sugarcubes.canvas',
-              version: 3,
-              session: this.session,
-              requestId,
-              type: 'geometry.reply',
-              result: { kind: 'failure', status: 'cancelled', message: 'Canvas sizing cancelled.' },
-            });
-            return;
-          }
-          resolve({
-            protocol: 'sugarcubes.canvas',
-            version: 3,
-            session: this.session,
-            requestId,
-            type: 'image.reply',
-            result: { status: 'cancelled', message: 'Canvas insertion cancelled.' },
-          });
+          if (
+            request.type === 'image.insert' ||
+            request.type === 'geometry.request' ||
+            request.type === 'edit.request' ||
+            request.type === 'workflow.request'
+          )
+            resolve(cancelledCanvasReply(request.type, this.session, requestId));
+          else reject(new Error('Canvas request cancelled.'));
         }) ?? (() => {});
       if (!this.#pending.has(requestId)) return;
       try {
@@ -434,8 +419,14 @@ export class CanvasClient implements CanvasLayerHost {
           requestId,
         } as const;
         const message = { ...envelope, ...request };
-        if (request.type.startsWith('surface.') && !isCanvasMessage(message))
-          throw new Error('Canvas surface request is invalid.');
+        // Commands assembled by consumers are refused locally rather than by a host timeout.
+        if (
+          (request.type.startsWith('surface.') ||
+            request.type === 'edit.request' ||
+            request.type === 'workflow.request') &&
+          !isCanvasMessage(message)
+        )
+          throw new Error(`Canvas ${request.type.split('.')[0] ?? ''} request is invalid.`);
         if (
           isSurfaceRequest(request) &&
           isCanvasPreviewCommand(request) &&

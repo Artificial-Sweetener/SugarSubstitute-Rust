@@ -15,69 +15,28 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Generated protocol validation; edit the authoritative canvas.schema.json. */
 import type * as Contract from '../contracts/CanvasProtocol.generated.js';
+import { isCanvasDocument } from './CanvasDocumentValidation.generated.js';
+import { isCanvasContext } from './CanvasContextValidation.generated.js';
+import {
+  isCanvasSourceRequest,
+  isCanvasSourceReply,
+  isCanvasSourceChanged,
+} from './CanvasSourceValidation.generated.js';
+import {
+  isCanvasGeometryRequest,
+  isCanvasGeometryReply,
+} from './CanvasGeometryValidation.generated.js';
+import {
+  isCanvasEditRequest,
+  isCanvasEditReply,
+  isCanvasEditChanged,
+} from './CanvasEditValidation.generated.js';
+import {
+  isCanvasWorkflowRequest,
+  isCanvasWorkflowReply,
+} from './CanvasWorkflowValidation.generated.js';
 import { isCanvasSurfaceMessage } from './CanvasSurfaceValidation.generated.js';
 import { isRecord } from './ContractRecord.js';
-/** Validate a bounded CanvasCapabilities payload before dispatch. */
-export function isCanvasCapabilities(value: unknown): value is Contract.CanvasCapabilities {
-  return (
-    (isRecord(value) &&
-      Object.keys(value).length === 3 &&
-      Object.hasOwn(value, 'displayOutput') &&
-      typeof value['displayOutput'] === 'boolean' &&
-      Object.hasOwn(value, 'insertImageLayer') &&
-      typeof value['insertImageLayer'] === 'boolean' &&
-      Object.hasOwn(value, 'positionImageLayer') &&
-      typeof value['positionImageLayer'] === 'boolean') ||
-    (isRecord(value) &&
-      Object.keys(value).length === 4 &&
-      Object.hasOwn(value, 'displayOutput') &&
-      typeof value['displayOutput'] === 'boolean' &&
-      Object.hasOwn(value, 'insertImageLayer') &&
-      typeof value['insertImageLayer'] === 'boolean' &&
-      Object.hasOwn(value, 'positionImageLayer') &&
-      typeof value['positionImageLayer'] === 'boolean' &&
-      Object.hasOwn(value, 'geometry') &&
-      typeof value['geometry'] === 'boolean')
-  );
-}
-/** Validate a bounded CanvasDescriptor payload before dispatch. */
-export function isCanvasDescriptor(value: unknown): value is Contract.CanvasDescriptor {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 3 &&
-    Object.hasOwn(value, 'id') &&
-    typeof value['id'] === 'string' &&
-    value['id'].length <= 128 &&
-    Object.hasOwn(value, 'label') &&
-    typeof value['label'] === 'string' &&
-    value['label'].length <= 128 &&
-    Object.hasOwn(value, 'capabilities') &&
-    isCanvasCapabilities(value['capabilities'])
-  );
-}
-/** Validate a bounded CanvasDocument payload before dispatch. */
-export function isCanvasDocument(value: unknown): value is Contract.CanvasDocument {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 4 &&
-    Object.hasOwn(value, 'id') &&
-    typeof value['id'] === 'string' &&
-    value['id'].length <= 128 &&
-    Object.hasOwn(value, 'geometryRevision') &&
-    typeof value['geometryRevision'] === 'string' &&
-    value['geometryRevision'].length <= 512 &&
-    Object.hasOwn(value, 'width') &&
-    typeof value['width'] === 'number' &&
-    Number.isSafeInteger(value['width']) &&
-    value['width'] >= 1 &&
-    value['width'] <= 300000 &&
-    Object.hasOwn(value, 'height') &&
-    typeof value['height'] === 'number' &&
-    Number.isSafeInteger(value['height']) &&
-    value['height'] >= 1 &&
-    value['height'] <= 300000
-  );
-}
 /** Validate a bounded CanvasFailure payload before dispatch. */
 export function isCanvasFailure(value: unknown): value is Contract.CanvasFailure {
   return (
@@ -132,17 +91,6 @@ export function isCanvasInsertedLayer(value: unknown): value is Contract.CanvasI
 /** Validate a bounded CanvasInsertResult payload before dispatch. */
 export function isCanvasInsertResult(value: unknown): value is Contract.CanvasInsertResult {
   return isCanvasInsertedLayer(value) || isCanvasFailure(value);
-}
-/** Validate a bounded CanvasContext payload before dispatch. */
-export function isCanvasContext(value: unknown): value is Contract.CanvasContext {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 2 &&
-    Object.hasOwn(value, 'canvas') &&
-    isCanvasDescriptor(value['canvas']) &&
-    Object.hasOwn(value, 'document') &&
-    (isCanvasDocument(value['document']) || value['document'] === null)
-  );
 }
 /** Validate a bounded CanvasInsertImage payload before dispatch. */
 export function isCanvasInsertImage(value: unknown): value is Contract.CanvasInsertImage {
@@ -314,322 +262,6 @@ export function isCanvasEncodedImage(value: unknown): value is Contract.CanvasEn
     value['data'].length <= 89478488
   );
 }
-/** Validate a bounded CanvasSourceTarget payload before dispatch. */
-export function isCanvasSourceTarget(value: unknown): value is Contract.CanvasSourceTarget {
-  return (
-    (isRecord(value) &&
-      Object.keys(value).length === 1 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'selection') ||
-    (isRecord(value) &&
-      Object.keys(value).length === 1 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'current-layer') ||
-    (isRecord(value) &&
-      Object.keys(value).length === 2 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'layer' &&
-      Object.hasOwn(value, 'layerId') &&
-      typeof value['layerId'] === 'string' &&
-      value['layerId'].length <= 128) ||
-    (isRecord(value) &&
-      Object.keys(value).length === 1 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'composition') ||
-    (isRecord(value) &&
-      Object.keys(value).length === 2 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'composition-from-layer' &&
-      Object.hasOwn(value, 'layerId') &&
-      typeof value['layerId'] === 'string' &&
-      value['layerId'].length <= 128)
-  );
-}
-/** Validate a bounded CanvasInputTarget payload before dispatch. */
-export function isCanvasInputTarget(value: unknown): value is Contract.CanvasInputTarget {
-  return (
-    isCanvasSourceTarget(value) ||
-    (isRecord(value) &&
-      Object.keys(value).length === 2 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'file' &&
-      Object.hasOwn(value, 'file') &&
-      ((typeof value['file'] === 'string' && value['file'].length <= 4096) ||
-        value['file'] === null))
-  );
-}
-/** Validate a bounded CanvasPixelRaster payload before dispatch. */
-export function isCanvasPixelRaster(value: unknown): value is Contract.CanvasPixelRaster {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 4 &&
-    Object.hasOwn(value, 'width') &&
-    typeof value['width'] === 'number' &&
-    Number.isSafeInteger(value['width']) &&
-    value['width'] >= 1 &&
-    value['width'] <= 65536 &&
-    Object.hasOwn(value, 'height') &&
-    typeof value['height'] === 'number' &&
-    Number.isSafeInteger(value['height']) &&
-    value['height'] >= 1 &&
-    value['height'] <= 65536 &&
-    Object.hasOwn(value, 'format') &&
-    (value['format'] === 'rgba8' || value['format'] === 'coverage8') &&
-    Object.hasOwn(value, 'data') &&
-    typeof value['data'] === 'string' &&
-    value['data'].length <= 89478488
-  );
-}
-/** Validate a bounded CanvasSourceLayer payload before dispatch. */
-export function isCanvasSourceLayer(value: unknown): value is Contract.CanvasSourceLayer {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 5 &&
-    Object.hasOwn(value, 'id') &&
-    typeof value['id'] === 'string' &&
-    value['id'].length <= 128 &&
-    Object.hasOwn(value, 'name') &&
-    typeof value['name'] === 'string' &&
-    value['name'].length <= 256 &&
-    Object.hasOwn(value, 'parentId') &&
-    ((typeof value['parentId'] === 'string' && value['parentId'].length <= 128) ||
-      value['parentId'] === null) &&
-    Object.hasOwn(value, 'depth') &&
-    typeof value['depth'] === 'number' &&
-    Number.isSafeInteger(value['depth']) &&
-    value['depth'] >= 0 &&
-    value['depth'] <= 128 &&
-    Object.hasOwn(value, 'visible') &&
-    typeof value['visible'] === 'boolean'
-  );
-}
-/** Validate a bounded CanvasSourceContext payload before dispatch. */
-export function isCanvasSourceContext(value: unknown): value is Contract.CanvasSourceContext {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 8 &&
-    Object.hasOwn(value, 'kind') &&
-    value['kind'] === 'context' &&
-    Object.hasOwn(value, 'supported') &&
-    typeof value['supported'] === 'boolean' &&
-    Object.hasOwn(value, 'document') &&
-    (isCanvasDocument(value['document']) || value['document'] === null) &&
-    Object.hasOwn(value, 'revision') &&
-    typeof value['revision'] === 'string' &&
-    value['revision'].length <= 512 &&
-    Object.hasOwn(value, 'targets') &&
-    Array.isArray(value['targets']) &&
-    value['targets'].length <= 5 &&
-    value['targets'].every(
-      (item: unknown) =>
-        item === 'selection' ||
-        item === 'current-layer' ||
-        item === 'layer' ||
-        item === 'composition' ||
-        item === 'composition-from-layer',
-    ) &&
-    Object.hasOwn(value, 'layers') &&
-    Array.isArray(value['layers']) &&
-    value['layers'].length <= 4096 &&
-    value['layers'].every((item: unknown) => isCanvasSourceLayer(item)) &&
-    Object.hasOwn(value, 'currentLayerId') &&
-    ((typeof value['currentLayerId'] === 'string' && value['currentLayerId'].length <= 128) ||
-      value['currentLayerId'] === null) &&
-    Object.hasOwn(value, 'observesChanges') &&
-    typeof value['observesChanges'] === 'boolean'
-  );
-}
-/** Validate a bounded CanvasSourceSnapshot payload before dispatch. */
-export function isCanvasSourceSnapshot(value: unknown): value is Contract.CanvasSourceSnapshot {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 4 &&
-    Object.hasOwn(value, 'target') &&
-    isCanvasSourceTarget(value['target']) &&
-    Object.hasOwn(value, 'document') &&
-    isCanvasDocument(value['document']) &&
-    Object.hasOwn(value, 'revision') &&
-    typeof value['revision'] === 'string' &&
-    value['revision'].length <= 512 &&
-    Object.hasOwn(value, 'pixels') &&
-    isCanvasPixelRaster(value['pixels'])
-  );
-}
-/** Validate a bounded CanvasSourceCommand payload before dispatch. */
-export function isCanvasSourceCommand(value: unknown): value is Contract.CanvasSourceCommand {
-  return (
-    isCanvasSourceQuery(value) ||
-    (isRecord(value) &&
-      Object.keys(value).length === 2 &&
-      Object.hasOwn(value, 'type') &&
-      value['type'] === 'watch' &&
-      Object.hasOwn(value, 'enabled') &&
-      typeof value['enabled'] === 'boolean')
-  );
-}
-/** Validate a bounded CanvasSourceResult payload before dispatch. */
-export function isCanvasSourceResult(value: unknown): value is Contract.CanvasSourceResult {
-  return (
-    isCanvasSourceContext(value) ||
-    (isRecord(value) &&
-      Object.keys(value).length === 2 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'captured' &&
-      Object.hasOwn(value, 'snapshots') &&
-      Array.isArray(value['snapshots']) &&
-      value['snapshots'].length <= 64 &&
-      value['snapshots'].every((item: unknown) => isCanvasSourceSnapshot(item))) ||
-    (isRecord(value) &&
-      Object.keys(value).length === 2 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'watching' &&
-      Object.hasOwn(value, 'supported') &&
-      typeof value['supported'] === 'boolean') ||
-    (isRecord(value) &&
-      Object.keys(value).length === 3 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'failure' &&
-      Object.hasOwn(value, 'status') &&
-      (value['status'] === 'unavailable' ||
-        value['status'] === 'unsupported' ||
-        value['status'] === 'stale' ||
-        value['status'] === 'cancelled' ||
-        value['status'] === 'error') &&
-      Object.hasOwn(value, 'message') &&
-      typeof value['message'] === 'string' &&
-      value['message'].length <= 512)
-  );
-}
-/** Validate a bounded CanvasSourceRequest payload before dispatch. */
-export function isCanvasSourceRequest(value: unknown): value is Contract.CanvasSourceRequest {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 6 &&
-    Object.hasOwn(value, 'protocol') &&
-    value['protocol'] === 'sugarcubes.canvas' &&
-    Object.hasOwn(value, 'version') &&
-    value['version'] === 3 &&
-    Object.hasOwn(value, 'session') &&
-    typeof value['session'] === 'string' &&
-    value['session'].length <= 80 &&
-    new RegExp('^[a-zA-Z0-9-]{16,80}$').test(value['session']) &&
-    Object.hasOwn(value, 'requestId') &&
-    typeof value['requestId'] === 'number' &&
-    Number.isSafeInteger(value['requestId']) &&
-    value['requestId'] >= 1 &&
-    value['requestId'] <= 2147483647 &&
-    Object.hasOwn(value, 'type') &&
-    value['type'] === 'source.request' &&
-    Object.hasOwn(value, 'command') &&
-    isCanvasSourceCommand(value['command'])
-  );
-}
-/** Validate a bounded CanvasSourceReply payload before dispatch. */
-export function isCanvasSourceReply(value: unknown): value is Contract.CanvasSourceReply {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 6 &&
-    Object.hasOwn(value, 'protocol') &&
-    value['protocol'] === 'sugarcubes.canvas' &&
-    Object.hasOwn(value, 'version') &&
-    value['version'] === 3 &&
-    Object.hasOwn(value, 'session') &&
-    typeof value['session'] === 'string' &&
-    value['session'].length <= 80 &&
-    new RegExp('^[a-zA-Z0-9-]{16,80}$').test(value['session']) &&
-    Object.hasOwn(value, 'requestId') &&
-    typeof value['requestId'] === 'number' &&
-    Number.isSafeInteger(value['requestId']) &&
-    value['requestId'] >= 1 &&
-    value['requestId'] <= 2147483647 &&
-    Object.hasOwn(value, 'type') &&
-    value['type'] === 'source.reply' &&
-    Object.hasOwn(value, 'result') &&
-    isCanvasSourceResult(value['result'])
-  );
-}
-/** Validate a bounded CanvasSourceChanged payload before dispatch. */
-export function isCanvasSourceChanged(value: unknown): value is Contract.CanvasSourceChanged {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 6 &&
-    Object.hasOwn(value, 'protocol') &&
-    value['protocol'] === 'sugarcubes.canvas' &&
-    Object.hasOwn(value, 'version') &&
-    value['version'] === 3 &&
-    Object.hasOwn(value, 'session') &&
-    typeof value['session'] === 'string' &&
-    value['session'].length <= 80 &&
-    new RegExp('^[a-zA-Z0-9-]{16,80}$').test(value['session']) &&
-    Object.hasOwn(value, 'requestId') &&
-    value['requestId'] === 0 &&
-    Object.hasOwn(value, 'type') &&
-    value['type'] === 'source.changed' &&
-    Object.hasOwn(value, 'change') &&
-    isCanvasSourceChange(value['change'])
-  );
-}
-/** Validate a bounded CanvasSourceChange payload before dispatch. */
-export function isCanvasSourceChange(value: unknown): value is Contract.CanvasSourceChange {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 2 &&
-    Object.hasOwn(value, 'documentId') &&
-    ((typeof value['documentId'] === 'string' && value['documentId'].length <= 128) ||
-      value['documentId'] === null) &&
-    Object.hasOwn(value, 'revision') &&
-    typeof value['revision'] === 'string' &&
-    value['revision'].length <= 512
-  );
-}
-/** Validate a bounded CanvasSourceQuery payload before dispatch. */
-export function isCanvasSourceQuery(value: unknown): value is Contract.CanvasSourceQuery {
-  return (
-    (isRecord(value) &&
-      Object.keys(value).length === 1 &&
-      Object.hasOwn(value, 'type') &&
-      value['type'] === 'context') ||
-    (isRecord(value) &&
-      Object.keys(value).length === 4 &&
-      Object.hasOwn(value, 'type') &&
-      value['type'] === 'capture' &&
-      Object.hasOwn(value, 'document') &&
-      isCanvasDocument(value['document']) &&
-      Object.hasOwn(value, 'targets') &&
-      Array.isArray(value['targets']) &&
-      value['targets'].length <= 64 &&
-      value['targets'].every((item: unknown) => isCanvasSourceTarget(item)) &&
-      Object.hasOwn(value, 'maximumSize') &&
-      typeof value['maximumSize'] === 'number' &&
-      Number.isSafeInteger(value['maximumSize']) &&
-      value['maximumSize'] >= 0 &&
-      value['maximumSize'] <= 1024)
-  );
-}
-/** Validate a bounded CanvasInputSource payload before dispatch. */
-export function isCanvasInputSource(value: unknown): value is Contract.CanvasInputSource {
-  return (
-    (isRecord(value) &&
-      Object.keys(value).length === 2 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'file' &&
-      Object.hasOwn(value, 'file') &&
-      ((typeof value['file'] === 'string' && value['file'].length <= 4096) ||
-        value['file'] === null)) ||
-    (isRecord(value) &&
-      Object.keys(value).length === 4 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'canvas' &&
-      Object.hasOwn(value, 'canvasId') &&
-      typeof value['canvasId'] === 'string' &&
-      value['canvasId'].length <= 128 &&
-      Object.hasOwn(value, 'documentId') &&
-      ((typeof value['documentId'] === 'string' && value['documentId'].length <= 128) ||
-        value['documentId'] === null) &&
-      Object.hasOwn(value, 'target') &&
-      isCanvasSourceTarget(value['target']))
-  );
-}
 /** Validate a bounded CanvasImagePosition payload before dispatch. */
 export function isCanvasImagePosition(value: unknown): value is Contract.CanvasImagePosition {
   return (
@@ -647,207 +279,6 @@ export function isCanvasImagePosition(value: unknown): value is Contract.CanvasI
     value['top'] <= 300000
   );
 }
-/** Validate a bounded CanvasDimensions payload before dispatch. */
-export function isCanvasDimensions(value: unknown): value is Contract.CanvasDimensions {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 2 &&
-    Object.hasOwn(value, 'width') &&
-    typeof value['width'] === 'number' &&
-    Number.isSafeInteger(value['width']) &&
-    value['width'] >= 1 &&
-    value['width'] <= 300000 &&
-    Object.hasOwn(value, 'height') &&
-    typeof value['height'] === 'number' &&
-    Number.isSafeInteger(value['height']) &&
-    value['height'] >= 1 &&
-    value['height'] <= 300000
-  );
-}
-/** Validate a bounded CanvasDimensionFieldValues payload before dispatch. */
-export function isCanvasDimensionFieldValues(
-  value: unknown,
-): value is Contract.CanvasDimensionFieldValues {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 2 &&
-    Object.hasOwn(value, 'width') &&
-    typeof value['width'] === 'number' &&
-    Number.isSafeInteger(value['width']) &&
-    value['width'] >= 0 &&
-    value['width'] <= 300000 &&
-    Object.hasOwn(value, 'height') &&
-    typeof value['height'] === 'number' &&
-    Number.isSafeInteger(value['height']) &&
-    value['height'] >= 0 &&
-    value['height'] <= 300000
-  );
-}
-/** Validate a bounded CanvasSelectionBounds payload before dispatch. */
-export function isCanvasSelectionBounds(value: unknown): value is Contract.CanvasSelectionBounds {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 4 &&
-    Object.hasOwn(value, 'left') &&
-    typeof value['left'] === 'number' &&
-    Number.isSafeInteger(value['left']) &&
-    value['left'] >= -300000 &&
-    value['left'] <= 300000 &&
-    Object.hasOwn(value, 'top') &&
-    typeof value['top'] === 'number' &&
-    Number.isSafeInteger(value['top']) &&
-    value['top'] >= -300000 &&
-    value['top'] <= 300000 &&
-    Object.hasOwn(value, 'width') &&
-    typeof value['width'] === 'number' &&
-    Number.isSafeInteger(value['width']) &&
-    value['width'] >= 1 &&
-    value['width'] <= 300000 &&
-    Object.hasOwn(value, 'height') &&
-    typeof value['height'] === 'number' &&
-    Number.isSafeInteger(value['height']) &&
-    value['height'] >= 1 &&
-    value['height'] <= 300000
-  );
-}
-/** Validate a bounded CanvasDimensionLimits payload before dispatch. */
-export function isCanvasDimensionLimits(value: unknown): value is Contract.CanvasDimensionLimits {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 3 &&
-    Object.hasOwn(value, 'minimum') &&
-    typeof value['minimum'] === 'number' &&
-    Number.isSafeInteger(value['minimum']) &&
-    value['minimum'] >= 1 &&
-    value['minimum'] <= 300000 &&
-    Object.hasOwn(value, 'maximum') &&
-    typeof value['maximum'] === 'number' &&
-    Number.isSafeInteger(value['maximum']) &&
-    value['maximum'] >= 1 &&
-    value['maximum'] <= 300000 &&
-    Object.hasOwn(value, 'multiple') &&
-    typeof value['multiple'] === 'number' &&
-    Number.isSafeInteger(value['multiple']) &&
-    value['multiple'] >= 1 &&
-    value['multiple'] <= 300000
-  );
-}
-/** Validate a bounded CanvasScaleOutput payload before dispatch. */
-export function isCanvasScaleOutput(value: unknown): value is Contract.CanvasScaleOutput {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 2 &&
-    Object.hasOwn(value, 'id') &&
-    typeof value['id'] === 'string' &&
-    value['id'].length <= 512 &&
-    Object.hasOwn(value, 'label') &&
-    typeof value['label'] === 'string' &&
-    value['label'].length <= 256
-  );
-}
-/** Validate a bounded CanvasGeometryCommand payload before dispatch. */
-export function isCanvasGeometryCommand(value: unknown): value is Contract.CanvasGeometryCommand {
-  return (
-    (isRecord(value) &&
-      Object.keys(value).length === 1 &&
-      Object.hasOwn(value, 'type') &&
-      value['type'] === 'context') ||
-    (isRecord(value) &&
-      Object.keys(value).length === 3 &&
-      Object.hasOwn(value, 'type') &&
-      value['type'] === 'resize' &&
-      Object.hasOwn(value, 'document') &&
-      isCanvasDocument(value['document']) &&
-      Object.hasOwn(value, 'size') &&
-      isCanvasDimensions(value['size']))
-  );
-}
-/** Validate a bounded CanvasGeometryResult payload before dispatch. */
-export function isCanvasGeometryResult(value: unknown): value is Contract.CanvasGeometryResult {
-  return (
-    (isRecord(value) &&
-      Object.keys(value).length === 6 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'context' &&
-      Object.hasOwn(value, 'supported') &&
-      typeof value['supported'] === 'boolean' &&
-      Object.hasOwn(value, 'resize') &&
-      typeof value['resize'] === 'boolean' &&
-      Object.hasOwn(value, 'selectionSupported') &&
-      typeof value['selectionSupported'] === 'boolean' &&
-      Object.hasOwn(value, 'document') &&
-      (isCanvasDocument(value['document']) || value['document'] === null) &&
-      Object.hasOwn(value, 'selection') &&
-      (isCanvasSelectionBounds(value['selection']) || value['selection'] === null)) ||
-    (isRecord(value) &&
-      Object.keys(value).length === 2 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'resized' &&
-      Object.hasOwn(value, 'document') &&
-      isCanvasDocument(value['document'])) ||
-    (isRecord(value) &&
-      Object.keys(value).length === 3 &&
-      Object.hasOwn(value, 'kind') &&
-      value['kind'] === 'failure' &&
-      Object.hasOwn(value, 'status') &&
-      (value['status'] === 'unavailable' ||
-        value['status'] === 'unsupported' ||
-        value['status'] === 'stale' ||
-        value['status'] === 'cancelled' ||
-        value['status'] === 'error') &&
-      Object.hasOwn(value, 'message') &&
-      typeof value['message'] === 'string' &&
-      value['message'].length <= 512)
-  );
-}
-/** Validate a bounded CanvasGeometryRequest payload before dispatch. */
-export function isCanvasGeometryRequest(value: unknown): value is Contract.CanvasGeometryRequest {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 6 &&
-    Object.hasOwn(value, 'protocol') &&
-    value['protocol'] === 'sugarcubes.canvas' &&
-    Object.hasOwn(value, 'version') &&
-    value['version'] === 3 &&
-    Object.hasOwn(value, 'session') &&
-    typeof value['session'] === 'string' &&
-    value['session'].length <= 80 &&
-    new RegExp('^[a-zA-Z0-9-]{16,80}$').test(value['session']) &&
-    Object.hasOwn(value, 'requestId') &&
-    typeof value['requestId'] === 'number' &&
-    Number.isSafeInteger(value['requestId']) &&
-    value['requestId'] >= 1 &&
-    value['requestId'] <= 2147483647 &&
-    Object.hasOwn(value, 'type') &&
-    value['type'] === 'geometry.request' &&
-    Object.hasOwn(value, 'command') &&
-    isCanvasGeometryCommand(value['command'])
-  );
-}
-/** Validate a bounded CanvasGeometryReply payload before dispatch. */
-export function isCanvasGeometryReply(value: unknown): value is Contract.CanvasGeometryReply {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 6 &&
-    Object.hasOwn(value, 'protocol') &&
-    value['protocol'] === 'sugarcubes.canvas' &&
-    Object.hasOwn(value, 'version') &&
-    value['version'] === 3 &&
-    Object.hasOwn(value, 'session') &&
-    typeof value['session'] === 'string' &&
-    value['session'].length <= 80 &&
-    new RegExp('^[a-zA-Z0-9-]{16,80}$').test(value['session']) &&
-    Object.hasOwn(value, 'requestId') &&
-    typeof value['requestId'] === 'number' &&
-    Number.isSafeInteger(value['requestId']) &&
-    value['requestId'] >= 1 &&
-    value['requestId'] <= 2147483647 &&
-    Object.hasOwn(value, 'type') &&
-    value['type'] === 'geometry.reply' &&
-    Object.hasOwn(value, 'result') &&
-    isCanvasGeometryResult(value['result'])
-  );
-}
 /** Validate a bounded CanvasMessage payload before dispatch. */
 export function isCanvasMessage(value: unknown): value is Contract.CanvasMessage {
   return (
@@ -862,6 +293,76 @@ export function isCanvasMessage(value: unknown): value is Contract.CanvasMessage
     isCanvasSourceChanged(value) ||
     isCanvasGeometryRequest(value) ||
     isCanvasGeometryReply(value) ||
+    isCanvasEditRequest(value) ||
+    isCanvasEditReply(value) ||
+    isCanvasEditChanged(value) ||
+    isCanvasWorkflowRequest(value) ||
+    isCanvasWorkflowReply(value) ||
     isCanvasSurfaceMessage(value)
   );
 }
+export { isCanvasDocument } from './CanvasDocumentValidation.generated.js';
+export {
+  isCanvasLayerCapabilities,
+  isCanvasGeometryCapabilities,
+  isCanvasEditingCapabilities,
+  isCanvasCapabilities,
+  isCanvasDescriptor,
+  isCanvasContext,
+} from './CanvasContextValidation.generated.js';
+export {
+  isCanvasSourceTarget,
+  isCanvasInputTarget,
+  isCanvasPixelRaster,
+  isCanvasSourceLayer,
+  isCanvasSourceContext,
+  isCanvasSourceSnapshot,
+  isCanvasSourceCommand,
+  isCanvasSourceResult,
+  isCanvasSourceRequest,
+  isCanvasSourceReply,
+  isCanvasSourceChanged,
+  isCanvasSourceChange,
+  isCanvasSourceQuery,
+  isCanvasInputSource,
+} from './CanvasSourceValidation.generated.js';
+export {
+  isCanvasDimensions,
+  isCanvasDimensionFieldValues,
+  isCanvasSelectionBounds,
+  isCanvasDimensionLimits,
+  isCanvasScaleOutput,
+  isCanvasGeometryCommand,
+  isCanvasGeometryResult,
+  isCanvasGeometryRequest,
+  isCanvasGeometryReply,
+} from './CanvasGeometryValidation.generated.js';
+export {
+  isCanvasToolId,
+  isCanvasBrushOptions,
+  isCanvasEditCommand,
+  isCanvasEditTool,
+  isCanvasEditToolOptions,
+  isCanvasEditSelectionBounds,
+  isCanvasEditSelection,
+  isCanvasEditHistory,
+  isCanvasEditSession,
+  isCanvasEditState,
+  isCanvasEditResult,
+  isCanvasEditRequest,
+  isCanvasEditReply,
+  isCanvasEditChanged,
+} from './CanvasEditValidation.generated.js';
+export {
+  isCanvasWorkflowSurfaceBase,
+  isCanvasWorkflowMask,
+  isCanvasWorkflowSurface,
+  isCanvasWorkflowAppearance,
+  isCanvasWorkflowResizeMode,
+  isCanvasWorkflowCommand,
+  isCanvasWorkflowMaskLayer,
+  isCanvasWorkflowSyncedSurface,
+  isCanvasWorkflowResult,
+  isCanvasWorkflowRequest,
+  isCanvasWorkflowReply,
+} from './CanvasWorkflowValidation.generated.js';

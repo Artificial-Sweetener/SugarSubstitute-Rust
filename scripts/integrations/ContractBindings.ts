@@ -136,12 +136,26 @@ export interface ContractOutput {
   readonly recordImport?: string;
   /** Place related validators in explicitly owned sibling modules; retain public guard exports. */
   readonly validationModules?: readonly ContractValidationModule[];
-  /** Import one separately generated union while keeping a single public root guard. */
+  /**
+   * Import separately generated definitions, such as a sibling message union or a shared value,
+   * while keeping a single public root guard. Every named definition must be referenced.
+   */
   readonly external?: {
-    readonly name: string;
+    readonly names: readonly string[];
     readonly typesImport: string;
     readonly validationImport: string;
   };
+}
+
+/** Collect every local definition reference so unused external imports are refused. */
+function referencedDefinitions(value: unknown, names: Set<string>): Set<string> {
+  if (Array.isArray(value)) for (const item of value) referencedDefinitions(item, names);
+  else if (value && typeof value === 'object')
+    for (const [key, item] of Object.entries(value)) {
+      if (key === '$ref' && typeof item === 'string') names.add(reference(item));
+      else referencedDefinitions(item, names);
+    }
+  return names;
 }
 /** Generate deterministic values and guards through the repository's shared schema vocabulary. */
 export async function contractBindings(
@@ -152,18 +166,26 @@ export async function contractBindings(
   const definitions = Object.entries(record(schema.$defs));
   const header = readFileSync(fileURLToPath(import.meta.url), 'utf8').split('/**')[0] ?? '';
   const external = options.external;
+  const referenced = referencedDefinitions(schema, new Set());
   if (
     external &&
-    (!/^[A-Za-z]+$/.test(external.name) ||
+    (!external.names.length ||
+      new Set(external.names).size !== external.names.length ||
+      external.names.some(
+        (name) =>
+          !/^[A-Za-z]+$/.test(name) ||
+          !referenced.has(name) ||
+          definitions.some(([local]) => local === name),
+      ) ||
       !/^\.\.?\/[A-Za-z0-9./-]+\.js$/.test(external.typesImport) ||
       !/^\.\.?\/[A-Za-z0-9./-]+\.js$/.test(external.validationImport))
   )
-    throw new Error('Invalid external contract union.');
+    throw new Error('Invalid external contract definitions.');
   const externalType = external
-    ? `import type { ${external.name} } from '${external.typesImport}';\n`
+    ? `import type { ${external.names.join(', ')} } from '${external.typesImport}';\n`
     : '';
   const externalGuard = external
-    ? `import { is${external.name} } from '${external.validationImport}';\n`
+    ? `import { ${external.names.map((name) => `is${name}`).join(', ')} } from '${external.validationImport}';\n`
     : '';
   if (options.recordImport && !/^\.\.?\/[A-Za-z0-9./-]+\.js$/.test(options.recordImport))
     throw new Error('Invalid shared record guard.');
@@ -191,7 +213,9 @@ export async function contractBindings(
         ...options,
         header: validationHeader,
         recordGuard,
-        external: external ? { name: external.name, guard: externalGuard } : undefined,
+        external: external
+          ? { names: new Set(external.names), validationImport: external.validationImport }
+          : undefined,
       })
     : {
         [options.validation]: `${validationHeader}import type * as Contract from '${options.importPath}';\n${externalGuard}${recordGuard}${guards.map(({ source }) => source).join('\n')}`,
