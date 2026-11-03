@@ -3,11 +3,17 @@
 //! Run deferred coverage work and selection tracing as owned blocking jobs, one of each at a
 //! time, beside the frame pipeline's CPU lanes.
 //!
-//! A tool's newest request replaces one still waiting to start. A finished edit applies to the
-//! document it read, shown or parked, and only while that document still shows the revision it
-//! read; anything else is stale and changes nothing.
+//! Deferred edits wait in request order, so successive gestures each land: one requested while
+//! earlier work of its document was still running is rebased onto that document's current
+//! revision just before it starts, and so reads the earlier result. A newer preview replaces a
+//! waiting preview of the same document, because only the latest preview is ever staged. A
+//! finished edit applies to the document it read, shown or parked, and only while that document
+//! still shows the revision it read; anything else is stale and changes nothing.
 use super::*;
-use sugarsubstitute_canvas::{BoundaryWork, CoverageBoundary, DeferredEdit, PreparedEdit};
+use std::collections::VecDeque;
+use sugarsubstitute_canvas::{
+    BoundaryWork, CoverageBoundary, DeferredEdit, Disposition, Document, PreparedEdit,
+};
 use sugarsubstitute_execution::OwnedInputError;
 use sugarsubstitute_image_ops::Coverage;
 
@@ -20,12 +26,15 @@ const TRACE_BYTES_PER_PIXEL: u64 = 1;
 const WORK_BASE_BYTES: u64 = 1 << 20;
 /// Longest a coverage job may run.
 const WORK_DEADLINE: Duration = Duration::from_secs(120);
+/// Most deferred edits that may wait behind the running one.
+const WAITING_EDITS: usize = 32;
 
 /// The running and waiting coverage work and the running selection trace.
 #[derive(Default)]
 pub(super) struct EditingWork {
     running: Option<(u64, OwnedJob<PreparedEdit, WorkError>)>,
-    queued: Option<DeferredEdit>,
+    /// Edits waiting to start, oldest first.
+    waiting: VecDeque<DeferredEdit>,
     tracing: Option<([u8; 32], OwnedJob<CoverageBoundary, WorkError>)>,
     trace: Option<BoundaryWork>,
     /// Working storage the waiting trace reserves.
@@ -33,9 +42,21 @@ pub(super) struct EditingWork {
 }
 
 impl EditingWork {
-    /// Keep the newest deferred request until a job can start it.
-    pub(super) fn queue(&mut self, work: DeferredEdit) {
-        self.queued = Some(work);
+    /// Wait for a job slot behind every earlier edit. A preview replaces waiting previews of its
+    /// document. Returns `false`, keeping the queue unchanged, when it is full.
+    pub(super) fn queue(&mut self, work: DeferredEdit) -> bool {
+        if work.disposition() == Disposition::Preview {
+            let identity = work.base().identity();
+            self.waiting.retain(|waiting| {
+                waiting.disposition() != Disposition::Preview
+                    || waiting.base().identity() != identity
+            });
+        }
+        if self.waiting.len() >= WAITING_EDITS {
+            return false;
+        }
+        self.waiting.push_back(work);
+        true
     }
 
     pub(super) fn in_flight(&self) -> bool {
@@ -50,7 +71,7 @@ impl EditingWork {
         if let Some((_, job)) = &self.tracing {
             job.cancel();
         }
-        self.queued = None;
+        self.waiting.clear();
         self.trace = None;
     }
 }
@@ -68,16 +89,37 @@ impl Session {
             .ok_or_else(|| "Coverage work reservation overflow".into())
     }
 
-    /// Start the waiting deferred edit and selection trace when their slots are free.
-    /// Saturated admission keeps them waiting for the completion wake.
+    /// The document with snapshot identity `identity`, shown or parked.
+    fn editing_document(&self, identity: u64) -> Option<&Document> {
+        let shown = self.document.scene.as_ref().map(|scene| &scene.document);
+        shown.filter(|document| document.snapshot().identity() == identity).or_else(|| {
+            self.inputs.parked_by_identity(identity)?.scene.as_ref().map(|scene| &scene.document)
+        })
+    }
+
+    /// Start the oldest waiting deferred edit and the waiting selection trace when their slots
+    /// are free. Saturated admission keeps them waiting for the completion wake.
     pub(super) fn submit_editing_work(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing {
             return Ok(());
         }
-        if self.editing.work.running.is_none()
-            && let Some(work) = &self.editing.work.queued
+        while self.editing.work.running.is_none()
+            && let Some(mut work) = self.editing.work.waiting.pop_front()
         {
             let identity = work.base().identity();
+            // Earlier work of this document may have landed since this was requested.
+            match self.editing_document(identity).map(|document| work.rebase(document)) {
+                Some(Ok(())) => {}
+                Some(Err(cause)) => return Err(cause.into()),
+                None => {
+                    tracing::debug!(
+                        operation = "canvas_coverage_work",
+                        document_id = identity,
+                        "Coverage work of a retired document was dropped"
+                    );
+                    continue;
+                }
+            }
             let bytes = Self::work_bytes(work.base().extent(), WORK_BYTES_PER_PIXEL)?;
             let spec = self.spec(
                 Operation::Infrastructure,
@@ -87,14 +129,20 @@ impl Session {
                 None,
             )?;
             let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
+            let mut slot = Some(work);
             match runtime.client.submit_blocking_owned_input(
                 &runtime.scope,
                 spec,
-                &mut self.editing.work.queued,
+                &mut slot,
                 |work, context| work.run(&context).map_err(WorkError::from),
             ) {
                 Ok(job) => self.editing.work.running = Some((identity, job)),
-                Err(OwnedInputError::Admission(cause)) if activity::retryable(&cause) => {}
+                Err(OwnedInputError::Admission(cause)) if activity::retryable(&cause) => {
+                    if let Some(work) = slot {
+                        self.editing.work.waiting.push_front(work);
+                    }
+                    break;
+                }
                 Err(cause) => return Err(cause.into()),
             }
         }
@@ -141,14 +189,17 @@ impl Session {
         self.submit_editing_work()
     }
 
-    /// Observe finished coverage work and traces, applying what is still current.
+    /// Observe finished coverage work and traces, applying what is still current, then start
+    /// the next waiting edit.
     pub(in crate::native_canvas::session) fn consume_editing_work(
         &mut self,
     ) -> Result<(), Box<dyn Error>> {
+        let mut finished = false;
         if let Some(completion) =
             self.editing.work.running.as_mut().and_then(|(_, job)| job.try_take_completion())
             && let Some((identity, job)) = self.editing.work.running.take()
         {
+            finished = true;
             Self::observe_terminal(&job, &completion.outcome);
             match Self::terminal(completion.outcome) {
                 Ok(prepared) if !self.closing => self.complete_editing(identity, prepared),
@@ -172,7 +223,7 @@ impl Session {
                 }
             }
         }
-        Ok(())
+        if finished { self.submit_editing_work() } else { Ok(()) }
     }
 
     /// Apply a finished edit to the document it read, wherever that document is held.
@@ -194,8 +245,18 @@ impl Session {
         let Some(scene) = document.scene.as_mut() else {
             return;
         };
-        if let Err(cause) = document.tools.complete_deferred(prepared, &mut scene.document, now) {
-            tracing::warn!(operation = "canvas_coverage_work", document_id = identity, cause = %cause, "Finished coverage work could not be applied");
+        match document.tools.complete_deferred(prepared, &mut scene.document, now) {
+            Ok(true) => {}
+            Ok(false) => {
+                tracing::debug!(
+                    operation = "canvas_coverage_work",
+                    document_id = identity,
+                    "Finished coverage work changed nothing: it was stale, superseded or empty"
+                );
+            }
+            Err(cause) => {
+                tracing::warn!(operation = "canvas_coverage_work", document_id = identity, cause = %cause, "Finished coverage work could not be applied");
+            }
         }
     }
 

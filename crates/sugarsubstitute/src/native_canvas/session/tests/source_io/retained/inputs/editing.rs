@@ -213,6 +213,36 @@ fn strokes_render_staged_steps_and_commit_one_undoable_step() -> Result<(), Box<
 }
 
 #[test]
+fn shapes_drawn_while_earlier_shape_work_runs_each_land_in_order() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    {
+        let image = show(&mut fixture, Some("first"))?;
+        let first = layer(&image, "first")?;
+        fixture.edit(CanvasEditCommand::Tool(CanvasToolId::MaskRectangle))?;
+        let before = fixture.snapshot(image.document)?.revision();
+        // No completion is observed between the gestures, so each later shape is requested
+        // against the revision before the earlier ones landed.
+        fixture.drag(&[[2.0, 2.0], [12.0, 12.0]])?;
+        fixture.drag(&[[20.0, 2.0], [30.0, 12.0]])?;
+        fixture.drag(&[[40.0, 2.0], [50.0, 12.0]])?;
+        fixture.settle_inputs()?;
+        let after = fixture.snapshot(image.document)?;
+        let painted = coverage(&after, first)?;
+        assert_eq!(
+            [painted.value(7, 7), painted.value(25, 7), painted.value(45, 7)],
+            [FULL_COVERAGE; 3],
+            "every shape lands"
+        );
+        assert_eq!(painted.value(16, 7), 0);
+        assert_eq!(after.revision(), before + 3, "each shape is its own undo step");
+        fixture.edit(CanvasEditCommand::History(CanvasHistoryAction::Undo))?;
+        let undone = coverage(&fixture.snapshot(image.document)?, first)?;
+        assert_eq!([undone.value(25, 7), undone.value(45, 7)], [FULL_COVERAGE, 0]);
+    }
+    fixture.finish().map(drop)
+}
+
+#[test]
 fn selections_run_as_jobs_draw_ants_and_report_bounds_that_follow_the_camera()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;

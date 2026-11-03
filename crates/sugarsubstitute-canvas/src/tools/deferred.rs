@@ -4,8 +4,9 @@
 //!
 //! Rasterizing a large selection, or expanding, contracting and feathering a whole mask, can take
 //! long enough to stall input. A tool describes such work as a [`DeferredEdit`]; the host runs it
-//! as an owned job against the snapshot it was requested for and hands the result back. The result
-//! applies only while the document still shows that revision; anything else is stale and dropped.
+//! as an owned job against the snapshot it was requested for, or the newer revision it was rebased
+//! onto, and hands the result back. The result applies only while the document still shows the
+//! revision the job read; anything else is stale and dropped.
 use crate::{CanvasError, Document, DocumentEdit, DocumentSnapshot};
 use sugarsubstitute_contracts::execution::JobContext;
 
@@ -50,6 +51,24 @@ impl DeferredEdit {
     /// The revision this work reads.
     pub const fn base(&self) -> &DocumentSnapshot {
         &self.base
+    }
+    /// What the finished edit does to the document.
+    pub const fn disposition(&self) -> Disposition {
+        self.disposition
+    }
+    /// Read the document's current revision instead of the one this work was requested
+    /// against. Work a tool requested while earlier work of the same document was still running
+    /// reads that work's result this way, so successive gestures each land in order. The work
+    /// itself is unchanged: it reshapes whatever content its base holds.
+    /// # Errors
+    /// Rejects a document of another identity.
+    pub fn rebase(&mut self, document: &Document) -> Result<(), CanvasError> {
+        let current = document.snapshot();
+        if current.identity() != self.base.identity() {
+            return Err(CanvasError::Invalid("Deferred work belongs to another document"));
+        }
+        self.base = current;
+        Ok(())
     }
     /// Run the work inside an owned execution job.
     /// # Errors

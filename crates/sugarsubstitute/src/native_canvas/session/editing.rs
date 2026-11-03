@@ -7,7 +7,8 @@
 //! input document as it is shown, so switching images keeps the person's tool. Brush and Eraser
 //! share their size: a wheel change to one resizes the other.
 //!
-//! Coverage work a tool defers runs as an owned job and applies to its document only while that
+//! Coverage work a tool defers runs as an owned job, in request order: work requested while
+//! earlier work was running reads that work's result, and applies to its document only while that
 //! document still shows the revision it read. Selection outlines are traced by owned jobs too.
 //! A staged gesture renders live: the frame pipeline latches the latest staged step while no
 //! frame work is in flight, and each latched step is distinct content for frame reuse. The
@@ -125,8 +126,13 @@ impl Session {
 
     /// Hand the shown tools' deferred work to its job and share a wheel-changed brush size.
     fn settle_tools(&mut self) -> Result<(), Box<dyn Error>> {
-        if let Some(work) = self.document.tools.take_deferred() {
-            self.editing.work.queue(work);
+        if let Some(work) = self.document.tools.take_deferred()
+            && !self.editing.work.queue(work)
+        {
+            tracing::warn!(
+                operation = "canvas_coverage_work",
+                "Too much coverage work is waiting; the newest request was dropped"
+            );
         }
         self.submit_editing_work()?;
         self.follow_brush_size()?;

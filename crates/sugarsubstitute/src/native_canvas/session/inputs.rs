@@ -166,6 +166,16 @@ impl InputDocuments {
     }
 
     /// The parked input document whose snapshots carry `identity`.
+    pub(super) fn parked_by_identity(&self, identity: u64) -> Option<&document::DocumentState> {
+        self.workflows
+            .iter()
+            .flat_map(|(_, surfaces)| surfaces)
+            .find(|surface| surface.identity.get() == identity)?
+            .document
+            .as_deref()
+    }
+
+    /// The parked input document whose snapshots carry `identity`, for applying finished work.
     pub(super) fn parked_mut(&mut self, identity: u64) -> Option<&mut document::DocumentState> {
         self.workflows
             .iter_mut()
