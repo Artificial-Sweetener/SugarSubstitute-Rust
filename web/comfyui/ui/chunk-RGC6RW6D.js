@@ -1,0 +1,150 @@
+import {
+  modifyPage,
+  selectionPage,
+  sessionPage,
+  transformPage
+} from "./chunk-CTNOBNH6.js";
+import {
+  CANVAS_EDIT_TEXT,
+  CANVAS_TOOL_LABELS
+} from "./chunk-ECAVEMES.js";
+import {
+  defineComponent,
+  h,
+  onMounted,
+  onUpdated,
+  ref,
+  watch
+} from "./chunk-6PAJ5Y37.js";
+
+// frontend/comfyui/ui/canvas_editing/domain/CanvasToolbarPlacement.ts
+var CANVAS_EDIT_TOOLBAR_GAP = 12;
+var CANVAS_EDIT_CHROME_INSET = 8;
+var EDGE_HYSTERESIS_PHYSICAL_PX = 24;
+var CanvasToolbarPlacement = class {
+  #side = null;
+  /** Forget the retained side so the next context is placed afresh. */
+  reset() {
+    this.#side = null;
+  }
+  /** Project the toolbar's top-left point for one context, size and safe area. */
+  position(context, size, safe, physicalPixelsPerCssPixel) {
+    const side = context ? this.#resolve(context, safe, physicalPixelsPerCssPixel) : null;
+    this.#side = side;
+    const bottom = safe.top + safe.height;
+    if (!context || side === "viewport-bottom")
+      return clamp(
+        { x: safe.left + safe.width / 2 - size.width / 2, y: bottom - size.height },
+        size,
+        safe
+      );
+    const x = context.left + context.width / 2 - size.width / 2;
+    const y = side === "above" ? context.top - CANVAS_EDIT_TOOLBAR_GAP - size.height : context.top + context.height + CANVAS_EDIT_TOOLBAR_GAP;
+    return clamp({ x, y }, size, safe);
+  }
+  #resolve(context, safe, density) {
+    const safeBottom = safe.top + safe.height;
+    const contextBottom = context.top + context.height;
+    if (context.top < safe.top && contextBottom > safeBottom) return "viewport-bottom";
+    const overflow = (contextBottom - safeBottom) * Math.max(1, density);
+    if (this.#side === "above") return overflow <= -EDGE_HYSTERESIS_PHYSICAL_PX ? "below" : "above";
+    return overflow > EDGE_HYSTERESIS_PHYSICAL_PX ? "above" : "below";
+  }
+};
+function canvasEditSafeArea(viewport) {
+  return {
+    left: viewport.left + CANVAS_EDIT_CHROME_INSET,
+    top: viewport.top + CANVAS_EDIT_CHROME_INSET,
+    width: Math.max(0, viewport.width - 2 * CANVAS_EDIT_CHROME_INSET),
+    height: Math.max(0, viewport.height - 2 * CANVAS_EDIT_CHROME_INSET)
+  };
+}
+function clamp(point, size, safe) {
+  const maxX = Math.max(safe.left, safe.left + safe.width - size.width);
+  const maxY = Math.max(safe.top, safe.top + safe.height - size.height);
+  return {
+    x: Math.round(Math.min(Math.max(point.x, safe.left), maxX)),
+    y: Math.round(Math.min(Math.max(point.y, safe.top), maxY))
+  };
+}
+
+// frontend/comfyui/ui/canvas_editing/presentation/CanvasContextualToolbar.ts
+var CanvasContextualToolbar = defineComponent({
+  name: "CanvasContextualToolbar",
+  props: {
+    snapshot: { type: Object, required: true },
+    controller: { type: Object, required: true },
+    viewport: { type: Object, required: true }
+  },
+  setup(props) {
+    const element = ref(null);
+    const placement = new CanvasToolbarPlacement();
+    watch(
+      () => props.snapshot.surface.kind,
+      () => placement.reset()
+    );
+    function place() {
+      const toolbar = element.value;
+      if (!toolbar) return;
+      const viewport = props.viewport;
+      const bounds = props.snapshot.state.selection?.bounds;
+      const context = bounds ? {
+        left: viewport.left + bounds.left,
+        top: viewport.top + bounds.top,
+        width: bounds.width,
+        height: bounds.height
+      } : null;
+      const point = placement.position(
+        context,
+        { width: toolbar.offsetWidth, height: toolbar.offsetHeight },
+        canvasEditSafeArea(viewport),
+        viewport.density
+      );
+      toolbar.style.transform = `translate(${point.x}px, ${point.y}px)`;
+      toolbar.dataset.canvasPlacement = `${point.x},${point.y}`;
+    }
+    onMounted(place);
+    onUpdated(place);
+    return () => {
+      const children = toolbarPage(props.snapshot, props.controller);
+      if (!children) return null;
+      return h(
+        "div",
+        {
+          ref: element,
+          class: "sc-canvas-edit-chrome sc-canvas-edit-row sc-canvas-edit-toolbar",
+          role: "toolbar",
+          "aria-label": toolbarLabel(props.snapshot),
+          "data-canvas-surface": props.snapshot.surface.kind
+        },
+        children
+      );
+    };
+  }
+});
+function toolbarLabel(snapshot) {
+  const surface = snapshot.surface;
+  if (surface.kind === "modify") return CANVAS_EDIT_TEXT.modifySelection;
+  if (surface.kind === "transform") return CANVAS_EDIT_TEXT.transform;
+  if (surface.kind === "session") return CANVAS_TOOL_LABELS[surface.tool];
+  return CANVAS_EDIT_TEXT.selectionActions;
+}
+function toolbarPage(snapshot, edit) {
+  const surface = snapshot.surface;
+  switch (surface.kind) {
+    case "selection":
+      return selectionPage(snapshot, edit);
+    case "modify":
+      return modifyPage(snapshot, edit);
+    case "transform":
+      return transformPage(snapshot, edit, surface.target);
+    case "session":
+      return sessionPage(snapshot, edit, surface.tool);
+    default:
+      return null;
+  }
+}
+
+export {
+  CanvasContextualToolbar
+};

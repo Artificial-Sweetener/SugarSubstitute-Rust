@@ -17,7 +17,7 @@
 import { afterEach, beforeEach } from '@jest/globals';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { assertRelativeModulesResolve } from '../../../scripts/WebModuleResolution.js';
+import { assertDeployedModulesResolve } from '../../../scripts/WebModuleResolution.js';
 
 let root: string;
 beforeEach(() => {
@@ -38,7 +38,7 @@ test('accepts static, re-exported, dynamic and deferred .mjs references that res
       "export const load = () => import('../lazy.mjs');\nconst note = '../absent.js';\n" +
       "import '/scripts/app.js';\n",
   );
-  expect(() => assertRelativeModulesResolve(root)).not.toThrow();
+  expect(() => assertDeployedModulesResolve(root)).not.toThrow();
 });
 
 test('rejects a reference that escapes the served tree even when the target exists', () => {
@@ -47,7 +47,7 @@ test('rejects a reference that escapes the served tree even when the target exis
     path.join(root, 'ui/infrastructure/preview.js'),
     "import { value } from '../../../outside.js';\n",
   );
-  expect(() => assertRelativeModulesResolve(root)).toThrow(
+  expect(() => assertDeployedModulesResolve(root)).toThrow(
     /preview\.js -> \.\.\/\.\.\/\.\.\/outside\.js/,
   );
 });
@@ -60,7 +60,7 @@ test('reports every missing static and dynamic module together', () => {
   writeFileSync(path.join(root, 'ui/two.js'), "export * from './infrastructure';\n");
   let message = '';
   try {
-    assertRelativeModulesResolve(root);
+    assertDeployedModulesResolve(root);
   } catch (error: unknown) {
     message = error instanceof Error ? error.message : String(error);
   }
@@ -69,6 +69,27 @@ test('reports every missing static and dynamic module together', () => {
   expect(message).toContain('two.js -> ./infrastructure');
 });
 
+test('rejects bare package specifiers that a browser cannot resolve without an import map', () => {
+  writeFileSync(
+    path.join(root, 'ui/infrastructure/overlay.js'),
+    "import { h } from 'vue';\nexport { ref } from 'vue';\n" +
+      "export const load = () => import('@scope/editor');\nconst note = 'vue';\n",
+  );
+  let message = '';
+  try {
+    assertDeployedModulesResolve(root);
+  } catch (error: unknown) {
+    message = error instanceof Error ? error.message : String(error);
+  }
+  expect(message).toContain('overlay.js -> vue');
+  expect(message).toContain('overlay.js -> @scope/editor');
+  expect(message.match(/overlay\.js -> vue/g)).toHaveLength(2);
+});
+
+test('the committed deployment tree loads without unresolved or bare module references', () => {
+  expect(() => assertDeployedModulesResolve(path.resolve('web'))).not.toThrow();
+});
+
 test('rejects a relative artifact root', () => {
-  expect(() => assertRelativeModulesResolve('web')).toThrow(/absolute/);
+  expect(() => assertDeployedModulesResolve('web')).toThrow(/absolute/);
 });
