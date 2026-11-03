@@ -16,8 +16,8 @@
 /** Measure web content covering a native viewport so the host can route OS gestures around it. */
 import { CANVAS_SURFACE_OCCLUSIONS, CANVAS_SURFACE_OCCLUSION_EXTENT, } from '../../core/embedded/CanvasRuntime.js';
 import { observeNativeCanvasOverlays } from './NativeCanvasOverlayObserver.js';
-/** The attachment's own chrome over its viewport: tab strips, status, divider and grid. */
-const ATTACHMENT_CHROME = '.sc-output-tabstrip, .sc-output-status, .sc-output-wipe, .sc-output-overview';
+/** The attachment's own chrome over its viewport: tabs, status, divider, grid and editing tools. */
+const ATTACHMENT_CHROME = '.sc-output-tabstrip, .sc-output-status, .sc-output-wipe, .sc-output-overview, .sc-canvas-edit-chrome';
 /** Elements examined per measurement, in document order, bounding work in large documents. */
 const MAX_SCANNED_ELEMENTS = 6000;
 /** Positioned elements over the viewport whose paint order is confirmed per measurement. */
