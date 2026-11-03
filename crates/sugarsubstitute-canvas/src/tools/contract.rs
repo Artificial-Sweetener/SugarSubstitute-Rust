@@ -50,6 +50,8 @@ pub enum ToolCancelReason {
     Locked,
     /// The surface is retiring.
     Shutdown,
+    /// The person cancelled, such as by pressing Escape.
+    Requested,
 }
 /// Physical device class that produced a pointer observation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -186,5 +188,9 @@ pub trait CanvasTool: Send {
     /// Whether Space belongs to this tool's own text/interaction protocol.
     fn captures_space(&self) -> bool {
         false
+    }
+    /// Presentation-only feedback for the current gesture, in document coordinates.
+    fn overlay(&self) -> Option<ToolOverlay<'_>> {
+        None
     }
 }

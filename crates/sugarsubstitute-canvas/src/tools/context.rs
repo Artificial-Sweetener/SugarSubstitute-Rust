@@ -13,6 +13,7 @@ pub struct ToolContext<'a> {
     pub(super) capture: &'a mut bool,
     pub(super) target: Option<LayerId>,
     pub(super) deferred: &'a mut Option<DeferredEdit>,
+    pub(super) next_request: &'a mut u64,
     pub(super) now: Duration,
 }
 impl ToolContext<'_> {
@@ -96,8 +97,12 @@ impl ToolContext<'_> {
         + Send
         + 'static,
     ) -> Result<(), CanvasError> {
-        let base = deferred::base(self.document.as_deref())?;
-        *self.deferred = Some(DeferredEdit::new(base, disposition, Box::new(work)));
+        *self.deferred = Some(deferred::request(
+            self.document.as_deref(),
+            disposition,
+            self.next_request,
+            Box::new(work),
+        )?);
         Ok(())
     }
     /// Observe transient geometry with its gesture and base-revision identities.

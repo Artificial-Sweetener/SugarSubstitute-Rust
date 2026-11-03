@@ -19,13 +19,14 @@ pub enum Disposition {
     Preview,
 }
 
-type Work =
+pub(super) type Work =
     Box<dyn FnOnce(&DocumentSnapshot, &JobContext) -> Result<DocumentEdit, CanvasError> + Send>;
 
 /// Pending work and the exact revision it was requested against.
 pub struct DeferredEdit {
     base: DocumentSnapshot,
     disposition: Disposition,
+    request: u64,
     work: Work,
 }
 
@@ -33,12 +34,18 @@ pub struct DeferredEdit {
 pub struct PreparedEdit {
     base: (u64, u64),
     disposition: Disposition,
+    request: u64,
     edit: DocumentEdit,
 }
 
 impl DeferredEdit {
-    pub(super) fn new(base: DocumentSnapshot, disposition: Disposition, work: Work) -> Self {
-        Self { base, disposition, work }
+    pub(super) fn new(
+        base: DocumentSnapshot,
+        disposition: Disposition,
+        request: u64,
+        work: Work,
+    ) -> Self {
+        Self { base, disposition, request, work }
     }
     /// The revision this work reads.
     pub const fn base(&self) -> &DocumentSnapshot {
@@ -52,6 +59,7 @@ impl DeferredEdit {
         Ok(PreparedEdit {
             base: (self.base.identity(), self.base.revision()),
             disposition: self.disposition,
+            request: self.request,
             edit,
         })
     }
@@ -65,6 +73,10 @@ impl PreparedEdit {
     }
     pub(super) const fn disposition(&self) -> Disposition {
         self.disposition
+    }
+    /// The manager-assigned order of the request that produced this edit.
+    pub(super) const fn request(&self) -> u64 {
+        self.request
     }
     pub(super) fn into_edit(self) -> DocumentEdit {
         self.edit
@@ -81,7 +93,18 @@ impl std::fmt::Debug for DeferredEdit {
     }
 }
 
-/// Reject work for a document that is not loaded.
-pub(super) fn base(document: Option<&Document>) -> Result<DocumentSnapshot, CanvasError> {
-    document.map(Document::snapshot).ok_or(CanvasError::Invalid("No editable document"))
+/// Package work against the loaded document's current revision under the next request order.
+pub(super) fn request(
+    document: Option<&Document>,
+    disposition: Disposition,
+    next_request: &mut u64,
+    work: Work,
+) -> Result<DeferredEdit, CanvasError> {
+    let base =
+        document.map(Document::snapshot).ok_or(CanvasError::Invalid("No editable document"))?;
+    let request = next_request
+        .checked_add(1)
+        .ok_or(CanvasError::Invalid("Deferred request order exhausted"))?;
+    *next_request = request;
+    Ok(DeferredEdit::new(base, disposition, request, work))
 }

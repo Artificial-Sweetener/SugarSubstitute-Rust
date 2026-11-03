@@ -10,8 +10,8 @@ minimum_tests = 28
 [[owners]]
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
-concern = "Physical camera, retained projection phase and exact damage invariants; exact input-document archive round trips and rejection of corrupt, truncated and unsupported archives; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history"
-minimum_tests = 57
+concern = "Physical camera, retained projection phase and exact damage invariants; exact input-document archive round trips and rejection of corrupt, truncated and unsupported archives; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history; selection and mask shape modes, constraints, snapping and outline dragging through deferred coverage work; deselect, clear and live-previewed coverage modification; selection contour tracing, outline caching and ant animation"
+minimum_tests = 72
 
 [[owners]]
 package = "sugarsubstitute-canvas-render"
@@ -22,8 +22,8 @@ minimum_tests = 46
 [[owners]]
 package = "sugarsubstitute-image-ops"
 root = "crates/sugarsubstitute-image-ops"
-concern = "Graph identity, shared CPU/GPU sampling and retention, exact clipped tile inventories, pyramid semantics, vector coverage, dirty dependencies and original execution admission"
-minimum_tests = 58
+concern = "Graph identity, shared CPU/GPU sampling and retention, exact clipped tile inventories, pyramid semantics, vector coverage and its whole-pixel translation, dirty dependencies and original execution admission"
+minimum_tests = 59
 
 [[owners]]
 package = "sugarsubstitute-contracts"

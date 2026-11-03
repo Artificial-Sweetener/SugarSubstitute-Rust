@@ -9,6 +9,7 @@ mod damage;
 mod document;
 mod error;
 mod navigation;
+mod overlay;
 mod presentation;
 mod projection;
 mod tools;
@@ -31,12 +32,18 @@ pub use navigation::{
     CursorIntent, Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput,
     ScrollPhase, ZoomMode,
 };
+pub use overlay::{
+    ANT_DARK, ANT_DASH, ANT_LIGHT, Contour, ContourWork, CoverageContours, MarchingAnts,
+    OUTLINE_DASH, OUTLINE_GAP, OverlayOutline, OverlayShape, PresentationOverlay,
+    SelectionOutlines, ToolOverlay, outline_light,
+};
 pub use presentation::{FrameStamp, RenderRequest};
 pub use projection::ViewProjection;
 pub use tools::{
-    CanvasTool, DeferredEdit, Disposition, PointerKind, PointerSample, PreparedEdit, Pressure,
-    ToolButton, ToolCancelReason, ToolContext, ToolId, ToolInput, ToolManager, ToolModifiers,
-    ToolView,
+    CanvasTool, CoverageModification, CoverageOperation, CoverageShapeTool, DeferredEdit,
+    Disposition, ModifyPhase, ModifyTarget, PointerKind, PointerSample, PreparedEdit, Pressure,
+    ShapeKind, ShapeTarget, ToolButton, ToolCancelReason, ToolContext, ToolId, ToolInput,
+    ToolManager, ToolModifiers, ToolView,
 };
 pub use viewport::{MAX_SURFACE_EDGE, Viewport};
 #[cfg(test)]

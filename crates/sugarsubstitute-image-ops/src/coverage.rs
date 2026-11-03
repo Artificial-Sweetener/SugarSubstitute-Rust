@@ -13,6 +13,7 @@ mod codec;
 mod filters;
 mod path;
 mod tiles;
+mod translate;
 
 pub use codec::{coverage_from_u8, coverage_to_u8};
 pub use filters::CombineMode;

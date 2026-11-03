@@ -56,7 +56,7 @@ fn deferred_work_commits_once_and_drops_stale_results() -> harness::TestResult {
             let deferred = tools.take_deferred().ok_or(CanvasError::Invalid("No deferred work"))?;
             assert!(tools.take_deferred().is_none());
             let prepared = deferred.run(context)?;
-            assert!(tools.complete_deferred(prepared, &mut document)?);
+            assert!(tools.complete_deferred(prepared, &mut document, Duration::ZERO)?);
             let selection = document.snapshot().selection().cloned();
             assert_eq!(selection.as_ref().map(|s| s.value(5, 5)), Some(FULL_COVERAGE));
             assert!(document.undo()?);
@@ -71,7 +71,7 @@ fn deferred_work_commits_once_and_drops_stale_results() -> harness::TestResult {
             let empty = Coverage::new(Extent::new(64, 64)?, 0, memory)?;
             document.apply(DocumentEdit::Select(Some(empty)))?;
             let revision = document.snapshot().revision();
-            assert!(!tools.complete_deferred(stale, &mut document)?);
+            assert!(!tools.complete_deferred(stale, &mut document, Duration::ZERO)?);
             assert_eq!(document.snapshot().revision(), revision);
 
             // Cancelling a gesture drops work not yet taken.
@@ -103,7 +103,7 @@ fn deferred_previews_stage_renderable_snapshots_without_publishing() -> harness:
                 .take_deferred()
                 .ok_or(CanvasError::Invalid("No deferred work"))?
                 .run(context)?;
-            assert!(tools.complete_deferred(prepared, &mut document)?);
+            assert!(tools.complete_deferred(prepared, &mut document, Duration::ZERO)?);
             assert_eq!(document.snapshot().revision(), 1);
             assert_eq!(document.snapshot().selection(), None);
             let preview = tools.preview_snapshot().ok_or(CanvasError::Invalid("No preview"))?;

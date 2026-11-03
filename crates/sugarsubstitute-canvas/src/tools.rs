@@ -3,18 +3,23 @@
 //! Route typed tool lifecycles with one shared navigation and document-edit boundary.
 mod context;
 mod contract;
+mod coverage_commands;
+mod coverage_shape;
+mod coverage_work;
 mod deferred;
 mod pan_zoom;
 use crate::{
     CanvasError, CursorIntent, Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession,
     EditSessionId, LayerId, Navigation, NavigationCommand, NavigationCommandOutcome,
-    NavigationInput, ScrollPhase,
+    NavigationInput, ScrollPhase, overlay::ToolOverlay,
 };
 pub use context::ToolContext;
 pub use contract::{
     CanvasTool, PointerKind, PointerSample, Pressure, ToolButton, ToolCancelReason, ToolId,
     ToolInput, ToolModifiers, ToolView,
 };
+pub use coverage_commands::{CoverageModification, CoverageOperation, ModifyPhase, ModifyTarget};
+pub use coverage_shape::{CoverageShapeTool, ShapeKind, ShapeTarget};
 pub use deferred::{DeferredEdit, Disposition, PreparedEdit};
 use std::time::Duration;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
@@ -40,6 +45,8 @@ pub struct ToolManager {
     next_edit: u64,
     target: Option<LayerId>,
     deferred: Option<DeferredEdit>,
+    next_request: u64,
+    modification: Option<coverage_commands::Modification>,
 }
 impl ToolManager {
     /// Create navigation as the selected/effective built-in tool with no heap allocation.
@@ -56,6 +63,8 @@ impl ToolManager {
             next_edit: 0,
             target: None,
             deferred: None,
+            next_request: 0,
+            modification: None,
         }
     }
     /// Choose the layer editing tools act on, such as the active mask; `None` leaves them
@@ -73,16 +82,21 @@ impl ToolManager {
     }
     /// Apply finished coverage work. Work computed from a revision the document no longer shows
     /// is stale and changes nothing. A preview replaces the tool's staged preview; a commit
-    /// discards any staged preview and publishes one undo step.
+    /// discards any staged preview and publishes one undo step. While a coverage modification
+    /// is open only its latest request applies, and its commit restores the captured tool.
     /// # Errors
-    /// Preserves validation, admission and identity failures.
+    /// Preserves validation, admission, identity and tool activation failures.
     pub fn complete_deferred(
         &mut self,
         prepared: PreparedEdit,
         document: &mut Document,
+        now: Duration,
     ) -> Result<bool, CanvasError> {
         if !prepared.current(document) {
             return Ok(false);
+        }
+        if self.modification.is_some() {
+            return self.complete_modification(prepared, document, now);
         }
         drop(self.edit.take());
         match prepared.disposition() {
@@ -161,7 +175,7 @@ impl ToolManager {
         command: NavigationCommand,
         now: Duration,
     ) -> Result<NavigationCommandOutcome, CanvasError> {
-        if self.captured() || self.edit.is_some() {
+        if self.captured() || (self.edit.is_some() && self.modification.is_none()) {
             return Ok(NavigationCommandOutcome::Denied);
         }
         self.navigation.command(command, now)
@@ -175,7 +189,7 @@ impl ToolManager {
         mode: crate::ZoomMode,
         now: Duration,
     ) -> Result<bool, CanvasError> {
-        if self.captured() || self.edit.is_some() {
+        if self.captured() || (self.edit.is_some() && self.modification.is_none()) {
             return Ok(false);
         }
         self.navigation.cancel_command(target, mode, now)
@@ -277,7 +291,7 @@ impl ToolManager {
         if !self.contains(id) {
             return Err(CanvasError::Invalid("Unknown tool identity"));
         }
-        if !self.space {
+        if !self.space && self.modification.is_none() {
             self.switch(id, document, ToolCancelReason::SelectionChanged, now)?;
         }
         self.selected = id;
@@ -296,6 +310,11 @@ impl ToolManager {
             return Ok(());
         }
         if held && self.active().is_some_and(CanvasTool::captures_space) {
+            return Ok(());
+        }
+        if self.modification.is_some() {
+            // Coverage modification already holds navigation; the selection returns after it.
+            self.space = held;
             return Ok(());
         }
         let id = if held { ToolId::PAN_ZOOM } else { self.selected };
@@ -320,6 +339,7 @@ impl ToolManager {
             capture: &mut self.capture,
             target: self.target,
             deferred: &mut self.deferred,
+            next_request: &mut self.next_request,
             now,
         };
         if self.effective == ToolId::PAN_ZOOM {
@@ -343,15 +363,24 @@ impl ToolManager {
             })
         })
     }
+    /// The effective tool's presentation-only feedback, in document coordinates.
+    pub fn overlay(&self) -> Option<ToolOverlay<'_>> {
+        self.active().and_then(CanvasTool::overlay)
+    }
     /// Cancel capture and staged edits, restoring persistent selection after lifecycle loss.
+    /// An unresolved coverage modification survives focus, geometry and policy changes with its
+    /// preview; the person cancelling, a document change or shutdown cancels it too.
     /// # Errors
-    /// Preserves clock and activation failures; staged document edits are always discarded.
+    /// Preserves clock and activation failures; staged gesture edits are always discarded.
     pub fn cancel(
         &mut self,
         reason: ToolCancelReason,
         document: Option<&Document>,
         now: Duration,
     ) -> Result<(), CanvasError> {
+        if self.modification.is_some() {
+            return self.interrupt_modification(reason, document, now);
+        }
         self.cancel_active(reason);
         self.capture = false;
         drop(self.edit.take());

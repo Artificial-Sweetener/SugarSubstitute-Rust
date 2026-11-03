@@ -287,3 +287,25 @@ fn nearest_previews_read_only_the_coverage_samples_they_show() -> TestResult {
         Ok(())
     })
 }
+
+#[test]
+fn translation_moves_whole_pixels_and_drops_what_leaves_the_extent() -> TestResult {
+    run(MEMORY, |context| {
+        let extent = Extent::new(300, 200)?;
+        let square = Path::rectangle([10.0, 20.0, 50.0, 60.0])?.rasterize(extent, context)?;
+        let moved = square.translate([130, -5], context)?;
+        assert_eq!(moved.bounds(), Some(Region::new(140, 15, 40, 40)?));
+        assert_eq!(moved.translate([-130, 5], context)?, square);
+        let clipped = square.translate([-30, 0], context)?;
+        assert_eq!(clipped.bounds(), Some(Region::new(0, 20, 20, 40)?));
+        assert_eq!(square.translate([0, 400], context)?.bounds(), None);
+        let everything = Coverage::new(extent, FULL, context.memory())?;
+        let shifted = everything.translate([5, 7], context)?;
+        assert_eq!(
+            [shifted.value(4, 100), shifted.value(5, 7), shifted.value(299, 199)],
+            [0, FULL, FULL]
+        );
+        assert_eq!(square.translate([0, 0], context)?, square);
+        Ok(())
+    })
+}
