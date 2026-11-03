@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Translate between the session's input documents and native protocol values: document and
-//! layer identities, synced key maps, failures, appearance and resize modes.
+//! layer identities, synced key maps, failures, appearance and resize modes. Identity text
+//! follows the input-document owner's one mapping, so every message family names a document or
+//! layer the same way.
 use crate::native_canvas::session::inputs::{
     InitialOutcome, InputDocumentId, InputReply, ResizeAnchor, ResizeMode, SurfaceOutcome,
-    SyncedSurface,
+    SyncedSurface, layer_from_protocol_id, layer_protocol_id,
 };
 use std::error::Error;
 use sugarsubstitute_canvas::{LayerId, MaskAppearance};
@@ -16,20 +18,30 @@ use sugarsubstitute_contracts::canvas_native::{
 };
 use sugarsubstitute_image_ops::{CoverageResampling, Extent};
 
-/// The protocol text naming one host layer.
+/// The protocol layer identity of one host layer.
 pub(in crate::startup::canvas::surface) fn layer_key(
     layer: LayerId,
 ) -> Result<CanvasLayerId, Box<dyn Error>> {
-    Ok(CanvasLayerId::new(format!("layer-{}", layer.get()))?)
+    Ok(CanvasLayerId::new(layer_protocol_id(layer))?)
 }
 
 /// The host layer a protocol layer identity names, when it names one.
 pub(in crate::startup::canvas::surface) fn layer_of(key: &CanvasLayerId) -> Option<LayerId> {
-    let digits = key.as_str().strip_prefix("layer-")?;
-    if digits.starts_with('0') {
-        return None;
-    }
-    LayerId::new(digits.parse().ok()?).ok()
+    layer_from_protocol_id(key.as_str())
+}
+
+/// The protocol document identity of one input document.
+pub(in crate::startup::canvas::surface) fn document_id(
+    document: InputDocumentId,
+) -> Result<CanvasDocumentId, CanvasNativeError> {
+    CanvasDocumentId::new(document.protocol_id())
+}
+
+/// The input document a protocol document identity names, when it names one.
+pub(in crate::startup::canvas::surface) fn document_of(
+    id: &CanvasDocumentId,
+) -> Option<InputDocumentId> {
+    InputDocumentId::from_protocol_id(id.as_str())
 }
 
 /// The protocol document for an input document at `extent`.
@@ -38,7 +50,7 @@ pub(in crate::startup::canvas::surface) fn canvas_document(
     extent: Extent,
 ) -> Result<CanvasDocument, CanvasNativeError> {
     Ok(CanvasDocument {
-        id: CanvasDocumentId::new(document.key())?,
+        id: document_id(document)?,
         geometry_revision: CanvasRevision::new(document.geometry(extent))?,
         size: CanvasDimensions::new(extent.width(), extent.height())?,
     })
@@ -47,7 +59,7 @@ pub(in crate::startup::canvas::surface) fn canvas_document(
 /// The protocol document a settled surface reports.
 fn synced_document(surface: &SyncedSurface) -> Result<CanvasDocument, CanvasNativeError> {
     Ok(CanvasDocument {
-        id: CanvasDocumentId::new(surface.document.key())?,
+        id: document_id(surface.document)?,
         geometry_revision: CanvasRevision::new(surface.geometry.as_str())?,
         size: CanvasDimensions::new(surface.extent.width(), surface.extent.height())?,
     })

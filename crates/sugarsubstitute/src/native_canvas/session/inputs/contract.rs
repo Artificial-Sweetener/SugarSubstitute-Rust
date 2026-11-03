@@ -13,14 +13,17 @@ impl InputDocumentId {
         self.0
     }
 
-    /// Protocol text naming this document, stable for its surface's lifetime and restarts.
-    pub(crate) fn key(self) -> String {
+    /// The document's protocol identity: `input-` and its index in lowercase hexadecimal
+    /// without leading zeros. It is the one name every message family (workflow, context,
+    /// source, geometry and editing) and the archive use, stable for the surface's lifetime
+    /// and across restarts.
+    pub(crate) fn protocol_id(self) -> String {
         format!("input-{:x}", self.0 & !IDENTITY_NAMESPACE)
     }
 
-    /// The identity [`Self::key`] names; this does not check that it is synced.
-    pub(crate) fn from_key(key: &str) -> Option<Self> {
-        let digits = key.strip_prefix("input-")?;
+    /// The identity [`Self::protocol_id`] names; this does not check that it is synced.
+    pub(crate) fn from_protocol_id(text: &str) -> Option<Self> {
+        let digits = text.strip_prefix("input-")?;
         if digits.is_empty() || digits.starts_with('0') || digits.len() > 16 {
             return None;
         }
@@ -31,8 +34,23 @@ impl InputDocumentId {
     /// The geometry revision of this document at `extent`: it changes exactly when the
     /// document's pixel geometry changes.
     pub(crate) fn geometry(self, extent: Extent) -> String {
-        format!("{}-{}x{}", self.key(), extent.width(), extent.height())
+        format!("{}-{}x{}", self.protocol_id(), extent.width(), extent.height())
     }
+}
+
+/// A layer's protocol identity: `layer-` and its decimal identity, unique within its document.
+/// Every message family names layers, mask layers included, by it.
+pub(crate) fn layer_protocol_id(layer: LayerId) -> String {
+    format!("layer-{}", layer.get())
+}
+
+/// The layer [`layer_protocol_id`] names; this does not check that the layer exists.
+pub(crate) fn layer_from_protocol_id(text: &str) -> Option<LayerId> {
+    let digits = text.strip_prefix("layer-")?;
+    if digits.starts_with('0') || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    LayerId::new(digits.parse().ok()?).ok()
 }
 
 /// The input document the Input route shows, with its content and editing target.

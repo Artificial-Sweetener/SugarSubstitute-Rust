@@ -5,6 +5,7 @@
 
 use super::*;
 
+mod identities;
 mod persistence;
 mod sources;
 

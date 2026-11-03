@@ -8,15 +8,15 @@
 //! are converted from physical viewport pixels to CSS pixels relative to the surface geometry
 //! origin, so they follow pan and zoom.
 
-use super::input_protocol::layer_key;
+use super::input_protocol::{document_id, layer_key};
 use super::*;
 use crate::native_canvas::session::editing::{EditRejection, EditState};
 use sugarsubstitute_canvas::BrushOptions;
 use sugarsubstitute_contracts::{
     canvas_native::{
-        CanvasBrushOptions, CanvasDocumentId, CanvasEditMode, CanvasEditRequest,
-        CanvasEditSelectionBounds, CanvasEditSession, CanvasEditSessionKind, CanvasEditState,
-        CanvasEditTool, CanvasFailure, CanvasFailureMessage, CanvasFailureStatus,
+        CanvasBrushOptions, CanvasEditMode, CanvasEditRequest, CanvasEditSelectionBounds,
+        CanvasEditSession, CanvasEditSessionKind, CanvasEditState, CanvasEditTool, CanvasFailure,
+        CanvasFailureMessage, CanvasFailureStatus,
     },
     execution::Moment,
     panel::PanelSession,
@@ -198,7 +198,7 @@ impl NativeSurface {
         });
         Ok(CanvasEditState {
             revision,
-            document: state.document.map(|id| CanvasDocumentId::new(id.key())).transpose()?,
+            document: state.document.map(document_id).transpose()?,
             active_mask: state.active_mask.map(layer_key).transpose()?,
             tool: state.tool,
             tools: state

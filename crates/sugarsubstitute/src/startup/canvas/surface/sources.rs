@@ -7,7 +7,9 @@
 //! worker; the reply reaches the page through the bulk channel when it is large. Watching
 //! reports `source.changed` whenever a synced document's content revision changes, one
 //! notification at a time, so a newer change of one document supersedes an undelivered older one.
-use super::input_protocol::{canvas_document, failure, layer_key, layer_of};
+use super::input_protocol::{
+    canvas_document, document_id, document_of, failure, layer_key, layer_of,
+};
 use super::*;
 use crate::native_canvas::session::inputs::{
     CaptureEncoder, CapturePixels, CaptureRejection, CaptureTarget, CaptureTicket, EncodedCapture,
@@ -15,8 +17,8 @@ use crate::native_canvas::session::inputs::{
 };
 use std::collections::VecDeque;
 use sugarsubstitute_contracts::canvas_native::{
-    CanvasCaptureSize, CanvasDocumentId, CanvasFailureStatus, CanvasLayerName, CanvasNativeError,
-    CanvasPixelFormat, CanvasPixelRaster, CanvasRevision, CanvasSourceCapture, CanvasSourceChange,
+    CanvasCaptureSize, CanvasFailureStatus, CanvasLayerName, CanvasNativeError, CanvasPixelFormat,
+    CanvasPixelRaster, CanvasRevision, CanvasSourceCapture, CanvasSourceChange,
     CanvasSourceCommand, CanvasSourceContext, CanvasSourceLayer, CanvasSourceRequest,
     CanvasSourceSnapshot, CanvasSourceTarget, CanvasSourceTargetKind,
     MAX_CANVAS_SOURCE_REPLY_BYTES,
@@ -86,7 +88,7 @@ impl Sources {
 
 /// The opaque content revision of one document.
 fn revision(document: InputDocumentId, revision: u64) -> Result<CanvasRevision, CanvasNativeError> {
-    CanvasRevision::new(format!("{}@{revision}", document.key()))
+    CanvasRevision::new(format!("{}@{revision}", document.protocol_id()))
 }
 
 impl NativeSurface {
@@ -142,7 +144,7 @@ impl NativeSurface {
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
         let unavailable = |message| failure(CanvasFailureStatus::Unavailable, message);
-        let Some(document) = InputDocumentId::from_key(capture.document.id.as_str()) else {
+        let Some(document) = document_of(&capture.document.id) else {
             let failure = unavailable("The document is not an input document");
             return self.answer(identity, request.failure_reply(&failure)?, claim);
         };
@@ -268,7 +270,7 @@ impl NativeSurface {
             return Ok(());
         };
         let change = CanvasSourceChange {
-            document: document.map(|document| CanvasDocumentId::new(document.key())).transpose()?,
+            document: document.map(document_id).transpose()?,
             revision: match document {
                 Some(document) => revision(document, value)?,
                 None => CanvasRevision::new("none")?,

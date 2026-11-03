@@ -320,7 +320,7 @@ impl Session {
                         }
                         _ => None,
                     };
-                    let key = surface.identity.key();
+                    let key = surface.identity.protocol_id();
                     documents
                         .push(ArchivedDocument::capture(&key, &snapshot, |_| reference.clone())?);
                 }
@@ -339,7 +339,9 @@ impl Session {
         self.inputs.next_identity = self.inputs.next_identity.max(restored.next_identity);
         for (workflow, mut surfaces) in restored.workflows {
             for surface in &mut surfaces {
-                let Some(document) = archive.document(&surface.identity.key()) else { continue };
+                let Some(document) = archive.document(&surface.identity.protocol_id()) else {
+                    continue;
+                };
                 // A blank backing's size changes only through resizes, so the archived extent
                 // is the surface's current one.
                 if matches!(surface.desired_base, Base::Blank(_)) {
