@@ -29,6 +29,9 @@ import type { ComfyInputAssociations } from './ComfyInputAssociations.js';
 import type { ComfyInputBindings } from './ComfyInputBindings.js';
 import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
 import { ComfyInputSurfaceCards } from './ComfyInputSurfaceCards.js';
+import { BrowserMaskImport } from './BrowserMaskImport.js';
+import { WorkflowMaskImport } from '../application/WorkflowMaskImport.js';
+import type { InputSourceAssets } from '../application/InputSourcePreparation.js';
 import { ComfyWorkflowInputState } from './ComfyWorkflowInputState.js';
 import { ComfyWorkflowSurfaceGraph } from './ComfyWorkflowSurfaceGraph.js';
 import { ComfyDimensionAuthorityWriter } from './ComfyDimensionAuthorityWriter.js';
@@ -46,6 +49,8 @@ export interface WorkflowSurfaceOptions {
   readonly associations: ComfyInputAssociations;
   readonly bindings: ComfyInputBindings;
   readonly loaders: ComfyInputLoaders;
+  /** Stages imported region masks as immutable input files. */
+  readonly assets: InputSourceAssets;
   graph(): ComfyGraph | null | undefined;
   workflowHost(): CanvasWorkflowHost | null;
   accent(): string;
@@ -111,7 +116,14 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
       subscribe: (listener) => route.subscribe(listener),
       choose: (value) => route.chooseRoute(value),
     },
-    cards: new ComfyInputSurfaceCards(associations, route, appearance, provisioning),
+    cards: new ComfyInputSurfaceCards(
+      associations,
+      route,
+      appearance,
+      provisioning,
+      new WorkflowMaskImport(provisioning, new BrowserMaskImport(options.document), options.assets),
+      options.bindings,
+    ),
     resolutionEntries: (targets) => canvasResolutionEntries(targets, resolution, dialog, report),
     dispose: () => {
       dialog.close();

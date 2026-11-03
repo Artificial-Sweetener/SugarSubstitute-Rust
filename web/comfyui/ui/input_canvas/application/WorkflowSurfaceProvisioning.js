@@ -1,5 +1,6 @@
 import { planWorkflowSurfaces, workflowSyncSurfaces, } from '../domain/WorkflowSurfacePlan.js';
 import { WORKFLOW_SURFACE_COPY } from './WorkflowSurfaceCopy.js';
+import { missingRegionMasks } from '../domain/RegionalPromptDemand.js';
 /**
  * Plan surfaces from graph facts and replace the canvas's surface set for the active workflow.
  *
@@ -67,6 +68,22 @@ export class WorkflowSurfaceProvisioning {
     refresh() {
         this.#signature = null;
         return this.request();
+    }
+    /**
+     * Refuse generation while a regional prompt declares more regions than its mask loader holds.
+     *
+     * Applies only while a workflow-surface canvas holds the workflow; pending syncs settle first so
+     * the check reads the same graph the canvas holds.
+     */
+    async assertGenerationReady() {
+        await this.#running;
+        if (!this.#state)
+            return;
+        for (const mask of this.graph.facts().masks) {
+            const missing = missingRegionMasks(mask.regions, mask.entries.length);
+            if (missing > 0)
+                throw new Error(WORKFLOW_SURFACE_COPY.regionalMasksMissing(mask.label, mask.regions?.required ?? 0, mask.entries.length));
+        }
     }
     /** Replace a synced surface after the canvas resized it, keeping every other surface. */
     replaceSurface(key, document) {

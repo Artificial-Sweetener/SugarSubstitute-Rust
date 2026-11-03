@@ -90,6 +90,7 @@ const paired: WorkflowSurfaceFacts = {
       opacity: 0.5,
       image: 'image',
       authority: { kind: 'missing', reason: 'no_relevant_spatial_root_with_dimensions' },
+      regions: null,
       entries: [{ entry: null, label: 'Load Mask', initial: null }],
     },
   ],

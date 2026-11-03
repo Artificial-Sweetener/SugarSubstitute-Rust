@@ -23,6 +23,7 @@ import {
 } from '../../../frontend/comfyui/ui/input_canvas/presentation/MaskOpacityField.js';
 import type { InputSurfaceCardPort } from '../../../frontend/comfyui/ui/input_canvas/application/InputEditorPorts.js';
 import { nativeInputFields } from '../support/native_input_fields.js';
+import { MaskImportCommand } from '../../../frontend/comfyui/ui/input_canvas/presentation/MaskImportCommand.js';
 
 afterEach(() => jest.useRealTimers());
 
@@ -35,6 +36,8 @@ function card(initial: number | null) {
     hover: jest.fn(),
     opacity: () => opacity,
     changeOpacity: jest.fn(),
+    canImport: () => opacity !== null,
+    importMasks: jest.fn(async () => {}),
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -78,4 +81,28 @@ test('the field appears only for provisioned masks and one slider drag becomes o
   expect(surface.port.changeOpacity).toHaveBeenLastCalledWith(0.8);
   expect(widget(node)).toBeUndefined();
   expect(maskOpacityLabel('mask')).toBe('mask Visual opacity');
+});
+
+test('"Choose mask" appears for provisioned regional loaders and imports every chosen picture', async () => {
+  const surface = card(null);
+  const report = jest.fn();
+  const command = new MaskImportCommand(document, surface.port, report);
+  document.body.append(command.element);
+  expect(command.element.hidden).toBe(true);
+  surface.publish(0.5);
+  expect(command.element.hidden).toBe(false);
+  expect(command.element.textContent).toContain('Choose mask');
+  const input = command.element.querySelector<HTMLInputElement>('input[type="file"]');
+  expect(input?.multiple).toBe(true);
+  const files = [new File(['a'], 'a.png'), new File(['b'], 'b.png')];
+  Object.defineProperty(input, 'files', { configurable: true, value: files });
+  input?.dispatchEvent(new Event('change'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(surface.port.importMasks).toHaveBeenCalledWith(files);
+  jest.mocked(surface.port.importMasks).mockRejectedValueOnce(new Error('Undecodable.'));
+  input?.dispatchEvent(new Event('change'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(report).toHaveBeenCalledWith(new Error('Undecodable.'));
+  command.dispose();
+  expect(command.element.isConnected).toBe(false);
 });

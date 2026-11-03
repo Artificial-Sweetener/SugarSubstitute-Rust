@@ -44,6 +44,7 @@ function mask(
     opacity: 0.5,
     image,
     authority: unsized,
+    regions: null,
     entries: [{ entry: null, label: key, initial: null }],
     ...extra,
   } satisfies WorkflowMaskEndpoint;

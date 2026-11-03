@@ -134,3 +134,17 @@ test('ordered loaders bind each region by entry and new regions wait for provisi
   f.value.provision(new Map([[second?.id ?? '', other]]));
   expect(f.saved()?.entries.map((entry) => entry.source)).toEqual([first?.source, other]);
 });
+
+test('imported regions append as provisioned file entries and select the last one', async () => {
+  const f = controller({ classType: 'SimpleSyrup.LoadMaskBatch', ordered: true });
+  await f.value.initialize();
+  f.value.append(['sugarcubes/sources/a.png', 'sugarcubes/sources/b.png']);
+  expect(f.saved()?.entries.map((entry) => [entry.label, entry.source])).toEqual([
+    ['Mask 1', { kind: 'file', file: 'mask.png' }],
+    ['Mask 2', { kind: 'file', file: 'sugarcubes/sources/a.png' }],
+    ['Mask 3', { kind: 'file', file: 'sugarcubes/sources/b.png' }],
+  ]);
+  expect(f.saved()?.selected).toBe(f.saved()?.entries[2]?.id);
+  expect(f.saved()?.explicit).toBeUndefined();
+  expect(() => controller().value.append(['x.png'])).toThrow('one source');
+});

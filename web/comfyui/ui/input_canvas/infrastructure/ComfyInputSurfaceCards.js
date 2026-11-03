@@ -4,12 +4,16 @@ export class ComfyInputSurfaceCards {
     route;
     appearance;
     provisioning;
+    imports;
+    bindings;
     /** Share the route, appearance and provisioning owners with the canvas tab controls. */
-    constructor(associations, route, appearance, provisioning) {
+    constructor(associations, route, appearance, provisioning, imports, bindings) {
         this.associations = associations;
         this.route = route;
         this.appearance = appearance;
         this.provisioning = provisioning;
+        this.imports = imports;
+        this.bindings = bindings;
     }
     /** Bind one loader field's card. */
     port(node, loader) {
@@ -37,6 +41,16 @@ export class ComfyInputSurfaceCards {
                 const key = endpoint();
                 if (key && loader.kind === 'mask')
                     this.appearance.changeOpacity(key, opacity);
+            },
+            canImport: () => {
+                const key = endpoint();
+                return Boolean(key && loader.kind === 'mask' && loader.ordered && this.imports.available(key));
+            },
+            importMasks: async (files) => {
+                const key = endpoint();
+                if (!key || loader.kind !== 'mask' || !loader.ordered)
+                    throw new Error('This loader cannot import masks.');
+                await this.imports.import(key, files, (staged) => this.bindings.get(node, loader).append(staged));
             },
             subscribe: (listener) => this.provisioning.subscribe(listener),
         };

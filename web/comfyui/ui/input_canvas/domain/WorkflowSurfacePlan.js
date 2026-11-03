@@ -43,17 +43,17 @@ export function planWorkflowSurfaces(facts, accent, labels) {
                 rejected.push({ endpoint: mask.key, reason: 'limit' });
             return;
         }
-        const entries = masks.flatMap((mask) => mask.entries.map((entry) => ({ mask, entry })));
+        const entries = masks.flatMap((mask) => mask.entries.map((entry, index) => ({ mask, entry, label: mask.regions?.names[index] ?? entry.label })));
         const admitted = entries.slice(0, MAX_SURFACE_MASKS);
         for (const mask of new Set(entries.slice(MAX_SURFACE_MASKS).map(({ mask }) => mask.key)))
             rejected.push({ endpoint: mask, reason: 'limit' });
         surfaces.push({
             ...surface,
-            masks: admitted.map(({ mask, entry }, index) => ({
+            masks: admitted.map(({ mask, entry, label }, index) => ({
                 key: workflowMaskKey(mask.key, entry.entry),
                 endpoint: mask.key,
                 entry: entry.entry,
-                label: entry.label,
+                label,
                 color: maskColor(accent, index, admitted.length),
                 opacity: mask.opacity,
                 initial: entry.initial,
