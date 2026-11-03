@@ -10,11 +10,25 @@ export function canvasResolutionEntries(targets, resolution, dialog, report) {
         { label: '', separator: true },
         {
             label: WORKFLOW_SURFACE_COPY.changeCanvasResolutionMenu,
-            select: () => {
-                dialog
-                    .open({ width: surface.document.width, height: surface.document.height }, (width, height, mode) => resolution.resize(surface.key, width, height, mode))
-                    .catch(report);
-            },
+            select: () => openResolution(surface, resolution, dialog, report),
         },
     ];
+}
+/** Contribute the entry to the node context menu of a node that sizes a mask-only surface. */
+export function canvasResolutionNodeMenuItems(node, resolution, dialog, report) {
+    const surface = node === null ? null : resolution.surfaceSizedBy(node);
+    if (!surface)
+        return [];
+    return [
+        {
+            content: WORKFLOW_SURFACE_COPY.changeCanvasResolutionMenu,
+            callback: () => openResolution(surface, resolution, dialog, report),
+        },
+    ];
+}
+/** Open the dialog at the surface's current size and resize it on apply. */
+function openResolution(surface, resolution, dialog, report) {
+    dialog
+        .open({ width: surface.document.width, height: surface.document.height }, (width, height, mode) => resolution.resize(surface.key, width, height, mode))
+        .catch(report);
 }

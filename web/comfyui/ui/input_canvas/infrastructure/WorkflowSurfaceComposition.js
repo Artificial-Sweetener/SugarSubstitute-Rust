@@ -1,3 +1,4 @@
+import { isRecord } from '../../types/common.js';
 import { WorkflowInputRoute } from '../application/WorkflowInputRoute.js';
 import { WorkflowMaskAppearance } from '../application/WorkflowMaskAppearance.js';
 import { WORKFLOW_SURFACE_COPY } from '../application/WorkflowSurfaceCopy.js';
@@ -11,7 +12,7 @@ import { ComfyWorkflowSurfaceGraph } from './ComfyWorkflowSurfaceGraph.js';
 import { ComfyDimensionAuthorityWriter } from './ComfyDimensionAuthorityWriter.js';
 import { WorkflowCanvasResolution } from '../application/WorkflowCanvasResolution.js';
 import { CanvasResolutionDialog } from '../presentation/CanvasResolutionDialog.js';
-import { canvasResolutionEntries, } from '../presentation/CanvasResolutionMenu.js';
+import { canvasResolutionEntries, canvasResolutionNodeMenuItems, } from '../presentation/CanvasResolutionMenu.js';
 /** Build provisioning over the existing association and binding owners. */
 export function createWorkflowSurfaces(options) {
     const { associations, workflowHost, report } = options;
@@ -45,6 +46,10 @@ export function createWorkflowSurfaces(options) {
         },
         cards: new ComfyInputSurfaceCards(associations, route, appearance, provisioning, new WorkflowMaskImport(provisioning, new BrowserMaskImport(options.document), options.assets), options.bindings),
         resolutionEntries: (targets) => canvasResolutionEntries(targets, resolution, dialog, report),
+        withNodeMenuItems: (node, items) => [
+            ...items,
+            ...canvasResolutionNodeMenuItems(isRecord(node) ? associations.inventory.path(node) : null, resolution, dialog, report),
+        ],
         dispose: () => {
             dialog.close();
             route.dispose();
