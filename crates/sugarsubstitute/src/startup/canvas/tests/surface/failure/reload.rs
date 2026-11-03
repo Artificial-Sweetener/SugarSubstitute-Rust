@@ -35,8 +35,8 @@ fn navigate(host: &mut Host, navigation: u64) -> Result<MainIdentity, Box<dyn Er
     let identity = MainIdentity { navigation: Generation::new(navigation)?, ..previous };
     let panel = PanelSession::for_main(identity)?;
     let claim = host.fixture.memory.claim(64 * 1024)?;
-    host.fixture.canvas.context(identity, context(&panel, 1)?, claim)?;
-    let Some(DesktopStartupCommand::SendCanvasContext(reply)) = host.fixture.canvas.take_command()
+    host.fixture.canvas.native(identity, context(&panel, 1)?, claim, Default::default())?;
+    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = host.fixture.canvas.take_command()
     else {
         return Err("The new page's context reply is missing".into());
     };

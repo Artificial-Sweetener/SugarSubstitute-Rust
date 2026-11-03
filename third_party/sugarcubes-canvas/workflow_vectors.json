@@ -1,0 +1,1352 @@
+{
+  "valid": {
+    "sync": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.request",
+      "command": {
+        "type": "sync",
+        "workflow": "workflow:a",
+        "surfaces": [
+          {
+            "key": "node:12:image",
+            "label": "Load Image",
+            "base": {
+              "kind": "file",
+              "file": {
+                "filename": "portrait.png",
+                "subfolder": "masks",
+                "type": "input"
+              }
+            },
+            "masks": [
+              {
+                "key": "node:13:mask",
+                "label": "Mask node:13:mask",
+                "color": "#3FA9f5",
+                "opacity": 0.5,
+                "initial": {
+                  "filename": "portrait-mask.png",
+                  "subfolder": "masks",
+                  "type": "input"
+                },
+                "channel": "alpha"
+              },
+              {
+                "key": "node:14:mask",
+                "label": "Mask node:14:mask",
+                "color": "#3FA9f5",
+                "opacity": 0.5,
+                "initial": null,
+                "channel": "alpha"
+              }
+            ]
+          },
+          {
+            "key": "authority:7",
+            "label": "Empty Latent",
+            "base": {
+              "kind": "blank",
+              "width": 1024,
+              "height": 768
+            },
+            "masks": []
+          }
+        ]
+      }
+    },
+    "emptySync": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.request",
+      "command": {
+        "type": "sync",
+        "workflow": "workflow:a",
+        "surfaces": []
+      }
+    },
+    "activateInput": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.request",
+      "command": {
+        "type": "activate",
+        "workflow": "workflow:a",
+        "route": "input",
+        "surface": "node:12:image",
+        "mask": "node:13:mask"
+      }
+    },
+    "activateOutput": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.request",
+      "command": {
+        "type": "activate",
+        "workflow": "workflow:a",
+        "route": "output",
+        "surface": null,
+        "mask": null
+      }
+    },
+    "appearance": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.request",
+      "command": {
+        "type": "appearance",
+        "workflow": "workflow:a",
+        "masks": [
+          {
+            "surface": "node:12:image",
+            "mask": "node:13:mask",
+            "color": "#000000",
+            "opacity": 1
+          }
+        ]
+      }
+    },
+    "resizeCanvas": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.request",
+      "command": {
+        "type": "resize",
+        "workflow": "workflow:a",
+        "surface": "authority:7",
+        "width": 1,
+        "height": 300000,
+        "mode": {
+          "kind": "canvas",
+          "anchor": "bottom-right"
+        }
+      }
+    },
+    "resizeScale": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.request",
+      "command": {
+        "type": "resize",
+        "workflow": "workflow:a",
+        "surface": "authority:7",
+        "width": 512,
+        "height": 512,
+        "mode": {
+          "kind": "scale",
+          "resampling": "smooth"
+        }
+      }
+    },
+    "hover": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.request",
+      "command": {
+        "type": "hover",
+        "workflow": "workflow:a",
+        "surface": "node:12:image",
+        "mask": null
+      }
+    },
+    "synced": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.reply",
+      "result": {
+        "kind": "synced",
+        "surfaces": [
+          {
+            "key": "node:12:image",
+            "document": {
+              "id": "input:surface-1",
+              "geometryRevision": "geometry-1",
+              "width": 1024,
+              "height": 768
+            },
+            "masks": [
+              {
+                "key": "node:13:mask",
+                "layerId": "layer:mask-1"
+              },
+              {
+                "key": "node:14:mask",
+                "layerId": "layer:mask-2"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "activated": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.reply",
+      "result": {
+        "kind": "activated"
+      }
+    },
+    "applied": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.reply",
+      "result": {
+        "kind": "applied"
+      }
+    },
+    "failure": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "requestId": 9,
+      "type": "workflow.reply",
+      "result": {
+        "kind": "failure",
+        "status": "stale",
+        "message": "The workflow changed."
+      }
+    }
+  },
+  "invalid": [
+    {
+      "name": "too many surfaces",
+      "base": "emptySync",
+      "path": ["command", "surfaces"],
+      "value": [
+        {
+          "key": "authority:0",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:1",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:2",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:3",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:4",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:5",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:6",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:7",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:8",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:9",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:10",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:11",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:12",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:13",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:14",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:15",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:16",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:17",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:18",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:19",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:20",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:21",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:22",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:23",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:24",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:25",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:26",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:27",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:28",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:29",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:30",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:31",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:32",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:33",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:34",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:35",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:36",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:37",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:38",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:39",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:40",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:41",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:42",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:43",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:44",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:45",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:46",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:47",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:48",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:49",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:50",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:51",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:52",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:53",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:54",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:55",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:56",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:57",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:58",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:59",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:60",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:61",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:62",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:63",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        },
+        {
+          "key": "authority:64",
+          "label": "Empty Latent",
+          "base": {
+            "kind": "blank",
+            "width": 1024,
+            "height": 768
+          },
+          "masks": []
+        }
+      ]
+    },
+    {
+      "name": "too many masks",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks"],
+      "value": [
+        {
+          "key": "node:0:mask",
+          "label": "Mask node:0:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:1:mask",
+          "label": "Mask node:1:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:2:mask",
+          "label": "Mask node:2:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:3:mask",
+          "label": "Mask node:3:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:4:mask",
+          "label": "Mask node:4:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:5:mask",
+          "label": "Mask node:5:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:6:mask",
+          "label": "Mask node:6:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:7:mask",
+          "label": "Mask node:7:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:8:mask",
+          "label": "Mask node:8:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:9:mask",
+          "label": "Mask node:9:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:10:mask",
+          "label": "Mask node:10:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:11:mask",
+          "label": "Mask node:11:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:12:mask",
+          "label": "Mask node:12:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:13:mask",
+          "label": "Mask node:13:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:14:mask",
+          "label": "Mask node:14:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:15:mask",
+          "label": "Mask node:15:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:16:mask",
+          "label": "Mask node:16:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:17:mask",
+          "label": "Mask node:17:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:18:mask",
+          "label": "Mask node:18:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:19:mask",
+          "label": "Mask node:19:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:20:mask",
+          "label": "Mask node:20:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:21:mask",
+          "label": "Mask node:21:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:22:mask",
+          "label": "Mask node:22:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:23:mask",
+          "label": "Mask node:23:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:24:mask",
+          "label": "Mask node:24:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:25:mask",
+          "label": "Mask node:25:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:26:mask",
+          "label": "Mask node:26:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:27:mask",
+          "label": "Mask node:27:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:28:mask",
+          "label": "Mask node:28:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:29:mask",
+          "label": "Mask node:29:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:30:mask",
+          "label": "Mask node:30:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:31:mask",
+          "label": "Mask node:31:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        },
+        {
+          "key": "node:32:mask",
+          "label": "Mask node:32:mask",
+          "color": "#3FA9f5",
+          "opacity": 0.5,
+          "initial": null,
+          "channel": "alpha"
+        }
+      ]
+    },
+    {
+      "name": "named color",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "color"],
+      "value": "red"
+    },
+    {
+      "name": "non-hex color",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "color"],
+      "value": "#12345g"
+    },
+    {
+      "name": "long color",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "color"],
+      "value": "#1234567"
+    },
+    {
+      "name": "opacity above one",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "opacity"],
+      "value": 1.5
+    },
+    {
+      "name": "negative opacity",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "opacity"],
+      "value": -0.1
+    },
+    {
+      "name": "missing initial mask",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 1, "initial"],
+      "delete": true
+    },
+    {
+      "name": "oversized mask key",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "key"],
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "oversized surface label",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "label"],
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "unknown file type",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "base", "file", "type"],
+      "value": "cache"
+    },
+    {
+      "name": "unknown base kind",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "base", "kind"],
+      "value": "url"
+    },
+    {
+      "name": "empty blank width",
+      "base": "sync",
+      "path": ["command", "surfaces", 1, "base", "width"],
+      "value": 0
+    },
+    {
+      "name": "oversized blank height",
+      "base": "sync",
+      "path": ["command", "surfaces", 1, "base", "height"],
+      "value": 300001
+    },
+    {
+      "name": "blank base with a file",
+      "base": "sync",
+      "path": ["command", "surfaces", 1, "base", "file"],
+      "value": {
+        "filename": "x.png",
+        "subfolder": "masks",
+        "type": "input"
+      }
+    },
+    {
+      "name": "oversized workflow key",
+      "base": "emptySync",
+      "path": ["command", "workflow"],
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "unknown route",
+      "base": "activateInput",
+      "path": ["command", "route"],
+      "value": "both"
+    },
+    {
+      "name": "missing active surface",
+      "base": "activateOutput",
+      "path": ["command", "surface"],
+      "delete": true
+    },
+    {
+      "name": "empty appearance",
+      "base": "appearance",
+      "path": ["command", "masks"],
+      "value": []
+    },
+    {
+      "name": "appearance opacity above one",
+      "base": "appearance",
+      "path": ["command", "masks", 0, "opacity"],
+      "value": 2
+    },
+    {
+      "name": "unknown anchor",
+      "base": "resizeCanvas",
+      "path": ["command", "mode", "anchor"],
+      "value": "middle"
+    },
+    {
+      "name": "unknown resampling",
+      "base": "resizeScale",
+      "path": ["command", "mode", "resampling"],
+      "value": "bicubic"
+    },
+    {
+      "name": "unknown resize mode",
+      "base": "resizeScale",
+      "path": ["command", "mode", "kind"],
+      "value": "crop"
+    },
+    {
+      "name": "empty resize width",
+      "base": "resizeScale",
+      "path": ["command", "width"],
+      "value": 0
+    },
+    {
+      "name": "null hover surface",
+      "base": "hover",
+      "path": ["command", "surface"],
+      "value": null
+    },
+    {
+      "name": "unknown workflow command",
+      "base": "hover",
+      "path": ["command", "type"],
+      "value": "retire"
+    },
+    {
+      "name": "extra workflow member",
+      "base": "hover",
+      "path": ["command", "region"],
+      "value": 0
+    },
+    {
+      "name": "invalid synced document",
+      "base": "synced",
+      "path": ["result", "surfaces", 0, "document", "width"],
+      "value": 0
+    },
+    {
+      "name": "oversized synced layer id",
+      "base": "synced",
+      "path": ["result", "surfaces", 0, "masks", 0, "layerId"],
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "unknown workflow result",
+      "base": "applied",
+      "path": ["result", "kind"],
+      "value": "retired"
+    },
+    {
+      "name": "extra activation member",
+      "base": "activated",
+      "path": ["result", "surface"],
+      "value": "node:12:image"
+    },
+    {
+      "name": "mask without channel",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "channel"],
+      "delete": true
+    },
+    {
+      "name": "unknown mask channel",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "channel"],
+      "value": "luma"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 //! Exercise actual child fallback routing without a ready policy or a native surface capability.
 
 use super::*;
-use sugarsubstitute_desktop::{CanvasContextReply, SurfaceReply};
+use sugarsubstitute_desktop::{CanvasNativeReply, SurfaceReply};
 
 struct Release;
 impl MemoryRelease for Release {
@@ -24,8 +24,8 @@ fn surface(identity: MainIdentity, request_id: u64, cancel: bool) -> Result<Canv
     Ok(CanvasSurfaceMessage::decode(&serde_json::to_vec(&value)?)?)
 }
 
-fn context(identity: MainIdentity) -> Result<CanvasContextRequest> {
-    Ok(CanvasContextRequest::decode(&serde_json::to_vec(&serde_json::json!({
+fn context(identity: MainIdentity) -> Result<CanvasNativeRequest> {
+    Ok(CanvasNativeRequest::decode(&serde_json::to_vec(&serde_json::json!({
         "protocol":"sugarcubes.canvas", "version":3,
         "session":PanelSession::for_main(identity)?.as_str(),
         "requestId":9, "type":"context.request"
@@ -58,13 +58,13 @@ fn current_unready_and_failed_policies_both_return_correlated_ordinary_refusals(
         assert_eq!(value["requestId"], 7);
         assert_eq!(value["status"], "unavailable");
         drop(reply);
-        child.receive_context_request(
+        child.receive_native_request(
             identity,
-            context(identity)?,
+            &context(identity)?,
             lease.clone(),
-            lease.claim(CanvasContextReply::STORAGE_BYTES)?,
+            lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
         )?;
-        let Some(DesktopStartupCommand::SendCanvasContext(reply)) = child.take_command()? else {
+        let Some(DesktopStartupCommand::SendCanvasNative(reply)) = child.take_command()? else {
             return Err("Current unavailable context request was silently dropped".into());
         };
         let value: serde_json::Value = serde_json::from_slice(reply.payload())?;

@@ -6,7 +6,7 @@ use super::*;
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::{
-    canvas_context::CanvasContextRequest,
+    canvas_native::CanvasNativeRequest,
     canvas_surface::CanvasSurfaceMessage,
     execution::{Generation, MemoryLease, MemoryRelease},
     lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey},
@@ -31,6 +31,7 @@ mod host;
 mod input;
 mod inspection;
 mod jpeg;
+mod native;
 mod overview;
 mod preview;
 mod reattached_overview;
@@ -221,16 +222,21 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     let identity = identity()?;
     let panel = PanelSession::for_main(identity)?;
     let memory = MemoryLease::new(2 * 1024 * 1024, Box::new(Release));
-    let context = CanvasContextRequest::decode(&serde_json::to_vec(&json!({
+    let context = CanvasNativeRequest::decode(&serde_json::to_vec(&json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
         "requestId":100, "type":"context.request"
     }))?)?;
-    canvas.context(identity, context, memory.claim(64 * 1024)?)?;
-    let Some(DesktopStartupCommand::SendCanvasContext(context)) = canvas.take_command() else {
+    canvas.native(identity, context, memory.claim(64 * 1024)?, Default::default())?;
+    let Some(DesktopStartupCommand::SendCanvasNative(context)) = canvas.take_command() else {
         return Err("Canvas context is missing".into());
     };
     let value: Value = serde_json::from_slice(context.payload())?;
-    assert_eq!(value["context"]["canvas"]["capabilities"]["displayOutput"], true);
+    // Geometry, editing and workflow surfaces stay unadvertised until they are serviced.
+    assert_eq!(
+        value["context"]["canvas"]["capabilities"],
+        json!({"displayOutput": true, "insertImageLayer": false, "positionImageLayer": false})
+    );
+    assert_eq!(value["context"]["document"], Value::Null);
     canvas.surface(
         identity,
         request(&panel, 1, "surface.prepare", json!({}))?,

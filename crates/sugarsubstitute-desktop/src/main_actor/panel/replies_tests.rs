@@ -4,13 +4,13 @@
 
 use super::*;
 use crate::{
-    CanvasContextReply, MainIdentity, SurfaceReply,
+    CanvasNativeReply, MainIdentity, SurfaceReply,
     main_events::{Command, Events, Kind},
 };
 use serde_json::{Value, json};
 use std::error::Error;
 use sugarsubstitute_contracts::{
-    canvas_context::{CanvasContextRequest, CanvasDisplayCapability},
+    canvas_native::{CanvasContextRequest, CanvasNativeCapabilities},
     canvas_surface::{CanvasSurfaceMessage, CanvasSurfaceReplyStatus},
     execution::{Generation, MemoryLease, MemoryRelease},
     lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey},
@@ -50,11 +50,11 @@ fn context(
         "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
         "requestId":id, "type":"context.request"
     }))?)?;
-    Ok(NativeDelivery::Context(CanvasContextReply::new(
+    let capabilities = CanvasNativeCapabilities { display_output: true, ..Default::default() };
+    Ok(NativeDelivery::Canvas(CanvasNativeReply::new(
         identity,
-        &request,
-        CanvasDisplayCapability::Available,
-        lease.claim(CanvasContextReply::STORAGE_BYTES)?,
+        request.reply(capabilities, None)?,
+        lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
     )?))
 }
 
@@ -274,6 +274,49 @@ fn overload_is_explicit_and_close_releases_every_retained_reply() -> Result<(), 
     queue.clear();
     assert!(queue.is_empty());
     assert!(lease.claim((CAPACITY as u64 + 1) * SurfaceReply::STORAGE_BYTES).is_ok());
+    Ok(())
+}
+
+#[test]
+fn canvas_notifications_coalesce_by_kind_and_retire_with_their_navigation()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::canvas_native::{CanvasRevision, CanvasSourceChange};
+    let identity = identity()?;
+    let session = PanelSession::for_main(identity)?;
+    let lease =
+        MemoryLease::new(4 * crate::CanvasNativeNotification::STORAGE_BYTES, Box::new(Release));
+    let notification = |revision: &str| -> Result<NativeDelivery, Box<dyn Error>> {
+        let change =
+            CanvasSourceChange { document: None, revision: CanvasRevision::new(revision)? };
+        Ok(NativeDelivery::CanvasNotification(crate::CanvasNativeNotification::new(
+            identity,
+            change.encode(&session)?,
+            lease.claim(crate::CanvasNativeNotification::STORAGE_BYTES)?,
+        )?))
+    };
+    let mut queue = Replies::new();
+    queue.push(notification("1")?)?;
+    queue.push(context(identity, 5, &lease)?)?;
+    queue.push(notification("2")?)?;
+    // The superseded notification released its claim; the reply keeps its ordinary credit.
+    assert!(lease.claim(crate::CanvasNativeNotification::STORAGE_BYTES).is_ok());
+    let mut sent = Vec::new();
+    while queue.progress(true, |delivery| {
+        let message: Value = serde_json::from_slice(
+            delivery
+                .payload()
+                .ok_or_else(|| DesktopError::message("test_reply", "missing payload"))?,
+        )
+        .map_err(|cause| DesktopError::new("test_reply", cause))?;
+        sent.push((message["type"].clone(), delivery.lane().is_some()));
+        Ok(())
+    })? {}
+    assert_eq!(sent, [(json!("source.changed"), false), (json!("context.reply"), true)]);
+    queue.push(notification("3")?)?;
+    let foreign = MainIdentity { navigation: Generation::new(2)?, ..identity };
+    assert!(queue.retire_presentations(Some(foreign))?);
+    assert!(queue.is_empty());
+    assert!(lease.claim(lease.bytes()).is_ok());
     Ok(())
 }
 

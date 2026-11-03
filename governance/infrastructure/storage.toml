@@ -4312,7 +4312,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:7037cb4e2234d2a777fbb3b569712d22cfb3ef13d65ffea7ac84097a06285192"
+source_sha256 = "sha256:211cac4546a97109b6cfa02fb3b61e90ee706eb9395a2d76b7245d805f6d6380"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
@@ -4384,7 +4384,7 @@ rationale = "An owned temporary cache scope qualifies the real loopback output t
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:c9485f904e02fc1ca7416e0353be0bb81ba7bc80262f895f054106108e952620"
+source_sha256 = "sha256:44740f18974d2412a2339cfd39a6f9e1746bf9d1aa79e8954ec33508311d1578"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."

@@ -6,7 +6,8 @@
   const host = 'ai.artificialsweetener.sugarsubstitute';
   const controls = ['ready', 'applied', 'pong', 'rejected'];
   const memoryReports = ['usage', 'preference'];
-  const requestTypes = ['context.request', 'surface.capabilities.request', 'surface.viewport.request',
+  const requestTypes = ['context.request', 'source.request', 'geometry.request', 'edit.request',
+    'workflow.request', 'surface.capabilities.request', 'surface.viewport.request',
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
@@ -15,7 +16,8 @@
   const notification = value => value.protocol === 'sugarcubes.panel' ||
     value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
     value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
-    ['surface.presentation.changed', 'surface.camera.changed'].includes(value.type);
+    ['surface.presentation.changed', 'surface.camera.changed', 'source.changed', 'edit.changed']
+      .includes(value.type);
   function acceptsReply(type, value) {
     const expected = type.startsWith('surface.preview.') ? 'surface.reply' :
       type.replace(/[^.]+$/, 'reply');

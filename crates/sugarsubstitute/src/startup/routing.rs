@@ -190,21 +190,21 @@ impl<B: StartupBackend> StartupHost<B> {
                                 .display(display.hertz)?;
                             return Ok(());
                         }
-                        DesktopStartupObservation::CanvasContextMessage(observed)
+                        DesktopStartupObservation::CanvasNativeMessage(observed)
                             if grants_native_canvas(accepts, observed.hosting()) =>
                         {
-                            let (identity, request, lease, claim) = observed.into_parts();
+                            let (identity, request, lease, claim, storage) = observed.into_parts();
                             if self.child.admits_canvas(identity, &lease) {
                                 let backend = self.child.canvas_backend(identity);
                                 let canvas =
                                     self.canvas.as_mut().ok_or("Application canvas disappeared")?;
                                 canvas.backend(backend)?;
-                                canvas.context(identity, request, claim)?;
+                                canvas.native(identity, request, claim, storage)?;
                             } else {
                                 self.canvas
                                     .as_mut()
                                     .ok_or("Application canvas disappeared")?
-                                    .refuse_context(identity, &request, claim)?;
+                                    .refuse_native(identity, &request, claim)?;
                                 #[cfg(feature = "k1-native-qualification")]
                                 sugarsubstitute_desktop::qualification_trace::progress(
                                     sugarsubstitute_desktop::qualification_trace::Progress::CanvasContextRejected,

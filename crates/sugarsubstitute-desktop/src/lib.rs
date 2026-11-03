@@ -33,7 +33,7 @@ mod host_contract;
 mod main_backend;
 #[cfg(any(target_os = "windows", test))]
 mod main_bulk;
-mod main_canvas_context;
+mod main_canvas_native;
 #[cfg(any(target_os = "windows", test))]
 mod main_downloads;
 mod main_environment;
@@ -171,8 +171,9 @@ pub use host_contract::{
     StartupPreparationStep, StartupWindowContent,
 };
 
-pub use main_canvas_context::{
-    CanvasContextObservation, CanvasContextReply, CanvasContextReplyError,
+pub use main_canvas_native::{
+    CanvasNativeNotification, CanvasNativeObservation, CanvasNativeReply, CanvasNativeReplyError,
+    CanvasNativeRequestStorage,
 };
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};
 pub use main_hosting::MainHosting;

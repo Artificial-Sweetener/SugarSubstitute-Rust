@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 use sugarsubstitute_contracts::{
-    canvas_context::CanvasContextRequest,
+    canvas_native::CanvasNativeRequest,
     canvas_surface::CanvasSurfaceMessage,
     memory::MemoryMessage,
     panel::{PanelMessage, PanelSession},
@@ -142,7 +142,7 @@ struct BindingEvent {
 pub(crate) enum ClientMessage {
     Panel(PanelMessage),
     Surface(CanvasSurfaceMessage),
-    Context(CanvasContextRequest),
+    Native(CanvasNativeRequest),
     Memory(MemoryMessage),
 }
 
@@ -152,7 +152,7 @@ impl ClientMessage {
         match self {
             Self::Panel(_) | Self::Memory(_) => Lane::Control,
             Self::Surface(CanvasSurfaceMessage::Cancel { .. }) => Lane::Cancellation,
-            Self::Surface(_) | Self::Context(_) => Lane::Ordinary,
+            Self::Surface(_) | Self::Native(_) => Lane::Ordinary,
         }
     }
 
@@ -164,7 +164,7 @@ impl ClientMessage {
             Self::Surface(CanvasSurfaceMessage::Discovery(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Presentation(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Cancel { request_id, .. }) => Some(*request_id),
-            Self::Context(value) => Some(value.request_id()),
+            Self::Native(value) => Some(value.request_id()),
         }
     }
 }
@@ -211,8 +211,8 @@ pub(crate) fn decode_payload(payload: &str, session: &PanelSession) -> Option<Cl
     if let Ok(message) = MemoryMessage::decode(payload.as_bytes()) {
         return (message.session() == session).then_some(ClientMessage::Memory(message));
     }
-    let request = CanvasContextRequest::decode(payload.as_bytes()).ok()?;
-    (request.session() == session).then_some(ClientMessage::Context(request))
+    let request = CanvasNativeRequest::decode(payload.as_bytes()).ok()?;
+    (request.session() == session).then_some(ClientMessage::Native(request))
 }
 
 #[cfg(test)]
@@ -329,11 +329,43 @@ mod tests {
         })
         .to_string();
         let current = event(BINDING_NAME, 17, &request);
-        assert!(matches!(decode(&current, Some(17), &session), Some(ClientMessage::Context(_))));
+        assert!(matches!(
+            decode(&current, Some(17), &session),
+            Some(ClientMessage::Native(CanvasNativeRequest::Context(_)))
+        ));
         assert!(decode(&current, None, &session).is_none());
         assert!(decode(&current, Some(18), &session).is_none());
         assert!(decode(&current, Some(17), &other).is_none());
         assert!(decode(&event("foreign", 17, &request), Some(17), &session).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn every_native_request_family_rides_the_ordinary_lane_for_its_own_session()
+    -> Result<(), Box<dyn Error>> {
+        let session = PanelSession::new("session-12345678".into())?;
+        let other = PanelSession::new("foreign-12345678".into())?;
+        let hover = serde_json::json!({"type":"hover", "workflow":"workflow-none",
+            "surface":"node:1:image", "mask":null});
+        for (kind, command) in [
+            ("source.request", serde_json::json!({"type":"watch", "enabled":true})),
+            ("geometry.request", serde_json::json!({"type":"context"})),
+            ("edit.request", serde_json::json!({"type":"tool", "tool":"brush"})),
+            ("workflow.request", hover),
+        ] {
+            let request = serde_json::json!({
+                "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
+                "requestId":9, "type":kind, "command":command,
+            })
+            .to_string();
+            let message = decode_payload(&request, &session).ok_or("Native request was inert")?;
+            assert!(matches!(&message, ClientMessage::Native(native) if native.request_id() == 9));
+            assert_eq!(message.lane(), Lane::Ordinary);
+            assert_eq!(message.request_id(), Some(9));
+            assert!(decode_payload(&request, &other).is_none());
+            let extended = request.replacen("\"requestId\":9", "\"requestId\":9,\"extra\":1", 1);
+            assert!(decode_payload(&extended, &session).is_none());
+        }
         Ok(())
     }
 

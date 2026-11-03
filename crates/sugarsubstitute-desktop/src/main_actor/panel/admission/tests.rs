@@ -38,7 +38,7 @@ fn ordinary_reply(
     claim: sugarsubstitute_contracts::execution::MemoryClaim,
 ) -> Result<NativeDelivery, Box<dyn Error>> {
     use sugarsubstitute_contracts::{
-        canvas_context::{CanvasContextRequest, CanvasDisplayCapability},
+        canvas_native::{CanvasContextRequest, CanvasNativeCapabilities},
         panel::PanelSession,
     };
     let identity = identity()?;
@@ -47,10 +47,10 @@ fn ordinary_reply(
         "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
         "requestId":request_id, "type":"context.request"
     }))?)?;
-    Ok(NativeDelivery::Context(crate::CanvasContextReply::new(
+    let capabilities = CanvasNativeCapabilities { display_output: true, ..Default::default() };
+    Ok(NativeDelivery::Canvas(crate::CanvasNativeReply::new(
         identity,
-        &request,
-        CanvasDisplayCapability::Available,
+        request.reply(capabilities, None)?,
         claim,
     )?))
 }

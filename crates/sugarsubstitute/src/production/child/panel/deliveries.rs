@@ -4,16 +4,16 @@
 
 use super::*;
 use sugarsubstitute_contracts::{
-    canvas_context::{CanvasContextRequest, CanvasDisplayCapability},
+    canvas_native::{CanvasFailure, CanvasFailureStatus, CanvasNativeRequest},
     canvas_surface::{
         CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryStatus, CanvasSurfaceMessage,
         CanvasSurfaceReplyStatus,
     },
 };
-use sugarsubstitute_desktop::{CanvasContextReply, PanelIngressReceipt, SurfaceReply};
+use sugarsubstitute_desktop::{CanvasNativeReply, PanelIngressReceipt, SurfaceReply};
 
 enum Ordinary {
-    Context(CanvasContextReply),
+    Native(CanvasNativeReply),
     Surface(SurfaceReply),
 }
 
@@ -156,23 +156,20 @@ impl Deliveries {
         Ok(())
     }
 
-    /// Answer context through the original ingress claim even before panel readiness or after failure.
-    pub(super) fn context(
+    /// Answer a native canvas request through its original ingress claim, even before panel
+    /// readiness or after failure: an empty context, or `unavailable` for every other family.
+    pub(super) fn native(
         &mut self,
         identity: MainIdentity,
-        request: CanvasContextRequest,
+        request: &CanvasNativeRequest,
         lease: &MemoryLease,
         claim: MemoryClaim,
     ) -> Result<()> {
         self.bind(identity, lease)?;
         self.check_ordinary()?;
-        let reply = CanvasContextReply::new(
-            identity,
-            &request,
-            CanvasDisplayCapability::Unavailable,
-            claim,
-        )?;
-        self.ordinary = Some(Ordinary::Context(reply));
+        let unavailable = CanvasFailure::new(CanvasFailureStatus::Unavailable);
+        let reply = CanvasNativeReply::new(identity, request.refusal_reply(&unavailable)?, claim)?;
+        self.ordinary = Some(Ordinary::Native(reply));
         Ok(())
     }
 
@@ -197,7 +194,7 @@ impl Deliveries {
             self.next = lane.next();
             let command = match lane {
                 Lane::Ordinary => self.ordinary.take().map(|reply| match reply {
-                    Ordinary::Context(reply) => DesktopStartupCommand::SendCanvasContext(reply),
+                    Ordinary::Native(reply) => DesktopStartupCommand::SendCanvasNative(reply),
                     Ordinary::Surface(reply) => DesktopStartupCommand::SendSurface(reply),
                 }),
                 Lane::Control => {

@@ -112,8 +112,8 @@ fn commit_red(host: &mut Host) -> Result<(), Box<dyn Error>> {
 }
 
 /// Decode a page's discovery-time context request through its public contract.
-fn context(panel: &PanelSession, id: u64) -> Result<CanvasContextRequest, Box<dyn Error>> {
-    Ok(CanvasContextRequest::decode(&serde_json::to_vec(&json!({
+fn context(panel: &PanelSession, id: u64) -> Result<CanvasNativeRequest, Box<dyn Error>> {
+    Ok(CanvasNativeRequest::decode(&serde_json::to_vec(&json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
         "requestId":id, "type":"context.request"
     }))?)?)

@@ -33,7 +33,8 @@ impl Replies {
         self.reply_after_evidence && !self.is_empty()
     }
 
-    /// Coalesce unsent full snapshots by attachment; preserve correlated responses and order.
+    /// Coalesce unsent full snapshots by attachment and canvas notifications by kind; preserve
+    /// correlated responses and order.
     /// Reject independent overload explicitly without acknowledging a discarded request.
     pub(super) fn push(&mut self, reply: NativeDelivery) -> Result<(), DesktopError> {
         if let NativeDelivery::Presentation(incoming) = &reply {
@@ -45,6 +46,17 @@ impl Replies {
                     if incoming.sequence() > pending.sequence() {
                         self.slots[index] = Some(reply);
                     }
+                    return Ok(());
+                }
+            }
+        }
+        if let NativeDelivery::CanvasNotification(incoming) = &reply {
+            for offset in 0..self.len {
+                let index = (self.first + offset) % CAPACITY;
+                if let Some(NativeDelivery::CanvasNotification(pending)) = &self.slots[index]
+                    && pending.same_target(incoming)
+                {
+                    self.slots[index] = Some(reply);
                     return Ok(());
                 }
             }
@@ -84,6 +96,7 @@ impl Replies {
             self.len -= 1;
             if matches!(&delivery, NativeDelivery::Presentation(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::Memory(value) if current != Some(value.identity()))
+                || matches!(&delivery, NativeDelivery::CanvasNotification(value) if current != Some(value.identity()))
             {
                 retired = true;
             } else {

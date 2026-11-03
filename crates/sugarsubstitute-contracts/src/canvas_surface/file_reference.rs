@@ -33,13 +33,23 @@ impl CanvasFileReference {
         if !value.valid() {
             return None;
         }
-        let storage = match value.r#type.as_str() {
+        Self::from_parts(value.filename, value.subfolder, &value.r#type)
+    }
+
+    /// Adopt the fields of any generated copy of the shared file-reference shape.
+    ///
+    /// Other shared protocols embed the same definition through their own generated module.
+    pub(crate) fn from_parts(filename: String, subfolder: String, storage: &str) -> Option<Self> {
+        let storage = match storage {
             "input" => CanvasFileStorage::Input,
             "output" => CanvasFileStorage::Output,
             "temp" => CanvasFileStorage::Temporary,
             _ => return None,
         };
-        Some(Self { filename: value.filename, subfolder: value.subfolder, storage })
+        if filename.chars().count() > 4096 || subfolder.chars().count() > 4096 {
+            return None;
+        }
+        Some(Self { filename, subfolder, storage })
     }
     /// Decode the closed shared wire shape and retain its original Unicode text.
     ///

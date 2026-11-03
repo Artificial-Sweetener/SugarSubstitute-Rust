@@ -565,7 +565,7 @@ test('binding exceptions propagate synchronously and queued admission fails clos
 });
 test('unsupported messages reject before custody and leave valid requests usable', () => {
   const f = fixture();
-  for (const value of [canvas(1, 'sources.request'), canvas(1, 'geometry.request'), canvas(1, 'image.insert'), canvas(1, 'context.request', { version: 2 }), canvas(1, 'context.request', { session: 'another-session' }), canvas(0), control('configure')])
+  for (const value of [canvas(1, 'sources.request'), canvas(1, 'masks.request'), canvas(1, 'image.insert'), canvas(1, 'context.request', { version: 2 }), canvas(1, 'context.request', { session: 'another-session' }), canvas(0), control('configure')])
     assert.throws(() => f.bridge.send(value), error => transportError(error, 'unsupported'));
   f.bridge.send(canvas());
   f.receipt('g', 'o', 1);
@@ -752,7 +752,38 @@ test('settled camera notifications share the zero-id presentation admission', ()
     assert.equal(f.deliver(value), false);
   assert.equal(f.deliver(camera), true);
 });
-test('every shared surface and context request type is admitted by the bridge policy', () => {
+const nativeRequests = ['source.request', 'geometry.request', 'edit.request', 'workflow.request'];
+for (const type of nativeRequests) {
+  test(`native ${type} rides the ordinary lane and accepts only its own reply or an error`, () => {
+    const f = fixture(), request = canvas(1, type, { command: { type: 'context' } });
+    const reply = type.replace(/request$/, 'reply');
+    f.bridge.send(request);
+    assert.equal(f.receipt('g', 'o', 1), true);
+    assert.deepEqual(f.sent, [framed(request, 'o', 1)]);
+    for (const other of nativeRequests.filter(value => value !== type))
+      assert.equal(f.deliver(canvas(1, other.replace(/request$/, 'reply')), 1), false);
+    assert.equal(f.deliver(canvas(2, reply), 1), false);
+    assert.equal(f.deliver(canvas(1, reply, { result: { kind: 'failure', status: 'unsupported', message: '' } }), 1), true);
+    assert.deepEqual(f.received.map(value => value.type), [reply]);
+    const next = admit(canvas(3, type, { command: { type: 'context' } }));
+    assert.equal(next.deliver(canvas(3, 'error.reply', { failure: { status: 'cancelled', message: '' } }), maxTicket), true);
+  });
+}
+test('source and edit change notifications are zero-id current-session notifications', () => {
+  const f = fixture();
+  const changes = [canvas(0, 'source.changed', { change: { documentId: null, revision: 'r' } }),
+    canvas(0, 'edit.changed', { state: { revision: 1 } })];
+  for (const change of changes) {
+    for (const value of [{ ...change, requestId: 1 }, { ...change, session: 'another-session' },
+      { ...change, version: 2 }, { ...change, protocol: 'other' }])
+      assert.equal(f.deliver(value), false);
+    assert.equal(f.deliver(change), true);
+  }
+  assert.deepEqual(f.received.map(value => value.type), ['source.changed', 'edit.changed']);
+  for (const type of ['workflow.changed', 'geometry.changed'])
+    assert.equal(f.deliver(canvas(0, type)), false);
+});
+test('every shared surface and native canvas request type is admitted by the bridge policy', () => {
   const schema = JSON.parse(readFileSync(
     new URL('../../../third_party/sugarcubes-canvas/canvas.schema.json', import.meta.url), 'utf8'));
   const context = createContext({});
@@ -761,10 +792,11 @@ test('every shared surface and context request type is admitted by the bridge po
   const sharedTypes = Object.entries(schema.definitions ?? schema.$defs ?? {})
     .filter(([name, definition]) => name.endsWith('Request') && definition.properties?.type?.const)
     .map(([, definition]) => definition.properties.type.const)
-    // The panel bridge carries surface and context requests; editor requests use other hosts,
-    // and cancellation travels the bridge's separate cancel lane.
-    .filter(type => type.startsWith('surface.') || type === 'context.request');
+    // The panel bridge carries every request except layer insertion, which the native host never
+    // advertises; cancellation travels the bridge's separate cancel lane.
+    .filter(type => !['image.insert', 'cancel'].includes(type));
   assert.ok(sharedTypes.includes('surface.overview') && sharedTypes.includes('surface.select'));
+  for (const type of ['context.request', ...nativeRequests]) assert.ok(sharedTypes.includes(type));
   for (const type of sharedTypes) assert.ok(policy.request(type), `${type} is not admitted`);
 });
 

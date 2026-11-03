@@ -4,7 +4,7 @@
 
 pub mod application_launch;
 pub mod backend_custody;
-pub mod canvas_context;
+pub mod canvas_native;
 pub mod canvas_surface;
 pub mod configuration;
 /// Bound independent invocation facts without native coordinator authority.

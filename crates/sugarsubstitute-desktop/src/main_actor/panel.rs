@@ -59,13 +59,29 @@ impl MainActor {
         self.canvas_replies.push(NativeDelivery::Memory(command))
     }
 
-    /// Deliver a correlated context reply to the same current document and UI apartment.
-    pub(crate) fn send_canvas_context(
+    /// Deliver a correlated native canvas reply to the same current document and UI apartment.
+    pub(crate) fn send_canvas_native(
         &mut self,
-        reply: crate::CanvasContextReply,
+        reply: crate::CanvasNativeReply,
     ) -> Result<(), DesktopError> {
         self.admitted_panel_context(reply.identity())?;
-        self.canvas_replies.push(NativeDelivery::Context(reply))
+        self.canvas_replies.push(NativeDelivery::Canvas(reply))
+    }
+
+    /// Retain the latest native canvas notification of its kind; stale ones retire here.
+    pub(crate) fn send_canvas_notification(
+        &mut self,
+        notification: crate::CanvasNativeNotification,
+    ) -> Result<(), DesktopError> {
+        if notification.identity() != self.identity()
+            || self.admission.closing()
+            || !self.revealed
+            || self.readiness.as_ref().and_then(MainReadiness::panel_context).is_none()
+        {
+            return Ok(());
+        }
+        self.admitted_panel_context(notification.identity())?;
+        self.canvas_replies.push(NativeDelivery::CanvasNotification(notification))
     }
 
     /// Acknowledge consumed control/cancellation without asserting original mutation completion.

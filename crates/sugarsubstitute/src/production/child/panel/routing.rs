@@ -5,10 +5,10 @@
 use super::*;
 use sugarsubstitute_application::startup::StartupPhase;
 use sugarsubstitute_contracts::{
-    canvas_context::CanvasContextRequest, canvas_surface::CanvasSurfaceMessage,
+    canvas_native::CanvasNativeRequest, canvas_surface::CanvasSurfaceMessage,
 };
 use sugarsubstitute_desktop::{
-    CanvasContextObservation, PanelIngressReceipt, PanelObservation, SurfaceObservation,
+    CanvasNativeObservation, PanelIngressReceipt, PanelObservation, SurfaceObservation,
 };
 
 #[cfg(test)]
@@ -105,21 +105,22 @@ impl ProductionChild {
         self.panel_deliveries.surface(identity, message, &lease, claim)
     }
 
-    /// Return an explicit unavailable context through the same current native delivery owner.
-    pub(in crate::production::child) fn observe_canvas_context(
+    /// Return an explicit unavailable answer through the same current native delivery owner.
+    pub(in crate::production::child) fn observe_canvas_native(
         &mut self,
-        observation: CanvasContextObservation,
+        observation: CanvasNativeObservation,
         _prepared: Option<&PreparedChildStartup>,
     ) -> Result<()> {
-        let (identity, request, lease, claim) = observation.into_parts();
-        self.receive_context_request(identity, request, lease, claim)
+        // The refusal is encoded at once, so upload storage is released with the request.
+        let (identity, request, lease, claim, _storage) = observation.into_parts();
+        self.receive_native_request(identity, &request, lease, claim)
     }
 
-    /// Consume an attributed context request without replacing its original response admission.
-    fn receive_context_request(
+    /// Consume an attributed native request without replacing its original response admission.
+    fn receive_native_request(
         &mut self,
         identity: MainIdentity,
-        request: CanvasContextRequest,
+        request: &CanvasNativeRequest,
         lease: MemoryLease,
         claim: MemoryClaim,
     ) -> Result<()> {
@@ -127,7 +128,7 @@ impl ProductionChild {
             return Ok(());
         }
         self.bind_panel_delivery(identity, &lease)?;
-        self.panel_deliveries.context(identity, request, &lease, claim)
+        self.panel_deliveries.native(identity, request, &lease, claim)
     }
 
     /// A retired or foreign peer cannot bind delivery resources for the current page.

@@ -5,7 +5,7 @@
 use super::*;
 
 /// Construct the inert application owner without starting workers or opening storage.
-fn waiting_canvas() -> Result<EmbeddedCanvas, Box<dyn Error>> {
+pub(super) fn waiting_canvas() -> Result<EmbeddedCanvas, Box<dyn Error>> {
     let mut canvas = EmbeddedCanvas::new(
         PathBuf::new(),
         DiagnosticHealth::fixture(),
@@ -19,8 +19,8 @@ fn waiting_canvas() -> Result<EmbeddedCanvas, Box<dyn Error>> {
 }
 
 /// Use the public request decoder rather than manufacturing an internal context record.
-fn context(panel: &PanelSession, id: u64) -> Result<CanvasContextRequest, Box<dyn Error>> {
-    Ok(CanvasContextRequest::decode(&serde_json::to_vec(&json!({
+fn context(panel: &PanelSession, id: u64) -> Result<CanvasNativeRequest, Box<dyn Error>> {
+    Ok(CanvasNativeRequest::decode(&serde_json::to_vec(&json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
         "requestId":id, "type":"context.request"
     }))?)?)
@@ -41,12 +41,12 @@ fn waiting_context_cancels_before_canvas_initialization_and_retains_terminal_rep
     let identity = identity()?;
     let panel = PanelSession::for_main(identity)?;
     let memory = MemoryLease::new(128 * 1024, Box::new(Release));
-    canvas.context(identity, context(&panel, 11)?, memory.claim(64 * 1024)?)?;
+    canvas.native(identity, context(&panel, 11)?, memory.claim(64 * 1024)?, Default::default())?;
     assert!(canvas.take_command().is_none());
     assert!(memory.claim(64 * 1024 + 1).is_err());
 
     canvas.surface(identity, cancel(&panel, 11)?, None, memory.claim(64 * 1024)?)?;
-    let Some(DesktopStartupCommand::SendCanvasContext(reply)) = canvas.take_command() else {
+    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
         return Err("Waiting context did not produce its terminal cancellation reply".into());
     };
     let value: Value = serde_json::from_slice(reply.payload())?;
@@ -68,10 +68,10 @@ fn waiting_context_cancels_before_canvas_initialization_and_retains_terminal_rep
     let restored = memory.claim(128 * 1024)?;
     drop(restored);
 
-    canvas.context(identity, context(&panel, 12)?, memory.claim(64 * 1024)?)?;
+    canvas.native(identity, context(&panel, 12)?, memory.claim(64 * 1024)?, Default::default())?;
     assert!(canvas.take_command().is_none());
     canvas.surface(identity, cancel(&panel, 12)?, None, memory.claim(64 * 1024)?)?;
-    let Some(DesktopStartupCommand::SendCanvasContext(reply)) = canvas.take_command() else {
+    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
         return Err("The next context read did not retain its own cancellation identity".into());
     };
     let value: Value = serde_json::from_slice(reply.payload())?;
@@ -92,7 +92,7 @@ fn cancellation_cannot_retire_another_request_or_navigation() -> Result<(), Box<
     let panel = PanelSession::for_main(current)?;
     let other = PanelSession::for_main(foreign)?;
     let memory = MemoryLease::new(128 * 1024, Box::new(Release));
-    canvas.context(current, context(&panel, 11)?, memory.claim(64 * 1024)?)?;
+    canvas.native(current, context(&panel, 11)?, memory.claim(64 * 1024)?, Default::default())?;
     for (identity, session, request_id) in [(current, &panel, 12), (foreign, &other, 11)] {
         canvas.surface(identity, cancel(session, request_id)?, None, memory.claim(64 * 1024)?)?;
         let Some(DesktopStartupCommand::CompletePanelIngress(receipt)) = canvas.take_command()
@@ -105,7 +105,7 @@ fn cancellation_cannot_retire_another_request_or_navigation() -> Result<(), Box<
         assert!(memory.claim(64 * 1024 + 1).is_err());
     }
     canvas.surface(current, cancel(&panel, 11)?, None, memory.claim(64 * 1024)?)?;
-    let Some(DesktopStartupCommand::SendCanvasContext(reply)) = canvas.take_command() else {
+    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
         return Err("The current context was lost after unrelated cancellation".into());
     };
     assert_eq!(reply.identity(), current);
@@ -126,8 +126,8 @@ fn navigation_retirement_removes_unattached_waits_without_discarding_newer_repli
     let old_panel = PanelSession::for_main(old)?;
     let panel = PanelSession::for_main(current)?;
     let memory = MemoryLease::new(192 * 1024, Box::new(Release));
-    canvas.context(old, context(&old_panel, 11)?, memory.claim(64 * 1024)?)?;
-    canvas.context(current, context(&panel, 12)?, memory.claim(64 * 1024)?)?;
+    canvas.native(old, context(&old_panel, 11)?, memory.claim(64 * 1024)?, Default::default())?;
+    canvas.native(current, context(&panel, 12)?, memory.claim(64 * 1024)?, Default::default())?;
     assert!(memory.claim(64 * 1024 + 1).is_err());
     canvas.main_retired(old)?;
     let released = memory.claim(128 * 1024)?;
@@ -135,7 +135,7 @@ fn navigation_retirement_removes_unattached_waits_without_discarding_newer_repli
 
     canvas.surface(current, cancel(&panel, 12)?, None, memory.claim(64 * 1024)?)?;
     canvas.main_retired(old)?;
-    let Some(DesktopStartupCommand::SendCanvasContext(reply)) = canvas.take_command() else {
+    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
         return Err("Late old-navigation retirement discarded the current terminal reply".into());
     };
     assert_eq!(reply.identity(), current);
@@ -183,9 +183,9 @@ fn queued_context_terminal_survives_matching_cancel_without_a_duplicate_ordinary
     let identity = identity()?;
     let panel = PanelSession::for_main(identity)?;
     let memory = MemoryLease::new(128 * 1024, Box::new(Release));
-    canvas.refuse_context(identity, &context(&panel, 11)?, memory.claim(64 * 1024)?)?;
+    canvas.refuse_native(identity, &context(&panel, 11)?, memory.claim(64 * 1024)?)?;
     canvas.surface(identity, cancel(&panel, 11)?, None, memory.claim(64 * 1024)?)?;
-    let Some(DesktopStartupCommand::SendCanvasContext(reply)) = canvas.take_command() else {
+    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
         return Err("Cancellation displaced the queued context terminal".into());
     };
     let value: Value = serde_json::from_slice(reply.payload())?;
@@ -248,8 +248,8 @@ fn retirement_removes_old_queued_terminals_and_receipts_and_preserves_new_fifo_c
     let panel = PanelSession::for_main(current)?;
     let old_credit = MemoryLease::new(128 * 1024, Box::new(Release));
     let current_credit = MemoryLease::new(128 * 1024, Box::new(Release));
-    canvas.refuse_context(old, &context(&old_panel, 11)?, old_credit.claim(64 * 1024)?)?;
-    canvas.refuse_context(current, &context(&panel, 12)?, current_credit.claim(64 * 1024)?)?;
+    canvas.refuse_native(old, &context(&old_panel, 11)?, old_credit.claim(64 * 1024)?)?;
+    canvas.refuse_native(current, &context(&panel, 12)?, current_credit.claim(64 * 1024)?)?;
     canvas.surface(old, cancel(&old_panel, 11)?, None, old_credit.claim(64 * 1024)?)?;
     canvas.surface(current, cancel(&panel, 12)?, None, current_credit.claim(64 * 1024)?)?;
     assert!(old_credit.claim(1).is_err());
@@ -257,7 +257,7 @@ fn retirement_removes_old_queued_terminals_and_receipts_and_preserves_new_fifo_c
     canvas.main_retired(old)?;
     drop(old_credit.claim(128 * 1024)?);
     assert!(current_credit.claim(1).is_err());
-    let Some(DesktopStartupCommand::SendCanvasContext(reply)) = canvas.take_command() else {
+    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
         return Err("Retirement lost the current first ordinary terminal".into());
     };
     assert_eq!(reply.identity(), current);

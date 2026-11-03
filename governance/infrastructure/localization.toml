@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:8eeeea26fc51bb56cfee6b6d9a09c6d6072285ad0674a77c4a6ee154cdbef1f4"
+source_sha256 = "sha256:49f61f0640f6dd6d981c33ccf58e506eb951b6f4d026877c36d37df8bbbfef9f"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -450,7 +450,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:4ebb3c72441a947866b1a2fc2beb3ea0d991232ad217c46641fd139a66f9f929"
+source_sha256 = "sha256:7b450ee17f7c866cf2155331233a1affa0c99826d62b9a22a8622c5263169fc2"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -720,7 +720,7 @@ rationale = "The bounded WebView transport defines technical JavaScript properti
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:6b23d05a943940ef3530e3a851a22c7ea57ee26e3fbbfc9b037a990c776b8ee1"
+source_sha256 = "sha256:dc5165ae53c9c501dd735d4d2a374d0f5aea175adc031772d8e7649c3695b16b"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 
@@ -732,6 +732,6 @@ rationale = "The bulk-origin transport helper moves exact JSON bytes through hos
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:c9485f904e02fc1ca7416e0353be0bb81ba7bc80262f895f054106108e952620"
+source_sha256 = "sha256:44740f18974d2412a2339cfd39a6f9e1746bf9d1aa79e8954ec33508311d1578"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."

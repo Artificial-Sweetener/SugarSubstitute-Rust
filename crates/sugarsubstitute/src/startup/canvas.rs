@@ -229,16 +229,20 @@ impl EmbeddedCanvas {
         Ok(())
     }
 
-    /// Receive the current panel's bounded context request for the native surface.
+    /// Receive the current panel's bounded native canvas protocol request.
+    ///
+    /// The surface dispatches each request family to its own entry point; see
+    /// NativeSurface::native.
     #[cfg(feature = "native-composition")]
-    pub(super) fn context(
+    pub(super) fn native(
         &mut self,
         identity: sugarsubstitute_contracts::startup::MainIdentity,
-        request: sugarsubstitute_contracts::canvas_context::CanvasContextRequest,
+        request: sugarsubstitute_contracts::canvas_native::CanvasNativeRequest,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
+        storage: sugarsubstitute_desktop::CanvasNativeRequestStorage,
     ) -> Result<(), Box<dyn Error>> {
         self.admit_composition_gpu();
-        self.surface.context(identity, request, claim, self.session.as_mut())
+        self.surface.native(identity, request, claim, storage, self.session.as_mut())
     }
 
     /// Only composition-hosted main lifetimes deliver canvas messages here, so the first one
@@ -289,18 +293,18 @@ impl EmbeddedCanvas {
         self.surface.refuse(identity, message, claim, self.session.as_mut())
     }
 
-    /// Return the unavailable context through the existing native reply owner.
+    /// Answer a native request the current page has no canvas authority for as unavailable.
     #[cfg(feature = "native-composition")]
-    pub(super) fn refuse_context(
+    pub(super) fn refuse_native(
         &mut self,
         identity: sugarsubstitute_contracts::startup::MainIdentity,
-        request: &sugarsubstitute_contracts::canvas_context::CanvasContextRequest,
+        request: &sugarsubstitute_contracts::canvas_native::CanvasNativeRequest,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
-        self.surface.refuse_context(identity, request, claim)
+        self.surface.refuse_native(identity, request, claim)
     }
 
-    /// Transfer a correlated context or surface reply with its admitted allocation.
+    /// Transfer a correlated native canvas or surface reply with its admitted allocation.
     #[cfg(feature = "native-composition")]
     pub(super) fn take_command(
         &mut self,

@@ -39,7 +39,10 @@ impl NativeSurface {
             if self.replies[index].as_ref().is_some_and(|command| {
                 let owner = match command {
                     DesktopStartupCommand::SendSurface(reply) => Some(reply.identity()),
-                    DesktopStartupCommand::SendCanvasContext(reply) => Some(reply.identity()),
+                    DesktopStartupCommand::SendCanvasNative(reply) => Some(reply.identity()),
+                    DesktopStartupCommand::SendCanvasNotification(notification) => {
+                        Some(notification.identity())
+                    }
                     DesktopStartupCommand::SendSurfacePresentation(reply) => Some(reply.identity()),
                     DesktopStartupCommand::CompletePanelIngress(receipt) => {
                         Some(receipt.identity())

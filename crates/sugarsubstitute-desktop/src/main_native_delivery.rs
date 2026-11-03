@@ -4,12 +4,15 @@
 
 use crate::main_panel_ingress::{Lane, Ticket};
 use crate::main_panel_ingress_receipt::ReceiptKind;
-use crate::{CanvasContextReply, MainIdentity, PanelIngressReceipt, SurfaceReply};
+use crate::{
+    CanvasNativeNotification, CanvasNativeReply, MainIdentity, PanelIngressReceipt, SurfaceReply,
+};
 use sugarsubstitute_contracts::execution::MemoryClaim;
 
 /// Move the same owned response from application custody into a native callback slot.
 pub(crate) enum NativeDelivery {
-    Context(CanvasContextReply),
+    Canvas(CanvasNativeReply),
+    CanvasNotification(CanvasNativeNotification),
     Surface(SurfaceReply),
     Presentation(crate::SurfacePresentation),
     Ingress(PanelIngressReceipt),
@@ -20,7 +23,8 @@ impl NativeDelivery {
     /// Borrow the navigation whose admitted allocation remains retained.
     pub(crate) fn identity(&self) -> MainIdentity {
         match self {
-            Self::Context(value) => value.identity(),
+            Self::Canvas(value) => value.identity(),
+            Self::CanvasNotification(value) => value.identity(),
             Self::Surface(value) => value.identity(),
             Self::Presentation(value) => value.identity(),
             Self::Ingress(value) => value.identity(),
@@ -31,8 +35,8 @@ impl NativeDelivery {
     /// Select only the transport lane that owns this response or consumption receipt.
     pub(crate) fn lane(&self) -> Option<Lane> {
         match self {
-            Self::Context(_) | Self::Surface(_) => Some(Lane::Ordinary),
-            Self::Presentation(_) | Self::Memory(_) => None,
+            Self::Canvas(_) | Self::Surface(_) => Some(Lane::Ordinary),
+            Self::CanvasNotification(_) | Self::Presentation(_) | Self::Memory(_) => None,
             Self::Ingress(value) => Some(match value.kind() {
                 ReceiptKind::Control => Lane::Control,
                 ReceiptKind::Cancellation { .. } => Lane::Cancellation,
@@ -43,9 +47,9 @@ impl NativeDelivery {
     /// Preserve original correlation independently of the private transport ticket.
     pub(crate) fn request_id(&self) -> Option<u64> {
         match self {
-            Self::Context(value) => Some(value.request_id()),
+            Self::Canvas(value) => Some(value.request_id()),
             Self::Surface(value) => Some(value.request_id()),
-            Self::Presentation(_) | Self::Memory(_) => None,
+            Self::CanvasNotification(_) | Self::Presentation(_) | Self::Memory(_) => None,
             Self::Ingress(value) => match value.kind() {
                 ReceiptKind::Control => None,
                 ReceiptKind::Cancellation { request_id } => Some(request_id),
@@ -56,7 +60,8 @@ impl NativeDelivery {
     /// Borrow public response bytes; ingress receipts carry only private acknowledgement metadata.
     pub(crate) fn payload(&self) -> Option<&[u8]> {
         match self {
-            Self::Context(value) => Some(value.payload()),
+            Self::Canvas(value) => Some(value.payload()),
+            Self::CanvasNotification(value) => Some(value.payload()),
             Self::Surface(value) => Some(value.payload()),
             Self::Presentation(value) => Some(value.payload()),
             Self::Memory(value) => Some(value.payload()),
@@ -69,7 +74,8 @@ impl NativeDelivery {
     /// The delivery keeps its original allocation claim and transport correlation.
     pub(crate) fn take_payload(&mut self) -> Option<Vec<u8>> {
         match self {
-            Self::Context(value) => Some(value.take_payload()),
+            Self::Canvas(value) => Some(value.take_payload()),
+            Self::CanvasNotification(value) => Some(value.take_payload()),
             Self::Surface(value) => Some(value.take_payload()),
             Self::Presentation(value) => Some(value.take_payload()),
             Self::Memory(value) => Some(value.take_payload()),
@@ -80,7 +86,8 @@ impl NativeDelivery {
     /// Drop encoded storage before recovering its original noncloneable allocation claim.
     pub(crate) fn into_claim(self) -> MemoryClaim {
         match self {
-            Self::Context(value) => value.into_claim(),
+            Self::Canvas(value) => value.into_claim(),
+            Self::CanvasNotification(value) => value.into_claim(),
             Self::Surface(value) => value.into_claim(),
             Self::Presentation(value) => value.into_claim(),
             Self::Ingress(value) => value.into_claim(),

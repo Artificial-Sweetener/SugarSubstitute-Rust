@@ -83,13 +83,21 @@ impl std::error::Error for Refusal {
 /// A received upload awaiting its lane envelope; its storage claims drop with it.
 pub(crate) struct Upload {
     text: String,
-    _claims: Vec<MemoryClaim>,
+    claims: Vec<MemoryClaim>,
 }
 
 impl Upload {
     /// Borrow the exact uploaded JSON while its claims remain held.
     pub(crate) fn text(&self) -> &str {
         &self.text
+    }
+
+    /// Release the text and keep its storage claims for the request decoded from it.
+    ///
+    /// The claims cover at least the encoded body, which bounds the decoded request's text;
+    /// each request family's schema limits bound its structure.
+    pub(crate) fn into_claims(self) -> Vec<MemoryClaim> {
+        self.claims
     }
 }
 
@@ -364,7 +372,7 @@ impl Transfers {
             context: slot.context,
             ticket: slot.ticket,
             expires: now + LIFETIME,
-            upload: Upload { text, _claims: claims },
+            upload: Upload { text, claims },
         });
         Ok(())
     }

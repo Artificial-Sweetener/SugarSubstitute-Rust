@@ -7,6 +7,7 @@ mod capabilities;
 mod ingress;
 mod input;
 mod lifecycle;
+mod native;
 mod navigation;
 mod operations;
 mod overview;
@@ -24,7 +25,7 @@ use std::path::{Component, Path};
 use sugarsubstitute_canvas::FrameStamp;
 use sugarsubstitute_comfy::output_media::ComfyViewTarget;
 use sugarsubstitute_contracts::{
-    canvas_context::{CanvasContextRequest, CanvasDisplayCapability},
+    canvas_native::CanvasContextRequest,
     canvas_surface::{
         CanvasFileStorage, CanvasSurfaceAddress, CanvasSurfaceMessage, CanvasSurfaceOperation,
         CanvasSurfaceReplyStatus, CanvasSurfaceRequest,
@@ -33,7 +34,7 @@ use sugarsubstitute_contracts::{
     startup::MainIdentity,
 };
 use sugarsubstitute_desktop::{
-    CanvasContextReply, DesktopStartupCommand, SurfaceReply,
+    CanvasNativeReply, DesktopStartupCommand, SurfaceReply,
     canvas::{
         MainCanvasFrame, MainCanvasRetention,
         placement::{
@@ -363,13 +364,12 @@ impl NativeSurface {
                 continue;
             }
             let Some(context) = self.contexts[index].take() else { continue };
-            let reply = CanvasContextReply::new(
+            let reply = CanvasNativeReply::new(
                 context.identity,
-                &context.request,
-                CanvasDisplayCapability::Available,
+                context.request.reply(native::ADVERTISED, None)?,
                 context.claim,
             )?;
-            self.enqueue(DesktopStartupCommand::SendCanvasContext(reply))?;
+            self.enqueue(DesktopStartupCommand::SendCanvasNative(reply))?;
             #[cfg(feature = "k1-native-qualification")]
             sugarsubstitute_desktop::qualification_trace::progress(
                 sugarsubstitute_desktop::qualification_trace::Progress::CanvasContextReplyQueued,

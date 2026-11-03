@@ -308,8 +308,11 @@ pub enum DesktopStartupCommand {
         /// Whether the browser should reduce its memory use.
         low: bool,
     },
-    /// Deliver a correlated canvas context reply to the current top document.
-    SendCanvasContext(crate::CanvasContextReply),
+    /// Deliver a correlated native canvas protocol reply to the current top document.
+    SendCanvasNative(crate::CanvasNativeReply),
+    /// Deliver a native canvas notification without ordinary request credit; a newer one of
+    /// the same kind replaces an undelivered one, and stale navigations drop it.
+    SendCanvasNotification(crate::CanvasNativeNotification),
     /// Deliver a correlated canvas reply to the same current top document.
     SendSurface(crate::SurfaceReply),
     /// Deliver a native full presentation snapshot without ordinary request credit.
@@ -431,8 +434,8 @@ pub enum DesktopStartupObservation {
     },
     /// A bounded canvas message from the current native top-document context.
     SurfaceMessage(crate::SurfaceObservation),
-    /// A bounded canvas context request from the current native top-document context.
-    CanvasContextMessage(crate::CanvasContextObservation),
+    /// A bounded native canvas protocol request from the current native top-document context.
+    CanvasNativeMessage(crate::CanvasNativeObservation),
     /// A pointer or wheel gesture the main window routed to the native canvas input region.
     /// It is delivered after the UI-thread message returned and never waits for canvas work.
     #[cfg(feature = "native-composition")]

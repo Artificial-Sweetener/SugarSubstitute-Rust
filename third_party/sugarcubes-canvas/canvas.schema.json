@@ -410,43 +410,52 @@
       ],
       "additionalProperties": false
     },
+    "CanvasLayerCapabilities": {
+      "type": "object",
+      "properties": {
+        "displayOutput": { "type": "boolean" },
+        "insertImageLayer": { "type": "boolean" },
+        "positionImageLayer": { "type": "boolean" }
+      },
+      "required": ["displayOutput", "insertImageLayer", "positionImageLayer"],
+      "additionalProperties": false
+    },
+    "CanvasGeometryCapabilities": {
+      "type": "object",
+      "properties": {
+        "displayOutput": { "type": "boolean" },
+        "insertImageLayer": { "type": "boolean" },
+        "positionImageLayer": { "type": "boolean" },
+        "geometry": { "type": "boolean" }
+      },
+      "required": ["displayOutput", "insertImageLayer", "positionImageLayer", "geometry"],
+      "additionalProperties": false
+    },
+    "CanvasEditingCapabilities": {
+      "type": "object",
+      "properties": {
+        "displayOutput": { "type": "boolean" },
+        "insertImageLayer": { "type": "boolean" },
+        "positionImageLayer": { "type": "boolean" },
+        "geometry": { "type": "boolean" },
+        "editing": { "type": "boolean" },
+        "workflowSurfaces": { "type": "boolean" }
+      },
+      "required": [
+        "displayOutput",
+        "insertImageLayer",
+        "positionImageLayer",
+        "geometry",
+        "editing",
+        "workflowSurfaces"
+      ],
+      "additionalProperties": false
+    },
     "CanvasCapabilities": {
       "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "displayOutput": {
-              "type": "boolean"
-            },
-            "insertImageLayer": {
-              "type": "boolean"
-            },
-            "positionImageLayer": {
-              "type": "boolean"
-            }
-          },
-          "required": ["displayOutput", "insertImageLayer", "positionImageLayer"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "displayOutput": {
-              "type": "boolean"
-            },
-            "insertImageLayer": {
-              "type": "boolean"
-            },
-            "positionImageLayer": {
-              "type": "boolean"
-            },
-            "geometry": {
-              "type": "boolean"
-            }
-          },
-          "required": ["displayOutput", "insertImageLayer", "positionImageLayer", "geometry"],
-          "additionalProperties": false
-        }
+        { "$ref": "#/$defs/CanvasLayerCapabilities" },
+        { "$ref": "#/$defs/CanvasGeometryCapabilities" },
+        { "$ref": "#/$defs/CanvasEditingCapabilities" }
       ]
     },
     "CanvasDescriptor": {
@@ -1575,6 +1584,564 @@
       "required": ["protocol", "version", "session", "requestId", "type", "result"],
       "additionalProperties": false
     },
+    "CanvasToolId": {
+      "enum": [
+        "pan-zoom",
+        "move",
+        "brush",
+        "eraser",
+        "select-rectangle",
+        "select-ellipse",
+        "select-lasso",
+        "mask-rectangle",
+        "mask-ellipse",
+        "mask-lasso",
+        "transform",
+        "shared-edges"
+      ]
+    },
+    "CanvasBrushOptions": {
+      "type": "object",
+      "properties": {
+        "size": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "hardness": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "opacity": { "type": "integer", "minimum": 0, "maximum": 100 }
+      },
+      "required": ["size", "hardness", "opacity"],
+      "additionalProperties": false
+    },
+    "CanvasEditCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": { "type": { "const": "state" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "tool" },
+            "tool": { "$ref": "#/$defs/CanvasToolId" }
+          },
+          "required": ["type", "tool"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "options" },
+            "tool": { "enum": ["brush", "eraser"] },
+            "options": { "$ref": "#/$defs/CanvasBrushOptions" }
+          },
+          "required": ["type", "tool", "options"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "history" },
+            "action": { "enum": ["undo", "redo"] }
+          },
+          "required": ["type", "action"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "commit" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "cancel" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "nudge" },
+            "dx": { "type": "integer", "minimum": -100, "maximum": 100 },
+            "dy": { "type": "integer", "minimum": -100, "maximum": 100 }
+          },
+          "required": ["type", "dx", "dy"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "selection" },
+            "action": { "enum": ["deselect", "clear"] }
+          },
+          "required": ["type", "action"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "modify" },
+            "target": { "enum": ["selection", "mask"] },
+            "operation": { "enum": ["expand", "contract", "feather"] },
+            "pixels": { "type": "integer", "minimum": 1, "maximum": 999 },
+            "phase": { "enum": ["preview", "apply", "cancel"] }
+          },
+          "required": ["type", "target", "operation", "pixels", "phase"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "mode" },
+            "mode": { "enum": ["none", "coverage"] }
+          },
+          "required": ["type", "mode"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "transform" },
+            "action": {
+              "enum": ["rotate-left", "rotate-right", "flip-horizontal", "flip-vertical"]
+            }
+          },
+          "required": ["type", "action"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "session" },
+            "action": { "enum": ["undo", "redo", "apply", "cancel"] }
+          },
+          "required": ["type", "action"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "navigation" },
+            "held": { "type": "boolean" }
+          },
+          "required": ["type", "held"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasEditTool": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/CanvasToolId" },
+        "available": { "type": "boolean" }
+      },
+      "required": ["id", "available"],
+      "additionalProperties": false
+    },
+    "CanvasEditToolOptions": {
+      "type": "object",
+      "properties": {
+        "brush": { "$ref": "#/$defs/CanvasBrushOptions" },
+        "eraser": { "$ref": "#/$defs/CanvasBrushOptions" }
+      },
+      "required": ["brush", "eraser"],
+      "additionalProperties": false
+    },
+    "CanvasEditSelectionBounds": {
+      "type": "object",
+      "properties": {
+        "left": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "top": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 }
+      },
+      "required": ["left", "top", "width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasEditSelection": {
+      "type": "object",
+      "properties": {
+        "bounds": { "$ref": "#/$defs/CanvasEditSelectionBounds" }
+      },
+      "required": ["bounds"],
+      "additionalProperties": false
+    },
+    "CanvasEditHistory": {
+      "type": "object",
+      "properties": {
+        "undo": { "type": "boolean" },
+        "redo": { "type": "boolean" }
+      },
+      "required": ["undo", "redo"],
+      "additionalProperties": false
+    },
+    "CanvasEditSession": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["move", "transform", "shared-edges", "modify"] },
+        "undo": { "type": "boolean" },
+        "redo": { "type": "boolean" }
+      },
+      "required": ["kind", "undo", "redo"],
+      "additionalProperties": false
+    },
+    "CanvasEditState": {
+      "type": "object",
+      "properties": {
+        "revision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "document": {
+          "oneOf": [{ "type": "string", "maxLength": 128 }, { "const": null }]
+        },
+        "activeMask": {
+          "oneOf": [{ "type": "string", "maxLength": 128 }, { "const": null }]
+        },
+        "tool": { "$ref": "#/$defs/CanvasToolId" },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CanvasEditTool" },
+          "maxItems": 12
+        },
+        "options": { "$ref": "#/$defs/CanvasEditToolOptions" },
+        "selection": {
+          "oneOf": [{ "$ref": "#/$defs/CanvasEditSelection" }, { "const": null }]
+        },
+        "history": { "$ref": "#/$defs/CanvasEditHistory" },
+        "session": {
+          "oneOf": [{ "$ref": "#/$defs/CanvasEditSession" }, { "const": null }]
+        },
+        "mode": { "enum": ["none", "coverage"] }
+      },
+      "required": [
+        "revision",
+        "document",
+        "activeMask",
+        "tool",
+        "tools",
+        "options",
+        "selection",
+        "history",
+        "session",
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "CanvasEditResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "state" },
+            "state": { "$ref": "#/$defs/CanvasEditState" }
+          },
+          "required": ["kind", "state"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "failure" },
+            "status": { "enum": ["unavailable", "unsupported", "stale", "cancelled", "error"] },
+            "message": { "type": "string", "maxLength": 512 }
+          },
+          "required": ["kind", "status", "message"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasEditRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "edit.request" },
+        "command": { "$ref": "#/$defs/CanvasEditCommand" }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "command"],
+      "additionalProperties": false
+    },
+    "CanvasEditReply": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "edit.reply" },
+        "result": { "$ref": "#/$defs/CanvasEditResult" }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "result"],
+      "additionalProperties": false
+    },
+    "CanvasEditChanged": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "const": 0 },
+        "type": { "const": "edit.changed" },
+        "state": { "$ref": "#/$defs/CanvasEditState" }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "state"],
+      "additionalProperties": false
+    },
+    "CanvasWorkflowSurfaceBase": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "file" },
+            "file": { "$ref": "#/$defs/CanvasSurfaceFileReference" }
+          },
+          "required": ["kind", "file"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "blank" },
+            "width": { "type": "integer", "minimum": 1, "maximum": 300000 },
+            "height": { "type": "integer", "minimum": 1, "maximum": 300000 }
+          },
+          "required": ["kind", "width", "height"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasWorkflowMask": {
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "maxLength": 256 },
+        "label": { "type": "string", "maxLength": 256 },
+        "color": { "type": "string", "maxLength": 7, "pattern": "^#[a-fA-F0-9]{6}$" },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "initial": {
+          "oneOf": [{ "$ref": "#/$defs/CanvasSurfaceFileReference" }, { "const": null }]
+        },
+        "channel": { "enum": ["red", "green", "blue", "alpha"] }
+      },
+      "required": ["key", "label", "color", "opacity", "initial", "channel"],
+      "additionalProperties": false
+    },
+    "CanvasWorkflowSurface": {
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "maxLength": 256 },
+        "label": { "type": "string", "maxLength": 256 },
+        "base": { "$ref": "#/$defs/CanvasWorkflowSurfaceBase" },
+        "masks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CanvasWorkflowMask" },
+          "maxItems": 32
+        }
+      },
+      "required": ["key", "label", "base", "masks"],
+      "additionalProperties": false
+    },
+    "CanvasWorkflowAppearance": {
+      "type": "object",
+      "properties": {
+        "surface": { "type": "string", "maxLength": 256 },
+        "mask": { "type": "string", "maxLength": 256 },
+        "color": { "type": "string", "maxLength": 7, "pattern": "^#[a-fA-F0-9]{6}$" },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["surface", "mask", "color", "opacity"],
+      "additionalProperties": false
+    },
+    "CanvasWorkflowResizeMode": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "canvas" },
+            "anchor": {
+              "enum": [
+                "top-left",
+                "top",
+                "top-right",
+                "left",
+                "center",
+                "right",
+                "bottom-left",
+                "bottom",
+                "bottom-right"
+              ]
+            }
+          },
+          "required": ["kind", "anchor"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "scale" },
+            "resampling": { "enum": ["nearest", "smooth"] }
+          },
+          "required": ["kind", "resampling"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasWorkflowCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "sync" },
+            "workflow": { "type": "string", "maxLength": 256 },
+            "surfaces": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/CanvasWorkflowSurface" },
+              "maxItems": 64
+            }
+          },
+          "required": ["type", "workflow", "surfaces"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "activate" },
+            "workflow": { "type": "string", "maxLength": 256 },
+            "route": { "enum": ["input", "output"] },
+            "surface": { "oneOf": [{ "type": "string", "maxLength": 256 }, { "const": null }] },
+            "mask": { "oneOf": [{ "type": "string", "maxLength": 256 }, { "const": null }] }
+          },
+          "required": ["type", "workflow", "route", "surface", "mask"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "appearance" },
+            "workflow": { "type": "string", "maxLength": 256 },
+            "masks": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/CanvasWorkflowAppearance" },
+              "minItems": 1,
+              "maxItems": 2048
+            }
+          },
+          "required": ["type", "workflow", "masks"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "resize" },
+            "workflow": { "type": "string", "maxLength": 256 },
+            "surface": { "type": "string", "maxLength": 256 },
+            "width": { "type": "integer", "minimum": 1, "maximum": 300000 },
+            "height": { "type": "integer", "minimum": 1, "maximum": 300000 },
+            "mode": { "$ref": "#/$defs/CanvasWorkflowResizeMode" }
+          },
+          "required": ["type", "workflow", "surface", "width", "height", "mode"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "hover" },
+            "workflow": { "type": "string", "maxLength": 256 },
+            "surface": { "type": "string", "maxLength": 256 },
+            "mask": { "oneOf": [{ "type": "string", "maxLength": 256 }, { "const": null }] }
+          },
+          "required": ["type", "workflow", "surface", "mask"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasWorkflowMaskLayer": {
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "maxLength": 256 },
+        "layerId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["key", "layerId"],
+      "additionalProperties": false
+    },
+    "CanvasWorkflowSyncedSurface": {
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "maxLength": 256 },
+        "document": { "$ref": "#/$defs/CanvasDocument" },
+        "masks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CanvasWorkflowMaskLayer" },
+          "maxItems": 32
+        }
+      },
+      "required": ["key", "document", "masks"],
+      "additionalProperties": false
+    },
+    "CanvasWorkflowResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "synced" },
+            "surfaces": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/CanvasWorkflowSyncedSurface" },
+              "maxItems": 64
+            }
+          },
+          "required": ["kind", "surfaces"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "kind": { "const": "activated" } },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "kind": { "const": "applied" } },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "failure" },
+            "status": { "enum": ["unavailable", "unsupported", "stale", "cancelled", "error"] },
+            "message": { "type": "string", "maxLength": 512 }
+          },
+          "required": ["kind", "status", "message"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasWorkflowRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "workflow.request" },
+        "command": { "$ref": "#/$defs/CanvasWorkflowCommand" }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "command"],
+      "additionalProperties": false
+    },
+    "CanvasWorkflowReply": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "sugarcubes.canvas" },
+        "version": { "const": 3 },
+        "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
+        "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "type": { "const": "workflow.reply" },
+        "result": { "$ref": "#/$defs/CanvasWorkflowResult" }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "result"],
+      "additionalProperties": false
+    },
     "CanvasSurfacePreviewIdentity": {
       "type": "object",
       "properties": {
@@ -2313,6 +2880,11 @@
     {
       "$ref": "#/$defs/CanvasGeometryReply"
     },
+    { "$ref": "#/$defs/CanvasEditRequest" },
+    { "$ref": "#/$defs/CanvasEditReply" },
+    { "$ref": "#/$defs/CanvasEditChanged" },
+    { "$ref": "#/$defs/CanvasWorkflowRequest" },
+    { "$ref": "#/$defs/CanvasWorkflowReply" },
     {
       "$ref": "#/$defs/CanvasSurfacePrepareRequest"
     },

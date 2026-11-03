@@ -20,7 +20,12 @@ pub(super) fn drain(
         else {
             return Ok(());
         };
-        if session.closing && matches!(&command, DesktopStartupCommand::SendSurfacePresentation(_))
+        if session.closing
+            && matches!(
+                &command,
+                DesktopStartupCommand::SendSurfacePresentation(_)
+                    | DesktopStartupCommand::SendCanvasNotification(_)
+            )
         {
             continue;
         }
@@ -169,9 +174,21 @@ pub(super) fn drain(
                     owner.set_browser_memory_target(identity, low).map(|()| None)
                 })?;
             }
-            DesktopStartupCommand::SendCanvasContext(reply) => {
+            DesktopStartupCommand::SendCanvasNative(reply) => {
                 main_operation(session, content, |owner| {
-                    owner.send_canvas_context(reply).map(|()| None)
+                    owner.send_canvas_native(reply).map(|()| None)
+                })?;
+            }
+            DesktopStartupCommand::SendCanvasNotification(notification) => {
+                if content.main_identity() != Some(notification.identity())
+                    || session.main.as_ref().is_none_or(|owner| {
+                        owner.identity() != notification.identity() || owner.retired()
+                    })
+                {
+                    continue;
+                }
+                main_operation(session, content, |owner| {
+                    owner.send_canvas_notification(notification).map(|()| None)
                 })?;
             }
             DesktopStartupCommand::SendSurface(reply) => {

@@ -11,7 +11,7 @@ use crate::{
 pub(in crate::main_actor) enum Ingress {
     Panel(crate::PanelObservation),
     Surface(crate::SurfaceObservation),
-    Context(crate::CanvasContextObservation),
+    Native(crate::CanvasNativeObservation),
     Memory(crate::MemoryObservation),
 }
 
@@ -82,6 +82,9 @@ impl MainActor {
         };
         let lease = self.request()?.storage_lease().clone();
         let hosting = self.hosting();
+        // A request decoded from an upload keeps the upload's storage; other messages are
+        // bounded by their inline schema and release it here.
+        let upload = upload.map(crate::main_bulk::Upload::into_claims).unwrap_or_default();
         Ok(Some(match message {
             crate::main_panel_ingress::ClientMessage::Panel(message) => {
                 Ingress::Panel(crate::PanelObservation::new(self.identity(), message, lease, claim))
@@ -92,12 +95,13 @@ impl MainActor {
             crate::main_panel_ingress::ClientMessage::Memory(message) => Ingress::Memory(
                 crate::MemoryObservation::new(self.identity(), message, lease, claim),
             ),
-            crate::main_panel_ingress::ClientMessage::Context(request) => {
-                Ingress::Context(crate::CanvasContextObservation::new(
+            crate::main_panel_ingress::ClientMessage::Native(request) => {
+                Ingress::Native(crate::CanvasNativeObservation::new(
                     self.identity(),
                     request,
                     lease,
                     claim,
+                    upload,
                     hosting,
                 ))
             }
@@ -129,13 +133,18 @@ impl MainActor {
                 }
                 DesktopStartupObservation::SurfaceMessage(observation)
             }
-            Ingress::Context(observation) => {
+            Ingress::Native(observation) => {
                 #[cfg(feature = "k1-native-qualification")]
-                crate::qualification_trace::progress(
-                    crate::qualification_trace::Progress::CanvasContextObserved,
-                    self.identity(),
-                );
-                DesktopStartupObservation::CanvasContextMessage(observation)
+                if matches!(
+                    observation.request(),
+                    sugarsubstitute_contracts::canvas_native::CanvasNativeRequest::Context(_)
+                ) {
+                    crate::qualification_trace::progress(
+                        crate::qualification_trace::Progress::CanvasContextObserved,
+                        self.identity(),
+                    );
+                }
+                DesktopStartupObservation::CanvasNativeMessage(observation)
             }
         }
     }

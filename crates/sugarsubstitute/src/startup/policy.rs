@@ -135,7 +135,7 @@ impl StartupPolicy {
                 | DesktopStartupObservation::MemoryMessage(_)
                 | DesktopStartupObservation::BrowserProcesses { .. }
                 | DesktopStartupObservation::SurfaceMessage(_)
-                | DesktopStartupObservation::CanvasContextMessage(_)
+                | DesktopStartupObservation::CanvasNativeMessage(_)
                 | DesktopStartupObservation::SplashPresented(_)
                 | DesktopStartupObservation::SplashRetired(_)
                 | DesktopStartupObservation::NavigationStarted(_)
@@ -195,7 +195,7 @@ impl StartupPolicy {
             DesktopStartupObservation::MemoryMessage(observed) => {
                 session.is_some_and(|session| observed.identity() == self.identity(session))
             }
-            DesktopStartupObservation::CanvasContextMessage(observed) => {
+            DesktopStartupObservation::CanvasNativeMessage(observed) => {
                 session.is_some_and(|session| observed.identity() == self.identity(session))
             }
             #[cfg(feature = "native-composition")]

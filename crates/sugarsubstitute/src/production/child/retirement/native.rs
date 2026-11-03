@@ -25,13 +25,13 @@ impl ProductionChild {
             self.observe_surface(observation, prepared)?;
             return self.advance_control();
         }
-        if matches!(self.observation, Some(DesktopStartupObservation::CanvasContextMessage(_))) {
-            let Some(DesktopStartupObservation::CanvasContextMessage(observation)) =
+        if matches!(self.observation, Some(DesktopStartupObservation::CanvasNativeMessage(_))) {
+            let Some(DesktopStartupObservation::CanvasNativeMessage(observation)) =
                 self.observation.take()
             else {
-                return Err("Canvas context observation disappeared".into());
+                return Err("Native canvas observation disappeared".into());
             };
-            self.observe_canvas_context(observation, prepared)?;
+            self.observe_canvas_native(observation, prepared)?;
             return self.advance_control();
         }
         if let Some(profile) = self.main.profile_mut()

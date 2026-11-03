@@ -27,9 +27,9 @@ impl NativeSurface {
             })
         }) {
             let context = self.contexts[index].take().ok_or("Canvas context disappeared")?;
-            self.enqueue(DesktopStartupCommand::SendCanvasContext(CanvasContextReply::cancelled(
+            self.enqueue(DesktopStartupCommand::SendCanvasNative(CanvasNativeReply::new(
                 context.identity,
-                &context.request,
+                context.request.envelope().cancelled_reply()?,
                 context.claim,
             )?))?;
         } else if self.pending.as_ref().is_some_and(|pending| {
@@ -131,23 +131,5 @@ impl NativeSurface {
                 )?))
             }
         }
-    }
-
-    /// Return a correlated empty context rather than abandoning an admitted policy refusal.
-    pub(in crate::startup::canvas) fn refuse_context(
-        &mut self,
-        identity: MainIdentity,
-        request: &CanvasContextRequest,
-        claim: MemoryClaim,
-    ) -> Result<(), Box<dyn Error>> {
-        if self.closed {
-            return Ok(());
-        }
-        self.enqueue(DesktopStartupCommand::SendCanvasContext(CanvasContextReply::new(
-            identity,
-            request,
-            CanvasDisplayCapability::Unavailable,
-            claim,
-        )?))
     }
 }

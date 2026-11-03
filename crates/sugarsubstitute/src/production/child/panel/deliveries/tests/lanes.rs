@@ -24,7 +24,7 @@ fn ordinary_control_and_cancellation_have_independent_slots_and_bounded_service(
 
     assert!(
         deliveries
-            .context(identity, context_request(&session)?, &lease, lease.claim(bytes)?)
+            .native(identity, &context_request(&session)?, &lease, lease.claim(bytes)?)
             .is_err()
     );
     assert!(
@@ -94,7 +94,7 @@ fn clear_releases_every_lane_and_rebinding_requires_the_explicit_fence() -> Resu
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
     let mut deliveries = Deliveries::new();
-    deliveries.context(identity, context_request(&session)?, &lease, lease.claim(bytes)?)?;
+    deliveries.native(identity, &context_request(&session)?, &lease, lease.claim(bytes)?)?;
     deliveries.complete_control(PanelIngressReceipt::control(identity, lease.claim(bytes)?)?)?;
     deliveries.surface(identity, cancellation(&session, 9)?, &lease, lease.claim(bytes)?)?;
     let next = MainIdentity { navigation: Generation::new(2)?, ..identity };

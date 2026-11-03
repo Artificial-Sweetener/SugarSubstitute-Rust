@@ -243,6 +243,42 @@ fn uploads_reassemble_once_through_the_same_lane_framing_and_decode() -> TestRes
 }
 
 #[test]
+fn an_uploaded_workflow_sync_decodes_and_keeps_its_body_storage() -> TestResult {
+    use sugarsubstitute_contracts::canvas_native::CanvasNativeRequest;
+    let lease = partition();
+    let transfers = transfers(&lease)?;
+    let session = PanelSession::new("session-12345678".into())?;
+    let surfaces: Vec<serde_json::Value> = (0..64)
+        .map(|index| {
+            serde_json::json!({"key": format!("node:{index}:image"), "label": "x".repeat(256),
+                "base": {"kind": "blank", "width": 512, "height": 512}, "masks": []})
+        })
+        .collect();
+    let request = serde_json::json!({"protocol": "sugarcubes.canvas", "version": 3,
+        "session": session.as_str(), "requestId": 4, "type": "workflow.request",
+        "command": {"type": "sync", "workflow": "workflow-1", "surfaces": surfaces}})
+    .to_string();
+    assert!(request.len() > 16384, "the message must exceed the inline lane");
+    let now = Instant::now();
+    let token = transfers.grant(CONTEXT, Ticket(8))?;
+    upload(&transfers, token, request.as_bytes(), now).map_err(|cause| format!("{cause:?}"))?;
+    let named = envelope(token, request.len());
+    let received = transfers.take_upload(CONTEXT, Ticket(8), named, now).ok_or("Missing upload")?;
+    let message = decode_payload(received.text(), &session).ok_or("Upload did not decode")?;
+    assert!(matches!(
+        &message,
+        ClientMessage::Native(CanvasNativeRequest::Workflow(sync)) if sync.envelope().request_id() == 4
+    ));
+    assert_eq!(message.lane(), Lane::Ordinary);
+    let storage = received.into_claims();
+    assert!(!storage.is_empty());
+    assert!(lease.claim(SESSION_BYTES).is_err(), "the decoded request released its storage");
+    drop(storage);
+    assert!(lease.claim(SESSION_BYTES).is_ok());
+    Ok(())
+}
+
+#[test]
 fn upload_tokens_are_single_use_and_bound_to_their_document_ticket_and_size() -> TestResult {
     let lease = partition();
     let transfers = transfers(&lease)?;

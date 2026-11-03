@@ -37,8 +37,8 @@ fn surface_request(session: &PanelSession, request_id: u64) -> Result<CanvasSurf
     Ok(CanvasSurfaceMessage::decode(&payload)?)
 }
 
-fn context_request(session: &PanelSession) -> Result<CanvasContextRequest> {
-    Ok(CanvasContextRequest::decode(&serde_json::to_vec(&serde_json::json!({
+fn context_request(session: &PanelSession) -> Result<CanvasNativeRequest> {
+    Ok(CanvasNativeRequest::decode(&serde_json::to_vec(&serde_json::json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
         "requestId":9, "type":"context.request"
     }))?)?)
@@ -241,20 +241,20 @@ fn surface_negotiation_rejects_foreign_navigation_and_memory_custody() -> Result
 #[test]
 fn canvas_context_reports_only_the_currently_implemented_display_capabilities() -> Result<()> {
     let released = Arc::new(AtomicU64::new(0));
-    let reserved = OWNER_BYTES + CanvasContextReply::STORAGE_BYTES;
+    let reserved = OWNER_BYTES + CanvasNativeReply::STORAGE_BYTES;
     let lease = MemoryLease::new(reserved, Box::new(Release(released.clone())));
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
     let mut deliveries = Deliveries::new();
     deliveries.bind(identity, &lease)?;
     let request = context_request(&session)?;
-    deliveries.context(
+    deliveries.native(
         identity,
-        request,
+        &request,
         &lease,
-        lease.claim(CanvasContextReply::STORAGE_BYTES)?,
+        lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
     )?;
-    let Some(DesktopStartupCommand::SendCanvasContext(reply)) = deliveries.take_command(identity)
+    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = deliveries.take_command(identity)
     else {
         return Err("Canvas context reply missing".into());
     };
@@ -273,8 +273,54 @@ fn canvas_context_reports_only_the_currently_implemented_display_capabilities() 
 }
 
 #[test]
+fn every_other_native_family_is_refused_as_unavailable_with_its_own_reply() -> Result<()> {
+    let reserved = OWNER_BYTES + CanvasNativeReply::STORAGE_BYTES;
+    let lease = MemoryLease::new(reserved, Box::new(Release(Arc::default())));
+    let identity = identity()?;
+    let session = PanelSession::for_main(identity)?;
+    let mut deliveries = Deliveries::new();
+    deliveries.bind(identity, &lease)?;
+    for (kind, command, reply_type) in [
+        ("source.request", serde_json::json!({"type":"context"}), "source.reply"),
+        ("geometry.request", serde_json::json!({"type":"context"}), "geometry.reply"),
+        ("edit.request", serde_json::json!({"type":"state"}), "edit.reply"),
+        (
+            "workflow.request",
+            serde_json::json!({"type":"hover", "workflow":"w", "surface":"s",
+            "mask":null}),
+            "workflow.reply",
+        ),
+    ] {
+        let request = CanvasNativeRequest::decode(&serde_json::to_vec(&serde_json::json!({
+            "protocol":"sugarcubes.canvas", "version":3, "session":session.as_str(),
+            "requestId":12, "type":kind, "command":command
+        }))?)?;
+        deliveries.native(
+            identity,
+            &request,
+            &lease,
+            lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
+        )?;
+        let Some(DesktopStartupCommand::SendCanvasNative(reply)) =
+            deliveries.take_command(identity)
+        else {
+            return Err("Native refusal missing".into());
+        };
+        let value: serde_json::Value = serde_json::from_slice(reply.payload())?;
+        assert_eq!(value["type"], reply_type);
+        assert_eq!(value["requestId"], 12);
+        assert_eq!(
+            value["result"],
+            serde_json::json!({"kind":"failure", "status":"unavailable",
+            "message":""})
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn canvas_context_rejects_foreign_navigation_and_memory_custody() -> Result<()> {
-    let reserved = OWNER_BYTES + CanvasContextReply::STORAGE_BYTES;
+    let reserved = OWNER_BYTES + CanvasNativeReply::STORAGE_BYTES;
     let lease = MemoryLease::new(reserved, Box::new(Release(Arc::default())));
     let other = MemoryLease::new(reserved, Box::new(Release(Arc::default())));
     let identity = identity()?;
@@ -284,31 +330,31 @@ fn canvas_context_rejects_foreign_navigation_and_memory_custody() -> Result<()> 
     let foreign = MainIdentity { navigation: Generation::new(2)?, ..identity };
     assert!(
         deliveries
-            .context(
+            .native(
                 foreign,
-                context_request(&session)?,
+                &context_request(&session)?,
                 &lease,
-                lease.claim(CanvasContextReply::STORAGE_BYTES)?,
+                lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
             )
             .is_err()
     );
     assert!(
         deliveries
-            .context(
+            .native(
                 identity,
-                context_request(&session)?,
+                &context_request(&session)?,
                 &other,
-                other.claim(CanvasContextReply::STORAGE_BYTES)?,
+                other.claim(CanvasNativeReply::STORAGE_BYTES)?,
             )
             .is_err()
     );
     assert!(
         deliveries
-            .context(
+            .native(
                 identity,
-                context_request(&PanelSession::for_main(foreign)?)?,
+                &context_request(&PanelSession::for_main(foreign)?)?,
                 &lease,
-                lease.claim(CanvasContextReply::STORAGE_BYTES)?,
+                lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
             )
             .is_err()
     );
