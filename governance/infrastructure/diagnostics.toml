@@ -1002,6 +1002,13 @@ disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 
 [[records]]
+path = "crates/sugarsubstitute-canvas/examples/brush_dab_timing.rs"
+owner = "sugarsubstitute-canvas"
+source_sha256 = "sha256:414378a69f05da4e7d253d62378592b0477b7a481149f4c213e4a07fe4139be6"
+disposition = "fixture"
+rationale = "Developer measurement reports brush input-path timings on a 4096 pixel mask through the public tool manager and asserts nothing; runtime diagnostics use structured logging."
+
+[[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification.rs"
 owner = "sugarsubstitute-canvas-render"
 source_sha256 = "sha256:d12211caedd13feb0bbe6b7ae3108f6b92860c689e541d94539e1692a137c067"

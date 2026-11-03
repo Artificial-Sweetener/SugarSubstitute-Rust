@@ -10,7 +10,7 @@ minimum_tests = 28
 [[owners]]
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
-concern = "Physical camera, retained projection phase and exact damage invariants; exact input-document archive round trips and rejection of corrupt, truncated and unsupported archives; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history; selection and mask shape modes, constraints, snapping and outline dragging through deferred coverage work; deselect, clear and live-previewed coverage modification; CuteCanvas pixel-edge selection boundaries, boundary caching and ant animation"
+concern = "Physical camera, retained projection phase and exact damage invariants; exact input-document archive round trips and rejection of corrupt, truncated and unsupported archives; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history; selection and mask shape modes, constraints, snapping and outline dragging through deferred coverage work; deselect, clear and live-previewed coverage modification; CuteCanvas pixel-edge selection boundaries, boundary caching and ant animation; brush dab placement, falloff, accumulation, selection clipping and stroke lifecycles"
 minimum_tests = 72
 
 [[owners]]

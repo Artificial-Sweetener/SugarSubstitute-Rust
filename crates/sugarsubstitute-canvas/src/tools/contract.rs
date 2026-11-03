@@ -165,6 +165,15 @@ pub struct ToolView<'a> {
     pub navigation: &'a Navigation,
     /// Current immutable authored metadata, when a document is available.
     pub document: Option<DocumentSnapshot>,
+    /// The layer editing tools act on, such as the active mask.
+    pub target: Option<LayerId>,
+}
+/// Settings the host chooses for a registered tool, delivered through
+/// [`ToolManager::configure`] and observed through [`ToolManager::options`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ToolOptions {
+    /// Brush and Eraser size, hardness and opacity.
+    Brush(BrushOptions),
 }
 /// One reusable tool lifecycle. Implementations keep only transient interaction state.
 /// Document mutation goes through ToolContext's owned edit session. Native handles, execution,
@@ -185,6 +194,16 @@ pub trait CanvasTool: Send {
     fn cancel(&mut self, reason: ToolCancelReason);
     /// Resolve feedback from the current shared state without allocating a native cursor.
     fn cursor(&self, view: &ToolView<'_>) -> CursorIntent;
+    /// The tool's current settings, when it has any.
+    fn options(&self) -> Option<ToolOptions> {
+        None
+    }
+    /// Replace the tool's settings.
+    /// # Errors
+    /// Rejects settings this tool does not take; the default takes none.
+    fn configure(&mut self, _options: ToolOptions) -> Result<(), CanvasError> {
+        Err(CanvasError::Invalid("Tool has no settings"))
+    }
     /// Whether Space belongs to this tool's own text/interaction protocol.
     fn captures_space(&self) -> bool {
         false

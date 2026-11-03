@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route typed tool lifecycles with one shared navigation and document-edit boundary.
+mod brush;
 mod context;
 mod contract;
 mod coverage_commands;
@@ -13,10 +14,11 @@ use crate::{
     EditSessionId, LayerId, Navigation, NavigationCommand, NavigationCommandOutcome,
     NavigationInput, ScrollPhase, overlay::ToolOverlay,
 };
+pub use brush::{BrushMode, BrushOptions, BrushTool};
 pub use context::ToolContext;
 pub use contract::{
     CanvasTool, PointerKind, PointerSample, Pressure, ToolButton, ToolCancelReason, ToolId,
-    ToolInput, ToolModifiers, ToolView,
+    ToolInput, ToolModifiers, ToolOptions, ToolView,
 };
 pub use coverage_commands::{CoverageModification, CoverageOperation, ModifyPhase, ModifyTarget};
 pub use coverage_shape::{CoverageShapeTool, ShapeKind, ShapeTarget};
@@ -138,6 +140,24 @@ impl ToolManager {
         let claim = memory.claim(size_of::<T>() as u64 + 128).map_err(ImageError::from)?;
         *slot = Some(Registered { id, tool: Box::new(tool), _memory: claim });
         Ok(())
+    }
+    /// The settings a registered tool uses now, including changes its own input made, such as
+    /// a brush size the wheel changed. Built-in navigation has none.
+    pub fn options(&self, id: ToolId) -> Option<ToolOptions> {
+        self.registered.iter().flatten().find(|entry| entry.id == id)?.tool.options()
+    }
+    /// Replace a registered tool's settings. They apply from the tool's next observation, so a
+    /// stroke in progress continues with the new size, hardness or opacity.
+    /// # Errors
+    /// Rejects unknown identities, built-in navigation and settings the tool does not take.
+    pub fn configure(&mut self, id: ToolId, options: ToolOptions) -> Result<(), CanvasError> {
+        self.registered
+            .iter_mut()
+            .flatten()
+            .find(|entry| entry.id == id)
+            .ok_or(CanvasError::Invalid("Unknown tool identity"))?
+            .tool
+            .configure(options)
     }
     /// Whether an identity is currently available for selection.
     pub fn contains(&self, id: ToolId) -> bool {
@@ -360,6 +380,7 @@ impl ToolManager {
             tool.cursor(&ToolView {
                 navigation: &self.navigation,
                 document: document.map(Document::snapshot),
+                target: self.target,
             })
         })
     }
@@ -424,7 +445,11 @@ impl ToolManager {
         self.navigation.advance(now)?;
         let mut navigation = self.navigation;
         navigation.input(NavigationInput::Cancel, now)?;
-        let view = ToolView { navigation: &navigation, document: document.map(Document::snapshot) };
+        let view = ToolView {
+            navigation: &navigation,
+            document: document.map(Document::snapshot),
+            target: self.target,
+        };
         if id == ToolId::PAN_ZOOM {
             self.pan_zoom.activate(&view)?;
         } else {

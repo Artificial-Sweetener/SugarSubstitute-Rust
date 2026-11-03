@@ -285,6 +285,7 @@ fn feedback_reports_precise_modes_translation_and_unavailability() -> harness::T
         let view = |document: &Document| crate::ToolView {
             navigation: &navigation,
             document: Some(document.snapshot()),
+            target: None,
         };
         let mut tool = CoverageShapeTool::new(ShapeTarget::Selection, ShapeKind::Rectangle);
         assert_eq!(tool.feedback(&view(&document)), Feedback::Unavailable);

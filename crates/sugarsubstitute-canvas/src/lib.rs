@@ -11,6 +11,7 @@ mod document;
 mod error;
 mod navigation;
 mod overlay;
+mod paint;
 mod presentation;
 mod projection;
 mod tools;
@@ -41,10 +42,10 @@ pub use overlay::{
 pub use presentation::{FrameStamp, RenderRequest};
 pub use projection::ViewProjection;
 pub use tools::{
-    CanvasTool, CoverageModification, CoverageOperation, CoverageShapeTool, DeferredEdit,
-    Disposition, ModifyPhase, ModifyTarget, PointerKind, PointerSample, PreparedEdit, Pressure,
-    ShapeKind, ShapeTarget, ToolButton, ToolCancelReason, ToolContext, ToolId, ToolInput,
-    ToolManager, ToolModifiers, ToolView,
+    BrushMode, BrushOptions, BrushTool, CanvasTool, CoverageModification, CoverageOperation,
+    CoverageShapeTool, DeferredEdit, Disposition, ModifyPhase, ModifyTarget, PointerKind,
+    PointerSample, PreparedEdit, Pressure, ShapeKind, ShapeTarget, ToolButton, ToolCancelReason,
+    ToolContext, ToolId, ToolInput, ToolManager, ToolModifiers, ToolOptions, ToolView,
 };
 pub use viewport::{MAX_SURFACE_EDGE, Viewport};
 #[cfg(test)]
