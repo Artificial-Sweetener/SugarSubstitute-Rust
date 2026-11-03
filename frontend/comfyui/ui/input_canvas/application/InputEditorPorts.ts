@@ -58,7 +58,7 @@ export interface InputSurfaceCardPort {
   changeOpacity(opacity: number): void;
   /** Whether pictures can be imported as new regions of this ordered mask loader. */
   canImport(): boolean;
-  /** Import pictures, grayscale and aspect-fit, as new regions of this loader. */
+  /** Import pictures, stretched to the surface and read as gray levels, as new regions. */
   importMasks(files: readonly Blob[]): Promise<void>;
   subscribe(listener: () => void): () => void;
 }

@@ -13,50 +13,19 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Fit an imported picture into a mask surface as grayscale coverage. */
-
-/** Destination rectangle in surface pixels. */
-export interface FitRectangle {
-  readonly left: number;
-  readonly top: number;
-  readonly width: number;
-  readonly height: number;
-}
-
-/** Scale a source to fit inside the surface without cropping, centred, keeping its aspect ratio. */
-export function aspectFit(
-  sourceWidth: number,
-  sourceHeight: number,
-  width: number,
-  height: number,
-): FitRectangle {
-  if (sourceWidth <= 0 || sourceHeight <= 0 || width <= 0 || height <= 0)
-    throw new RangeError('Mask import sizes must be positive.');
-  const scale = Math.min(width / sourceWidth, height / sourceHeight);
-  const fitted = {
-    width: Math.max(1, Math.round(sourceWidth * scale)),
-    height: Math.max(1, Math.round(sourceHeight * scale)),
-  };
-  return {
-    left: Math.floor((width - fitted.width) / 2),
-    top: Math.floor((height - fitted.height) / 2),
-    ...fitted,
-  };
-}
+/** Convert an imported picture, already stretched to its surface, into mask coverage. */
 
 /**
- * Convert drawn RGBA pixels to opaque grayscale: each pixel's luminance, weighted by its alpha
- * over black, becomes its coverage, so white is fully masked and transparency is unmasked.
+ * Read each RGBA pixel's gray level as coverage, ignoring alpha, with the integer weights of a
+ * Qt grayscale conversion: `(11 r + 16 g + 5 b) / 32`. White is fully masked.
  */
-export function grayscaleMask(rgba: Uint8Array | Uint8ClampedArray): Uint8Array {
+export function grayscaleCoverage(rgba: Uint8Array | Uint8ClampedArray): Uint8Array {
   if (rgba.length % 4) throw new RangeError('Mask import pixels must be RGBA.');
-  const output = new Uint8Array(rgba.length);
-  for (let index = 0; index < rgba.length; index += 4) {
-    const luminance =
-      0.299 * (rgba[index] ?? 0) + 0.587 * (rgba[index + 1] ?? 0) + 0.114 * (rgba[index + 2] ?? 0);
-    const value = Math.round((luminance * (rgba[index + 3] ?? 0)) / 255);
-    output[index] = output[index + 1] = output[index + 2] = value;
-    output[index + 3] = 255;
+  const coverage = new Uint8Array(rgba.length / 4);
+  for (let index = 0; index < coverage.length; index++) {
+    const offset = index * 4;
+    coverage[index] =
+      ((rgba[offset] ?? 0) * 11 + (rgba[offset + 1] ?? 0) * 16 + (rgba[offset + 2] ?? 0) * 5) >> 5;
   }
-  return output;
+  return coverage;
 }

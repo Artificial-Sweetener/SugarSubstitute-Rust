@@ -18,6 +18,7 @@ import { isRecord } from '../../types/common.js';
 import { resolveDimensionAuthority } from '../domain/CanvasDimensionAuthority.js';
 import { comfyFileReference, } from '../domain/WorkflowSurfacePlan.js';
 import { DEFAULT_MASK_OPACITY } from '../domain/MaskColorScheme.js';
+import { nativeMaskOutputChannel } from '../domain/InputLoader.js';
 import { readRegionalPrompts } from './ComfyRegionalPrompts.js';
 /** Node property holding a mask loader's visual opacity in 0..1. */
 export const MASK_OPACITY_KEY = 'sugarcubes_canvas_mask_opacity';
@@ -61,12 +62,12 @@ export class ComfyWorkflowSurfaceGraph {
         const fields = inventory.fields().filter((field) => this.#endpoint(field));
         for (const field of fields) {
             const path = inventory.path(field.node), key = inventory.workflowKey(field.key);
-            const kind = field.loader.kind === 'image' ? 'IMAGE' : 'MASK';
+            const kind = inventory.kind(field.key) === 'image' ? 'IMAGE' : 'MASK';
             if (path === null || key === null || !used.has(JSON.stringify([path, kind])))
                 continue;
             const binding = this.bindings.get(field.node, field.loader);
             bindings.add(binding);
-            if (field.loader.kind !== 'image')
+            if (kind !== 'IMAGE')
                 continue;
             const entry = selectedEntry(binding.state.entries, binding.state.selected);
             images.push({
@@ -79,7 +80,7 @@ export class ComfyWorkflowSurfaceGraph {
             imageKeys.set(field.key, key);
         }
         for (const field of fields) {
-            if (field.loader.kind !== 'mask')
+            if (inventory.kind(field.key) !== 'mask')
                 continue;
             const path = inventory.path(field.node), key = inventory.workflowKey(field.key);
             if (path === null || key === null || !used.has(JSON.stringify([path, 'MASK'])))
@@ -116,6 +117,7 @@ export class ComfyWorkflowSurfaceGraph {
                 image,
                 authority,
                 regions: prompts?.demand ?? null,
+                channel: maskChannel(field),
                 entries: (entries.length || field.loader.ordered ? entries : [null]).map((entry) => ({
                     entry: field.loader.ordered && entry ? entry.id : null,
                     label: field.loader.ordered && entry ? entry.label : nodeLabel(field.node),
@@ -134,7 +136,7 @@ export class ComfyWorkflowSurfaceGraph {
         const inventory = this.associations.inventory;
         const field = inventory
             .fields()
-            .find((item) => item.loader.kind === 'mask' && inventory.workflowKey(item.key) === endpoint);
+            .find((item) => inventory.kind(item.key) === 'mask' && inventory.workflowKey(item.key) === endpoint);
         return field ? this.bindings.get(field.node, field.loader) : null;
     }
     /** Store a mask loader's visual opacity on its node, outside native undo history. */
@@ -211,6 +213,18 @@ export class ComfyWorkflowSurfaceGraph {
                 this.report(error);
             }
     }
+}
+/**
+ * Name the channel a mask loader reads from its files: image loaders' MASK output is inverted
+ * alpha, channel loaders use their authored channel, and loaders without one read red.
+ */
+function maskChannel(field) {
+    if (field.loader.kind === 'image')
+        return nativeMaskOutputChannel(field.loader) ?? 'alpha';
+    const value = field.loader.channel ? widgetValue(field.node, field.loader.channel) : null;
+    return value === 'red' || value === 'green' || value === 'blue' || value === 'alpha'
+        ? value
+        : 'red';
 }
 /** Resolve the selected entry, or the first one. */
 function selectedEntry(entries, selected) {

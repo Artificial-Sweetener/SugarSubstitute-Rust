@@ -31,14 +31,16 @@
                   "filename": "portrait-mask.png",
                   "subfolder": "masks",
                   "type": "input"
-                }
+                },
+                "channel": "alpha"
               },
               {
                 "key": "node:14:mask",
                 "label": "Mask node:14:mask",
                 "color": "#3FA9f5",
                 "opacity": 0.5,
-                "initial": null
+                "initial": null,
+                "channel": "alpha"
               }
             ]
           },
@@ -895,231 +897,264 @@
           "label": "Mask node:0:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:1:mask",
           "label": "Mask node:1:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:2:mask",
           "label": "Mask node:2:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:3:mask",
           "label": "Mask node:3:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:4:mask",
           "label": "Mask node:4:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:5:mask",
           "label": "Mask node:5:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:6:mask",
           "label": "Mask node:6:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:7:mask",
           "label": "Mask node:7:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:8:mask",
           "label": "Mask node:8:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:9:mask",
           "label": "Mask node:9:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:10:mask",
           "label": "Mask node:10:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:11:mask",
           "label": "Mask node:11:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:12:mask",
           "label": "Mask node:12:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:13:mask",
           "label": "Mask node:13:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:14:mask",
           "label": "Mask node:14:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:15:mask",
           "label": "Mask node:15:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:16:mask",
           "label": "Mask node:16:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:17:mask",
           "label": "Mask node:17:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:18:mask",
           "label": "Mask node:18:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:19:mask",
           "label": "Mask node:19:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:20:mask",
           "label": "Mask node:20:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:21:mask",
           "label": "Mask node:21:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:22:mask",
           "label": "Mask node:22:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:23:mask",
           "label": "Mask node:23:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:24:mask",
           "label": "Mask node:24:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:25:mask",
           "label": "Mask node:25:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:26:mask",
           "label": "Mask node:26:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:27:mask",
           "label": "Mask node:27:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:28:mask",
           "label": "Mask node:28:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:29:mask",
           "label": "Mask node:29:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:30:mask",
           "label": "Mask node:30:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:31:mask",
           "label": "Mask node:31:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         },
         {
           "key": "node:32:mask",
           "label": "Mask node:32:mask",
           "color": "#3FA9f5",
           "opacity": 0.5,
-          "initial": null
+          "initial": null,
+          "channel": "alpha"
         }
       ]
     },
@@ -1300,6 +1335,18 @@
       "base": "activated",
       "path": ["result", "surface"],
       "value": "node:12:image"
+    },
+    {
+      "name": "mask without channel",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "channel"],
+      "delete": true
+    },
+    {
+      "name": "unknown mask channel",
+      "base": "sync",
+      "path": ["command", "surfaces", 0, "masks", 0, "channel"],
+      "value": "luma"
     }
   ]
 }

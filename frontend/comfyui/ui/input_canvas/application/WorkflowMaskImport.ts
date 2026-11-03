@@ -16,16 +16,19 @@
 /** Import pictures as new regions of a regional mask loader on a workflow-surface canvas. */
 import type { CanvasPixelRaster } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import type { InputSourceAssets } from './InputSourcePreparation.js';
+import { maskSourceImage } from '../domain/MaskSourcePixels.js';
 import type { WorkflowSurfaceSource } from './WorkflowInputRoute.js';
 
-/** Draw a picture at a surface's exact size as grayscale coverage. */
+/** Stretch a picture to a surface's exact size and read its gray levels as coverage. */
 export interface MaskImportRasters {
   raster(file: Blob, width: number, height: number): Promise<CanvasPixelRaster>;
 }
 
 /**
  * Convert every picture to the loader's surface size before anything is added, so a failed
- * picture adds no region. Each staged file becomes a new region's initial mask; the surface
+ * picture adds no region. Files are staged in the coverage image encoding (rgb = value,
+ * alpha = 255 - value), which every loader channel reads as the same coverage. Each staged file
+ * becomes a new region's initial mask; the surface
  * provisioning then creates and binds its layer.
  */
 export class WorkflowMaskImport {
@@ -53,7 +56,9 @@ export class WorkflowMaskImport {
     for (const file of files)
       staged.push(
         await this.assets.stage(
-          await this.rasters.raster(file, surface.document.width, surface.document.height),
+          maskSourceImage(
+            await this.rasters.raster(file, surface.document.width, surface.document.height),
+          ),
         ),
       );
     if (staged.length) append(staged);

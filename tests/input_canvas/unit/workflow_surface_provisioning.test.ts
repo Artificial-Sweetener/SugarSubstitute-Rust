@@ -91,6 +91,7 @@ const paired: WorkflowSurfaceFacts = {
       image: 'image',
       authority: { kind: 'missing', reason: 'no_relevant_spatial_root_with_dimensions' },
       regions: null,
+      channel: 'alpha',
       entries: [{ entry: null, label: 'Load Mask', initial: null }],
     },
   ],
@@ -129,7 +130,14 @@ test('a file image with a paired mask syncs once and binds the mask loader to it
           label: 'Load Image',
           base: { kind: 'file', file: photo },
           masks: [
-            { key: 'mask', label: 'Load Mask', color: '#479ef5', opacity: 0.5, initial: null },
+            {
+              key: 'mask',
+              label: 'Load Mask',
+              color: '#479ef5',
+              opacity: 0.5,
+              initial: null,
+              channel: 'alpha',
+            },
           ],
         },
       ],

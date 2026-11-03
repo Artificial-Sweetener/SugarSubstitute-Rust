@@ -57,6 +57,7 @@ export function planWorkflowSurfaces(facts, accent, labels) {
                 color: maskColor(accent, index, admitted.length),
                 opacity: mask.opacity,
                 initial: entry.initial,
+                channel: mask.channel,
             })),
         });
     };
@@ -95,6 +96,7 @@ export function workflowSyncSurfaces(plan) {
             color: mask.color,
             opacity: mask.opacity,
             initial: mask.initial,
+            channel: mask.channel,
         })),
     }));
 }

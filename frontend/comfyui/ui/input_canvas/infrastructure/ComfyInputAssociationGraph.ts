@@ -81,6 +81,12 @@ export class ComfyInputAssociationGraph {
     return field && path !== null ? JSON.stringify([path, field.loader.field]) : null;
   }
 
+  /** Classify an owned field by the outputs actually used, or null for an unknown field. */
+  kind(key: string): InputKind | null {
+    const field = this.#fields.get(key);
+    return field ? endpointKind(field.node, field.loader) : null;
+  }
+
   /** List every loader field owned by the current workflow inventory. */
   fields(): readonly ComfyInputAssetField[] {
     return [...this.#fields.values()];
@@ -253,7 +259,7 @@ export class ComfyInputAssociationGraph {
           source && outputKind === kind
             ? this.loaders
                 .all(source.type ?? source.class_type ?? '')
-                .filter((loader) => loader.kind === kind)
+                .filter((loader) => endpointKind(source, loader) === kind)
                 .map((loader) => this.key(source, loader.field))
                 .filter((key) => this.#fields.has(key))
             : [];
@@ -273,9 +279,9 @@ export class ComfyInputAssociationGraph {
             ? [
                 {
                   key,
-                  kind: loader.kind,
+                  kind: endpointKind(node, loader),
                   maskOutput:
-                    loader.kind === 'image' &&
+                    endpointKind(node, loader) === 'image' &&
                     Boolean(
                       node.outputs?.some(
                         (output) => assetKind(output.type) === 'mask' && output.links?.length,
@@ -306,6 +312,19 @@ export class ComfyInputAssociationGraph {
   }
 }
 
+/**
+ * Classify a loader field by the spatial outputs actually used: an image loader whose IMAGE
+ * output is used is an image endpoint even when its MASK output is also used; one whose only
+ * used spatial output is MASK is a mask endpoint.
+ */
+function endpointKind(node: ComfyNode, loader: InputLoader): InputKind {
+  if (loader.kind !== 'image') return loader.kind;
+  const used = (kind: InputKind): boolean =>
+    Boolean(
+      node.outputs?.some((output) => assetKind(output.type) === kind && output.links?.length),
+    );
+  return !used('image') && used('mask') ? 'mask' : 'image';
+}
 /** Admit native node identity before it participates in flattened paths. */
 function validNodeId(value: unknown): value is string | number {
   return typeof value === 'string'

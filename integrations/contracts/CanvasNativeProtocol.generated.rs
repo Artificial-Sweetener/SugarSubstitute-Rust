@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): e789a00daf015acd58aa1c3f854c7f2fa5cf01aa49e054343277c5919fabc9bb
+// Schema SHA-256 (LF): d9d243f3ccecb0394dabbed54902e320aabacf2618c9922756a42f4fd9feeb9a
 
 /// Schema-defined untrusted CanvasSurfaceFileReference data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -958,6 +958,7 @@ pub(super) struct CanvasWorkflowMask {
     pub(super) opacity: f64,
     #[serde(deserialize_with = "deserialize_required_option")]
     pub(super) initial: Option<CanvasSurfaceFileReference>,
+    pub(super) channel: String,
 }
 impl CanvasWorkflowMask {
     /// Reject values outside the exact schema-defined bounds.
@@ -967,6 +968,7 @@ impl CanvasWorkflowMask {
             && valid_color(&self.color)
             && (0.0..=1.0).contains(&self.opacity)
             && self.initial.as_ref().is_none_or(CanvasSurfaceFileReference::valid)
+            && matches!(self.channel.as_str(), "red" | "green" | "blue" | "alpha")
     }
 }
 

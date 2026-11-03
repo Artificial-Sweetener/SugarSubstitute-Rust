@@ -47,6 +47,7 @@ function surface(key: string, image: string | null, masks: readonly string[]): P
       color: '#479ef5',
       opacity: 0.5,
       initial: null,
+      channel: 'alpha',
       layerId: 'layer:' + mask,
     })),
   };

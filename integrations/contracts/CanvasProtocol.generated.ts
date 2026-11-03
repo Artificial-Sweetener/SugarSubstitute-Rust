@@ -446,6 +446,7 @@ export type CanvasWorkflowMask = {
   readonly color: string;
   readonly opacity: number;
   readonly initial: CanvasSurfaceFileReference | null;
+  readonly channel: 'red' | 'green' | 'blue' | 'alpha';
 };
 /** Describe the schema-defined CanvasWorkflowSurface wire value. */
 export type CanvasWorkflowSurface = {
