@@ -20,7 +20,7 @@ import type {
 } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import type { CanvasSurfaceFileReference } from '../../../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
 import type { DimensionAuthority, DimensionAuthorityNode } from './CanvasDimensionAuthority.js';
-import { maskColor, regionMaskColor } from './MaskColorScheme.js';
+import { maskColor } from './MaskColorScheme.js';
 import type { RegionalPromptDemand } from './RegionalPromptDemand.js';
 
 /** At most this many surfaces cross the wire in one sync, per the canvas contract. */
@@ -100,7 +100,7 @@ export interface WorkflowSurfacePlan {
  * surface of its resolved size authority, so masks sized by the same nodes share one surface.
  * Ambiguous pairings and unresolved sizes are rejected rather than guessed. Scalar mask colours
  * rotate over each surface's complete mask list, starting from the accent; the regions of an
- * ordered loader take the regional palette over that loader's own regions, as their prompts do.
+ * ordered loader rotate over that loader's own regions, as their prompt separators do.
  */
 export function planWorkflowSurfaces(
   facts: WorkflowSurfaceFacts,
@@ -154,7 +154,7 @@ export function planWorkflowSurfaces(
             mask,
             entry,
             label: mask.regions?.names[index] ?? entry.label,
-            region: mask.regions ? regionMaskColor(index, mask.entries.length) : null,
+            region: mask.regions ? maskColor(accent, index, mask.entries.length) : null,
           }) as const,
       ),
     );

@@ -32,7 +32,7 @@ export function prepareReorderRowPaint(
     paints =
       preview.capture.projection &&
       preview.capture.prepared.scope.container.location.kind === 'prompt'
-        ? preparedRegionPaint(preview.capture.prepared.scope)
+        ? preparedRegionPaint(preview.capture.prepared.scope, preview.capture.regionPalette)
         : [];
   const result = new Map<SourceLineOrigin, CanonicalRowPaint>();
   if (!bands.length && !paints.length) return result;

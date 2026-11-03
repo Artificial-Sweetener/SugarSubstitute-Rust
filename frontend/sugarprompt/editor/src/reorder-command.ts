@@ -59,6 +59,7 @@ import {
   type ReorderProjection,
 } from './reorder-projection.js';
 import { richProjection, projectsRichSyntax } from './rich-projection.js';
+import { regionPalette } from './region-paint.js';
 /** One actual scope and original native selection intent; preview cannot grant editing authority. */
 export interface NativeReorderCapture {
   readonly context: NativeDocumentValueContext;
@@ -80,6 +81,8 @@ export interface NativeReorderCapture {
   readonly nativeSelection: NativeSelectionContents;
   readonly authored: Authorship | undefined;
   readonly projection: ReorderProjection | null;
+  /** The regional palette base when the capture was taken. */
+  readonly regionPalette: string;
 }
 const captures = new WeakSet<NativeReorderCapture>();
 /** Current native permission and feature policy admit reorder in either presentation mode. */
@@ -138,6 +141,7 @@ export function prepareNativeReorder(
     nativeSelection: selectionContents(state.selection),
     authored: state.field(authorship, false),
     projection,
+    regionPalette: state.facet(regionPalette),
   });
   captures.add(capture);
   return capture;

@@ -13,9 +13,8 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Choose which base the shared ordinal palette rotates from for each kind of input mask. */
+/** Colour input masks from the theme accent through SugarPrompt's shared ordinal palette. */
 import {
-  REGION_PALETTE_BASE,
   formatRegionHex,
   parseRegionHex,
   regionPaletteColor,
@@ -25,22 +24,14 @@ import {
 export const DEFAULT_MASK_OPACITY = 0.5;
 
 /**
- * Return the overlay colour of mask `index` among `count` masks sharing one surface.
+ * Return the colour of mask `index` among `count` related masks.
  *
- * Mask 0 keeps the theme accent; later masks rotate from it through the shared ordinal palette.
+ * Mask 0 keeps the theme accent; later masks rotate from it through the shared ordinal palette,
+ * the palette SugarPrompt colours separators with when given the same accent. Scalar masks relate
+ * to every mask on their surface; the regions of an ordered loader relate to that loader's regions.
  */
 export function maskColor(accent: string, index: number, count: number): string {
   const base = parseRegionHex(accent);
   if (!base) throw new Error('A mask colour requires a #rrggbb accent.');
   return formatRegionHex(regionPaletteColor(base, index, count));
-}
-
-/**
- * Return the colour of region `index` among the `count` regions of one ordered mask loader.
- *
- * Regions take SugarPrompt's regional palette so a region's mask, its card row and its prompt
- * separator show the same colour.
- */
-export function regionMaskColor(index: number, count: number): string {
-  return formatRegionHex(regionPaletteColor(REGION_PALETTE_BASE, index, count));
 }

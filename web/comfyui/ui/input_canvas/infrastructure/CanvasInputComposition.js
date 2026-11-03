@@ -51,6 +51,7 @@ export function createCanvasInputs(options) {
         workflowPeers: options.workflowPeers,
         commitWorkflow: options.commitWorkflow,
         accent: options.accent,
+        subscribeAccent: options.subscribeAccent,
         notice: options.notice,
         report,
     });

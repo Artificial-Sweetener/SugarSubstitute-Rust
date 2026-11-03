@@ -22,6 +22,8 @@ import type { EditorOptions } from './editor-options.js';
 import type { HostConfiguration } from './host-update.js';
 import { captureConditioningContext, type ConditioningContext } from '../../services/src/index.js';
 import { conditioningContext } from './conditioning-context.js';
+import { regionPalette } from './region-paint.js';
+import { formatRegionHex, parseRegionHex } from '../../core/src/index.js';
 import { documentKind } from './document-kind.js';
 import { loraPageHost, loraMetadataHost } from './lora-action-hosts.js';
 import { captureLoraSchedulingHost, loraSchedulingHost } from './lora-schedule.js';
@@ -66,6 +68,7 @@ export class NativeConfiguration {
       savedSegmentHost: null,
       fieldActionUtilities: null,
       conditioningContext: null,
+      regionAccent: null,
       richRendering: true,
       sourceLineChrome: { enabled: false, contentLeftInset: 0 },
       wheelMode: 'hover_dwell',
@@ -99,6 +102,7 @@ export class NativeConfiguration {
       savedSegmentHost: input.savedSegmentHost ?? null,
       fieldActionUtilities: input.fieldActionUtilities ?? null,
       conditioningContext: captureConditioningContext(input.conditioningContext),
+      regionAccent: captureRegionAccent(input.regionAccent ?? null),
       placeholder: requireValue(input.placeholder, 'native-configuration'),
       richRendering: requireValue(input.richRendering, 'native-configuration'),
       sourceLineChrome: Object.freeze({
@@ -137,6 +141,8 @@ export class NativeConfiguration {
         return documentKind.of(values.documentKind);
       case 'conditioningContext':
         return conditioningContext.of(values.conditioningContext);
+      case 'regionAccent':
+        return values.regionAccent === null ? [] : regionPalette.of(values.regionAccent);
       case 'placeholder':
         return values.placeholder === '' ? [] : placeholder(values.placeholder);
       case 'richRendering':
@@ -271,4 +277,12 @@ export class NativeConfiguration {
   accept(prepared: PreparedNativeConfiguration): void {
     this.current = prepared.values;
   }
+}
+
+/** Normalize a host accent to lowercase `#rrggbb`; malformed accents reject. */
+function captureRegionAccent(value: string | null): string | null {
+  if (value === null) return null;
+  const parsed = typeof value === 'string' ? parseRegionHex(value) : null;
+  if (!parsed) throw new TypeError('Invalid region accent');
+  return formatRegionHex(parsed);
 }

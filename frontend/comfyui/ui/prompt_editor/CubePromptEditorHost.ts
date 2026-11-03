@@ -35,6 +35,8 @@ export interface PromptRegionLinks {
   hoverPrompt(node: ComfyNode, ordinal: number | null): void;
   /** Let the regional owner highlight separators hovered in another view. */
   connectPrompts(editors: Pick<CubePromptEditorHost, 'highlightRegions'>): () => void;
+  /** The theme accent, as `#rrggbb`, that separators rotate from like their mask regions. */
+  readonly accent: { current(): string; subscribe(listener: () => void): () => void };
 }
 
 interface PromptSession {
@@ -81,7 +83,15 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
     if (regions && !this.#regions) {
       this.#regions = regions;
-      this.#releaseRegions = regions.connectPrompts(this);
+      const releaseHover = regions.connectPrompts(this);
+      const releaseAccent = regions.accent.subscribe(() => {
+        const accent = regions.accent.current();
+        for (const session of this.#sessions.values()) session.editor?.setRegionAccent(accent);
+      });
+      this.#releaseRegions = () => {
+        releaseHover();
+        releaseAccent();
+      };
     }
   }
 
@@ -242,6 +252,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
       },
       report: this.#report,
       appearance: this.appearance,
+      regionAccent: this.#regions?.accent.current() ?? null,
       regionHover: (ordinal) => {
         try {
           this.#regions?.hoverPrompt(session.node, ordinal);

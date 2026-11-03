@@ -29,7 +29,16 @@ export class CubePromptEditorHost {
         this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
         if (regions && !this.#regions) {
             this.#regions = regions;
-            this.#releaseRegions = regions.connectPrompts(this);
+            const releaseHover = regions.connectPrompts(this);
+            const releaseAccent = regions.accent.subscribe(() => {
+                const accent = regions.accent.current();
+                for (const session of this.#sessions.values())
+                    session.editor?.setRegionAccent(accent);
+            });
+            this.#releaseRegions = () => {
+                releaseHover();
+                releaseAccent();
+            };
         }
     }
     /** Acquire a field presentation without duplicating its native editor or serialized value. */
@@ -190,6 +199,7 @@ export class CubePromptEditorHost {
             },
             report: this.#report,
             appearance: this.appearance,
+            regionAccent: this.#regions?.accent.current() ?? null,
             regionHover: (ordinal) => {
                 try {
                     this.#regions?.hoverPrompt(session.node, ordinal);

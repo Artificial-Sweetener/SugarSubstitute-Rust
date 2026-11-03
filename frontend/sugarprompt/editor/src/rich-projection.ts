@@ -44,6 +44,7 @@ import { projectWildcardDiagnosticVisibility } from './projection-diagnostics.js
 import { sceneErrors } from './scene-errors.js';
 import { documentKind } from './document-kind.js';
 import { projectWeightInput } from './exact-weight-projection.js';
+import { regionPalette } from './region-paint.js';
 /** Publish only prepared output, never parser work in a transaction or paint callback. */
 export const installProjection = StateEffect.define<PreparedProjection>();
 /** Publish one current projection for source input; native measurement still owns painting. */
@@ -60,8 +61,13 @@ function projectionCurrent(prepared: PreparedProjection, state: EditorState): bo
     prepared.loraPresentation === state.field(loraPresentation) &&
     prepared.loraMedia === state.field(loraMedia) &&
     prepared.wildcardCatalog === state.facet(wildcardCatalog) &&
-    prepared.sceneErrors === state.field(sceneErrors)
+    prepared.sceneErrors === state.field(sceneErrors) &&
+    regionPaletteCurrent(prepared, state)
   );
+}
+/** Prepared rails belong to the palette base they were coloured with. */
+export function regionPaletteCurrent(prepared: PreparedProjection, state: EditorState): boolean {
+  return prepared.regionPalette === null || prepared.regionPalette === state.facet(regionPalette);
 }
 /** Retain at most one actual current compilation between history settlement and native measurement; it supplies no DOM decorations. */
 export const unmeasuredProjection = StateField.define<PreparedProjection | null>({
@@ -265,6 +271,7 @@ export const richProjection = StateField.define<PreparedProjection>({
     if (next.wildcardCatalog !== catalog)
       next = { ...next, sourceIdentity: null, wildcardCatalog: catalog };
     if (next.sceneErrors !== errors) next = { ...next, sourceIdentity: null, sceneErrors: errors };
+    if (!regionPaletteCurrent(next, transaction.state)) next = { ...next, sourceIdentity: null };
     if (next.loraPresentation !== resources || next.loraMedia !== media)
       next = {
         ...next,

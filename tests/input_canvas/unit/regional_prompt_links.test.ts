@@ -16,7 +16,7 @@
 /** Prove how regional mask rows, canvas masks and prompt separators name, colour and hover together. */
 import { jest } from '@jest/globals';
 import { regionalPromptDemand } from '../../../frontend/comfyui/ui/input_canvas/domain/RegionalPromptDemand.js';
-import { regionMaskColor } from '../../../frontend/comfyui/ui/input_canvas/domain/MaskColorScheme.js';
+import { maskColor } from '../../../frontend/comfyui/ui/input_canvas/domain/MaskColorScheme.js';
 import { planWorkflowSurfaces } from '../../../frontend/comfyui/ui/input_canvas/domain/WorkflowSurfacePlan.js';
 import type {
   WorkflowMaskEndpoint,
@@ -68,6 +68,25 @@ function graph(initial: WorkflowSurfaceFacts) {
   };
 }
 
+const ACCENT = '#cc3355';
+
+/** Serve a theme accent that tests can change. */
+function accent(initial = ACCENT) {
+  let color = initial;
+  const listeners = new Set<() => void>();
+  return {
+    current: () => color,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    change(next: string) {
+      color = next;
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
 const prompts = [
   { path: 'positive', separators: [null, 'sky'] },
   { path: 'negative', separators: ['person', 'cloud', 'extra'] },
@@ -75,14 +94,14 @@ const prompts = [
 
 test('rows take the first-authored separator name and the regional colour of their position', () => {
   const g = graph({ images: [], masks: [regional('regions', 2, prompts)] });
-  const regions = new WorkflowRegionalPrompts(g.port, jest.fn());
+  const regions = new WorkflowRegionalPrompts(g.port, accent(), jest.fn());
   expect(regions.region('regions', 'regions0')).toEqual({
     label: 'person',
-    color: regionMaskColor(0, 2),
+    color: maskColor(ACCENT, 0, 2),
   });
   expect(regions.region('regions', 'regions1')).toEqual({
     label: 'sky',
-    color: regionMaskColor(1, 2),
+    color: maskColor(ACCENT, 1, 2),
   });
   expect(regions.region('regions', 'missing')).toBeNull();
   expect(regions.region('scalar', 'regions0')).toBeNull();
@@ -94,7 +113,7 @@ test('rows take the first-authored separator name and the regional colour of the
   expect(changed).toHaveBeenCalledTimes(1);
   expect(regions.region('regions', 'regions0')).toEqual({
     label: null,
-    color: regionMaskColor(0, 1),
+    color: maskColor(ACCENT, 0, 1),
   });
   expect(g.read).toHaveBeenCalledTimes(2);
   regions.dispose();
@@ -115,14 +134,14 @@ test('canvas masks of an ordered loader take the same regional colours as its ro
         regional('regions', 3, prompts),
       ],
     },
-    '#479ef5',
+    ACCENT,
     { synthetic: 'Mask canvas' },
   );
   expect(plan.surfaces[0]?.masks.map((mask) => mask.color)).toEqual([
-    '#479ef5',
-    regionMaskColor(0, 3),
-    regionMaskColor(1, 3),
-    regionMaskColor(2, 3),
+    ACCENT,
+    maskColor(ACCENT, 0, 3),
+    maskColor(ACCENT, 1, 3),
+    maskColor(ACCENT, 2, 3),
   ]);
 });
 
@@ -132,7 +151,7 @@ function hover() {
     images: [],
     masks: [regional('regions', 2, prompts), regional('other', 1, [])],
   });
-  const regions = new WorkflowRegionalPrompts(g.port, jest.fn());
+  const regions = new WorkflowRegionalPrompts(g.port, accent(), jest.fn());
   const canvas = { hover: jest.fn() };
   const report = jest.fn();
   const owner = new WorkflowRegionalHover(regions, canvas, report);
@@ -201,4 +220,21 @@ test('a hover whose loader leaves the workflow is cleared from every view', () =
   expect(h.canvas.hover).toHaveBeenLastCalledWith('regions', null);
   expect(h.highlight).toHaveBeenLastCalledWith(['positive', 'negative'], null);
   h.owner.dispose();
+});
+
+test('region colours follow a theme accent change and observers are told', () => {
+  const g = graph({ images: [], masks: [regional('regions', 2, prompts)] });
+  const theme = accent();
+  const regions = new WorkflowRegionalPrompts(g.port, theme, jest.fn());
+  const changed = jest.fn();
+  regions.subscribe(changed);
+  expect(regions.region('regions', 'regions1')?.color).toBe(maskColor(ACCENT, 1, 2));
+  theme.change('#479ef5');
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(regions.region('regions', 'regions0')?.color).toBe('#479ef5');
+  expect(regions.region('regions', 'regions1')?.color).toBe(maskColor('#479ef5', 1, 2));
+  expect(g.read).toHaveBeenCalledTimes(1);
+  regions.dispose();
+  theme.change('#4f6df5');
+  expect(changed).toHaveBeenCalledTimes(1);
 });

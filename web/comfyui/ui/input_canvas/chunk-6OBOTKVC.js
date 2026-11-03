@@ -1050,7 +1050,6 @@ export {
   changedRegionNames,
   firstRegionNames,
   applyRegionNames,
-  REGION_PALETTE_BASE,
   regionPaletteColor,
   parseRegionHex,
   formatRegionHex
