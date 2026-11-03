@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{
     AffineCursor, CanvasError, CursorIntent, DocumentSnapshot, NavigationInput, OverlaySeam,
-    ResizeDirection, SeamHandle, overlay::ToolOverlay,
+    ResizeDirection, SeamHandle, SnapGuide, overlay::ToolOverlay,
 };
 use edges::{Edge, Owner, distance, rectangle_edges};
 use gesture::{Gesture, Pivot};
@@ -371,6 +371,9 @@ impl CanvasTool for SharedEdgesTool {
     }
     fn overlay(&self) -> Option<ToolOverlay<'_>> {
         (!self.overlay.is_empty()).then_some(ToolOverlay::Seams(&self.overlay))
+    }
+    fn snap_guides(&self) -> &[SnapGuide] {
+        self.drag.as_ref().map_or(&[], |drag| drag.gesture.guides())
     }
     fn session(&self) -> Option<SessionState> {
         self.edges

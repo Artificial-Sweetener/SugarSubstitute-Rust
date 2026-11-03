@@ -281,6 +281,10 @@ pub trait CanvasTool: Send {
     fn overlay(&self) -> Option<ToolOverlay<'_>> {
         None
     }
+    /// Smart guides of the snaps the current gesture holds, in document coordinates.
+    fn snap_guides(&self) -> &[SnapGuide] {
+        &[]
+    }
     /// Act on a typed command; `Ok(false)` when this tool does not take it. A tool asks for the
     /// previously selected tool back through [`ToolContext::settle`].
     /// # Errors

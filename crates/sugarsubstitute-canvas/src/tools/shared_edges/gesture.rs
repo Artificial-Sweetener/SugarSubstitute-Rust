@@ -22,7 +22,7 @@ use super::{
     rail::RailSnap,
     seams::{Handle, Participant, Seam, chain_length, clearance},
 };
-use crate::{CanvasError, LayerId};
+use crate::{CanvasError, LayerId, SnapGuide};
 use sugarsubstitute_image_ops::{CoverageMapping, PiecewiseMapping, triangle_affine};
 
 /// Device pixels within which a snap takes hold.
@@ -62,6 +62,8 @@ pub(super) struct Gesture {
     edge_snap: Option<EdgeSnap>,
     rail_snap: Option<RailSnap>,
     pub(super) ends: [Point; 2],
+    /// The smart guide of the snap the latest placement holds.
+    guide: Option<SnapGuide>,
 }
 
 impl Gesture {
@@ -86,7 +88,12 @@ impl Gesture {
         });
         let rail_snap = pivot.as_ref().and_then(|pivot| RailSnap::new(pivot, &targets));
         let ends = [seam.start(), seam.end()];
-        Some(Self { seam, handle, origin, pivot, edge_snap, rail_snap, ends })
+        Some(Self { seam, handle, origin, pivot, edge_snap, rail_snap, ends, guide: None })
+    }
+
+    /// Smart guides of the snap the latest placement holds.
+    pub(super) fn guides(&self) -> &[SnapGuide] {
+        self.guide.as_slice()
     }
 
     /// The participants' mappings for the pointer at `point`, or `None` when the pointer has no
@@ -100,20 +107,22 @@ impl Gesture {
         if self.handle == Handle::Middle {
             let normal = self.seam.edge.normal();
             let raw = dot(normal, sub(point, self.origin));
-            let snapped = match &mut self.edge_snap {
+            let (snapped, guide) = match &mut self.edge_snap {
                 Some(snap) => snap.resolve(raw, scale, suppressed),
-                None => raw,
+                None => (raw, None),
             };
+            self.guide = guide;
             let (distance, mappings) = translate(&self.seam, snapped, 2.0 * scale);
             let delta = self::scale(normal, distance);
             self.ends = [add(self.seam.start(), delta), add(self.seam.end(), delta)];
             return Some(mappings);
         }
         let pivot = self.pivot.as_ref()?;
-        let snapped = match &mut self.rail_snap {
+        let (snapped, guide) = match &mut self.rail_snap {
             Some(snap) => snap.resolve(point, scale, suppressed),
-            None => point,
+            None => (point, None),
         };
+        self.guide = guide;
         let target = pivot.constrained(snapped, SNAP * scale);
         let mappings = pivot.mappings(target).ok()?;
         self.ends = match self.handle {
@@ -208,22 +217,25 @@ fn boundary_mapping(source: &[Point], target: &[Point]) -> Option<CoverageMappin
 }
 
 impl EdgeSnap {
-    fn resolve(&mut self, raw: f64, scale: f64, suppressed: bool) -> f64 {
+    /// The snapped distance along the source's normal for the pointer's distance `raw`, with
+    /// the guide of the target it snapped to.
+    fn resolve(&mut self, raw: f64, scale: f64, suppressed: bool) -> (f64, Option<SnapGuide>) {
         if suppressed {
             self.lock = None;
-            return raw;
+            return (raw, None);
         }
         let moving = self.source.translated(raw);
         let offset = moving.offset();
         if let Some((owner, line)) = self.lock {
-            let held = self.targets.iter().any(|target| {
+            let held = self.targets.iter().find(|target| {
                 target.owner == owner
                     && (target.offset() - line).abs() <= 1e-9_f64.max(line.abs() * 1e-12)
                     && parallel(&moving, target)
                     && (target.offset() - offset).abs() <= RELEASE * scale
             });
-            if held {
-                return raw + line - offset;
+            if let Some(target) = held {
+                let resolved = raw + line - offset;
+                return (resolved, Some(self.guide(resolved, target)));
             }
         }
         self.lock = None;
@@ -250,10 +262,21 @@ impl EdgeSnap {
         match best {
             Some(target) => {
                 self.lock = Some((target.owner, target.offset()));
-                raw + target.offset() - offset
+                let resolved = raw + target.offset() - offset;
+                (resolved, Some(self.guide(resolved, target)))
             }
-            None => raw,
+            None => (raw, None),
         }
+    }
+
+    /// CuteCanvas's oriented guide: along the target's line, spanning both edges' extents.
+    fn guide(&self, resolved: f64, target: &Edge) -> SnapGuide {
+        let source = self.source.translated(resolved);
+        let (tangent, normal) = (source.tangent(), source.normal());
+        let (own, other) = (source.interval(), target.interval());
+        let (start, end) = (own[0].min(other[0]), own[1].max(other[1]));
+        let line = scale(normal, target.offset());
+        SnapGuide { start: add(scale(tangent, start), line), end: add(scale(tangent, end), line) }
     }
 }
 

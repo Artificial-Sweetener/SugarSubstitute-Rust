@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Snap a moving transform box to the canvas, other layers and the selection, as CuteCanvas's
-//! movement snapping does.
+//! Snap a moving box to the canvas, other layers and the selection, as CuteCanvas's movement
+//! snapping does for Move and for Transform's move handle.
 //!
 //! The box's axis-aligned bounds move; on each axis its start, centre and end are matched
-//! against the same features of stationary targets: the canvas (priority 20, whose centre also
-//! takes the box's edges and whose edges take its centre), the selection (15) and the content
-//! bounds of every other visible layer (10). A feature within 8 device pixels snaps, and the
-//! snap holds until it is more than 12 device pixels away. The closest match wins, then the
-//! higher priority, then like features before start-to-end and centre-to-edge relationships.
+//! against the same features of stationary targets: the canvas (priority 20), the selection (15)
+//! and the content bounds of every other visible layer (10). Like features snap together, and a
+//! start snaps to an end; only the canvas centre also takes the box's start and end. A feature
+//! within 8 device pixels snaps, and the snap holds until it is more than 12 device pixels away.
 //! Ctrl suppresses snapping.
-use crate::{DocumentSnapshot, LayerContent, LayerId};
+//!
+//! Ties resolve exactly as CuteCanvas's ordered match tuple does: the smallest correction, then
+//! the higher priority, then like features before start-to-end and centre relationships, then
+//! the lower target position, then the target owner's name and finally the moving feature's
+//! name, so `center` wins over `end` and `end` over `start`. Each held snap shows a smart guide
+//! along the aligned line, spanning the moved box and the target.
+use crate::{DocumentSnapshot, LayerContent, LayerId, SnapGuide};
 
 /// Device pixels within which a feature snaps.
 const THRESHOLD: f64 = 8.0;
@@ -18,29 +23,43 @@ const THRESHOLD: f64 = 8.0;
 const RELEASE: f64 = 4.0;
 
 /// One feature of a box along an axis.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Feature {
     Start,
     Center,
     End,
 }
+impl Feature {
+    /// CuteCanvas's tie order of moving features: their names, `center` < `end` < `start`.
+    const fn name_order(self) -> u8 {
+        match self {
+            Self::Center => 0,
+            Self::End => 1,
+            Self::Start => 2,
+        }
+    }
+}
 
-/// What a target belongs to, ordering ties after distance, priority and relationship.
+/// What a target belongs to, ordered as CuteCanvas's owner names order ties: `composition`
+/// before layer identities before `selection`. Owners of one priority are always layers, which
+/// order by identity.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Owner {
-    Layer(u64),
     Canvas,
+    Layer(u64),
     Selection,
 }
 
-/// One stationary feature position on an axis.
+/// One stationary feature position on an axis, with the target's extent across the axis.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Target {
     position: f64,
     feature: Feature,
     priority: i32,
     owner: Owner,
+    /// Whether a moving feature of another kind may snap here: only the canvas centre.
     cross: bool,
+    span: [f64; 2],
 }
 
 /// Targets and the held snap of one axis.
@@ -55,6 +74,8 @@ struct Axis {
 pub(super) struct MoveSnap {
     source: [f64; 4],
     axes: [Axis; 2],
+    guides: [SnapGuide; 2],
+    shown: usize,
 }
 
 impl MoveSnap {
@@ -66,7 +87,9 @@ impl MoveSnap {
         selection: bool,
         source: [f64; 4],
     ) -> Self {
-        let mut snap = Self { source, axes: [Axis::default(), Axis::default()] };
+        let none = SnapGuide { start: [0.0; 2], end: [0.0; 2] };
+        let mut snap =
+            Self { source, axes: [Axis::default(), Axis::default()], guides: [none; 2], shown: 0 };
         let extent = document.extent();
         let canvas = [0.0, 0.0, f64::from(extent.width()), f64::from(extent.height())];
         snap.add(canvas, 20, Owner::Canvas, true);
@@ -102,15 +125,20 @@ impl MoveSnap {
         [left, top, right, bottom]: [f64; 4],
         priority: i32,
         owner: Owner,
-        cross: bool,
+        cross_center: bool,
     ) {
-        for (axis, [start, end]) in self.axes.iter_mut().zip([[left, right], [top, bottom]]) {
+        if right <= left || bottom <= top {
+            return;
+        }
+        let axes = [([left, right], [top, bottom]), ([top, bottom], [left, right])];
+        for (axis, ([start, end], span)) in self.axes.iter_mut().zip(axes) {
             for (feature, position) in [
                 (Feature::Start, start),
                 (Feature::Center, (start + end) / 2.0),
                 (Feature::End, end),
             ] {
-                axis.targets.push(Target { position, feature, priority, owner, cross });
+                let cross = cross_center && feature == Feature::Center;
+                axis.targets.push(Target { position, feature, priority, owner, cross, span });
             }
         }
     }
@@ -128,7 +156,30 @@ impl MoveSnap {
             ];
             resolved[index] = axis.resolve(delta[index], features, scale, suppressed);
         }
+        self.shown = 0;
+        for index in 0..2 {
+            let Some((_, target)) = self.axes[index].lock else {
+                continue;
+            };
+            // The guide spans the moved box across the snapped axis and the target.
+            let across = 1 - index;
+            let span = [
+                (self.source[across] + resolved[across]).min(target.span[0]),
+                (self.source[across + 2] + resolved[across]).max(target.span[1]),
+            ];
+            let point = |along: f64| {
+                if index == 0 { [target.position, along] } else { [along, target.position] }
+            };
+            self.guides[self.shown] = SnapGuide { start: point(span[0]), end: point(span[1]) };
+            self.shown += 1;
+        }
         resolved
+    }
+
+    /// Smart guides of the snaps the latest move holds: a vertical line for a horizontal snap,
+    /// then a horizontal line for a vertical one.
+    pub(super) fn guides(&self) -> &[SnapGuide] {
+        &self.guides[..self.shown]
     }
 }
 
@@ -169,7 +220,7 @@ impl Axis {
                     .then(a.1.cmp(&b.1))
                     .then(a.3.position.total_cmp(&b.3.position))
                     .then(a.3.owner.cmp(&b.3.owner))
-                    .then(a.2.cmp(&b.2))
+                    .then(a.2.name_order().cmp(&b.2.name_order()))
             });
         match best {
             Some((correction, _, moving, target)) => {
@@ -184,8 +235,8 @@ impl Axis {
     }
 }
 
-/// CuteCanvas's relationship rank: like features first, then start to end, then centres to
-/// edges where the target accepts them; anything else never snaps.
+/// CuteCanvas's relationship rank: like features first, then start to end, then a centre
+/// relationship where the target accepts another feature; anything else never snaps.
 fn rank(moving: Feature, target: Feature, cross: bool) -> Option<u8> {
     if moving == target {
         return Some(0);
@@ -195,3 +246,6 @@ fn rank(moving: Feature, target: Feature, cross: bool) -> Option<u8> {
     }
     (cross && (moving == Feature::Center || target == Feature::Center)).then_some(2)
 }
+
+#[cfg(test)]
+mod tests;

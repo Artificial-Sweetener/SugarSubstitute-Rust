@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Presentation-only marks drawn over prepared canvas frames: the committed selection's marching
-//! ants and the outline of a shape being drawn.
+//! ants, the outline of a shape being drawn, transform and shared-edge guides, and the smart
+//! guides of held snaps.
 //!
 //! Overlays are view feedback, never authored content. Their geometry is in document pixel
 //! coordinates, so renderers project it through the presented camera and draw it on top of the
@@ -87,6 +88,18 @@ pub struct OverlaySeam {
     pub handle: Option<SeamHandle>,
     /// Whether the start, middle and end handles can be dragged.
     pub enabled: [bool; 3],
+}
+/// Colour of the smart guides an applied snap shows, as sRGB bytes, as CuteCanvas draws them
+/// with its cosmetic one-pixel pen.
+pub const SNAP_GUIDE: [u8; 3] = [225, 55, 180];
+/// One smart guide: the line an applied snap aligns along, from `start` to `end` in document
+/// coordinates, spanning the moving and the stationary geometry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SnapGuide {
+    /// One end of the guide.
+    pub start: [f64; 2],
+    /// The other end of the guide.
+    pub end: [f64; 2],
 }
 /// Owned transform or shared-edge guides that can travel with a presentation job.
 #[derive(Clone, Debug, PartialEq)]
@@ -178,17 +191,21 @@ pub struct PresentationOverlay {
     pub outline: Option<OverlayOutline>,
     /// Transform box or shared-edge guides.
     pub guides: Option<OverlayGuides>,
+    /// Smart guides of the snaps the effective tool's gesture holds, drawn over everything else.
+    pub snaps: Arc<[SnapGuide]>,
     /// Ant animation state.
     pub ants: MarchingAnts,
     /// Document extent; drawn outlines are clipped to it like the coverage they produce.
     pub document: Extent,
 }
 impl PresentationOverlay {
-    /// Combine the displayed selection's boundary with the effective tool's feedback.
+    /// Combine the displayed selection's boundary with the effective tool's feedback and the
+    /// smart guides of its held snaps.
     pub fn new(
         document: Extent,
         selection: Option<Arc<CoverageBoundary>>,
         tool: Option<ToolOverlay<'_>>,
+        snaps: &[SnapGuide],
         ants: MarchingAnts,
     ) -> Self {
         let (mut outline, mut selection_offset, mut guides) = (None, [0, 0], None);
@@ -201,11 +218,12 @@ impl PresentationOverlay {
             }
             None => {}
         }
-        Self { selection, selection_offset, outline, guides, ants, document }
+        let snaps = Arc::from(snaps);
+        Self { selection, selection_offset, outline, guides, snaps, ants, document }
     }
     /// Whether nothing would be drawn.
     pub fn is_empty(&self) -> bool {
-        self.outline.is_none() && self.guides.is_none() && !self.animated()
+        self.outline.is_none() && self.guides.is_none() && self.snaps.is_empty() && !self.animated()
     }
     /// Whether the overlay changes over time, so hosts schedule [`MarchingAnts::next_step`].
     pub fn animated(&self) -> bool {

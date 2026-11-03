@@ -34,6 +34,7 @@ fn outline(document: Extent, shape: OverlayOutline) -> PresentationOverlay {
         selection_offset: [0, 0],
         outline: Some(shape),
         guides: None,
+        snaps: Arc::from([]),
         ants: MarchingAnts::default(),
         document,
     }
@@ -105,6 +106,7 @@ fn ants_dash_each_boundary_run_through_the_camera_and_phase() -> harness::TestRe
             selection_offset: offset,
             outline: None,
             guides: None,
+            snaps: Arc::from([]),
             ants: MarchingAnts::at(MarchingAnts::STEP * phase, false),
             document,
         };
@@ -152,6 +154,7 @@ fn magnified_strokes_sample_only_the_visible_surface() -> harness::TestResult {
             selection_offset: [0, 0],
             outline: None,
             guides: None,
+            snaps: Arc::from([]),
             ants: MarchingAnts::default(),
             document,
         };
@@ -173,6 +176,7 @@ fn guides_draw_a_solid_frame_with_handles_and_heavier_focused_seams() -> harness
             selection_offset: [0, 0],
             outline: None,
             guides: Some(guides),
+            snaps: Arc::from([]),
             ants: MarchingAnts::default(),
             document: surface,
         };
@@ -208,6 +212,33 @@ fn guides_draw_a_solid_frame_with_handles_and_heavier_focused_seams() -> harness
             [word(GUIDE_DISABLED), word(GUIDE_HANDLE)]
         );
         assert_eq!(at(&plain, 20, 45), word(GUIDE_HANDLE));
+        Ok(())
+    })
+}
+
+#[test]
+fn smart_guides_draw_solid_over_frames_through_the_camera() -> harness::TestResult {
+    run(|context| {
+        let surface = Extent::new(60, 50)?;
+        let mut view = Viewport::new(surface)?;
+        view.reframe([0.0, 0.0], 2.0)?;
+        let corners = [[5.0, 5.0], [20.0, 5.0], [20.0, 20.0], [5.0, 20.0]];
+        let guide = sugarsubstitute_canvas::SnapGuide { start: [10.0, 0.0], end: [10.0, 25.0] };
+        let overlay = PresentationOverlay {
+            selection: None,
+            selection_offset: [0, 0],
+            outline: None,
+            guides: Some(OverlayGuides::Frame(corners)),
+            snaps: Arc::from([guide]),
+            ants: MarchingAnts::default(),
+            document: surface,
+        };
+        let pixels = painted(&OverlayPixels::rasterize(&overlay, view, context)?)?;
+        let at = |x: usize, y: usize| pixels[y * 60 + x];
+        // The vertical guide at document x 10 is device column 20, drawn over the frame's top.
+        assert_eq!([at(20, 0), at(20, 10), at(20, 30), at(20, 49)], [word(SNAP_GUIDE); 4]);
+        assert_eq!([at(19, 30), at(21, 30)], [GREY; 2]);
+        assert_eq!(at(30, 10), word(GUIDE));
         Ok(())
     })
 }

@@ -8,8 +8,8 @@
 //! rotates it about its centre. Corner handles scale proportionally unless Shift frees the
 //! aspect ratio, side handles scale one axis, Ctrl+Shift on a side handle skews, Alt scales or
 //! skews about the centre instead of the opposite handle, and Shift snaps rotation to 15°.
-//! Moves follow the pointer exactly, snapping as the `snap` module decides; content moved by a
-//! fraction of a pixel is resampled bilinearly when it lands.
+//! Moves follow the pointer exactly, snapping as the tools' `box_snap` module decides; content
+//! moved by a fraction of a pixel is resampled bilinearly when it lands.
 use crate::tools::{ToolModifiers, TransformAction};
 use crate::{AffineCursor, CanvasError, CursorIntent, Viewport};
 use sugarsubstitute_image_ops::CoverageAffine;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route typed tool lifecycles with one shared navigation and document-edit boundary.
+mod box_snap;
 mod brush;
 mod context;
 mod contract;
@@ -18,7 +19,7 @@ mod transform;
 use crate::{
     CanvasError, CursorIntent, Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession,
     EditSessionId, LayerId, Navigation, NavigationCommand, NavigationCommandOutcome,
-    NavigationInput, ScrollPhase, overlay::ToolOverlay,
+    NavigationInput, ScrollPhase, SnapGuide, overlay::ToolOverlay,
 };
 pub use brush::{BrushMode, BrushOptions, BrushTool};
 pub use context::ToolContext;
@@ -259,6 +260,10 @@ impl ToolManager {
     /// The effective tool's presentation-only feedback, in document coordinates.
     pub fn overlay(&self) -> Option<ToolOverlay<'_>> {
         self.active().and_then(CanvasTool::overlay)
+    }
+    /// Smart guides of the snaps the effective tool's gesture holds, in document coordinates.
+    pub fn snap_guides(&self) -> &[SnapGuide] {
+        self.active().map_or(&[], CanvasTool::snap_guides)
     }
     fn active(&self) -> Option<&dyn CanvasTool> {
         if self.effective == ToolId::PAN_ZOOM {

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Layer moves, nudges, 45° snapping and floating selections with their sessions.
+//! Fractional layer moves, snapping with guides, nudges, 45° constraints and floating
+//! selections with their sessions.
 use super::*;
 use crate::tools::tests::editing::{Canvas, MASK, OTHER, TOOL, canvas, held, region, run};
-use crate::{DocumentEdit, ToolId, tests::harness::TestResult};
+use crate::{DocumentEdit, SnapGuide, ToolId, tests::harness::TestResult};
 use std::time::Duration;
 use sugarsubstitute_image_ops::{Coverage, FULL_COVERAGE, Region};
 
@@ -18,7 +19,7 @@ fn selected(snapshot: &DocumentSnapshot) -> Option<Region> {
 }
 
 #[test]
-fn layer_drags_move_by_whole_pixels_and_land_as_one_undo_step() -> TestResult {
+fn layer_drags_move_by_fractions_and_land_as_one_undo_step() -> TestResult {
     run(|context| {
         let mut canvas = canvas(context, MoveTool::new(), &[[20, 20, 60, 60]])?;
         let revision = canvas.document.snapshot().revision();
@@ -27,12 +28,17 @@ fn layer_drags_move_by_whole_pixels_and_land_as_one_undo_step() -> TestResult {
         canvas.button(true, NONE, context)?;
         canvas.point([45.4, 37.6], NONE, context)?;
         assert!(canvas.tools.captured());
-        assert_eq!(canvas.shown_bounds(MASK), region(35, 28, 40, 40)?);
+        // The mask moves by (15.4, 7.6): its edges cover parts of pixels.
+        assert_eq!(canvas.shown_bounds(MASK), region(35, 27, 41, 41)?);
         assert_eq!(canvas.document.snapshot().revision(), revision);
         assert!(canvas.tools.session().is_none());
         canvas.button(false, NONE, context)?;
         assert!(!canvas.tools.captured());
-        assert_eq!(canvas.bounds(MASK), region(35, 28, 40, 40)?);
+        assert_eq!(canvas.bounds(MASK), region(35, 27, 41, 41)?);
+        let landed = mask(&canvas.document.snapshot())?;
+        let edges = [landed.value(35, 40), landed.value(75, 40), landed.value(50, 27)];
+        assert!(edges.iter().all(|value| *value > 0 && *value < FULL_COVERAGE), "{edges:?}");
+        assert_eq!(landed.value(50, 40), FULL_COVERAGE);
         assert!(canvas.document.undo()?);
         assert_eq!(canvas.bounds(MASK), region(20, 20, 40, 40)?);
         // Escape mid-drag drops the move.
@@ -51,14 +57,19 @@ fn layer_drags_move_by_whole_pixels_and_land_as_one_undo_step() -> TestResult {
 fn shift_turns_drags_to_the_nearest_45_degrees_keeping_their_length() -> TestResult {
     run(|context| {
         let mut canvas = canvas(context, MoveTool::new(), &[[20, 20, 60, 60]])?;
-        let shift = held(true, false, false);
+        // Ctrl keeps the turned drags from snapping.
+        let shift = held(true, true, false);
         canvas.drag(&[[30.0, 30.0], [60.0, 42.0]], shift, context)?;
         // atan2(12, 30) ≈ 21.8° turns to 0°, keeping the length √(30² + 12²) ≈ 32.3.
-        assert_eq!(canvas.bounds(MASK), region(52, 20, 40, 40)?);
+        assert_eq!(canvas.bounds(MASK), region(52, 20, 41, 40)?);
         assert!(canvas.document.undo()?);
         canvas.drag(&[[30.0, 30.0], [50.0, 48.0]], shift, context)?;
-        // ≈ 42° turns to 45°: √(20² + 18²) ≈ 26.9 along the diagonal is 19 pixels each way.
-        assert_eq!(canvas.bounds(MASK), region(39, 39, 40, 40)?);
+        // ≈ 42° turns to 45°: √(20² + 18²) ≈ 26.9 along the diagonal is 19.03 pixels each way.
+        assert_eq!(canvas.bounds(MASK), region(39, 39, 41, 41)?);
+        // Without Ctrl the turned drag's end 7.7 pixels short of the canvas centre snaps to it.
+        assert!(canvas.document.undo()?);
+        canvas.drag(&[[30.0, 30.0], [60.0, 42.0]], held(true, false, false), context)?;
+        assert_eq!(canvas.bounds(MASK), region(60, 20, 40, 40)?);
         assert_eq!(constrain([0.0, 0.0], true), [0.0, 0.0]);
         assert_eq!(constrain([3.0, 4.0], false), [3.0, 4.0]);
         Ok(())
@@ -219,6 +230,36 @@ fn masks_and_floating_pixels_moved_off_the_document_come_back_whole() -> TestRes
         canvas.document.apply(DocumentEdit::Select(None))?;
         canvas.drag(&[[185.0, 30.0], [155.0, 30.0]], NONE, context)?;
         assert_eq!(mask(&canvas.document.snapshot())?, original);
+        Ok(())
+    })
+}
+
+#[test]
+fn drags_snap_to_other_layers_and_the_canvas_with_guides_until_release() -> TestResult {
+    run(|context| {
+        let mut canvas =
+            canvas(context, MoveTool::new(), &[[20, 20, 60, 60], [110, 120, 150, 180]])?;
+        canvas.point([30.0, 30.0], NONE, context)?;
+        canvas.button(true, NONE, context)?;
+        // The mask's start 3 pixels short of the other mask's start snaps onto it; the canvas
+        // centre 7 pixels away is farther.
+        canvas.point([117.0, 30.0], NONE, context)?;
+        assert_eq!(canvas.shown_bounds(MASK), region(110, 20, 40, 40)?);
+        let guide = SnapGuide { start: [110.0, 20.0], end: [110.0, 180.0] };
+        assert_eq!(canvas.tools.snap_guides(), [guide]);
+        // Ctrl suppresses snapping and its guide.
+        canvas.point([117.0, 30.0], held(false, true, false), context)?;
+        assert_eq!(canvas.shown_bounds(MASK), region(107, 20, 40, 40)?);
+        assert!(canvas.tools.snap_guides().is_empty());
+        canvas.point([117.0, 30.0], NONE, context)?;
+        canvas.button(false, NONE, context)?;
+        assert!(canvas.tools.snap_guides().is_empty(), "guides end with the drag");
+        assert_eq!(canvas.bounds(MASK), region(110, 20, 40, 40)?);
+        // A floating selection snaps by its own bounds, here its start onto the other mask's,
+        // and moves by whole pixels.
+        canvas.select([110, 20, 130, 40], context)?;
+        canvas.drag(&[[120.0, 30.0], [121.5, 23.0]], NONE, context)?;
+        assert_eq!(selected(&canvas.shown()), region(110, 13, 20, 20)?);
         Ok(())
     })
 }

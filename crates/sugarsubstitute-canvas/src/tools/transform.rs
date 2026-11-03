@@ -13,18 +13,19 @@
 //! transform lands: quarter turns, flips and whole-pixel moves permute pixels exactly; anything
 //! else is sampled bilinearly, as CuteCanvas resamples transformed fragments.
 mod frame;
-mod snap;
 
 use super::{
     CanvasTool, SessionAction, SessionKind, SessionState, ToolButton, ToolCancelReason,
-    ToolCommand, ToolContext, ToolInput, ToolModifiers, ToolView, coverage_work,
+    ToolCommand, ToolContext, ToolInput, ToolModifiers, ToolView,
+    box_snap::MoveSnap,
+    coverage_work,
     session::{Checkpoints, EditWork, Previewed},
 };
 use crate::{
-    CanvasError, CursorIntent, DocumentSnapshot, LayerId, NavigationInput, overlay::ToolOverlay,
+    CanvasError, CursorIntent, DocumentSnapshot, LayerId, NavigationInput, SnapGuide,
+    overlay::ToolOverlay,
 };
 use frame::{Frame, Grip};
-use snap::MoveSnap;
 use sugarsubstitute_image_ops::CoverageAffine;
 
 /// What the box transforms.
@@ -348,6 +349,12 @@ impl CanvasTool for TransformTool {
     }
     fn overlay(&self) -> Option<ToolOverlay<'_>> {
         self.frame().map(|frame| ToolOverlay::Frame(frame.corners()))
+    }
+    fn snap_guides(&self) -> &[SnapGuide] {
+        self.gesture
+            .as_ref()
+            .and_then(|gesture| gesture.snap.as_ref())
+            .map_or(&[], MoveSnap::guides)
     }
     fn session(&self) -> Option<SessionState> {
         self.prepared

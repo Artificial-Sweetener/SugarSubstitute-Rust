@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Draw presentation overlays, the selection's marching ants and a drawn shape's outline, over
-//! display pixels.
+//! Draw presentation overlays, the selection's marching ants, a drawn shape's outline, transform
+//! and shared-edge guides and the smart guides of held snaps, over display pixels.
 //!
 //! Overlay geometry is projected through the presented camera and rasterized into opaque
 //! one-pixel strokes, as CuteCanvas's cosmetic pens draw them. Dash positions follow device-pixel
 //! distance along each stroke; each selection boundary run starts its own dash, and the light
-//! dashes of every run are drawn before the dark ones, as CuteCanvas's two pen passes are. Pixel
-//! storage follows the strokes actually drawn and is admitted as it grows. The same pixels are painted into CPU display buffers and drawn by
+//! dashes of every run are drawn before the dark ones, as CuteCanvas's two pen passes are. Smart
+//! guides are drawn last, over everything else. Pixel storage follows the strokes actually drawn
+//! and is admitted as it grows. The same pixels are painted into CPU display buffers and drawn by
 //! the GPU display pass, so both presentations show identical marks, and animating the ants only
 //! rasterizes the overlay again, never document pixels.
 use crate::{CpuProjection, RenderError, cpu::check};
 use sugarsubstitute_canvas::{
     ANT_DARK, ANT_LIGHT, GUIDE, GUIDE_DISABLED, GUIDE_HANDLE, GUIDE_HANDLE_RADIUS, OverlayGuides,
-    OverlayOutline, PresentationOverlay, SeamHandle, Viewport, outline_light,
+    OverlayOutline, PresentationOverlay, SNAP_GUIDE, SeamHandle, Viewport, outline_light,
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 pub use sugarsubstitute_image_gpu::OverlayPixel;
@@ -99,6 +100,11 @@ impl OverlayPixels {
         if let Some(guides) = &overlay.guides {
             raster.guides(guides, view)?;
         }
+        for guide in overlay.snaps.iter() {
+            let (start, end) = (view.device_at(guide.start)?, view.device_at(guide.end)?);
+            raster.segment(start, end, 0.0, Stroke::Solid(SNAP_GUIDE), None, None)?;
+        }
+        check(context)?;
         Ok(Self { extent, pixels: raster.pixels, _memory: raster.memory })
     }
     /// Physical surface the pixels were rasterized for.

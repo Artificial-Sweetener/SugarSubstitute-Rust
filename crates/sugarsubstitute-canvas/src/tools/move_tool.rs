@@ -7,30 +7,45 @@
 //! - With a selection, pressing inside it lifts the selected pixels ("move-cut"; Alt copies) and
 //!   the selection travels with them. Pressing outside does nothing. Drags and arrow-key nudges
 //!   accumulate in one floating session, a checkpoint each, with no document history until Enter
-//!   commits it; Escape discards it.
-//! - Without a selection, a drag moves the whole mask and lands as one undo step on release;
-//!   each nudge is its own step.
-//! - Offsets are whole document pixels. Shift turns the drag to the nearest 45° direction,
-//!   keeping its length. Arrow keys move 1 pixel, 10 with Shift; nudges are ignored mid-drag.
+//!   commits it; Escape discards it. Floating pixels move by whole document pixels.
+//! - Without a selection, a drag moves the whole mask by the pointer's exact travel, fractions
+//!   of a pixel included, as CuteCanvas moves a layer; the move lands as one undo step on
+//!   release, resampled bilinearly when it is fractional. Each nudge is its own step.
+//! - Shift turns the drag to the nearest 45° direction, keeping its length; the result then
+//!   snaps the moved box (the mask's content, or the floating selection) to the canvas, the
+//!   selection and other layers, showing smart guides, and Ctrl suppresses snapping. Arrow keys
+//!   move 1 pixel, 10 with Shift; nudges are ignored mid-drag.
 //! - Locked layers and non-mask layers are never moved.
 //!
-//! Masks span the document, so content moved beyond its edge is cropped when the move lands;
-//! until then every preview starts from the published mask, so dragging back restores it.
+//! Masks keep content moved beyond the document, and every preview starts from the published
+//! mask, so dragging back restores it.
 use super::{
     CanvasTool, SessionAction, SessionKind, SessionState, ToolButton, ToolCancelReason,
-    ToolCommand, ToolContext, ToolInput, ToolModifiers, ToolView, coverage_work,
+    ToolCommand, ToolContext, ToolInput, ToolModifiers, ToolView,
+    box_snap::MoveSnap,
+    coverage_work,
     session::{Checkpoints, EditWork, Previewed},
 };
-use crate::{CanvasError, CursorIntent, DocumentSnapshot, LayerId, NavigationInput};
+use crate::{
+    CanvasError, CursorIntent, DocumentSnapshot, LayerContent, LayerId, NavigationInput, SnapGuide,
+};
 use sugarsubstitute_image_ops::CoverageAffine;
 
-/// A drag in progress, by whole document pixels from where it began.
+/// A drag in progress: the offset it started from and the snapped offset it shows now, in
+/// document pixels. Floating drags start on whole pixels and show whole pixels.
 #[derive(Debug)]
 struct Drag {
     mask: LayerId,
     origin: [f64; 2],
-    start: [i64; 2],
-    offset: [i64; 2],
+    start: [f64; 2],
+    offset: [f64; 2],
+    snap: Option<MoveSnap>,
+}
+impl Drag {
+    /// The offset in whole pixels, as floating pixels move.
+    fn whole(&self) -> [i64; 2] {
+        whole(self.offset)
+    }
 }
 
 /// Lifted selected pixels and the offsets they were moved through.
@@ -47,7 +62,8 @@ impl Floating {
     }
     fn work(&self, offset: [i64; 2]) -> EditWork {
         let (mask, copy) = (self.mask, self.copy);
-        Box::new(move |base, job| coverage_work::float(base, mask, translation(offset), copy, job))
+        let translation = CoverageAffine::translation(offset.map(|value| value as f64));
+        Box::new(move |base, job| coverage_work::float(base, mask, translation, copy, job))
     }
     /// Preview the current checkpoint; at the base nothing has moved.
     fn show(&mut self, context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
@@ -107,7 +123,14 @@ impl MoveTool {
             None => [0, 0],
         };
         let mask = self.floating.as_ref().map_or(mask, |floating| floating.mask);
-        self.drag = Some(Drag { mask, origin: point, start, offset: start });
+        let start = start.map(|value| value as f64);
+        let source = match &self.floating {
+            Some(_) => selection_bounds(&document).map(|bounds| moved(bounds, start)),
+            None => content_bounds(&document, mask),
+        };
+        let floating = self.floating.is_some();
+        let snap = source.map(|source| MoveSnap::begin(&document, mask, floating, source));
+        self.drag = Some(Drag { mask, origin: point, start, offset: start, snap });
         context.capture_pointer(true);
         Ok(())
     }
@@ -115,21 +138,28 @@ impl MoveTool {
         let (Some(drag), Some(position)) = (&mut self.drag, self.position) else {
             return Ok(());
         };
-        let point = context.navigation().viewport().document_at(position)?;
-        let delta =
+        let viewport = context.navigation().viewport();
+        let point = viewport.document_at(position)?;
+        let raw =
             constrain([point[0] - drag.origin[0], point[1] - drag.origin[1]], self.modifiers.shift);
-        let offset =
-            [drag.start[0] + delta[0].round() as i64, drag.start[1] + delta[1].round() as i64];
-        if offset == drag.offset {
-            return Ok(());
-        }
+        let delta = match &mut drag.snap {
+            Some(snap) => snap.resolve(raw, viewport.zoom(), self.modifiers.ctrl),
+            None => raw,
+        };
+        let offset = [drag.start[0] + delta[0], drag.start[1] + delta[1]];
+        let previous = drag.offset;
         drag.offset = offset;
         match &mut self.floating {
             Some(floating) => {
-                let work = floating.work(offset);
+                let shown = drag.whole();
+                if shown == whole(previous) {
+                    return Ok(());
+                }
+                let work = floating.work(shown);
                 floating.preview.preview(context, work)
             }
-            None if offset == [0, 0] => {
+            None if offset == previous => Ok(()),
+            None if offset == [0.0, 0.0] => {
                 self.layer.discard(context);
                 context.capture_pointer(true);
                 Ok(())
@@ -144,8 +174,8 @@ impl MoveTool {
         };
         context.capture_pointer(false);
         match &mut self.floating {
-            Some(floating) => floating.offsets.record(drag.offset).map(drop),
-            None if drag.offset == [0, 0] => {
+            Some(floating) => floating.offsets.record(drag.whole()).map(drop),
+            None if drag.offset == [0.0, 0.0] => {
                 self.layer.discard(context);
                 Ok(())
             }
@@ -180,7 +210,8 @@ impl MoveTool {
             self.floating = Some(floating);
             return Ok(true);
         }
-        context.defer(super::Disposition::Commit, layer_work(mask, delta))?;
+        context
+            .defer(super::Disposition::Commit, layer_work(mask, delta.map(|value| value as f64)))?;
         Ok(true)
     }
     fn step(
@@ -269,7 +300,7 @@ impl CanvasTool for MoveTool {
             self.floating = None;
         } else if let (Some(drag), Some(floating)) = (drag, &mut self.floating) {
             // The latest preview already shows the interrupted drag; keep it as a checkpoint.
-            if floating.offsets.record(drag.offset).is_err() {
+            if floating.offsets.record(drag.whole()).is_err() {
                 self.floating = None;
             }
         }
@@ -298,6 +329,9 @@ impl CanvasTool for MoveTool {
             None => CursorIntent::Arrow,
         }
     }
+    fn snap_guides(&self) -> &[SnapGuide] {
+        self.drag.as_ref().and_then(|drag| drag.snap.as_ref()).map_or(&[], MoveSnap::guides)
+    }
     fn session(&self) -> Option<SessionState> {
         self.floating.as_ref().map(|floating| floating.offsets.state(SessionKind::Move))
     }
@@ -318,6 +352,29 @@ fn inside(document: &DocumentSnapshot, [x, y]: [f64; 2], [dx, dy]: [i64; 2]) -> 
     x >= 0.0 && y >= 0.0 && selection.value(x as u32, y as u32) != 0
 }
 
+/// The selection's `[left, top, right, bottom]` bounds.
+fn selection_bounds(document: &DocumentSnapshot) -> Option<[f64; 4]> {
+    let bounds = document.selection()?.bounds()?;
+    Some([bounds.x(), bounds.y(), bounds.right(), bounds.bottom()].map(f64::from))
+}
+
+/// The mask's whole content bounds, including content beyond the document.
+fn content_bounds(document: &DocumentSnapshot, mask: LayerId) -> Option<[f64; 4]> {
+    let layer = coverage_work::editable_mask(document, mask)?;
+    let LayerContent::Coverage { coverage, .. } = layer.content() else {
+        return None;
+    };
+    coverage.content_bounds().map(|bounds| bounds.map(|value| value as f64))
+}
+
+fn moved([left, top, right, bottom]: [f64; 4], [dx, dy]: [f64; 2]) -> [f64; 4] {
+    [left + dx, top + dy, right + dx, bottom + dy]
+}
+
+fn whole(offset: [f64; 2]) -> [i64; 2] {
+    offset.map(|value| value.round() as i64)
+}
+
 /// With Shift, the drag turned to the nearest 45° direction, keeping its length.
 fn constrain([x, y]: [f64; 2], shift: bool) -> [f64; 2] {
     let length = x.hypot(y);
@@ -329,12 +386,9 @@ fn constrain([x, y]: [f64; 2], shift: bool) -> [f64; 2] {
     [angle.cos() * length, angle.sin() * length]
 }
 
-fn translation([dx, dy]: [i64; 2]) -> CoverageAffine {
-    CoverageAffine::translation([dx as f64, dy as f64])
-}
-
-fn layer_work(mask: LayerId, offset: [i64; 2]) -> EditWork {
-    Box::new(move |base, job| coverage_work::transform_mask(base, mask, translation(offset), job))
+fn layer_work(mask: LayerId, offset: [f64; 2]) -> EditWork {
+    let translation = CoverageAffine::translation(offset);
+    Box::new(move |base, job| coverage_work::transform_mask(base, mask, translation, job))
 }
 
 #[cfg(test)]

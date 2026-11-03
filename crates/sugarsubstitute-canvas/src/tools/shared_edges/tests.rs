@@ -115,6 +115,36 @@ fn middle_drags_snap_to_parallel_edges_of_other_layers_unless_ctrl_is_held() -> 
         Ok(())
     })
 }
+
+#[test]
+fn held_snaps_show_cutecanvas_guides_until_release() -> TestResult {
+    run(|context| {
+        let masks = [[0, 0, 100, 200], [100, 0, 200, 200], [140, 0, 190, 40]];
+        let mut edged = canvas(context, SharedEdgesTool::new(), &masks)?;
+        edged.point([101.0, 150.0], NONE, context)?;
+        edged.button(true, NONE, context)?;
+        edged.point([137.5, 150.0], NONE, context)?;
+        // Along the target edge's line, spanning the seam and the target edge.
+        let guide = SnapGuide { start: [140.0, 0.0], end: [140.0, 200.0] };
+        assert_eq!(edged.tools.snap_guides(), [guide]);
+        edged.point([137.5, 150.0], held(false, true, false), context)?;
+        assert!(edged.tools.snap_guides().is_empty(), "Ctrl suppresses the snap and its guide");
+        edged.button(false, NONE, context)?;
+        assert!(edged.tools.snap_guides().is_empty());
+        // An endpoint near the vertical through the fixed end snaps there, guided from it.
+        let masks = [[0, 0, 100, 100], [100, 0, 200, 100]];
+        let mut pivoting = canvas(context, SharedEdgesTool::new(), &masks)?;
+        pivoting.point([100.0, 2.0], NONE, context)?;
+        pivoting.button(true, NONE, context)?;
+        pivoting.point([103.0, 1.0], NONE, context)?;
+        let guide = SnapGuide { start: [100.0, 100.0], end: [100.0, 0.0] };
+        assert_eq!(pivoting.tools.snap_guides(), [guide]);
+        pivoting.button(false, NONE, context)?;
+        assert!(pivoting.tools.snap_guides().is_empty());
+        Ok(())
+    })
+}
+
 #[test]
 fn endpoints_pivot_along_the_shared_rail_and_join_its_end() -> TestResult {
     run(|context| {

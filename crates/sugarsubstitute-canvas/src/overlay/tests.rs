@@ -224,6 +224,7 @@ fn presentation_overlays_own_tool_feedback_and_animate_only_with_ants() -> harne
             extent,
             None,
             Some(ToolOverlay::Outline(OverlayShape::Polygon(&points))),
+            &[],
             MarchingAnts::default(),
         );
         assert_eq!(drawn.outline, Some(OverlayOutline::Polygon(points.into())));
@@ -234,16 +235,20 @@ fn presentation_overlays_own_tool_feedback_and_animate_only_with_ants() -> harne
             extent,
             Some(boundary),
             Some(ToolOverlay::SelectionOffset([3, -1])),
+            &[],
             MarchingAnts::default(),
         );
         assert_eq!((moving.selection_offset, moving.outline.is_none()), ([3, -1], true));
         assert!(moving.animated());
-        assert!(PresentationOverlay::new(extent, None, None, MarchingAnts::default()).is_empty());
+        assert!(
+            PresentationOverlay::new(extent, None, None, &[], MarchingAnts::default()).is_empty()
+        );
         let corners = [[1.0, 1.0], [9.0, 1.0], [9.0, 8.0], [1.0, 8.0]];
         let framed = PresentationOverlay::new(
             extent,
             None,
             Some(ToolOverlay::Frame(corners)),
+            &[],
             MarchingAnts::default(),
         );
         assert_eq!(framed.guides, Some(OverlayGuides::Frame(corners)));
@@ -259,9 +264,15 @@ fn presentation_overlays_own_tool_feedback_and_animate_only_with_ants() -> harne
             extent,
             None,
             Some(ToolOverlay::Seams(&seams)),
+            &[],
             MarchingAnts::default(),
         );
         assert_eq!(seamed.guides, Some(OverlayGuides::Seams(seams.into())));
+        let guide = SnapGuide { start: [0.0, 4.0], end: [9.0, 4.0] };
+        let snapped =
+            PresentationOverlay::new(extent, None, None, &[guide], MarchingAnts::default());
+        assert_eq!(&*snapped.snaps, [guide]);
+        assert!(!snapped.is_empty() && !snapped.animated());
         Ok(())
     })
 }

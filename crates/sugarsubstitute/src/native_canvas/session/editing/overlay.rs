@@ -3,9 +3,10 @@
 //! Keep the shown document's presentation overlay and its staged gesture step for frames.
 //!
 //! The overlay combines the shown selection's traced boundary, animated as marching ants, with
-//! the effective tool's feedback. Each different overlay takes a new nonzero generation, which
-//! display evidence records, so a changed overlay presents a new frame and an unchanged one
-//! reuses the shown frame. Ants step every 100 ms from when they first appeared.
+//! the effective tool's feedback and the smart guides of the snaps its gesture holds. Each
+//! different overlay takes a new nonzero generation, which display evidence records, so a
+//! changed overlay presents a new frame and an unchanged one reuses the shown frame. Ants step
+//! every 100 ms from when they first appeared.
 use super::*;
 use std::sync::Arc;
 use sugarsubstitute_canvas::{MarchingAnts, PresentationOverlay};
@@ -29,6 +30,8 @@ fn same(left: &PresentationOverlay, right: &PresentationOverlay) -> bool {
     boundaries
         && left.selection_offset == right.selection_offset
         && left.outline == right.outline
+        && left.guides == right.guides
+        && left.snaps == right.snaps
         && left.ants == right.ants
         && left.document == right.document
 }
@@ -58,10 +61,11 @@ impl Session {
                 *since = None;
                 Duration::ZERO
             };
-            let tool = self.document.tools.overlay();
-            (boundary.is_some() || tool.is_some()).then(|| {
+            let tools = &self.document.tools;
+            let (tool, snaps) = (tools.overlay(), tools.snap_guides());
+            (boundary.is_some() || tool.is_some() || !snaps.is_empty()).then(|| {
                 let ants = MarchingAnts::at(elapsed, false);
-                PresentationOverlay::new(snapshot.extent(), boundary, tool, ants)
+                PresentationOverlay::new(snapshot.extent(), boundary, tool, snaps, ants)
             })
         });
         let shown = &mut self.editing.overlay;
