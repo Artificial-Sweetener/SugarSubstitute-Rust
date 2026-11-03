@@ -3,6 +3,7 @@
 //! Restore image-relative cameras on selection and on the shown image, reporting their centers.
 
 use super::*;
+use sugarsubstitute_canvas::{PointerSample, ToolModifiers};
 use sugarsubstitute_desktop::canvas::{MainCanvasButton, MainCanvasGesture, MainCanvasInput};
 use viewport::fixture::{Execution, Fixture};
 
@@ -98,7 +99,15 @@ fn route(fixture: &mut Fixture, gestures: &[MainCanvasGesture]) -> Result<(), Bo
 }
 
 fn button(pressed: bool) -> MainCanvasGesture {
-    MainCanvasGesture::Button { button: MainCanvasButton::Primary, pressed }
+    MainCanvasGesture::Button {
+        button: MainCanvasButton::Primary,
+        pressed,
+        modifiers: ToolModifiers::NONE,
+    }
+}
+
+fn pointer(position: [f64; 2]) -> MainCanvasGesture {
+    MainCanvasGesture::Pointer(PointerSample::mouse(position, ToolModifiers::NONE))
 }
 
 /// Advance injected time, present every frame and return the settled-camera notifications.
@@ -141,10 +150,7 @@ fn watched() -> Result<Fixture, Box<dyn Error>> {
 #[test]
 fn a_settled_wheel_gesture_publishes_its_camera_exactly_once() -> Result<(), Box<dyn Error>> {
     let mut fixture = watched()?;
-    route(
-        &mut fixture,
-        &[MainCanvasGesture::Pointer([30.0, 30.0]), MainCanvasGesture::Wheel(1.0)],
-    )?;
+    route(&mut fixture, &[pointer([30.0, 30.0]), MainCanvasGesture::Wheel(1.0)])?;
     let cameras = settle(&mut fixture)?;
     assert_eq!(cameras.len(), 1, "{cameras:?}");
     let change = &cameras[0]["change"];
@@ -165,14 +171,7 @@ fn a_drag_publishes_only_after_its_release() -> Result<(), Box<dyn Error>> {
     fixture.viewport(6, json!({"type":"zoom","factor":4}))?;
     fixture.complete(6)?;
     assert!(settle(&mut fixture)?.is_empty());
-    route(
-        &mut fixture,
-        &[
-            MainCanvasGesture::Pointer([50.0, 40.0]),
-            button(true),
-            MainCanvasGesture::Pointer([60.0, 44.0]),
-        ],
-    )?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), button(true), pointer([60.0, 44.0])])?;
     assert!(settle(&mut fixture)?.is_empty());
     route(&mut fixture, &[button(false)])?;
     let cameras = settle(&mut fixture)?;
@@ -181,7 +180,7 @@ fn a_drag_publishes_only_after_its_release() -> Result<(), Box<dyn Error>> {
     assert_eq!(viewport["mode"], "custom");
     assert!(close(&viewport["physicalScale"], 1.0), "{viewport}");
     assert!(!close(&viewport["center"]["x"], 0.5), "{viewport}");
-    route(&mut fixture, &[MainCanvasGesture::Pointer([20.0, 25.0])])?;
+    route(&mut fixture, &[pointer([20.0, 25.0])])?;
     assert!(settle(&mut fixture)?.is_empty());
     fixture.finish()
 }
@@ -191,8 +190,8 @@ fn cancelling_a_held_drag_publishes_its_final_camera() -> Result<(), Box<dyn Err
     let mut fixture = watched()?;
     fixture.viewport(6, json!({"type":"zoom","factor":4}))?;
     fixture.complete(6)?;
-    route(&mut fixture, &[MainCanvasGesture::Pointer([50.0, 40.0]), button(true)])?;
-    route(&mut fixture, &[MainCanvasGesture::Pointer([40.0, 35.0])])?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), button(true)])?;
+    route(&mut fixture, &[pointer([40.0, 35.0])])?;
     assert!(settle(&mut fixture)?.is_empty());
     route(&mut fixture, &[MainCanvasGesture::Cancel])?;
     let cameras = settle(&mut fixture)?;
@@ -207,7 +206,7 @@ fn a_shown_preview_publishes_no_gesture_camera() -> Result<(), Box<dyn Error>> {
     let mut fixture = watched()?;
     fixture.viewport(6, json!({"type":"zoom","factor":4}))?;
     fixture.complete(6)?;
-    route(&mut fixture, &[MainCanvasGesture::Pointer([50.0, 40.0]), button(true)])?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), button(true)])?;
     preview::transfer(&mut fixture, 200, "preview:1", preview::JPEG)?;
     let target = preview::wait_frame(&mut fixture)?;
     fixture.canvas.presented(target)?;
@@ -228,14 +227,14 @@ fn a_routed_double_click_from_a_zoomed_camera_publishes_fit() -> Result<(), Box<
     route(
         &mut fixture,
         &[
-            MainCanvasGesture::Pointer(point),
+            pointer(point),
             button(true),
-            MainCanvasGesture::Pointer(point),
+            pointer(point),
             button(false),
-            MainCanvasGesture::Pointer(point),
+            pointer(point),
             button(true),
             MainCanvasGesture::DoubleClick(point),
-            MainCanvasGesture::Pointer(point),
+            pointer(point),
             button(false),
         ],
     )?;

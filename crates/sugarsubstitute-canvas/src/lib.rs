@@ -28,7 +28,8 @@ pub use navigation::{
 pub use presentation::{FrameStamp, RenderRequest};
 pub use projection::ViewProjection;
 pub use tools::{
-    CanvasTool, ToolButton, ToolCancelReason, ToolContext, ToolId, ToolInput, ToolManager, ToolView,
+    CanvasTool, PointerKind, PointerSample, Pressure, ToolButton, ToolCancelReason, ToolContext,
+    ToolId, ToolInput, ToolManager, ToolModifiers, ToolView,
 };
 pub use viewport::{MAX_SURFACE_EDGE, Viewport};
 #[cfg(test)]

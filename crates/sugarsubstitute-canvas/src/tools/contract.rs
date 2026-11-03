@@ -51,17 +51,97 @@ pub enum ToolCancelReason {
     /// The surface is retiring.
     Shutdown,
 }
+/// Physical device class that produced a pointer observation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PointerKind {
+    /// A mouse, touchpad or any device the platform reports as a mouse.
+    Mouse,
+    /// A pen or stylus, including its eraser end.
+    Pen,
+    /// A touch contact.
+    Touch,
+}
+/// Keyboard modifiers the platform reported held when it delivered an observation.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ToolModifiers {
+    /// Either Shift key.
+    pub shift: bool,
+    /// Either Control key.
+    pub ctrl: bool,
+    /// Either Alt key.
+    pub alt: bool,
+}
+impl ToolModifiers {
+    /// No modifier held.
+    pub const NONE: Self = Self { shift: false, ctrl: false, alt: false };
+}
+/// Contact pressure normalized to the closed unit interval; devices without pressure report
+/// [`Pressure::FULL`].
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub struct Pressure(f64);
+impl Pressure {
+    /// Full pressure: mouse buttons and pressure-less devices.
+    pub const FULL: Self = Self(1.0);
+    /// Normalize a device reading from its inclusive `0..=maximum` range. Readings above the
+    /// range clamp to full pressure; a device without a range (`maximum == 0`) reports full.
+    pub fn from_range(value: u32, maximum: u32) -> Self {
+        if maximum == 0 {
+            return Self::FULL;
+        }
+        Self(f64::from(value.min(maximum)) / f64::from(maximum))
+    }
+    /// Pressure in `[0, 1]`.
+    pub const fn get(self) -> f64 {
+        self.0
+    }
+}
+/// One pointer observation with the device facts tools use to shape their gestures.
+///
+/// `position` is in physical pixels of the receiving coordinate space: the native host's client
+/// area until the host converts it to the canvas viewport.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PointerSample {
+    /// Physical pixel position.
+    pub position: [f64; 2],
+    /// Device class that produced the observation.
+    pub kind: PointerKind,
+    /// Normalized contact pressure; full for mice and pressure-less devices.
+    pub pressure: Pressure,
+    /// Whether a pen's eraser end, inverted tip or eraser button is active.
+    pub eraser: bool,
+    /// Modifiers held when the platform delivered the observation.
+    pub modifiers: ToolModifiers,
+}
+impl PointerSample {
+    /// A mouse observation: full pressure and no eraser.
+    pub const fn mouse(position: [f64; 2], modifiers: ToolModifiers) -> Self {
+        Self {
+            position,
+            kind: PointerKind::Mouse,
+            pressure: Pressure::FULL,
+            eraser: false,
+            modifiers,
+        }
+    }
+    /// The same device facts at a position in another coordinate space.
+    pub const fn at(self, position: [f64; 2]) -> Self {
+        Self { position, ..self }
+    }
+}
 /// Tool-neutral physical observations. Wheel steps are normalized hardware notches.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ToolInput {
-    /// Physical client pointer position.
-    Pointer([f64; 2]),
-    /// Pointer button transition at the most recent position.
+    /// A pointer observation in physical viewport pixels.
+    Pointer(PointerSample),
+    /// Pointer button transition at the most recent pointer observation. A pen tip contact is
+    /// the primary button; its pressure and eraser state arrive with the preceding sample.
     Button {
         /// Changed button.
         button: ToolButton,
         /// Whether it is pressed.
         pressed: bool,
+        /// Modifiers held when the platform delivered the transition.
+        modifiers: ToolModifiers,
     },
     /// A wheel observation with its explicit or implicit gesture lifetime.
     Wheel {

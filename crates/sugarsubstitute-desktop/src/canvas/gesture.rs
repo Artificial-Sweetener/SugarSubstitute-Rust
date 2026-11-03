@@ -2,11 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exchange the native input region and routed gestures between the canvas and desktop owners.
 //!
-//! The canvas owner publishes where native navigation may receive pointer input; the desktop
-//! adapter routes Win32 mouse messages against that region on the UI thread and returns only
-//! the gestures it assigned to the canvas. Neither direction waits on the other.
+//! The canvas owner publishes where native tools may receive pointer input; the desktop adapter
+//! routes Win32 mouse and pen messages against that region on the UI thread and returns only the
+//! gestures it assigned to the canvas. Neither direction waits on the other.
 
 use super::placement::{CanvasPlacement, PhysicalRect, WebViewAllocation};
+use sugarsubstitute_canvas::{PointerSample, ToolModifiers};
 
 /// Maximum occlusion rectangles in one published input region, matching the shared contract.
 pub const MAX_INPUT_OCCLUSIONS: usize = 64;
@@ -63,17 +64,20 @@ pub enum MainCanvasButton {
 /// One routed observation, in the order the desktop received its Win32 message.
 ///
 /// Positions are physical client pixels of the main window. The canvas owner converts them to
-/// its viewport and applies them to the navigation tool.
+/// its viewport and applies them to the effective tool. A pen's tip contact arrives as the
+/// primary button; its pressure and eraser state travel with the pointer samples.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MainCanvasGesture {
-    /// The pointer moved inside the region or during a captured native gesture.
-    Pointer([f64; 2]),
-    /// A routed button changed state at the most recent pointer position.
+    /// The mouse or pen moved inside the region or during a captured native gesture.
+    Pointer(PointerSample),
+    /// A routed button changed state at the most recent pointer sample.
     Button {
         /// The changed button.
         button: MainCanvasButton,
         /// Whether the button is now held.
         pressed: bool,
+        /// Modifiers held when Windows delivered the transition.
+        modifiers: ToolModifiers,
     },
     /// Signed hardware wheel notches at the most recent pointer position; positive zooms in.
     Wheel(f64),

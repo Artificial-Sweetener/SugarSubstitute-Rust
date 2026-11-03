@@ -11,6 +11,7 @@ mod display;
 mod drag_source;
 mod drop_target;
 mod input;
+mod modifiers;
 mod retirement;
 mod routing;
 mod scale;

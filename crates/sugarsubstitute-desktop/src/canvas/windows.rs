@@ -16,18 +16,24 @@ use crate::{
 use ::windows::Win32::Foundation::HWND;
 use input::{NativeEvent, NativeInput};
 use std::time::Instant;
-use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
+use sugarsubstitute_canvas::{PointerSample, ScrollPhase, ToolButton, ToolInput, ToolModifiers};
 use tao::{
     dpi::PhysicalSize,
     event::{DeviceEvent, ElementState, Event, MouseButton, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder},
-    keyboard::Key,
+    keyboard::{Key, ModifiersState},
     platform::{
         run_return::EventLoopExtRunReturn,
         windows::{MonitorHandleExtWindows, WindowExtWindows},
     },
     window::WindowBuilder,
 };
+
+/// Tool modifiers from Tao's latest modifier state. The viewer's pointer samples are mouse
+/// samples: Tao reports pen contacts only as touch events, without device kind or eraser state.
+fn tool_modifiers(state: ModifiersState) -> ToolModifiers {
+    ToolModifiers { shift: state.shift_key(), ctrl: state.control_key(), alt: state.alt_key() }
+}
 
 /// Run a standalone native canvas without starting a browser, ComfyUI or inference connection.
 /// Call on the OS main thread. CPU image work remains behind the application's lifetime port.
@@ -121,7 +127,7 @@ fn run_with_picker(
     let mut displayed = None;
     let mut extent = None;
     let mut title = options.title;
-    let mut control_down = false;
+    let mut modifiers = ToolModifiers::NONE;
     let mut display_id = None;
     let mut display_dirty = true;
     let mut drawable = true;
@@ -137,30 +143,30 @@ fn run_with_picker(
         let result = (|| -> Result<(), Box<dyn Error>> {
             match event {
                 Event::UserEvent(NativeEvent::Wheel { point, steps }) if !closing => {
-                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Pointer(point)))?;
+                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Pointer(PointerSample::mouse(point, modifiers))))?;
                     feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Wheel { steps, phase: ScrollPhase::Unphased }))?;
                 }
                 Event::UserEvent(NativeEvent::DoubleClick(point)) if !closing => feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::DoubleClick(point)))?,
                 Event::UserEvent(NativeEvent::CaptureLost) if !closing => feedback::dispatch_input(lifetime, native.as_ref(), Input::Unfocused)?,
                 Event::UserEvent(NativeEvent::DisplayChanged) if !closing => display_dirty = true,
                 Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => closing = true,
-                Event::WindowEvent { event: WindowEvent::ModifiersChanged(modifiers), .. } => control_down = modifiers.control_key(),
+                Event::WindowEvent { event: WindowEvent::ModifiersChanged(changed), .. } => modifiers = tool_modifiers(changed),
                 Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } if !closing => {
-                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Pointer([position.x, position.y])))?;
+                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Pointer(PointerSample::mouse([position.x, position.y], modifiers))))?;
                 },
                 Event::WindowEvent { event: WindowEvent::MouseInput { state, button: button @ (MouseButton::Left | MouseButton::Middle), .. }, .. } if !closing => {
                     let button = if button == MouseButton::Left { ToolButton::Primary } else { ToolButton::Middle };
-                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Button { button, pressed: state == ElementState::Pressed }))?;
+                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Button { button, pressed: state == ElementState::Pressed, modifiers }))?;
                 }
                 Event::WindowEvent { event: WindowEvent::Focused(false), .. } if !closing => {
-                    control_down = false; feedback::dispatch_input(lifetime, native.as_ref(), Input::Unfocused)?;
+                    modifiers = ToolModifiers::NONE; feedback::dispatch_input(lifetime, native.as_ref(), Input::Unfocused)?;
                 }
                 Event::WindowEvent { event: WindowEvent::KeyboardInput { event, .. }, .. } if !closing && !event.repeat => {
                     if event.logical_key == Key::Space {
                         feedback::dispatch_input(lifetime, native.as_ref(), Input::TemporaryNavigation(event.state == ElementState::Pressed))?;
                     } else if event.state == ElementState::Pressed {
                         let command = match event.logical_key {
-                            Key::Character(value) if control_down && value.eq_ignore_ascii_case("o") => Some(Input::Open),
+                            Key::Character(value) if modifiers.ctrl && value.eq_ignore_ascii_case("o") => Some(Input::Open),
                             Key::Character(value) if value.eq_ignore_ascii_case("f") => Some(Input::Tool(ToolInput::Fit)),
                             Key::Character("1") => Some(Input::Tool(ToolInput::OneToOne)),
                             _ => None,

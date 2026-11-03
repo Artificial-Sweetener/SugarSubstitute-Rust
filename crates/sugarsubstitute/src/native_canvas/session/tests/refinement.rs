@@ -236,8 +236,15 @@ fn reversing_zoom_retires_an_unreached_coarser_destination_and_keeps_finer_ready
 fn panning_a_preview_keeps_covered_finished_refinement_running() -> Result<(), Box<dyn Error>> {
     let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
-    session.input(Input::Tool(ToolInput::Pointer([7.0, 3.0])))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: true,
+        modifiers: ToolModifiers::NONE,
+    }))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [7.0, 3.0],
+        ToolModifiers::NONE,
+    ))))?;
     assert_eq!(
         session.reconstruction()?,
         Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3)
@@ -257,8 +264,15 @@ fn overlapping_repair_survives_pan_beyond_the_complete_coverage_guard() -> Resul
 {
     let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
-    session.input(Input::Tool(ToolInput::Pointer([-129.0, 3.0])))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: true,
+        modifiers: ToolModifiers::NONE,
+    }))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [-129.0, 3.0],
+        ToolModifiers::NONE,
+    ))))?;
     let rendering = session.rendering.as_mut().ok_or("Overlapping pan lost useful refinement")?;
     assert!(!rendering.superseded);
     rendering.superseded = true;
@@ -273,8 +287,15 @@ fn zero_overlap_pan_cancels_obsolete_refinement_without_failing_viewer()
 -> Result<(), Box<dyn Error>> {
     let Fixture { mut session, wake, boundary, _directory } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
-    session.input(Input::Tool(ToolInput::Pointer([-2000.0, 3.0])))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: true,
+        modifiers: ToolModifiers::NONE,
+    }))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [-2000.0, 3.0],
+        ToolModifiers::NONE,
+    ))))?;
     assert!(session.rendering.as_ref().is_some_and(|rendering| rendering.superseded));
     observe_terminal(&mut session, &wake, &boundary)?;
     assert!(session.failed.is_none());

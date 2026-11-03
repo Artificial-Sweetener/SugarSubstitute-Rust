@@ -14,7 +14,11 @@ fn freezing_retires_live_edits_and_restores_persistent_tool_selection() -> harne
         tools.select(id, Some(&document), Duration::ZERO)?;
         let accepted = tools.navigation().viewport();
         tools.input(
-            ToolInput::Button { button: ToolButton::Primary, pressed: true },
+            ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: true,
+                modifiers: ToolModifiers::NONE,
+            },
             Some(&mut document),
             Duration::ZERO,
         )?;
@@ -48,7 +52,11 @@ fn camera_commands_preserve_live_edits_and_temporary_tool_selection() -> harness
         let mut document = Document::new(1, Extent::new(1000, 1000)?, memory)?;
         tools.select(id, Some(&document), Duration::ZERO)?;
         tools.input(
-            ToolInput::Button { button: ToolButton::Primary, pressed: true },
+            ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: true,
+                modifiers: ToolModifiers::NONE,
+            },
             Some(&mut document),
             Duration::ZERO,
         )?;
@@ -64,7 +72,11 @@ fn camera_commands_preserve_live_edits_and_temporary_tool_selection() -> harness
         assert_eq!(tools.selected(), id);
         assert_eq!(tools.effective(), id);
         tools.input(
-            ToolInput::Button { button: ToolButton::Primary, pressed: false },
+            ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: false,
+                modifiers: ToolModifiers::NONE,
+            },
             Some(&mut document),
             Duration::ZERO,
         )?;
@@ -94,7 +106,11 @@ fn framing_preserves_live_edits_and_applies_immediately_once_navigation_is_free(
         tools.select(id, Some(&document), Duration::ZERO)?;
         let frame = NavigationCommand::Frame { center: [0.25, 0.75], span: [0.0005; 2] };
         tools.input(
-            ToolInput::Button { button: ToolButton::Primary, pressed: true },
+            ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: true,
+                modifiers: ToolModifiers::NONE,
+            },
             Some(&mut document),
             Duration::ZERO,
         )?;
@@ -103,7 +119,11 @@ fn framing_preserves_live_edits_and_applies_immediately_once_navigation_is_free(
         assert!(tools.preview().is_some());
         assert_eq!(tools.navigation().viewport(), before);
         tools.input(
-            ToolInput::Button { button: ToolButton::Primary, pressed: false },
+            ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: false,
+                modifiers: ToolModifiers::NONE,
+            },
             Some(&mut document),
             Duration::ZERO,
         )?;

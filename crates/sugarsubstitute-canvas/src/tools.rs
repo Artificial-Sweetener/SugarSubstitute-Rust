@@ -10,7 +10,10 @@ use crate::{
     ScrollPhase,
 };
 pub use context::ToolContext;
-pub use contract::{CanvasTool, ToolButton, ToolCancelReason, ToolId, ToolInput, ToolView};
+pub use contract::{
+    CanvasTool, PointerKind, PointerSample, Pressure, ToolButton, ToolCancelReason, ToolId,
+    ToolInput, ToolModifiers, ToolView,
+};
 use std::time::Duration;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::ImageError;

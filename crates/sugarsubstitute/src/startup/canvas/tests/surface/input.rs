@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::startup::canvas::RoutedInput;
+use sugarsubstitute_canvas::{PointerSample, ToolModifiers};
 use sugarsubstitute_desktop::canvas::{
     MainCanvasButton, MainCanvasDragOut, MainCanvasGesture, MainCanvasInput,
 };
@@ -28,7 +29,11 @@ fn route(
 }
 
 fn button(pressed: bool) -> MainCanvasGesture {
-    MainCanvasGesture::Button { button: PRIMARY, pressed }
+    MainCanvasGesture::Button { button: PRIMARY, pressed, modifiers: ToolModifiers::NONE }
+}
+
+fn pointer(position: [f64; 2]) -> MainCanvasGesture {
+    MainCanvasGesture::Pointer(PointerSample::mouse(position, ToolModifiers::NONE))
 }
 
 /// Read the settled camera through the ordinary viewport contract.
@@ -40,8 +45,7 @@ fn read(fixture: &mut Fixture, id: u64) -> Result<Value, Box<dyn Error>> {
 /// Require every gesture to be refused and the camera to stay unrouted.
 fn refused(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
     assert!(fixture.canvas.input_region().is_none());
-    let results =
-        route(fixture, &[MainCanvasGesture::Pointer([30.0, 30.0]), MainCanvasGesture::Wheel(1.0)])?;
+    let results = route(fixture, &[pointer([30.0, 30.0]), MainCanvasGesture::Wheel(1.0)])?;
     assert_eq!(results, [RoutedInput::Refused; 2]);
     Ok(())
 }
@@ -92,8 +96,7 @@ fn a_wheel_notch_zooms_the_committed_final_in_at_the_cursor() -> Result<(), Box<
     let anchored =
         |origin: [f64; 2], zoom: f64| [0, 1].map(|axis| origin[axis] + local[axis] / zoom);
     let document = anchored(camera.origin(), camera.zoom());
-    let results =
-        route(&mut fixture, &[MainCanvasGesture::Pointer(cursor), MainCanvasGesture::Wheel(1.0)])?;
+    let results = route(&mut fixture, &[pointer(cursor), MainCanvasGesture::Wheel(1.0)])?;
     assert_eq!(results, [RoutedInput::Applied; 2]);
     let after = read(&mut fixture, 6)?;
     assert_eq!(after["mode"], "custom");
@@ -116,12 +119,7 @@ fn a_primary_drag_pans_the_zoomed_camera_by_the_dragged_distance() -> Result<(),
     let before = fixture.accepted()?.viewport.origin();
     route(
         &mut fixture,
-        &[
-            MainCanvasGesture::Pointer([50.0, 40.0]),
-            button(true),
-            MainCanvasGesture::Pointer([60.0, 44.0]),
-            button(false),
-        ],
+        &[pointer([50.0, 40.0]), button(true), pointer([60.0, 44.0]), button(false)],
     )?;
     read(&mut fixture, 6)?;
     let camera = fixture.accepted()?.viewport;
@@ -139,10 +137,7 @@ fn a_click_then_a_keyboard_pan_applies_and_keeps_the_camera_readable() -> Result
     fixture.commit(4)?;
     fixture.viewport(5, json!({"type":"zoom","factor":4}))?;
     fixture.complete(5)?;
-    let results = route(
-        &mut fixture,
-        &[MainCanvasGesture::Pointer([50.0, 40.0]), button(true), button(false)],
-    )?;
+    let results = route(&mut fixture, &[pointer([50.0, 40.0]), button(true), button(false)])?;
     assert_eq!(results, [RoutedInput::Applied; 3]);
     let settled = read(&mut fixture, 6)?;
     assert_eq!(settled["mode"], "custom");
@@ -159,7 +154,7 @@ fn a_camera_command_during_a_held_drag_is_refused_until_the_release_lands()
     fixture.commit(4)?;
     fixture.viewport(5, json!({"type":"zoom","factor":4}))?;
     fixture.complete(5)?;
-    route(&mut fixture, &[MainCanvasGesture::Pointer([50.0, 40.0]), button(true)])?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), button(true)])?;
     fixture.viewport(6, json!({"type":"pan","x":0.1,"y":0,"units":"viewport"}))?;
     fixture.take(6, "unavailable")?;
     assert_eq!(route(&mut fixture, &[button(false)])?, [RoutedInput::Applied]);
@@ -177,11 +172,8 @@ fn a_cancellation_ends_a_held_drag_without_moving_the_camera() -> Result<(), Box
     fixture.viewport(5, json!({"type":"zoom","factor":4}))?;
     fixture.complete(5)?;
     let before = fixture.accepted()?.viewport.origin();
-    route(
-        &mut fixture,
-        &[MainCanvasGesture::Pointer([50.0, 40.0]), button(true), MainCanvasGesture::Cancel],
-    )?;
-    route(&mut fixture, &[MainCanvasGesture::Pointer([70.0, 50.0])])?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), button(true), MainCanvasGesture::Cancel])?;
+    route(&mut fixture, &[pointer([70.0, 50.0])])?;
     read(&mut fixture, 6)?;
     assert_eq!(fixture.accepted()?.viewport.origin(), before);
     fixture.viewport(7, json!({"type":"pan","x":0.1,"y":0,"units":"viewport"}))?;
@@ -274,12 +266,7 @@ fn a_drag_out_hands_over_the_selected_output_name_and_original_bytes() -> Result
     fixture.commit(4)?;
     let routed = route(
         &mut fixture,
-        &[
-            MainCanvasGesture::Pointer([50.0, 40.0]),
-            button(true),
-            MainCanvasGesture::Pointer([60.0, 40.0]),
-            MainCanvasGesture::DragOut,
-        ],
+        &[pointer([50.0, 40.0]), button(true), pointer([60.0, 40.0]), MainCanvasGesture::DragOut],
     )?;
     assert_eq!(routed, [RoutedInput::Applied; 4]);
     let drag = copied(&mut fixture)?;
@@ -310,7 +297,7 @@ fn a_drag_out_hands_over_the_selected_output_name_and_original_bytes() -> Result
 fn a_replaced_selection_drops_its_pending_drag_out() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     fixture.commit(4)?;
-    route(&mut fixture, &[MainCanvasGesture::Pointer([50.0, 40.0]), MainCanvasGesture::DragOut])?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), MainCanvasGesture::DragOut])?;
     fixture.select(5, "tall.png")?;
     fixture.complete(5)?;
     for _ in 0..8 {
@@ -326,10 +313,7 @@ fn only_the_most_recent_staged_drags_stay_on_disk() -> Result<(), Box<dyn Error>
     fixture.commit(4)?;
     let mut staged = Vec::new();
     for _ in 0..crate::native_canvas::drag_staging::STAGED_DRAGS + 1 {
-        route(
-            &mut fixture,
-            &[MainCanvasGesture::Pointer([50.0, 40.0]), MainCanvasGesture::DragOut],
-        )?;
+        route(&mut fixture, &[pointer([50.0, 40.0]), MainCanvasGesture::DragOut])?;
         staged.push(copied(&mut fixture)?.staged.ok_or("The output was not staged as a file")?);
     }
     assert!(!staged[0].exists(), "the oldest drag's file is removed when a later drag starts");
@@ -351,14 +335,7 @@ fn a_routed_pan_admits_its_frame_without_another_main_loop_turn() -> Result<(), 
     fixture.pump()?;
     let scope = ScopeId::new(1)?;
     let before = fixture.scope_jobs(scope)?;
-    route(
-        &mut fixture,
-        &[
-            MainCanvasGesture::Pointer([50.0, 40.0]),
-            button(true),
-            MainCanvasGesture::Pointer([70.0, 48.0]),
-        ],
-    )?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), button(true), pointer([70.0, 48.0])])?;
     let after = fixture.scope_jobs(scope)?;
     assert_ne!(before, after, "The routed pan admitted no frame: [{before}]");
     route(&mut fixture, &[button(false)])?;

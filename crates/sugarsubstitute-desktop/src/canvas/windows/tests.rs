@@ -304,3 +304,16 @@ fn hidden_empty_startup_selects_and_presents_one_cpu_frame_without_activation()
     assert_eq!(thread_ui_state(), original);
     Ok(())
 }
+
+#[test]
+fn tao_modifier_state_maps_to_tool_modifiers_without_the_super_key() {
+    assert_eq!(tool_modifiers(ModifiersState::empty()), ToolModifiers::NONE);
+    assert_eq!(
+        tool_modifiers(ModifiersState::SHIFT | ModifiersState::ALT | ModifiersState::SUPER),
+        ToolModifiers { shift: true, ctrl: false, alt: true }
+    );
+    assert_eq!(
+        tool_modifiers(ModifiersState::CONTROL),
+        ToolModifiers { shift: false, ctrl: true, alt: false }
+    );
+}

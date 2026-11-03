@@ -14,8 +14,8 @@ impl CanvasTool for PanZoom {
         context: &mut ToolContext<'_>,
     ) -> Result<(), CanvasError> {
         let input = match input {
-            ToolInput::Pointer(point) => NavigationInput::Pointer(point),
-            ToolInput::Button { button, pressed } => {
+            ToolInput::Pointer(sample) => NavigationInput::Pointer(sample.position),
+            ToolInput::Button { button, pressed, .. } => {
                 let bit = match button {
                     ToolButton::Primary => 1,
                     ToolButton::Middle => 2,

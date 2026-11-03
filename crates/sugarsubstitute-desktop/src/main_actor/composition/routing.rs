@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Decide, per composed-window mouse message, whether WebView2, native navigation or both see it.
+//! Decide, per composed-window mouse or pen message, whether WebView2, the canvas or both see it.
 //!
 //! The canvas owner publishes the native input region: the shown final's clip minus the
-//! page's occlusions. WebView2 receives every move and button message, so focus, hover and
-//! context menus keep working; only wheel input routed to the canvas is withheld from it.
+//! page's occlusions. WebView2 receives every mouse move and button message, so focus, hover
+//! and context menus keep working; only wheel input routed to the canvas is withheld from it.
+//! Pen observations the canvas claims are withheld from WebView2 entirely, so the page never
+//! starts its own pen gesture underneath a canvas stroke.
 //! A primary or middle press inside the region starts a native gesture that stays captured
 //! until its release or a cancellation. A gesture that starts elsewhere stays with WebView2.
 //! While the region offers drag-out, a primary press keeps its origin and crossing the system
-//! drag threshold ends the native gesture with a drag-out request instead of a pan.
+//! drag threshold ends the native gesture with a drag-out request instead of a pan; pen presses
+//! never start a drag-out, because the OS drag loop follows only the mouse.
 //! Without a region every message belongs to WebView2 alone.
 //!
 //! This owner performs no native calls; the Win32 adapter samples message facts for it and
@@ -19,7 +22,7 @@ use crate::canvas::{
     click::{Click, double_click},
     placement::PhysicalRect,
 };
-use sugarsubstitute_canvas::CursorIntent;
+use sugarsubstitute_canvas::{CursorIntent, PointerKind, PointerSample};
 
 /// Routed gestures retained between UI-thread messages and the next main-loop drain.
 pub(super) const QUEUE_CAPACITY: usize = 64;
@@ -63,19 +66,20 @@ pub(super) struct ClickRule {
     pub(super) drag: [i32; 2],
 }
 
-/// One decoded mouse message in physical client pixels; `held` reports whether any mouse
-/// button remains down after it, from the message's own key state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// One decoded mouse or pen message. Samples carry whole physical client pixels with the device
+/// facts sampled at event time; `held` reports whether any button or pen contact remains down
+/// after it, from the message's own state.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Message {
-    /// `WM_MOUSEMOVE`.
-    Move { point: [i32; 2], held: bool },
-    /// A button-down or button-double-click message.
-    Press { button: Button, point: [i32; 2], rule: ClickRule },
-    /// A button-up message.
-    Release { button: Button, point: [i32; 2], held: bool },
+    /// `WM_MOUSEMOVE`, or a pen update in range or in contact.
+    Move { sample: PointerSample, held: bool },
+    /// A button-down or button-double-click message, or a pen contact.
+    Press { button: Button, sample: PointerSample, rule: ClickRule },
+    /// A button-up message, or the end of a pen contact.
+    Release { button: Button, sample: PointerSample, held: bool },
     /// `WM_MOUSEWHEEL`, already converted from screen to client coordinates.
-    Wheel { point: [i32; 2], delta: i16 },
-    /// `WM_MOUSELEAVE`.
+    Wheel { sample: PointerSample, delta: i16 },
+    /// `WM_MOUSELEAVE`, or the pen leaving detection range.
     Leave,
     /// Horizontal wheel or any other message WebView2 alone interprets.
     Other,
@@ -156,13 +160,14 @@ impl Routing {
     /// Route one message, queueing native gestures; returns whether WebView2 receives it.
     pub(super) fn route(&mut self, message: Message) -> bool {
         match message {
-            Message::Move { point, held } => {
+            Message::Move { sample, held } => {
+                let point = pixel(sample);
                 self.last = Some(point);
                 if !held {
                     self.web = false;
                 }
                 if held && self.crosses_drag_threshold(point) {
-                    self.push(MainCanvasGesture::Pointer(position(point)));
+                    self.push(MainCanvasGesture::Pointer(sample));
                     self.push(MainCanvasGesture::DragOut);
                     // The OS drag that follows owns the rest of this button press.
                     self.native = None;
@@ -174,15 +179,16 @@ impl Routing {
                 }
                 self.hover = self.native.is_some() || (!self.web && self.inside(point));
                 if self.hover {
-                    self.push(MainCanvasGesture::Pointer(position(point)));
+                    self.push(MainCanvasGesture::Pointer(sample));
                 }
                 true
             }
-            Message::Press { button, point, rule } => {
+            Message::Press { button, sample, rule } => {
+                let point = pixel(sample);
                 self.last = Some(point);
                 match (self.native, button.navigation()) {
                     (None, Some(routed)) if !self.web && self.inside(point) => {
-                        self.press(routed, point, rule);
+                        self.press(routed, sample, rule);
                     }
                     (None, _) => {
                         self.web = true;
@@ -193,13 +199,18 @@ impl Routing {
                 }
                 true
             }
-            Message::Release { button, point, held } => {
+            Message::Release { button, sample, held } => {
+                let point = pixel(sample);
                 self.last = Some(point);
                 if let Some(routed) =
                     self.native.filter(|routed| Some(*routed) == button.navigation())
                 {
-                    self.push(MainCanvasGesture::Pointer(position(point)));
-                    self.push(MainCanvasGesture::Button { button: routed, pressed: false });
+                    self.push(MainCanvasGesture::Pointer(sample));
+                    self.push(MainCanvasGesture::Button {
+                        button: routed,
+                        pressed: false,
+                        modifiers: sample.modifiers,
+                    });
                     self.native = None;
                     self.origin = None;
                 }
@@ -209,11 +220,11 @@ impl Routing {
                 self.hover = self.native.is_some() || (!self.web && self.inside(point));
                 true
             }
-            Message::Wheel { point, delta } => {
-                if self.native.is_none() && (self.web || !self.inside(point)) {
+            Message::Wheel { sample, delta } => {
+                if self.native.is_none() && (self.web || !self.inside(pixel(sample))) {
                     return true;
                 }
-                self.push(MainCanvasGesture::Pointer(position(point)));
+                self.push(MainCanvasGesture::Pointer(sample));
                 self.push(MainCanvasGesture::Wheel(f64::from(delta) / WHEEL_DELTA));
                 false
             }
@@ -226,6 +237,22 @@ impl Routing {
             }
             Message::Other => true,
         }
+    }
+
+    /// Route one pen message, queueing canvas gestures; returns whether WebView2 receives it.
+    ///
+    /// The pen follows the mouse's capture and region rules, but a sample the canvas claims, a
+    /// contact the canvas captured and that contact's release are withheld from WebView2.
+    pub(super) fn route_pen(&mut self, message: Message) -> bool {
+        let captured = self.native.is_some();
+        let forward = self.route(message);
+        forward
+            && match message {
+                Message::Move { .. } => !self.hover,
+                Message::Press { .. } => self.native.is_none(),
+                Message::Release { .. } => !captured,
+                Message::Wheel { .. } | Message::Leave | Message::Other => true,
+            }
     }
 
     /// End a captured native gesture after capture or region loss.
@@ -280,8 +307,9 @@ impl Routing {
         self.count
     }
 
-    fn press(&mut self, routed: MainCanvasButton, point: [i32; 2], rule: ClickRule) {
-        self.push(MainCanvasGesture::Pointer(position(point)));
+    fn press(&mut self, routed: MainCanvasButton, sample: PointerSample, rule: ClickRule) {
+        let point = pixel(sample);
+        self.push(MainCanvasGesture::Pointer(sample));
         let current = Click { time: rule.time, point };
         let doubled = routed == MainCanvasButton::Primary
             && self
@@ -290,13 +318,19 @@ impl Routing {
         self.click = (routed == MainCanvasButton::Primary && !doubled).then_some(current);
         // The tool starts the press before the double-click, as the standalone viewer delivers
         // them; a press after it would cancel the zoom transition the double-click began.
-        self.push(MainCanvasGesture::Button { button: routed, pressed: true });
+        self.push(MainCanvasGesture::Button {
+            button: routed,
+            pressed: true,
+            modifiers: sample.modifiers,
+        });
         if doubled {
-            self.push(MainCanvasGesture::DoubleClick(position(point)));
+            self.push(MainCanvasGesture::DoubleClick(sample.position));
         }
         self.native = Some(routed);
-        self.origin =
-            (self.drag_out && routed == MainCanvasButton::Primary).then_some((point, rule.drag));
+        self.origin = (self.drag_out
+            && routed == MainCanvasButton::Primary
+            && sample.kind == PointerKind::Mouse)
+            .then_some((point, rule.drag));
         self.hover = true;
     }
 
@@ -349,8 +383,10 @@ fn contains(rect: PhysicalRect, x: i32, y: i32) -> bool {
         && y < i64::from(rect.y) + i64::from(rect.height)
 }
 
-fn position(point: [i32; 2]) -> [f64; 2] {
-    point.map(f64::from)
+/// The client pixel containing a sample; mouse and pen samples arrive in whole pixels.
+#[allow(clippy::cast_possible_truncation)]
+fn pixel(sample: PointerSample) -> [i32; 2] {
+    sample.position.map(|value| value.floor() as i32)
 }
 
 #[cfg(test)]

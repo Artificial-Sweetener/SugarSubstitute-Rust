@@ -36,7 +36,11 @@ fn geometry_and_policy_changes_cancel_staged_edits_and_registration_is_bounded()
         tools.select(ToolId::new(2)?, Some(&document), Duration::ZERO)?;
         for change in 0..3 {
             tools.input(
-                ToolInput::Button { button: ToolButton::Primary, pressed: true },
+                ToolInput::Button {
+                    button: ToolButton::Primary,
+                    pressed: true,
+                    modifiers: ToolModifiers::NONE,
+                },
                 Some(&mut document),
                 Duration::ZERO,
             )?;
@@ -70,7 +74,7 @@ impl CanvasTool for EditingTool {
         context: &mut ToolContext<'_>,
     ) -> Result<(), CanvasError> {
         match input {
-            ToolInput::Button { button: ToolButton::Primary, pressed: true } => {
+            ToolInput::Button { button: ToolButton::Primary, pressed: true, .. } => {
                 context.begin_edit()?;
                 context.capture_pointer(true);
                 context.stage(DocumentEdit::Insert {
@@ -78,7 +82,7 @@ impl CanvasTool for EditingTool {
                     layer: Layer::new(LayerId::new(1)?, LayerContent::Exposure { stops: 1.0 })?,
                 })?;
             }
-            ToolInput::Button { button: ToolButton::Primary, pressed: false } => {
+            ToolInput::Button { button: ToolButton::Primary, pressed: false, .. } => {
                 context.commit_edit()?;
             }
             _ => {}
@@ -139,8 +143,16 @@ fn lifecycle_loss_discards_preview_while_completed_gesture_uses_one_history_entr
         tools.register(edit, EditingTool::default(), memory)?;
         let mut document = Document::new(1, Extent::new(1000, 1000)?, memory)?;
         tools.select(edit, Some(&document), Duration::ZERO)?;
-        let press = ToolInput::Button { button: ToolButton::Primary, pressed: true };
-        let release = ToolInput::Button { button: ToolButton::Primary, pressed: false };
+        let press = ToolInput::Button {
+            button: ToolButton::Primary,
+            pressed: true,
+            modifiers: ToolModifiers::NONE,
+        };
+        let release = ToolInput::Button {
+            button: ToolButton::Primary,
+            pressed: false,
+            modifiers: ToolModifiers::NONE,
+        };
         tools.input(press, Some(&mut document), Duration::ZERO)?;
         assert_eq!(tools.preview().map(|p| p.layers().len()), Some(1));
         assert!(tools.captured());
@@ -174,7 +186,11 @@ fn rejected_activation_preserves_capture_and_all_pan_buttons_release_cleanly() -
         tools.advance(Duration::from_millis(100))?;
         let now = Duration::from_millis(100);
         for button in [ToolButton::Primary, ToolButton::Middle] {
-            tools.input(ToolInput::Button { button, pressed: true }, None, now)?;
+            tools.input(
+                ToolInput::Button { button, pressed: true, modifiers: ToolModifiers::NONE },
+                None,
+                now,
+            )?;
         }
         assert_eq!(tools.cursor(None), CursorIntent::ClosedHand);
         let rejected = ToolId::new(2)?;
@@ -185,17 +201,41 @@ fn rejected_activation_preserves_capture_and_all_pan_buttons_release_cleanly() -
         tools.resize(Extent::new(100, 100)?, None, now)?;
         assert!(tools.navigation().captured());
         tools.input(
-            ToolInput::Button { button: ToolButton::Primary, pressed: false },
+            ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: false,
+                modifiers: ToolModifiers::NONE,
+            },
             None,
             now,
         )?;
         assert!(tools.navigation().captured());
-        tools.input(ToolInput::Button { button: ToolButton::Middle, pressed: false }, None, now)?;
+        tools.input(
+            ToolInput::Button {
+                button: ToolButton::Middle,
+                pressed: false,
+                modifiers: ToolModifiers::NONE,
+            },
+            None,
+            now,
+        )?;
         assert_eq!(tools.cursor(None), CursorIntent::OpenHand);
         tools.cancel(ToolCancelReason::FocusLost, None, now)?;
-        tools.input(ToolInput::Button { button: ToolButton::Primary, pressed: true }, None, now)?;
         tools.input(
-            ToolInput::Button { button: ToolButton::Primary, pressed: false },
+            ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: true,
+                modifiers: ToolModifiers::NONE,
+            },
+            None,
+            now,
+        )?;
+        tools.input(
+            ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: false,
+                modifiers: ToolModifiers::NONE,
+            },
             None,
             now,
         )?;
@@ -213,15 +253,27 @@ fn tao_double_click_order_preserves_fit_roundtrip_after_release_and_pointer_moti
         let moved = [43.0, 38.0];
         let initial_fit = tools.navigation().viewport();
         let anchored_document = initial_fit.document_at(anchor)?;
-        let press = ToolInput::Button { button: ToolButton::Primary, pressed: true };
-        let release = ToolInput::Button { button: ToolButton::Primary, pressed: false };
+        let press = ToolInput::Button {
+            button: ToolButton::Primary,
+            pressed: true,
+            modifiers: ToolModifiers::NONE,
+        };
+        let release = ToolInput::Button {
+            button: ToolButton::Primary,
+            pressed: false,
+            modifiers: ToolModifiers::NONE,
+        };
         let ordered_double_click = |tools: &mut ToolManager, first: Duration, second: Duration| {
             tools.input(press, None, first)?;
             tools.input(release, None, first)?;
             tools.input(press, None, second)?;
             tools.input(ToolInput::DoubleClick(anchor), None, second)?;
             tools.input(release, None, second)?;
-            tools.input(ToolInput::Pointer(moved), None, second)
+            tools.input(
+                ToolInput::Pointer(PointerSample::mouse(moved, ToolModifiers::NONE)),
+                None,
+                second,
+            )
         };
 
         ordered_double_click(&mut tools, Duration::ZERO, Duration::from_millis(10))?;
@@ -260,6 +312,103 @@ fn drag_out_yields_to_any_other_effective_tool() -> harness::TestResult {
         assert!(!tools.allows_drag_out(), "a selected editing tool takes priority");
         tools.select(ToolId::PAN_ZOOM, None, Duration::ZERO)?;
         assert!(tools.allows_drag_out());
+        Ok(())
+    })
+}
+
+#[test]
+fn pressure_normalizes_device_ranges_and_defaults_to_full() {
+    assert_eq!(Pressure::from_range(0, 1024).get(), 0.0);
+    assert_eq!(Pressure::from_range(256, 1024).get(), 0.25);
+    assert_eq!(Pressure::from_range(1024, 1024), Pressure::FULL);
+    assert_eq!(Pressure::from_range(9000, 1024), Pressure::FULL, "out-of-range readings clamp");
+    assert_eq!(Pressure::from_range(7, 0), Pressure::FULL, "a device without a range");
+    let modifiers = ToolModifiers { shift: true, ctrl: false, alt: false };
+    let mouse = PointerSample::mouse([3.0, 4.0], modifiers);
+    assert_eq!(
+        (mouse.kind, mouse.pressure, mouse.eraser, mouse.modifiers),
+        (PointerKind::Mouse, Pressure::FULL, false, modifiers)
+    );
+    assert_eq!(mouse.at([5.0, 6.0]), PointerSample { position: [5.0, 6.0], ..mouse });
+}
+
+/// Records every observation so device facts can be compared after routing.
+#[derive(Default)]
+struct RecordingTool {
+    seen: std::sync::Arc<std::sync::Mutex<Vec<ToolInput>>>,
+}
+impl CanvasTool for RecordingTool {
+    fn input(&mut self, input: ToolInput, _: &mut ToolContext<'_>) -> Result<(), CanvasError> {
+        self.seen.lock().map_err(|_| CanvasError::Invalid("Recording poisoned"))?.push(input);
+        Ok(())
+    }
+    fn cancel(&mut self, _: ToolCancelReason) {}
+    fn cursor(&self, _: &ToolView<'_>) -> CursorIntent {
+        CursorIntent::Arrow
+    }
+}
+
+#[test]
+fn tools_receive_pen_samples_and_button_modifiers_unchanged() -> harness::TestResult {
+    execute(|memory| {
+        let mut tools = manager()?;
+        let tool = RecordingTool::default();
+        let seen = tool.seen.clone();
+        let id = ToolId::new(2)?;
+        tools.register(id, tool, memory)?;
+        tools.select(id, None, Duration::ZERO)?;
+        let modifiers = ToolModifiers { shift: false, ctrl: true, alt: true };
+        let sample = PointerSample {
+            position: [12.5, 40.0],
+            kind: PointerKind::Pen,
+            pressure: Pressure::from_range(600, 1024),
+            eraser: true,
+            modifiers,
+        };
+        let inputs = [
+            ToolInput::Pointer(sample),
+            ToolInput::Button { button: ToolButton::Primary, pressed: true, modifiers },
+            ToolInput::Button { button: ToolButton::Primary, pressed: false, modifiers },
+        ];
+        for input in inputs {
+            tools.input(input, None, Duration::ZERO)?;
+        }
+        assert_eq!(*seen.lock().map_err(|_| CanvasError::Invalid("Recording poisoned"))?, inputs);
+        Ok(())
+    })
+}
+
+#[test]
+fn navigation_pans_identically_for_pen_and_mouse_samples() -> harness::TestResult {
+    execute(|_| {
+        type Pan = Result<(crate::Viewport, crate::Viewport), CanvasError>;
+        let pan = |kind: PointerKind| -> Pan {
+            let mut tools = manager()?;
+            tools.input(ToolInput::OneToOne, None, Duration::ZERO)?;
+            tools.advance(Duration::from_millis(100))?;
+            let now = Duration::from_millis(100);
+            let before = tools.navigation().target_viewport();
+            let sample = |position| PointerSample {
+                position,
+                kind,
+                pressure: Pressure::from_range(300, 1024),
+                eraser: kind == PointerKind::Pen,
+                modifiers: ToolModifiers::NONE,
+            };
+            let button = |pressed| ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed,
+                modifiers: ToolModifiers::NONE,
+            };
+            tools.input(ToolInput::Pointer(sample([50.0, 50.0])), None, now)?;
+            tools.input(button(true), None, now)?;
+            tools.input(ToolInput::Pointer(sample([30.0, 20.0])), None, now)?;
+            tools.input(button(false), None, now)?;
+            Ok((before, tools.navigation().target_viewport()))
+        };
+        let (before, mouse) = pan(PointerKind::Mouse)?;
+        assert_ne!(before, mouse, "the drag panned");
+        assert_eq!(pan(PointerKind::Pen)?, (before, mouse));
         Ok(())
     })
 }

@@ -7,7 +7,7 @@ use super::*;
 use crate::native_canvas::proof::{self, Input as ProofInput, ProofBacking, ProofPaths, Sample};
 use motion::Motion;
 use std::{num::NonZeroUsize, time::Instant};
-use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
+use sugarsubstitute_canvas::{PointerSample, ScrollPhase, ToolButton, ToolInput, ToolModifiers};
 use sugarsubstitute_desktop::{
     HeadlessLifetime, HeadlessStep, StartupPreparationStep,
     canvas::{Input, Lifetime},
@@ -194,19 +194,28 @@ impl Proof {
         ];
         match self.phase {
             0 => {
-                session.input(Input::Tool(ToolInput::Pointer(center)))?;
+                session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+                    center,
+                    ToolModifiers::NONE,
+                ))))?;
                 session.input(Input::Tool(ToolInput::OneToOne))?;
             }
             6 => {
                 self.fallback_before_phase_six = Some(session.fallback_projection_acceptances);
-                session.input(Input::Tool(ToolInput::Pointer(center)))?;
+                session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+                    center,
+                    ToolModifiers::NONE,
+                ))))?;
                 session.input(Input::Tool(ToolInput::OneToOne))?;
             }
             // Cross the inner repair band while remaining within the outer backing guard.
             1 | 7 => pan(session, center, [97.0, -83.0])?,
             2 | 8 => pan(session, center, [-79.0, 61.0])?,
             3 => {
-                session.input(Input::Tool(ToolInput::Pointer(center)))?;
+                session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+                    center,
+                    ToolModifiers::NONE,
+                ))))?;
                 session.input(Input::Tool(ToolInput::Wheel {
                     steps: 4.0,
                     phase: ScrollPhase::Unphased,
@@ -216,7 +225,10 @@ impl Proof {
             5 => pan(session, center, [-5.0, 3.0])?,
             9 => session.input(Input::Tool(ToolInput::Fit))?,
             10 => {
-                session.input(Input::Tool(ToolInput::Pointer(center)))?;
+                session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+                    center,
+                    ToolModifiers::NONE,
+                ))))?;
                 session.input(Input::Tool(ToolInput::Wheel {
                     steps: -4.0,
                     phase: ScrollPhase::Unphased,
@@ -364,10 +376,22 @@ fn take_settled_presentation_stats(
 
 /// Native observations exercise exactly the same camera input path used by a visible window.
 fn pan(session: &mut Session, start: [f64; 2], delta: [f64; 2]) -> Result<(), Box<dyn Error>> {
-    session.input(Input::Tool(ToolInput::Pointer(start)))?;
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
-    session.input(Input::Tool(ToolInput::Pointer([start[0] + delta[0], start[1] + delta[1]])))?;
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: false }))
+    session
+        .input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(start, ToolModifiers::NONE))))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: true,
+        modifiers: ToolModifiers::NONE,
+    }))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [start[0] + delta[0], start[1] + delta[1]],
+        ToolModifiers::NONE,
+    ))))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: false,
+        modifiers: ToolModifiers::NONE,
+    }))
 }
 
 #[cfg(test)]

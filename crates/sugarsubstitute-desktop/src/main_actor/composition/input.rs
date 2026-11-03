@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Host the composed browser's native pointer, keyboard focus, cursor and drag-and-drop.
+//! Host the composed browser's mouse and pen input, keyboard focus, cursor and drag-and-drop.
 //!
-//! Every mouse message is routed against the canvas owner's published input region before
-//! WebView2 receives it; gestures assigned to native navigation wait in the routing queue for
-//! the main loop, so the UI thread never waits on canvas work. Keyboard and IME messages are
-//! never intercepted: they belong to the browser's own focus window.
+//! Every mouse and pen message is routed against the canvas owner's published input region
+//! before WebView2 receives it; gestures assigned to the canvas wait in the routing queue for
+//! the main loop, so the UI thread never waits on canvas work. Samples carry the modifiers
+//! Windows associates with each message. Keyboard and IME messages are never intercepted: they
+//! belong to the browser's own focus window.
 
 use super::callbacks::{CallbackFence, retire_when_quiet};
 use super::cancellation::{self, Interruption};
@@ -13,11 +14,12 @@ use super::cursor::{self, Hands, Pointer, Subscription};
 use super::drag_source;
 use super::drop_target::{DropTarget, Exporter};
 use super::routing::{Button, ClickRule, Message, Routing};
-use super::*;
+use super::{modifiers, *};
 use crate::canvas::{MainCanvasDragOut, MainCanvasGesture, placement::PhysicalRect};
 use crate::main_actor::focus::{self, Focus};
 use crate::windows_subclass::{self, Registration};
 use std::cell::{Cell, RefCell};
+use sugarsubstitute_canvas::PointerSample;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_MOUSE_EVENT_KIND, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS,
     COREWEBVIEW2_NON_CLIENT_REGION_KIND, COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION,
@@ -132,6 +134,7 @@ struct State {
     /// Buttons WebView2 last saw held, with the client point of that forwarded message.
     page: Cell<(u16, POINT)>,
     callbacks: CallbackFence,
+    pen: pen::Pen,
     /// The drag-out posted for this window's next dispatch, with its export refusal.
     drag_out: RefCell<Option<(MainCanvasDragOut, Exporter)>>,
 }
@@ -192,18 +195,19 @@ impl State {
     /// Route one message in client pixels; returns whether WebView2 also receives it.
     fn route(&self, message: Mouse, point: [i32; 2]) -> bool {
         let held = message.keys & BUTTON_KEYS != 0;
+        let sample = PointerSample::mouse(point.map(f64::from), modifiers::current());
         let routed = match message.kind {
-            WM_MOUSEMOVE => Message::Move { point, held },
-            WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => self.press(Button::Primary, point),
-            WM_MBUTTONDOWN | WM_MBUTTONDBLCLK => self.press(Button::Middle, point),
-            WM_RBUTTONDOWN | WM_RBUTTONDBLCLK => self.press(Button::Secondary, point),
-            WM_XBUTTONDOWN | WM_XBUTTONDBLCLK => self.press(Button::Extra, point),
-            WM_LBUTTONUP => Message::Release { button: Button::Primary, point, held },
-            WM_MBUTTONUP => Message::Release { button: Button::Middle, point, held },
-            WM_RBUTTONUP => Message::Release { button: Button::Secondary, point, held },
-            WM_XBUTTONUP => Message::Release { button: Button::Extra, point, held },
+            WM_MOUSEMOVE => Message::Move { sample, held },
+            WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => self.press(Button::Primary, sample),
+            WM_MBUTTONDOWN | WM_MBUTTONDBLCLK => self.press(Button::Middle, sample),
+            WM_RBUTTONDOWN | WM_RBUTTONDBLCLK => self.press(Button::Secondary, sample),
+            WM_XBUTTONDOWN | WM_XBUTTONDBLCLK => self.press(Button::Extra, sample),
+            WM_LBUTTONUP => Message::Release { button: Button::Primary, sample, held },
+            WM_MBUTTONUP => Message::Release { button: Button::Middle, sample, held },
+            WM_RBUTTONUP => Message::Release { button: Button::Secondary, sample, held },
+            WM_XBUTTONUP => Message::Release { button: Button::Extra, sample, held },
             // The decoder stores the signed wheel delta in the low 16 bits.
-            WM_MOUSEWHEEL => Message::Wheel { point, delta: message.data as u16 as i16 },
+            WM_MOUSEWHEEL => Message::Wheel { sample, delta: message.data as u16 as i16 },
             WM_MOUSELEAVE => Message::Leave,
             _ => Message::Other,
         };
@@ -244,7 +248,7 @@ impl State {
     }
 
     /// Sample the user's double-click rule with the press's own message time and DPI.
-    fn press(&self, button: Button, point: [i32; 2]) -> Message {
+    fn press(&self, button: Button, sample: PointerSample) -> Message {
         // SAFETY: These reads copy this UI thread's message time, the live window's DPI and
         // the matching system metrics without retaining any handle.
         let rule = unsafe {
@@ -262,7 +266,7 @@ impl State {
                 ],
             }
         };
-        Message::Press { button, point, rule }
+        Message::Press { button, sample, rule }
     }
 
     /// End gestures interrupted outside their own release. A cancellation also releases every
@@ -395,6 +399,7 @@ impl Input {
             .cast::<ICoreWebView2Controller>()
             .map_err(|cause| DesktopError::new("query_composed_browser_controller", cause))?;
         let regions = controller.cast::<ICoreWebView2CompositionController4>().ok();
+        let pen = pen::Pen::new(&browser);
         let state = Rc::new(State {
             window,
             controller,
@@ -407,6 +412,7 @@ impl Input {
             focus: Focus::new(browser),
             page: Cell::new((0, POINT::default())),
             callbacks: CallbackFence::default(),
+            pen,
             drag_out: RefCell::new(None),
         });
         let callback = Rc::new(state.clone());
@@ -557,12 +563,21 @@ unsafe extern "system" fn procedure(
         return caption.unwrap_or(hit);
     }
     if state.admits()
+        && let Some(pen) = state.pen_message(message, wparam)
+    {
+        state.guarded(|| state.deliver_pen(message, &pen));
+        if pen::consumed(message) {
+            return LRESULT(0);
+        }
+    }
+    if state.admits()
         && let Some(interruption) = cancellation::interruption(message, wparam, lparam, window)
     {
         state.guarded(|| state.interrupt(interruption));
     }
     if state.admits()
         && let Some(message) = mouse(message, wparam, lparam)
+        && !state.promoted_pen()
     {
         state.guarded(|| state.deliver(message));
     }
@@ -581,6 +596,8 @@ unsafe extern "system" fn procedure(
     }
     result
 }
+
+mod pen;
 
 #[cfg(test)]
 mod tests;

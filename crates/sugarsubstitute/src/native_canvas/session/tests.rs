@@ -10,7 +10,7 @@ mod refinement;
 mod runtime;
 mod source_io;
 use std::sync::atomic::{AtomicU64, Ordering};
-use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
+use sugarsubstitute_canvas::{PointerSample, ScrollPhase, ToolButton, ToolInput, ToolModifiers};
 use sugarsubstitute_desktop::canvas::{Input, Lifetime};
 use sugarsubstitute_image_ops::Extent;
 
@@ -73,7 +73,10 @@ fn normalized_tool_zoom_uses_the_execution_clock_and_keeps_finished_work_during_
 -> Result<(), Box<dyn Error>> {
     let (mut session, clock, _directory) = session()?;
     let pointer = [71.25, 53.5];
-    session.input(Input::Tool(ToolInput::Pointer(pointer)))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        pointer,
+        ToolModifiers::NONE,
+    ))))?;
     let anchor = session.document.tools.navigation().viewport().document_at(pointer)?;
     session.input(Input::Tool(ToolInput::Wheel { steps: 1.0, phase: ScrollPhase::Unphased }))?;
     assert_eq!(session.document.tools.navigation().target_viewport().zoom(), 0.625);
@@ -117,9 +120,19 @@ fn panning_keeps_finished_quality_and_focus_loss_ends_tool_capture() -> Result<(
     session.input(Input::Tool(ToolInput::OneToOne))?;
     clock.0.store(80_000_000, Ordering::SeqCst);
     session.poll(Duration::ZERO)?;
-    session.input(Input::Tool(ToolInput::Pointer([20.0, 30.0])))?;
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
-    session.input(Input::Tool(ToolInput::Pointer([27.0, 19.0])))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [20.0, 30.0],
+        ToolModifiers::NONE,
+    ))))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: true,
+        modifiers: ToolModifiers::NONE,
+    }))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [27.0, 19.0],
+        ToolModifiers::NONE,
+    ))))?;
     assert_eq!(session.document.tools.navigation().viewport().origin(), [-7.0, 11.0]);
     assert!(session.feedback().capture);
     assert_eq!(
@@ -128,7 +141,10 @@ fn panning_keeps_finished_quality_and_focus_loss_ends_tool_capture() -> Result<(
     );
     assert!(session.next_deadline().is_none());
     session.input(Input::Unfocused)?;
-    session.input(Input::Tool(ToolInput::Pointer([100.0, 100.0])))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [100.0, 100.0],
+        ToolModifiers::NONE,
+    ))))?;
     assert_eq!(session.document.tools.navigation().viewport().origin(), [-7.0, 11.0]);
     assert!(!session.feedback().capture);
     assert_eq!(
@@ -160,11 +176,24 @@ fn fractional_pan_repairs_finished_detail_on_the_retained_grid_until_release()
         comparison: None,
     });
 
-    session.input(Input::Tool(ToolInput::Pointer([20.0, 30.0])))?;
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
-    session.input(Input::Tool(ToolInput::Pointer([27.0, 19.0])))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [20.0, 30.0],
+        ToolModifiers::NONE,
+    ))))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: true,
+        modifiers: ToolModifiers::NONE,
+    }))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [27.0, 19.0],
+        ToolModifiers::NONE,
+    ))))?;
     assert_eq!(session.reconstruction()?, finished);
-    session.input(Input::Tool(ToolInput::Pointer([27.5, 19.25])))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [27.5, 19.25],
+        ToolModifiers::NONE,
+    ))))?;
     assert_eq!(session.reconstruction()?, finished);
     let actual = session.document.tools.navigation().viewport();
     let repair_view = session.detail_view(actual, (1, 1), 0, finished)?;
@@ -173,8 +202,11 @@ fn fractional_pan_repairs_finished_detail_on_the_retained_grid_until_release()
     let repair = coverage::detail(repair_view)?.viewport().repair_from(retained.viewport())?;
     assert!(repair.blit().is_some());
     assert!(repair.dirty().pixels() < repair.dirty().surface().pixels());
-    session
-        .input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: false }))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: false,
+        modifiers: ToolModifiers::NONE,
+    }))?;
     assert_eq!(session.reconstruction()?, finished);
     assert_eq!(session.detail_view(actual, (1, 1), 0, finished)?, actual);
     assert!(!actual.shares_sampling_grid(retained.viewport()));
@@ -200,8 +232,15 @@ fn pan_detail_grid_requires_the_same_document_source_and_finished_quality()
         source_revision: 7,
         comparison: None,
     });
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
-    session.input(Input::Tool(ToolInput::Pointer([0.5, -0.25])))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: true,
+        modifiers: ToolModifiers::NONE,
+    }))?;
+    session.input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+        [0.5, -0.25],
+        ToolModifiers::NONE,
+    ))))?;
     let actual = session.document.tools.navigation().viewport();
     assert!(!actual.shares_sampling_grid(retained.viewport()));
     assert!(
@@ -248,7 +287,11 @@ fn finished_reconstruction_threshold_does_not_turn_nearest_into_a_preview_loop()
         comparison: None,
     });
     assert_eq!(session.reconstruction()?, finished);
-    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
+    session.input(Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed: true,
+        modifiers: ToolModifiers::NONE,
+    }))?;
     assert_eq!(session.reconstruction()?, finished);
     assert!(!finished.is_preview());
     Ok(())
@@ -301,7 +344,14 @@ fn invalid_native_input_preserves_camera_and_closed_lifetimes_ignore_new_intent(
             .input(Input::Tool(ToolInput::Wheel { steps: f64::NAN, phase: ScrollPhase::Unphased }))
             .is_err()
     );
-    assert!(session.input(Input::Tool(ToolInput::Pointer([f64::INFINITY, 2.0]))).is_err());
+    assert!(
+        session
+            .input(Input::Tool(ToolInput::Pointer(PointerSample::mouse(
+                [f64::INFINITY, 2.0],
+                ToolModifiers::NONE
+            ))))
+            .is_err()
+    );
     assert_eq!(session.document.tools.navigation().viewport(), previous);
     assert!(!session.is_closing());
     session.close()?;
