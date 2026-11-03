@@ -28,6 +28,11 @@ import type {
 } from '../../../integrations/contracts/CanvasSurface.js';
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
+import type { CanvasEditHost } from '../../../integrations/contracts/CanvasEditing.js';
+import {
+  CanvasEditHostFixture,
+  editState,
+} from '../../canvas_editing/support/CanvasEditHostFixture.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import {
   nativePreviewHost,
@@ -198,7 +203,10 @@ test('merges rects past the protocol ceiling into one covering rect', () => {
 });
 
 /** Mount real view, selection, port, geometry and presentation owners over a held host. */
-function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
+function fixture(
+  capabilities: Partial<CanvasSurfaceCapabilities>,
+  editing: CanvasEditHost | null = null,
+) {
   const scene = layout();
   // jsdom cannot measure visibility; keep the real measurement, including routing members.
   const read = CanvasSurfaceGeometryObserver.prototype.read;
@@ -236,6 +244,7 @@ function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
     accepts: () => views.accepts(address),
     acceptsPreparation: () => false,
     nativeSurface: () => host,
+    editing: () => editing,
     connected: () => true,
     report: (error) => errors.push(error),
   });
@@ -347,6 +356,45 @@ test('a routing host installs no pan or zoom handlers on the native viewport', a
     for (const event of events) viewport.dispatchEvent(event);
     expect(events.map((event) => event.defaultPrevented)).toEqual([false, false, false]);
     expect(f.errors).toEqual([]);
+  } finally {
+    await f.dispose();
+  }
+});
+
+test('mounts editing chrome for an editing host and routes gestures around it', async () => {
+  const editing = new CanvasEditHostFixture(editState({ tool: 'brush' }));
+  const f = fixture({ input: true }, editing);
+  try {
+    await f.drain();
+    const rail = f.surface.viewport.parentElement?.querySelector('.sc-canvas-edit-rail');
+    expect(rail).not.toBeNull();
+    expect(editing.commands).toEqual([{ type: 'state' }]);
+    f.boxes.set(rail!, { left: 108, top: 102, width: 40, height: 200 });
+    rail!.classList.add('measured');
+    await f.drain();
+    expect(f.geometries().at(-1)?.occlusions).toContainEqual({
+      x: 8,
+      y: 52,
+      width: 40,
+      height: 200,
+    });
+    // Without an editable document the chrome withdraws and stops covering the canvas.
+    editing.push({ document: null });
+    await f.drain();
+    expect(f.surface.viewport.parentElement?.querySelector('.sc-canvas-edit-rail')).toBeNull();
+    expect(f.geometries().at(-1)?.occlusions).toEqual([]);
+    expect(f.errors).toEqual([]);
+  } finally {
+    await f.dispose();
+  }
+  expect(editing.observers).toBe(0);
+});
+
+test('mounts no editing chrome for a canvas without an editing host', async () => {
+  const f = fixture({ input: true });
+  try {
+    await f.drain();
+    expect(f.surface.viewport.parentElement?.querySelector('.sc-canvas-edit-chrome')).toBeNull();
   } finally {
     await f.dispose();
   }

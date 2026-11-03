@@ -59,6 +59,11 @@ import { NativeCanvasOverview } from './NativeCanvasOverview.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
 import { NativeCanvasPresentation } from './NativeCanvasPresentation.js';
 import type { NativeCanvasPresentationStatus } from './NativeCanvasStatus.js';
+import type { CanvasEditHost } from '../../../../../integrations/contracts/CanvasEditing.js';
+import {
+  mountCanvasEditOverlay,
+  type MountedCanvasEditOverlay,
+} from '../../canvas_editing/presentation/CanvasEditOverlayRuntime.js';
 
 /** Supply the negotiated host through the existing canvas capability registry. */
 export interface NativeCanvasAttachmentOptions extends CanvasAttachmentOptions {
@@ -69,6 +74,8 @@ export interface NativeCanvasAttachmentOptions extends CanvasAttachmentOptions {
   acceptsPreparation(): boolean;
   /** Ask the attachment owner for a fresh attachment after a stalled preparation's request changed. */
   recover?(): void;
+  /** Resolve the canvas's editing host; the editing chrome shows while it presents a document. */
+  editing?(): CanvasEditHost | null;
 }
 
 /** Retain controls and selection while leaving every output pixel to the native host. */
@@ -84,6 +91,7 @@ export class NativeCanvasAttachment {
   readonly #inspection: NativeCanvasInspection;
   readonly #geometry: CanvasSurfaceGeometryObserver;
   readonly #overlay: MountedCanvasOverlay;
+  readonly #editing: MountedCanvasEditOverlay;
   readonly #stopView: () => void;
   readonly #stopTransfer: () => void;
   readonly #stopCamera: () => void;
@@ -131,7 +139,8 @@ export class NativeCanvasAttachment {
     this.viewport.setAttribute('data-sc-canvas-geometry', '');
     const overlay = document.createElement('div');
     overlay.className = 'sc-output-overlay-root';
-    element.append(this.viewport, overlay);
+    const editing = document.createElement('div');
+    element.append(this.viewport, overlay, editing);
     const host = options.nativeSurface();
     this.viewport.classList.toggle('sc-output-native-input', nativeCanvasInput(host));
     this.#overview =
@@ -281,6 +290,14 @@ export class NativeCanvasAttachment {
     try {
       this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element);
       cleanup.push(() => this.#overlay.dispose());
+      this.#editing = mountCanvasEditOverlay({
+        root: editing,
+        scope: element,
+        region: this.viewport,
+        geometry: () => this.#surface,
+        report: (error) => options.report(error, null),
+      });
+      cleanup.push(() => this.#editing.dispose());
       this.#geometry = new CanvasSurfaceGeometryObserver(
         this.viewport,
         options.frames,
@@ -326,6 +343,8 @@ export class NativeCanvasAttachment {
     )
       return;
     if (!this.#surface?.visible) this.#observeGeometry(this.#geometry.read());
+    // A staged candidate shows no editing chrome until it commits.
+    this.#editing.attach(this.options.accepts() ? (this.options.editing?.() ?? null) : null);
     const catalog = this.options.catalog();
     if (!catalog || catalog.generation !== this.#catalog.generation) return;
     this.#catalog = catalog;
@@ -402,6 +421,7 @@ export class NativeCanvasAttachment {
     this.port.dispose();
     this.#geometry.dispose();
     this.#overlay.dispose();
+    this.#editing.dispose();
     this.#media.dispose();
     const released = this.#native.dispose();
     this.#inspection.dispose();
@@ -453,6 +473,7 @@ export class NativeCanvasAttachment {
     if (this.#surface && JSON.stringify(this.#surface) === JSON.stringify(surface)) return;
     this.#surface = surface;
     this.#overview?.resize();
+    this.#editing.geometryChanged();
     this.#present();
     this.#recoverOnChange();
   }
