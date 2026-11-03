@@ -261,6 +261,7 @@ impl Content {
 pub struct DocumentSnapshot {
     identity: u64,
     revision: u64,
+    stage: u64,
     content: Arc<Content>,
 }
 impl DocumentSnapshot {
@@ -271,6 +272,11 @@ impl DocumentSnapshot {
     /// Monotonic publication revision, advancing even when undo restores older content.
     pub const fn revision(&self) -> u64 {
         self.revision
+    }
+    /// Zero for published content; a gesture's staged previews count up from one on top of
+    /// their base revision, so each staged step renders as distinct content.
+    pub const fn stage(&self) -> u64 {
+        self.stage
     }
     /// Authored document pixel extent, independent of viewport bounds.
     pub fn extent(&self) -> Extent {
@@ -313,7 +319,7 @@ impl Document {
             .map_err(sugarsubstitute_image_ops::ImageError::from)?;
         let content = Arc::new(Content::new(extent, &[], None, memory)?);
         Ok(Self {
-            current: DocumentSnapshot { identity, revision: 1, content },
+            current: DocumentSnapshot { identity, revision: 1, stage: 0, content },
             undo,
             redo,
             memory: memory.clone(),
@@ -324,6 +330,10 @@ impl Document {
     pub fn snapshot(&self) -> DocumentSnapshot {
         self.current.clone()
     }
+    /// The execution admission that edits of this document charge.
+    pub(crate) const fn memory(&self) -> &MemoryLease {
+        &self.memory
+    }
     /// Apply one validated edit and publish a new revision; no-op edits retain revision/history.
     /// # Errors
     /// Rejects missing/duplicate IDs, invalid indices, extent mismatches, limits and memory pressure.
@@ -331,20 +341,17 @@ impl Document {
         let revision = self.next_revision()?;
         let mut content = Content::copy(&self.current.content, &self.memory)?;
         content.apply(edit)?;
-        Ok(self.publish_content(content, revision))
+        Ok(self.publish_content(Arc::new(content), revision))
     }
     /// Publish one validated metadata branch through the sole history owner.
-    fn publish_content(&mut self, content: Content, revision: u64) -> bool {
+    fn publish_content(&mut self, content: Arc<Content>, revision: u64) -> bool {
         if content.same(&self.current.content) {
             return false;
         }
         push_history(&mut self.undo, Arc::clone(&self.current.content));
         self.redo.clear();
-        self.current = DocumentSnapshot {
-            identity: self.current.identity,
-            revision,
-            content: Arc::new(content),
-        };
+        self.current =
+            DocumentSnapshot { identity: self.current.identity, revision, stage: 0, content };
         true
     }
     /// Restore preceding authored content and publish a fresh revision, without raster copies.
@@ -357,7 +364,8 @@ impl Document {
         let revision = self.next_revision()?;
         let content = self.undo.pop().ok_or(CanvasError::Invalid("Missing undo state"))?;
         push_history(&mut self.redo, Arc::clone(&self.current.content));
-        self.current = DocumentSnapshot { identity: self.current.identity, revision, content };
+        self.current =
+            DocumentSnapshot { identity: self.current.identity, revision, stage: 0, content };
         Ok(true)
     }
     /// Restore a previously undone edit, publishing a fresh revision.
@@ -370,7 +378,8 @@ impl Document {
         let revision = self.next_revision()?;
         let content = self.redo.pop().ok_or(CanvasError::Invalid("Missing redo state"))?;
         push_history(&mut self.undo, Arc::clone(&self.current.content));
-        self.current = DocumentSnapshot { identity: self.current.identity, revision, content };
+        self.current =
+            DocumentSnapshot { identity: self.current.identity, revision, stage: 0, content };
         Ok(true)
     }
     fn next_revision(&self) -> Result<u64, CanvasError> {

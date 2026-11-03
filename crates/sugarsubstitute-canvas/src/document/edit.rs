@@ -53,7 +53,8 @@ impl EditPreview<'_> {
 pub struct EditSession {
     id: EditSessionId,
     base: DocumentSnapshot,
-    staged: Option<Content>,
+    staged: Option<Arc<Content>>,
+    stages: u64,
     memory: MemoryLease,
 }
 impl EditSession {
@@ -63,7 +64,7 @@ impl EditSession {
     }
     /// Observe staged metadata with its separate preview identity.
     pub fn preview(&self) -> EditPreview<'_> {
-        let content = self.staged.as_ref().unwrap_or(&self.base.content);
+        let content = self.staged.as_deref().unwrap_or(&self.base.content);
         EditPreview {
             session: self.id,
             base: &self.base,
@@ -76,16 +77,33 @@ impl EditSession {
     /// Preserves the preceding preview on invalid commands, allocation or admission failures.
     pub fn stage(&mut self, edit: DocumentEdit) -> Result<(), CanvasError> {
         let mut content =
-            Content::copy(self.staged.as_ref().unwrap_or(&self.base.content), &self.memory)?;
+            Content::copy(self.staged.as_deref().unwrap_or(&self.base.content), &self.memory)?;
         content.apply(edit)?;
-        self.staged = Some(content);
+        self.staged = Some(Arc::new(content));
+        self.stages = self.stages.saturating_add(1);
         Ok(())
+    }
+    /// The staged content as a renderable snapshot of the base document. Each staged step is a
+    /// distinct [`DocumentSnapshot::stage`], so renderers can tell previews apart.
+    pub fn snapshot(&self) -> DocumentSnapshot {
+        DocumentSnapshot {
+            identity: self.base.identity,
+            revision: self.base.revision,
+            stage: self.stages,
+            content: self.staged.clone().unwrap_or_else(|| Arc::clone(&self.base.content)),
+        }
     }
 }
 impl Document {
     /// Begin a gesture against the exact current immutable revision, sharing original admission.
     pub fn begin_edit(&self, id: EditSessionId) -> EditSession {
-        EditSession { id, base: self.snapshot(), staged: None, memory: self.memory.clone() }
+        EditSession {
+            id,
+            base: self.snapshot(),
+            staged: None,
+            stages: 0,
+            memory: self.memory.clone(),
+        }
     }
     /// Publish a gesture only while its original document and revision remain current.
     /// # Errors

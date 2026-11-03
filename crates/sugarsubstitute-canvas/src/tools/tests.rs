@@ -5,6 +5,7 @@ use super::*;
 use crate::{Layer, LayerContent, LayerId, ZoomMode, tests::harness};
 use sugarsubstitute_image_ops::Extent;
 mod commands;
+mod deferred;
 
 #[test]
 fn rejected_memory_admission_does_not_register_a_tool_or_consume_its_identity()

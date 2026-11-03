@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Give tools scoped navigation and transactional commands without exporting the document owner.
 use super::*;
+use sugarsubstitute_contracts::execution::JobContext;
 
 /// Borrowed capability for one synchronous tool observation; stores no window or scheduler handle.
 pub struct ToolContext<'a> {
@@ -10,6 +11,8 @@ pub struct ToolContext<'a> {
     pub(super) edit: &'a mut Option<EditSession>,
     pub(super) next_edit: &'a mut u64,
     pub(super) capture: &'a mut bool,
+    pub(super) target: Option<LayerId>,
+    pub(super) deferred: &'a mut Option<DeferredEdit>,
     pub(super) now: Duration,
 }
 impl ToolContext<'_> {
@@ -63,6 +66,39 @@ impl ToolContext<'_> {
     pub fn cancel_edit(&mut self) {
         drop(self.edit.take());
         *self.capture = false;
+    }
+    /// The layer editing tools act on, such as the active mask.
+    pub const fn target(&self) -> Option<LayerId> {
+        self.target
+    }
+    /// The current authored revision, when a document is loaded.
+    pub fn document(&self) -> Option<DocumentSnapshot> {
+        self.document.as_deref().map(Document::snapshot)
+    }
+    /// The execution admission that edits of this document charge, for bounded coverage edits
+    /// such as brush dabs.
+    /// # Errors
+    /// Rejects a missing document.
+    pub fn memory(&self) -> Result<&MemoryLease, CanvasError> {
+        self.document
+            .as_deref()
+            .map(Document::memory)
+            .ok_or(CanvasError::Invalid("No editable document"))
+    }
+    /// Request coverage work too large for the input thread. The host runs it as an owned job
+    /// against the current revision; a newer request replaces one not yet taken.
+    /// # Errors
+    /// Rejects a missing document.
+    pub fn defer(
+        &mut self,
+        disposition: Disposition,
+        work: impl FnOnce(&DocumentSnapshot, &JobContext) -> Result<DocumentEdit, CanvasError>
+        + Send
+        + 'static,
+    ) -> Result<(), CanvasError> {
+        let base = deferred::base(self.document.as_deref())?;
+        *self.deferred = Some(DeferredEdit::new(base, disposition, Box::new(work)));
+        Ok(())
     }
     /// Observe transient geometry with its gesture and base-revision identities.
     pub fn preview(&self) -> Option<EditPreview<'_>> {

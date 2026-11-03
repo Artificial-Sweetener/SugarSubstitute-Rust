@@ -3,17 +3,19 @@
 //! Route typed tool lifecycles with one shared navigation and document-edit boundary.
 mod context;
 mod contract;
+mod deferred;
 mod pan_zoom;
 use crate::{
     CanvasError, CursorIntent, Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession,
-    EditSessionId, Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput,
-    ScrollPhase,
+    EditSessionId, LayerId, Navigation, NavigationCommand, NavigationCommandOutcome,
+    NavigationInput, ScrollPhase,
 };
 pub use context::ToolContext;
 pub use contract::{
     CanvasTool, PointerKind, PointerSample, Pressure, ToolButton, ToolCancelReason, ToolId,
     ToolInput, ToolModifiers, ToolView,
 };
+pub use deferred::{DeferredEdit, Disposition, PreparedEdit};
 use std::time::Duration;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::ImageError;
@@ -36,6 +38,8 @@ pub struct ToolManager {
     registered: [Option<Registered>; 16],
     edit: Option<EditSession>,
     next_edit: u64,
+    target: Option<LayerId>,
+    deferred: Option<DeferredEdit>,
 }
 impl ToolManager {
     /// Create navigation as the selected/effective built-in tool with no heap allocation.
@@ -50,7 +54,55 @@ impl ToolManager {
             registered: std::array::from_fn(|_| None),
             edit: None,
             next_edit: 0,
+            target: None,
+            deferred: None,
         }
+    }
+    /// Choose the layer editing tools act on, such as the active mask; `None` leaves them
+    /// nothing to edit.
+    pub fn set_target(&mut self, layer: Option<LayerId>) {
+        self.target = layer;
+    }
+    /// The layer editing tools act on.
+    pub const fn target(&self) -> Option<LayerId> {
+        self.target
+    }
+    /// Hand the latest requested coverage work to the host, which runs it as an owned job.
+    pub fn take_deferred(&mut self) -> Option<DeferredEdit> {
+        self.deferred.take()
+    }
+    /// Apply finished coverage work. Work computed from a revision the document no longer shows
+    /// is stale and changes nothing. A preview replaces the tool's staged preview; a commit
+    /// discards any staged preview and publishes one undo step.
+    /// # Errors
+    /// Preserves validation, admission and identity failures.
+    pub fn complete_deferred(
+        &mut self,
+        prepared: PreparedEdit,
+        document: &mut Document,
+    ) -> Result<bool, CanvasError> {
+        if !prepared.current(document) {
+            return Ok(false);
+        }
+        drop(self.edit.take());
+        match prepared.disposition() {
+            Disposition::Commit => document.apply(prepared.into_edit()),
+            Disposition::Preview => {
+                let next = self
+                    .next_edit
+                    .checked_add(1)
+                    .ok_or(CanvasError::Invalid("Edit identity exhausted"))?;
+                let mut session = document.begin_edit(EditSessionId::new(next)?);
+                session.stage(prepared.into_edit())?;
+                self.next_edit = next;
+                self.edit = Some(session);
+                Ok(true)
+            }
+        }
+    }
+    /// The staged gesture as a renderable snapshot, when a tool has one.
+    pub fn preview_snapshot(&self) -> Option<DocumentSnapshot> {
+        self.edit.as_ref().map(EditSession::snapshot)
     }
     /// Register bounded tool state with its original execution-backed memory charge.
     /// # Errors
@@ -266,6 +318,8 @@ impl ToolManager {
             edit: &mut self.edit,
             next_edit: &mut self.next_edit,
             capture: &mut self.capture,
+            target: self.target,
+            deferred: &mut self.deferred,
             now,
         };
         if self.effective == ToolId::PAN_ZOOM {
@@ -301,6 +355,7 @@ impl ToolManager {
         self.cancel_active(reason);
         self.capture = false;
         drop(self.edit.take());
+        self.deferred = None;
         self.navigation.input(NavigationInput::Cancel, now)?;
         if self.space {
             self.switch(self.selected, document, reason, now)?;
