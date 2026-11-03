@@ -5,6 +5,7 @@ mod archive;
 mod comparison;
 mod compile;
 mod coverage;
+mod cursor;
 mod damage;
 mod document;
 mod error;
@@ -22,6 +23,7 @@ pub use archive::{
 pub use comparison::{Comparison, WipeOrientation};
 pub use compile::CompiledView;
 pub use coverage::BackingCoverage;
+pub use cursor::{BrushOutline, CursorIntent};
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};
 pub use document::{
     Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession, EditSessionId, Layer,
@@ -29,8 +31,7 @@ pub use document::{
 };
 pub use error::CanvasError;
 pub use navigation::{
-    CursorIntent, Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput,
-    ScrollPhase, ZoomMode,
+    Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput, ScrollPhase, ZoomMode,
 };
 pub use overlay::{
     ANT_DARK, ANT_DASH, ANT_LIGHT, BoundaryRun, BoundaryWork, CoverageBoundary, MarchingAnts,

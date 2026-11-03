@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Validate bundled Qt cursor parsing and native Windows resource decoding without a window.
+//! Validate bundled Qt cursor parsing, native Windows resource decoding and DPI caching without
+//! a window.
 
 use super::*;
 use ::windows::Win32::{
@@ -13,7 +14,7 @@ use ::windows::Win32::{
 };
 use std::cell::{Cell, RefCell};
 
-struct DeviceContext(HDC);
+pub(super) struct DeviceContext(pub(super) HDC);
 impl Drop for DeviceContext {
     fn drop(&mut self) {
         // SAFETY: This exact memory DC was created by the test and is not selected elsewhere.
@@ -26,7 +27,7 @@ impl Drop for DeviceContext {
     }
 }
 
-struct IconCopies(ICONINFO);
+pub(super) struct IconCopies(pub(super) ICONINFO);
 impl Drop for IconCopies {
     fn drop(&mut self) {
         // SAFETY: GetIconInfo returned these private bitmap copies to this test.
@@ -61,17 +62,7 @@ fn qt_hand_archives_select_the_nearest_frame_and_authored_hotspot() -> Result<()
 #[test]
 fn qt_hand_resources_decode_to_distinct_native_cursors_at_authored_and_scaled_sizes()
 -> Result<(), Box<dyn Error>> {
-    // SAFETY: Create a memory-only GDI context; this creates no window or input-desktop state.
-    let dc = DeviceContext(unsafe { CreateCompatibleDC(None) });
-    if dc.0.is_invalid() {
-        // SAFETY: Read the failure recorded by the immediately preceding native call.
-        let code = unsafe { GetLastError() };
-        return Err(DesktopError::new(
-            "canvas_cursor_test_dc",
-            std::io::Error::from_raw_os_error(code.0 as i32),
-        )
-        .into());
-    }
+    let dc = memory_dc()?;
     for size in [32, 48, 64] {
         let open = load_cursor(OPEN_HAND, [size, size])?;
         let closed = load_cursor(CLOSED_HAND, [size, size])?;
@@ -141,7 +132,23 @@ fn assert_native_cursor(
     Ok(())
 }
 
-fn icon_info(cursor: &OwnedCursor) -> Result<IconCopies, Box<dyn Error>> {
+/// A memory-only GDI context for reading cursor bitmaps back.
+pub(super) fn memory_dc() -> Result<DeviceContext, Box<dyn Error>> {
+    // SAFETY: Create a memory-only GDI context; this creates no window or input-desktop state.
+    let dc = DeviceContext(unsafe { CreateCompatibleDC(None) });
+    if dc.0.is_invalid() {
+        // SAFETY: Read the failure recorded by the immediately preceding native call.
+        let code = unsafe { GetLastError() };
+        return Err(DesktopError::new(
+            "canvas_cursor_test_dc",
+            std::io::Error::from_raw_os_error(code.0 as i32),
+        )
+        .into());
+    }
+    Ok(dc)
+}
+
+pub(super) fn icon_info(cursor: &OwnedCursor) -> Result<IconCopies, Box<dyn Error>> {
     let mut info = ICONINFO::default();
     // SAFETY: Query one live private cursor; returned bitmap copies are adopted by IconCopies.
     unsafe {
@@ -150,7 +157,7 @@ fn icon_info(cursor: &OwnedCursor) -> Result<IconCopies, Box<dyn Error>> {
     Ok(IconCopies(info))
 }
 
-fn bitmap_pixels(
+pub(super) fn bitmap_pixels(
     info: &ICONINFO,
     size: i32,
     dc: &DeviceContext,
@@ -190,18 +197,22 @@ fn assert_scaled_hotspot(actual: u32, source: u32, source_size: u32, target_size
     assert!((actual * source_size).abs_diff(scaled) <= source_size);
 }
 
+/// Native metrics at 100% and 150% display scale.
+pub(super) const STANDARD: Metrics = Metrics { dpi: 96, size: [32, 32] };
+pub(super) const LARGE: Metrics = Metrics { dpi: 144, size: [48, 48] };
+
 #[test]
 fn a_dpi_change_rebuilds_both_hands_at_the_new_cursor_size_once() -> Result<(), Box<dyn Error>> {
-    let cursors = Cursors::sized([32, 32])?;
+    let cursors = Cursors::sized(STANDARD)?;
     let arrow = cursors.arrow();
-    let open = cursors.resolve([32, 32], CursorIntent::OpenHand)?;
-    let closed = cursors.resolve([32, 32], CursorIntent::ClosedHand)?;
-    assert_eq!(cursors.resolve([32, 32], CursorIntent::OpenHand)?.handle(), open.handle());
-    let larger = cursors.resolve([48, 48], CursorIntent::OpenHand)?;
+    let open = cursors.resolve(STANDARD, CursorIntent::OpenHand)?;
+    let closed = cursors.resolve(STANDARD, CursorIntent::ClosedHand)?;
+    assert_eq!(cursors.resolve(STANDARD, CursorIntent::OpenHand)?.handle(), open.handle());
+    let larger = cursors.resolve(LARGE, CursorIntent::OpenHand)?;
     assert_ne!(larger.handle(), open.handle(), "the new DPI needs a new private hand");
-    assert_ne!(cursors.resolve([48, 48], CursorIntent::ClosedHand)?.handle(), closed.handle());
-    assert_eq!(cursors.resolve([48, 48], CursorIntent::OpenHand)?.handle(), larger.handle());
-    assert_eq!(cursors.resolve([48, 48], CursorIntent::Arrow)?.handle(), arrow);
+    assert_ne!(cursors.resolve(LARGE, CursorIntent::ClosedHand)?.handle(), closed.handle());
+    assert_eq!(cursors.resolve(LARGE, CursorIntent::OpenHand)?.handle(), larger.handle());
+    assert_eq!(cursors.resolve(LARGE, CursorIntent::Arrow)?.handle(), arrow);
     assert!(open.owned().is_some(), "a displaced hand stays owned while still referenced");
     Ok(())
 }

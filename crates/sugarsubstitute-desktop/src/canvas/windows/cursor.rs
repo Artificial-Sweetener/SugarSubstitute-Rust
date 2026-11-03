@@ -1,23 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Own DPI-sized Qt hand cursors and the shared Windows arrow for one native window.
+//! Own one native window's canvas cursors: the shared Windows arrow, DPI-sized Qt hands and the
+//! rendered editing cursors.
 //!
 //! The standalone canvas peer and the composed main window each own one cache.
 
 use super::*;
+mod generated;
+mod resource;
+
 use ::windows::Win32::UI::{
     HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
     WindowsAndMessaging::{
-        CreateIconFromResourceEx, DestroyCursor, GetCursor, HCURSOR, IDC_ARROW, LR_DEFAULTCOLOR,
-        LoadCursorW, SM_CXCURSOR, SM_CYCURSOR, SetCursor,
+        DestroyCursor, GetCursor, HCURSOR, IDC_ARROW, LoadCursorW, SM_CXCURSOR, SM_CYCURSOR,
+        SetCursor,
     },
 };
+use resource::load_cursor;
+#[cfg(test)]
+use resource::select_frame;
 use std::{cell::RefCell, rc::Rc};
 use sugarsubstitute_canvas::CursorIntent;
 
-const CURSOR_RESOURCE_VERSION: u32 = 0x0003_0000;
-const CURSOR_ENTRIES: usize = 3;
-const DIRECTORY_BYTES: usize = 6 + CURSOR_ENTRIES * 16;
 const OPEN_HAND: &[u8] = include_bytes!("../../../assets/cursors/qt-open-hand.cur");
 const CLOSED_HAND: &[u8] = include_bytes!("../../../assets/cursors/qt-closed-hand.cur");
 
@@ -103,24 +107,37 @@ struct CursorPair {
 struct Cache {
     arrow: HCURSOR,
     pair: Option<CursorPair>,
+    rendered: generated::Rendered,
 }
 
-/// One current-DPI custom pair plus the shared system arrow for one native window.
+/// A window's physical DPI and the native cursor size Windows uses at that DPI.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct Metrics {
+    dpi: u32,
+    size: [i32; 2],
+}
+
+/// One current-DPI hand pair, recently rendered editing cursors and the shared system arrow for
+/// one native window.
 pub(crate) struct Cursors(RefCell<Cache>);
 
 impl Cursors {
     /// Create the shared arrow and private hands using this live peer's physical DPI.
     /// Errors preserve native metric/resource failures; call on the peer's owning thread.
     pub(crate) fn new(window: HWND) -> Result<Self, Box<dyn Error>> {
-        Self::sized(cursor_size(window)?)
+        Self::sized(metrics(window)?)
     }
 
     /// Create the shared arrow and private hands at one physical cursor size.
-    fn sized(size: [i32; 2]) -> Result<Self, Box<dyn Error>> {
+    fn sized(metrics: Metrics) -> Result<Self, Box<dyn Error>> {
         // SAFETY: IDC_ARROW requests a shared Windows cursor that callers never destroy.
         let arrow = unsafe { LoadCursorW(None, IDC_ARROW)? };
-        let pair = CursorPair::new(size)?;
-        Ok(Self(RefCell::new(Cache { arrow, pair: Some(pair) })))
+        let pair = CursorPair::new(metrics.size)?;
+        Ok(Self(RefCell::new(Cache {
+            arrow,
+            pair: Some(pair),
+            rendered: generated::Rendered::default(),
+        })))
     }
 
     /// Resolve an intent, refreshing size if DPI changed; retain the returned private resource.
@@ -130,43 +147,50 @@ impl Cursors {
         window: HWND,
         intent: CursorIntent,
     ) -> Result<CursorResource, Box<dyn Error>> {
-        self.resolve(cursor_size(window)?, intent)
+        self.resolve(metrics(window)?, intent)
     }
 
-    /// Resolve an intent at the window's current physical cursor size, rebuilding the hand
-    /// pair when that size changed with the window's DPI.
+    /// Resolve an intent at the window's current DPI, rebuilding the hand pair when the native
+    /// cursor size changed and rendering editing cursors at that DPI.
     fn resolve(
         &self,
-        size: [i32; 2],
+        metrics: Metrics,
         intent: CursorIntent,
     ) -> Result<CursorResource, Box<dyn Error>> {
-        self.resize(size, false)?;
+        self.resize(metrics, false)?;
+        if let Some(art) = generated::art(intent) {
+            let cursor = self.0.borrow_mut().rendered.get(art, metrics.dpi)?;
+            return Ok(CursorResource::Owned(cursor));
+        }
         let cache = self.0.borrow();
-        let pair = cache.pair.as_ref().ok_or_else(invalid_cursor)?;
+        let pair = cache.pair.as_ref().ok_or_else(missing_hands)?;
         Ok(match intent {
-            CursorIntent::Arrow => CursorResource::Shared(cache.arrow),
             CursorIntent::OpenHand => CursorResource::Owned(pair.open.clone()),
             CursorIntent::ClosedHand => CursorResource::Owned(pair.closed.clone()),
+            _ => CursorResource::Shared(cache.arrow),
         })
     }
 
     /// Reload the current Windows arrow and rebuild exactly one DPI-sized private hand pair.
     pub(super) fn refresh(&self, window: HWND, force: bool) -> Result<(), Box<dyn Error>> {
-        self.resize(cursor_size(window)?, force)
+        self.resize(metrics(window)?, force)
     }
 
-    fn resize(&self, size: [i32; 2], force: bool) -> Result<(), Box<dyn Error>> {
-        if !force && self.0.borrow().pair.as_ref().is_some_and(|pair| pair.size == size) {
+    fn resize(&self, metrics: Metrics, force: bool) -> Result<(), Box<dyn Error>> {
+        self.0.borrow_mut().rendered.keep_dpi(metrics.dpi);
+        if !force && self.0.borrow().pair.as_ref().is_some_and(|pair| pair.size == metrics.size) {
             return Ok(());
         }
-        let pair = CursorPair::new(size)?;
+        let pair = CursorPair::new(metrics.size)?;
         let arrow = if force {
             // SAFETY: Reload the shared scheme-owned arrow; neither old nor new handle is private.
             unsafe { LoadCursorW(None, IDC_ARROW)? }
         } else {
             self.0.borrow().arrow
         };
-        *self.0.borrow_mut() = Cache { arrow, pair: Some(pair) };
+        let mut cache = self.0.borrow_mut();
+        cache.arrow = arrow;
+        cache.pair = Some(pair);
         Ok(())
     }
 
@@ -175,9 +199,12 @@ impl Cursors {
         self.0.borrow().arrow
     }
 
-    /// Release cached hands after the peer's selected and desired resources have retired.
+    /// Release cached private cursors after the peer's selected and desired resources have
+    /// retired.
     pub(crate) fn retire_custom(&self) {
-        self.0.borrow_mut().pair = None;
+        let mut cache = self.0.borrow_mut();
+        cache.pair = None;
+        cache.rendered.clear();
     }
 }
 
@@ -191,7 +218,7 @@ impl CursorPair {
     }
 }
 
-fn cursor_size(window: HWND) -> Result<[i32; 2], DesktopError> {
+fn metrics(window: HWND) -> Result<Metrics, DesktopError> {
     // SAFETY: Read only the live peer's physical DPI and the corresponding native metrics.
     let dpi = unsafe { GetDpiForWindow(window) };
     // SAFETY: Metric queries copy physical dimensions and retain no window or resource.
@@ -204,141 +231,17 @@ fn cursor_size(window: HWND) -> Result<[i32; 2], DesktopError> {
             "Native cursor dimensions are unavailable",
         ));
     }
-    Ok(size)
+    Ok(Metrics { dpi, size })
 }
 
-fn load_cursor(bytes: &[u8], size: [i32; 2]) -> Result<OwnedCursor, Box<dyn Error>> {
-    let frame = select_frame(bytes, size)?;
-    let mut resource = Vec::new();
-    resource
-        .try_reserve_exact(frame.bytes.len() + 4)
-        .map_err(|cause| DesktopError::new("canvas_cursor_resource", cause))?;
-    resource.extend_from_slice(&frame.hotspot[0].to_le_bytes());
-    resource.extend_from_slice(&frame.hotspot[1].to_le_bytes());
-    resource.extend_from_slice(frame.bytes);
-    // SAFETY: The bounded parser proved a complete cursor DIB and hotspot prefix. Windows copies
-    // the resource synchronously and returns a private cursor scaled to the requested native size.
-    let icon = unsafe {
-        CreateIconFromResourceEx(
-            &resource,
-            false,
-            CURSOR_RESOURCE_VERSION,
-            size[0],
-            size[1],
-            LR_DEFAULTCOLOR,
-        )?
-    };
-    Ok(OwnedCursor(HCURSOR(icon.0)))
-}
-
-#[derive(Clone, Copy)]
-struct CursorFrame<'a> {
-    extent: [u16; 2],
-    hotspot: [u16; 2],
-    bytes: &'a [u8],
-}
-
-fn select_frame(bytes: &[u8], requested: [i32; 2]) -> Result<CursorFrame<'_>, DesktopError> {
-    if bytes.len() < DIRECTORY_BYTES
-        || word(bytes, 0) != Some(0)
-        || word(bytes, 2) != Some(2)
-        || word(bytes, 4) != Some(CURSOR_ENTRIES as u16)
-        || requested.iter().any(|edge| *edge <= 0)
-    {
-        return Err(invalid_cursor());
-    }
-    let mut selected = None;
-    let mut selected_distance = u64::MAX;
-    for index in 0..CURSOR_ENTRIES {
-        let entry = 6 + index * 16;
-        let width = extent_byte(bytes[entry]);
-        let height = extent_byte(bytes[entry + 1]);
-        if bytes[entry + 2] != 0 || bytes[entry + 3] != 0 {
-            return Err(invalid_cursor());
-        }
-        let hotspot = [
-            word(bytes, entry + 4).ok_or_else(invalid_cursor)?,
-            word(bytes, entry + 6).ok_or_else(invalid_cursor)?,
-        ];
-        let length = usize::try_from(dword(bytes, entry + 8).ok_or_else(invalid_cursor)?)
-            .map_err(|_| invalid_cursor())?;
-        let offset = usize::try_from(dword(bytes, entry + 12).ok_or_else(invalid_cursor)?)
-            .map_err(|_| invalid_cursor())?;
-        let end = offset.checked_add(length).ok_or_else(invalid_cursor)?;
-        if offset < DIRECTORY_BYTES || length == 0 || end > bytes.len() {
-            return Err(invalid_cursor());
-        }
-        let frame = CursorFrame { extent: [width, height], hotspot, bytes: &bytes[offset..end] };
-        validate_dib(frame)?;
-        let requested = [
-            requested[0].min(i32::from(u16::MAX)) as u16,
-            requested[1].min(i32::from(u16::MAX)) as u16,
-        ];
-        let distance =
-            u64::from(width.abs_diff(requested[0])) + u64::from(height.abs_diff(requested[1]));
-        let prefer_larger = selected.is_some_and(|current: CursorFrame<'_>| {
-            distance == selected_distance && width > current.extent[0]
-        });
-        if distance < selected_distance || prefer_larger {
-            selected = Some(frame);
-            selected_distance = distance;
-        }
-    }
-    selected.ok_or_else(invalid_cursor)
-}
-
-fn validate_dib(frame: CursorFrame<'_>) -> Result<(), DesktopError> {
-    let header = dword(frame.bytes, 0).ok_or_else(invalid_cursor)?;
-    let width = dword(frame.bytes, 4).ok_or_else(invalid_cursor)?;
-    let height = dword(frame.bytes, 8).ok_or_else(invalid_cursor)?;
-    let planes = word(frame.bytes, 12).ok_or_else(invalid_cursor)?;
-    let bits = word(frame.bytes, 14).ok_or_else(invalid_cursor)?;
-    let compression = dword(frame.bytes, 16).ok_or_else(invalid_cursor)?;
-    let xor = usize::from(frame.extent[0])
-        .checked_mul(usize::from(frame.extent[1]))
-        .and_then(|pixels| pixels.checked_mul(4))
-        .ok_or_else(invalid_cursor)?;
-    let mask_stride = usize::from(frame.extent[0]).div_ceil(32) * 4;
-    let required = 40_usize
-        .checked_add(xor)
-        .and_then(|bytes| bytes.checked_add(mask_stride * usize::from(frame.extent[1])))
-        .ok_or_else(invalid_cursor)?;
-    if header != 40
-        || width != u32::from(frame.extent[0])
-        || height != u32::from(frame.extent[1]) * 2
-        || planes != 1
-        || bits != 32
-        || compression != 0
-        || frame.hotspot[0] >= frame.extent[0]
-        || frame.hotspot[1] >= frame.extent[1]
-        || frame.bytes.len() < required
-    {
-        return Err(invalid_cursor());
-    }
-    Ok(())
-}
-
-const fn extent_byte(value: u8) -> u16 {
-    if value == 0 { 256 } else { value as u16 }
-}
-
-fn word(bytes: &[u8], offset: usize) -> Option<u16> {
-    Some(u16::from_le_bytes([*bytes.get(offset)?, *bytes.get(offset + 1)?]))
-}
-
-fn dword(bytes: &[u8], offset: usize) -> Option<u32> {
-    Some(u32::from_le_bytes([
-        *bytes.get(offset)?,
-        *bytes.get(offset + 1)?,
-        *bytes.get(offset + 2)?,
-        *bytes.get(offset + 3)?,
-    ]))
-}
-
-fn invalid_cursor() -> DesktopError {
-    DesktopError::message("canvas_cursor_asset", "Embedded Qt cursor resource is invalid")
+fn missing_hands() -> DesktopError {
+    DesktopError::message("canvas_cursor_retired", "Native canvas hand cursors were retired")
 }
 
 #[cfg(test)]
 #[path = "cursor/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cursor/rendered_tests.rs"]
+mod rendered_tests;

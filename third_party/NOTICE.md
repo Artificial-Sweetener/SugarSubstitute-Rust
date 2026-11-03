@@ -19,6 +19,20 @@ Packaging is copyright Artificial Sweetener and contributors (2026).
 The manifest inventories the originals and derivatives. Windows displays these
 as native cursors; the executable includes no Qt runtime.
 
+The native canvas selection-translate and move-cut cursors are SugarSubstitute's
+cursor artwork, preserved unchanged from `substitute/presentation/resources/cursors`
+at SugarSubstitute commit `e6a5a990a91f7e9a2701e48d5af5ace821508c43`. Both draw
+the arrow of [Microsoft Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons)
+`assets/Cursor/SVG/ic_fluent_cursor_24_regular.svg`, and the selection-translate
+badge redraws `assets/Arrow Move/SVG/ic_fluent_arrow_move_20_regular.svg`, both at
+revision `a6931cf6ad3541975b132762c8cad67b2f54fd7a`, Copyright (c) 2020 Microsoft
+Corporation, under MIT; the license text is in `licenses/fluentui-system-icons.MIT.txt`.
+The outlines, the composition and the move-cut scissors mark are copyright
+Artificial Sweetener and contributors (2026) under GPL-3.0-or-later. The Python
+application's manifest lists the selection-translate file only; the move-cut file
+came from the same commit and shares its Fluent arrow. The application renders
+both at the display's DPI from a 40 pixel base with the hotspot at (6, 3).
+
 The installer uses provisioning source from
 [Comfy Desktop](https://github.com/Comfy-Org/Comfy-Desktop), pinned by the
 `third_party/comfy-desktop` Git submodule. The build applies the reviewed patches

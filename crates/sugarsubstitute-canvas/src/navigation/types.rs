@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Toolkit-independent navigation observations and semantic feedback.
+//! Toolkit-independent navigation observations and camera commands.
 
 use crate::Viewport;
 
@@ -56,18 +56,6 @@ pub enum ZoomMode {
     OneToOne,
     /// User-selected scale with pointer-anchored reconstruction.
     Custom,
-}
-/// Native cursor appearance requested by the interaction owner.
-/// This changes appearance only: physical pointer position remains owned by the operating system.
-/// Hosts publish this feedback after input without waiting for image work or presentation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CursorIntent {
-    /// Navigation cannot capture a pan gesture.
-    Arrow,
-    /// Navigation can capture a pan gesture.
-    OpenHand,
-    /// Navigation currently owns a pan gesture.
-    ClosedHand,
 }
 /// Platform gesture lifetime, distinct from individual wheel deltas.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

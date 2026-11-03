@@ -6,13 +6,12 @@ mod bounds;
 mod commands;
 mod motion;
 mod types;
-use crate::{CanvasError, Viewport};
+use crate::{CanvasError, CursorIntent, Viewport};
 use motion::Transition;
 use std::time::Duration;
 use sugarsubstitute_image_ops::Extent;
 pub use types::{
-    CursorIntent, NavigationCommand, NavigationCommandOutcome, NavigationInput, ScrollPhase,
-    ZoomMode,
+    NavigationCommand, NavigationCommandOutcome, NavigationInput, ScrollPhase, ZoomMode,
 };
 
 /// Portable navigation state. The application supplies monotonic elapsed time from its clock.
