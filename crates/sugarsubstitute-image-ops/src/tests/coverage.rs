@@ -309,3 +309,20 @@ fn translation_moves_whole_pixels_and_drops_what_leaves_the_extent() -> TestResu
         Ok(())
     })
 }
+
+/// Fingerprints are persisted identities, so their function of the values must never change.
+#[test]
+fn coverage_fingerprints_stay_a_fixed_function_of_extent_and_values() -> TestResult {
+    run(MEMORY, |context| {
+        let extent = Extent::new(300, 200)?;
+        let mut coverage = Coverage::new(extent, 0, context.memory())?;
+        let region = Region::new(100, 60, 160, 120)?;
+        coverage.update(region, context.memory(), |x, y, _| {
+            (x.wrapping_mul(2_654_435_761) ^ y.wrapping_mul(40_503)) as u16
+        })?;
+        coverage.update(Region::new(0, 128, 128, 72)?, context.memory(), |_, _, _| 777)?;
+        let hex: String = coverage.fingerprint().iter().map(|byte| format!("{byte:02x}")).collect();
+        assert_eq!(hex, "d51176ecd96faa8228969399bbbbfce5a28f7d35fbb88edf6b3744b90c062133");
+        Ok(())
+    })
+}

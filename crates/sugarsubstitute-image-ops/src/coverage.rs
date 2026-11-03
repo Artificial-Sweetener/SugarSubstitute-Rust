@@ -245,8 +245,9 @@ impl Coverage {
     ) -> Result<(), ImageError> {
         self.validate(region, values.len())?;
         let width = region.width() as usize;
-        self.update(region, memory, |x, y, _| {
-            values[(y - region.y()) as usize * width + (x - region.x()) as usize]
+        self.rewrite(region, memory, None, |x, y, row| {
+            let start = (y - region.y()) as usize * width + (x - region.x()) as usize;
+            row.copy_from_slice(&values[start..start + row.len()]);
         })
     }
 
@@ -260,7 +261,7 @@ impl Coverage {
         memory: &MemoryLease,
         change: impl FnMut(u32, u32, u16) -> u16,
     ) -> Result<(), ImageError> {
-        self.rewrite(region, memory, None, change)
+        self.rewrite(region, memory, None, per_value(change))
     }
 
     /// [`Self::update`] inside a job, checking cancellation and deadline between tiles.
@@ -270,7 +271,7 @@ impl Coverage {
         context: &JobContext,
         change: impl FnMut(u32, u32, u16) -> u16,
     ) -> Result<(), ImageError> {
-        self.rewrite(region, context.memory(), Some(context), change)
+        self.rewrite(region, context.memory(), Some(context), per_value(change))
     }
 
     /// Invert every value. Untouched tiles stay untouched, so inversion costs only the stored
@@ -304,12 +305,14 @@ impl Coverage {
         Ok(Self { tiles: Arc::new(Tiles::new(self.extent, default, slots, memory)?), ..*self })
     }
 
+    /// Rewrite a region tile by tile; `change(x, y, row)` rewrites the in-region values of one
+    /// tile row starting at `(x, y)`.
     fn rewrite(
         &mut self,
         region: Region,
         memory: &MemoryLease,
         context: Option<&JobContext>,
-        mut change: impl FnMut(u32, u32, u16) -> u16,
+        mut change: impl FnMut(u32, u32, &mut [u16]),
     ) -> Result<(), ImageError> {
         self.validate(region, region.pixels() as usize)?;
         let default = self.tiles.default;
@@ -337,10 +340,8 @@ impl Coverage {
                 }
             }
             for y in part.y()..part.bottom() {
-                for x in part.x()..part.right() {
-                    let value = &mut values[tile_index(x, y)];
-                    *value = change(x, y, *value);
-                }
+                let start = tile_index(part.x(), y);
+                change(part.x(), y, &mut values[start..start + part.width() as usize]);
             }
             match uniform_value(&values, tile_region) {
                 Some(value) if value == default => {
@@ -421,6 +422,15 @@ impl Coverage {
     }
 }
 
+/// Adapt a per-value change to the row-wise rewrite.
+fn per_value(mut change: impl FnMut(u32, u32, u16) -> u16) -> impl FnMut(u32, u32, &mut [u16]) {
+    move |x, y, row| {
+        for (value, column) in row.iter_mut().zip(x..) {
+            *value = change(column, y, *value);
+        }
+    }
+}
+
 /// The single in-extent value of a tile, when all its values are equal.
 fn uniform_value(values: &[u16], region: Region) -> Option<u16> {
     let first = values[tile_index(region.x(), region.y())];
@@ -435,9 +445,15 @@ fn uniform_value(values: &[u16], region: Region) -> Option<u16> {
 impl CoverageTile {
     fn new(values: Vec<u16>, memory: &MemoryLease) -> Result<Self, ImageError> {
         let claim = memory.claim((TILE_VALUES * size_of::<u16>() + 64) as u64)?;
+        // Hash little-endian bytes in contiguous blocks: the digest is the same as hashing each
+        // value in turn, without a hasher call per value.
         let mut hash = Sha256::new();
-        for value in &values {
-            hash.update(value.to_le_bytes());
+        let mut block = [0_u8; 2048];
+        for chunk in values.chunks(block.len() / 2) {
+            for (bytes, value) in block.chunks_exact_mut(2).zip(chunk) {
+                bytes.copy_from_slice(&value.to_le_bytes());
+            }
+            hash.update(&block[..chunk.len() * 2]);
         }
         Ok(Self { values, fingerprint: hash.finalize().into(), _memory: claim })
     }
@@ -479,6 +495,7 @@ const fn tile_index(x: u32, y: u32) -> usize {
 }
 
 /// Multiply two coverages with nearest rounding.
+#[inline]
 pub(crate) const fn multiply(left: u16, right: u16) -> u16 {
     ((left as u32 * right as u32 + FULL_COVERAGE as u32 / 2) / FULL_COVERAGE as u32) as u16
 }

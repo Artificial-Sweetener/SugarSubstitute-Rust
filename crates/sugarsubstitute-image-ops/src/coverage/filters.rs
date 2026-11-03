@@ -25,6 +25,7 @@ pub enum CombineMode {
 
 impl CombineMode {
     /// Combine one existing value with one incoming value.
+    #[inline]
     pub const fn apply(self, existing: u16, incoming: u16) -> u16 {
         match self {
             Self::Replace => incoming,

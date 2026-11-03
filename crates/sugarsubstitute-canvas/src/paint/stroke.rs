@@ -85,45 +85,53 @@ impl StrokeRaster {
         let radius = (dab.diameter / 2.0).max(0.5);
         let top = ((cy - radius - 0.5).floor() + 1.0).max(0.0);
         let bottom = (cy + radius - 0.5).ceil().min(f64::from(extent.height()));
+        let left = ((cx - radius - 0.5).floor() + 1.0).max(0.0);
+        let right = (cx + radius - 0.5).ceil().min(f64::from(extent.width()));
+        if top >= bottom || left >= right {
+            return Ok(());
+        }
         let mode = if style.erase { CombineMode::Subtract } else { CombineMode::Add };
         let falloff = Falloff::new(style, radius);
-        let mut y = top;
-        while y < bottom {
-            let row = y as u32;
-            y += 1.0;
-            let dy = f64::from(row) + 0.5 - cy;
-            let remaining = radius * radius - dy * dy;
-            if remaining <= 0.0 {
-                continue;
-            }
-            let half = remaining.sqrt();
-            let left = ((cx - half - 0.5).floor() + 1.0).max(0.0);
-            let right = (cx + half - 0.5).ceil().min(f64::from(extent.width()));
-            if left >= right {
-                continue;
-            }
-            let (mut x, right) = (left as u32, right as u32);
-            while x < right {
-                let key = (row / TILE_EDGE, x / TILE_EDGE);
-                let end = right.min((key.1 + 1) * TILE_EDGE);
+        let (rows, columns) = ([top as u32, bottom as u32], [left as u32, right as u32]);
+        // Visit each touched tile once, so the per-tile lookup is not repeated for every row.
+        for tile_row in rows[0] / TILE_EDGE..=(rows[1] - 1) / TILE_EDGE {
+            for tile_column in columns[0] / TILE_EDGE..=(columns[1] - 1) / TILE_EDGE {
+                let key = (tile_row, tile_column);
                 let tile = tile(&mut self.painted, &self.base, &self.memory, key)?;
-                let start = (row - tile.region.y()) as usize * tile.region.width() as usize;
-                let span = &mut tile.values[start + (x - tile.region.x()) as usize
-                    ..start + (end - tile.region.x()) as usize];
-                match falloff.solid() {
-                    // An opaque hard dab replaces the span outright.
-                    Some(value) => span.fill(if style.erase { 0 } else { value }),
-                    None => {
-                        for (value, column) in span.iter_mut().zip(x..end) {
-                            let incoming = falloff.coverage(f64::from(column) + 0.5 - cx, dy);
-                            if incoming != 0 {
-                                *value = mode.apply(*value, incoming);
-                            }
+                let region = tile.region;
+                let width = region.width() as usize;
+                let mut painted = false;
+                for row in rows[0].max(region.y())..rows[1].min(region.bottom()) {
+                    let dy = f64::from(row) + 0.5 - cy;
+                    let remaining = radius * radius - dy * dy;
+                    if remaining <= 0.0 {
+                        continue;
+                    }
+                    let half = remaining.sqrt();
+                    let start = ((cx - half - 0.5).floor() + 1.0).max(f64::from(region.x()));
+                    let end = (cx + half - 0.5).ceil().min(f64::from(region.right()));
+                    if start >= end {
+                        continue;
+                    }
+                    let (start, end) = (start as u32, end as u32);
+                    let offset = (row - region.y()) as usize * width;
+                    let span = &mut tile.values[offset + (start - region.x()) as usize
+                        ..offset + (end - region.x()) as usize];
+                    match falloff.solid() {
+                        // An opaque hard dab replaces the span outright.
+                        Some(value) => span.fill(if style.erase { 0 } else { value }),
+                        None => {
+                            let mut line = [0; TILE_EDGE as usize];
+                            let incoming = &mut line[..span.len()];
+                            falloff.row(f64::from(start) + 0.5 - cx, dy, incoming);
+                            composite(mode, span, incoming);
                         }
                     }
+                    painted = true;
                 }
-                self.dirty.insert(key);
-                x = end;
+                if painted {
+                    self.dirty.insert(key);
+                }
             }
         }
         Ok(())
@@ -183,42 +191,77 @@ impl StrokeRaster {
 }
 
 /// Dab coverage at an offset from its centre.
+///
+/// Strength is `(1 - distance / radius) / (1 - hardness)` clamped to `[0, 1]`, which is exactly
+/// the peak inside the hardness radius and the linear ramp outside it. Rows are evaluated in
+/// single precision without branches so they vectorize; the error stays far below one coverage
+/// level.
 struct Falloff {
-    opacity: f64,
-    hardness: f64,
-    radius: f64,
+    /// Peak coverage in coverage units.
+    peak: f32,
+    inverse_radius: f32,
+    /// Reciprocal of the falloff ramp's share of the radius.
+    inverse_ramp: f32,
+    hard: bool,
 }
 
 impl Falloff {
     fn new(style: DabStyle, radius: f64) -> Self {
+        let hardness = style.hardness.clamp(0.0, 1.0);
+        let hard = hardness >= 1.0;
         Self {
-            opacity: style.opacity.clamp(0.0, 1.0),
-            hardness: style.hardness.clamp(0.0, 1.0),
-            radius,
+            peak: (style.opacity.clamp(0.0, 1.0) * f64::from(FULL_COVERAGE)) as f32,
+            inverse_radius: (1.0 / radius) as f32,
+            inverse_ramp: if hard { 0.0 } else { (1.0 / (1.0 - hardness)) as f32 },
+            hard,
         }
     }
 
     /// Full coverage when every covered pixel takes the same full value, as for an opaque hard
     /// dab, so a span can be filled without compositing.
     fn solid(&self) -> Option<u16> {
-        (self.hardness >= 1.0 && self.opacity >= 1.0).then_some(FULL_COVERAGE)
+        (self.hard && self.peak >= f32::from(FULL_COVERAGE)).then_some(FULL_COVERAGE)
     }
 
-    /// Coverage of the pixel whose centre is `(dx, dy)` from the dab centre; the caller has
-    /// already established that the centre lies inside the circle.
-    fn coverage(&self, dx: f64, dy: f64) -> u16 {
-        let strength = if self.hardness >= 1.0 {
-            1.0
-        } else {
-            let distance = (dx * dx + dy * dy).sqrt() / self.radius;
-            if distance <= self.hardness {
-                1.0
-            } else {
-                ((1.0 - distance) / (1.0 - self.hardness)).clamp(0.0, 1.0)
-            }
-        };
+    /// Coverage of consecutive pixels in one row, the first centred `dx` from the dab centre
+    /// and the row `dy` from it; the caller has already established that every centre lies
+    /// inside the circle.
+    fn row(&self, dx: f64, dy: f64, output: &mut [u16]) {
         // Nonnegative, so adding a half and truncating rounds to nearest without a libm call.
-        (self.opacity * strength * f64::from(FULL_COVERAGE) + 0.5) as u16
+        if self.hard {
+            output.fill((self.peak + 0.5) as u16);
+            return;
+        }
+        let (dx, dy) = (dx as f32, (dy * dy) as f32);
+        let mut strengths = [0.0_f32; TILE_EDGE as usize];
+        let strengths = &mut strengths[..output.len()];
+        for (index, strength) in strengths.iter_mut().enumerate() {
+            let offset = dx + index as f32;
+            let distance = (offset * offset + dy).sqrt();
+            let ramp = (1.0 - distance * self.inverse_radius) * self.inverse_ramp;
+            *strength = self.peak * ramp.clamp(0.0, 1.0) + 0.5;
+        }
+        // In range by construction, so the integer conversion needs no saturation.
+        for (value, strength) in output.iter_mut().zip(strengths.iter()) {
+            *value = *strength as i32 as u16;
+        }
+    }
+}
+
+/// Composite a row of dab coverage, with the mode chosen once per row rather than per pixel.
+fn composite(mode: CombineMode, span: &mut [u16], incoming: &[u16]) {
+    fn each(span: &mut [u16], incoming: &[u16], join: impl Fn(u16, u16) -> u16) {
+        for (value, incoming) in span.iter_mut().zip(incoming) {
+            *value = join(*value, *incoming);
+        }
+    }
+    match mode {
+        CombineMode::Subtract => {
+            each(span, incoming, |existing, incoming| {
+                CombineMode::Subtract.apply(existing, incoming)
+            });
+        }
+        _ => each(span, incoming, |existing, incoming| CombineMode::Add.apply(existing, incoming)),
     }
 }
 

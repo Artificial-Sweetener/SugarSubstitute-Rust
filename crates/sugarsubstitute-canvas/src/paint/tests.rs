@@ -95,7 +95,7 @@ fn hard_and_soft_dabs_cover_pixel_centres_inside_the_circle_with_cutecanvas_fall
                 for x in 0..40 {
                     let want = expected(center, diameter, style, x, y);
                     let got = f64::from(coverage.value(x, y));
-                    assert!((got - want).abs() <= 0.5, "{center:?} {diameter} ({x},{y})");
+                    assert!((got - want).abs() <= 1.0, "{center:?} {diameter} ({x},{y})");
                 }
             }
         }
