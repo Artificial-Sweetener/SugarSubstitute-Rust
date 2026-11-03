@@ -9,6 +9,7 @@ mod bilinear;
 mod coverage;
 mod coverage_geometry;
 mod coverage_tiles;
+mod coverage_transform;
 mod display_sampling;
 mod harness;
 mod phase;

@@ -9,13 +9,16 @@
 //! are all equal are stored as one value. Clones share tiles, and an edit copies only the tiles
 //! it touches, so undo history and published snapshots stay cheap. Every coverage carries a
 //! content fingerprint, which graph evaluation uses as its structural identity.
+mod affine;
 mod codec;
 mod filters;
 mod geometry;
 mod path;
+mod stretch;
 mod tiles;
 mod translate;
 
+pub use affine::CoverageAffine;
 pub use codec::{coverage_from_u8, coverage_to_u8};
 pub use filters::CombineMode;
 pub use geometry::CoverageResampling;
@@ -120,7 +123,14 @@ impl Coverage {
     /// Bounds of nonzero coverage, or `None` when nothing is covered. Bounds are exact for stored
     /// tiles and span the whole extent when untouched tiles are covered.
     pub fn bounds(&self) -> Option<Region> {
-        if self.tiles.default != 0 {
+        self.bounds_at_least(1)
+    }
+
+    /// Bounds of pixels holding at least `threshold`, or `None` when there are none, as
+    /// CuteCanvas finds a mask's occupied area at half coverage. Exact for stored tiles; untouched
+    /// tiles at or above the threshold span the whole extent, as does a zero threshold.
+    pub fn bounds_at_least(&self, threshold: u16) -> Option<Region> {
+        if self.tiles.default >= threshold {
             return Some(self.extent.region());
         }
         let mut bounds: Option<[u32; 4]> = None;
@@ -133,7 +143,7 @@ impl Coverage {
         for (key, slot) in &self.tiles.slots {
             let region = self.tile_region(*key).ok()?;
             match slot {
-                Slot::Uniform(0) => {}
+                Slot::Uniform(value) if *value < threshold => {}
                 Slot::Uniform(_) => {
                     include([region.x(), region.y(), region.right(), region.bottom()]);
                 }
@@ -141,7 +151,7 @@ impl Coverage {
                     let mut tight: Option<[u32; 4]> = None;
                     for y in region.y()..region.bottom() {
                         for x in region.x()..region.right() {
-                            if tile.values[tile_index(x, y)] != 0 {
+                            if tile.values[tile_index(x, y)] >= threshold {
                                 tight = Some(match tight {
                                     None => [x, y, x + 1, y + 1],
                                     Some([l, t, r, b]) => {
