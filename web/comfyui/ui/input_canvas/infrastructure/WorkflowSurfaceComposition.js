@@ -15,7 +15,7 @@ import { canvasResolutionEntries, } from '../presentation/CanvasResolutionMenu.j
 /** Build provisioning over the existing association and binding owners. */
 export function createWorkflowSurfaces(options) {
     const { associations, workflowHost, report } = options;
-    const state = new ComfyWorkflowInputState(options.graph, () => crypto.randomUUID());
+    const state = new ComfyWorkflowInputState(options.graph, () => crypto.randomUUID(), options.workflowPeers, options.commitWorkflow);
     const graph = new ComfyWorkflowSurfaceGraph(associations, options.bindings, options.loaders, state, report);
     const provisioning = new WorkflowSurfaceProvisioning(graph, workflowHost, options.accent, new BrowserWorkflowFileDimensions(options.document), options.notice, report);
     const route = new WorkflowInputRoute(provisioning, workflowHost, state, report);

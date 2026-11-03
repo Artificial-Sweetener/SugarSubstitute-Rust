@@ -134,6 +134,8 @@ function fixture() {
   const state = new ComfyWorkflowInputState(
     () => native.graph,
     () => String(++ids),
+    () => [],
+    () => {},
   );
   const graph = new ComfyWorkflowSurfaceGraph(associations, bindings, definitions, state, report);
   const provisioning = new WorkflowSurfaceProvisioning(

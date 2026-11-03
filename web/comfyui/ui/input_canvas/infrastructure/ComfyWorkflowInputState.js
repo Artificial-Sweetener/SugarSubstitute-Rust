@@ -25,14 +25,22 @@ const EMPTY_WORKFLOW = 'workflow-none';
  * The record lives in the root graph's `extra`, like other per-workflow SugarCubes UI state, so
  * it travels with the workflow across reloads. It is written outside native undo history:
  * changing the visible route is navigation, not an authored edit.
+ *
+ * A duplicated workflow carries its original's record. When another open workflow already holds
+ * the same identity, the loaded one is the copy: it takes a fresh identity, keeping its route and
+ * selection, and the change is recorded in its change tracker so it persists like any edit.
  */
 export class ComfyWorkflowInputState {
     root;
     nextId;
+    peers;
+    commit;
     /** Read the root workflow graph lazily so each loaded workflow keeps its own record. */
-    constructor(root, nextId) {
+    constructor(root, nextId, peers, commit) {
         this.root = root;
         this.nextId = nextId;
+        this.peers = peers;
+        this.commit = commit;
     }
     /**
      * Read the workflow's identity. A workflow with nothing to provision is not modified and shares
@@ -43,8 +51,14 @@ export class ComfyWorkflowInputState {
         if (!root)
             return null;
         const stored = this.#read(root);
-        if (stored)
+        if (stored && !this.peers().some((peer) => storedId(peer) === stored.id))
             return stored.id;
+        if (stored) {
+            const id = 'workflow-' + this.nextId();
+            this.#write(root, { ...stored, id });
+            this.commit();
+            return id;
+        }
         if (!create)
             return EMPTY_WORKFLOW;
         const id = 'workflow-' + this.nextId();
@@ -89,6 +103,12 @@ export class ComfyWorkflowInputState {
     #write(root, state) {
         root.extra = { ...(isRecord(root.extra) ? root.extra : {}), [WORKFLOW_INPUT_STATE_KEY]: state };
     }
+}
+/** Read the identity recorded in another workflow's serialized state, or null. */
+function storedId(state) {
+    const extra = isRecord(state) && isRecord(state.extra) ? state.extra : null;
+    const record = extra ? extra[WORKFLOW_INPUT_STATE_KEY] : null;
+    return isRecord(record) && typeof record.id === 'string' ? record.id : null;
 }
 /** Admit a surface or mask key of the wire's maximum length, or null. */
 function optionalKey(value) {

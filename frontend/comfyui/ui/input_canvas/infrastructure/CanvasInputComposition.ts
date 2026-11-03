@@ -46,6 +46,10 @@ export interface CanvasInputHostOptions {
   host(id?: string): CanvasSourceHost | null;
   readonly canvases: InputCanvasCapabilities;
   workflowHost(): CanvasWorkflowHost | null;
+  /** Stored states of the other open workflows, used to recognize a duplicated workflow. */
+  workflowPeers(): readonly unknown[];
+  /** Record the active workflow's graph in its change tracker. */
+  commitWorkflow(): void;
   /** Theme accent that colours the first mask of each input surface. */
   accent(): string;
   notice: WorkflowSurfaceNotice;
@@ -109,6 +113,8 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     assets,
     graph: options.graph,
     workflowHost: options.workflowHost,
+    workflowPeers: options.workflowPeers,
+    commitWorkflow: options.commitWorkflow,
     accent: options.accent,
     notice: options.notice,
     report,

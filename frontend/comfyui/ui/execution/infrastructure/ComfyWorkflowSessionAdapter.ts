@@ -155,6 +155,25 @@ export class ComfyWorkflowSessionAdapter {
     return tracker?.activeState;
   }
 
+  /** Read the stored serialized state of every open workflow other than the active one. */
+  readOtherStoredWorkflows(): readonly unknown[] {
+    const active = this.#workflow.activeWorkflow;
+    const activeTracker = isRecord(active) ? active.changeTracker : undefined;
+    return [...this.#open.values()].flatMap((workflow) => {
+      const tracker = isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
+      return tracker && tracker !== activeTracker ? [tracker.activeState] : [];
+    });
+  }
+
+  /** Ask the active workflow's change tracker to record the graph's current serialized state. */
+  commitActiveWorkflowState(): void {
+    const active = this.#workflow.activeWorkflow;
+    const tracker =
+      isRecord(active) && isRecord(active.changeTracker) ? active.changeTracker : null;
+    const check = tracker?.checkState;
+    if (typeof check === 'function') check.call(tracker);
+  }
+
   /** Stop this adapter's subscription while leaving session/resource teardown to their owners. */
   dispose(): void {
     if (!this.#active) return;
