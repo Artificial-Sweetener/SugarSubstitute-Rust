@@ -110,7 +110,7 @@ impl Content {
                 {
                     return Err(CanvasError::Invalid("Invalid layer insertion"));
                 }
-                validate_layer(layer, self.extent)?;
+                validate_layer(&layer, self.extent)?;
                 self.layers.insert(index, layer);
             }
             DocumentEdit::Remove(id) => {
@@ -119,7 +119,7 @@ impl Content {
             }
             DocumentEdit::Replace(layer) => {
                 let index = find(&self.layers, layer.id)?;
-                validate_layer(layer, self.extent)?;
+                validate_layer(&layer, self.extent)?;
                 self.layers[index] = layer;
             }
             DocumentEdit::Reorder { layer, index } => {

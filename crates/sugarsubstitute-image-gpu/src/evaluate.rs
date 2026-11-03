@@ -156,6 +156,9 @@ impl<S: RasterSource> GpuEvaluator<S> {
         let operation = self.graph.operation(node).map_err(image_error)?;
         let computed = match operation {
             Operation::Raster { asset, .. } => self.source_tile(asset, region, None, context)?,
+            Operation::Coverage { source, .. } => {
+                self.coverage_tile(source, region, None, context)?
+            }
             Operation::Solid { color, .. } => {
                 let mut parameters = Parameters::new(0, region);
                 parameters.color(color);
@@ -210,6 +213,10 @@ impl<S: RasterSource> GpuEvaluator<S> {
                     self.graph.sampled_source(node, region).map_err(image_error)?
                 {
                     self.source_tile(asset, region, Some(&samples), context)?
+                } else if let Some((source, samples)) =
+                    self.graph.sampled_coverage(node, region).map_err(image_error)?
+                {
+                    self.coverage_tile(source, region, Some(&samples), context)?
                 } else {
                     self.resample(node, input, sampling, region, context)?
                 }

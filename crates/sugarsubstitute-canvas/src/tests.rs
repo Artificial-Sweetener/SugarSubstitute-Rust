@@ -238,12 +238,12 @@ fn document_history(
     let mut document = Document::new(1, extent, context.memory())?;
     let image =
         Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([7; 32]), extent })?;
-    assert!(document.apply(DocumentEdit::Insert { index: 0, layer: image })?);
+    assert!(document.apply(DocumentEdit::Insert { index: 0, layer: image.clone() })?);
     let original = document.snapshot();
     let geometry =
         VectorRectangle::new([0.5, 1.25, 25.5, 40.25], Pixel::linear(1.0, 0.0, 0.0, 1.0)?)?;
     let vector = Layer::new(LayerId::new(2)?, LayerContent::VectorRectangle(geometry))?;
-    document.apply(DocumentEdit::Insert { index: 1, layer: vector })?;
+    document.apply(DocumentEdit::Insert { index: 1, layer: vector.clone() })?;
     let edited = document.snapshot();
     assert_eq!(original.layers(), &[image]);
     assert_eq!(edited.layers()[1].content(), LayerContent::VectorRectangle(geometry));
@@ -275,22 +275,22 @@ fn document_rejections(
     let mut document = Document::new(1, extent, context.memory())?;
     let image =
         Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([7; 32]), extent })?;
-    document.apply(DocumentEdit::Insert { index: 0, layer: image })?;
-    let hidden = image.with_visibility(false);
-    document.apply(DocumentEdit::Replace(hidden))?;
+    document.apply(DocumentEdit::Insert { index: 0, layer: image.clone() })?;
+    let hidden = image.clone().with_visibility(false);
+    document.apply(DocumentEdit::Replace(hidden.clone()))?;
     document.undo()?;
     let revision = document.snapshot().revision();
-    assert!(document.apply(DocumentEdit::Insert { index: 0, layer: image }).is_err());
+    assert!(document.apply(DocumentEdit::Insert { index: 0, layer: image.clone() }).is_err());
     assert!(document.apply(DocumentEdit::Remove(LayerId::new(99)?)).is_err());
     assert!(
         document.apply(DocumentEdit::Reorder { layer: image.id(), index: usize::MAX }).is_err()
     );
     assert_eq!(document.snapshot().revision(), revision);
-    assert_eq!(document.snapshot().layers(), &[image]);
+    assert_eq!(document.snapshot().layers(), std::slice::from_ref(&image));
     assert!(document.redo()?);
     assert_eq!(document.snapshot().layers(), &[hidden]);
     document.undo()?;
-    document.apply(DocumentEdit::Replace(image.with_opacity(0.5)?))?;
+    document.apply(DocumentEdit::Replace(image.clone().with_opacity(0.5)?))?;
     assert!(!document.redo()?);
     assert!(LayerId::new(0).is_err());
     assert!(image.with_opacity(f32::NAN).is_err());
@@ -313,7 +313,7 @@ fn maximum_layer_stacks_admit_all_explicit_source_and_mask_pyramids() -> harness
 fn maximum_stack(
     context: &sugarsubstitute_contracts::execution::JobContext,
 ) -> Result<(), CanvasError> {
-    use sugarsubstitute_image_ops::{AssetId, Pixel};
+    use sugarsubstitute_image_ops::{AssetId, Coverage, FULL_COVERAGE, Pixel};
     let extent = Extent::new(i32::MAX as u32, i32::MAX as u32)?;
     let mut document = Document::new(1, extent, context.memory())?;
     for index in 0..32 {
@@ -322,7 +322,7 @@ fn maximum_stack(
             LayerContent::Raster { asset: AssetId([index as u8; 32]), extent },
         )?
         .with_opacity(0.5)?
-        .with_mask(Some(LayerMask::Raster { asset: AssetId([index as u8 + 32; 32]), extent }));
+        .with_mask(Some(Coverage::new(extent, FULL_COVERAGE, context.memory())?));
         document.apply(DocumentEdit::Insert { index, layer })?;
     }
     let snapshot = document.snapshot();

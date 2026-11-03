@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::{Document, DocumentEdit, Layer, LayerId};
-use sugarsubstitute_image_ops::{Filter, ImageError};
+use sugarsubstitute_image_ops::{FULL_COVERAGE, Filter, ImageError};
 
 #[test]
 fn navigation_selects_the_nearest_ready_raster_and_mask_pyramids()
@@ -144,7 +144,10 @@ fn compile_policy(
 
 fn collect_filters(graph: &Graph, node: NodeId, filters: &mut [u32; 3]) -> Result<(), ImageError> {
     match graph.operation(node)? {
-        Operation::Raster { .. } | Operation::Solid { .. } | Operation::Rectangle { .. } => {}
+        Operation::Raster { .. }
+        | Operation::Coverage { .. }
+        | Operation::Solid { .. }
+        | Operation::Rectangle { .. } => {}
         Operation::Resample { input, sampling, .. } => {
             filters[match sampling.filter() {
                 Filter::Lanczos3 => 0,
@@ -178,7 +181,7 @@ fn raster_fixture(
     let mut document = Document::new(1, extent, context.memory())?;
     let layer =
         Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([1; 32]), extent })?
-            .with_mask(Some(LayerMask::Raster { asset: AssetId([2; 32]), extent }));
+            .with_mask(Some(Coverage::new(extent, FULL_COVERAGE / 2, context.memory())?));
     document.apply(DocumentEdit::Insert { index: 0, layer })?;
     let mut view = Viewport::new(Extent::new(8, 8)?)?;
     view.zoom_at(0.125, [0.0; 2])?;

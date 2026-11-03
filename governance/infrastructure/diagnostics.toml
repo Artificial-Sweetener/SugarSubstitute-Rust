@@ -1019,7 +1019,7 @@ rationale = "Isolated native qualification reports observed GPU display, repair 
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/scene.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:cd0d3a02d3d26dfd8f3c9f5e1e39c1756d1bb4cc269ae9dc17cd6b117c28722a"
+source_sha256 = "sha256:169956b13272cacf6433feffde9284565e9880dda744dce43cc15e9ac151baea"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 

@@ -6,7 +6,7 @@ use crate::CanvasError;
 pub use edit::{EditPreview, EditSession, EditSessionId};
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
-use sugarsubstitute_image_ops::{AssetId, Extent, VectorRectangle};
+use sugarsubstitute_image_ops::{AssetId, Coverage, Extent, VectorRectangle};
 
 const MAX_LAYERS: usize = 32;
 const HISTORY_LIMIT: usize = 32;
@@ -59,28 +59,15 @@ pub enum LayerContent {
     },
 }
 
-/// Coverage source retained as authored content; evaluation uses its alpha channel.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum LayerMask {
-    /// Raster coverage at the document's pixel extent.
-    Raster {
-        /// Original coverage asset.
-        asset: AssetId,
-        /// Coverage pixel dimensions.
-        extent: Extent,
-    },
-    /// Vector coverage preserving editable geometry.
-    VectorRectangle(VectorRectangle),
-}
-
 /// Immutable layer description. Changes are published only through document commands.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// Cloning shares mask coverage tiles.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Layer {
     id: LayerId,
     content: LayerContent,
     visible: bool,
     opacity: f32,
-    mask: Option<LayerMask>,
+    mask: Option<Coverage>,
 }
 impl Layer {
     /// Create an opaque visible layer with explicit source content.
@@ -95,27 +82,27 @@ impl Layer {
         Ok(Self { id, content, visible: true, opacity: 1.0, mask: None })
     }
     /// Stable layer identity.
-    pub const fn id(self) -> LayerId {
+    pub const fn id(&self) -> LayerId {
         self.id
     }
     /// Original source geometry, image identity or adjustment parameters.
-    pub const fn content(self) -> LayerContent {
+    pub const fn content(&self) -> LayerContent {
         self.content
     }
     /// Whether this layer contributes to the document's rendered result.
-    pub const fn visible(self) -> bool {
+    pub const fn visible(&self) -> bool {
         self.visible
     }
     /// Finite layer coverage in `[0, 1]`.
-    pub const fn opacity(self) -> f32 {
+    pub const fn opacity(&self) -> f32 {
         self.opacity
     }
-    /// Original authored coverage source.
-    pub const fn mask(self) -> Option<LayerMask> {
-        self.mask
+    /// Layer mask coverage at the document extent, when the layer has one.
+    pub const fn mask(&self) -> Option<&Coverage> {
+        self.mask.as_ref()
     }
     /// Change visibility on a value submitted through a document command.
-    pub const fn with_visibility(mut self, visible: bool) -> Self {
+    pub fn with_visibility(mut self, visible: bool) -> Self {
         self.visible = visible;
         self
     }
@@ -129,15 +116,15 @@ impl Layer {
         self.opacity = opacity;
         Ok(self)
     }
-    /// Attach or remove a mask while preserving its authored representation.
-    pub const fn with_mask(mut self, mask: Option<LayerMask>) -> Self {
+    /// Attach or remove a layer mask.
+    pub fn with_mask(mut self, mask: Option<Coverage>) -> Self {
         self.mask = mask;
         self
     }
 }
 
 /// One atomic edit; rejected edits leave document revision and both history branches intact.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum DocumentEdit {
     /// Insert at an index in bottom-to-top compositing order.
     Insert {
@@ -303,7 +290,7 @@ fn find(layers: &[Layer], id: LayerId) -> Result<usize, CanvasError> {
         .position(|layer| layer.id == id)
         .ok_or(CanvasError::Invalid("Unknown layer identity"))
 }
-fn validate_layer(layer: Layer, extent: Extent) -> Result<(), CanvasError> {
+fn validate_layer(layer: &Layer, extent: Extent) -> Result<(), CanvasError> {
     if let LayerContent::Raster { extent: source, .. } = layer.content
         && source != extent
     {
@@ -316,10 +303,8 @@ fn validate_layer(layer: Layer, extent: Extent) -> Result<(), CanvasError> {
     {
         return Err(CanvasError::Invalid("Placed raster bounds must be finite and nonempty"));
     }
-    if let Some(LayerMask::Raster { extent: source, .. }) = layer.mask
-        && source != extent
-    {
-        return Err(CanvasError::Invalid("Raster mask extent differs from document extent"));
+    if layer.mask.as_ref().is_some_and(|mask| mask.extent() != extent) {
+        return Err(CanvasError::Invalid("Layer mask extent differs from document extent"));
     }
     Ok(())
 }

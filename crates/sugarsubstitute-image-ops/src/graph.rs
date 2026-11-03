@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Append-only typed DAGs with structural identities and bounded graph ownership.
-use crate::{Extent, Filter, ImageError, Pixel, Sampling};
+use crate::{Coverage, Extent, Filter, ImageError, Pixel, Sampling};
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
@@ -64,6 +64,14 @@ impl VectorRectangle {
     }
 }
 
+/// Graph-owned coverage referenced by an [`Operation::Coverage`] node. Only
+/// [`Graph::coverage`] creates one, so every reference names coverage its graph retains.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CoverageSource {
+    slot: u16,
+    fingerprint: [u8; 32],
+}
+
 /// Image semantics independent of evaluation backend, storage and presentation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Operation {
@@ -73,6 +81,13 @@ pub enum Operation {
         asset: AssetId,
         /// Source pixel dimensions.
         extent: Extent,
+    },
+    /// Coverage as premultiplied white whose alpha is the coverage value.
+    Coverage {
+        /// Coverage extent.
+        extent: Extent,
+        /// Coverage retained by this graph.
+        source: CoverageSource,
     },
     /// Uniform image without proportional source storage.
     Solid {
@@ -138,7 +153,10 @@ pub enum Operation {
 impl Operation {
     pub(crate) fn inputs(self) -> [Option<NodeId>; 3] {
         match self {
-            Self::Raster { .. } | Self::Solid { .. } | Self::Rectangle { .. } => [None; 3],
+            Self::Raster { .. }
+            | Self::Coverage { .. }
+            | Self::Solid { .. }
+            | Self::Rectangle { .. } => [None; 3],
             Self::Resample { input, .. } | Self::Exposure { input, .. } => {
                 [Some(input), None, None]
             }
@@ -164,6 +182,7 @@ pub(crate) struct Entry {
 /// Document edits compile a new snapshot; structural fingerprints allow compatible reuse.
 pub struct Graph {
     entries: Vec<Entry>,
+    coverages: Vec<Coverage>,
     identity: u64,
     limit: usize,
     _memory: MemoryClaim,
@@ -182,7 +201,7 @@ impl Graph {
         let identity = NEXT_GRAPH
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
             .map_err(|_| ImageError::Invalid("Graph identity exhausted"))?;
-        Ok(Self { entries, identity, limit: capacity, _memory: claim })
+        Ok(Self { entries, coverages: Vec::new(), identity, limit: capacity, _memory: claim })
     }
     /// Append a validated operation; existing nodes remain immutable.
     /// # Errors
@@ -201,13 +220,26 @@ impl Graph {
             return Err(ImageError::Invalid("Image graph depth exceeded"));
         }
         let extent = match operation {
+            Operation::Coverage { extent, source } => {
+                let retained = self
+                    .coverages
+                    .get(usize::from(source.slot))
+                    .ok_or(ImageError::Invalid("Unknown graph coverage"))?;
+                if retained.fingerprint() != source.fingerprint || retained.extent() != extent {
+                    return Err(ImageError::Invalid("Graph coverage reference differs"));
+                }
+                extent
+            }
             Operation::Raster { extent, .. }
             | Operation::Solid { extent, .. }
             | Operation::Rectangle { extent, .. } => extent,
             Operation::Resample { input, extent, sampling } => {
                 let source = self.extent(input)?;
                 let sampled = sampling.filter() == Filter::Nearest
-                    && matches!(self.operation(input)?, Operation::Raster { .. });
+                    && matches!(
+                        self.operation(input)?,
+                        Operation::Raster { .. } | Operation::Coverage { .. }
+                    );
                 sampling.validate(source, extent, sampled)?;
                 extent
             }
@@ -241,6 +273,29 @@ impl Graph {
             requested_level,
         });
         Ok(id)
+    }
+    /// Retain coverage and append a node evaluating it. Clones share tiles, so retaining a
+    /// document's coverage costs no pixel storage.
+    /// # Errors
+    /// Rejects exhausted capacity and allocation failure.
+    pub fn coverage(&mut self, coverage: &Coverage) -> Result<NodeId, ImageError> {
+        let slot = u16::try_from(self.coverages.len())
+            .map_err(|_| ImageError::Invalid("Graph coverage capacity exhausted"))?;
+        self.coverages.try_reserve(1)?;
+        self.coverages.push(coverage.clone());
+        let source = CoverageSource { slot, fingerprint: coverage.fingerprint() };
+        self.add(Operation::Coverage { extent: coverage.extent(), source }).inspect_err(|_| {
+            self.coverages.pop();
+        })
+    }
+    /// Borrow coverage an [`Operation::Coverage`] node of this graph references.
+    /// # Errors
+    /// Rejects a reference this graph does not retain.
+    pub fn coverage_source(&self, source: CoverageSource) -> Result<&Coverage, ImageError> {
+        self.coverages
+            .get(usize::from(source.slot))
+            .filter(|coverage| coverage.fingerprint() == source.fingerprint)
+            .ok_or(ImageError::Invalid("Unknown graph coverage"))
     }
     /// Resize a complete image with explicit aligned-corner Lanczos semantics.
     /// # Errors
@@ -357,6 +412,11 @@ impl Graph {
             Operation::Raster { asset, .. } => {
                 hash.update([0]);
                 hash.update(asset.0);
+                None
+            }
+            Operation::Coverage { source, .. } => {
+                hash.update([8]);
+                hash.update(source.fingerprint);
                 None
             }
             Operation::Solid { color, .. } => {

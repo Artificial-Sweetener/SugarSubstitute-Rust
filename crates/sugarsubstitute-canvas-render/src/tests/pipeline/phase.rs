@@ -13,7 +13,7 @@ fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composit
         let mut document = Document::new(1, extent, context.memory())?;
         let raster =
             Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([1; 32]), extent })?
-                .with_mask(Some(LayerMask::Raster { asset: AssetId([1; 32]), extent }));
+                .with_mask(Some(half_mask(extent, context)?));
         document.apply(DocumentEdit::Insert { index: 0, layer: raster })?;
         let vector = VectorRectangle::new(
             [-3.25, 7.125, 402.75, 364.25],
@@ -23,11 +23,10 @@ fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composit
             index: 1,
             layer: Layer::new(LayerId::new(2)?, LayerContent::VectorRectangle(vector))?,
         })?;
-        let mask =
-            VectorRectangle::new([2.25, 1.125, 470.75, 350.5], Pixel::linear(0.0, 0.0, 0.0, 1.0)?)?;
+        let mask = Path::rectangle([2.25, 1.125, 470.75, 350.5])?.rasterize(extent, context)?;
         let adjustment = Layer::new(LayerId::new(3)?, LayerContent::Exposure { stops: 0.75 })?
             .with_opacity(0.55)?
-            .with_mask(Some(LayerMask::VectorRectangle(mask)));
+            .with_mask(Some(mask));
         document.apply(DocumentEdit::Insert { index: 2, layer: adjustment })?;
         let snapshot = document.snapshot();
         let mut generation = 0;

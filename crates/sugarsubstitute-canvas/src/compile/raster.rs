@@ -12,29 +12,39 @@ pub(super) struct RasterGrid<'a> {
     pub(super) ready: PyramidAvailability<'a>,
 }
 
-/// Where a raster's own pixels land: its extent stretched into document-space `bounds`.
+/// Where a source's own pixels land: its extent stretched into document-space `bounds`.
 #[derive(Clone, Copy)]
 pub(super) struct RasterPlacement {
-    pub(super) source: Extent,
     /// Document-space `[left, top, width, height]` with positive finite dimensions.
     pub(super) bounds: [f64; 4],
 }
 
 impl RasterPlacement {
-    /// Stretch `source` over the whole document rectangle.
-    pub(super) fn document(source: Extent, document: Extent) -> Self {
-        Self {
-            source,
-            bounds: [0.0, 0.0, f64::from(document.width()), f64::from(document.height())],
-        }
+    /// Stretch a source over the whole document rectangle.
+    pub(super) fn document(document: Extent) -> Self {
+        Self { bounds: [0.0, 0.0, f64::from(document.width()), f64::from(document.height())] }
     }
 }
 
+/// Document-resolution pixels a placement samples.
+#[derive(Clone, Copy)]
+pub(super) enum GraphSource<'a> {
+    /// An image asset at its own pixel extent.
+    Raster {
+        /// Content-bound asset identity.
+        asset: AssetId,
+        /// Asset pixel dimensions.
+        extent: Extent,
+    },
+    /// Document coverage, such as a layer mask.
+    Coverage(&'a Coverage),
+}
+
 /// Select the nearest permitted ready pyramid and preserve the exact requested output mapping.
-/// Per-axis ratios stretch the raster's own extent into its placement rectangle.
+/// Per-axis ratios stretch the source's own extent into its placement rectangle.
 pub(super) fn raster_node(
     graph: &mut Graph,
-    asset: AssetId,
+    source: GraphSource<'_>,
     placement: RasterPlacement,
     grid: RasterGrid<'_>,
     clip: bool,
@@ -42,7 +52,10 @@ pub(super) fn raster_node(
 ) -> Result<NodeId, CanvasError> {
     let RasterGrid { document, view, reconstruction, ready } = grid;
     let [_, _, width, height] = placement.bounds;
-    let source = graph.add(Operation::Raster { asset, extent: placement.source })?;
+    let source = match source {
+        GraphSource::Raster { asset, extent } => graph.add(Operation::Raster { asset, extent })?,
+        GraphSource::Coverage(coverage) => graph.coverage(coverage)?,
+    };
     let mut selected = source;
     if reconstruction.uses_canonical_pyramid() {
         let pyramid = graph.pyramid(source)?;

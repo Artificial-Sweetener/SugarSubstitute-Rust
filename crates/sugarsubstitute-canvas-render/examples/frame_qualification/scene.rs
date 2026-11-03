@@ -48,11 +48,10 @@ fn document(extent: Extent, context: &JobContext) -> Result<Document> {
         index: 1,
         layer: Layer::new(LayerId::new(2)?, LayerContent::VectorRectangle(shape))?,
     })?;
-    let mask =
-        VectorRectangle::new([199.125, 0.0, 701.75, 769.0], Pixel::linear(0.0, 0.0, 0.0, 1.0)?)?;
+    let mask = Path::rectangle([199.125, 0.0, 701.75, 769.0])?.rasterize(extent, context)?;
     let adjustment = Layer::new(LayerId::new(3)?, LayerContent::Exposure { stops: 0.75 })?
         .with_opacity(0.375)?
-        .with_mask(Some(LayerMask::VectorRectangle(mask)));
+        .with_mask(Some(mask));
     document.apply(DocumentEdit::Insert { index: 2, layer: adjustment })?;
     Ok(document)
 }

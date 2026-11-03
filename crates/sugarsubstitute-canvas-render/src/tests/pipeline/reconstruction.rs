@@ -366,11 +366,10 @@ fn horizontal_preview_batch_matches_scalar_mixed_composition() -> harness::TestR
             index: 0,
             layer: Layer::new(LayerId::new(1)?, LayerContent::VectorRectangle(vector))?,
         })?;
-        let adjustment_mask =
-            VectorRectangle::new([0.0, 0.0, 2112.0, 2048.0], Pixel::linear(0.0, 0.0, 0.0, 0.65)?)?;
+        let adjustment_mask = soft_rectangle(extent, [0.0, 0.0, 2112.0, 2048.0], 0.65, context)?;
         let adjustment = Layer::new(LayerId::new(2)?, LayerContent::Exposure { stops: 0.75 })?
             .with_opacity(0.55)?
-            .with_mask(Some(LayerMask::VectorRectangle(adjustment_mask)));
+            .with_mask(Some(adjustment_mask));
         document.apply(DocumentEdit::Insert { index: 1, layer: adjustment })?;
         let raster =
             Layer::new(LayerId::new(3)?, LayerContent::Raster { asset: AssetId([1; 32]), extent })?
@@ -429,10 +428,10 @@ fn transparent_authored_mask_keeps_preview_source_lazy() -> harness::TestResult 
         let extent = Extent::new(4096, 2048)?;
         let target = Extent::new(256, 128)?;
         let mut document = Document::new(1, extent, context.memory())?;
-        let mask = VectorRectangle::new([0.0, 0.0, 4096.0, 2048.0], Pixel::TRANSPARENT)?;
+        let mask = Coverage::new(extent, 0, context.memory())?;
         let raster =
             Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([1; 32]), extent })?
-                .with_mask(Some(LayerMask::VectorRectangle(mask)));
+                .with_mask(Some(mask));
         document.apply(DocumentEdit::Insert { index: 0, layer: raster })?;
         let snapshot = document.snapshot();
         let mut view = Viewport::new(target)?;

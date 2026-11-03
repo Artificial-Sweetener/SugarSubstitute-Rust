@@ -15,7 +15,7 @@ fn padded_crop_matches_direct_mixed_composition_at_finished_zoom_boundaries() ->
         let raster =
             Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([1; 32]), extent })?
                 .with_opacity(0.78)?
-                .with_mask(Some(LayerMask::Raster { asset: AssetId([1; 32]), extent }));
+                .with_mask(Some(half_mask(extent, context)?));
         document.apply(DocumentEdit::Insert { index: 0, layer: raster })?;
         let vector = VectorRectangle::new(
             [24.125, 18.375, 96.875, 79.625],
@@ -24,13 +24,10 @@ fn padded_crop_matches_direct_mixed_composition_at_finished_zoom_boundaries() ->
         let vector = Layer::new(LayerId::new(2)?, LayerContent::VectorRectangle(vector))?
             .with_opacity(0.61)?;
         document.apply(DocumentEdit::Insert { index: 1, layer: vector })?;
-        let adjustment_mask = VectorRectangle::new(
-            [29.75, 21.125, 83.5, 68.875],
-            Pixel::linear(0.0, 0.0, 0.0, 0.72)?,
-        )?;
+        let adjustment_mask = soft_rectangle(extent, [29.75, 21.125, 83.5, 68.875], 0.72, context)?;
         let adjustment = Layer::new(LayerId::new(3)?, LayerContent::Exposure { stops: 0.8 })?
             .with_opacity(0.57)?
-            .with_mask(Some(LayerMask::VectorRectangle(adjustment_mask)));
+            .with_mask(Some(adjustment_mask));
         document.apply(DocumentEdit::Insert { index: 2, layer: adjustment })?;
         let snapshot = document.snapshot();
         let target_extent = Extent::new(39, 27)?;

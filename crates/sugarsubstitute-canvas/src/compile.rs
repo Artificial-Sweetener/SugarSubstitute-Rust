@@ -1,20 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compile authored content into explicit image operations at the requested evaluation grid.
-use crate::{
-    CanvasError, Comparison, DocumentSnapshot, LayerContent, LayerMask, Viewport, WipeOrientation,
-};
+use crate::{CanvasError, Comparison, DocumentSnapshot, LayerContent, Viewport, WipeOrientation};
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_ops::{
-    AssetId, Extent, Filter, Graph, ImageError, NodeId, Operation, Pixel, Reconstruction, Region,
-    Sampling, VectorRectangle,
+    AssetId, Coverage, Extent, Filter, Graph, ImageError, NodeId, Operation, Pixel, Reconstruction,
+    Region, Sampling, VectorRectangle,
 };
 
 type PyramidAvailability<'a> =
     Option<&'a dyn Fn(&Graph, NodeId, Region) -> Result<bool, ImageError>>;
 
 mod raster;
-use raster::{RasterGrid, RasterPlacement, raster_node};
+use raster::{GraphSource, RasterGrid, RasterPlacement, raster_node};
 
 /// One immutable image graph for a document revision and physical evaluation grid.
 /// Source pyramids use canonical content keys; vectors rasterize at the requested device resolution.
@@ -120,16 +118,16 @@ impl DocumentSnapshot {
                     let mut foreground = match content {
                         LayerContent::Raster { asset, .. } => raster_node(
                             &mut graph,
-                            asset,
-                            RasterPlacement::document(document, document),
+                            GraphSource::Raster { asset, extent: document },
+                            RasterPlacement::document(document),
                             raster,
                             true,
                             &mut sampling_scale,
                         )?,
                         LayerContent::PlacedRaster { asset, extent, bounds } => raster_node(
                             &mut graph,
-                            asset,
-                            RasterPlacement { source: extent, bounds },
+                            GraphSource::Raster { asset, extent },
+                            RasterPlacement { bounds },
                             raster,
                             true,
                             &mut sampling_scale,
@@ -162,8 +160,8 @@ impl DocumentSnapshot {
         if let Some(comparison) = comparison {
             let compared = raster_node(
                 &mut graph,
-                comparison.asset(),
-                RasterPlacement::document(comparison.extent(), document),
+                GraphSource::Raster { asset: comparison.asset(), extent: comparison.extent() },
+                RasterPlacement::document(document),
                 raster,
                 true,
                 &mut sampling_scale,
@@ -188,10 +186,7 @@ fn graph_capacity(document: &DocumentSnapshot, comparison: Option<Comparison>) -
     // Comparison: its own pyramid plus resample, document clip, clip mask, wipe, mask and over.
     let mut capacity = 3 + comparison.map_or(0, |comparison| reductions(comparison.extent()) + 8);
     for layer in document.layers().iter().filter(|layer| layer.visible() && layer.opacity() > 0.0) {
-        let mask = match layer.mask() {
-            Some(LayerMask::Raster { .. }) => sampled,
-            _ => 1,
-        };
+        let mask = if layer.mask().is_some() { sampled } else { 1 };
         match layer.content() {
             LayerContent::Exposure { .. } => capacity += 2 + mask,
             content => {
@@ -216,22 +211,19 @@ fn graph_capacity(document: &DocumentSnapshot, comparison: Option<Comparison>) -
 
 fn mask_node(
     graph: &mut Graph,
-    mask: Option<LayerMask>,
+    mask: Option<&Coverage>,
     grid: RasterGrid<'_>,
     sampling_scale: &mut f64,
 ) -> Result<NodeId, CanvasError> {
     match mask {
-        Some(LayerMask::Raster { asset, .. }) => raster_node(
+        Some(coverage) => raster_node(
             graph,
-            asset,
-            RasterPlacement::document(grid.document, grid.document),
+            GraphSource::Coverage(coverage),
+            RasterPlacement::document(grid.document),
             grid,
             false,
             sampling_scale,
         ),
-        Some(LayerMask::VectorRectangle(shape)) => {
-            vector_node(graph, shape, grid.document, grid.view)
-        }
         None => Ok(graph.add(Operation::Solid {
             extent: grid.view.surface(),
             color: Pixel::linear(0.0, 0.0, 0.0, 1.0)?,

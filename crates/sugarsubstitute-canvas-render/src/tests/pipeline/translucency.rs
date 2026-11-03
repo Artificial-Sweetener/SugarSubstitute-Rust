@@ -12,7 +12,7 @@ fn minified_nearest_and_lanczos_share_canonical_translucent_composite() -> harne
         let layer =
             Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([1; 32]), extent })?
                 .with_opacity(0.75)?
-                .with_mask(Some(LayerMask::Raster { asset: AssetId([1; 32]), extent }));
+                .with_mask(Some(half_mask(extent, context)?));
         document.apply(DocumentEdit::Insert { index: 0, layer })?;
         let snapshot = document.snapshot();
         let mut view = Viewport::new(Extent::new(8, 8)?)?;

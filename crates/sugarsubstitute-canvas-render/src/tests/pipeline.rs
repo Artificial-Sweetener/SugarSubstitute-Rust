@@ -9,11 +9,10 @@ mod placement;
 mod progressive;
 mod reconstruction;
 mod translucency;
-use sugarsubstitute_canvas::{
-    Document, DocumentEdit, Layer, LayerContent, LayerId, LayerMask, Viewport,
-};
+use sugarsubstitute_canvas::{Document, DocumentEdit, Layer, LayerContent, LayerId, Viewport};
 use sugarsubstitute_image_ops::{
-    AssetId, Filter, Pixel, RasterSource, Reconstruction, SrgbEncoder, VectorRectangle,
+    AssetId, Coverage, FULL_COVERAGE, Filter, Path, Pixel, RasterSource, Reconstruction,
+    SrgbEncoder, VectorRectangle,
 };
 
 struct Gradient {
@@ -51,6 +50,25 @@ fn image_document(extent: Extent, context: &JobContext) -> Result<Document, Rend
         Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([1; 32]), extent })?;
     document.apply(DocumentEdit::Insert { index: 0, layer })?;
     Ok(document)
+}
+/// The gradient's constant half alpha as layer-mask coverage.
+fn half_mask(extent: Extent, context: &JobContext) -> Result<Coverage, ImageError> {
+    Coverage::new(extent, FULL_COVERAGE / 2 + 1, context.memory())
+}
+/// A rectangle mask at partial strength.
+fn soft_rectangle(
+    extent: Extent,
+    bounds: [f64; 4],
+    strength: f32,
+    context: &JobContext,
+) -> Result<Coverage, ImageError> {
+    let mut mask = Path::rectangle(bounds)?.rasterize(extent, context)?;
+    if let Some(region) = mask.bounds() {
+        mask.update(region, context.memory(), |_, _, value| {
+            (f32::from(value) * strength).round() as u16
+        })?;
+    }
+    Ok(mask)
 }
 fn black() -> Result<Pixel, ImageError> {
     Pixel::linear(0.0, 0.0, 0.0, 1.0)
@@ -248,10 +266,10 @@ fn adjustment_layer_mask_and_opacity_preserve_original_translucent_coverage() ->
     execute(|context| {
         let extent = Extent::new(4, 4)?;
         let mut document = image_document(extent, context)?;
-        let mask = VectorRectangle::new([0.0, 0.0, 2.0, 4.0], Pixel::linear(0.0, 0.0, 0.0, 1.0)?)?;
+        let mask = Path::rectangle([0.0, 0.0, 2.0, 4.0])?.rasterize(extent, context)?;
         let adjustment = Layer::new(LayerId::new(2)?, LayerContent::Exposure { stops: 1.0 })?
             .with_opacity(0.5)?
-            .with_mask(Some(LayerMask::VectorRectangle(mask)));
+            .with_mask(Some(mask));
         document.apply(DocumentEdit::Insert { index: 1, layer: adjustment })?;
         let snapshot = document.snapshot();
         let view = Viewport::new(extent)?;

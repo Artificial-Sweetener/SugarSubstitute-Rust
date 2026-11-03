@@ -12,19 +12,19 @@ fn memory_pressure_preserves_the_last_valid_staged_branch_and_can_retry() -> har
         let mut doc = Document::new(1, extent, memory)?;
         let original = layer(extent)?;
         let mut edit = doc.begin_edit(EditSessionId::new(1)?);
-        edit.stage(DocumentEdit::Insert { index: 0, layer: original })?;
+        edit.stage(DocumentEdit::Insert { index: 0, layer: original.clone() })?;
         let available = memory
             .claim(memory.bytes())
             .err()
             .ok_or(CanvasError::Invalid("Expected already-claimed document memory"))?
             .available_bytes;
         let blocker = memory.claim(available).map_err(ImageError::from)?;
-        let replacement = original.with_opacity(0.5)?;
-        assert!(edit.stage(DocumentEdit::Replace(replacement)).is_err());
+        let replacement = original.clone().with_opacity(0.5)?;
+        assert!(edit.stage(DocumentEdit::Replace(replacement.clone())).is_err());
         assert_eq!(edit.preview().layers(), &[original]);
         assert_eq!(doc.snapshot().revision(), 1);
         drop(blocker);
-        edit.stage(DocumentEdit::Replace(replacement))?;
+        edit.stage(DocumentEdit::Replace(replacement.clone()))?;
         assert!(doc.commit_edit(edit)?);
         assert_eq!(doc.snapshot().layers(), &[replacement]);
         Ok(())
@@ -48,7 +48,7 @@ fn a_multi_update_gesture_publishes_once_and_undo_redo_restore_whole_changes() -
         let mut doc = Document::new(1, extent, memory)?;
         let original = layer(extent)?;
         let mut edit = doc.begin_edit(EditSessionId::new(1)?);
-        edit.stage(DocumentEdit::Insert { index: 0, layer: original })?;
+        edit.stage(DocumentEdit::Insert { index: 0, layer: original.clone() })?;
         edit.stage(DocumentEdit::Replace(original.with_opacity(0.5)?))?;
         assert!(doc.snapshot().layers().is_empty());
         assert_eq!(edit.preview().layers()[0].opacity(), 0.5);
@@ -70,12 +70,12 @@ fn cancelled_invalid_and_noop_gestures_preserve_document_revision_and_redo() -> 
         let extent = Extent::new(100, 100)?;
         let mut doc = Document::new(1, extent, memory)?;
         let original = layer(extent)?;
-        doc.apply(DocumentEdit::Insert { index: 0, layer: original })?;
+        doc.apply(DocumentEdit::Insert { index: 0, layer: original.clone() })?;
         doc.undo()?;
         let revision = doc.snapshot().revision();
         let mut edit = doc.begin_edit(EditSessionId::new(1)?);
-        edit.stage(DocumentEdit::Insert { index: 0, layer: original })?;
-        assert!(edit.stage(DocumentEdit::Insert { index: 0, layer: original }).is_err());
+        edit.stage(DocumentEdit::Insert { index: 0, layer: original.clone() })?;
+        assert!(edit.stage(DocumentEdit::Insert { index: 0, layer: original.clone() }).is_err());
         assert_eq!(edit.preview().layers(), &[original]);
         drop(edit);
         let noop = doc.begin_edit(EditSessionId::new(2)?);
@@ -94,12 +94,12 @@ fn stale_and_foreign_sessions_cannot_publish_even_with_reused_document_identity(
         let mut other = Document::new(1, extent, memory)?;
         let original = layer(extent)?;
         let mut foreign = doc.begin_edit(EditSessionId::new(1)?);
-        foreign.stage(DocumentEdit::Insert { index: 0, layer: original })?;
+        foreign.stage(DocumentEdit::Insert { index: 0, layer: original.clone() })?;
         assert!(other.commit_edit(foreign).is_err());
         assert!(other.snapshot().layers().is_empty());
         let mut stale = doc.begin_edit(EditSessionId::new(2)?);
-        stale.stage(DocumentEdit::Insert { index: 0, layer: original })?;
-        doc.apply(DocumentEdit::Insert { index: 0, layer: original })?;
+        stale.stage(DocumentEdit::Insert { index: 0, layer: original.clone() })?;
+        doc.apply(DocumentEdit::Insert { index: 0, layer: original.clone() })?;
         assert!(doc.commit_edit(stale).is_err());
         assert_eq!(doc.snapshot().revision(), 2);
         assert_eq!(doc.snapshot().layers(), &[original]);

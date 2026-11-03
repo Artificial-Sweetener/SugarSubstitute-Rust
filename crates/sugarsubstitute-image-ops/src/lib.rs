@@ -9,6 +9,7 @@
 //! remains explicit until evaluated; source assets and document editing state are not caches.
 
 mod buffer;
+mod coverage;
 mod display;
 mod display_sampling;
 mod error;
@@ -26,13 +27,16 @@ mod sampling;
 mod spatial;
 
 pub use buffer::{TILE_EDGE, Tile};
+pub use coverage::{CombineMode, Coverage, FULL_COVERAGE, Path, coverage_from_u8, coverage_to_u8};
 pub use display::SrgbEncoder;
 pub use display_sampling::{DisplaySample, bilinear_display_pixel, bilinear_display_row};
 pub use error::ImageError;
 pub(crate) use error::check;
 pub use evaluate::{EvaluationStats, Evaluator};
 pub use geometry::{Extent, Region, RegionTiles};
-pub use graph::{AssetId, Graph, NodeId, Operation, Pyramid, SparseSourcePlan, VectorRectangle};
+pub use graph::{
+    AssetId, CoverageSource, Graph, NodeId, Operation, Pyramid, SparseSourcePlan, VectorRectangle,
+};
 pub use kernel::{AxisKernel, MAX_SAMPLING_TAPS, SampleTap, SamplingAxis};
 pub use pixel::Pixel;
 pub use raster_samples::RasterSamples;

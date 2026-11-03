@@ -271,6 +271,9 @@ impl<S: RasterSource> Evaluator<S> {
                 self.source.read(asset, region, &mut output.pixels, context)?;
                 self.stats.source_pixels = self.stats.source_pixels.saturating_add(region.pixels());
             }
+            Operation::Coverage { source, .. } => {
+                self.graph.coverage_source(source)?.read_pixels(region, &mut output.pixels)?;
+            }
             Operation::Solid { color, .. } => output.pixels.fill(color),
             Operation::Rectangle { shape, translation, .. } => {
                 for y in region.y()..region.bottom() {
@@ -297,6 +300,10 @@ impl<S: RasterSource> Evaluator<S> {
                     self.source.read_samples(asset, &samples, &mut output.pixels, context)?;
                     self.stats.source_pixels =
                         self.stats.source_pixels.saturating_add(region.pixels());
+                } else if let Some((source, samples)) = self.graph.sampled_coverage(node, region)? {
+                    self.graph
+                        .coverage_source(source)?
+                        .read_samples(&samples, &mut output.pixels)?;
                 } else {
                     let dependency = self.graph.required_inputs(node, region)?[0]
                         .ok_or(ImageError::Invalid("Missing resample dependency"))?
