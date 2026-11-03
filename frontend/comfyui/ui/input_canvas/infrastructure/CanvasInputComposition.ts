@@ -60,7 +60,7 @@ export interface CanvasInputHostOptions {
 /** Keep definition registration, execution preparation and view lifetime under explicit owners. */
 export function createCanvasInputs(options: CanvasInputHostOptions): {
   loaders: ComfyInputLoaders;
-  preparation: ComfyInputPreparation;
+  preparation: Pick<ComfyInputPreparation, 'prepare'>;
   masonry: MasonryInputHost;
   bindings: ComfyInputBindings;
   associations: ComfyInputAssociations;
@@ -106,6 +106,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     associations,
     bindings,
     loaders,
+    assets,
     graph: options.graph,
     workflowHost: options.workflowHost,
     accent: options.accent,
@@ -137,23 +138,29 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     },
     { once: true },
   );
+  const preparation = new ComfyInputPreparation(
+    loaders,
+    new InputSourcePreparation(capture, assets),
+    defaults,
+    new ComfyInputReturnPreparation(rasters, async () => {
+      const source = host();
+      if (!source) return null;
+      const context = await capture.context(source.canvasId);
+      return context.document ? { canvasId: source.canvasId, document: context.document } : null;
+    }),
+    new ComfyMaskInputPreparation(rasters, assets, new MaskInputPreparation(maskEditing), () =>
+      associations.preparationPairs(),
+    ),
+    new PreparedInputPromptClient((input, init) => fetch(input, init)),
+  );
   return {
     loaders,
-    preparation: new ComfyInputPreparation(
-      loaders,
-      new InputSourcePreparation(capture, assets),
-      defaults,
-      new ComfyInputReturnPreparation(rasters, async () => {
-        const source = host();
-        if (!source) return null;
-        const context = await capture.context(source.canvasId);
-        return context.document ? { canvasId: source.canvasId, document: context.document } : null;
-      }),
-      new ComfyMaskInputPreparation(rasters, assets, new MaskInputPreparation(maskEditing), () =>
-        associations.preparationPairs(),
-      ),
-      new PreparedInputPromptClient((input, init) => fetch(input, init)),
-    ),
+    preparation: {
+      prepare: async (payload) => {
+        await surfaces.provisioning.assertGenerationReady();
+        return await preparation.prepare(payload);
+      },
+    },
     masonry,
     bindings,
     associations,

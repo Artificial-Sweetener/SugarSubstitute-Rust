@@ -21,6 +21,8 @@ import type { WorkflowInputRoute } from '../application/WorkflowInputRoute.js';
 import type { WorkflowMaskAppearance } from '../application/WorkflowMaskAppearance.js';
 import type { WorkflowSurfaceProvisioning } from '../application/WorkflowSurfaceProvisioning.js';
 import type { ComfyInputAssociations } from './ComfyInputAssociations.js';
+import type { ComfyInputBindings } from './ComfyInputBindings.js';
+import type { WorkflowMaskImport } from '../application/WorkflowMaskImport.js';
 
 /** Resolve the card's endpoint at use time so renumbered or moved nodes stay addressed. */
 export class ComfyInputSurfaceCards {
@@ -33,6 +35,8 @@ export class ComfyInputSurfaceCards {
       'hover' | 'opacity' | 'changeOpacity'
     >,
     private readonly provisioning: Pick<WorkflowSurfaceProvisioning, 'subscribe'>,
+    private readonly imports: Pick<WorkflowMaskImport, 'available' | 'import'>,
+    private readonly bindings: Pick<ComfyInputBindings, 'get'>,
   ) {}
 
   /** Bind one loader field's card. */
@@ -57,6 +61,20 @@ export class ComfyInputSurfaceCards {
       changeOpacity: (opacity) => {
         const key = endpoint();
         if (key && loader.kind === 'mask') this.appearance.changeOpacity(key, opacity);
+      },
+      canImport: () => {
+        const key = endpoint();
+        return Boolean(
+          key && loader.kind === 'mask' && loader.ordered && this.imports.available(key),
+        );
+      },
+      importMasks: async (files) => {
+        const key = endpoint();
+        if (!key || loader.kind !== 'mask' || !loader.ordered)
+          throw new Error('This loader cannot import masks.');
+        await this.imports.import(key, files, (staged) =>
+          this.bindings.get(node, loader).append(staged),
+        );
       },
       subscribe: (listener) => this.provisioning.subscribe(listener),
     };

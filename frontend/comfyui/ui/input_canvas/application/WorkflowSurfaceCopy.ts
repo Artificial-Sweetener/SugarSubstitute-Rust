@@ -29,6 +29,10 @@ export const WORKFLOW_SURFACE_COPY = Object.freeze({
   maskDimensionsUnverified:
     'The selected mask dimensions could not be verified against the loaded input image.',
   surfaceSyncFailed: 'The input canvas could not be updated.',
+  regionalMasksMissing: (mask: string, required: number, available: number) =>
+    `Regional prompt is missing an associated mask: ${mask} has ${String(available)} of the ${String(required)} masks its prompt regions need.`,
+  chooseMask: 'Choose mask',
+  chooseMaskFiles: 'Mask files',
   changeCanvasResolutionMenu: 'Change canvas resolution…',
   changeCanvasResolution: 'Change canvas resolution',
   changeCanvasResolutionDescription:

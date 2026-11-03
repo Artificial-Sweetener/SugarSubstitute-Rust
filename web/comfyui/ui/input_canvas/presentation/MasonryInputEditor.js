@@ -1,4 +1,5 @@
 import { MaskOpacityField, maskOpacityLabel } from './MaskOpacityField.js';
+import { MaskImportCommand } from './MaskImportCommand.js';
 import { inputLabel } from '../domain/InputLoader.js';
 import { InputPreviewRows } from './InputPreviewRows.js';
 import { CanvasSourcePicker } from './CanvasSourcePicker.js';
@@ -20,6 +21,7 @@ export class MasonryInputEditor {
     #entryField;
     #maskFields;
     #opacity;
+    #import = null;
     /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
     constructor(document, binding, previews, upload, report, fields, fieldRoot, association, showField = false, surface = null) {
         this.binding = binding;
@@ -65,7 +67,10 @@ export class MasonryInputEditor {
             },
         }, fields, fieldRoot, showField ? binding.loader.field : null);
         this.#entryField = binding.loader.ordered
-            ? fields.mountChoice(fieldRoot, showField ? binding.loader.field + ' Entry' : 'Entry', (id) => binding.select(id), 'Entry')
+            ? fields.mountChoice(fieldRoot, showField ? binding.loader.field + ' Entry' : 'Entry', (id) => {
+                binding.select(id);
+                surface?.activate(id);
+            }, 'Entry')
             : null;
         this.#controls.append(this.#picker.element);
         if (binding.loader.ordered) {
@@ -87,6 +92,10 @@ export class MasonryInputEditor {
                 });
                 this.#commands.push(button);
                 actions.append(button.element);
+            }
+            if (surface && binding.loader.kind === 'mask') {
+                this.#import = new MaskImportCommand(document, surface, report);
+                actions.append(this.#import.element);
             }
             this.#controls.append(actions);
         }
@@ -135,6 +144,7 @@ export class MasonryInputEditor {
         this.#picker.dispose();
         this.#maskFields.dispose();
         this.#opacity?.dispose();
+        this.#import?.dispose();
         this.#entryField?.dispose();
         for (const command of this.#commands)
             command.dispose();

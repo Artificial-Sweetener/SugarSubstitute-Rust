@@ -18,6 +18,7 @@ import { isRecord } from '../../types/common.js';
 import { resolveDimensionAuthority } from '../domain/CanvasDimensionAuthority.js';
 import { comfyFileReference, } from '../domain/WorkflowSurfacePlan.js';
 import { DEFAULT_MASK_OPACITY } from '../domain/MaskColorScheme.js';
+import { readRegionalPrompts } from './ComfyRegionalPrompts.js';
 /** Node property holding a mask loader's visual opacity in 0..1. */
 export const MASK_OPACITY_KEY = 'sugarcubes_canvas_mask_opacity';
 /**
@@ -36,7 +37,7 @@ export class ComfyWorkflowSurfaceGraph {
     report;
     #listeners = new Set();
     #bindings = new Map();
-    #authorities = new Map();
+    #widgets = new Map();
     #stopTopology;
     /** Share the association, binding and loader owners used by previews and queue preparation. */
     constructor(associations, bindings, loaders, state, report) {
@@ -55,7 +56,7 @@ export class ComfyWorkflowSurfaceGraph {
     facts() {
         const inventory = this.associations.inventory, topology = this.associations.topology();
         const used = new Set(topology.edges.map((edge) => JSON.stringify([edge.source, edge.type])));
-        const images = [], masks = [], bindings = new Set(), authorities = new Set();
+        const images = [], masks = [], bindings = new Set(), observed = new Set();
         const imageKeys = new Map();
         const fields = inventory.fields().filter((field) => this.#endpoint(field));
         for (const field of fields) {
@@ -96,8 +97,13 @@ export class ComfyWorkflowSurfaceGraph {
                 for (const item of authority.nodes) {
                     const node = inventory.node(item.node);
                     if (node)
-                        authorities.add(node);
+                        observed.add(node);
                 }
+            const prompts = field.loader.ordered
+                ? readRegionalPrompts(topology, path, (node) => inventory.node(node))
+                : null;
+            for (const node of prompts?.nodes ?? [])
+                observed.add(node);
             const binding = this.bindings.get(field.node, field.loader);
             const state = binding.state;
             const entries = field.loader.ordered
@@ -109,6 +115,7 @@ export class ComfyWorkflowSurfaceGraph {
                 opacity: opacityOf(field.node),
                 image,
                 authority,
+                regions: prompts?.demand ?? null,
                 entries: (entries.length || field.loader.ordered ? entries : [null]).map((entry) => ({
                     entry: field.loader.ordered && entry ? entry.id : null,
                     label: field.loader.ordered && entry ? entry.label : nodeLabel(field.node),
@@ -119,7 +126,7 @@ export class ComfyWorkflowSurfaceGraph {
             });
         }
         this.#observeBindings(bindings);
-        this.#observeAuthorities(authorities);
+        this.#observeWidgets(observed);
         return { images, masks };
     }
     /** Resolve a mask endpoint's binding owner by its stable key. */
@@ -153,7 +160,7 @@ export class ComfyWorkflowSurfaceGraph {
     dispose() {
         this.#stopTopology();
         this.#observeBindings(new Set());
-        this.#observeAuthorities(new Set());
+        this.#observeWidgets(new Set());
         this.#listeners.clear();
     }
     /** Admit loader fields of nodes with exactly one upload field. */
@@ -171,15 +178,15 @@ export class ComfyWorkflowSurfaceGraph {
             if (!this.#bindings.has(binding))
                 this.#bindings.set(binding, binding.subscribe(() => this.#changed()));
     }
-    /** Follow widget commits on exactly the nodes that size the last plan's mask-only surfaces. */
-    #observeAuthorities(nodes) {
-        for (const [node, stop] of this.#authorities)
+    /** Follow widget commits on the size authorities and regional prompts the last plan read. */
+    #observeWidgets(nodes) {
+        for (const [node, stop] of this.#widgets)
             if (!nodes.has(node)) {
                 stop();
-                this.#authorities.delete(node);
+                this.#widgets.delete(node);
             }
         for (const node of nodes) {
-            if (this.#authorities.has(node))
+            if (this.#widgets.has(node))
                 continue;
             const previous = node.onWidgetChanged;
             const listener = (...args) => {
@@ -188,7 +195,7 @@ export class ComfyWorkflowSurfaceGraph {
                 return result;
             };
             node.onWidgetChanged = listener;
-            this.#authorities.set(node, () => {
+            this.#widgets.set(node, () => {
                 if (node.onWidgetChanged === listener)
                     node.onWidgetChanged = previous;
             });

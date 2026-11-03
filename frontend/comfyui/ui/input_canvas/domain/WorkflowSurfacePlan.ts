@@ -18,6 +18,7 @@ import type { CanvasWorkflowSurface } from '../../../../../integrations/contract
 import type { CanvasSurfaceFileReference } from '../../../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
 import type { DimensionAuthority, DimensionAuthorityNode } from './CanvasDimensionAuthority.js';
 import { maskColor } from './MaskColorScheme.js';
+import type { RegionalPromptDemand } from './RegionalPromptDemand.js';
 
 /** At most this many surfaces cross the wire in one sync, per the canvas contract. */
 export const MAX_WORKFLOW_SURFACES = 64;
@@ -48,6 +49,8 @@ export interface WorkflowMaskEndpoint {
   readonly image: string | 'ambiguous' | null;
   /** Sizing for an unpaired mask; ignored for paired and ambiguous masks. */
   readonly authority: DimensionAuthority;
+  /** Regions declared by related prompts for an ordered loader, or null. */
+  readonly regions: RegionalPromptDemand | null;
 }
 /** Graph-derived facts for one workflow, already translated to stable keys. */
 export interface WorkflowSurfaceFacts {
@@ -138,18 +141,21 @@ export function planWorkflowSurfaces(
       return;
     }
     const entries = masks.flatMap((mask) =>
-      mask.entries.map((entry) => ({ mask, entry }) as const),
+      mask.entries.map(
+        (entry, index) =>
+          ({ mask, entry, label: mask.regions?.names[index] ?? entry.label }) as const,
+      ),
     );
     const admitted = entries.slice(0, MAX_SURFACE_MASKS);
     for (const mask of new Set(entries.slice(MAX_SURFACE_MASKS).map(({ mask }) => mask.key)))
       rejected.push({ endpoint: mask, reason: 'limit' });
     surfaces.push({
       ...surface,
-      masks: admitted.map(({ mask, entry }, index) => ({
+      masks: admitted.map(({ mask, entry, label }, index) => ({
         key: workflowMaskKey(mask.key, entry.entry),
         endpoint: mask.key,
         entry: entry.entry,
-        label: entry.label,
+        label,
         color: maskColor(accent, index, admitted.length),
         opacity: mask.opacity,
         initial: entry.initial,

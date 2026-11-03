@@ -253,6 +253,24 @@ export class InputBindingController {
     };
     this.#save({ ...state, entries: [...state.entries, entry], selected: entry.id });
   }
+  /** Append one region per file to an ordered loader and select the last one. */
+  append(files: readonly string[]): void {
+    if (!this.loader.ordered) throw new Error('This loader accepts one source.');
+    const state = this.state;
+    if (state.entries.length + files.length > 64)
+      throw new Error('A source collection supports at most 64 entries.');
+    const added: InputEntry[] = files.map((file, index) => ({
+      id: this.nextId(),
+      label: `${inputLabel(this.loader.kind)} ${String(state.entries.length + index + 1)}`,
+      source: { kind: 'file', file },
+    }));
+    if (!added.length) return;
+    this.#save({
+      ...state,
+      entries: [...state.entries, ...added],
+      selected: added.at(-1)?.id ?? state.selected,
+    });
+  }
   /** Remove the selected entry while leaving the connected canvas unchanged. */
   remove(): void {
     const state = this.state,

@@ -234,6 +234,26 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
+  // Regional mask labels read prompt separators through SugarPrompt's parser, bundled privately.
+  await build({
+    ...browserDependencyResolution,
+    entryPoints: [
+      path.join(
+        repositoryRoot,
+        'frontend/comfyui/ui/input_canvas/infrastructure/ComfyRegionalPrompts.ts',
+      ),
+    ],
+    outfile: path.join(
+      generatedRoot,
+      'comfyui/ui/input_canvas/infrastructure/ComfyRegionalPrompts.js',
+    ),
+    external: ['../domain/RegionalPromptDemand.js'],
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   rmSync(path.join(generatedRoot, 'sugarprompt'), { force: true, recursive: true });
   await bundleVueSurface(
     ['surface/stack/vue', 'picker/vue', 'output_canvas/presentation/vue'],

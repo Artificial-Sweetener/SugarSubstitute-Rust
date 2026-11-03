@@ -4,6 +4,8 @@ import { WORKFLOW_SURFACE_COPY } from '../application/WorkflowSurfaceCopy.js';
 import { WorkflowSurfaceProvisioning, } from '../application/WorkflowSurfaceProvisioning.js';
 import { BrowserWorkflowFileDimensions } from './BrowserWorkflowFileDimensions.js';
 import { ComfyInputSurfaceCards } from './ComfyInputSurfaceCards.js';
+import { BrowserMaskImport } from './BrowserMaskImport.js';
+import { WorkflowMaskImport } from '../application/WorkflowMaskImport.js';
 import { ComfyWorkflowInputState } from './ComfyWorkflowInputState.js';
 import { ComfyWorkflowSurfaceGraph } from './ComfyWorkflowSurfaceGraph.js';
 import { ComfyDimensionAuthorityWriter } from './ComfyDimensionAuthorityWriter.js';
@@ -41,7 +43,7 @@ export function createWorkflowSurfaces(options) {
             subscribe: (listener) => route.subscribe(listener),
             choose: (value) => route.chooseRoute(value),
         },
-        cards: new ComfyInputSurfaceCards(associations, route, appearance, provisioning),
+        cards: new ComfyInputSurfaceCards(associations, route, appearance, provisioning, new WorkflowMaskImport(provisioning, new BrowserMaskImport(options.document), options.assets), options.bindings),
         resolutionEntries: (targets) => canvasResolutionEntries(targets, resolution, dialog, report),
         dispose: () => {
             dialog.close();

@@ -20,6 +20,7 @@ import type {
   InputSurfaceCardPort,
 } from '../application/InputEditorPorts.js';
 import { MaskOpacityField, maskOpacityLabel } from './MaskOpacityField.js';
+import { MaskImportCommand } from './MaskImportCommand.js';
 import type { CanvasSourcePreviews } from '../application/CanvasSourcePreviews.js';
 import { inputLabel } from '../domain/InputLoader.js';
 import { InputPreviewRows } from './InputPreviewRows.js';
@@ -44,6 +45,7 @@ export class MasonryInputEditor {
   readonly #entryField: NativeNodeChoiceMount | null;
   readonly #maskFields: MaskEditFields;
   readonly #opacity: MaskOpacityField | null;
+  #import: MaskImportCommand | null = null;
 
   /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
   constructor(
@@ -111,7 +113,10 @@ export class MasonryInputEditor {
       ? fields.mountChoice(
           fieldRoot,
           showField ? binding.loader.field + ' Entry' : 'Entry',
-          (id) => binding.select(id),
+          (id) => {
+            binding.select(id);
+            surface?.activate(id);
+          },
           'Entry',
         )
       : null;
@@ -134,6 +139,10 @@ export class MasonryInputEditor {
         });
         this.#commands.push(button);
         actions.append(button.element);
+      }
+      if (surface && binding.loader.kind === 'mask') {
+        this.#import = new MaskImportCommand(document, surface, report);
+        actions.append(this.#import.element);
       }
       this.#controls.append(actions);
     }
@@ -203,6 +212,7 @@ export class MasonryInputEditor {
     this.#picker.dispose();
     this.#maskFields.dispose();
     this.#opacity?.dispose();
+    this.#import?.dispose();
     this.#entryField?.dispose();
     for (const command of this.#commands) command.dispose();
     this.#controls.remove();
