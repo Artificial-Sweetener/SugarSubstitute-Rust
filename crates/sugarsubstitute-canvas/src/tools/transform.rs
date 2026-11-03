@@ -23,7 +23,6 @@ use super::{
 use crate::{
     CanvasError, CursorIntent, DocumentSnapshot, LayerId, NavigationInput, overlay::ToolOverlay,
 };
-pub(super) use frame::segment_distance;
 use frame::{Frame, Grip};
 use snap::MoveSnap;
 use sugarsubstitute_image_ops::CoverageAffine;

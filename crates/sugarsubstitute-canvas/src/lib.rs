@@ -36,9 +36,9 @@ pub use navigation::{
 };
 pub use overlay::{
     ANT_DARK, ANT_DASH, ANT_LIGHT, BoundaryRun, BoundaryWork, CoverageBoundary, GUIDE,
-    GUIDE_HANDLE, GUIDE_HANDLE_RADIUS, MarchingAnts, OUTLINE_DASH, OUTLINE_GAP, OverlayGuides,
-    OverlayOutline, OverlaySeam, OverlayShape, PresentationOverlay, SelectionOutlines, ToolOverlay,
-    outline_light,
+    GUIDE_DISABLED, GUIDE_HANDLE, GUIDE_HANDLE_RADIUS, MarchingAnts, OUTLINE_DASH, OUTLINE_GAP,
+    OverlayGuides, OverlayOutline, OverlaySeam, OverlayShape, PresentationOverlay, SeamHandle,
+    SelectionOutlines, ToolOverlay, outline_light,
 };
 pub use presentation::{FrameStamp, RenderRequest};
 pub use projection::ViewProjection;

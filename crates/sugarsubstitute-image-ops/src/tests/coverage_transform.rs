@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Affine coverage maps, fragment placement and shared-edge stretches against dense references.
+//! Affine coverage maps and fragment placement against dense references.
 use super::*;
 
 const FULL: u16 = FULL_COVERAGE;
@@ -143,37 +143,6 @@ fn placing_a_fragment_cuts_its_alpha_and_adds_its_premultiplied_values() -> Test
             mask.over(&empty, &Coverage::new(Extent::new(5, 5)?, 0, context.memory())?, context)
                 .is_err()
         );
-        Ok(())
-    })
-}
-
-#[test]
-fn stretching_maps_whole_pixel_edges_without_gaps_and_identity_copies() -> TestResult {
-    run(MEMORY, |context| {
-        let extent = Extent::new(400, 300)?;
-        let left = rectangle(extent, [0, 0, 150, 300], context)?;
-        let right = rectangle(extent, [150, 0, 400, 300], context)?;
-        // Dragging the shared seam from x = 150 to x = 213 grows one mask and shrinks the other.
-        let grown = left.stretch([0.0, 0.0, 150.0, 300.0], [0.0, 0.0, 213.0, 300.0], context)?;
-        let shrunk =
-            right.stretch([150.0, 0.0, 400.0, 300.0], [213.0, 0.0, 400.0, 300.0], context)?;
-        assert_eq!(grown.bounds(), Some(Region::new(0, 0, 213, 300)?));
-        assert_eq!(shrunk.bounds(), Some(Region::new(213, 0, 187, 300)?));
-        for x in [0_u32, 100, 149, 150, 212, 213, 300, 399] {
-            let total = u32::from(grown.value(x, 150)) + u32::from(shrunk.value(x, 150));
-            assert_eq!(total, u32::from(FULL), "column {x}");
-        }
-        let irregular = pattern(extent, [10, 20, 200, 250], context)?;
-        let same = irregular.stretch([5.0, 5.0, 50.0, 50.0], [5.0, 5.0, 50.0, 50.0], context)?;
-        assert_eq!(same.fingerprint(), irregular.fingerprint());
-        // A uniform halving averages each pair of source pixels.
-        let half =
-            irregular.stretch([0.0, 0.0, 400.0, 300.0], [0.0, 0.0, 200.0, 300.0], context)?;
-        let source = values(&irregular)?;
-        let expected =
-            (f64::from(source[100 * 400 + 60]) + f64::from(source[100 * 400 + 61])) / 2.0;
-        assert_eq!(half.value(30, 100), expected.round() as u16);
-        assert!(left.stretch([0.0, 0.0, 0.0, 10.0], [0.0, 0.0, 5.0, 10.0], context).is_err());
         Ok(())
     })
 }

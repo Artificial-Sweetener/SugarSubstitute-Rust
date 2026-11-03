@@ -248,7 +248,13 @@ fn presentation_overlays_own_tool_feedback_and_animate_only_with_ants() -> harne
         );
         assert_eq!(framed.guides, Some(OverlayGuides::Frame(corners)));
         assert!(!framed.is_empty() && !framed.animated());
-        let seams = [OverlaySeam { start: [5.0, 0.0], end: [5.0, 9.0], focused: true }];
+        let seams = [OverlaySeam {
+            start: [5.0, 0.0],
+            end: [5.0, 9.0],
+            focused: true,
+            handle: Some(SeamHandle::Middle),
+            enabled: [true; 3],
+        }];
         let seamed = PresentationOverlay::new(
             extent,
             None,

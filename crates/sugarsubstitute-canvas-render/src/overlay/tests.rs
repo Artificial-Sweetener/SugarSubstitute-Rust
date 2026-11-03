@@ -193,6 +193,8 @@ fn guides_draw_a_solid_frame_with_handles_and_heavier_focused_seams() -> harness
                 start: [20.0, 5.0],
                 end: [20.0, 45.0],
                 focused,
+                handle: None,
+                enabled: [false, true, true],
             }]);
             OverlayPixels::rasterize(&guides(OverlayGuides::Seams(seams)), view, context)
         };
@@ -200,6 +202,12 @@ fn guides_draw_a_solid_frame_with_handles_and_heavier_focused_seams() -> harness
         assert_eq!([at(&plain, 20, 10), at(&plain, 19, 10)], [word(GUIDE), GREY]);
         assert_eq!([at(&focused, 20, 10), at(&focused, 19, 10)], [word(GUIDE); 2]);
         assert_eq!(at(&plain, 20, 25), word(GUIDE_HANDLE));
+        // The start handle cannot be dragged: grey, crossed in the handle colour.
+        assert_eq!(
+            [at(&plain, 18, 5), at(&plain, 20, 5)],
+            [word(GUIDE_DISABLED), word(GUIDE_HANDLE)]
+        );
+        assert_eq!(at(&plain, 20, 45), word(GUIDE_HANDLE));
         Ok(())
     })
 }

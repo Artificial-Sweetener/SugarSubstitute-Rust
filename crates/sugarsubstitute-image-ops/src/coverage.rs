@@ -14,11 +14,12 @@
 //! that bring it back restore it, as CuteCanvas keeps a moved layer's pixels.
 mod affine;
 mod beyond;
+mod boundary;
 mod codec;
 mod filters;
 mod geometry;
+mod mapping;
 mod path;
-mod stretch;
 mod tiles;
 mod translate;
 
@@ -26,6 +27,7 @@ pub use affine::CoverageAffine;
 pub use codec::{coverage_from_u8, coverage_to_u8};
 pub use filters::CombineMode;
 pub use geometry::CoverageResampling;
+pub use mapping::{BilinearMapping, CoverageMapping, PiecewiseMapping, triangle_affine};
 pub use path::Path;
 pub use tiles::{CoverageBuilder, CoverageTileValues};
 

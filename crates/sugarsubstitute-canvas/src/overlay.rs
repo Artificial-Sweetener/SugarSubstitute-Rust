@@ -58,17 +58,35 @@ pub enum ToolOverlay<'a> {
 pub const GUIDE: [u8; 3] = [82, 139, 205];
 /// Fill of guide handles, as sRGB bytes.
 pub const GUIDE_HANDLE: [u8; 3] = [238, 242, 247];
-/// Radius of a guide handle in device pixels; a focused seam's handle is one pixel larger.
+/// Fill of guide handles that cannot be dragged, as sRGB bytes.
+pub const GUIDE_DISABLED: [u8; 3] = [90, 90, 90];
+/// Radius of a guide handle in device pixels; an emphasized handle is one pixel larger.
 pub const GUIDE_HANDLE_RADIUS: f64 = 4.0;
-/// One shared edge in document coordinates, with its middle drag handle.
+/// One of a shared edge's three drag handles.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SeamHandle {
+    /// The handle at the edge's start.
+    Start,
+    /// The handle at the edge's midpoint.
+    Middle,
+    /// The handle at the edge's end.
+    End,
+}
+/// One shared edge in document coordinates with its start, middle and end handles, as CuteCanvas
+/// draws them: a focused edge is two pixels wide, its gripped or hovered handle and its middle
+/// handle one pixel larger, and handles that cannot be dragged grey with a cross.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OverlaySeam {
     /// One end of the edge.
     pub start: [f64; 2],
     /// The other end of the edge.
     pub end: [f64; 2],
-    /// Whether the pointer hovers or drags this edge; it is drawn heavier.
+    /// Whether the pointer hovers or drags this edge.
     pub focused: bool,
+    /// The handle the pointer hovers or drags, when it does.
+    pub handle: Option<SeamHandle>,
+    /// Whether the start, middle and end handles can be dragged.
+    pub enabled: [bool; 3],
 }
 /// Owned transform or shared-edge guides that can travel with a presentation job.
 #[derive(Clone, Debug, PartialEq)]

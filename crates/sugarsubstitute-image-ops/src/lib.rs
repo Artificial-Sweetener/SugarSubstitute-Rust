@@ -28,8 +28,9 @@ mod spatial;
 
 pub use buffer::{TILE_EDGE, Tile};
 pub use coverage::{
-    CombineMode, Coverage, CoverageAffine, CoverageBuilder, CoverageResampling, CoverageTileValues,
-    FULL_COVERAGE, Path, coverage_from_u8, coverage_to_u8,
+    BilinearMapping, CombineMode, Coverage, CoverageAffine, CoverageBuilder, CoverageMapping,
+    CoverageResampling, CoverageTileValues, FULL_COVERAGE, Path, PiecewiseMapping,
+    coverage_from_u8, coverage_to_u8, triangle_affine,
 };
 pub use display::SrgbEncoder;
 pub use display_sampling::{DisplaySample, bilinear_display_pixel, bilinear_display_row};

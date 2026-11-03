@@ -1,129 +1,170 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Seam discovery and grouping, coupled resizing, clamping and the shared-edge session.
+//! Seam discovery, sub-pixel and snapped edge moves, endpoint pivots and the session.
+use super::seams::Shape;
 use super::*;
-use crate::tools::tests::editing::{Canvas, MASK, OTHER, TOOL, canvas, region, run};
-use crate::{ToolId, Viewport, tests::harness::TestResult};
+use crate::tools::tests::editing::{Canvas, MASK, OTHER, TOOL, canvas, held, run};
+use crate::{DocumentEdit, LayerId};
+use crate::{ToolId, tests::harness::TestResult};
 use std::time::Duration;
-use sugarsubstitute_image_ops::{Extent, FULL_COVERAGE};
+use sugarsubstitute_image_ops::CoverageAffine;
+use sugarsubstitute_image_ops::{Coverage, FULL_COVERAGE};
 
-const NONE: crate::ToolModifiers = crate::ToolModifiers::NONE;
+const NONE: ToolModifiers = ToolModifiers::NONE;
+
+fn rect(
+    layer: u64,
+    [left, top, right, bottom]: [f64; 4],
+    eligible: bool,
+) -> Result<Shape, CanvasError> {
+    Ok(Shape {
+        layer: LayerId::new(layer)?,
+        eligible,
+        mapping: CoverageMapping::Affine(CoverageAffine::IDENTITY),
+        boundary: vec![[left, top], [right, top], [right, bottom], [left, bottom]],
+    })
+}
+
+fn shown(canvas: &Canvas, layer: u64) -> Result<Coverage, CanvasError> {
+    Canvas::coverage(&canvas.shown(), layer).ok_or(CanvasError::Invalid("No mask"))
+}
 
 #[test]
-fn seams_join_every_mask_along_one_line_and_need_real_overlap() -> Result<(), CanvasError> {
-    let frames = [
-        [0.0, 0.0, 100.0, 200.0],
-        [100.0, 0.0, 200.0, 100.0],
-        [100.0, 100.0, 200.0, 200.0],
-        // Touches the first mask's bottom corner for less than 8 pixels.
-        [95.0, 200.0, 99.0, 210.0],
+fn seams_join_every_mask_along_one_line_and_skip_ineligible_layers() -> Result<(), CanvasError> {
+    let shapes = [
+        rect(1, [0.0, 0.0, 100.0, 200.0], true)?,
+        rect(2, [100.0, 0.0, 200.0, 100.0], true)?,
+        rect(3, [100.0, 100.0, 200.0, 200.0], true)?,
+        // Touches the first mask's bottom for less than 8 device pixels.
+        rect(4, [95.0, 200.0, 99.0, 210.0], true)?,
     ];
-    let found = seams::discover(&frames, 1.0);
-    assert_eq!(found.len(), 2);
-    let vertical = found.iter().find(|seam| seam.axis == Axis::Vertical);
-    let horizontal = found.iter().find(|seam| seam.axis == Axis::Horizontal);
-    assert_eq!(vertical.map(Seam::ends), Some(([100.0, 0.0], [100.0, 200.0])));
-    assert_eq!(horizontal.map(Seam::ends), Some(([100.0, 100.0], [200.0, 100.0])));
-    // Dragging the vertical seam moves all three masks beside it.
-    let vertical = vertical.ok_or(CanvasError::Invalid("No vertical seam"))?;
-    let (moved, delta) = vertical.moved(&frames, 25.0, 1.0);
-    assert_eq!(delta, 25.0);
-    assert_eq!([moved[0][2], moved[1][0], moved[2][0], moved[3][0]], [125.0, 125.0, 125.0, 95.0]);
-    // Masks never collapse below two device pixels.
-    assert_eq!(vertical.moved(&frames, 500.0, 1.0).1, 98.0);
-    assert_eq!(vertical.moved(&frames, -500.0, 1.0).1, -98.0);
-    assert_eq!(vertical.moved(&frames, 500.0, 0.5).1, 96.0);
-    // Zoomed far out, a one-pixel gap is within a quarter device pixel.
-    let gapped = [[0.0, 0.0, 100.0, 200.0], [101.0, 0.0, 200.0, 200.0]];
-    assert!(seams::discover(&gapped, 1.0).is_empty());
-    assert_eq!(seams::discover(&gapped, 0.2).len(), 1);
-    // Near the junction both seams are in reach, so neither is picked.
-    let viewport = Viewport::new(Extent::new(200, 200)?)?;
-    assert_eq!(seams::pick(&found, viewport, [103.0, 103.0])?, None);
-    assert!(seams::pick(&found, viewport, [104.0, 30.0])?.is_some());
-    assert_eq!(seams::pick(&found, viewport, [120.0, 30.0])?, None);
+    let discovery = Discovery::new(&shapes, 1.0);
+    assert_eq!(discovery.seams.len(), 2);
+    let vertical = discovery
+        .seams
+        .iter()
+        .find(|seam| seam.edge.tangent() == [0.0, 1.0])
+        .ok_or(CanvasError::Invalid("No vertical seam"))?;
+    assert_eq!([vertical.start(), vertical.end()], [[100.0, 0.0], [100.0, 200.0]]);
+    assert_eq!(vertical.layers().len(), 3);
+    // Near the junction both seams are in reach, but only one has an endpoint there.
+    assert!(discovery.seam_at([103.0, 103.0], 1.0).is_some());
+    assert_eq!(discovery.seam_at([150.0, 50.0], 1.0), None);
+    assert_eq!(handle_at(vertical, [101.0, 4.0], 1.0), Handle::Start);
+    assert_eq!(handle_at(vertical, [101.0, 50.0], 1.0), Handle::Middle);
+    // A layer that cannot move along the seam's line removes it.
+    let mut blocked = shapes.to_vec();
+    blocked.push(rect(5, [100.0, 0.0, 150.0, 50.0], false)?);
+    assert!(
+        Discovery::new(&blocked, 1.0).seams.iter().all(|seam| seam.edge.tangent() != [0.0, 1.0])
+    );
+    // Zoomed far out, a one-pixel gap lies within a quarter device pixel.
+    let gapped =
+        [rect(1, [0.0, 0.0, 100.0, 200.0], true)?, rect(2, [101.0, 0.0, 200.0, 200.0], true)?];
+    assert!(Discovery::new(&gapped, 1.0).seams.is_empty());
+    assert_eq!(Discovery::new(&gapped, 5.0).seams.len(), 1);
     Ok(())
 }
 
 #[test]
-fn dragging_a_seam_resizes_both_masks_inside_one_session() -> TestResult {
+fn middle_drags_move_by_fractions_and_stop_before_a_mask_collapses() -> TestResult {
     run(|context| {
         let mut canvas =
             canvas(context, SharedEdgesTool::new(), &[[0, 0, 100, 200], [100, 0, 200, 200]])?;
         let revision = canvas.document.snapshot().revision();
-        canvas.point([101.0, 50.0], NONE, context)?;
-        let resize = CursorIntent::Resize(ResizeDirection::Horizontal);
-        assert_eq!(canvas.tools.cursor(Some(&canvas.document)), resize);
-        assert!(
-            matches!(canvas.tools.overlay(), Some(ToolOverlay::Seams(seams)) if seams.len() == 1 && seams[0].focused)
-        );
-        canvas.drag(&[[101.0, 50.0], [131.4, 90.0]], NONE, context)?;
-        assert_eq!(canvas.shown_bounds(MASK), region(0, 0, 130, 200)?);
-        assert_eq!(canvas.shown_bounds(MASK + 1), region(130, 0, 70, 200)?);
+        canvas.point([101.0, 150.0], NONE, context)?;
+        let cursor = canvas.tools.cursor(Some(&canvas.document));
+        assert_eq!(cursor, CursorIntent::Resize(ResizeDirection::Horizontal));
+        // A fraction of a pixel lands as a soft edge on both sides of the seam.
+        canvas.drag(&[[101.0, 150.0], [121.5, 160.0]], NONE, context)?;
+        let (left, right) = (shown(&canvas, MASK)?, shown(&canvas, MASK + 1)?);
+        assert_eq!([left.value(119, 150), left.value(122, 150)], [FULL_COVERAGE, 0]);
+        assert!(left.value(120, 150) > 0 && left.value(120, 150) < FULL_COVERAGE);
+        assert_eq!([right.value(119, 150), right.value(122, 150)], [0, FULL_COVERAGE]);
         let session = canvas.tools.session().ok_or(CanvasError::Invalid("No session"))?;
-        assert_eq!(
-            (session.kind, session.undo, session.redo),
-            (SessionKind::SharedEdges, true, false)
-        );
-        assert!(
-            canvas
-                .tools
-                .select(ToolId::new(OTHER)?, Some(&canvas.document), Duration::ZERO)
-                .is_err()
-        );
-        // A second drag works from the moved seam.
-        canvas.drag(&[[130.0, 20.0], [110.0, 20.0]], NONE, context)?;
-        assert_eq!(canvas.shown_bounds(MASK + 1), region(110, 0, 90, 200)?);
+        assert_eq!((session.kind, session.undo), (SessionKind::SharedEdges, true));
+        // A drag past the far edge stops where the second mask is two device pixels thin.
+        canvas.drag(&[[120.5, 150.0], [400.0, 150.0]], NONE, context)?;
+        let right = shown(&canvas, MASK + 1)?;
+        assert_eq!([right.value(199, 150), right.value(196, 150)], [FULL_COVERAGE, 0]);
+        let other = ToolId::new(OTHER)?;
+        assert!(canvas.tools.select(other, Some(&canvas.document), Duration::ZERO).is_err());
         assert!(canvas.command(ToolCommand::Session(SessionAction::Undo), context)?);
-        assert_eq!(canvas.shown_bounds(MASK), region(0, 0, 130, 200)?);
+        assert_eq!(shown(&canvas, MASK)?.value(119, 150), FULL_COVERAGE);
         assert_eq!(canvas.document.snapshot().revision(), revision);
-        assert!(canvas.command(ToolCommand::Session(SessionAction::Apply), context)?);
+        assert!(canvas.command(ToolCommand::Commit, context)?);
+        assert_eq!(canvas.document.snapshot().revision(), revision + 1);
         assert!(canvas.tools.session().is_none());
         assert_eq!(canvas.tools.selected(), ToolId::new(TOOL)?);
-        assert_eq!(canvas.document.snapshot().revision(), revision + 1);
-        let snapshot = canvas.document.snapshot();
-        let (left, right) =
-            (Canvas::coverage(&snapshot, MASK), Canvas::coverage(&snapshot, MASK + 1));
-        let (Some(left), Some(right)) = (left, right) else {
-            return Err(CanvasError::Invalid("Missing masks"));
-        };
-        for x in [0, 99, 100, 129, 130, 199] {
-            let total = u32::from(left.value(x, 7)) + u32::from(right.value(x, 7));
-            assert_eq!(total, u32::from(FULL_COVERAGE), "column {x}");
-        }
-        assert!(canvas.document.undo()?);
-        assert_eq!(canvas.bounds(MASK), region(0, 0, 100, 200)?);
         Ok(())
     })
 }
 
 #[test]
-fn escape_cancels_a_session_and_then_leaves_the_tool() -> TestResult {
+fn middle_drags_snap_to_parallel_edges_of_other_layers_unless_ctrl_is_held() -> TestResult {
+    run(|context| {
+        let masks = [[0, 0, 100, 200], [100, 0, 200, 200], [140, 0, 190, 40]];
+        let mut snapped = canvas(context, SharedEdgesTool::new(), &masks)?;
+        snapped.drag(&[[101.0, 150.0], [137.5, 150.0]], NONE, context)?;
+        let left = shown(&snapped, MASK)?;
+        // The seam lands on the third mask's left edge at x = 140, not at 136.5.
+        assert_eq!([left.value(138, 150), left.value(141, 150)], [FULL_COVERAGE, 0]);
+        let mut free = canvas(context, SharedEdgesTool::new(), &masks)?;
+        free.drag(&[[101.0, 150.0], [137.5, 150.0]], held(false, true, false), context)?;
+        assert_eq!(shown(&free, MASK)?.value(138, 150), 0);
+        Ok(())
+    })
+}
+#[test]
+fn endpoints_pivot_along_the_shared_rail_and_join_its_end() -> TestResult {
     run(|context| {
         let mut canvas =
-            canvas(context, SharedEdgesTool::new(), &[[0, 0, 200, 80], [0, 80, 200, 200]])?;
-        // Every mask takes part, locked or not, while this tool is open.
-        let locked = canvas.document.snapshot().layers()[1].clone().with_locked(true);
-        canvas.document.apply(DocumentEdit::Replace(locked))?;
+            canvas(context, SharedEdgesTool::new(), &[[0, 0, 100, 100], [100, 0, 200, 100]])?;
+        canvas.point([100.0, 2.0], NONE, context)?;
+        let cursor = canvas.tools.cursor(Some(&canvas.document));
+        assert_eq!(cursor, CursorIntent::Affine(AffineCursor::resize(0.0)));
+        // Dragging the top end right turns both masks into trapezoids along the rail.
+        canvas.drag(&[[100.0, 2.0], [130.0, 3.0]], NONE, context)?;
+        let (left, right) = (shown(&canvas, MASK)?, shown(&canvas, MASK + 1)?);
+        assert_eq!([left.value(115, 2), right.value(115, 2)], [FULL_COVERAGE, 0]);
+        assert_eq!([left.value(102, 97), right.value(102, 97)], [0, FULL_COVERAGE]);
+        // Within 6 device pixels of the rail's end the point joins it and the right mask's top
+        // edge collapses into a triangle.
+        canvas.drag(&[[130.0, 1.0], [196.0, 1.0]], NONE, context)?;
+        let right = shown(&canvas, MASK + 1)?;
+        assert_eq!([right.value(190, 90), right.value(150, 20)], [FULL_COVERAGE, 0]);
+        assert_eq!(shown(&canvas, MASK)?.value(150, 20), FULL_COVERAGE);
+        // Escape cancels the session; a second Escape leaves the tool.
         let revision = canvas.document.snapshot().revision();
-        canvas.point([50.0, 80.0], NONE, context)?;
-        let resize = CursorIntent::Resize(ResizeDirection::Vertical);
-        assert_eq!(canvas.tools.cursor(Some(&canvas.document)), resize);
-        canvas.drag(&[[50.0, 80.0], [50.0, 60.0]], NONE, context)?;
-        assert_eq!(canvas.shown_bounds(MASK + 1), region(0, 60, 200, 140)?);
-        // A focus loss mid-drag keeps the drag as a checkpoint.
-        canvas.drag(&[[50.0, 60.0], [50.0, 50.0]], NONE, context)?;
-        canvas.point([50.0, 50.0], NONE, context)?;
-        canvas.button(true, NONE, context)?;
-        canvas.point([50.0, 40.0], NONE, context)?;
-        canvas.tools.cancel(ToolCancelReason::FocusLost, Some(&canvas.document), Duration::ZERO)?;
-        assert_eq!(canvas.shown_bounds(MASK + 1), region(0, 40, 200, 160)?);
         assert!(canvas.command(ToolCommand::Cancel, context)?);
         assert!(canvas.tools.session().is_none() && canvas.tools.preview_snapshot().is_none());
         assert_eq!(canvas.document.snapshot().revision(), revision);
-        assert_eq!(canvas.tools.selected(), ToolId::new(TOOL)?);
         assert!(canvas.command(ToolCommand::Cancel, context)?);
         assert_eq!(canvas.tools.selected(), ToolId::new(OTHER)?);
+        Ok(())
+    })
+}
+
+#[test]
+fn locked_masks_take_part_and_interrupted_drags_become_checkpoints() -> TestResult {
+    run(|context| {
+        let mut canvas =
+            canvas(context, SharedEdgesTool::new(), &[[0, 0, 200, 80], [0, 80, 200, 200]])?;
+        let locked = canvas.document.snapshot().layers()[1].clone().with_locked(true);
+        canvas.document.apply(DocumentEdit::Replace(locked))?;
+        canvas.point([50.0, 80.0], NONE, context)?;
+        let cursor = canvas.tools.cursor(Some(&canvas.document));
+        assert_eq!(cursor, CursorIntent::Resize(ResizeDirection::Vertical));
+        canvas.point([50.0, 80.0], NONE, context)?;
+        canvas.button(true, NONE, context)?;
+        canvas.point([50.0, 60.0], NONE, context)?;
+        canvas.tools.cancel(ToolCancelReason::FocusLost, Some(&canvas.document), Duration::ZERO)?;
+        assert!(!canvas.tools.captured());
+        assert_eq!(shown(&canvas, MASK + 1)?.value(100, 61), FULL_COVERAGE);
+        assert!(canvas.tools.session().is_some_and(|session| session.undo));
+        assert!(canvas.command(ToolCommand::Session(SessionAction::Apply), context)?);
+        let applied = Canvas::coverage(&canvas.document.snapshot(), MASK + 1);
+        assert_eq!(applied.map(|coverage| coverage.value(100, 61)), Some(FULL_COVERAGE));
         Ok(())
     })
 }

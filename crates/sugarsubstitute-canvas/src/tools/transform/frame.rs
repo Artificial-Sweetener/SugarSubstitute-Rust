@@ -298,7 +298,7 @@ fn distance(polygon: &[[f64; 2]], point: [f64; 2]) -> f64 {
 }
 
 /// Distance from `point` to the segment from `a` to `b`.
-pub(in crate::tools) fn segment_distance(a: [f64; 2], b: [f64; 2], point: [f64; 2]) -> f64 {
+fn segment_distance(a: [f64; 2], b: [f64; 2], point: [f64; 2]) -> f64 {
     let along = [b[0] - a[0], b[1] - a[1]];
     let length = along[0].powi(2) + along[1].powi(2);
     let t = if length == 0.0 {

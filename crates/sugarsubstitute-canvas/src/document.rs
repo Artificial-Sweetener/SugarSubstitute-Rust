@@ -18,7 +18,7 @@ const HISTORY_LIMIT: usize = 32;
 const MAX_NAME_CHARACTERS: usize = 256;
 
 /// Stable positive layer identity, preserved across reordering and history traversal.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct LayerId(u64);
 impl LayerId {
     /// Validate application-assigned layer identity.

@@ -1,121 +1,57 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! The Resize shared edges tool: drag a seam between adjacent masks to resize them together.
+//! The Resize shared edges tool: drag a seam between adjacent masks to reshape them together.
 //!
 //! Behaviour follows the Python app's shared-edge mode over CuteCanvas's shared-edge resize.
 //! Every visible mask of the document takes part, locked or not, as the Python app makes every
-//! mask temporarily movable in this mode; other layers never do. Dragging a seam moves it along
-//! its normal by whole document pixels, stretching the masks on one side and compressing those
-//! on the other, each remapped from its own frame with area-weighted resampling so the masks
-//! keep meeting without gaps. Each release is one checkpoint of an edit session with its own
-//! Undo, Redo, Apply and Cancel; Apply publishes every resized mask as one undo step. Escape
-//! with no session leaves the tool for the one selected before it.
-//!
-//! Masks are rasters spanning the document, so seams run along their frames' sides: only whole
-//! edges move, never single seam endpoints, and drags do not snap to other edges.
+//! mask temporarily movable in this mode; other layers only bound and snap. Each mask is framed
+//! by the convex boundary of its original coverage under its current mapping, and seams are
+//! found and dragged as the `seams` and `gesture` modules describe: the middle handle moves an
+//! axis-aligned edge whole, by any fraction of a pixel, and an endpoint slides along the masks'
+//! shared outer rail. Each release is one checkpoint of an edit session with its own Undo,
+//! Redo, Apply and Cancel; every later drag must move the same masks. Each preview and Apply
+//! resamples the original coverage through its mapping: affine maps bilinearly, piecewise and
+//! bilinear maps by nearest pixel, as CuteCanvas resamples them. Apply publishes every reshaped
+//! mask as one undo step; Escape with no session leaves for the tool selected before.
+mod collapse;
+mod edges;
+mod gesture;
+mod masks;
+mod rail;
 mod seams;
 
 use super::{
     CanvasTool, SessionAction, SessionKind, SessionState, ToolButton, ToolCancelReason,
-    ToolCommand, ToolContext, ToolInput, ToolView,
-    session::{Checkpoints, EditWork, Previewed},
+    ToolCommand, ToolContext, ToolInput, ToolModifiers, ToolView,
 };
 use crate::{
-    CanvasError, CursorIntent, DocumentEdit, DocumentSnapshot, LayerContent, LayerId,
-    NavigationInput, OverlaySeam, ResizeDirection, overlay::ToolOverlay,
+    AffineCursor, CanvasError, CursorIntent, DocumentSnapshot, NavigationInput, OverlaySeam,
+    ResizeDirection, SeamHandle, overlay::ToolOverlay,
 };
-use seams::{Axis, Seam};
+use edges::{Edge, Owner, distance, rectangle_edges};
+use gesture::{Gesture, Pivot};
+use masks::{Edges, shapes};
+use seams::{Discovery, Handle, handle_at};
+use sugarsubstitute_image_ops::CoverageMapping;
 
-/// Coverage CuteCanvas counts as occupied: 128 of 255.
-const OCCUPIED: u16 = 128 * 257;
-
-/// The participating masks, their frames when the session began and the frames they went
-/// through.
-#[derive(Debug)]
-struct Edges {
-    base: (u64, u64),
-    layers: Vec<LayerId>,
-    frames: Checkpoints<Vec<[f64; 4]>>,
-    preview: Previewed,
-}
-impl Edges {
-    fn from(document: &DocumentSnapshot) -> Self {
-        let (layers, frames) = document
-            .layers()
-            .iter()
-            .filter(|layer| layer.visible())
-            .filter_map(|layer| match layer.content() {
-                LayerContent::Coverage { coverage, .. } => {
-                    let bounds = coverage.bounds_at_least(OCCUPIED)?;
-                    let frame = [bounds.x(), bounds.y(), bounds.right(), bounds.bottom()];
-                    Some((layer.id(), frame.map(f64::from)))
-                }
-                _ => None,
-            })
-            .unzip();
-        Self {
-            base: (document.identity(), document.revision()),
-            layers,
-            frames: Checkpoints::new(frames),
-            preview: Previewed::default(),
-        }
-    }
-    fn work(&self, frames: &[[f64; 4]]) -> EditWork {
-        let layers = self.layers.clone();
-        let (from, to) = (self.frames.base().clone(), frames.to_vec());
-        Box::new(move |base, job| {
-            let mut edits = Vec::new();
-            for ((id, from), to) in layers.iter().zip(&from).zip(&to) {
-                if from == to {
-                    continue;
-                }
-                let layer = base
-                    .layers()
-                    .iter()
-                    .find(|layer| layer.id() == *id)
-                    .ok_or(CanvasError::Invalid("A shared-edge mask is missing"))?;
-                let LayerContent::Coverage { coverage, appearance } = layer.content() else {
-                    return Err(CanvasError::Invalid("A shared-edge layer is not a mask"));
-                };
-                let coverage = coverage.stretch(*from, *to, job)?;
-                edits.push(DocumentEdit::Replace(
-                    layer
-                        .clone()
-                        .with_content(LayerContent::Coverage { coverage, appearance: *appearance }),
-                ));
-            }
-            Ok(DocumentEdit::Group(edits))
-        })
-    }
-    /// Preview the current checkpoint; at the base nothing has moved.
-    fn show(&mut self, context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
-        if self.frames.current() == self.frames.base() {
-            self.preview.discard(context);
-            return Ok(());
-        }
-        let work = self.work(self.frames.current());
-        self.preview.preview(context, work)
-    }
-}
-
-/// A seam drag in progress.
+/// A seam drag and the mappings it shows now.
 #[derive(Debug)]
 struct Drag {
-    seam: Seam,
-    origin: [f64; 2],
-    start: Vec<[f64; 4]>,
-    frames: Vec<[f64; 4]>,
-    delta: f64,
+    gesture: Gesture,
+    mappings: Vec<CoverageMapping>,
 }
 
-/// Resizes adjacent masks together by dragging the seams they share.
+/// Reshapes adjacent masks together by dragging the seams they share.
 #[derive(Debug, Default)]
 pub struct SharedEdgesTool {
     position: Option<[f64; 2]>,
+    modifiers: ToolModifiers,
+    zoom: f64,
     edges: Option<Edges>,
     drag: Option<Drag>,
-    seams: Vec<Seam>,
-    hover: Option<usize>,
+    discovery: Discovery,
+    pivots: Vec<[Option<Pivot>; 2]>,
+    hover: Option<(usize, Handle)>,
     overlay: Vec<OverlaySeam>,
 }
 impl SharedEdgesTool {
@@ -123,52 +59,103 @@ impl SharedEdgesTool {
     pub fn new() -> Self {
         Self::default()
     }
+
     /// Find the participants again while no session is open, and the seams at this zoom.
     fn refresh(&mut self, document: Option<&DocumentSnapshot>, zoom: f64) {
-        let open = self.edges.as_ref().is_some_and(|edges| edges.frames.changed());
+        self.zoom = zoom;
+        let open = self.edges.as_ref().is_some_and(|edges| edges.mappings.changed());
         let current = document.map(|document| (document.identity(), document.revision()));
         if !open && self.edges.as_ref().map(|edges| edges.base) != current {
             self.edges = document.map(Edges::from);
         }
-        let frames = match (&self.drag, &self.edges) {
-            (Some(drag), _) => drag.frames.as_slice(),
-            (None, Some(edges)) => edges.frames.current().as_slice(),
-            (None, None) => &[],
+        let (Some(document), Some(edges)) = (document, &self.edges) else {
+            self.discovery = Discovery::default();
+            self.pivots.clear();
+            self.overlay.clear();
+            return;
         };
-        self.seams = seams::discover(frames, zoom);
-        let focus =
-            self.drag.as_ref().map(|drag| (drag.seam.axis, drag.seam.position + drag.delta));
-        self.overlay = self
+        let mappings = self.drag.as_ref().map_or(edges.mappings.current(), |drag| &drag.mappings);
+        let shapes = shapes(document, edges, mappings);
+        let scale = 1.0 / zoom.max(1e-9);
+        self.discovery = Discovery::new(&shapes, scale);
+        let discovery = &self.discovery;
+        self.pivots = discovery
             .seams
             .iter()
+            .map(|seam| {
+                [Handle::Start, Handle::End]
+                    .map(|handle| Pivot::of(seam, handle, &discovery.edges, discovery.tolerance))
+            })
+            .collect();
+        let dragged = self.drag.as_ref().map(|drag| drag.gesture.ends);
+        self.overlay = discovery
+            .seams
+            .iter()
+            .zip(&self.pivots)
             .enumerate()
-            .map(|(index, seam)| {
-                let dragged = focus.is_some_and(|(axis, position)| {
-                    axis == seam.axis && (seam.position - position).abs() <= 0.5
+            .map(|(index, (seam, [start, end]))| {
+                let active = dragged.is_some_and(|[a, b]| {
+                    distance(a, seam.start()).max(distance(b, seam.end())) <= discovery.tolerance
                 });
-                seam.overlay(dragged || Some(index) == self.hover)
+                let hovered =
+                    self.hover.filter(|(seam, _)| *seam == index).map(|(_, handle)| handle);
+                let handle = self
+                    .drag
+                    .as_ref()
+                    .filter(|_| active)
+                    .map(|drag| drag.gesture.handle)
+                    .or(hovered);
+                OverlaySeam {
+                    start: seam.start(),
+                    end: seam.end(),
+                    focused: active || hovered.is_some(),
+                    handle: handle.map(overlay_handle),
+                    enabled: [start.is_some(), seam.translatable(), end.is_some()],
+                }
             })
             .collect();
     }
+
     fn press(&mut self, context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
         let (Some(position), Some(edges)) = (self.position, &self.edges) else {
             return Ok(());
         };
         let viewport = context.navigation().viewport();
-        let Some(index) = seams::pick(&self.seams, viewport, position)? else {
+        let point = viewport.document_at(position)?;
+        let scale = 1.0 / viewport.zoom();
+        let Some(index) = self.discovery.seam_at(point, scale) else {
             return Ok(());
         };
-        let start = edges.frames.current().clone();
-        self.drag = Some(Drag {
-            seam: self.seams[index].clone(),
-            origin: viewport.document_at(position)?,
-            frames: start.clone(),
-            start,
-            delta: 0.0,
-        });
+        let seam = self.discovery.seams[index].clone();
+        let layers = seam.layers();
+        if edges.participants.as_ref().is_some_and(|participants| *participants != layers) {
+            return Ok(());
+        }
+        let handle = handle_at(&seam, point, scale);
+        let pivot = (handle != Handle::Middle)
+            .then(|| Pivot::of(&seam, handle, &self.discovery.edges, self.discovery.tolerance))
+            .flatten();
+        let mut targets: Vec<Edge> = self
+            .discovery
+            .edges
+            .iter()
+            .filter(|edge| !matches!(edge.owner, Owner::Layer(layer) if layers.contains(&layer)))
+            .copied()
+            .collect();
+        if let Some(document) = context.document() {
+            let extent = document.extent();
+            let canvas = [0.0, 0.0, f64::from(extent.width()), f64::from(extent.height())];
+            targets.extend(rectangle_edges(Owner::Canvas, canvas, 20));
+        }
+        let Some(gesture) = Gesture::begin(seam, handle, pivot, point, targets) else {
+            return Ok(());
+        };
+        let mappings = edges.mappings.current().clone();
+        self.drag = Some(Drag { gesture, mappings });
         context.capture_pointer(true);
         Ok(())
     }
+
     fn moved(&mut self, context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
         let (Some(drag), Some(position), Some(edges)) =
             (&mut self.drag, self.position, &mut self.edges)
@@ -177,41 +164,70 @@ impl SharedEdgesTool {
         };
         let viewport = context.navigation().viewport();
         let point = viewport.document_at(position)?;
-        let normal = drag.seam.axis.normal();
-        let delta = (point[normal] - drag.origin[normal]).round();
-        let (frames, delta) = drag.seam.moved(&drag.start, delta, viewport.zoom());
-        if frames == drag.frames {
+        let Some(changes) = drag.gesture.resolve(point, 1.0 / viewport.zoom(), self.modifiers.ctrl)
+        else {
+            return Ok(());
+        };
+        let mappings = edges.with(&changes);
+        if mappings == drag.mappings {
             return Ok(());
         }
-        drag.frames = frames;
-        drag.delta = delta;
-        if &drag.frames == edges.frames.base() {
-            edges.preview.discard(context);
-            context.capture_pointer(true);
-            return Ok(());
-        }
-        let work = edges.work(&drag.frames);
-        edges.preview.preview(context, work)
+        drag.mappings = mappings;
+        edges.show(&drag.mappings, context)?;
+        context.capture_pointer(true);
+        Ok(())
     }
+
     fn release(&mut self, context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
         self.moved(context)?;
         context.capture_pointer(false);
         let (Some(drag), Some(edges)) = (self.drag.take(), &mut self.edges) else {
             return Ok(());
         };
-        edges.frames.record(drag.frames).map(drop)
+        if edges.mappings.record(drag.mappings)? && edges.participants.is_none() {
+            edges.participants = Some(drag.gesture.seam.layers());
+        }
+        Ok(())
     }
+
     fn resolve(&mut self, apply: bool, context: &mut ToolContext<'_>) -> Result<bool, CanvasError> {
-        let Some(mut edges) = self.edges.take_if(|edges| edges.frames.changed()) else {
+        let Some(mut edges) = self.edges.take_if(|edges| edges.mappings.changed()) else {
             return Ok(false);
         };
-        if apply && edges.frames.current() != edges.frames.base() {
-            let work = edges.work(edges.frames.current());
+        if apply && edges.mappings.current() != edges.mappings.base() {
+            let work = edges.work(edges.mappings.current());
             edges.preview.publish(context, work)?;
         } else {
             edges.preview.discard(context);
         }
         Ok(true)
+    }
+
+    fn step(
+        &mut self,
+        action: SessionAction,
+        context: &mut ToolContext<'_>,
+    ) -> Result<bool, CanvasError> {
+        let Some(edges) = self.edges.as_mut().filter(|edges| edges.mappings.changed()) else {
+            return Ok(false);
+        };
+        let moved = match action {
+            SessionAction::Undo => edges.mappings.undo(),
+            _ => edges.mappings.redo(),
+        };
+        if moved {
+            let current = edges.mappings.current().clone();
+            edges.show(&current, context)?;
+        }
+        Ok(moved)
+    }
+}
+
+const fn overlay_handle(handle: Handle) -> SeamHandle {
+    match handle {
+        Handle::Start => SeamHandle::Start,
+        Handle::Middle => SeamHandle::Middle,
+        Handle::End => SeamHandle::End,
     }
 }
 
@@ -229,16 +245,22 @@ impl CanvasTool for SharedEdgesTool {
         let result = match input {
             ToolInput::Pointer(sample) => {
                 self.position = Some(sample.position);
+                self.modifiers = sample.modifiers;
                 if self.drag.is_some() {
                     self.moved(context)
                 } else {
                     self.refresh(context.document().as_ref(), zoom);
                     let viewport = context.navigation().viewport();
-                    self.hover = seams::pick(&self.seams, viewport, sample.position)?;
+                    let point = viewport.document_at(sample.position)?;
+                    let scale = 1.0 / zoom;
+                    self.hover = self.discovery.seam_at(point, scale).map(|index| {
+                        (index, handle_at(&self.discovery.seams[index], point, scale))
+                    });
                     Ok(())
                 }
             }
-            ToolInput::Button { button: ToolButton::Primary, pressed, .. } => {
+            ToolInput::Button { button: ToolButton::Primary, pressed, modifiers } => {
+                self.modifiers = modifiers;
                 match (pressed, self.drag.is_some()) {
                     (true, false) => {
                         self.refresh(context.document().as_ref(), zoom);
@@ -263,12 +285,12 @@ impl CanvasTool for SharedEdgesTool {
         command: ToolCommand,
         context: &mut ToolContext<'_>,
     ) -> Result<bool, CanvasError> {
-        let zoom = context.navigation().viewport().zoom();
         let handled = match command {
             ToolCommand::Cancel if self.drag.is_some() => {
                 self.drag = None;
                 if let Some(edges) = &mut self.edges {
-                    edges.show(context)?;
+                    let current = edges.mappings.current().clone();
+                    edges.show(&current, context)?;
                 }
                 context.capture_pointer(false);
                 true
@@ -283,21 +305,10 @@ impl CanvasTool for SharedEdgesTool {
                 }
                 true
             }
-            ToolCommand::Session(action) => {
-                let Some(edges) = self.edges.as_mut().filter(|edges| edges.frames.changed()) else {
-                    return Ok(false);
-                };
-                let moved = match action {
-                    SessionAction::Undo => edges.frames.undo(),
-                    _ => edges.frames.redo(),
-                };
-                if moved {
-                    edges.show(context)?;
-                }
-                moved
-            }
+            ToolCommand::Session(action) => self.step(action, context)?,
             ToolCommand::Nudge(_) | ToolCommand::Transform(_) => false,
         };
+        let zoom = context.navigation().viewport().zoom();
         self.refresh(context.document().as_ref(), zoom);
         Ok(handled)
     }
@@ -311,23 +322,51 @@ impl CanvasTool for SharedEdgesTool {
                 | ToolCancelReason::Shutdown
         ) {
             self.edges = None;
+            self.overlay.clear();
         } else if let (Some(drag), Some(edges)) = (drag, &mut self.edges) {
             // The latest preview already shows the interrupted drag; keep it as a checkpoint.
-            if edges.frames.record(drag.frames).is_err() {
-                self.edges = None;
+            let layers = drag.gesture.seam.layers();
+            match edges.mappings.record(drag.mappings) {
+                Ok(true) if edges.participants.is_none() => edges.participants = Some(layers),
+                Ok(_) => {}
+                Err(_) => self.edges = None,
             }
         }
     }
     fn cursor(&self, _: &ToolView<'_>) -> CursorIntent {
-        let axis = match (&self.drag, self.hover) {
-            (Some(drag), _) => Some(drag.seam.axis),
-            (None, Some(index)) => self.seams.get(index).map(|seam| seam.axis),
+        let gripped = match (&self.drag, self.hover) {
+            (Some(drag), _) => Some((
+                &drag.gesture.seam,
+                drag.gesture.handle,
+                self.discovery.seams.iter().position(|seam| *seam == drag.gesture.seam),
+            )),
+            (None, Some((index, handle))) => {
+                self.discovery.seams.get(index).map(|seam| (seam, handle, Some(index)))
+            }
             (None, None) => None,
         };
-        match axis {
-            Some(Axis::Vertical) => CursorIntent::Resize(ResizeDirection::Horizontal),
-            Some(Axis::Horizontal) => CursorIntent::Resize(ResizeDirection::Vertical),
-            None => CursorIntent::Arrow,
+        let Some((seam, handle, index)) = gripped else {
+            return CursorIntent::Arrow;
+        };
+        match handle {
+            Handle::Middle if seam.translatable() || self.drag.is_some() => {
+                CursorIntent::Resize(ResizeDirection::along(seam.edge.normal()))
+            }
+            Handle::Middle => CursorIntent::Forbidden,
+            Handle::Start | Handle::End => {
+                let side = usize::from(handle == Handle::End);
+                let pivot = index
+                    .and_then(|index| self.pivots.get(index))
+                    .and_then(|pivots| pivots[side].as_ref());
+                match pivot {
+                    Some(pivot) => {
+                        let [start, end] = pivot.rail();
+                        let degrees = (end[1] - start[1]).atan2(end[0] - start[0]).to_degrees();
+                        CursorIntent::Affine(AffineCursor::resize(degrees))
+                    }
+                    None => CursorIntent::Forbidden,
+                }
+            }
         }
     }
     fn overlay(&self) -> Option<ToolOverlay<'_>> {
@@ -336,8 +375,8 @@ impl CanvasTool for SharedEdgesTool {
     fn session(&self) -> Option<SessionState> {
         self.edges
             .as_ref()
-            .filter(|edges| edges.frames.changed())
-            .map(|edges| edges.frames.state(SessionKind::SharedEdges))
+            .filter(|edges| edges.mappings.changed())
+            .map(|edges| edges.mappings.state(SessionKind::SharedEdges))
     }
 }
 

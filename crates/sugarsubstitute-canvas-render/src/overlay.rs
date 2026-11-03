@@ -12,8 +12,8 @@
 //! rasterizes the overlay again, never document pixels.
 use crate::{CpuProjection, RenderError, cpu::check};
 use sugarsubstitute_canvas::{
-    ANT_DARK, ANT_LIGHT, GUIDE, GUIDE_HANDLE, GUIDE_HANDLE_RADIUS, OverlayGuides, OverlayOutline,
-    PresentationOverlay, Viewport, outline_light,
+    ANT_DARK, ANT_LIGHT, GUIDE, GUIDE_DISABLED, GUIDE_HANDLE, GUIDE_HANDLE_RADIUS, OverlayGuides,
+    OverlayOutline, PresentationOverlay, SeamHandle, Viewport, outline_light,
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 pub use sugarsubstitute_image_gpu::OverlayPixel;
@@ -168,7 +168,7 @@ fn outline_points(outline: &OverlayOutline, view: Viewport) -> Result<Vec<[f64; 
 }
 
 impl Raster<'_> {
-    /// Draw a transform box with its eight handles, or shared edges with their middle handles,
+    /// Draw a transform box with its eight handles, or shared edges with their three handles,
     /// as CuteCanvas's cosmetic guide pens and circular affine handles.
     fn guides(&mut self, guides: &OverlayGuides, view: Viewport) -> Result<(), RenderError> {
         let solid = Stroke::Solid(GUIDE);
@@ -199,15 +199,41 @@ impl Raster<'_> {
                         self.segment(offset(start), offset(end), 0.0, solid, None, None)?;
                     }
                     let middle = [(start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0];
-                    let radius = GUIDE_HANDLE_RADIUS + if seam.focused { 1.0 } else { 0.0 };
-                    self.handle(middle, radius)?;
+                    let emphasized = |handle| seam.focused && seam.handle == Some(handle);
+                    let handles = [
+                        (start, emphasized(SeamHandle::Start)),
+                        (middle, seam.focused),
+                        (end, emphasized(SeamHandle::End)),
+                    ];
+                    for ((point, emphasis), enabled) in handles.into_iter().zip(seam.enabled) {
+                        let radius = GUIDE_HANDLE_RADIUS + if emphasis { 1.0 } else { 0.0 };
+                        if enabled {
+                            self.handle(point, radius)?;
+                        } else {
+                            self.disabled_handle(point, radius)?;
+                        }
+                    }
                 }
             }
         }
         check(self.context)
     }
+    /// A grey handle crossed out, for a handle that cannot be dragged.
+    fn disabled_handle(&mut self, center: [f64; 2], radius: f64) -> Result<(), RenderError> {
+        self.disc(center, radius, GUIDE_DISABLED)?;
+        let inset = radius * 0.55;
+        let cross = Stroke::Solid(GUIDE_HANDLE);
+        let [x, y] = center;
+        self.segment([x - inset, y - inset], [x + inset, y + inset], 0.0, cross, None, None)?;
+        self.segment([x - inset, y + inset], [x + inset, y - inset], 0.0, cross, None, None)?;
+        Ok(())
+    }
     /// A filled circular handle with a one-pixel guide-coloured rim.
-    fn handle(&mut self, [x, y]: [f64; 2], radius: f64) -> Result<(), RenderError> {
+    fn handle(&mut self, center: [f64; 2], radius: f64) -> Result<(), RenderError> {
+        self.disc(center, radius, GUIDE_HANDLE)
+    }
+    /// A disc filled with `fill` inside a one-pixel guide-coloured rim.
+    fn disc(&mut self, [x, y]: [f64; 2], radius: f64, fill: [u8; 3]) -> Result<(), RenderError> {
         let [width, height] = [f64::from(self.extent.width()), f64::from(self.extent.height())];
         let reach = radius + 1.0;
         let (left, top) = ((x - reach).floor().max(0.0), (y - reach).floor().max(0.0));
@@ -218,7 +244,7 @@ impl Raster<'_> {
             while column < right {
                 let distance = (column + 0.5 - x).hypot(row + 0.5 - y);
                 let color = if distance <= radius - 0.5 {
-                    Some(GUIDE_HANDLE)
+                    Some(fill)
                 } else if distance <= radius + 0.5 {
                     Some(GUIDE)
                 } else {
