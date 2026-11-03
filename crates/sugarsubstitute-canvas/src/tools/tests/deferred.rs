@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Tools see their edit target and hand large coverage work to an owned job.
+//! Tools see their edit target and hand large coverage work to an owned job, whose stale
+//! results run again until they land after the change that came first.
 use super::*;
+use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_image_ops::{CombineMode, Coverage, FULL_COVERAGE, Path};
 
 /// Selects a rectangle through deferred work on press, previewing or committing it.
@@ -37,7 +39,7 @@ fn press() -> ToolInput {
 }
 
 #[test]
-fn deferred_work_commits_once_and_drops_stale_results() -> harness::TestResult {
+fn deferred_work_commits_once_and_runs_stale_results_again() -> harness::TestResult {
     harness::run(8 * 1024 * 1024, |context| {
         let run = || -> Result<(), CanvasError> {
             let memory = context.memory();
@@ -56,13 +58,13 @@ fn deferred_work_commits_once_and_drops_stale_results() -> harness::TestResult {
             let deferred = tools.take_deferred().ok_or(CanvasError::Invalid("No deferred work"))?;
             assert!(tools.take_deferred().is_none());
             let prepared = deferred.run(context)?;
-            assert!(tools.complete_deferred(prepared, &mut document, Duration::ZERO)?);
+            assert!(tools.complete_deferred(prepared, &mut document, Duration::ZERO)?.applied());
             let selection = document.snapshot().selection().cloned();
             assert_eq!(selection.as_ref().map(|s| s.value(5, 5)), Some(FULL_COVERAGE));
             assert!(document.undo()?);
             assert_eq!(document.snapshot().selection(), None);
 
-            // Work computed from an older revision changes nothing.
+            // Work computed from an older revision changes nothing and comes back to run again.
             tools.input(press(), Some(&mut document), Duration::ZERO)?;
             let stale = tools
                 .take_deferred()
@@ -71,8 +73,18 @@ fn deferred_work_commits_once_and_drops_stale_results() -> harness::TestResult {
             let empty = Coverage::new(Extent::new(64, 64)?, 0, memory)?;
             document.apply(DocumentEdit::Select(Some(empty)))?;
             let revision = document.snapshot().revision();
-            assert!(!tools.complete_deferred(stale, &mut document, Duration::ZERO)?);
+            let DeferredCompletion::Rerun(mut again) =
+                tools.complete_deferred(stale, &mut document, Duration::ZERO)?
+            else {
+                return Err(CanvasError::Invalid("A stale result must run again"));
+            };
             assert_eq!(document.snapshot().revision(), revision);
+            assert_eq!((again.base().revision(), again.runs()), (revision, 1));
+            again.rebase(&document)?;
+            let landed =
+                tools.complete_deferred(again.run(context)?, &mut document, Duration::ZERO)?;
+            assert!(landed.applied(), "{landed:?}");
+            assert_eq!(document.snapshot().revision(), revision + 1, "one undo step");
 
             // Cancelling a gesture drops work not yet taken.
             tools.input(press(), Some(&mut document), Duration::ZERO)?;
@@ -131,13 +143,9 @@ fn work_requested_before_earlier_work_lands_reads_its_result_once_rebased() -> h
             tools.input(press(), Some(&mut document), Duration::ZERO)?;
             let mut second = tools.take_deferred().ok_or(CanvasError::Invalid("No second work"))?;
             assert_eq!(second.disposition(), Disposition::Commit);
-            assert!(tools.complete_deferred(first.run(context)?, &mut document, Duration::ZERO)?);
+            assert!(finish(&mut tools, first, &mut document, context)?.applied());
             second.rebase(&document)?;
-            assert!(tools.complete_deferred(
-                second.run(context)?,
-                &mut document,
-                Duration::ZERO
-            )?);
+            assert!(finish(&mut tools, second, &mut document, context)?.applied());
             let selection = document.snapshot().selection().cloned();
             let selection = selection.ok_or(CanvasError::Invalid("Nothing is selected"))?;
             assert_eq!([selection.value(5, 5), selection.value(25, 5)], [FULL_COVERAGE; 2]);
@@ -149,6 +157,153 @@ fn work_requested_before_earlier_work_lands_reads_its_result_once_rebased() -> h
             tools.input(press(), Some(&mut document), Duration::ZERO)?;
             let mut foreign = tools.take_deferred().ok_or(CanvasError::Invalid("No work"))?;
             assert!(foreign.rebase(&other).is_err(), "work stays with its document");
+            Ok(())
+        };
+        run().map_err(|cause| ImageError::Source(Box::new(cause)))
+    })
+}
+
+/// Run work as the host's job would and hand its result back to the manager.
+fn finish(
+    tools: &mut ToolManager,
+    work: DeferredEdit,
+    document: &mut Document,
+    context: &JobContext,
+) -> Result<DeferredCompletion, CanvasError> {
+    let prepared = work.run(context)?;
+    tools.complete_deferred(prepared, document, Duration::ZERO)
+}
+
+/// The work a stale completion hands back, rebased as the host does before starting it.
+fn rerun(completion: DeferredCompletion, document: &Document) -> Result<DeferredEdit, CanvasError> {
+    let DeferredCompletion::Rerun(mut work) = completion else {
+        return Err(CanvasError::Invalid("A stale result must run again"));
+    };
+    work.rebase(document)?;
+    Ok(work)
+}
+
+fn covered(document: &Document, [x, y]: [u32; 2]) -> bool {
+    document.snapshot().selection().is_some_and(|selection| selection.value(x, y) != 0)
+}
+
+#[test]
+fn shape_whose_job_an_undo_outdates_lands_after_the_undo_as_one_step() -> harness::TestResult {
+    harness::run(8 * 1024 * 1024, |context| {
+        let run = || -> Result<(), CanvasError> {
+            let memory = context.memory();
+            let mut tools = manager()?;
+            let id = ToolId::new(2)?;
+            tools.register(id, AddingTool { left: 0.0 }, memory)?;
+            let mut document = Document::new(1, Extent::new(64, 64)?, memory)?;
+            tools.select(id, Some(&document), Duration::ZERO)?;
+            tools.input(press(), Some(&mut document), Duration::ZERO)?;
+            let first = tools.take_deferred().ok_or(CanvasError::Invalid("No first work"))?;
+            assert!(finish(&mut tools, first, &mut document, context)?.applied());
+            tools.input(press(), Some(&mut document), Duration::ZERO)?;
+            let second = tools.take_deferred().ok_or(CanvasError::Invalid("No second work"))?;
+            // The second shape's job reads the first square; the undo removes it meanwhile.
+            let prepared = second.run(context)?;
+            assert!(document.undo()?);
+            let undone = document.snapshot().revision();
+            let completion = tools.complete_deferred(prepared, &mut document, Duration::ZERO)?;
+            assert_eq!(document.snapshot().revision(), undone, "a stale result changes nothing");
+            let again = rerun(completion, &document)?;
+            assert_eq!((again.runs(), again.base().revision()), (1, undone));
+            assert!(finish(&mut tools, again, &mut document, context)?.applied());
+            assert_eq!(document.snapshot().revision(), undone + 1);
+            assert!(covered(&document, [25, 5]), "the second square lands");
+            assert!(!covered(&document, [5, 5]), "after the undo that came first");
+            assert_eq!(document.history(), [true, false], "landing clears the undone square");
+            assert!(document.undo()?);
+            assert_eq!(document.snapshot().selection(), None, "the square is one step");
+            Ok(())
+        };
+        run().map_err(|cause| ImageError::Source(Box::new(cause)))
+    })
+}
+
+#[test]
+fn work_finished_during_a_staged_stroke_waits_and_lands_after_it() -> harness::TestResult {
+    harness::run(8 * 1024 * 1024, |context| {
+        let run = || -> Result<(), CanvasError> {
+            let memory = context.memory();
+            let mut tools = manager()?;
+            let (shape, stroke) = (ToolId::new(2)?, ToolId::new(3)?);
+            tools.register(shape, AddingTool { left: 0.0 }, memory)?;
+            tools.register(stroke, EditingTool::default(), memory)?;
+            let mut document = Document::new(1, Extent::new(64, 64)?, memory)?;
+            tools.select(shape, Some(&document), Duration::ZERO)?;
+            tools.input(press(), Some(&mut document), Duration::ZERO)?;
+            let work = tools.take_deferred().ok_or(CanvasError::Invalid("No shape work"))?;
+            tools.select(stroke, Some(&document), Duration::ZERO)?;
+            tools.input(press(), Some(&mut document), Duration::ZERO)?;
+            assert!(tools.staging_gesture());
+            // The result is current, but applying it would discard the stroke's staged edit.
+            let completion = finish(&mut tools, work, &mut document, context)?;
+            assert!(tools.preview().is_some(), "the stroke keeps its staged edit");
+            assert_eq!(document.snapshot().revision(), 1);
+            let release = ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed: false,
+                modifiers: ToolModifiers::NONE,
+            };
+            tools.input(release, Some(&mut document), Duration::ZERO)?;
+            assert!(!tools.staging_gesture());
+            assert_eq!(document.snapshot().layers().len(), 1, "the stroke committed");
+            let again = rerun(completion, &document)?;
+            assert!(finish(&mut tools, again, &mut document, context)?.applied());
+            assert_eq!(document.snapshot().revision(), 3, "stroke, then shape");
+            assert!(covered(&document, [5, 5]));
+            assert!(document.undo()?);
+            let snapshot = document.snapshot();
+            assert_eq!((snapshot.selection(), snapshot.layers().len()), (None, 1));
+            Ok(())
+        };
+        run().map_err(|cause| ImageError::Source(Box::new(cause)))
+    })
+}
+
+#[test]
+fn work_stale_after_its_last_permitted_run_is_abandoned() -> harness::TestResult {
+    harness::run(8 * 1024 * 1024, |context| {
+        let run = || -> Result<(), CanvasError> {
+            let memory = context.memory();
+            let mut tools = manager()?;
+            let id = ToolId::new(2)?;
+            tools.register(id, AddingTool { left: 0.0 }, memory)?;
+            let mut document = Document::new(1, Extent::new(64, 64)?, memory)?;
+            let deselected = Coverage::new(Extent::new(64, 64)?, 0, memory)?;
+            document.apply(DocumentEdit::Select(Some(deselected)))?;
+            tools.select(id, Some(&document), Duration::ZERO)?;
+            // Every run is outdated by an undo or redo while it runs; the last run that may
+            // still land is the eighth.
+            let outdated = |tools: &mut ToolManager, document: &mut Document| {
+                tools.input(press(), Some(document), Duration::ZERO)?;
+                let mut work = tools.take_deferred().ok_or(CanvasError::Invalid("No work"))?;
+                for runs in 1..DeferredEdit::MAX_RUNS {
+                    let prepared = work.run(context)?;
+                    let changed = if runs % 2 == 1 { document.undo()? } else { document.redo()? };
+                    assert!(changed);
+                    let completion = tools.complete_deferred(prepared, document, Duration::ZERO)?;
+                    work = rerun(completion, document)?;
+                    assert_eq!(work.runs(), runs);
+                }
+                work.run(context)
+            };
+            let last = outdated(&mut tools, &mut document)?;
+            assert!(tools.complete_deferred(last, &mut document, Duration::ZERO)?.applied());
+            assert!(covered(&document, [5, 5]), "a current eighth run still lands");
+
+            // The seven changes end on an undo of the first square; redoing it outdates the
+            // eighth run too.
+            let last = outdated(&mut tools, &mut document)?;
+            assert!(document.redo()?);
+            let revision = document.snapshot().revision();
+            let completion = tools.complete_deferred(last, &mut document, Duration::ZERO)?;
+            assert!(matches!(completion, DeferredCompletion::Abandoned), "{completion:?}");
+            assert_eq!(document.snapshot().revision(), revision);
+            assert!(covered(&document, [5, 5]) && !covered(&document, [25, 5]));
             Ok(())
         };
         run().map_err(|cause| ImageError::Source(Box::new(cause)))
@@ -174,7 +329,7 @@ fn deferred_previews_stage_renderable_snapshots_without_publishing() -> harness:
                 .take_deferred()
                 .ok_or(CanvasError::Invalid("No deferred work"))?
                 .run(context)?;
-            assert!(tools.complete_deferred(prepared, &mut document, Duration::ZERO)?);
+            assert!(tools.complete_deferred(prepared, &mut document, Duration::ZERO)?.applied());
             assert_eq!(document.snapshot().revision(), 1);
             assert_eq!(document.snapshot().selection(), None);
             let preview = tools.preview_snapshot().ok_or(CanvasError::Invalid("No preview"))?;

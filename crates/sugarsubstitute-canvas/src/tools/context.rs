@@ -87,13 +87,14 @@ impl ToolContext<'_> {
             .ok_or(CanvasError::Invalid("No editable document"))
     }
     /// Request coverage work too large for the input thread. The host runs it as an owned job
-    /// against the current revision; a newer request replaces one not yet taken.
+    /// against the current revision; a newer request replaces one not yet taken. The work may
+    /// run again against a newer revision when the document changes while it runs.
     /// # Errors
     /// Rejects a missing document.
     pub fn defer(
         &mut self,
         disposition: Disposition,
-        work: impl FnOnce(&DocumentSnapshot, &JobContext) -> Result<DocumentEdit, CanvasError>
+        work: impl Fn(&DocumentSnapshot, &JobContext) -> Result<DocumentEdit, CanvasError>
         + Send
         + 'static,
     ) -> Result<(), CanvasError> {

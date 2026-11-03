@@ -43,9 +43,10 @@ pub use presentation::{FrameStamp, RenderRequest};
 pub use projection::ViewProjection;
 pub use tools::{
     BrushMode, BrushOptions, BrushTool, CanvasTool, CoverageModification, CoverageOperation,
-    CoverageShapeTool, DeferredEdit, Disposition, ModifyPhase, ModifyTarget, PointerKind,
-    PointerSample, PreparedEdit, Pressure, ShapeKind, ShapeTarget, ToolButton, ToolCancelReason,
-    ToolContext, ToolId, ToolInput, ToolManager, ToolModifiers, ToolOptions, ToolView,
+    CoverageShapeTool, DeferredCompletion, DeferredEdit, Disposition, ModifyPhase, ModifyTarget,
+    PointerKind, PointerSample, PreparedEdit, Pressure, ShapeKind, ShapeTarget, ToolButton,
+    ToolCancelReason, ToolContext, ToolId, ToolInput, ToolManager, ToolModifiers, ToolOptions,
+    ToolView,
 };
 pub use viewport::{MAX_SURFACE_EDGE, Viewport};
 #[cfg(test)]

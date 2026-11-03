@@ -8,8 +8,9 @@
 //! share their size: a wheel change to one resizes the other.
 //!
 //! Coverage work a tool defers runs as an owned job, in request order: work requested while
-//! earlier work was running reads that work's result, and applies to its document only while that
-//! document still shows the revision it read. Selection outlines are traced by owned jobs too.
+//! earlier work was running reads that work's result, and work whose document an undo, redo or
+//! stroke changed while it ran runs again, so it lands after that change. Selection outlines are
+//! traced by owned jobs too.
 //! A staged gesture renders live: the frame pipeline latches the latest staged step while no
 //! frame work is in flight, and each latched step is distinct content for frame reuse. The
 //! selection's marching ants, a shape's outline and the brush's Shift line are presentation

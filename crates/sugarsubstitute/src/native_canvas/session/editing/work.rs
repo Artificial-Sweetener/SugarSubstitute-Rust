@@ -5,14 +5,19 @@
 //!
 //! Deferred edits wait in request order, so successive gestures each land: one requested while
 //! earlier work of its document was still running is rebased onto that document's current
-//! revision just before it starts, and so reads the earlier result. A newer preview replaces a
-//! waiting preview of the same document, because only the latest preview is ever staged. A
-//! finished edit applies to the document it read, shown or parked, and only while that document
-//! still shows the revision it read; anything else is stale and changes nothing.
+//! revision just before it starts, and so reads the earlier result. Work waits while a gesture
+//! of its document stages an edit, such as a brush stroke in progress. A newer preview replaces
+//! a waiting preview of the same document, because only the latest preview is ever staged. A
+//! finished edit applies to the document it read, shown or parked, while that document still
+//! shows the revision it read. When an undo, redo or stroke changed the document while the job
+//! ran, the work returns to the head of the queue and runs again against the newer revision, so
+//! it lands after that change; the tool manager abandons work whose result is still stale after
+//! [`DeferredEdit::MAX_RUNS`] runs.
 use super::*;
 use std::collections::VecDeque;
 use sugarsubstitute_canvas::{
-    BoundaryWork, CoverageBoundary, DeferredEdit, Disposition, Document, PreparedEdit,
+    BoundaryWork, CoverageBoundary, DeferredCompletion, DeferredEdit, Disposition, Document,
+    PreparedEdit, ToolManager,
 };
 use sugarsubstitute_execution::OwnedInputError;
 use sugarsubstitute_image_ops::Coverage;
@@ -59,6 +64,23 @@ impl EditingWork {
         true
     }
 
+    /// Put work whose result went stale back at the head of the queue, ahead of everything
+    /// requested after it. It held the running slot, so the waiting bound does not refuse it.
+    /// Returns `false`, dropping it, for a preview that a newer waiting preview of its document
+    /// supersedes.
+    fn requeue(&mut self, work: DeferredEdit) -> bool {
+        let identity = work.base().identity();
+        let superseded = work.disposition() == Disposition::Preview
+            && self.waiting.iter().any(|waiting| {
+                waiting.disposition() == Disposition::Preview
+                    && waiting.base().identity() == identity
+            });
+        if !superseded {
+            self.waiting.push_front(work);
+        }
+        !superseded
+    }
+
     pub(super) fn in_flight(&self) -> bool {
         self.running.is_some() || self.tracing.is_some()
     }
@@ -89,26 +111,38 @@ impl Session {
             .ok_or_else(|| "Coverage work reservation overflow".into())
     }
 
-    /// The document with snapshot identity `identity`, shown or parked.
-    fn editing_document(&self, identity: u64) -> Option<&Document> {
-        let shown = self.document.scene.as_ref().map(|scene| &scene.document);
-        shown.filter(|document| document.snapshot().identity() == identity).or_else(|| {
-            self.inputs.parked_by_identity(identity)?.scene.as_ref().map(|scene| &scene.document)
-        })
+    /// The tools and document with snapshot identity `identity`, shown or parked.
+    fn editing_document(&self, identity: u64) -> Option<(&ToolManager, &Document)> {
+        let shown = self
+            .document
+            .scene
+            .as_ref()
+            .is_some_and(|scene| scene.document.snapshot().identity() == identity);
+        let state =
+            if shown { Some(&*self.document) } else { self.inputs.parked_by_identity(identity) }?;
+        Some((&state.tools, &state.scene.as_ref()?.document))
     }
 
     /// Start the oldest waiting deferred edit and the waiting selection trace when their slots
-    /// are free. Saturated admission keeps them waiting for the completion wake.
+    /// are free. Saturated admission keeps them waiting for the completion wake; a gesture
+    /// staging an edit in the oldest edit's document keeps it waiting until the gesture's input
+    /// ends it.
     pub(super) fn submit_editing_work(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing {
             return Ok(());
         }
         while self.editing.work.running.is_none()
-            && let Some(mut work) = self.editing.work.waiting.pop_front()
+            && let Some(identity) =
+                self.editing.work.waiting.front().map(|work| work.base().identity())
         {
-            let identity = work.base().identity();
-            // Earlier work of this document may have landed since this was requested.
-            match self.editing_document(identity).map(|document| work.rebase(document)) {
+            let staging = self.editing_document(identity).map(|(tools, _)| tools.staging_gesture());
+            if staging == Some(true) {
+                break;
+            }
+            let mut work =
+                self.editing.work.waiting.pop_front().ok_or("Coverage work left the queue")?;
+            // Earlier work, an undo or a stroke may have changed the document since this read it.
+            match self.editing_document(identity).map(|(_, document)| work.rebase(document)) {
                 Some(Ok(())) => {}
                 Some(Err(cause)) => return Err(cause.into()),
                 None => {
@@ -246,12 +280,37 @@ impl Session {
             return;
         };
         match document.tools.complete_deferred(prepared, &mut scene.document, now) {
-            Ok(true) => {}
-            Ok(false) => {
+            Ok(DeferredCompletion::Applied) => {}
+            Ok(DeferredCompletion::Unchanged) => {
                 tracing::debug!(
                     operation = "canvas_coverage_work",
                     document_id = identity,
-                    "Finished coverage work changed nothing: it was stale, superseded or empty"
+                    "Finished coverage work changed nothing: it was superseded or empty"
+                );
+            }
+            Ok(DeferredCompletion::Rerun(work)) => {
+                let runs = work.runs();
+                if self.editing.work.requeue(work) {
+                    tracing::debug!(
+                        operation = "canvas_coverage_work",
+                        document_id = identity,
+                        runs,
+                        "The document changed while coverage work ran; it runs again"
+                    );
+                } else {
+                    tracing::debug!(
+                        operation = "canvas_coverage_work",
+                        document_id = identity,
+                        "A newer preview superseded stale preview work"
+                    );
+                }
+            }
+            Ok(DeferredCompletion::Abandoned) => {
+                tracing::warn!(
+                    operation = "canvas_coverage_work",
+                    document_id = identity,
+                    runs = DeferredEdit::MAX_RUNS,
+                    "The document kept changing while coverage work ran; the edit was abandoned"
                 );
             }
             Err(cause) => {

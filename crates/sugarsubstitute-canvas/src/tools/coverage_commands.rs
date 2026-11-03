@@ -10,10 +10,10 @@
 //! the latest preview as one undo step, computing it first when it is not staged yet; Cancel
 //! drops the preview. Either restores the captured tool.
 use super::{
-    CanvasTool, Disposition, ToolCancelReason, ToolId, ToolManager, coverage_work, deferred,
-    deferred::PreparedEdit,
+    CanvasTool, DeferredCompletion, Disposition, ToolCancelReason, ToolId, ToolManager,
+    coverage_work, deferred, deferred::PreparedEdit,
 };
-use crate::{CanvasError, Document, EditSessionId, LayerId};
+use crate::{CanvasError, Document, LayerId};
 use std::time::Duration;
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_image_ops::{CombineMode, Coverage};
@@ -200,37 +200,40 @@ impl ToolManager {
             }
         }
     }
-    /// Apply finished work for the open modification; only its latest request counts.
+    /// Apply finished work for the open modification; only its latest request counts, and a
+    /// result the document moved past runs again.
     pub(super) fn complete_modification(
         &mut self,
         prepared: PreparedEdit,
         document: &mut Document,
         now: Duration,
-    ) -> Result<bool, CanvasError> {
-        let Some(open) = self.modification.as_mut() else {
-            return Ok(false);
+    ) -> Result<DeferredCompletion, CanvasError> {
+        let Some(open) = self.modification.as_ref() else {
+            return Ok(DeferredCompletion::Unchanged);
         };
         if prepared.request() != open.request {
-            return Ok(false);
+            return Ok(DeferredCompletion::Unchanged);
+        }
+        if !prepared.current(document) {
+            return prepared.rerun(document);
         }
         match prepared.disposition() {
             Disposition::Preview => {
-                let next = self
-                    .next_edit
-                    .checked_add(1)
-                    .ok_or(CanvasError::Invalid("Edit identity exhausted"))?;
-                let mut session = document.begin_edit(EditSessionId::new(next)?);
-                session.stage(prepared.into_edit())?;
-                self.next_edit = next;
-                self.edit = Some(session);
-                open.staged = true;
-                Ok(true)
+                self.stage_deferred(prepared, document)?;
+                if let Some(open) = self.modification.as_mut() {
+                    open.staged = true;
+                }
+                Ok(DeferredCompletion::Applied)
             }
             Disposition::Commit => {
                 drop(self.edit.take());
                 let changed = document.apply(prepared.into_edit())?;
                 self.end_modification(Some(document), now)?;
-                Ok(changed)
+                Ok(if changed {
+                    DeferredCompletion::Applied
+                } else {
+                    DeferredCompletion::Unchanged
+                })
             }
         }
     }

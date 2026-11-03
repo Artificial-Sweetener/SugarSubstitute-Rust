@@ -16,11 +16,12 @@ pub(crate) enum ShapeGeometry {
     Polygon(Vec<[f64; 2]>),
 }
 impl ShapeGeometry {
-    pub(crate) fn path(self) -> Result<Path, CanvasError> {
+    /// The outline to rasterize; deferred work that runs again builds it again.
+    pub(crate) fn path(&self) -> Result<Path, CanvasError> {
         Ok(match self {
-            Self::Rectangle(bounds) => Path::rectangle(bounds)?,
-            Self::Ellipse(bounds) => Path::ellipse(bounds)?,
-            Self::Polygon(points) => Path::polygon(points)?,
+            Self::Rectangle(bounds) => Path::rectangle(*bounds)?,
+            Self::Ellipse(bounds) => Path::ellipse(*bounds)?,
+            Self::Polygon(points) => Path::polygon(points.clone())?,
         })
     }
 }

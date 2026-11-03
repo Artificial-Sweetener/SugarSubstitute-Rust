@@ -67,7 +67,7 @@ impl Canvas {
             return Ok(false);
         };
         let prepared = work.run(context)?;
-        self.tools.complete_deferred(prepared, &mut self.document, Duration::ZERO)
+        Ok(self.tools.complete_deferred(prepared, &mut self.document, Duration::ZERO)?.applied())
     }
     fn selection(&self) -> Option<Region> {
         self.document.snapshot().selection().and_then(Coverage::bounds)

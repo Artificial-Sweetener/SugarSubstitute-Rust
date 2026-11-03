@@ -40,7 +40,7 @@ impl Fixture {
     fn settle(&mut self, context: &JobContext) -> Result<bool, CanvasError> {
         let work = self.tools.take_deferred().ok_or(CanvasError::Invalid("No deferred work"))?;
         let prepared = work.run(context)?;
-        self.tools.complete_deferred(prepared, &mut self.document, Duration::ZERO)
+        Ok(self.tools.complete_deferred(prepared, &mut self.document, Duration::ZERO)?.applied())
     }
     fn modify(
         &mut self,
@@ -125,7 +125,8 @@ fn previews_hand_input_to_navigation_and_apply_the_latest_once() -> harness::Tes
         )?;
         // The superseded preview finishes late and is ignored.
         let late = first.run(context)?;
-        assert!(!canvas.tools.complete_deferred(late, &mut canvas.document, Duration::ZERO)?);
+        let late = canvas.tools.complete_deferred(late, &mut canvas.document, Duration::ZERO)?;
+        assert!(matches!(late, DeferredCompletion::Unchanged), "{late:?}");
         assert!(canvas.settle(context)?);
         let preview = canvas.tools.preview_snapshot().ok_or(CanvasError::Invalid("No preview"))?;
         assert_eq!(

@@ -22,7 +22,7 @@ pub use contract::{
 };
 pub use coverage_commands::{CoverageModification, CoverageOperation, ModifyPhase, ModifyTarget};
 pub use coverage_shape::{CoverageShapeTool, ShapeKind, ShapeTarget};
-pub use deferred::{DeferredEdit, Disposition, PreparedEdit};
+pub use deferred::{DeferredCompletion, DeferredEdit, Disposition, PreparedEdit};
 use std::time::Duration;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::ImageError;
@@ -77,44 +77,6 @@ impl ToolManager {
     /// The layer editing tools act on.
     pub const fn target(&self) -> Option<LayerId> {
         self.target
-    }
-    /// Hand the latest requested coverage work to the host, which runs it as an owned job.
-    pub fn take_deferred(&mut self) -> Option<DeferredEdit> {
-        self.deferred.take()
-    }
-    /// Apply finished coverage work. Work computed from a revision the document no longer shows
-    /// is stale and changes nothing. A preview replaces the tool's staged preview; a commit
-    /// discards any staged preview and publishes one undo step. While a coverage modification
-    /// is open only its latest request applies, and its commit restores the captured tool.
-    /// # Errors
-    /// Preserves validation, admission, identity and tool activation failures.
-    pub fn complete_deferred(
-        &mut self,
-        prepared: PreparedEdit,
-        document: &mut Document,
-        now: Duration,
-    ) -> Result<bool, CanvasError> {
-        if !prepared.current(document) {
-            return Ok(false);
-        }
-        if self.modification.is_some() {
-            return self.complete_modification(prepared, document, now);
-        }
-        drop(self.edit.take());
-        match prepared.disposition() {
-            Disposition::Commit => document.apply(prepared.into_edit()),
-            Disposition::Preview => {
-                let next = self
-                    .next_edit
-                    .checked_add(1)
-                    .ok_or(CanvasError::Invalid("Edit identity exhausted"))?;
-                let mut session = document.begin_edit(EditSessionId::new(next)?);
-                session.stage(prepared.into_edit())?;
-                self.next_edit = next;
-                self.edit = Some(session);
-                Ok(true)
-            }
-        }
     }
     /// The staged gesture as a renderable snapshot, when a tool has one.
     pub fn preview_snapshot(&self) -> Option<DocumentSnapshot> {
