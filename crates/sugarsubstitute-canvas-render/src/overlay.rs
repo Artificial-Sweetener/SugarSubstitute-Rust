@@ -5,7 +5,9 @@
 //!
 //! Overlay geometry is projected through the presented camera and rasterized into opaque
 //! one-pixel strokes, as CuteCanvas's cosmetic pens draw them. Dash positions follow device-pixel
-//! distance along each outline. The same pixels are painted into CPU display buffers and drawn by
+//! distance along each stroke; each selection boundary run starts its own dash, and the light
+//! dashes of every run are drawn before the dark ones, as CuteCanvas's two pen passes are. Pixel
+//! storage follows the strokes actually drawn and is admitted as it grows. The same pixels are painted into CPU display buffers and drawn by
 //! the GPU display pass, so both presentations show identical marks, and animating the ants only
 //! rasterizes the overlay again, never document pixels.
 use crate::{CpuProjection, RenderError, cpu::check};
@@ -13,7 +15,6 @@ use sugarsubstitute_canvas::{
     ANT_DARK, ANT_LIGHT, OverlayOutline, PresentationOverlay, Viewport, outline_light,
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_gpu::MAX_OVERLAY_PIXELS;
 pub use sugarsubstitute_image_gpu::OverlayPixel;
 use sugarsubstitute_image_ops::{Extent, ImageError};
 
@@ -43,7 +44,7 @@ pub struct OverlayPixels {
     _memory: Vec<MemoryClaim>,
 }
 
-/// Bounded pixel accumulation for one viewport, clipped to an optional device rectangle.
+/// Admitted pixel accumulation for one viewport.
 struct Raster<'a> {
     extent: Extent,
     pixels: Vec<OverlayPixel>,
@@ -52,8 +53,6 @@ struct Raster<'a> {
 }
 
 impl OverlayPixels {
-    /// Most pixels one overlay draws; strokes beyond it are left out.
-    pub const MAX: usize = MAX_OVERLAY_PIXELS;
     /// Project and rasterize an overlay for `view`'s physical surface on an admitted worker.
     /// Outlines being drawn are clipped to the document; selection ants are not, so an outline
     /// along the document edge stays visible.
@@ -67,18 +66,17 @@ impl OverlayPixels {
         check(context)?;
         let extent = view.surface();
         let mut raster = Raster { extent, pixels: Vec::new(), memory: Vec::new(), context };
-        if let Some(contours) = &overlay.selection {
+        if let Some(boundary) = &overlay.selection {
             let [dx, dy] = overlay.selection_offset.map(|value| value as f64);
-            for contour in contours.contours() {
-                check(context)?;
-                let bytes = (contour.points().len() * size_of::<[f64; 2]>()) as u64;
-                let _points = context.memory().claim(bytes + 64).map_err(ImageError::from)?;
-                let mut points = Vec::new();
-                points.try_reserve_exact(contour.points().len()).map_err(ImageError::from)?;
-                for [x, y] in contour.points() {
-                    points.push(view.device_at([f64::from(*x) + dx, f64::from(*y) + dy])?);
+            let stroke = Stroke::Ants(overlay.ants);
+            for only in [ANT_LIGHT, ANT_DARK] {
+                for run in boundary.runs() {
+                    let point =
+                        |[x, y]: [u32; 2]| view.device_at([f64::from(x) + dx, f64::from(y) + dy]);
+                    let (from, to) = (point(run.start)?, point(run.end())?);
+                    raster.segment(from, to, 0.0, stroke, None, Some(only))?;
                 }
-                raster.closed(&points, Stroke::Ants(overlay.ants), None)?;
+                check(context)?;
             }
         }
         if let Some(outline) = &overlay.outline {
@@ -168,12 +166,12 @@ impl Raster<'_> {
         let mut distance = 0.0;
         for (index, from) in points.iter().enumerate() {
             let to = points[(index + 1) % points.len()];
-            distance = self.segment(*from, to, distance, stroke, clip)?;
+            distance = self.segment(*from, to, distance, stroke, clip, None)?;
         }
         Ok(())
     }
-    /// Stroke one segment by sampling it once per device pixel along its major axis, returning
-    /// the dash distance at its end.
+    /// Stroke one segment by sampling it once per device pixel along its major axis, keeping
+    /// only samples of colour `only` when given, and return the dash distance at its end.
     fn segment(
         &mut self,
         from: [f64; 2],
@@ -181,6 +179,7 @@ impl Raster<'_> {
         start: f64,
         stroke: Stroke,
         clip: Option<[f64; 4]>,
+        only: Option<[u8; 3]>,
     ) -> Result<f64, RenderError> {
         let delta = [to[0] - from[0], to[1] - from[1]];
         let length = delta[0].hypot(delta[1]);
@@ -189,11 +188,26 @@ impl Raster<'_> {
             || from[1].max(to[1]) < 0.0
             || from[0].min(to[0]) >= width
             || from[1].min(to[1]) >= height;
-        if length == 0.0 || outside || self.pixels.len() >= OverlayPixels::MAX {
+        if length == 0.0 || outside {
             return Ok(start + length);
         }
         let steps = delta[0].abs().max(delta[1].abs()).ceil().max(1.0);
-        for step in 0..steps as u64 {
+        // Visit only the samples near the surface, however far a magnified stroke extends.
+        let (mut low, mut high) = (0.0_f64, 1.0_f64);
+        for (axis, limit) in [width, height].into_iter().enumerate() {
+            if delta[axis] != 0.0 {
+                let enter = (-1.0 - from[axis]) / delta[axis];
+                let leave = (limit + 1.0 - from[axis]) / delta[axis];
+                low = low.max(enter.min(leave));
+                high = high.min(enter.max(leave));
+            }
+        }
+        if low >= high {
+            return Ok(start + length);
+        }
+        let first = (low * steps - 0.5).floor().max(0.0) as u64;
+        let last = ((high * steps - 0.5).ceil() + 1.0).min(steps) as u64;
+        for step in first..last {
             let t = (step as f64 + 0.5) / steps;
             let [x, y] = [(from[0] + delta[0] * t).floor(), (from[1] + delta[1] * t).floor()];
             let clipped = clip.is_some_and(|[left, top, right, bottom]| {
@@ -203,17 +217,18 @@ impl Raster<'_> {
                 continue;
             }
             let (x, y) = (x as u32, y as u32);
-            if self.pixels.last().is_some_and(|last| (last.x, last.y) == (x, y)) {
+            // Consecutive polyline segments share their joint pixel; draw it once.
+            if only.is_none() && self.pixels.last().is_some_and(|last| (last.x, last.y) == (x, y)) {
                 continue;
             }
-            self.push(OverlayPixel { x, y, color: stroke.color(start + length * t) })?;
+            let color = stroke.color(start + length * t);
+            if only.is_none_or(|only| only == color) {
+                self.push(OverlayPixel { x, y, color })?;
+            }
         }
         Ok(start + length)
     }
     fn push(&mut self, pixel: OverlayPixel) -> Result<(), RenderError> {
-        if self.pixels.len() >= OverlayPixels::MAX {
-            return Ok(());
-        }
         if self.pixels.len() == self.pixels.capacity() {
             const CHUNK: usize = 4096;
             check(self.context)?;

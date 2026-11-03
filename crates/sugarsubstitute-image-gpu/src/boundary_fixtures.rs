@@ -7,6 +7,7 @@ use crate::{
     display_mapping::MappingUpload,
     display_readback::{DisplayReadbackWorkspace, read_texture_region_into},
     transfer::Transfer,
+    window_overlay::OverlayBatches,
     window_shader::Blitter,
 };
 use std::sync::Arc;
@@ -112,10 +113,10 @@ pub fn qualify_composite(
     let upload = MappingUpload::new(
         Some(fixture.primary.mapping),
         Some(fixture.fallback.mapping),
-        fixture.overlay,
         output,
         context,
     )?;
+    let overlay = OverlayBatches::upload(&device, fixture.overlay, output, context)?;
     let mapping = blitter.mapping();
     let staging = context
         .memory()
@@ -157,14 +158,7 @@ pub fn qualify_composite(
     let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("SugarSubstitute offscreen composite commands"),
     });
-    blitter.encode(
-        &device,
-        &primary_view,
-        &fallback_view,
-        &output_view,
-        upload.overlay,
-        &mut commands,
-    );
+    blitter.encode(&device, &primary_view, &fallback_view, &output_view, &overlay, &mut commands);
     device.faults.check()?;
     let submission = device.submission(context)?;
     let mut transfer =

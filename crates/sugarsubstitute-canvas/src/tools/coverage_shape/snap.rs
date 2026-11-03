@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Snap drawn shape corners to document, image-layer and selection edges and centres.
+//! Snap drawn shape corners to the edges and centres of the document, layers and selection.
 //!
-//! This follows CuteCanvas's default authoring policy: targets are captured once per gesture,
-//! each axis snaps independently within 8 device pixels and keeps its target until the pointer
-//! moves 4 pixels beyond that, the nearest target wins with ties going to the document, then the
-//! selection, then image layers, and a constrained square keeps equal sides when only one axis
-//! snaps.
+//! This follows CuteCanvas's default authoring policy. Targets are captured once per gesture:
+//! the document, the content bounds of every visible layer (image rasters, vector rectangles and
+//! masks with coverage) and the selection. Each axis snaps independently within 8 device pixels
+//! and keeps its target until the pointer moves 4 pixels beyond that. The nearest target wins,
+//! with ties going to the document, then the selection, then layers. A constrained square keeps
+//! equal sides when only one axis snaps.
 use crate::{DocumentSnapshot, LayerContent};
 use std::cmp::Ordering;
 
@@ -77,19 +78,17 @@ impl Snapper {
                 LayerContent::PlacedRaster { bounds: [left, top, width, height], .. } => {
                     snapper.add([*left, *top, left + width, top + height], LAYER);
                 }
-                _ => {}
+                LayerContent::VectorRectangle(rectangle) => snapper.add(rectangle.bounds(), LAYER),
+                LayerContent::Coverage { coverage, .. } => {
+                    if let Some(bounds) = coverage.bounds() {
+                        snapper.add(region_bounds(bounds), LAYER);
+                    }
+                }
+                LayerContent::Exposure { .. } => {}
             }
         }
         if let Some(bounds) = document.selection().and_then(|selection| selection.bounds()) {
-            snapper.add(
-                [
-                    f64::from(bounds.x()),
-                    f64::from(bounds.y()),
-                    f64::from(bounds.right()),
-                    f64::from(bounds.bottom()),
-                ],
-                SELECTION,
-            );
+            snapper.add(region_bounds(bounds), SELECTION);
         }
         if !suppressed {
             let resolved =
@@ -151,6 +150,10 @@ impl Snapper {
             self.y.targets.push(Target { position, priority });
         }
     }
+}
+
+fn region_bounds(region: sugarsubstitute_image_ops::Region) -> [f64; 4] {
+    [region.x(), region.y(), region.right(), region.bottom()].map(f64::from)
 }
 
 /// The corner making a square with `anchor`, on the side the pointer is.

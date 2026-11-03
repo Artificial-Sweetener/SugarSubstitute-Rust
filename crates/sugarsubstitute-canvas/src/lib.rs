@@ -33,7 +33,7 @@ pub use navigation::{
     ScrollPhase, ZoomMode,
 };
 pub use overlay::{
-    ANT_DARK, ANT_DASH, ANT_LIGHT, Contour, ContourWork, CoverageContours, MarchingAnts,
+    ANT_DARK, ANT_DASH, ANT_LIGHT, BoundaryRun, BoundaryWork, CoverageBoundary, MarchingAnts,
     OUTLINE_DASH, OUTLINE_GAP, OverlayOutline, OverlayShape, PresentationOverlay,
     SelectionOutlines, ToolOverlay, outline_light,
 };

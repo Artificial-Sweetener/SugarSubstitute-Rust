@@ -6,11 +6,11 @@
 //! Overlays are view feedback, never authored content. Their geometry is in document pixel
 //! coordinates, so renderers project it through the presented camera and draw it on top of the
 //! prepared frame; animating the ants only changes [`MarchingAnts`], never document pixels.
-mod contour;
+mod boundary;
 mod outlines;
 
-pub use contour::{Contour, CoverageContours};
-pub use outlines::{ContourWork, SelectionOutlines};
+pub use boundary::{BoundaryRun, CoverageBoundary};
+pub use outlines::{BoundaryWork, SelectionOutlines};
 
 use std::{sync::Arc, time::Duration};
 use sugarsubstitute_image_ops::Extent;
@@ -82,7 +82,7 @@ impl MarchingAnts {
     pub const fn phase(self) -> u8 {
         self.phase
     }
-    /// Whether the light dash covers the point `distance` device pixels along a contour.
+    /// Whether the light dash covers the point `distance` device pixels along a boundary run.
     pub fn light(self, distance: f64) -> bool {
         (distance + f64::from(self.phase)).rem_euclid(2.0 * ANT_DASH) < ANT_DASH
     }
@@ -114,12 +114,12 @@ impl From<OverlayShape<'_>> for OverlayOutline {
 }
 
 /// Everything presentation draws over one frame, in document coordinates. It owns its geometry
-/// so hosts can hand it to the job preparing the frame; contours are shared, not copied.
+/// so hosts can hand it to the job preparing the frame; boundaries are shared, not copied.
 #[derive(Clone, Debug)]
 pub struct PresentationOverlay {
-    /// The committed or previewed selection's contours, when they are ready.
-    pub selection: Option<Arc<CoverageContours>>,
-    /// Whole-pixel displacement applied to the selection contours.
+    /// The committed or previewed selection's boundary, when it is traced.
+    pub selection: Option<Arc<CoverageBoundary>>,
+    /// Whole-pixel displacement applied to the selection boundary.
     pub selection_offset: [i64; 2],
     /// The outline of a shape being drawn.
     pub outline: Option<OverlayOutline>,
@@ -129,10 +129,10 @@ pub struct PresentationOverlay {
     pub document: Extent,
 }
 impl PresentationOverlay {
-    /// Combine the displayed selection's contours with the effective tool's feedback.
+    /// Combine the displayed selection's boundary with the effective tool's feedback.
     pub fn new(
         document: Extent,
-        selection: Option<Arc<CoverageContours>>,
+        selection: Option<Arc<CoverageBoundary>>,
         tool: Option<ToolOverlay<'_>>,
         ants: MarchingAnts,
     ) -> Self {
@@ -149,7 +149,7 @@ impl PresentationOverlay {
     }
     /// Whether the overlay changes over time, so hosts schedule [`MarchingAnts::next_step`].
     pub fn animated(&self) -> bool {
-        self.selection.as_ref().is_some_and(|contours| !contours.is_empty())
+        self.selection.as_ref().is_some_and(|boundary| !boundary.is_empty())
     }
 }
 

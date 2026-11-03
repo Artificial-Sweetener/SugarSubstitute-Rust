@@ -215,6 +215,7 @@ impl WindowSurface {
             self.blitter = Some(Blitter::new(&device, self.owner.format, context)?);
         }
         let staged = StagedDraw::new(
+            &device,
             mapping,
             underlay.map(|(_, mapping)| mapping),
             overlay,

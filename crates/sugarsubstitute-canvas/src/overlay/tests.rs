@@ -1,149 +1,168 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Contour tracing fixtures, outline caching and ant animation.
+//! Pixel-edge boundary fixtures, boundary caching and ant animation.
 use super::*;
 use crate::{CanvasError, tests::harness};
-use sugarsubstitute_image_ops::{CombineMode, Coverage, FULL_COVERAGE, ImageError, Path, Region};
+use sugarsubstitute_contracts::execution::JobContext;
+use sugarsubstitute_image_ops::{
+    CombineMode, Coverage, FULL_COVERAGE, ImageError, Path, Region, coverage_from_u8,
+};
 
-fn trace(
-    coverage: &Coverage,
-    context: &sugarsubstitute_contracts::execution::JobContext,
-) -> Result<CoverageContours, CanvasError> {
-    CoverageContours::trace(coverage, context)
-}
-
-/// Twice the signed area of a contour; positive is clockwise on screen (y down).
-fn area(contour: &Contour) -> f64 {
-    let points = contour.points();
-    (0..points.len())
-        .map(|index| {
-            let [x0, y0] = points[index].map(f64::from);
-            let [x1, y1] = points[(index + 1) % points.len()].map(f64::from);
-            x0 * y1 - x1 * y0
-        })
-        .sum::<f64>()
-        / 2.0
-}
-
-fn bounds(contour: &Contour) -> [f32; 4] {
-    contour
-        .points()
-        .iter()
-        .fold([f32::MAX, f32::MAX, f32::MIN, f32::MIN], |[l, t, r, b], [x, y]| {
-            [l.min(*x), t.min(*y), r.max(*x), b.max(*y)]
-        })
+fn trace(coverage: &Coverage, context: &JobContext) -> Result<CoverageBoundary, CanvasError> {
+    CoverageBoundary::trace(coverage, context)
 }
 
 fn run(
-    test: impl FnOnce(&sugarsubstitute_contracts::execution::JobContext) -> Result<(), CanvasError>
-    + Send
-    + 'static,
+    test: impl FnOnce(&JobContext) -> Result<(), CanvasError> + Send + 'static,
 ) -> harness::TestResult {
     harness::run(16 * 1024 * 1024, |context| {
         test(context).map_err(|cause| ImageError::Source(Box::new(cause)))
     })
 }
 
+fn horizontal(x: u32, y: u32, length: u32) -> BoundaryRun {
+    BoundaryRun { start: [x, y], length, vertical: false }
+}
+
+fn vertical(x: u32, y: u32, length: u32) -> BoundaryRun {
+    BoundaryRun { start: [x, y], length, vertical: true }
+}
+
+/// CuteCanvas's `SelectionBoundaryBuilder` over the whole extent, transcribed literally.
+fn reference(coverage: &Coverage) -> Vec<BoundaryRun> {
+    let extent = coverage.extent();
+    let (width, height) = (extent.width() as usize, extent.height() as usize);
+    let selected = |x: usize, y: usize| {
+        sugarsubstitute_image_ops::coverage_to_u8(coverage.value(x as u32, y as u32)) >= 128
+    };
+    let runs = |values: Vec<bool>| {
+        let mut found = Vec::new();
+        let mut start = None;
+        for (index, value) in values.iter().chain([&false]).enumerate() {
+            match (*value, start) {
+                (true, None) => start = Some(index),
+                (false, Some(first)) => {
+                    found.push((first as u32, index as u32));
+                    start = None;
+                }
+                _ => {}
+            }
+        }
+        found
+    };
+    let mut result = Vec::new();
+    for y in 0..=height {
+        let edges = (0..width)
+            .map(|x| (y > 0 && selected(x, y - 1)) != (y < height && selected(x, y)))
+            .collect();
+        for (start, end) in runs(edges) {
+            result.push(horizontal(start, y as u32, end - start));
+        }
+    }
+    for x in 0..=width {
+        let edges = (0..height)
+            .map(|y| (x > 0 && selected(x - 1, y)) != (x < width && selected(x, y)))
+            .collect();
+        for (start, end) in runs(edges) {
+            result.push(vertical(x as u32, start, end - start));
+        }
+    }
+    result
+}
+
 #[test]
-fn hard_edges_trace_pixel_edges_with_half_pixel_corner_cuts() -> harness::TestResult {
+fn boundaries_are_pixel_edge_runs_in_cutecanvas_order() -> harness::TestResult {
     run(|context| {
         let extent = Extent::new(300, 200)?;
         let square = Path::rectangle([10.0, 20.0, 50.0, 70.0])?.rasterize(extent, context)?;
-        let contours = trace(&square, context)?;
-        assert_eq!(contours.contours().len(), 1);
-        let contour = &contours.contours()[0];
-        assert_eq!(bounds(contour), [10.0, 20.0, 50.0, 70.0]);
-        // Corner cells cut each corner by a half-pixel triangle of area 1/8.
-        assert!((area(contour) - (40.0 * 50.0 - 4.0 / 8.0)).abs() < 1e-3);
-        assert_eq!(contours.fingerprint(), square.fingerprint());
-        // Coverage touching the extent edge still closes along it.
-        let edge = Path::rectangle([0.0, 0.0, 300.0, 40.0])?.rasterize(extent, context)?;
-        let traced = trace(&edge, context)?;
-        assert_eq!(bounds(&traced.contours()[0]), [0.0, 0.0, 300.0, 40.0]);
+        let boundary = trace(&square, context)?;
+        assert_eq!(
+            boundary.runs(),
+            &[
+                horizontal(10, 20, 40),
+                horizontal(10, 70, 40),
+                vertical(10, 20, 50),
+                vertical(50, 20, 50),
+            ]
+        );
+        assert_eq!(boundary.fingerprint(), square.fingerprint());
+        assert_eq!(boundary.runs()[3].end(), [50, 70]);
+        // Selected pixels on the extent's edge are bounded by the edge itself.
         let everything = Coverage::new(extent, FULL_COVERAGE, context.memory())?;
-        assert_eq!(bounds(&trace(&everything, context)?.contours()[0]), [0.0, 0.0, 300.0, 200.0]);
+        assert_eq!(
+            trace(&everything, context)?.runs(),
+            &[
+                horizontal(0, 0, 300),
+                horizontal(0, 200, 300),
+                vertical(0, 0, 200),
+                vertical(300, 0, 200),
+            ]
+        );
         assert!(trace(&Coverage::new(extent, 0, context.memory())?, context)?.is_empty());
         Ok(())
     })
 }
 
 #[test]
-fn holes_and_islands_trace_separately_with_opposite_winding() -> harness::TestResult {
+fn holes_islands_and_anti_aliased_edges_match_the_reference_builder() -> harness::TestResult {
     run(|context| {
-        let extent = Extent::new(256, 256)?;
+        let extent = Extent::new(200, 150)?;
         let outer = Path::rectangle([20.0, 20.0, 120.0, 120.0])?.rasterize(extent, context)?;
-        let hole = Path::rectangle([50.0, 50.0, 80.0, 80.0])?.rasterize(extent, context)?;
-        let island = Path::ellipse([150.0, 140.0, 230.0, 200.0])?.rasterize(extent, context)?;
-        let ring = outer.combine(&hole, CombineMode::Subtract, context)?;
-        let shapes = ring.combine(&island, CombineMode::Add, context)?;
-        let contours = trace(&shapes, context)?;
-        assert_eq!(contours.contours().len(), 3);
-        let mut found: Vec<([f32; 4], bool)> = contours
-            .contours()
-            .iter()
-            .map(|contour| (bounds(contour), area(contour) > 0.0))
-            .collect();
-        found.sort_by(|left, right| left.0[0].total_cmp(&right.0[0]));
-        assert_eq!(found[0], ([20.0, 20.0, 120.0, 120.0], true));
-        assert_eq!(found[1], ([50.0, 50.0, 80.0, 80.0], false));
-        let ellipse = found[2];
-        assert!(ellipse.1);
-        for (actual, expected) in ellipse.0.iter().zip([150.0, 140.0, 230.0, 200.0]) {
-            assert!((actual - expected).abs() < 0.5, "{actual} vs {expected}");
-        }
-        Ok(())
-    })
-}
-
-#[test]
-fn partial_coverage_traces_its_half_level_crossing() -> harness::TestResult {
-    run(|context| {
-        let extent = Extent::new(64, 64)?;
-        let mut coverage = Coverage::new(extent, 0, context.memory())?;
-        // A horizontal ramp: column x holds x/63 of full coverage inside rows 10..30.
-        coverage.update(Region::new(0, 10, 64, 20)?, context.memory(), |x, _, _| {
-            (u32::from(FULL_COVERAGE) * x / 63) as u16
-        })?;
-        let contours = trace(&coverage, context)?;
-        assert_eq!(contours.contours().len(), 1);
-        let [left, top, right, bottom] = bounds(&contours.contours()[0]);
-        // Half coverage falls between columns 31 and 32, whose centres are 31.5 and 32.5.
-        assert!((left - 32.0).abs() < 0.01, "{left}");
-        assert_eq!([top, right, bottom], [10.0, 64.0, 30.0]);
-        // A pixel just below half is outside; just above is inside.
-        let mut dot = Coverage::new(extent, 0, context.memory())?;
-        dot.write(
-            Region::new(5, 5, 2, 1)?,
-            &[FULL_COVERAGE / 2, FULL_COVERAGE / 2 + 1],
-            context.memory(),
+        let hole = Path::ellipse([40.5, 45.25, 90.0, 80.0])?.rasterize(extent, context)?;
+        let island = Path::polygon(vec![[130.0, 10.0], [195.3, 60.7], [140.2, 140.0]])?
+            .rasterize(extent, context)?;
+        let shapes = outer.combine(&hole, CombineMode::Subtract, context)?.combine(
+            &island,
+            CombineMode::Add,
+            context,
         )?;
-        let traced = trace(&dot, context)?;
-        assert_eq!(traced.contours().len(), 1);
-        let [l, _, r, _] = bounds(&traced.contours()[0]);
-        assert!((l - 6.0).abs() < 1e-3 && r < 6.6, "{l} {r}");
+        let boundary = trace(&shapes, context)?;
+        assert_eq!(boundary.runs(), reference(&shapes).as_slice());
+        // The hole adds its own runs inside the square.
+        assert!(
+            boundary
+                .runs()
+                .iter()
+                .any(|run| run.start[1] > 45 && run.start[1] < 80 && !run.vertical)
+        );
         Ok(())
     })
 }
 
 #[test]
-fn saddles_join_diagonal_pixels_by_their_mean() -> harness::TestResult {
+fn partial_coverage_is_selected_from_eight_bit_128() -> harness::TestResult {
     run(|context| {
-        let extent = Extent::new(8, 8)?;
+        let extent = Extent::new(16, 4)?;
         let mut coverage = Coverage::new(extent, 0, context.memory())?;
-        coverage.write(
-            Region::new(2, 2, 2, 2)?,
+        let values = [127_u8, 128, 200, 128, 127, 255, 0, 128].map(coverage_from_u8);
+        coverage.write(Region::new(2, 1, 8, 1)?, &values, context.memory())?;
+        let boundary = trace(&coverage, context)?;
+        assert_eq!(boundary.runs(), reference(&coverage).as_slice());
+        assert_eq!(
+            boundary.runs(),
+            &[
+                horizontal(3, 1, 3),
+                horizontal(7, 1, 1),
+                horizontal(9, 1, 1),
+                horizontal(3, 2, 3),
+                horizontal(7, 2, 1),
+                horizontal(9, 2, 1),
+                vertical(3, 1, 1),
+                vertical(6, 1, 1),
+                vertical(7, 1, 1),
+                vertical(8, 1, 1),
+                vertical(9, 1, 1),
+                vertical(10, 1, 1),
+            ]
+        );
+        // Diagonal neighbours stay separate, with no saddle joining them.
+        let mut diagonal = Coverage::new(extent, 0, context.memory())?;
+        diagonal.write(
+            Region::new(2, 1, 2, 2)?,
             &[FULL_COVERAGE, 0, 0, FULL_COVERAGE],
             context.memory(),
         )?;
-        // The saddle's mean is exactly half, below the inside level: two separate pixels.
-        assert_eq!(trace(&coverage, context)?.contours().len(), 2);
-        // A third corner still below half lifts the mean above it and joins the diagonal.
-        coverage.write(
-            Region::new(2, 2, 2, 2)?,
-            &[FULL_COVERAGE, 30_000, 0, FULL_COVERAGE],
-            context.memory(),
-        )?;
-        assert_eq!(trace(&coverage, context)?.contours().len(), 1);
+        assert_eq!(trace(&diagonal, context)?.runs(), reference(&diagonal).as_slice());
         Ok(())
     })
 }
@@ -210,10 +229,10 @@ fn presentation_overlays_own_tool_feedback_and_animate_only_with_ants() -> harne
         assert_eq!(drawn.outline, Some(OverlayOutline::Polygon(points.into())));
         assert!(!drawn.is_empty() && !drawn.animated());
         let square = Path::rectangle([2.0, 2.0, 9.0, 9.0])?.rasterize(extent, context)?;
-        let contours = std::sync::Arc::new(CoverageContours::trace(&square, context)?);
+        let boundary = std::sync::Arc::new(CoverageBoundary::trace(&square, context)?);
         let moving = PresentationOverlay::new(
             extent,
-            Some(contours),
+            Some(boundary),
             Some(ToolOverlay::SelectionOffset([3, -1])),
             MarchingAnts::default(),
         );

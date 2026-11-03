@@ -311,3 +311,24 @@ fn feedback_reports_precise_modes_translation_and_unavailability() -> harness::T
         Ok(())
     })
 }
+
+#[test]
+fn visible_mask_content_bounds_are_snap_targets() -> harness::TestResult {
+    run(|context| {
+        let mut canvas = canvas(context, ShapeTarget::Selection, ShapeKind::Rectangle)?;
+        let extent = canvas.document.snapshot().extent();
+        let coverage = sugarsubstitute_image_ops::Path::rectangle([30.0, 40.0, 70.0, 90.0])?
+            .rasterize(extent, context)?;
+        let appearance = MaskAppearance::new([255, 0, 0], 0.5)?;
+        let layer =
+            Layer::new(LayerId::new(MASK)?, LayerContent::Coverage { coverage, appearance })?;
+        canvas.document.apply(DocumentEdit::Insert { index: 0, layer: layer.clone() })?;
+        assert!(canvas.drag(&[[36.0, 44.0], [120.0, 91.0]], NONE, context)?);
+        assert_eq!(canvas.selection(), region(30, 40, 90, 50)?);
+        canvas.document.apply(DocumentEdit::Select(None))?;
+        canvas.document.apply(DocumentEdit::Replace(layer.with_visibility(false)))?;
+        assert!(canvas.drag(&[[36.0, 44.0], [120.0, 91.0]], NONE, context)?);
+        assert_eq!(canvas.selection(), region(36, 44, 84, 47)?);
+        Ok(())
+    })
+}

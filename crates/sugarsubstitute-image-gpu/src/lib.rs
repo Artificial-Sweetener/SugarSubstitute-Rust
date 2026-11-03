@@ -36,6 +36,7 @@ mod video_memory;
 mod window;
 mod window_configuration;
 mod window_frame;
+mod window_overlay;
 mod window_shader;
 
 #[cfg(feature = "boundary-fixtures")]
@@ -46,7 +47,7 @@ pub use batch::GpuWork;
 pub use buffer::{GpuTile, Readback};
 pub use display::{DisplayRegions, DisplayTile};
 pub use display_image::{DisplayCopy, DisplayImage};
-pub use display_mapping::{DisplayMapping, MAX_OVERLAY_PIXELS, OverlayPixel};
+pub use display_mapping::DisplayMapping;
 pub use display_readback::{DisplayReadback, DisplayReadbackWorkspace};
 pub use error::GpuError;
 pub use evaluate::GpuEvaluator;
@@ -61,3 +62,4 @@ pub use timing::GpuDiagnostics;
 #[cfg(windows)]
 pub use video_memory::VideoMemoryBudget;
 pub use window::{NativeWindowHandle, WindowFrame, WindowPresentation, WindowSurface};
+pub use window_overlay::OverlayPixel;

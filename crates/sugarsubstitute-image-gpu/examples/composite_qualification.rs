@@ -244,13 +244,21 @@ fn run(device: Arc<GpuDevice>, context: &JobContext) -> Result<Report> {
         &fallback_columns,
         &fallback_rows,
     )?;
-    // Selection ants and outline dashes, including a later pixel replacing an earlier one.
-    let overlay = [
+    // Selection ants and outline dashes spanning more than one overlay batch, in order: the
+    // final explicit pixels cover everything drawn before them.
+    let mut overlay = (0..600_000_u32)
+        .map(|index| OverlayPixel {
+            x: index % 5,
+            y: (index / 5) % 4,
+            color: [(index % 251) as u8, 77, (index % 13) as u8],
+        })
+        .collect::<Vec<_>>();
+    overlay.extend([
         OverlayPixel { x: 0, y: 0, color: [245, 245, 245] },
         OverlayPixel { x: 2, y: 2, color: [25, 25, 25] },
         OverlayPixel { x: 4, y: 3, color: [255, 255, 255] },
         OverlayPixel { x: 2, y: 2, color: [0, 0, 0] },
-    ];
+    ]);
     let fixture =
         CompositeFixture::new(primary_source, fallback_source, matte)?.with_overlay(&overlay);
     let qualification = qualify_composite(fixture, context)?;

@@ -4,13 +4,13 @@ platforms = ["windows", "macos", "linux"]
 [[owners]]
 package = "sugarsubstitute-image-gpu"
 root = "crates/sugarsubstitute-image-gpu"
-concern = "Exclusive surface configuration, transferable submission custody, scoped configuration recovery and transactional swapchain admission; GPU compatibility, exact device selection, shader validation, bounded physical display mappings, display-copy bounds and retryable admission classification; hardware qualification compares shared DAG pixels, display conversion, alias eviction and actual cancellation retirement; overlay pixel encoding and its validated point shader drawn over displays"
+concern = "Exclusive surface configuration, transferable submission custody, scoped configuration recovery and transactional swapchain admission; GPU compatibility, exact device selection, shader validation, bounded physical display mappings, display-copy bounds and retryable admission classification; hardware qualification compares shared DAG pixels, display conversion, alias eviction and actual cancellation retirement; overlay pixels uploaded in admitted batches and drawn by a validated point shader over displays"
 minimum_tests = 28
 
 [[owners]]
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
-concern = "Physical camera, retained projection phase and exact damage invariants; exact input-document archive round trips and rejection of corrupt, truncated and unsupported archives; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history; selection and mask shape modes, constraints, snapping and outline dragging through deferred coverage work; deselect, clear and live-previewed coverage modification; selection contour tracing, outline caching and ant animation"
+concern = "Physical camera, retained projection phase and exact damage invariants; exact input-document archive round trips and rejection of corrupt, truncated and unsupported archives; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history; selection and mask shape modes, constraints, snapping and outline dragging through deferred coverage work; deselect, clear and live-previewed coverage modification; CuteCanvas pixel-edge selection boundaries, boundary caching and ant animation"
 minimum_tests = 72
 
 [[owners]]

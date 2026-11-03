@@ -115,6 +115,7 @@ impl SharedSurface {
                 Some(Blitter::new(&self.device, wgpu::TextureFormat::Bgra8Unorm, context)?);
         }
         let staged = StagedDraw::new(
+            &self.device,
             mapping,
             underlay.map(|(_, mapping)| mapping),
             overlay,
