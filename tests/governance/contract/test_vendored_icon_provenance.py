@@ -68,6 +68,60 @@ def test_substitute_frame_artwork_has_pinned_licensed_deployment_bytes() -> None
     }
 
 
+def test_canvas_editing_artwork_has_pinned_licensed_deployment_bytes() -> None:
+    """Verify Substitute and QFluent editing artwork against pinned, licensed deployment bytes."""
+    manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))
+    expected = {
+        "Substitute input canvas Fluent artwork": (
+            "MIT",
+            "https://github.com/Artificial-Sweetener/SugarSubstitute",
+            "substitute/presentation/resources/icons/",
+        ),
+        "QFluent canvas editing artwork": (
+            "GPL-3.0-or-later",
+            "https://github.com/zhiyiYo/PyQt-Fluent-Widgets",
+            "qfluentwidgets/_rc/images/icons/",
+        ),
+    }
+    recorded: set[str] = set()
+    for component in manifest["component"]:
+        if component["name"] not in expected:
+            continue
+        license_id, source, source_root = expected.pop(component["name"])
+        assert (component["license"], component["source"]) == (license_id, source)
+        assert re.fullmatch(r"[0-9a-f]{40}", component["revision"])
+        license_path = Path(component["license_file"])
+        assert (ROOT / license_path).read_bytes() == (
+            ROOT / "web" / license_path
+        ).read_bytes()
+        for asset in component["asset"]:
+            authored = asset["vendored_file"]
+            assert asset["source_path"].startswith(source_root)
+            assert authored.startswith("frontend/static/canvas-editing/")
+            assert authored not in recorded
+            recorded.add(authored)
+            assert asset["runtime_file"] == authored.replace(
+                "frontend/static/", "web/", 1
+            )
+            contents = (ROOT / authored).read_bytes()
+            assert hashlib.sha256(contents).hexdigest() == asset["sha256"]
+            assert (ROOT / asset["runtime_file"]).read_bytes() == contents
+            svg = ElementTree.fromstring(contents)
+            assert svg.tag == "{http://www.w3.org/2000/svg}svg"
+            for element in svg.iter():
+                assert not element.tag.endswith("script")
+                assert not any(
+                    key.lower().startswith("on") or "href" in key.lower()
+                    for key in element.attrib
+                )
+    assert not expected
+    assert recorded == {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "frontend/static/canvas-editing").iterdir()
+        if path.is_file()
+    }
+
+
 def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None:
     """Reject unrecorded assets, stale derivatives, unsafe SVGs, and missing notices."""
     manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))

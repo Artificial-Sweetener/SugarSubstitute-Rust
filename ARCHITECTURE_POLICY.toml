@@ -104,6 +104,21 @@ paths = ["frontend/comfyui/ui/input_canvas/application/*.ts"]
 forbidden_typescript_paths = ["frontend/comfyui/ui/input_canvas/infrastructure", "frontend/comfyui/ui/input_canvas/presentation", "frontend/comfyui/ui/surface", "frontend/comfyui/ui/types/graph", "types/comfyui", "/scripts", "node_modules"]
 
 [[dependency]]
+name = "TYPESCRIPT_CANVAS_EDITING_DOMAIN"
+paths = ["frontend/comfyui/ui/canvas_editing/domain/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/canvas_editing/application", "frontend/comfyui/ui/canvas_editing/presentation", "frontend/comfyui/ui/output_canvas", "frontend/comfyui/ui/menus", "frontend/comfyui/ui/surface", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_EDITING_APPLICATION"
+paths = ["frontend/comfyui/ui/canvas_editing/application/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/canvas_editing/presentation", "frontend/comfyui/ui/output_canvas", "frontend/comfyui/ui/menus", "frontend/comfyui/ui/surface", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_EDITING_PRESENTATION"
+paths = ["frontend/comfyui/ui/canvas_editing/presentation/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/output_canvas", "frontend/comfyui/ui/execution", "frontend/comfyui/ui/surface", "types/comfyui", "/scripts"]
+
+[[dependency]]
 name = "TYPESCRIPT_EXECUTION_DOMAIN"
 paths = ["frontend/comfyui/ui/execution/domain/*.ts"]
 forbidden_typescript_paths = [

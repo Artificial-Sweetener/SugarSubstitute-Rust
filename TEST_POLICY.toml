@@ -296,6 +296,19 @@ sources = ["sugarcubes/frontend_assets.py", "frontend/comfyui/ui/output_canvas/*
 proofs = ["unit", "contract", "integration"]
 
 [[area]]
+name = "canvas_editing"
+sources = ["frontend/comfyui/ui/canvas_editing/**", "web/comfyui/ui/canvas_editing/**", "frontend/static/icons/canvas-editing/**", "web/icons/canvas-editing/**", "frontend/static/canvas-editing/**", "web/canvas-editing/**"]
+proofs = ["unit", "integration"]
+
+[[boundary]]
+name = "canvas_editing_overlay"
+area = "canvas_editing"
+
+[[subscription]]
+boundary = "canvas_editing_overlay"
+groups = ["output_canvas/integration"]
+
+[[area]]
 name = "cube"
 sources = [
   "frontend/comfyui/ui/affordance/**",
