@@ -99,3 +99,18 @@ fn zooming_brush_rings_stay_bounded_and_retirement_releases_them() -> Result<(),
     assert_eq!(again.owned().map(|cursor| Rc::strong_count(&cursor)), Some(2));
     Ok(())
 }
+
+#[test]
+fn large_rings_stay_within_the_cached_byte_budget() -> Result<(), Box<dyn Error>> {
+    let cursors = Cursors::sized(STANDARD)?;
+    for diameter in [1024, 1280, 1536, 1792, 2048] {
+        cursors.resolve(STANDARD, ring(diameter))?;
+        assert!(
+            cursors.0.borrow().rendered.bytes() <= 32 << 20
+                || cursors.0.borrow().rendered.len() == 1
+        );
+    }
+    let latest = cursors.resolve(STANDARD, ring(2048))?;
+    assert_eq!(cursors.resolve(STANDARD, ring(2048))?.handle(), latest.handle());
+    Ok(())
+}

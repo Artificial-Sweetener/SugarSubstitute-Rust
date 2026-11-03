@@ -45,11 +45,23 @@ impl BrushOutline {
     /// so a native cursor never needs an unbounded bitmap.
     pub const MAX_DIAMETER: u32 = 2048;
 
-    /// A ring `diameter` physical pixels across, clamped to the supported range, drawn in the
-    /// target mask's sRGB `color`. `erase` adds the erase mark shown while Alt or a pen's
-    /// eraser end turns the brush into an eraser.
+    /// Rings below this diameter keep their exact pixel size.
+    pub const EXACT_DIAMETER: u32 = 64;
+
+    /// A ring about `diameter` physical pixels across, drawn in the target mask's sRGB `color`.
+    /// `erase` adds the erase mark shown while Alt or a pen's eraser end turns the brush into an
+    /// eraser. The diameter is clamped to the supported range; from [`Self::EXACT_DIAMETER`] up
+    /// it snaps to 32 steps per doubling, within 1.6% of the request, so zooming a large brush
+    /// reuses a bounded set of native cursors instead of one per camera scale.
     pub fn new(diameter: u32, color: [u8; 3], erase: bool) -> Self {
-        Self { diameter: diameter.clamp(Self::MIN_DIAMETER, Self::MAX_DIAMETER), color, erase }
+        let diameter = diameter.clamp(Self::MIN_DIAMETER, Self::MAX_DIAMETER);
+        let diameter = if diameter < Self::EXACT_DIAMETER {
+            diameter
+        } else {
+            let step = 1 << (diameter.ilog2() - 5);
+            ((diameter + step / 2) / step * step).min(Self::MAX_DIAMETER)
+        };
+        Self { diameter, color, erase }
     }
     /// Ring diameter in physical pixels.
     pub const fn diameter(self) -> u32 {
@@ -73,6 +85,14 @@ mod tests {
     fn brush_outlines_clamp_to_a_visible_and_bounded_native_ring() {
         assert_eq!(BrushOutline::new(0, [1, 2, 3], false).diameter(), BrushOutline::MIN_DIAMETER);
         assert_eq!(BrushOutline::new(u32::MAX, [1, 2, 3], false).diameter(), 2048);
+        let snapped: Vec<u32> = [63, 64, 65, 129, 130, 1000, 1017, 2047]
+            .map(|diameter| BrushOutline::new(diameter, [0; 3], false).diameter())
+            .to_vec();
+        assert_eq!(snapped, [63, 64, 66, 128, 132, 1008, 1024, 2048]);
+        let sizes: std::collections::BTreeSet<u32> = (0..=4096)
+            .map(|diameter| BrushOutline::new(diameter, [0; 3], false).diameter())
+            .collect();
+        assert!(sizes.len() <= 62 + 6 * 32 + 1, "{} distinct rings", sizes.len());
         let outline = BrushOutline::new(37, [10, 20, 30], true);
         assert_eq!([outline.diameter(), u32::from(outline.erase())], [37, 1]);
         assert_eq!(outline.color(), [10, 20, 30]);
