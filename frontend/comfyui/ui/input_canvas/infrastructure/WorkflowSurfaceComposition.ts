@@ -53,6 +53,10 @@ export interface WorkflowSurfaceOptions {
   readonly assets: InputSourceAssets;
   graph(): ComfyGraph | null | undefined;
   workflowHost(): CanvasWorkflowHost | null;
+  /** Stored states of the other open workflows, used to recognize a duplicated workflow. */
+  workflowPeers(): readonly unknown[];
+  /** Record the active workflow's graph in its change tracker. */
+  commitWorkflow(): void;
   accent(): string;
   notice: WorkflowSurfaceNotice;
   report(error: unknown): void;
@@ -71,7 +75,12 @@ export interface WorkflowSurfaces {
 /** Build provisioning over the existing association and binding owners. */
 export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): WorkflowSurfaces {
   const { associations, workflowHost, report } = options;
-  const state = new ComfyWorkflowInputState(options.graph, () => crypto.randomUUID());
+  const state = new ComfyWorkflowInputState(
+    options.graph,
+    () => crypto.randomUUID(),
+    options.workflowPeers,
+    options.commitWorkflow,
+  );
   const graph = new ComfyWorkflowSurfaceGraph(
     associations,
     options.bindings,

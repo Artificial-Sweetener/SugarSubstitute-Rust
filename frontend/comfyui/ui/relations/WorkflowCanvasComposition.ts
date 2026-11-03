@@ -75,6 +75,8 @@ export function createWorkflowCanvasComposition(
       provisions: (id) => workflowExecution.canvases.workflowHost(id) !== null,
     },
     workflowHost: () => workflowExecution.canvases.workflowHost(),
+    workflowPeers: () => workflowExecution.otherStoredWorkflows(),
+    commitWorkflow: () => workflowExecution.commitActiveWorkflowState(),
     accent: () => workflowFields.appearance.palette.theme.color,
     notice: (title, message) => options.notify('warn', title, message),
     legacyHost: (id) => workflowExecution.canvases.maskHost(id),

@@ -48,6 +48,8 @@ export function createCanvasInputs(options) {
         assets,
         graph: options.graph,
         workflowHost: options.workflowHost,
+        workflowPeers: options.workflowPeers,
+        commitWorkflow: options.commitWorkflow,
         accent: options.accent,
         notice: options.notice,
         report,

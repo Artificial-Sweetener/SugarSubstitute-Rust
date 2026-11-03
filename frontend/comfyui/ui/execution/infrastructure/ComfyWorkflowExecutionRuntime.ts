@@ -227,6 +227,16 @@ export class ComfyWorkflowExecutionRuntime {
     );
   }
 
+  /** Read the stored state of every open workflow other than the active one. */
+  otherStoredWorkflows(): readonly unknown[] {
+    return this.#adapter?.readOtherStoredWorkflows() ?? [];
+  }
+
+  /** Record the active workflow's current graph in its change tracker. */
+  commitActiveWorkflowState(): void {
+    this.#adapter?.commitActiveWorkflowState();
+  }
+
   /** Report whether the bound document canvas concluded native output discovery. */
   get canvasSurfaceDiscovered(): boolean {
     return this.#canvasDelivery?.surfaceDiscovered ?? false;
