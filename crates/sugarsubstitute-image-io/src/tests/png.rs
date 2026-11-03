@@ -107,3 +107,43 @@ fn tagged_gamma_decodes_into_linear_light_before_canonical_source_reads() -> har
     let gray = (128.0_f32 / 255.0).powi(2);
     roundtrip(bytes, [[gray, gray, gray, 1.0], [1.0; 4]])
 }
+
+#[test]
+fn original_samples_keep_straight_color_under_transparency_and_narrow_sixteen_bits()
+-> harness::TestResult {
+    let straight =
+        encode(::png::ColorType::Rgba, ::png::BitDepth::Eight, &[9, 200, 77, 0, 255, 1, 2, 3])?;
+    let deep = encode(
+        ::png::ColorType::Rgba,
+        ::png::BitDepth::Sixteen,
+        &[0x12, 0xff, 0x34, 0x00, 0x56, 0x80, 0x78, 0x01, 0, 0, 0xff, 0xff, 0, 0, 0xab, 0xcd],
+    )?;
+    for (bytes, expected) in [
+        (straight, [[9, 200, 77, 0], [255, 1, 2, 3]]),
+        (deep, [[0x12, 0x34, 0x56, 0x78], [0, 0xff, 0, 0xab]]),
+    ] {
+        harness::run(32 * 1024 * 1024, move |context| {
+            let import =
+                PngImport::open(Cursor::new(&bytes), Sha256::digest(&bytes).into(), context)?;
+            let descriptor = import.descriptor();
+            let mut archive = Vec::new();
+            import.write(&mut archive, context)?;
+            let mut source =
+                RasterArchive::open(Cursor::new(archive), descriptor, context.memory(), context)?;
+            let mut samples = [[0; 4]; 2];
+            source.read_samples8(descriptor.layout().extent().region(), &mut samples, context)?;
+            assert_eq!(samples, expected);
+            assert!(
+                source
+                    .read_samples8(
+                        descriptor.layout().extent().region(),
+                        &mut samples[..1],
+                        context
+                    )
+                    .is_err()
+            );
+            Ok(())
+        })?;
+    }
+    Ok(())
+}

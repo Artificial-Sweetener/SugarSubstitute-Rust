@@ -92,7 +92,7 @@ impl RetainedDocuments {
     }
 
     /// Withdraw the parked document for `key`, releasing its ledger charge.
-    fn take(&mut self, key: &RetentionKey) -> Option<Box<document::DocumentState>> {
+    pub(super) fn take(&mut self, key: &RetentionKey) -> Option<Box<document::DocumentState>> {
         let index = self.entries.iter().position(|entry| entry.key == *key)?;
         let entry = self.entries.remove(index)?;
         self.bytes = self.bytes.saturating_sub(entry.bytes);
@@ -246,7 +246,7 @@ impl document::DocumentState {
     }
 
     /// The part of [`Self::retained_bytes`] held in video memory.
-    fn retained_gpu_bytes(&self) -> u64 {
+    pub(super) fn retained_gpu_bytes(&self) -> u64 {
         [&self.gpu_front, &self.fallback_gpu_front, &self.navigation_gpu_front]
             .into_iter()
             .flatten()
@@ -255,7 +255,7 @@ impl document::DocumentState {
     }
 
     /// Backing bytes charged to the retained-document ledger.
-    fn retained_bytes(&self) -> u64 {
+    pub(super) fn retained_bytes(&self) -> u64 {
         let cpu = [&self.front, &self.fallback_front, &self.navigation_front]
             .into_iter()
             .flatten()
@@ -289,7 +289,7 @@ impl document::DocumentState {
     /// Take over the outgoing document's display custody: the acknowledged projection, its
     /// reusable buffers and their evidence, which describe the screen rather than a document.
     /// Neither document may hold a frame awaiting native acknowledgement.
-    fn adopt_display(&mut self, outgoing: &mut Self) {
+    pub(super) fn adopt_display(&mut self, outgoing: &mut Self) {
         self.cpu_projection = outgoing.cpu_projection.take();
         self.display_buffers = std::mem::take(&mut outgoing.display_buffers);
         self.display_buffer_extent = outgoing.display_buffer_extent.take();
@@ -304,7 +304,7 @@ impl document::DocumentState {
 
     /// Label the scene and the backings prepared for its current source as `source_revision`.
     /// Backings of any older source stay stale.
-    fn rebind(&mut self, source_revision: u64) {
+    pub(super) fn rebind(&mut self, source_revision: u64) {
         let Some(scene) = &mut self.scene else {
             return;
         };
@@ -354,7 +354,13 @@ impl Session {
         }
         let current = self.document.retention.as_ref() == Some(key)
             && self.document.scene.as_ref().is_some_and(|scene| scene.source.is_some());
-        if !current && !self.retained.contains(key) {
+        let parked = self.input_shown()
+            && self
+                .inputs
+                .parked_output
+                .as_ref()
+                .is_some_and(|document| document.retention.as_ref() == Some(key));
+        if !current && !parked && !self.retained.contains(key) {
             return Ok(false);
         }
         let Some(intent) = self.supersede_pending_source()? else {
@@ -366,10 +372,13 @@ impl Session {
 
     /// Bound parked documents to the memory budget's current `limit`, shedding at once.
     ///
-    /// The effective allowance never exceeds the funded retained-document admission.
+    /// The effective allowance never exceeds the funded retained-document admission. Parked
+    /// input documents are never evicted; their backings give way within what retained
+    /// outputs leave of `limit`.
     pub(crate) fn set_retained_limit(&mut self, limit: u64) {
         self.retained.limit = Some(limit);
         self.retained.shed(self.retained.allowance(self.config.retained_document_bytes));
+        self.shed_input_backings(limit);
     }
 
     /// The parked CPU detail backing for `key`, observed without retaining it.
@@ -385,9 +394,10 @@ impl Session {
             .and_then(|entry| entry.document.front.as_ref().map(Arc::downgrade))
     }
 
-    /// Backing bytes parked documents currently hold, as charged to the memory budget.
+    /// Backing bytes parked documents currently hold, as charged to the memory budget:
+    /// retained outputs, parked input documents and the output parked behind an input.
     pub(crate) fn retained_bytes(&self) -> u64 {
-        self.retained.bytes()
+        self.retained.bytes().saturating_add(self.inputs.bytes())
     }
 
     /// Retire every retained document, as when the outputs' backend changes. A pending
@@ -404,7 +414,7 @@ impl Session {
     }
 
     /// Whether document custody may move: no job or native frame references the current document.
-    fn document_parkable(&self) -> bool {
+    pub(super) fn document_parkable(&self) -> bool {
         #[cfg(windows)]
         let composition = self.composition_pending.is_some();
         #[cfg(not(windows))]
@@ -446,7 +456,7 @@ impl Session {
     ///
     /// # Errors
     /// Preserves CPU and composition frame withdrawal failures.
-    fn fence_document_work(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(super) fn fence_document_work(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(displaying) = &self.displaying {
             displaying.job.cancel();
         }
@@ -484,8 +494,13 @@ impl Session {
         Ok(())
     }
 
-    /// Park a retainable document as the most recently shown, or retire it.
-    fn park(&mut self, mut document: Box<document::DocumentState>) {
+    /// Park a retainable document as the most recently shown, or retire it. An input
+    /// document is authoritative and returns to its surface instead.
+    pub(super) fn park(&mut self, mut document: Box<document::DocumentState>) {
+        if document.input.is_some() {
+            self.inputs.stow(document);
+            return;
+        }
         match document.retention.clone() {
             Some(key) if !self.closing && self.retains(&document) => {
                 document.trim(&mut self.retained.retiring);
@@ -532,6 +547,11 @@ impl Session {
     /// fitted to the current physical extent, and one fresh display of the retained backings
     /// proves the selection.
     fn restore_retained(&mut self, key: RetentionKey, intent: u64) -> Result<bool, Box<dyn Error>> {
+        if self.input_shown() {
+            // The Input route stays; the reselected output waits behind the input document.
+            self.park_retained_output(&key, intent);
+            return Ok(false);
+        }
         let now = self.navigation_time();
         let extent = self.document.tools.navigation().viewport().surface();
         if self.document.retention.as_ref() != Some(&key) {

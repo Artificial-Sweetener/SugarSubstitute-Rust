@@ -25,7 +25,7 @@ pub use coverage::BackingCoverage;
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};
 pub use document::{
     Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession, EditSessionId, Layer,
-    LayerContent, LayerId, MaskAppearance,
+    LayerContent, LayerId, MaskAppearance, Provision,
 };
 pub use error::CanvasError;
 pub use navigation::{

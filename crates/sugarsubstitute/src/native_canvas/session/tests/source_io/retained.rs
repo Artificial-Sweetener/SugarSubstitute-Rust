@@ -15,6 +15,8 @@ mod camera;
 mod composition;
 mod frames;
 #[cfg(feature = "native-composition")]
+mod inputs;
+#[cfg(feature = "native-composition")]
 mod reselection;
 #[cfg(feature = "native-composition")]
 mod transactions;

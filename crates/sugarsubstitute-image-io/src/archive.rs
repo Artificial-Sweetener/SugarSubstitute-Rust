@@ -185,11 +185,56 @@ impl<R: Read + Seek> RasterArchive<R> {
         output: &mut [Pixel],
         context: &JobContext,
     ) -> Result<(), ImportError> {
+        if output.len() as u64 != region.pixels() {
+            return Err(ImportError::Invalid("Invalid bounded source region"));
+        }
+        let stride = self.descriptor.layout().packing().bytes() as usize;
+        self.visit_rows(region, context, |archive, target, encoded| {
+            for (pixel, sample) in output[target..].iter_mut().zip(encoded.chunks_exact(stride)) {
+                *pixel = archive.decode_pixel(sample)?;
+            }
+            Ok(())
+        })
+    }
+    /// Copy a region's original straight RGBA samples, as a file decoder would hand them out,
+    /// without transfer decoding or premultiplication. Sixteen-bit samples keep their most
+    /// significant byte. The region spans at most one 128-pixel tile on each axis.
+    /// # Errors
+    /// Rejects regions outside the image or a wrong output length; preserves integrity, native
+    /// and control failures.
+    pub fn read_samples8(
+        &mut self,
+        region: Region,
+        output: &mut [[u8; 4]],
+        context: &JobContext,
+    ) -> Result<(), ImportError> {
+        if output.len() as u64 != region.pixels() {
+            return Err(ImportError::Invalid("Invalid bounded source region"));
+        }
+        let packing = self.descriptor.layout().packing();
+        let stride = packing.bytes() as usize;
+        self.visit_rows(region, context, |_, target, encoded| {
+            for (sample, encoded) in output[target..].iter_mut().zip(encoded.chunks_exact(stride)) {
+                *sample = match packing {
+                    Packing::Rgba8 => [encoded[0], encoded[1], encoded[2], encoded[3]],
+                    Packing::Rgba16 => [encoded[0], encoded[2], encoded[4], encoded[6]],
+                };
+            }
+            Ok(())
+        })
+    }
+    /// Hand each row of a bounded region's encoded samples within one chunk to `visit`, with
+    /// the row-major output index of its first sample.
+    fn visit_rows(
+        &mut self,
+        region: Region,
+        context: &JobContext,
+        mut visit: impl FnMut(&Self, usize, &[u8]) -> Result<(), ImportError>,
+    ) -> Result<(), ImportError> {
         let layout = self.descriptor.layout();
         if region.width() > TILE_EDGE
             || region.height() > TILE_EDGE
             || region.intersection(layout.extent().region()) != Some(region)
-            || output.len() as u64 != region.pixels()
         {
             return Err(ImportError::Invalid("Invalid bounded source region"));
         }
@@ -202,15 +247,14 @@ impl<R: Read + Seek> RasterArchive<R> {
                     .ok_or(ImportError::Invalid("Missing source chunk overlap"))?;
                 for y in overlap.y()..overlap.bottom() {
                     crate::check(context)?;
-                    for x in overlap.x()..overlap.right() {
-                        let source = ((y - chunk.y()) as usize * chunk.width() as usize
-                            + (x - chunk.x()) as usize)
-                            * stride;
-                        let encoded = &self.payload()[source..source + stride];
-                        let target = (y - region.y()) as usize * region.width() as usize
-                            + (x - region.x()) as usize;
-                        output[target] = self.decode_pixel(encoded)?;
-                    }
+                    let source = ((y - chunk.y()) as usize * chunk.width() as usize
+                        + (overlap.x() - chunk.x()) as usize)
+                        * stride;
+                    let encoded =
+                        &self.payload()[source..source + overlap.width() as usize * stride];
+                    let target = (y - region.y()) as usize * region.width() as usize
+                        + (overlap.x() - region.x()) as usize;
+                    visit(self, target, encoded)?;
                 }
             }
         }

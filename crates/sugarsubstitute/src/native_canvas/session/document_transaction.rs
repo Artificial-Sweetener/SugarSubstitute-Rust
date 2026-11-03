@@ -198,8 +198,16 @@ impl Session {
         }
         if phase == Phase::Promoted {
             let cutoff = self.retirement_cutoff()?;
-            let transaction =
+            let mut transaction =
                 self.document_transaction.take().ok_or("Document transaction lost")?;
+            if transaction.previous.document.input.is_some() {
+                // An input document is authoritative: it returns to its surface instead.
+                let empty = Box::new(document::DocumentState::new(Viewport::new(
+                    transaction.previous.document.tools.navigation().viewport().surface(),
+                )?));
+                let previous = std::mem::replace(&mut transaction.previous.document, empty);
+                self.inputs.stow(previous);
+            }
             self.pending_retirement = Some(Retired {
                 _retained_document: Some(transaction.previous),
                 ..Default::default()

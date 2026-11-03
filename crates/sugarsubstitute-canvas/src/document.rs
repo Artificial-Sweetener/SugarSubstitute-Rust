@@ -3,8 +3,11 @@
 //! Revisioned document metadata and reversible commands sharing original image assets.
 mod damage;
 mod edit;
+mod highlight;
+mod provision;
 use crate::CanvasError;
 pub use edit::{EditPreview, EditSession, EditSessionId};
+pub use provision::Provision;
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::{AssetId, Coverage, Extent, VectorRectangle};
@@ -250,9 +253,15 @@ impl Content {
         owned.extend_from_slice(layers);
         Ok(Self { extent, layers: owned, selection, _memory: claim })
     }
-    /// Whether two contents hold the same layers and selection.
+    /// Whether two contents hold the same extent, layers and selection.
     fn same(&self, other: &Self) -> bool {
-        self.layers == other.layers && self.selection == other.selection
+        self.extent == other.extent
+            && self.layers == other.layers
+            && self.selection == other.selection
+    }
+    /// Whether a layer with this identity is present.
+    fn contains(&self, id: LayerId) -> bool {
+        self.layers.iter().any(|layer| layer.id == id)
     }
 }
 
@@ -263,6 +272,7 @@ pub struct DocumentSnapshot {
     revision: u64,
     stage: u64,
     content: Arc<Content>,
+    highlight: Option<LayerId>,
 }
 impl DocumentSnapshot {
     /// Stable document identity supplied by its application owner.
@@ -289,6 +299,11 @@ impl DocumentSnapshot {
     /// The document's selection, when something is selected.
     pub fn selection(&self) -> Option<&Coverage> {
         self.content.selection.as_ref()
+    }
+    /// The mask layer whose overlay is drawn emphasized, as while a person hovers its row.
+    /// Emphasis is presentation only: it is never part of history or of the authored content.
+    pub const fn highlight(&self) -> Option<LayerId> {
+        self.highlight
     }
 }
 
@@ -319,7 +334,7 @@ impl Document {
             .map_err(sugarsubstitute_image_ops::ImageError::from)?;
         let content = Arc::new(Content::new(extent, &[], None, memory)?);
         Ok(Self {
-            current: DocumentSnapshot { identity, revision: 1, stage: 0, content },
+            current: DocumentSnapshot { identity, revision: 1, stage: 0, content, highlight: None },
             undo,
             redo,
             memory: memory.clone(),
@@ -366,9 +381,14 @@ impl Document {
         }
         push_history(&mut self.undo, Arc::clone(&self.current.content));
         self.redo.clear();
-        self.current =
-            DocumentSnapshot { identity: self.current.identity, revision, stage: 0, content };
+        self.current = self.published(content, revision);
         true
+    }
+    /// The next current snapshot: `content` at `revision`, keeping the highlight while its
+    /// layer remains.
+    fn published(&self, content: Arc<Content>, revision: u64) -> DocumentSnapshot {
+        let highlight = self.current.highlight.filter(|layer| content.contains(*layer));
+        DocumentSnapshot { identity: self.current.identity, revision, stage: 0, content, highlight }
     }
     /// Restore preceding authored content and publish a fresh revision, without raster copies.
     /// # Errors
@@ -380,8 +400,7 @@ impl Document {
         let revision = self.next_revision()?;
         let content = self.undo.pop().ok_or(CanvasError::Invalid("Missing undo state"))?;
         push_history(&mut self.redo, Arc::clone(&self.current.content));
-        self.current =
-            DocumentSnapshot { identity: self.current.identity, revision, stage: 0, content };
+        self.current = self.published(content, revision);
         Ok(true)
     }
     /// Restore a previously undone edit, publishing a fresh revision.
@@ -394,8 +413,7 @@ impl Document {
         let revision = self.next_revision()?;
         let content = self.redo.pop().ok_or(CanvasError::Invalid("Missing redo state"))?;
         push_history(&mut self.undo, Arc::clone(&self.current.content));
-        self.current =
-            DocumentSnapshot { identity: self.current.identity, revision, stage: 0, content };
+        self.current = self.published(content, revision);
         Ok(true)
     }
     fn next_revision(&self) -> Result<u64, CanvasError> {

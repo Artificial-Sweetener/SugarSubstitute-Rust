@@ -24,7 +24,30 @@ enum Change {
 impl DocumentSnapshot {
     /// Document-space regions that may render differently from `earlier`, clipped to the
     /// document extent. Snapshots of another document, or of another extent, differ entirely.
+    /// Moving the highlight damages the coverage of the mask that gains or loses it.
     pub fn damage_since(&self, earlier: &Self) -> DirtyRegions {
+        let mut damage = self.content_damage(earlier);
+        if self.highlight != earlier.highlight && self.extent() == earlier.extent() {
+            for id in [self.highlight, earlier.highlight].into_iter().flatten() {
+                let rendered = self.layers().iter().find(|layer| layer.id == id).and_then(
+                    |layer| match &layer.content {
+                        LayerContent::Coverage { coverage, .. }
+                            if layer.visible && layer.opacity > 0.0 =>
+                        {
+                            coverage.bounds()
+                        }
+                        _ => None,
+                    },
+                );
+                if let Some(region) = rendered {
+                    damage.insert(region);
+                }
+            }
+        }
+        damage
+    }
+
+    fn content_damage(&self, earlier: &Self) -> DirtyRegions {
         let extent = self.extent();
         let mut damage = DirtyRegions::empty(extent);
         if self.identity != earlier.identity || extent != earlier.extent() {

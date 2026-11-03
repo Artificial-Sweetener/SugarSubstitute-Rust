@@ -44,6 +44,9 @@ pub(super) struct DocumentState {
     /// Host identity of the output this document shows, when it may be retained for reselection.
     #[cfg(feature = "native-composition")]
     pub(super) retention: Option<retention::RetentionKey>,
+    /// Identity of the synced input document this is, which is never retained or evicted.
+    #[cfg(feature = "native-composition")]
+    pub(super) input: Option<inputs::InputDocumentId>,
 }
 
 impl DocumentState {
@@ -80,6 +83,8 @@ impl DocumentState {
             cpu_only: false,
             #[cfg(feature = "native-composition")]
             retention: None,
+            #[cfg(feature = "native-composition")]
+            input: None,
         }
     }
 

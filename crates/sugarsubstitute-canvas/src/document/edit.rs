@@ -91,6 +91,7 @@ impl EditSession {
             revision: self.base.revision,
             stage: self.stages,
             content: self.staged.clone().unwrap_or_else(|| Arc::clone(&self.base.content)),
+            highlight: self.base.highlight,
         }
     }
 }

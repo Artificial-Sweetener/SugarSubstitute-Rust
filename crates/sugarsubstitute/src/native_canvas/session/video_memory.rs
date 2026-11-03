@@ -34,7 +34,7 @@ impl Session {
         else {
             return;
         };
-        let parked = self.retained.gpu_bytes();
+        let parked = self.retained.gpu_bytes().saturating_add(self.inputs.gpu_bytes());
         let limit = parked_limit(budget, parked);
         if parked > limit {
             tracing::debug!(
@@ -46,6 +46,10 @@ impl Session {
                 "Parked canvas documents gave video memory back"
             );
             self.retained.shed_gpu(limit);
+            let allowance = limit.saturating_sub(self.retained.gpu_bytes());
+            if self.inputs.gpu_bytes() > allowance {
+                self.inputs.shed(allowance, true);
+            }
         }
     }
 }

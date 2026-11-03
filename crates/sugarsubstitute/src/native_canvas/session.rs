@@ -32,6 +32,12 @@ pub(crate) use document_transaction::{DocumentToken, PreviewOffer, PreviewStatus
 mod gpu;
 #[cfg(all(windows, feature = "native-composition"))]
 mod host_graphics;
+#[cfg(feature = "native-composition")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "The workflow-surface protocol adapter is this API's consumer")
+)]
+pub(crate) mod inputs;
 mod native;
 mod preparation;
 mod presentation;
@@ -127,6 +133,8 @@ struct Retired {
     _preview: Option<document_transaction::PreviewRetired>,
     #[cfg(feature = "native-composition")]
     _retained: Option<retention::Retiring>,
+    #[cfg(feature = "native-composition")]
+    _inputs: Option<inputs::Retiring>,
     _packet: Option<Packet>,
     _resources: Option<Resources>,
     _front: Option<Arc<CpuSurface>>,
@@ -254,6 +262,9 @@ pub(crate) struct Session {
     /// Retained output and the selection it becomes once current document work has settled.
     #[cfg(feature = "native-composition")]
     pending_restore: Option<(RetentionKey, u64)>,
+    /// Authoritative input documents of synced workflow surfaces.
+    #[cfg(feature = "native-composition")]
+    inputs: inputs::InputDocuments,
     rendering: Option<Rendering>,
     displaying: Option<display::Displaying>,
     pending_retirement: Option<Retired>,
@@ -401,6 +412,8 @@ impl Session {
             retained: retention::RetainedDocuments::default(),
             #[cfg(feature = "native-composition")]
             pending_restore: None,
+            #[cfg(feature = "native-composition")]
+            inputs: inputs::InputDocuments::default(),
             rendering: None,
             displaying: None,
             pending_retirement: None,

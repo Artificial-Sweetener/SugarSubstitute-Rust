@@ -4288,7 +4288,7 @@ rationale = "Owned temporary cache fixtures verify retained encoded originals, a
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e5ff6b006c76f4da1b8adf0389c076dbd85c4301bb419757e26254d5afda0c31"
+source_sha256 = "sha256:07cc4103ec4c08ecfee24c6e2631447d27a43fc1ae372bc139ff32c6b076c2cd"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary cache fixtures exercise canvas source replacement, worker disposal and scoped shutdown without using user data."
@@ -4300,6 +4300,14 @@ source_sha256 = "sha256:eeba0365c8a8cc552d102ebb228552197792d5642c6999141a46e002
 capabilities = ["std::fs::File::create"]
 disposition = "fixture"
 rationale = "An owned temporary PNG fixture exercises acquisition cancellation and retirement through the canvas worker."
+
+[[records]]
+path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained/inputs.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:9009d60483507f275018f8c510d8e0c9d20c70e019b0a014d627a399742d19d2"
+capabilities = ["std::fs::File::create"]
+disposition = "fixture"
+rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while input documents load, re-base and retire through the canvas worker."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests.rs"

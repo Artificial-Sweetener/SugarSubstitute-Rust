@@ -107,6 +107,7 @@ impl Session {
                 self.source_sequence.checked_add(1).ok_or("Canvas source revision exhausted")?;
             self.selection = self.source_sequence;
             self.abandon_cpu_frame(self.navigation_time())?;
+            self.follow_selection();
         }
         Ok(())
     }
@@ -141,6 +142,7 @@ impl Session {
         self.selection = next;
         self.pending_first_image = None;
         self.pending_restore = None;
+        self.follow_selection();
         Ok(())
     }
 
@@ -245,6 +247,8 @@ impl Session {
         if let Some(presenting) = &self.presenting {
             presenting.job.cancel();
         }
+        #[cfg(feature = "native-composition")]
+        self.follow_selection();
         self.failed = None;
         Ok(Some(next))
     }

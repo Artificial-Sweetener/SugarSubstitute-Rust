@@ -11,12 +11,14 @@
 //! content fingerprint, which graph evaluation uses as its structural identity.
 mod codec;
 mod filters;
+mod geometry;
 mod path;
 mod tiles;
 mod translate;
 
 pub use codec::{coverage_from_u8, coverage_to_u8};
 pub use filters::CombineMode;
+pub use geometry::CoverageResampling;
 pub use path::Path;
 pub use tiles::{CoverageBuilder, CoverageTileValues};
 

@@ -35,6 +35,8 @@ impl Session {
             self.consume_load()?;
         }
         #[cfg(feature = "native-composition")]
+        self.consume_input_job()?;
+        #[cfg(feature = "native-composition")]
         self.advance_acquirer_retirement()?;
         if self.deferred_retirement.is_none() {
             self.consume_frame()?;
@@ -71,6 +73,8 @@ impl Session {
         self.advance_video_memory();
         #[cfg(feature = "native-composition")]
         self.advance_retained_retirement()?;
+        #[cfg(feature = "native-composition")]
+        self.advance_input_retirement()?;
         self.submit_retirement()?;
         if restoring
             || self.closing
@@ -94,6 +98,8 @@ impl Session {
         if self.host_graphics_pending {
             self.submit_host_graphics()?;
         }
+        #[cfg(feature = "native-composition")]
+        self.submit_input_job()?;
         if self.picker {
             return Ok(());
         }
@@ -104,7 +110,7 @@ impl Session {
             return Ok(());
         }
         #[cfg(feature = "native-composition")]
-        if self.advance_retained_restore()? {
+        if self.advance_input_route()? || self.advance_retained_restore()? {
             return Ok(());
         }
         if self.pending_open.is_some() {
@@ -204,7 +210,7 @@ impl Session {
         #[cfg(not(all(windows, feature = "native-composition")))]
         let graphics_retained = false;
         #[cfg(feature = "native-composition")]
-        let acquisition_pending = self.acquisition_retirement.is_some();
+        let acquisition_pending = self.acquisition_retirement.is_some() || self.inputs.in_flight();
         #[cfg(not(feature = "native-composition"))]
         let acquisition_pending = false;
         #[cfg(feature = "native-composition")]
@@ -238,7 +244,7 @@ impl Session {
         #[cfg(not(all(windows, feature = "native-composition")))]
         let composition_retained = false;
         #[cfg(feature = "native-composition")]
-        let documents_retained = self.retained.has_resources();
+        let documents_retained = self.retained.has_resources() || self.inputs.has_resources();
         #[cfg(not(feature = "native-composition"))]
         let documents_retained = false;
         if self.pending_open.is_some()
@@ -259,6 +265,8 @@ impl Session {
                 _retained_document: self.take_retained_document(),
                 #[cfg(feature = "native-composition")]
                 _retained: self.retained.take_all(),
+                #[cfg(feature = "native-composition")]
+                _inputs: self.take_input_documents(),
                 _resources: self.resources.take(),
                 #[cfg(all(windows, feature = "native-composition"))]
                 _host_graphics: self.host_graphics.take(),

@@ -95,10 +95,23 @@ impl Session {
                         .scene
                         .as_mut()
                         .ok_or("Canvas rebuild has no current document")?;
+                    // A route change may have replaced the document the rebuild was for.
+                    if current.source.as_ref().map(|source| source.descriptor().asset())
+                        != Some(expected)
+                    {
+                        self.retire(Retired { _scene: Some(scene), ..Default::default() })?;
+                        return retirement;
+                    }
                     std::mem::swap(&mut current.source, &mut scene.source);
                     current.source_revision = scene.source_revision;
                     self.retire(Retired { _scene: Some(scene), ..Default::default() })?;
                 } else {
+                    #[cfg(feature = "native-composition")]
+                    if self.input_shown() {
+                        self.park_loaded_output(scene, loading.retention, loading.intent)?;
+                        self.failed = None;
+                        return retirement;
+                    }
                     #[cfg(feature = "native-composition")]
                     self.adopt_document_for(loading.retention)?;
                     let now = self.navigation_time();

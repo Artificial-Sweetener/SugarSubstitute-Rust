@@ -140,9 +140,14 @@ impl DocumentSnapshot {
                             vector_node(&mut graph, *shape, document, view)?
                         }
                         LayerContent::Coverage { coverage, appearance } => {
+                            let appearance = if self.highlight() == Some(layer.id()) {
+                                appearance.highlighted()
+                            } else {
+                                *appearance
+                            };
                             let tint = graph.add(Operation::Solid {
                                 extent: target,
-                                color: tint(*appearance)?,
+                                color: tint(appearance)?,
                             })?;
                             let mask = raster_node(
                                 &mut graph,
