@@ -3962,6 +3962,18 @@ function regionPaletteColor(base, ordinal, total) {
   const { h, s, v } = rgbToHsv(base);
   return hsvToRgb(regionHue(h, ordinal, total), Math.max(s, 200), Math.max(v, 220));
 }
+function parseRegionHex(value) {
+  const match2 = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(value.trim());
+  if (!match2?.[1] || !match2[2] || !match2[3]) return null;
+  return Object.freeze({
+    r: Number.parseInt(match2[1], 16),
+    g: Number.parseInt(match2[2], 16),
+    b: Number.parseInt(match2[3], 16)
+  });
+}
+function formatRegionHex({ r, g, b }) {
+  return "#" + [r, g, b].map((channel) => channel.toString(16).padStart(2, "0")).join("");
+}
 function rgbToHsv({ r, g, b }) {
   const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
   if (delta === 0) return { h: -1, s: 0, v: max };
@@ -7425,6 +7437,8 @@ export {
   applyRegionNames,
   REGION_PALETTE_BASE,
   regionPaletteColor,
+  parseRegionHex,
+  formatRegionHex,
   ConditioningTopology,
   reorderOriginBoundary,
   prepareDocumentValueReorders,

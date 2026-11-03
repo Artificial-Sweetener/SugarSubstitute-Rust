@@ -13,11 +13,8 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove the shared ordinal palette and which base each kind of input mask rotates from. */
-import {
-  maskColor,
-  regionMaskColor,
-} from '../../../frontend/comfyui/ui/input_canvas/domain/MaskColorScheme.js';
+/** Prove masks rotate from the theme accent through the palette SugarPrompt colours separators with. */
+import { maskColor } from '../../../frontend/comfyui/ui/input_canvas/domain/MaskColorScheme.js';
 import { parseRegionHex, regionHue } from '../../../frontend/sugarprompt/core/src/index.js';
 import { prepareRegionColor } from '../../../frontend/sugarprompt/editor/src/region-color.js';
 
@@ -45,18 +42,34 @@ test('the first mask keeps the accent and later masks are vivid rotations', () =
   expect(() => maskColor('red', 1, 2)).toThrow('#rrggbb');
 });
 
-test('a region mask has the colour SugarPrompt gives the same separator', () => {
-  for (const total of [1, 2, 3, 4, 5, 7])
-    for (let ordinal = 0; ordinal < total; ordinal++) {
-      const prompt = prepareRegionColor(ordinal, total).normal;
-      const channels = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(prompt);
-      const expected = channels
-        ? '#' +
-          channels
-            .slice(1)
-            .map((channel) => Number(channel).toString(16).padStart(2, '0'))
-            .join('')
-        : prompt;
-      expect(regionMaskColor(ordinal, total)).toBe(expected);
-    }
+/** Express a prepared separator colour in the canvas wire form. */
+function hex(css: string): string {
+  const channels = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(css);
+  return channels
+    ? '#' +
+        channels
+          .slice(1)
+          .map((channel) => Number(channel).toString(16).padStart(2, '0'))
+          .join('')
+    : css;
+}
+
+test('a region mask has the colour SugarPrompt gives the same separator under any accent', () => {
+  for (const accent of ['#4f6df5', '#cc3355', '#479ef5', '#808080'])
+    for (const total of [1, 2, 3, 4, 5, 7])
+      for (let ordinal = 0; ordinal < total; ordinal++) {
+        const base = parseRegionHex(accent);
+        if (!base) throw new Error('Invalid accent.');
+        expect(maskColor(accent, ordinal, total)).toBe(
+          hex(prepareRegionColor(ordinal, total, base).normal),
+        );
+      }
+});
+
+test('without a host accent SugarPrompt keeps its pinned palette, the default accent palette', () => {
+  for (const total of [2, 3, 5])
+    for (let ordinal = 0; ordinal < total; ordinal++)
+      expect(hex(prepareRegionColor(ordinal, total).normal)).toBe(
+        maskColor('#4f6df5', ordinal, total),
+      );
 });

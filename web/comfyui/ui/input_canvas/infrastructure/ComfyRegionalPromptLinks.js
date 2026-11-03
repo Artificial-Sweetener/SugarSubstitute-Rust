@@ -1,11 +1,16 @@
-/** Address prompt editors by node while the regional hover owner addresses prompts by path. */
+/**
+ * Address prompt editors by node while the regional hover owner addresses prompts by path, and
+ * give them the accent that mask rows and canvas masks colour regions from.
+ */
 export class ComfyRegionalPromptLinks {
     associations;
     hover;
+    accent;
     /** Resolve paths through the association inventory that read the regional topology. */
-    constructor(associations, hover) {
+    constructor(associations, hover, accent) {
         this.associations = associations;
         this.hover = hover;
+        this.accent = accent;
     }
     /** Report a prompt editor's separator hover, or its end with null. */
     hoverPrompt(node, ordinal) {

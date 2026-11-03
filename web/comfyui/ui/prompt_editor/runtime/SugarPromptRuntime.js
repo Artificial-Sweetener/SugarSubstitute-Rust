@@ -1,6 +1,6 @@
 import {
   bundledPromptTagCatalog
-} from "./chunk-6SSYSXSF.js";
+} from "./chunk-3QEAS2MJ.js";
 import {
   markComfyPromptInput
 } from "./chunk-74D7X3OT.js";
@@ -36,6 +36,7 @@ import {
   featureDefinitions,
   featureEnabled,
   findPromptTextCompletions,
+  formatRegionHex,
   formatWeight,
   hideReorderChip,
   identityNormalization,
@@ -57,6 +58,7 @@ import {
   normalizeTypedDeletion,
   normalizeTypedEdit,
   parenthesisEscapes,
+  parseRegionHex,
   parseScenes,
   parseWeight,
   prepareDocumentLoraScopes,
@@ -112,7 +114,7 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-3DYXYQL4.js";
+} from "./chunk-GHE3WHFX.js";
 import {
   SugarPromptMenu
 } from "./chunk-QTBJ64DI.js";
@@ -17745,6 +17747,7 @@ function emptyProjection(sourceIdentity, emphasisEnabled, loraEnabled, wildcardE
     mutedWildcard: null,
     all: Decoration.none,
     regionHovers: Object.freeze({}),
+    regionPalette: null,
     allAtomic: Decoration.none,
     tokens: RangeSet.empty,
     expanded: [],
@@ -18008,6 +18011,70 @@ var sceneErrors = StateField.define({
   }
 });
 
+// frontend/sugarprompt/editor/src/region-color.ts
+function regionChannels(ordinal, total, base2) {
+  const { r, g, b } = regionPaletteColor(base2, ordinal, total);
+  return [r, g, b];
+}
+function hoverChannels(channels) {
+  const [red, green, blue] = channels.map((channel) => channel * 257), maximum = Math.max(red, green, blue), minimum = Math.min(red, green, blue), chroma = maximum - minimum, f = Math.fround;
+  let hue = 65535, saturation = 0;
+  if (chroma) {
+    saturation = Math.round(f(f(chroma / maximum) * 65535));
+    let sector2 = maximum === red ? f((green - blue) / chroma) : maximum === green ? f(2 + f((blue - red) / chroma)) : f(4 + f((red - green) / chroma));
+    if (sector2 < 0) sector2 = f(sector2 + 6);
+    hue = Math.round(f(sector2 * 6e3));
+  }
+  const amplified = Math.floor(maximum * 135 / 100), value = Math.min(65535, amplified);
+  saturation = Math.max(0, saturation - Math.max(0, amplified - 65535));
+  if (!saturation) return [value, value, value].map((channel) => Math.round(channel / 257));
+  const position = hue === 36e3 ? 0 : f(hue / 6e3), sector = Math.floor(position), fraction = f(position - sector), s = f(saturation / 65535), v = f(value / 65535), low = f(v * f(1 - s)), middle = sector % 2 ? f(v * f(1 - f(s * fraction))) : f(v * f(1 - f(s * f(1 - fraction))));
+  const output = sector === 0 ? [v, middle, low] : sector === 1 ? [middle, v, low] : sector === 2 ? [low, v, middle] : sector === 3 ? [low, middle, v] : sector === 4 ? [middle, low, v] : [v, low, middle];
+  return output.map((channel) => Math.round(Math.round(f(channel * 65535)) / 257));
+}
+function prepareRegionColor(ordinal, total, base2 = REGION_PALETTE_BASE) {
+  const channels = regionChannels(ordinal, total, base2);
+  return Object.freeze({
+    normal: ordinal === 0 ? formatRegionHex(base2) : `rgb(${channels.join(", ")})`,
+    hover: `rgb(${hoverChannels(channels).join(", ")})`
+  });
+}
+
+// frontend/sugarprompt/editor/src/region-paint.ts
+var DEFAULT_REGION_PALETTE = formatRegionHex(REGION_PALETTE_BASE);
+var regionPalette = Facet.define({
+  /** Duplicate palette authority is an observable configuration invariant. */
+  combine(values) {
+    if (values.length > 1) throw new Error("Multiple region palette owners");
+    return values[0] ?? DEFAULT_REGION_PALETTE;
+  }
+});
+var regionRailMetrics = Object.freeze({
+  axis: -3,
+  width: 2,
+  hoverWidth: 3.5
+});
+var scopes = /* @__PURE__ */ new WeakMap();
+function preparedRegionPaint(scope, palette = DEFAULT_REGION_PALETTE) {
+  const cached = scopes.get(scope);
+  const previous = cached?.get(palette);
+  if (previous) return previous;
+  const base2 = parseRegionHex(palette);
+  if (!base2) throw new TypeError("Invalid region palette");
+  const total = scope.document.regions.separators.length;
+  const paints = Object.freeze(
+    scope.document.regions.separators.map(
+      (_, ordinal) => Object.freeze({
+        scopeId: scope.id,
+        ordinal,
+        ...prepareRegionColor(ordinal, total, base2)
+      })
+    )
+  );
+  scopes.set(scope, new Map([...cached ?? [], [palette, paints]]));
+  return paints;
+}
+
 // frontend/sugarprompt/editor/src/projection-exposure.ts
 var holdProjectionToken = StateEffect.define();
 var releaseProjectionToken = StateEffect.define();
@@ -18017,7 +18084,7 @@ function current(held, state) {
   return held.freshness.source === freshness.source && held.freshness.context === freshness.context && state.facet(richRendering);
 }
 function currentAdmission(candidate2, state) {
-  return current(candidate2, state) && candidate2.prepared.sourceIdentity === state.field(editorFreshness).source && candidate2.prepared.loraPresentation === state.field(loraPresentation) && candidate2.prepared.loraMedia === state.field(loraMedia) && candidate2.prepared.wildcardCatalog === state.facet(wildcardCatalog) && candidate2.prepared.sceneErrors === state.field(sceneErrors);
+  return current(candidate2, state) && candidate2.prepared.sourceIdentity === state.field(editorFreshness).source && candidate2.prepared.loraPresentation === state.field(loraPresentation) && candidate2.prepared.loraMedia === state.field(loraMedia) && candidate2.prepared.wildcardCatalog === state.facet(wildcardCatalog) && candidate2.prepared.sceneErrors === state.field(sceneErrors) && (candidate2.prepared.regionPalette === null || candidate2.prepared.regionPalette === state.facet(regionPalette));
 }
 var heldProjection = StateField.define({
   /** Mounted rendering begins without a pointer reservation. */
@@ -18570,7 +18637,10 @@ function projectWildcardDiagnosticVisibility(prepared4, state) {
 var installProjection = StateEffect.define();
 var installUnmeasuredProjection = StateEffect.define();
 function projectionCurrent(prepared4, state) {
-  return projectsRichSyntax(state) && prepared4.sourceIdentity === state.field(editorFreshness).source && prepared4.documentKind === state.facet(documentKind) && prepared4.emphasisEnabled === featureEnabled(state.facet(featureProfile), "emphasis") && prepared4.loraEnabled === featureEnabled(state.facet(featureProfile), "lora_syntax") && prepared4.wildcardEnabled === featureEnabled(state.facet(featureProfile), "wildcard_syntax") && prepared4.loraPresentation === state.field(loraPresentation) && prepared4.loraMedia === state.field(loraMedia) && prepared4.wildcardCatalog === state.facet(wildcardCatalog) && prepared4.sceneErrors === state.field(sceneErrors);
+  return projectsRichSyntax(state) && prepared4.sourceIdentity === state.field(editorFreshness).source && prepared4.documentKind === state.facet(documentKind) && prepared4.emphasisEnabled === featureEnabled(state.facet(featureProfile), "emphasis") && prepared4.loraEnabled === featureEnabled(state.facet(featureProfile), "lora_syntax") && prepared4.wildcardEnabled === featureEnabled(state.facet(featureProfile), "wildcard_syntax") && prepared4.loraPresentation === state.field(loraPresentation) && prepared4.loraMedia === state.field(loraMedia) && prepared4.wildcardCatalog === state.facet(wildcardCatalog) && prepared4.sceneErrors === state.field(sceneErrors) && regionPaletteCurrent(prepared4, state);
+}
+function regionPaletteCurrent(prepared4, state) {
+  return prepared4.regionPalette === null || prepared4.regionPalette === state.facet(regionPalette);
 }
 var unmeasuredProjection = StateField.define({
   /** Native creation discovers no source. */
@@ -18716,6 +18786,7 @@ var richProjection = StateField.define({
     if (next.wildcardCatalog !== catalog)
       next = { ...next, sourceIdentity: null, wildcardCatalog: catalog };
     if (next.sceneErrors !== errors) next = { ...next, sourceIdentity: null, sceneErrors: errors };
+    if (!regionPaletteCurrent(next, transaction.state)) next = { ...next, sourceIdentity: null };
     if (next.loraPresentation !== resources || next.loraMedia !== media)
       next = {
         ...next,
@@ -22462,59 +22533,6 @@ var RegionWidget = class _RegionWidget extends SourceWidget {
   }
 };
 
-// frontend/sugarprompt/editor/src/region-color.ts
-function regionChannels(ordinal, total) {
-  const { r, g, b } = regionPaletteColor(REGION_PALETTE_BASE, ordinal, total);
-  return [r, g, b];
-}
-function hoverChannels(channels) {
-  const [red, green, blue] = channels.map((channel) => channel * 257), maximum = Math.max(red, green, blue), minimum = Math.min(red, green, blue), chroma = maximum - minimum, f = Math.fround;
-  let hue = 65535, saturation = 0;
-  if (chroma) {
-    saturation = Math.round(f(f(chroma / maximum) * 65535));
-    let sector2 = maximum === red ? f((green - blue) / chroma) : maximum === green ? f(2 + f((blue - red) / chroma)) : f(4 + f((red - green) / chroma));
-    if (sector2 < 0) sector2 = f(sector2 + 6);
-    hue = Math.round(f(sector2 * 6e3));
-  }
-  const amplified = Math.floor(maximum * 135 / 100), value = Math.min(65535, amplified);
-  saturation = Math.max(0, saturation - Math.max(0, amplified - 65535));
-  if (!saturation) return [value, value, value].map((channel) => Math.round(channel / 257));
-  const position = hue === 36e3 ? 0 : f(hue / 6e3), sector = Math.floor(position), fraction = f(position - sector), s = f(saturation / 65535), v = f(value / 65535), low = f(v * f(1 - s)), middle = sector % 2 ? f(v * f(1 - f(s * fraction))) : f(v * f(1 - f(s * f(1 - fraction))));
-  const output = sector === 0 ? [v, middle, low] : sector === 1 ? [middle, v, low] : sector === 2 ? [low, v, middle] : sector === 3 ? [low, middle, v] : sector === 4 ? [middle, low, v] : [v, low, middle];
-  return output.map((channel) => Math.round(Math.round(f(channel * 65535)) / 257));
-}
-function prepareRegionColor(ordinal, total) {
-  const channels = regionChannels(ordinal, total);
-  return Object.freeze({
-    normal: ordinal === 0 ? "#4f6df5" : `rgb(${channels.join(", ")})`,
-    hover: `rgb(${hoverChannels(channels).join(", ")})`
-  });
-}
-
-// frontend/sugarprompt/editor/src/region-paint.ts
-var regionRailMetrics = Object.freeze({
-  axis: -3,
-  width: 2,
-  hoverWidth: 3.5
-});
-var scopes = /* @__PURE__ */ new WeakMap();
-function preparedRegionPaint(scope) {
-  const previous = scopes.get(scope);
-  if (previous) return previous;
-  const total = scope.document.regions.separators.length;
-  const paints = Object.freeze(
-    scope.document.regions.separators.map(
-      (_, ordinal) => Object.freeze({
-        scopeId: scope.id,
-        ordinal,
-        ...prepareRegionColor(ordinal, total)
-      })
-    )
-  );
-  scopes.set(scope, paints);
-  return paints;
-}
-
 // frontend/sugarprompt/editor/src/region-projection.ts
 function prepareRegionProjection(state, prepared4) {
   const decorations2 = [], tokens = [];
@@ -22528,7 +22546,7 @@ function prepareRegionProjection(state, prepared4) {
   for (const entry of prepared4.nativeValues.entries) {
     const scope = entry.scope, mapping = entry.semanticMapping;
     if (!scope || !mapping) continue;
-    const structure = scope.document.regions, localTargets = targets2.get(scope.id) ?? [], palette = preparedRegionPaint(scope).map((color) => {
+    const structure = scope.document.regions, localTargets = targets2.get(scope.id) ?? [], palette = preparedRegionPaint(scope, state.facet(regionPalette)).map((color) => {
       return `--sp-region-color:${color.normal};--sp-region-hover-color:${color.hover}`;
     });
     const hovered = structure.separators.map(() => []);
@@ -22784,6 +22802,7 @@ function prepareProjection(state, structure) {
     mutedWildcard: null,
     all,
     regionHovers: region.hovers,
+    regionPalette: state.facet(regionPalette),
     allAtomic: atomic2,
     tokens: RangeSet.of(nativeTokens, true),
     expanded: [],
@@ -26888,7 +26907,8 @@ function prepareNativeReorder(state, context, range) {
     active: hit.chip,
     nativeSelection: selectionContents(state.selection),
     authored: state.field(authorship, false),
-    projection
+    projection,
+    regionPalette: state.facet(regionPalette)
   });
   captures.add(capture);
   return capture;
@@ -28059,7 +28079,7 @@ function reorderSceneFragmentContext(preview, start, end) {
 
 // frontend/sugarprompt/editor/src/reorder-row-paint.ts
 function prepareReorderRowPaint(preview, lines, layout, emptyPartitions) {
-  const bands = prepareSceneBands(preview.scenes), paints = preview.capture.projection && preview.capture.prepared.scope.container.location.kind === "prompt" ? preparedRegionPaint(preview.capture.prepared.scope) : [];
+  const bands = prepareSceneBands(preview.scenes), paints = preview.capture.projection && preview.capture.prepared.scope.container.location.kind === "prompt" ? preparedRegionPaint(preview.capture.prepared.scope, preview.capture.regionPalette) : [];
   const result2 = /* @__PURE__ */ new Map();
   if (!bands.length && !paints.length) return result2;
   const partitions = /* @__PURE__ */ new Map();
@@ -29802,6 +29822,7 @@ var NativeConfiguration = class {
       savedSegmentHost: null,
       fieldActionUtilities: null,
       conditioningContext: null,
+      regionAccent: null,
       richRendering: true,
       sourceLineChrome: { enabled: false, contentLeftInset: 0 },
       wheelMode: "hover_dwell",
@@ -29835,6 +29856,7 @@ var NativeConfiguration = class {
       savedSegmentHost: input.savedSegmentHost ?? null,
       fieldActionUtilities: input.fieldActionUtilities ?? null,
       conditioningContext: captureConditioningContext(input.conditioningContext),
+      regionAccent: captureRegionAccent(input.regionAccent ?? null),
       placeholder: requireValue(input.placeholder, "native-configuration"),
       richRendering: requireValue(input.richRendering, "native-configuration"),
       sourceLineChrome: Object.freeze({
@@ -29869,6 +29891,8 @@ var NativeConfiguration = class {
         return documentKind.of(values.documentKind);
       case "conditioningContext":
         return conditioningContext.of(values.conditioningContext);
+      case "regionAccent":
+        return values.regionAccent === null ? [] : regionPalette.of(values.regionAccent);
       case "placeholder":
         return values.placeholder === "" ? [] : placeholder(values.placeholder);
       case "richRendering":
@@ -29971,6 +29995,12 @@ var NativeConfiguration = class {
     this.current = prepared4.values;
   }
 };
+function captureRegionAccent(value) {
+  if (value === null) return null;
+  const parsed = typeof value === "string" ? parseRegionHex(value) : null;
+  if (!parsed) throw new TypeError("Invalid region accent");
+  return formatRegionHex(parsed);
+}
 
 // frontend/sugarprompt/editor/src/prepared-edits.ts
 var sourceEditBrand = Symbol();
@@ -30968,7 +30998,7 @@ var SemanticRefresh = class {
   measurementCurrent(measured) {
     const current6 = this.view?.state;
     if (!current6) return false;
-    return current6.facet(documentKind) === measured.facet(documentKind) && current6.facet(featureProfile) === measured.facet(featureProfile) && current6.facet(nativeInputSettlement) === measured.facet(nativeInputSettlement) && current6.facet(conditioningContext) === measured.facet(conditioningContext) && current6.readOnly === measured.readOnly && current6.field(editorFreshness) === measured.field(editorFreshness) && current6.facet(richRendering) === measured.facet(richRendering) && current6.field(loraPresentation) === measured.field(loraPresentation) && current6.field(loraMedia) === measured.field(loraMedia) && current6.facet(wildcardCatalog) === measured.facet(wildcardCatalog) && current6.field(sceneErrors) === measured.field(sceneErrors);
+    return current6.facet(documentKind) === measured.facet(documentKind) && current6.facet(featureProfile) === measured.facet(featureProfile) && current6.facet(nativeInputSettlement) === measured.facet(nativeInputSettlement) && current6.facet(conditioningContext) === measured.facet(conditioningContext) && current6.readOnly === measured.readOnly && current6.field(editorFreshness) === measured.field(editorFreshness) && current6.facet(richRendering) === measured.facet(richRendering) && current6.field(loraPresentation) === measured.field(loraPresentation) && current6.field(loraMedia) === measured.field(loraMedia) && current6.facet(wildcardCatalog) === measured.facet(wildcardCatalog) && current6.facet(regionPalette) === measured.facet(regionPalette) && current6.field(sceneErrors) === measured.field(sceneErrors);
   }
   /** Measure native settlement first; preparation yields beyond the measurement frame. */
   queue() {
@@ -48193,6 +48223,8 @@ var SugarPromptEditor = class {
   #pendingRefresh = null;
   #refreshQueued = false;
   #committedSource;
+  #regionAccent;
+  #accentPending = false;
   #allocatedHeight = null;
   /** Mount all existing editing, rich projection, weight and Alt-reorder behavior through its public API. */
   constructor(document2, options) {
@@ -48237,8 +48269,10 @@ var SugarPromptEditor = class {
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
       onLoraMediaError: options.report,
-      onRegionHover: options.regionHover
+      onRegionHover: options.regionHover,
+      regionAccent: options.regionAccent
     });
+    this.#regionAccent = options.regionAccent;
     markComfyPromptInput(this.element);
   }
   /** Preserve the native document and history when the host moves the same field to another presentation. */
@@ -48274,6 +48308,13 @@ var SugarPromptEditor = class {
     });
     this.#queueResources();
   }
+  /** Recolour separators from a new theme accent, retrying after unfinished composition. */
+  setRegionAccent(accent) {
+    if (this.#disposed) return;
+    this.#regionAccent = accent;
+    this.#accentPending = true;
+    this.#applyRegionAccent();
+  }
   /** Show the hover of a region hovered in another view on separator `ordinal`, or clear it. */
   highlightRegion(ordinal) {
     if (!this.#disposed) this.#api.setLinkedRegionHover(ordinal);
@@ -48305,7 +48346,18 @@ var SugarPromptEditor = class {
       this.#options.commit(snapshot.source);
     }
     if (this.#pendingRefresh) this.#queueRefresh();
+    if (this.#accentPending && !snapshot.composing) queueMicrotask(() => this.#applyRegionAccent());
     this.#queueResources();
+  }
+  /** Apply the latest accent through the editor's configuration owner without touching source. */
+  #applyRegionAccent() {
+    if (this.#disposed || !this.#accentPending || this.#publishing || this.#api.snapshot().composing)
+      return;
+    const outcome = this.#api.updateHost({
+      mode: "preserve",
+      configuration: { regionAccent: this.#regionAccent }
+    });
+    if (outcome.status !== "rejected") this.#accentPending = false;
   }
   /** Adopt external state after native dispatch, preserving newer host intent during unfinished composition. */
   #queueRefresh() {

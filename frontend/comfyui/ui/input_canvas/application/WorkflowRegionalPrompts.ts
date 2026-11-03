@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Relate ordered mask loaders to the regional prompts that name and count their regions. */
-import { regionMaskColor } from '../domain/MaskColorScheme.js';
+import { maskColor } from '../domain/MaskColorScheme.js';
 import type { WorkflowSurfaceGraph } from './WorkflowSurfaceProvisioning.js';
 
 /** One ordered mask loader, its regions and the prompts related to it. */
@@ -26,6 +26,13 @@ export interface RegionalMask {
   readonly names: readonly (string | null)[];
   /** Workflow paths of the related prompts, in discovery order. */
   readonly prompts: readonly string[];
+}
+
+/** The host theme accent that regional colours rotate from. */
+export interface RegionalAccent {
+  /** The current accent as `#rrggbb`. */
+  current(): string;
+  subscribe(listener: () => void): () => void;
 }
 
 /** How one region identifies itself wherever it is shown. */
@@ -40,26 +47,28 @@ export interface RegionPresentation {
  *
  * Relations are read lazily and cached until the graph reports a change, so every card row and
  * hover between two changes sees one consistent snapshot without repeating topology walks.
+ * Observers are also told when the theme accent changes, since every region colour follows it.
  */
 export class WorkflowRegionalPrompts {
   readonly #listeners = new Set<() => void>();
   readonly #stop: () => void;
   #masks: readonly RegionalMask[] | null = null;
 
-  /** Observe the graph facts owner. */
+  /** Observe the graph facts owner and the theme accent. */
   constructor(
     private readonly graph: Pick<WorkflowSurfaceGraph, 'facts' | 'subscribe'>,
+    private readonly accent: RegionalAccent,
     private readonly report: (error: unknown) => void,
   ) {
-    this.#stop = graph.subscribe(() => {
+    const stopGraph = graph.subscribe(() => {
       this.#masks = null;
-      for (const listener of this.#listeners)
-        try {
-          listener();
-        } catch (error: unknown) {
-          this.report(error);
-        }
+      this.#changed();
     });
+    const stopAccent = accent.subscribe(() => this.#changed());
+    this.#stop = () => {
+      stopGraph();
+      stopAccent();
+    };
   }
 
   /** Every ordered mask loader whose MASK output is used, in graph order; none when unreadable. */
@@ -105,7 +114,7 @@ export class WorkflowRegionalPrompts {
     if (!mask || index < 0) return null;
     return {
       label: mask.names[index] ?? null,
-      color: regionMaskColor(index, mask.entries.length),
+      color: maskColor(this.accent.current(), index, mask.entries.length),
     };
   }
 
@@ -117,10 +126,20 @@ export class WorkflowRegionalPrompts {
     };
   }
 
-  /** Stop observing the graph. */
+  /** Stop observing the graph and the accent. */
   dispose(): void {
     this.#stop();
     this.#listeners.clear();
     this.#masks = null;
+  }
+
+  /** Notify observers, isolating their failures. */
+  #changed(): void {
+    for (const listener of this.#listeners)
+      try {
+        listener();
+      } catch (error: unknown) {
+        this.report(error);
+      }
   }
 }

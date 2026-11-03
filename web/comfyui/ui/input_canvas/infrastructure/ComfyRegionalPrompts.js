@@ -1,6 +1,6 @@
 import {
   parsePrompt
-} from "../chunk-S7BQTISC.js";
+} from "../chunk-6OBOTKVC.js";
 
 // frontend/comfyui/ui/input_canvas/infrastructure/ComfyRegionalPrompts.ts
 import { regionalPromptDemand } from "../domain/RegionalPromptDemand.js";

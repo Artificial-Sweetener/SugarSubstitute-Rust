@@ -25,6 +25,7 @@ import { loraPresentation } from './lora-presentation.js';
 import { loraMedia } from './lora-media-state.js';
 import { wildcardCatalog } from './wildcard-catalog.js';
 import { sceneErrors } from './scene-errors.js';
+import { regionPalette } from './region-paint.js';
 import { featureProfile } from './features.js';
 import { conditioningContext } from './conditioning-context.js';
 import { documentKind } from './document-kind.js';
@@ -253,6 +254,7 @@ export class SemanticRefresh {
       current.field(loraPresentation) === measured.field(loraPresentation) &&
       current.field(loraMedia) === measured.field(loraMedia) &&
       current.facet(wildcardCatalog) === measured.facet(wildcardCatalog) &&
+      current.facet(regionPalette) === measured.facet(regionPalette) &&
       current.field(sceneErrors) === measured.field(sceneErrors)
     );
   }

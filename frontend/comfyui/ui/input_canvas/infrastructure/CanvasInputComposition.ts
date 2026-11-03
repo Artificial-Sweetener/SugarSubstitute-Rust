@@ -50,8 +50,10 @@ export interface CanvasInputHostOptions {
   workflowPeers(): readonly unknown[];
   /** Record the active workflow's graph in its change tracker. */
   commitWorkflow(): void;
-  /** Theme accent that colours the first mask of each input surface. */
+  /** Theme accent that input masks, and the prompt separators of their regions, rotate from. */
   accent(): string;
+  /** Observe theme accent changes. */
+  subscribeAccent(listener: () => void): () => void;
   notice: WorkflowSurfaceNotice;
   legacyHost(id?: string): CanvasMaskHost | null;
   graph(): ComfyGraph | null | undefined;
@@ -116,6 +118,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     workflowPeers: options.workflowPeers,
     commitWorkflow: options.commitWorkflow,
     accent: options.accent,
+    subscribeAccent: options.subscribeAccent,
     notice: options.notice,
     report,
   });

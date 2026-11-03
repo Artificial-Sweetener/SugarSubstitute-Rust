@@ -40,6 +40,7 @@ import { sceneErrors } from './scene-errors.js';
 import { prepareSceneProjection } from './scene-projection.js';
 import { documentKind } from './document-kind.js';
 import { prepareRegionProjection } from './region-projection.js';
+import { regionPalette } from './region-paint.js';
 import type { PreparedStructure } from './structure.js';
 import { lineEndings } from './exact-source.js';
 /** Derive one current decoration/range set; source, native caret and history remain untouched. */
@@ -277,6 +278,7 @@ export function prepareProjection(
     mutedWildcard: null,
     all,
     regionHovers: region.hovers,
+    regionPalette: state.facet(regionPalette),
     allAtomic: atomic,
     tokens: RangeSet.of(nativeTokens, true),
     expanded: [],

@@ -14,7 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prepared regional colors consume the shared ordinal palette and add Qt-compatible native hover lightening. */
-import { REGION_PALETTE_BASE, regionPaletteColor } from '../../core/src/index.js';
+import {
+  REGION_PALETTE_BASE,
+  formatRegionHex,
+  regionPaletteColor,
+  type RegionRgb,
+} from '../../core/src/index.js';
 
 /** Both immutable declarations belong to one source-prepared ordinal palette, not native hover work. */
 export interface PreparedRegionColor {
@@ -23,8 +28,8 @@ export interface PreparedRegionColor {
 }
 
 /** Read the shared palette's channels for one ordinal of the related separators. */
-function regionChannels(ordinal: number, total: number): readonly number[] {
-  const { r, g, b } = regionPaletteColor(REGION_PALETTE_BASE, ordinal, total);
+function regionChannels(ordinal: number, total: number, base: RegionRgb): readonly number[] {
+  const { r, g, b } = regionPaletteColor(base, ordinal, total);
   return [r, g, b];
 }
 
@@ -74,11 +79,15 @@ function hoverChannels(channels: readonly number[]): readonly number[] {
   return output.map((channel) => Math.round(Math.round(f(channel * 65535)) / 257));
 }
 
-/** Prepare exact normal and hover CSS once with source projection; the current native accent remains the palette input. */
-export function prepareRegionColor(ordinal: number, total: number): PreparedRegionColor {
-  const channels = regionChannels(ordinal, total);
+/** Prepare exact normal and hover CSS once with source projection; the host accent is the palette base. */
+export function prepareRegionColor(
+  ordinal: number,
+  total: number,
+  base: RegionRgb = REGION_PALETTE_BASE,
+): PreparedRegionColor {
+  const channels = regionChannels(ordinal, total, base);
   return Object.freeze({
-    normal: ordinal === 0 ? '#4f6df5' : `rgb(${channels.join(', ')})`,
+    normal: ordinal === 0 ? formatRegionHex(base) : `rgb(${channels.join(', ')})`,
     hover: `rgb(${hoverChannels(channels).join(', ')})`,
   });
 }

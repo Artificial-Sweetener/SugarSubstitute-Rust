@@ -25,7 +25,10 @@ export function createWorkflowSurfaces(options) {
     const provisioning = new WorkflowSurfaceProvisioning(graph, workflowHost, options.accent, new BrowserWorkflowFileDimensions(options.document), options.notice, report);
     const route = new WorkflowInputRoute(provisioning, workflowHost, state, report);
     const appearance = new WorkflowMaskAppearance(provisioning, workflowHost, graph, report);
-    const regionalPrompts = new WorkflowRegionalPrompts(graph, report);
+    const accent = { current: options.accent, subscribe: options.subscribeAccent };
+    const regionalPrompts = new WorkflowRegionalPrompts(graph, accent, report);
+    // Canvas masks take their colours from the accent; an unchanged plan is not resent.
+    const stopAccent = options.subscribeAccent(() => void provisioning.request());
     const regionalHover = new WorkflowRegionalHover(regionalPrompts, appearance, report);
     const promptNames = new ComfyRegionalPromptNames(regionalPrompts, (path) => associations.inventory.node(path), options.graph, report);
     const resolution = new WorkflowCanvasResolution(provisioning, workflowHost, new ComfyDimensionAuthorityWriter((path) => associations.inventory.node(path), options.graph));
@@ -52,7 +55,7 @@ export function createWorkflowSurfaces(options) {
             choose: (value) => route.chooseRoute(value),
         },
         cards: new ComfyInputSurfaceCards(associations, route, appearance, provisioning, regionalPrompts, regionalHover, new WorkflowMaskImport(provisioning, new BrowserMaskImport(options.document), options.assets), options.bindings),
-        regions: new ComfyRegionalPromptLinks(associations, regionalHover),
+        regions: new ComfyRegionalPromptLinks(associations, regionalHover, accent),
         resolutionEntries: (targets) => canvasResolutionEntries(targets, resolution, dialog, report),
         withNodeMenuItems: (node, items) => [
             ...items,
@@ -60,6 +63,7 @@ export function createWorkflowSurfaces(options) {
         ],
         dispose: () => {
             dialog.close();
+            stopAccent();
             promptNames.dispose();
             regionalHover.dispose();
             regionalPrompts.dispose();

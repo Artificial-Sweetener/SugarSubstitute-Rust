@@ -20,7 +20,7 @@ import { Decoration } from '@codemirror/view';
 import type { SourceRange } from '../../core/src/index.js';
 import { SourceToken } from './projection-widgets.js';
 import { RegionWidget } from './region-widget.js';
-import { preparedRegionPaint } from './region-paint.js';
+import { preparedRegionPaint, regionPalette } from './region-paint.js';
 import type { PreparedStructure } from './structure.js';
 import type { RegionTarget } from './region-index.js';
 import type { RegionHoverProjection } from './projection-contracts.js';
@@ -55,7 +55,7 @@ export function prepareRegionProjection(
     if (!scope || !mapping) continue;
     const structure = scope.document.regions,
       localTargets = targets.get(scope.id) ?? [],
-      palette = preparedRegionPaint(scope).map((color) => {
+      palette = preparedRegionPaint(scope, state.facet(regionPalette)).map((color) => {
         return `--sp-region-color:${color.normal};--sp-region-hover-color:${color.hover}`;
       });
     const hovered = structure.separators.map(() => [] as Range<Decoration>[]);

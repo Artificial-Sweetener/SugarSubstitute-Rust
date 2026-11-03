@@ -5,7 +5,7 @@ import {
   parsePrompt,
   strip,
   validRegionName
-} from "../chunk-S7BQTISC.js";
+} from "../chunk-6OBOTKVC.js";
 
 // frontend/sugarprompt/services/src/wildcards/catalog.ts
 var noColumns = Object.freeze([]);

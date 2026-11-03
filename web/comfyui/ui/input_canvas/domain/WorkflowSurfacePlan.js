@@ -1,4 +1,4 @@
-import { maskColor, regionMaskColor } from './MaskColorScheme.js';
+import { maskColor } from './MaskColorScheme.js';
 /** At most this many surfaces cross the wire in one sync, per the canvas contract. */
 export const MAX_WORKFLOW_SURFACES = 64;
 /** At most this many masks belong to one surface, per the canvas contract. */
@@ -10,7 +10,7 @@ export const MAX_SURFACE_MASKS = 32;
  * surface of its resolved size authority, so masks sized by the same nodes share one surface.
  * Ambiguous pairings and unresolved sizes are rejected rather than guessed. Scalar mask colours
  * rotate over each surface's complete mask list, starting from the accent; the regions of an
- * ordered loader take the regional palette over that loader's own regions, as their prompts do.
+ * ordered loader rotate over that loader's own regions, as their prompt separators do.
  */
 export function planWorkflowSurfaces(facts, accent, labels) {
     const rejected = [];
@@ -48,7 +48,7 @@ export function planWorkflowSurfaces(facts, accent, labels) {
             mask,
             entry,
             label: mask.regions?.names[index] ?? entry.label,
-            region: mask.regions ? regionMaskColor(index, mask.entries.length) : null,
+            region: mask.regions ? maskColor(accent, index, mask.entries.length) : null,
         })));
         const admitted = entries.slice(0, MAX_SURFACE_MASKS);
         for (const mask of new Set(entries.slice(MAX_SURFACE_MASKS).map(({ mask }) => mask.key)))

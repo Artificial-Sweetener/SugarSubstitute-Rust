@@ -16,6 +16,7 @@
 /** Translate prompt editors' live nodes to the workflow paths regional hover links by. */
 import type { ComfyNode } from '../../types/graph.js';
 import type { WorkflowRegionalHover } from '../application/WorkflowRegionalHover.js';
+import type { RegionalAccent } from '../application/WorkflowRegionalPrompts.js';
 import type { ComfyInputAssociations } from './ComfyInputAssociations.js';
 
 /** Prompt editors that show a linked highlight on the separators of their nodes. */
@@ -24,12 +25,16 @@ export interface RegionalPromptEditors {
   highlightRegions(prompts: ReadonlySet<ComfyNode>, ordinal: number | null): void;
 }
 
-/** Address prompt editors by node while the regional hover owner addresses prompts by path. */
+/**
+ * Address prompt editors by node while the regional hover owner addresses prompts by path, and
+ * give them the accent that mask rows and canvas masks colour regions from.
+ */
 export class ComfyRegionalPromptLinks {
   /** Resolve paths through the association inventory that read the regional topology. */
   constructor(
     private readonly associations: Pick<ComfyInputAssociations, 'inventory'>,
     private readonly hover: Pick<WorkflowRegionalHover, 'hoverPrompt' | 'connect'>,
+    readonly accent: RegionalAccent,
   ) {}
 
   /** Report a prompt editor's separator hover, or its end with null. */

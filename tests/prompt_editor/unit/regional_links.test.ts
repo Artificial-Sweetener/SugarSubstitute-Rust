@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove prompt editors report separator hover to the regional owner and show its linked hover. */
+/** Prove prompt editors link separator hover and accent colours with the regional owner. */
 import { expect, jest, test } from '@jest/globals';
 import type { ComfyNode, ComfyWidget } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { SugarPromptMountOptions } from '../../../frontend/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js';
@@ -38,6 +38,13 @@ class RecordedPromptEditor {
   /** Place the editor beside its native textarea. */
   attach(textarea: HTMLTextAreaElement): void {
     textarea.after(this.element);
+  }
+
+  readonly accents: (string | null)[] = [];
+
+  /** Record an accent change. */
+  setRegionAccent(accent: string | null): void {
+    this.accents.push(accent);
   }
 
   /** Record a linked highlight. */
@@ -105,11 +112,20 @@ test('separator hover reaches the regional owner and its highlights reach only r
   const hoverPrompt = jest.fn<(node: ComfyNode, ordinal: number | null) => void>();
   const release = jest.fn();
   let linked: Parameters<PromptRegionLinks['connectPrompts']>[0] | null = null;
+  let accent = '#cc3355';
+  const accentListeners = new Set<() => void>();
   const regions: PromptRegionLinks = {
     hoverPrompt,
     connectPrompts: (editors) => {
       linked = editors;
       return release;
+    },
+    accent: {
+      current: () => accent,
+      subscribe: (listener) => {
+        accentListeners.add(listener);
+        return () => accentListeners.delete(listener);
+      },
     },
   };
   host.setup(regions);
@@ -135,9 +151,17 @@ test('separator hover reaches the regional owner and its highlights reach only r
     });
     second.options.regionHover(2);
     expect(report).toHaveBeenCalledWith(new Error('regional owner failed'));
+    expect([first.options.regionAccent, second.options.regionAccent]).toEqual([
+      '#cc3355',
+      '#cc3355',
+    ]);
+    accent = '#479ef5';
+    for (const listener of accentListeners) listener();
+    expect([first.accents, second.accents]).toEqual([['#479ef5'], ['#479ef5']]);
   } finally {
     host.dispose();
     document.body.replaceChildren();
   }
   expect(release).toHaveBeenCalledTimes(1);
+  expect(accentListeners.size).toBe(0);
 });

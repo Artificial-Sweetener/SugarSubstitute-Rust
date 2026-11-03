@@ -65,6 +65,8 @@ export interface WorkflowSurfaceOptions {
   /** Record the active workflow's graph in its change tracker. */
   commitWorkflow(): void;
   accent(): string;
+  /** Observe theme accent changes. */
+  subscribeAccent(listener: () => void): () => void;
   notice: WorkflowSurfaceNotice;
   report(error: unknown): void;
 }
@@ -112,7 +114,10 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
   );
   const route = new WorkflowInputRoute(provisioning, workflowHost, state, report);
   const appearance = new WorkflowMaskAppearance(provisioning, workflowHost, graph, report);
-  const regionalPrompts = new WorkflowRegionalPrompts(graph, report);
+  const accent = { current: options.accent, subscribe: options.subscribeAccent };
+  const regionalPrompts = new WorkflowRegionalPrompts(graph, accent, report);
+  // Canvas masks take their colours from the accent; an unchanged plan is not resent.
+  const stopAccent = options.subscribeAccent(() => void provisioning.request());
   const regionalHover = new WorkflowRegionalHover(regionalPrompts, appearance, report);
   const promptNames = new ComfyRegionalPromptNames(
     regionalPrompts,
@@ -157,7 +162,7 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
       new WorkflowMaskImport(provisioning, new BrowserMaskImport(options.document), options.assets),
       options.bindings,
     ),
-    regions: new ComfyRegionalPromptLinks(associations, regionalHover),
+    regions: new ComfyRegionalPromptLinks(associations, regionalHover, accent),
     resolutionEntries: (targets) => canvasResolutionEntries(targets, resolution, dialog, report),
     withNodeMenuItems: (node, items) => [
       ...items,
@@ -170,6 +175,7 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
     ],
     dispose: () => {
       dialog.close();
+      stopAccent();
       promptNames.dispose();
       regionalHover.dispose();
       regionalPrompts.dispose();

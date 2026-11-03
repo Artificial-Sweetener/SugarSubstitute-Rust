@@ -25,6 +25,7 @@ import { loraPresentation } from './lora-presentation.js';
 import { loraMedia } from './lora-media-state.js';
 import { wildcardCatalog } from './wildcard-catalog.js';
 import { sceneErrors } from './scene-errors.js';
+import { regionPalette } from './region-paint.js';
 /** A reservation retains logical-document UTF-16 bounds and source/context authority, never selection or editable source. */
 interface HeldProjection {
   readonly session: symbol;
@@ -60,7 +61,9 @@ function currentAdmission(candidate: HeldProjectionAdmission, state: EditorState
     candidate.prepared.loraPresentation === state.field(loraPresentation) &&
     candidate.prepared.loraMedia === state.field(loraMedia) &&
     candidate.prepared.wildcardCatalog === state.facet(wildcardCatalog) &&
-    candidate.prepared.sceneErrors === state.field(sceneErrors)
+    candidate.prepared.sceneErrors === state.field(sceneErrors) &&
+    (candidate.prepared.regionPalette === null ||
+      candidate.prepared.regionPalette === state.facet(regionPalette))
   );
 }
 /** The projection owner keeps at most one source/context-bound held token, independently of ordinary reveal/history metadata. */

@@ -42,6 +42,8 @@ export interface HostConfiguration {
   readonly savedSegmentHost?: SavedSegmentHost | null;
   readonly documentKind?: PromptDocumentKind;
   readonly conditioningContext?: ConditioningContextInput | null;
+  /** The host theme accent as `#rrggbb`, from which regional rails rotate; null keeps the pinned base. */
+  readonly regionAccent?: string | null;
   readonly readOnly?: boolean;
   readonly placeholder?: string;
   readonly richRendering?: boolean;

@@ -54,6 +54,8 @@ export interface SugarPromptMountOptions {
   readonly appearance: AppearanceSource;
   /** Observe pointer hover of the prompt's separator ordinals, and null when it ends. */
   readonly regionHover: (ordinal: number | null) => void;
+  /** The theme accent separators rotate from, or null for SugarPrompt's pinned palette. */
+  readonly regionAccent: string | null;
 }
 
 /** One field retains its native document across renderer presentations. */
@@ -80,6 +82,8 @@ export class SugarPromptEditor {
   #pendingRefresh: { source: string; readOnly: boolean } | null = null;
   #refreshQueued = false;
   #committedSource: string;
+  #regionAccent: string | null;
+  #accentPending = false;
   #allocatedHeight: number | null = null;
 
   /** Mount all existing editing, rich projection, weight and Alt-reorder behavior through its public API. */
@@ -127,7 +131,9 @@ export class SugarPromptEditor {
       onLayout: (metrics) => this.#layout(metrics),
       onLoraMediaError: options.report,
       onRegionHover: options.regionHover,
+      regionAccent: options.regionAccent,
     });
+    this.#regionAccent = options.regionAccent;
     markComfyPromptInput(this.element);
   }
 
@@ -167,6 +173,14 @@ export class SugarPromptEditor {
     this.#queueResources();
   }
 
+  /** Recolour separators from a new theme accent, retrying after unfinished composition. */
+  setRegionAccent(accent: string | null): void {
+    if (this.#disposed) return;
+    this.#regionAccent = accent;
+    this.#accentPending = true;
+    this.#applyRegionAccent();
+  }
+
   /** Show the hover of a region hovered in another view on separator `ordinal`, or clear it. */
   highlightRegion(ordinal: number | null): void {
     if (!this.#disposed) this.#api.setLinkedRegionHover(ordinal);
@@ -202,7 +216,25 @@ export class SugarPromptEditor {
       this.#options.commit(snapshot.source);
     }
     if (this.#pendingRefresh) this.#queueRefresh();
+    // Native dispatch is still in progress; adopt the accent after it settles.
+    if (this.#accentPending && !snapshot.composing) queueMicrotask(() => this.#applyRegionAccent());
     this.#queueResources();
+  }
+
+  /** Apply the latest accent through the editor's configuration owner without touching source. */
+  #applyRegionAccent(): void {
+    if (
+      this.#disposed ||
+      !this.#accentPending ||
+      this.#publishing ||
+      this.#api.snapshot().composing
+    )
+      return;
+    const outcome = this.#api.updateHost({
+      mode: 'preserve',
+      configuration: { regionAccent: this.#regionAccent },
+    });
+    if (outcome.status !== 'rejected') this.#accentPending = false;
   }
 
   /** Adopt external state after native dispatch, preserving newer host intent during unfinished composition. */

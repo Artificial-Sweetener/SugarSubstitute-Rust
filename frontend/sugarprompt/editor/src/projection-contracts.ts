@@ -57,6 +57,8 @@ export interface PreparedProjection {
   readonly all: DecorationSet;
   /** Scope-local ordinal hover lookup preserves canonical target identity across multiple values. */
   readonly regionHovers: Readonly<Record<string, readonly RegionHoverProjection[]>>;
+  /** The regional palette base the rails were prepared with; null when no rails were prepared. */
+  readonly regionPalette: string | null;
   /** Prepared concealed-widget intervals exclude styling marks and editable body text. */
   readonly allAtomic: DecorationSet;
   readonly tokens: RangeSet<SourceToken>;
@@ -103,6 +105,7 @@ export function emptyProjection(
     mutedWildcard: null,
     all: Decoration.none,
     regionHovers: Object.freeze({}),
+    regionPalette: null,
     allAtomic: Decoration.none,
     tokens: RangeSet.empty,
     expanded: [],

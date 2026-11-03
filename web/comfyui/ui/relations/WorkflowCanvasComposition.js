@@ -50,6 +50,7 @@ export function createWorkflowCanvasComposition(options) {
         workflowPeers: () => workflowExecution.otherStoredWorkflows(),
         commitWorkflow: () => workflowExecution.commitActiveWorkflowState(),
         accent: () => workflowFields.appearance.palette.theme.color,
+        subscribeAccent: (listener) => workflowFields.appearance.palette.subscribe(listener),
         notice: (title, message) => options.notify('warn', title, message),
         legacyHost: (id) => workflowExecution.canvases.maskHost(id),
         graph: () => options.app?.graph,
