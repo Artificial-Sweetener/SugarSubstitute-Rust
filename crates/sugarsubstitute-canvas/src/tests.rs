@@ -5,6 +5,7 @@ use super::*;
 use sugarsubstitute_image_ops::{Extent, Region};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 pub(crate) mod harness;
+mod masks;
 mod phase;
 
 #[test]
@@ -246,7 +247,7 @@ fn document_history(
     document.apply(DocumentEdit::Insert { index: 1, layer: vector.clone() })?;
     let edited = document.snapshot();
     assert_eq!(original.layers(), &[image]);
-    assert_eq!(edited.layers()[1].content(), LayerContent::VectorRectangle(geometry));
+    assert_eq!(edited.layers()[1].content(), &LayerContent::VectorRectangle(geometry));
     assert!(document.undo()?);
     assert_eq!(document.snapshot().layers(), original.layers());
     assert!(document.snapshot().revision() > edited.revision());

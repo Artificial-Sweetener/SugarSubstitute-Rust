@@ -114,6 +114,7 @@ fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
             comparison: None,
             job,
             document,
+            snapshot,
             source_revision: 0,
             reconstruction: Reconstruction::Preview,
             tier: BackingTier::Detail,

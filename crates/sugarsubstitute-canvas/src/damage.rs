@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exact retained-pixel translation and disjoint exposed-edge repair.
+use crate::Viewport;
 use sugarsubstitute_image_ops::{Extent, Region};
 
 /// Copy retained device pixels to a different overlapping region of the same surface.
@@ -113,6 +114,33 @@ impl DamagePlan {
         }
         let source = Region::new(source_x, source_y, width, height)?;
         Ok(Self { blit: Some(PixelBlit { source, destination }), dirty })
+    }
+    /// Also repaint the device pixels that changed document regions reach on `view`'s surface.
+    /// Each region's mapped bounds grow by the reconstruction filter's reach (three source
+    /// pixels at magnification, a few device pixels through minifying pyramids), so resampled
+    /// edges around an edit update too.
+    /// # Errors
+    /// Preserves viewport mapping and region construction failures.
+    pub fn include_document_damage(
+        &mut self,
+        damage: &DirtyRegions,
+        view: Viewport,
+    ) -> Result<(), crate::CanvasError> {
+        let surface = view.surface();
+        let margin = (3.0 * view.zoom().max(1.0)).ceil() + 8.0;
+        for region in damage.regions() {
+            let start = view.device_at([f64::from(region.x()), f64::from(region.y())])?;
+            let end = view.device_at([f64::from(region.right()), f64::from(region.bottom())])?;
+            let clamp = |value: f64, limit: u32| value.clamp(0.0, f64::from(limit)) as u32;
+            let left = clamp((start[0].min(end[0]) - margin).floor(), surface.width());
+            let top = clamp((start[1].min(end[1]) - margin).floor(), surface.height());
+            let right = clamp((start[0].max(end[0]) + margin).ceil(), surface.width());
+            let bottom = clamp((start[1].max(end[1]) + margin).ceil(), surface.height());
+            if left < right && top < bottom {
+                self.dirty.insert(Region::new(left, top, right - left, bottom - top)?);
+            }
+        }
+        Ok(())
     }
     /// Optional overlap copy, performed before applying prepared dirty pixels.
     pub const fn blit(&self) -> Option<PixelBlit> {

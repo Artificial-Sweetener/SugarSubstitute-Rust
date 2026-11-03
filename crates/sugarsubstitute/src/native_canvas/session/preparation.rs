@@ -2,6 +2,53 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Select canonical navigation/fine backings and admit one immutable image-operation request.
 use super::*;
+
+/// What the shown backing contributes to the next frame of one tier.
+pub(super) struct FrameReuse {
+    /// Whether the shown pixels stay as the base the new frame repairs.
+    pub(super) compatible: bool,
+    /// Pixels the new frame prepares.
+    pub(super) damage: DamagePlan,
+}
+
+/// Decide which shown pixels a new frame keeps. A backing of the same document, source,
+/// comparison, reconstruction and size keeps its pixels: a camera move repaints the exposed
+/// strips, and an edit since the shown revision also repaints what it changed, provided the
+/// shown revision's snapshot was kept. Anything else is prepared in full.
+/// # Errors
+/// Preserves viewport mapping and region construction failures.
+pub(super) fn frame_reuse(
+    shown: Option<&Presented>,
+    shown_document: Option<&DocumentSnapshot>,
+    document: &DocumentSnapshot,
+    source_revision: u64,
+    comparison: Option<Comparison>,
+    reconstruction: Reconstruction,
+    view: Viewport,
+) -> Result<FrameReuse, sugarsubstitute_canvas::CanvasError> {
+    let identity = (document.identity(), document.revision());
+    let earlier = shown_document.filter(|snapshot| {
+        shown.is_some_and(|shown| shown.document == (snapshot.identity(), snapshot.revision()))
+    });
+    let compatible = shown.filter(|shown| {
+        (shown.document == identity || shown.document.0 == identity.0 && earlier.is_some())
+            && shown.source_revision == source_revision
+            && shown.comparison == comparison
+            && shown.reconstruction == reconstruction
+            && shown.view.surface() == view.surface()
+    });
+    let Some(shown) = compatible else {
+        return Ok(FrameReuse { compatible: false, damage: DamagePlan::full(view.surface()) });
+    };
+    let mut damage = view.repair_from(shown.view)?;
+    if shown.document != identity
+        && let Some(earlier) = earlier
+    {
+        damage.include_document_damage(&document.damage_since(earlier), view)?;
+    }
+    Ok(FrameReuse { compatible: true, damage })
+}
+
 impl Session {
     /// Preserve an already sharper document/source product while a coarser destination is pending.
     /// Exact preparation cannot exceed its device grid or the original raster sampling density.
@@ -165,17 +212,16 @@ impl Session {
             BackingTier::Navigation => self.document.navigation_presented.as_ref(),
             BackingTier::Detail => self.document.presented.as_ref(),
         };
-        let compatible = shown.filter(|shown| {
-            shown.document == identity
-                && shown.source_revision == scene.source_revision
-                && shown.comparison == comparison
-                && shown.reconstruction == reconstruction
-                && shown.view.surface() == view.surface()
-        });
-        let damage = match compatible {
-            Some(shown) => view.repair_from(shown.view)?,
-            None => DamagePlan::full(view.surface()),
-        };
+        let reuse = frame_reuse(
+            shown,
+            self.document.presented_documents[tier.index()].as_ref(),
+            &document,
+            scene.source_revision,
+            comparison,
+            reconstruction,
+            view,
+        )?;
+        let damage = reuse.damage;
         let replace_surface = if self.config.gpu.is_some() {
             let surface = match tier {
                 BackingTier::Fallback => self.document.fallback_gpu_front.as_ref(),
@@ -195,17 +241,23 @@ impl Session {
         let base = if replace_surface {
             None
         } else {
-            compatible.and_then(|_| match tier {
-                BackingTier::Fallback => {
-                    if self.config.gpu.is_some() {
-                        self.document.fallback_gpu_front.as_ref().and_then(GpuSurface::current)
-                    } else {
-                        self.document.fallback_front.as_ref().and_then(|surface| surface.current())
+            reuse
+                .compatible
+                .then(|| match tier {
+                    BackingTier::Fallback => {
+                        if self.config.gpu.is_some() {
+                            self.document.fallback_gpu_front.as_ref().and_then(GpuSurface::current)
+                        } else {
+                            self.document
+                                .fallback_front
+                                .as_ref()
+                                .and_then(|surface| surface.current())
+                        }
                     }
-                }
-                BackingTier::Detail => self.current_frame(),
-                BackingTier::Navigation => self.backing_stamp(BackingTier::Navigation),
-            })
+                    BackingTier::Detail => self.current_frame(),
+                    BackingTier::Navigation => self.backing_stamp(BackingTier::Navigation),
+                })
+                .flatten()
         };
         let next = self.frame_revision.checked_add(1).ok_or("Canvas frame revision exhausted")?;
         let target = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(next)? };
@@ -237,6 +289,7 @@ impl Session {
             BackingTier::Navigation => self.document.navigation_gpu_front.clone(),
             BackingTier::Detail => self.document.gpu_front.clone(),
         };
+        let snapshot = document.clone();
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         match runtime.client.submit_cpu(&runtime.scope, spec, move |_| work::Prepare {
             tier,
@@ -266,6 +319,7 @@ impl Session {
                 self.rendering = Some(Rendering {
                     job,
                     document: identity,
+                    snapshot,
                     source_revision,
                     reconstruction,
                     tier,

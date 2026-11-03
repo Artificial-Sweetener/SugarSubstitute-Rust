@@ -36,6 +36,8 @@ pub(super) struct DocumentState {
     pub(super) presented: Option<Presented>,
     pub(super) fallback_presented: Option<Presented>,
     pub(super) navigation_presented: Option<Presented>,
+    /// The document revision each tier's presented backing shows, by tier.
+    pub(super) presented_documents: [Option<DocumentSnapshot>; 3],
     pub(super) rebuilt: bool,
     /// CPU-prepared previews keep CPU backings and display even in a GPU session.
     pub(super) cpu_only: bool,
@@ -73,6 +75,7 @@ impl DocumentState {
             presented: None,
             fallback_presented: None,
             navigation_presented: None,
+            presented_documents: [None, None, None],
             rebuilt: false,
             cpu_only: false,
             #[cfg(feature = "native-composition")]

@@ -27,6 +27,7 @@ pub struct EditPreview<'a> {
     session: EditSessionId,
     base: &'a DocumentSnapshot,
     layers: &'a [Layer],
+    selection: Option<&'a Coverage>,
 }
 impl EditPreview<'_> {
     /// Gesture whose transient state produced this preview.
@@ -40,6 +41,10 @@ impl EditPreview<'_> {
     /// Staged bottom-to-top layer metadata; original pixels remain shared immutable assets.
     pub const fn layers(&self) -> &[Layer] {
         self.layers
+    }
+    /// Staged selection.
+    pub const fn selection(&self) -> Option<&Coverage> {
+        self.selection
     }
 }
 /// One document-bound, execution-admitted transient layer edit.
@@ -58,17 +63,20 @@ impl EditSession {
     }
     /// Observe staged metadata with its separate preview identity.
     pub fn preview(&self) -> EditPreview<'_> {
+        let content = self.staged.as_ref().unwrap_or(&self.base.content);
         EditPreview {
             session: self.id,
             base: &self.base,
-            layers: self.staged.as_ref().map_or(self.base.layers(), |content| &content.layers),
+            layers: &content.layers,
+            selection: content.selection.as_ref(),
         }
     }
     /// Apply one complete layer command to the transient branch using authoritative validation.
     /// # Errors
     /// Preserves the preceding preview on invalid commands, allocation or admission failures.
     pub fn stage(&mut self, edit: DocumentEdit) -> Result<(), CanvasError> {
-        let mut content = Content::copy(self.base.extent(), self.preview().layers(), &self.memory)?;
+        let mut content =
+            Content::copy(self.staged.as_ref().unwrap_or(&self.base.content), &self.memory)?;
         content.apply(edit)?;
         self.staged = Some(content);
         Ok(())
@@ -92,7 +100,7 @@ impl Document {
         let Some(content) = session.staged else {
             return Ok(false);
         };
-        if content.layers == self.current.content.layers {
+        if content.same(&self.current.content) {
             return Ok(false);
         }
         let revision = self.next_revision()?;
@@ -129,6 +137,12 @@ impl Content {
                 let original = find(&self.layers, layer)?;
                 let layer = self.layers.remove(original);
                 self.layers.insert(index, layer);
+            }
+            DocumentEdit::Select(selection) => {
+                if selection.as_ref().is_some_and(|selection| selection.extent() != self.extent) {
+                    return Err(CanvasError::Invalid("Selection extent differs from document"));
+                }
+                self.selection = selection;
             }
         }
         Ok(())

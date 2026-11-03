@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Revisioned document metadata and reversible commands sharing original image assets.
+mod damage;
 mod edit;
 use crate::CanvasError;
 pub use edit::{EditPreview, EditSession, EditSessionId};
@@ -10,6 +11,8 @@ use sugarsubstitute_image_ops::{AssetId, Coverage, Extent, VectorRectangle};
 
 const MAX_LAYERS: usize = 32;
 const HISTORY_LIMIT: usize = 32;
+/// Longest layer name, in characters, matching what the canvas protocol carries.
+const MAX_NAME_CHARACTERS: usize = 256;
 
 /// Stable positive layer identity, preserved across reordering and history traversal.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -30,8 +33,36 @@ impl LayerId {
     }
 }
 
-/// Authoritative layer content; pixels and vector geometry remain independently editable.
+/// How a mask layer is drawn over the image: a tint at partial opacity. Appearance never
+/// changes the mask's coverage or what a workflow receives from it.
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MaskAppearance {
+    color: [u8; 3],
+    opacity: f32,
+}
+impl MaskAppearance {
+    /// Tint as sRGB bytes and its overlay opacity.
+    /// # Errors
+    /// Rejects an opacity that is nonfinite or outside `[0, 1]`.
+    pub fn new(color: [u8; 3], opacity: f32) -> Result<Self, CanvasError> {
+        if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+            return Err(CanvasError::Invalid("Invalid mask overlay opacity"));
+        }
+        Ok(Self { color, opacity })
+    }
+    /// Tint as sRGB bytes.
+    pub const fn color(self) -> [u8; 3] {
+        self.color
+    }
+    /// Overlay opacity in `[0, 1]`.
+    pub const fn opacity(self) -> f32 {
+        self.opacity
+    }
+}
+
+/// Authoritative layer content; pixels, coverage and vector geometry remain independently
+/// editable. Cloning shares coverage tiles.
+#[derive(Clone, Debug, PartialEq)]
 pub enum LayerContent {
     /// Immutable original image asset at the document's pixel extent.
     Raster {
@@ -57,6 +88,14 @@ pub enum LayerContent {
         /// Exposure in EV, finite and between -32 and 32.
         stops: f32,
     },
+    /// A mask: coverage at the document extent, shown as a tinted overlay and never part of
+    /// the composed image.
+    Coverage {
+        /// The mask's coverage.
+        coverage: Coverage,
+        /// How the overlay is drawn.
+        appearance: MaskAppearance,
+    },
 }
 
 /// Immutable layer description. Changes are published only through document commands.
@@ -64,13 +103,15 @@ pub enum LayerContent {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Layer {
     id: LayerId,
+    name: Arc<str>,
     content: LayerContent,
     visible: bool,
+    locked: bool,
     opacity: f32,
     mask: Option<Coverage>,
 }
 impl Layer {
-    /// Create an opaque visible layer with explicit source content.
+    /// Create an unnamed, unlocked, opaque visible layer with explicit source content.
     /// # Errors
     /// Rejects nonfinite or unsupported operation parameters.
     pub fn new(id: LayerId, content: LayerContent) -> Result<Self, CanvasError> {
@@ -79,15 +120,32 @@ impl Layer {
         {
             return Err(CanvasError::Invalid("Invalid layer exposure"));
         }
-        Ok(Self { id, content, visible: true, opacity: 1.0, mask: None })
+        Ok(Self {
+            id,
+            name: Arc::from(""),
+            content,
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+            mask: None,
+        })
     }
     /// Stable layer identity.
     pub const fn id(&self) -> LayerId {
         self.id
     }
-    /// Original source geometry, image identity or adjustment parameters.
-    pub const fn content(&self) -> LayerContent {
-        self.content
+    /// Display name shown to people choosing layers.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Original source geometry, image identity, coverage or adjustment parameters.
+    pub const fn content(&self) -> &LayerContent {
+        &self.content
+    }
+    /// Whether tools leave this layer alone: it cannot be selected, moved, painted, reordered
+    /// or removed by editing gestures, as with an input canvas's base image.
+    pub const fn locked(&self) -> bool {
+        self.locked
     }
     /// Whether this layer contributes to the document's rendered result.
     pub const fn visible(&self) -> bool {
@@ -100,6 +158,26 @@ impl Layer {
     /// Layer mask coverage at the document extent, when the layer has one.
     pub const fn mask(&self) -> Option<&Coverage> {
         self.mask.as_ref()
+    }
+    /// Rename the layer.
+    /// # Errors
+    /// Rejects names longer than 256 characters.
+    pub fn with_name(mut self, name: &str) -> Result<Self, CanvasError> {
+        if name.chars().count() > MAX_NAME_CHARACTERS {
+            return Err(CanvasError::Invalid("Layer name is too long"));
+        }
+        self.name = Arc::from(name);
+        Ok(self)
+    }
+    /// Replace the layer's content, keeping its identity and other properties.
+    pub fn with_content(mut self, content: LayerContent) -> Self {
+        self.content = content;
+        self
+    }
+    /// Lock or unlock the layer against editing gestures.
+    pub fn with_locked(mut self, locked: bool) -> Self {
+        self.locked = locked;
+        self
     }
     /// Change visibility on a value submitted through a document command.
     pub fn with_visibility(mut self, visible: bool) -> Self {
@@ -144,22 +222,37 @@ pub enum DocumentEdit {
         /// Destination index after removing the original item.
         index: usize,
     },
+    /// Replace the document's selection; `None` deselects.
+    Select(Option<Coverage>),
 }
 
 struct Content {
     extent: Extent,
     layers: Vec<Layer>,
+    selection: Option<Coverage>,
     _memory: MemoryClaim,
 }
 impl Content {
-    fn copy(extent: Extent, layers: &[Layer], memory: &MemoryLease) -> Result<Self, CanvasError> {
+    fn copy(source: &Self, memory: &MemoryLease) -> Result<Self, CanvasError> {
+        Self::new(source.extent, &source.layers, source.selection.clone(), memory)
+    }
+    fn new(
+        extent: Extent,
+        layers: &[Layer],
+        selection: Option<Coverage>,
+        memory: &MemoryLease,
+    ) -> Result<Self, CanvasError> {
         let claim = memory
             .claim((MAX_LAYERS * size_of::<Layer>() + 128) as u64)
             .map_err(sugarsubstitute_image_ops::ImageError::from)?;
         let mut owned = Vec::new();
         owned.try_reserve_exact(MAX_LAYERS).map_err(sugarsubstitute_image_ops::ImageError::from)?;
         owned.extend_from_slice(layers);
-        Ok(Self { extent, layers: owned, _memory: claim })
+        Ok(Self { extent, layers: owned, selection, _memory: claim })
+    }
+    /// Whether two contents hold the same layers and selection.
+    fn same(&self, other: &Self) -> bool {
+        self.layers == other.layers && self.selection == other.selection
     }
 }
 
@@ -186,6 +279,10 @@ impl DocumentSnapshot {
     /// Immutable bottom-to-top layer stack, preserving raster sources and vector geometry.
     pub fn layers(&self) -> &[Layer] {
         &self.content.layers
+    }
+    /// The document's selection, when something is selected.
+    pub fn selection(&self) -> Option<&Coverage> {
+        self.content.selection.as_ref()
     }
 }
 
@@ -214,7 +311,7 @@ impl Document {
             .map_err(sugarsubstitute_image_ops::ImageError::from)?;
         redo.try_reserve_exact(HISTORY_LIMIT)
             .map_err(sugarsubstitute_image_ops::ImageError::from)?;
-        let content = Arc::new(Content::copy(extent, &[], memory)?);
+        let content = Arc::new(Content::new(extent, &[], None, memory)?);
         Ok(Self {
             current: DocumentSnapshot { identity, revision: 1, content },
             undo,
@@ -232,14 +329,13 @@ impl Document {
     /// Rejects missing/duplicate IDs, invalid indices, extent mismatches, limits and memory pressure.
     pub fn apply(&mut self, edit: DocumentEdit) -> Result<bool, CanvasError> {
         let revision = self.next_revision()?;
-        let mut content =
-            Content::copy(self.current.extent(), self.current.layers(), &self.memory)?;
+        let mut content = Content::copy(&self.current.content, &self.memory)?;
         content.apply(edit)?;
         Ok(self.publish_content(content, revision))
     }
     /// Publish one validated metadata branch through the sole history owner.
     fn publish_content(&mut self, content: Content, revision: u64) -> bool {
-        if content.layers == self.current.content.layers {
+        if content.same(&self.current.content) {
             return false;
         }
         push_history(&mut self.undo, Arc::clone(&self.current.content));
@@ -291,8 +387,8 @@ fn find(layers: &[Layer], id: LayerId) -> Result<usize, CanvasError> {
         .ok_or(CanvasError::Invalid("Unknown layer identity"))
 }
 fn validate_layer(layer: &Layer, extent: Extent) -> Result<(), CanvasError> {
-    if let LayerContent::Raster { extent: source, .. } = layer.content
-        && source != extent
+    if let LayerContent::Raster { extent: source, .. } = &layer.content
+        && *source != extent
     {
         return Err(CanvasError::Invalid("Raster layer extent differs from document extent"));
     }
@@ -305,6 +401,11 @@ fn validate_layer(layer: &Layer, extent: Extent) -> Result<(), CanvasError> {
     }
     if layer.mask.as_ref().is_some_and(|mask| mask.extent() != extent) {
         return Err(CanvasError::Invalid("Layer mask extent differs from document extent"));
+    }
+    if let LayerContent::Coverage { coverage, .. } = &layer.content
+        && coverage.extent() != extent
+    {
+        return Err(CanvasError::Invalid("Mask layer extent differs from document extent"));
     }
     Ok(())
 }

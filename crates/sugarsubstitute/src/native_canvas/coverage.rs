@@ -24,6 +24,16 @@ pub(super) enum BackingTier {
     /// Full-quality overscanned coverage near the current camera.
     Detail,
 }
+impl BackingTier {
+    /// Position in per-tier tables.
+    pub(super) const fn index(self) -> usize {
+        match self {
+            Self::Fallback => 0,
+            Self::Navigation => 1,
+            Self::Detail => 2,
+        }
+    }
+}
 
 /// Construct bounded whole-document coverage while preserving document aspect ratio.
 /// # Errors

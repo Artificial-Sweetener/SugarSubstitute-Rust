@@ -59,8 +59,8 @@ use super::{
 use crate::{diagnostics::DiagnosticHealth, job_sequence::JobSequence};
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 use sugarsubstitute_canvas::{
-    BackingCoverage, Comparison, DamagePlan, FrameStamp, Navigation, ToolManager, Viewport,
-    WipeOrientation,
+    BackingCoverage, Comparison, DamagePlan, DocumentSnapshot, FrameStamp, Navigation, ToolManager,
+    Viewport, WipeOrientation,
 };
 use sugarsubstitute_canvas_render::{
     CpuProjection, CpuSurface, GpuSurface, PresentationMode, PresentationPacer,
@@ -143,6 +143,8 @@ struct Retired {
 struct Rendering {
     job: OwnedJob<Packet, WorkError>,
     document: (u64, u64),
+    /// The exact revision being prepared, kept so the next edit repaints only what changed.
+    snapshot: DocumentSnapshot,
     source_revision: u64,
     reconstruction: Reconstruction,
     tier: BackingTier,

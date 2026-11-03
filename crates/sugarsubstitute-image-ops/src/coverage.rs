@@ -353,6 +353,43 @@ impl Coverage {
         Ok(())
     }
 
+    /// Bounds of every tile whose values may differ from `other`, or `None` when both hold the
+    /// same values. Tiles shared between the two by copy-on-write are skipped without being
+    /// read, so the cost follows the edited tiles.
+    pub fn difference(&self, other: &Self) -> Option<Region> {
+        if self.extent != other.extent || self.tiles.default != other.tiles.default {
+            return Some(self.extent.region());
+        }
+        if self.tiles.fingerprint == other.tiles.fingerprint {
+            return None;
+        }
+        let mut bounds: Option<[u32; 4]> = None;
+        let keys = self.tiles.slots.keys().chain(other.tiles.slots.keys());
+        for key in keys {
+            let same = match (self.tiles.slots.get(key), other.tiles.slots.get(key)) {
+                (Some(Slot::Uniform(left)), Some(Slot::Uniform(right))) => left == right,
+                (Some(Slot::Stored(left)), Some(Slot::Stored(right))) => {
+                    Arc::ptr_eq(left, right) || left.fingerprint == right.fingerprint
+                }
+                _ => false,
+            };
+            if same {
+                continue;
+            }
+            let Ok(region) = self.tile_region(*key) else {
+                return Some(self.extent.region());
+            };
+            let [left, top, right, bottom] =
+                [region.x(), region.y(), region.right(), region.bottom()];
+            bounds = Some(match bounds {
+                None => [left, top, right, bottom],
+                Some([l, t, r, b]) => [l.min(left), t.min(top), r.max(right), b.max(bottom)],
+            });
+        }
+        let [left, top, right, bottom] = bounds?;
+        Region::new(left, top, right - left, bottom - top).ok()
+    }
+
     /// Bytes of tile storage this coverage holds, shared storage included.
     pub fn stored_bytes(&self) -> u64 {
         self.tiles.slots.values().filter(|slot| matches!(slot, Slot::Stored(_))).count() as u64

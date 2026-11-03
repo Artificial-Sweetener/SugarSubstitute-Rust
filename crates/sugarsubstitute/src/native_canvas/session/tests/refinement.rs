@@ -141,7 +141,8 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
     let JobOutcome::Success(document) = wake.completion(&client, &mut setup)?.outcome else {
         return Err("Refinement document setup failed".into());
     };
-    let identity = (document.snapshot().identity(), document.snapshot().revision());
+    let snapshot = document.snapshot();
+    let identity = (snapshot.identity(), snapshot.revision());
     session.document.scene = Some(Scene {
         document,
         source: None,
@@ -168,6 +169,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         comparison: None,
         job,
         document: identity,
+        snapshot,
         source_revision: 0,
         reconstruction,
         tier: BackingTier::Detail,

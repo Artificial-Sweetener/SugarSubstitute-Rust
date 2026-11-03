@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compile authored content into explicit image operations at the requested evaluation grid.
-use crate::{CanvasError, Comparison, DocumentSnapshot, LayerContent, Viewport, WipeOrientation};
+use crate::{
+    CanvasError, Comparison, DocumentSnapshot, LayerContent, MaskAppearance, Viewport,
+    WipeOrientation,
+};
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_ops::{
     AssetId, Coverage, Extent, Filter, Graph, ImageError, NodeId, Operation, Pixel, Reconstruction,
@@ -105,7 +108,8 @@ impl DocumentSnapshot {
         for layer in self.layers().iter().filter(|layer| layer.visible() && layer.opacity() > 0.0) {
             match layer.content() {
                 LayerContent::Exposure { stops } => {
-                    let adjusted = graph.add(Operation::Exposure { input: composite, stops })?;
+                    let adjusted =
+                        graph.add(Operation::Exposure { input: composite, stops: *stops })?;
                     let mask = mask_node(&mut graph, layer.mask(), raster, &mut sampling_scale)?;
                     composite = graph.add(Operation::Mix {
                         original: composite,
@@ -118,7 +122,7 @@ impl DocumentSnapshot {
                     let mut foreground = match content {
                         LayerContent::Raster { asset, .. } => raster_node(
                             &mut graph,
-                            GraphSource::Raster { asset, extent: document },
+                            GraphSource::Raster { asset: *asset, extent: document },
                             RasterPlacement::document(document),
                             raster,
                             true,
@@ -126,14 +130,29 @@ impl DocumentSnapshot {
                         )?,
                         LayerContent::PlacedRaster { asset, extent, bounds } => raster_node(
                             &mut graph,
-                            GraphSource::Raster { asset, extent },
-                            RasterPlacement { bounds },
+                            GraphSource::Raster { asset: *asset, extent: *extent },
+                            RasterPlacement { bounds: *bounds },
                             raster,
                             true,
                             &mut sampling_scale,
                         )?,
                         LayerContent::VectorRectangle(shape) => {
-                            vector_node(&mut graph, shape, document, view)?
+                            vector_node(&mut graph, *shape, document, view)?
+                        }
+                        LayerContent::Coverage { coverage, appearance } => {
+                            let tint = graph.add(Operation::Solid {
+                                extent: target,
+                                color: tint(*appearance)?,
+                            })?;
+                            let mask = raster_node(
+                                &mut graph,
+                                GraphSource::Coverage(coverage),
+                                RasterPlacement::document(document),
+                                raster,
+                                true,
+                                &mut sampling_scale,
+                            )?;
+                            graph.add(Operation::Mask { input: tint, mask })?
                         }
                         LayerContent::Exposure { .. } => {
                             return Err(CanvasError::Invalid(
@@ -175,6 +194,15 @@ impl DocumentSnapshot {
     }
 }
 
+/// A mask overlay's tint as linear premultiplied color at the overlay's opacity.
+fn tint(appearance: MaskAppearance) -> Result<Pixel, ImageError> {
+    let [red, green, blue] = appearance.color().map(|channel| {
+        let value = f32::from(channel) / 255.0;
+        if value <= 0.040_45 { value / 12.92 } else { ((value + 0.055) / 1.055).powf(2.4) }
+    });
+    Pixel::linear(red, green, blue, appearance.opacity())
+}
+
 /// Pyramid reductions needed to bring an extent's longer edge down to one pixel.
 fn reductions(extent: Extent) -> usize {
     (u32::BITS - (extent.width().max(extent.height()) - 1).leading_zeros()) as usize
@@ -193,7 +221,9 @@ fn graph_capacity(document: &DocumentSnapshot, comparison: Option<Comparison>) -
                 capacity += match content {
                     LayerContent::Raster { .. } => sampled + 2,
                     // Its own pyramid, resample, placement clip and its mask.
-                    LayerContent::PlacedRaster { extent, .. } => reductions(extent) + 5,
+                    LayerContent::PlacedRaster { extent, .. } => reductions(*extent) + 5,
+                    // The tint, its coverage pyramid, resample, document clip and two masks.
+                    LayerContent::Coverage { .. } => sampled + 4,
                     _ => 1,
                 };
                 capacity += 1;

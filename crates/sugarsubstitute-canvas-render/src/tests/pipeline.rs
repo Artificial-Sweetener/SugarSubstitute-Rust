@@ -254,7 +254,7 @@ fn vector_layers_rasterize_at_requested_zoom_without_flattening_geometry() -> ha
         assert_eq!(surface.pixels()[10 * 32 + 10], 0xffff0000);
         assert_eq!(surface.pixels()[17 * 32 + 17], 0xffff0000);
         assert_eq!(surface.pixels()[18 * 32 + 18], 0xff000000);
-        assert_eq!(snapshot.layers()[0].content(), LayerContent::VectorRectangle(shape));
+        assert_eq!(snapshot.layers()[0].content(), &LayerContent::VectorRectangle(shape));
         assert_eq!(renderer.stats().source_pixels, 0);
         Ok(())
     })

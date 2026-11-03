@@ -377,6 +377,8 @@ impl Session {
                     BackingTier::Detail => self.document.presented = Some(shown),
                     BackingTier::Navigation => self.document.navigation_presented = Some(shown),
                 }
+                self.document.presented_documents[packet.tier.index()] =
+                    Some(rendering.snapshot.clone());
                 self.last_prepare = packet.elapsed;
                 self.last_stats = packet.stats;
                 self.last_surface_work = work;

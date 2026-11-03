@@ -3,6 +3,7 @@
 //! Verify native navigation intent and exact preview/refinement decisions with an injected clock.
 use super::*;
 mod display;
+mod edit_damage;
 mod latency;
 mod navigation_backing;
 mod refinement;
