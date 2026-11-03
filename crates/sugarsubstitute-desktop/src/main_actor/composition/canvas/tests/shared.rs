@@ -186,9 +186,9 @@ fn qualify_extent(
             let mut surface = SharedSurface::new(drawn_device).map_err(io)?;
             drawn_texture.await_reads(&context).map_err(io)?;
             // The first draw compiles the display pipeline; the second measures steady state.
-            surface.draw(&target, &image, &context).map_err(io)?;
+            surface.draw(&target, &image, &[], &context).map_err(io)?;
             let started = Instant::now();
-            surface.draw(&target, &image, &context).map_err(io)?;
+            surface.draw(&target, &image, &[], &context).map_err(io)?;
             Ok::<_, io::Error>((image, target, surface, started.elapsed()))
         })
         .map_err(io)?;

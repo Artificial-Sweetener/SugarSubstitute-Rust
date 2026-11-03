@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Present already-encoded sRGB display bytes through a native unorm swapchain.
 use crate::{
-    DisplayImage, DisplayMapping, GpuDevice, GpuError, buffer::Buffer,
+    DisplayImage, DisplayMapping, GpuDevice, GpuError, OverlayPixel, buffer::Buffer,
     coordination::SubmissionPermit, display_mapping::MappingUpload, transfer::Transfer,
 };
 use std::{borrow::Cow, sync::Arc};
@@ -21,10 +21,11 @@ impl StagedDraw {
     pub(crate) fn new(
         mapping: Option<DisplayMapping<'_>>,
         underlay: Option<DisplayMapping<'_>>,
+        overlay: &[OverlayPixel],
         output: Extent,
         context: &JobContext,
     ) -> Result<Self, GpuError> {
-        let upload = MappingUpload::new(mapping, underlay, output, context)?;
+        let upload = MappingUpload::new(mapping, underlay, overlay, output, context)?;
         let staging = context
             .memory()
             .claim(upload.bytes.len() as u64 + 128)
@@ -35,6 +36,7 @@ impl StagedDraw {
 
 pub(crate) struct Blitter {
     pipeline: wgpu::RenderPipeline,
+    overlay: wgpu::RenderPipeline,
     mapping: Arc<Buffer>,
     _memory: MemoryClaim,
 }
@@ -85,7 +87,9 @@ impl Blitter {
             cache: None,
         });
         device.faults.check()?;
-        Ok(Self { pipeline, mapping, _memory: memory })
+        let overlay = overlay_pipeline(device, format);
+        device.faults.check()?;
+        Ok(Self { pipeline, overlay, mapping, _memory: memory })
     }
     /// Retain the exact mapping buffer through its write and draw submission.
     pub(crate) fn mapping(&self) -> Arc<Buffer> {
@@ -107,7 +111,8 @@ impl Blitter {
         });
         let input = image.view();
         let underlay_input = underlay.map_or_else(|| image.view(), DisplayImage::view);
-        self.encode(device, &input, &underlay_input, output, &mut commands);
+        let overlay = staged.upload.overlay;
+        self.encode(device, &input, &underlay_input, output, overlay, &mut commands);
         device.faults.check()?;
         Transfer::upload(
             self.mapping(),
@@ -124,6 +129,7 @@ impl Blitter {
         input: &wgpu::TextureView,
         underlay: &wgpu::TextureView,
         output: &wgpu::TextureView,
+        overlay: u32,
         commands: &mut wgpu::CommandEncoder,
     ) {
         let group = device.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -157,8 +163,80 @@ impl Blitter {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &group, &[]);
         pass.draw(0..3, 0..1);
+        if overlay > 0 {
+            let points = device.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("SugarSubstitute native display overlay"),
+                layout: &self.overlay.get_bind_group_layout(0),
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.mapping.raw.as_entire_binding(),
+                }],
+            });
+            pass.set_pipeline(&self.overlay);
+            pass.set_bind_group(0, &points, &[]);
+            pass.draw(0..overlay, 0..1);
+        }
     }
 }
+
+/// Opaque overlay pixels, one point primitive each, drawn over the display in the same pass.
+fn overlay_pipeline(device: &GpuDevice, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
+    let module = device.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("SugarSubstitute native display overlay shader"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(OVERLAY)),
+    });
+    device.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("SugarSubstitute native display overlay pipeline"),
+        layout: None,
+        vertex: wgpu::VertexState {
+            module: &module,
+            entry_point: Some("vertex"),
+            compilation_options: Default::default(),
+            buffers: &[],
+        },
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::PointList,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: Default::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &module,
+            entry_point: Some("fragment"),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+const OVERLAY: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+@group(0) @binding(0) var<storage, read> mapping: array<u32>;
+struct Point {
+    @builtin(position) position: vec4<f32>,
+    @location(0) @interpolate(flat) color: u32,
+}
+@vertex
+fn vertex(@builtin(vertex_index) index: u32) -> Point {
+    let entry = mapping[5] + index * 2u;
+    let packed = mapping[entry];
+    let size = vec2<f32>(f32(mapping[1]), f32(mapping[2]));
+    let centre = vec2<f32>(f32(packed & 65535u), f32(packed >> 16u)) + vec2<f32>(0.5);
+    let clip = vec2<f32>(centre.x / size.x * 2.0 - 1.0, 1.0 - centre.y / size.y * 2.0);
+    return Point(vec4<f32>(clip, 0.0, 1.0), mapping[entry + 1u]);
+}
+@fragment
+fn fragment(point: Point) -> @location(0) vec4<f32> {
+    let color = point.color;
+    return vec4<f32>(f32((color >> 16u) & 255u), f32((color >> 8u) & 255u),
+        f32(color & 255u), 255.0) / 255.0;
+}
+"#;
 const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 @group(0) @binding(0) var image: texture_2d<f32>;
@@ -260,14 +338,16 @@ mod tests {
     use super::*;
     #[test]
     fn native_display_shader_requires_no_optional_device_capabilities() -> Result<(), GpuError> {
-        let module = wgpu::naga::front::wgsl::parse_str(SOURCE)
-            .map_err(|cause| GpuError::new("window_shader_parse", cause))?;
-        wgpu::naga::valid::Validator::new(
-            wgpu::naga::valid::ValidationFlags::all(),
-            wgpu::naga::valid::Capabilities::empty(),
-        )
-        .validate(&module)
-        .map_err(|cause| GpuError::new("window_shader_validate", cause))?;
+        for source in [SOURCE, OVERLAY] {
+            let module = wgpu::naga::front::wgsl::parse_str(source)
+                .map_err(|cause| GpuError::new("window_shader_parse", cause))?;
+            wgpu::naga::valid::Validator::new(
+                wgpu::naga::valid::ValidationFlags::all(),
+                wgpu::naga::valid::Capabilities::empty(),
+            )
+            .validate(&module)
+            .map_err(|cause| GpuError::new("window_shader_validate", cause))?;
+        }
         Ok(())
     }
 }

@@ -78,12 +78,16 @@ pub(super) fn prepare(
                         samples.gpu_mapping(matte)?,
                         underlay.frame.image(),
                         underlay_samples.gpu_mapping(matte)?,
+                        &[],
                         context,
                     ),
-                (Some(samples), _, _) => {
-                    window.prepare_projected(frame.image(), samples.gpu_mapping(matte)?, context)
-                }
-                (None, _, _) => window.prepare(frame.image(), context),
+                (Some(samples), _, _) => window.prepare_projected(
+                    frame.image(),
+                    samples.gpu_mapping(matte)?,
+                    &[],
+                    context,
+                ),
+                (None, _, _) => window.prepare(frame.image(), &[], context),
             };
             match prepared {
                 Err(cause) if cause.is_memory_pressure() => match reclaim_gpu_cache(resources)? {

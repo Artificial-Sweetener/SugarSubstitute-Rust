@@ -4,6 +4,7 @@
 mod cpu;
 mod gpu;
 mod gpu_surface;
+mod overlay;
 mod pacing;
 mod projection;
 mod surface;
@@ -11,6 +12,7 @@ mod update;
 pub use cpu::{CpuPreparation, CpuRenderer};
 pub use gpu::{GpuRenderer, PreparedGpuUpdate};
 pub use gpu_surface::{GpuFrame, GpuSurface};
+pub use overlay::{OverlayPixel, OverlayPixels};
 pub use pacing::{
     PacingError, PresentationMode, PresentationPacer, PresentationReadiness, PresentationStage,
     PresentationStats, TimingSummary,

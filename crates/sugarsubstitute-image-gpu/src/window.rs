@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Native swapchain custody: attach on the window thread, prepare and present on admitted workers.
 use crate::{
-    DisplayImage, DisplayMapping, GpuDevice, GpuError,
+    DisplayImage, DisplayMapping, GpuDevice, GpuError, OverlayPixel,
     coordination::{ConfigurationIntent, SubmissionPermit},
     surface_state::{Reconfiguration, ReconfigureReason},
     window_shader::{Blitter, StagedDraw},
@@ -124,35 +124,40 @@ impl WindowSurface {
     /// completion before returning. This never reads display pixels back to the CPU.
     /// `None` reports temporary occlusion, timeout, reconfiguration or an unconsumed prior token;
     /// the application coalesces a later presentation attempt while retaining its completed image.
+    /// `overlay` pixels, such as selection outlines, are drawn opaque over the display.
     /// # Errors
     /// Rejects foreign devices and preserves original control/admission/driver causes.
     pub fn prepare(
         &mut self,
         image: &DisplayImage,
+        overlay: &[OverlayPixel],
         context: &JobContext,
     ) -> Result<Option<WindowFrame>, GpuError> {
-        self.draw(image, None, None, context)
+        self.draw(image, None, None, overlay, context)
     }
     /// Project one immutable retained image into a current physical viewport on the same device.
     /// Supplied indices are prevalidated; no source pixels are read back or replaced. Outstanding
     /// frame/backpressure and native completion semantics match canonical presentation.
+    /// `overlay` pixels, such as selection outlines, are drawn opaque over the display.
     /// # Errors
     /// Rejects foreign source extents/devices; preserves original control, admission and GPU causes.
     pub fn prepare_projected(
         &mut self,
         image: &DisplayImage,
         mapping: DisplayMapping<'_>,
+        overlay: &[OverlayPixel],
         context: &JobContext,
     ) -> Result<Option<WindowFrame>, GpuError> {
         if mapping.source() != image.extent() {
             return Err(GpuError::invalid("Display projection source differs from retained image"));
         }
-        self.draw(image, Some(mapping), None, context)
+        self.draw(image, Some(mapping), None, overlay, context)
     }
     /// Project a retained detail image over a retained fallback image into one physical viewport.
     /// Covered detail pixels take precedence, uncovered detail pixels sample the underlay, and
     /// pixels uncovered by both mappings use the primary mapping's opaque matte. Both immutable
     /// images and maps are validated before native swapchain acquisition.
+    /// `overlay` pixels, such as selection outlines, are drawn opaque over the display.
     /// # Errors
     /// Rejects foreign source extents/devices or disagreeing output extents; preserves original
     /// control, admission and GPU causes.
@@ -162,6 +167,7 @@ impl WindowSurface {
         mapping: DisplayMapping<'_>,
         underlay: &DisplayImage,
         underlay_mapping: DisplayMapping<'_>,
+        overlay: &[OverlayPixel],
         context: &JobContext,
     ) -> Result<Option<WindowFrame>, GpuError> {
         if mapping.source() != image.extent() || underlay_mapping.source() != underlay.extent() {
@@ -174,7 +180,7 @@ impl WindowSurface {
                 "Display composition mappings disagree on output extent",
             ));
         }
-        self.draw(image, Some(mapping), Some((underlay, underlay_mapping)), context)
+        self.draw(image, Some(mapping), Some((underlay, underlay_mapping)), overlay, context)
     }
     /// Configure, acquire and retire one draw while retaining upload and swapchain custody.
     fn draw<'primary, 'underlay>(
@@ -182,6 +188,7 @@ impl WindowSurface {
         image: &DisplayImage,
         mapping: Option<DisplayMapping<'primary>>,
         underlay: Option<(&DisplayImage, DisplayMapping<'underlay>)>,
+        overlay: &[OverlayPixel],
         context: &JobContext,
     ) -> Result<Option<WindowFrame>, GpuError> {
         crate::adapter::check(context)?;
@@ -207,8 +214,13 @@ impl WindowSurface {
         if self.blitter.is_none() {
             self.blitter = Some(Blitter::new(&device, self.owner.format, context)?);
         }
-        let staged =
-            StagedDraw::new(mapping, underlay.map(|(_, mapping)| mapping), extent, context)?;
+        let staged = StagedDraw::new(
+            mapping,
+            underlay.map(|(_, mapping)| mapping),
+            overlay,
+            extent,
+            context,
+        )?;
         let acquired = {
             let _timing = device.timings.begin(crate::timing::Phase::Acquire, 0, 1);
             self.owner.surface.get_current_texture()

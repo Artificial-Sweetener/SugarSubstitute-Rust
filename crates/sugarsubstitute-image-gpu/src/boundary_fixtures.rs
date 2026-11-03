@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Headless driver-boundary fixtures using the production display shader and mapping upload.
 use crate::{
-    DisplayImage, DisplayMapping, GpuError,
+    DisplayImage, DisplayMapping, GpuError, OverlayPixel,
     display::row_bytes,
     display_mapping::MappingUpload,
     display_readback::{DisplayReadbackWorkspace, read_texture_region_into},
@@ -56,6 +56,7 @@ pub struct CompositeFixture<'a> {
     primary: CompositeSource<'a>,
     fallback: CompositeSource<'a>,
     matte: [u8; 4],
+    overlay: &'a [OverlayPixel],
 }
 
 impl<'a> CompositeFixture<'a> {
@@ -73,7 +74,12 @@ impl<'a> CompositeFixture<'a> {
         {
             return Err(GpuError::invalid("Invalid composite qualification fixture"));
         }
-        Ok(Self { primary, fallback, matte })
+        Ok(Self { primary, fallback, matte, overlay: &[] })
+    }
+    /// Draw these opaque overlay pixels over the composite, later pixels over earlier ones.
+    pub const fn with_overlay(mut self, overlay: &'a [OverlayPixel]) -> Self {
+        self.overlay = overlay;
+        self
     }
 }
 
@@ -106,6 +112,7 @@ pub fn qualify_composite(
     let upload = MappingUpload::new(
         Some(fixture.primary.mapping),
         Some(fixture.fallback.mapping),
+        fixture.overlay,
         output,
         context,
     )?;
@@ -150,7 +157,14 @@ pub fn qualify_composite(
     let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("SugarSubstitute offscreen composite commands"),
     });
-    blitter.encode(&device, &primary_view, &fallback_view, &output_view, &mut commands);
+    blitter.encode(
+        &device,
+        &primary_view,
+        &fallback_view,
+        &output_view,
+        upload.overlay,
+        &mut commands,
+    );
     device.faults.check()?;
     let submission = device.submission(context)?;
     let mut transfer =
@@ -182,6 +196,12 @@ pub fn qualify_composite(
 }
 
 fn expected_pixel(fixture: &CompositeFixture<'_>, x: usize, y: usize) -> u32 {
+    if let Some(pixel) =
+        fixture.overlay.iter().rev().find(|pixel| (pixel.x as usize, pixel.y as usize) == (x, y))
+    {
+        let [red, green, blue] = pixel.color;
+        return u32::from_be_bytes([255, red, green, blue]);
+    }
     sample(&fixture.primary, x, y).or_else(|| sample(&fixture.fallback, x, y)).unwrap_or_else(
         || {
             u32::from_be_bytes([

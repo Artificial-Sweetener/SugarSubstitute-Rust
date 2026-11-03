@@ -46,7 +46,7 @@ pub use batch::GpuWork;
 pub use buffer::{GpuTile, Readback};
 pub use display::{DisplayRegions, DisplayTile};
 pub use display_image::{DisplayCopy, DisplayImage};
-pub use display_mapping::DisplayMapping;
+pub use display_mapping::{DisplayMapping, MAX_OVERLAY_PIXELS, OverlayPixel};
 pub use display_readback::{DisplayReadback, DisplayReadbackWorkspace};
 pub use error::GpuError;
 pub use evaluate::GpuEvaluator;

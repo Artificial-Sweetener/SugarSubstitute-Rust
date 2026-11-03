@@ -239,6 +239,10 @@ impl CpuProjection {
     pub fn pixels(&self) -> &[u32] {
         &self.buffer.pixels
     }
+    /// Writable display words for presentation-only marks drawn over the projection.
+    pub(crate) fn pixels_mut(&mut self) -> &mut [u32] {
+        &mut self.buffer.pixels
+    }
 }
 
 #[cfg(test)]

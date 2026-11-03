@@ -147,10 +147,10 @@ fn render(
     context: &JobContext,
 ) -> Result<(), GpuError> {
     match (primary, underlay) {
-        (Some(mapping), Some((underlay, underlay_mapping))) => {
-            surface.draw_composited(target, image, mapping, underlay, underlay_mapping, context)
+        (Some(mapping), Some(underlay)) => {
+            surface.draw_composited(target, image, mapping, underlay, &[], context)
         }
-        (Some(mapping), None) => surface.draw_projected(target, image, mapping, context),
-        (None, _) => surface.draw(target, image, context),
+        (Some(mapping), None) => surface.draw_projected(target, image, mapping, &[], context),
+        (None, _) => surface.draw(target, image, &[], context),
     }
 }

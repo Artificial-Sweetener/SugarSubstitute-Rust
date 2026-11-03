@@ -51,23 +51,45 @@ impl<'a> DisplayMapping<'a> {
     }
 }
 
+/// Most overlay pixels one display draw carries.
+pub const MAX_OVERLAY_PIXELS: usize = 1 << 17;
+
+/// One opaque device pixel drawn over a display, such as a dash of selection outline.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct OverlayPixel {
+    /// Output column.
+    pub x: u32,
+    /// Output row.
+    pub y: u32,
+    /// Encoded sRGB colour.
+    pub color: [u8; 3],
+}
+
 /// Host encoding retains its original claim; submission separately admits native write staging.
 pub(crate) struct MappingUpload {
     pub(crate) bytes: Vec<u8>,
+    /// Overlay pixels drawn after the display, one point each.
+    pub(crate) overlay: u32,
     _memory: MemoryClaim,
 }
 impl MappingUpload {
-    pub(crate) const CAPACITY: u64 = (8 + 12 * 16384) * 4;
-    /// Encode bounded little-endian primary and optional underlay mappings. Identity presentation
-    /// uploads only its header.
+    pub(crate) const CAPACITY: u64 = (8 + 12 * 16384 + 2 * MAX_OVERLAY_PIXELS as u64) * 4;
+    /// Encode bounded little-endian primary and optional underlay mappings, then the overlay
+    /// pixels drawn over them. Identity presentation uploads only its header and overlay.
     pub(crate) fn new(
         mapping: Option<DisplayMapping<'_>>,
         underlay: Option<DisplayMapping<'_>>,
+        overlay: &[OverlayPixel],
         output: Extent,
         context: &JobContext,
     ) -> Result<Self, GpuError> {
         crate::adapter::check(context)?;
-        let layout = MappingLayout::new(mapping, underlay, output)?;
+        if overlay.len() > MAX_OVERLAY_PIXELS
+            || overlay.iter().any(|pixel| pixel.x >= output.width() || pixel.y >= output.height())
+        {
+            return Err(GpuError::invalid("Display overlay pixels exceed their output"));
+        }
+        let layout = MappingLayout::new(mapping, underlay, output, overlay.len())?;
         let memory = context
             .memory()
             .claim(layout.words as u64 * 4 + 128)
@@ -76,8 +98,14 @@ impl MappingUpload {
         bytes
             .try_reserve_exact(layout.words * 4)
             .map_err(|cause| GpuError::new("gpu_display_mapping_allocation", cause))?;
-        encode_mappings(&mut bytes, mapping, underlay, output, layout.underlay_base);
-        Ok(Self { bytes, _memory: memory })
+        encode_mappings(&mut bytes, mapping, underlay, output, layout);
+        for pixel in overlay {
+            let [red, green, blue] = pixel.color;
+            for word in [pixel.x | pixel.y << 16, u32::from_be_bytes([0, red, green, blue])] {
+                bytes.extend_from_slice(&word.to_le_bytes());
+            }
+        }
+        Ok(Self { bytes, overlay: overlay.len() as u32, _memory: memory })
     }
 }
 
@@ -85,12 +113,15 @@ impl MappingUpload {
 struct MappingLayout {
     words: usize,
     underlay_base: usize,
+    overlay_base: usize,
+    overlay: usize,
 }
 impl MappingLayout {
     fn new(
         mapping: Option<DisplayMapping<'_>>,
         underlay: Option<DisplayMapping<'_>>,
         output: Extent,
+        overlay: usize,
     ) -> Result<Self, GpuError> {
         if mapping.is_some_and(|map| map.output != output)
             || underlay.is_some_and(|map| map.output != output)
@@ -100,11 +131,12 @@ impl MappingLayout {
         }
         let primary_words = mapping.map_or(0, axis_words);
         let underlay_base = underlay.map_or(0, |_| 8 + primary_words);
-        let words = 8 + primary_words + underlay.map_or(0, axis_words);
+        let overlay_base = 8 + primary_words + underlay.map_or(0, axis_words);
+        let words = overlay_base + 2 * overlay;
         if words as u64 * 4 > MappingUpload::CAPACITY {
             return Err(GpuError::invalid("Native display mappings exceed upload capacity"));
         }
-        Ok(Self { words, underlay_base })
+        Ok(Self { words, underlay_base, overlay_base, overlay })
     }
 }
 
@@ -117,7 +149,7 @@ fn encode_mappings(
     mapping: Option<DisplayMapping<'_>>,
     underlay: Option<DisplayMapping<'_>>,
     output: Extent,
-    underlay_base: usize,
+    layout: MappingLayout,
 ) {
     let matte = mapping.map_or([0, 0, 0, 255], |map| map.matte);
     let background = u32::from_be_bytes([matte[3], matte[0], matte[1], matte[2]]);
@@ -126,9 +158,9 @@ fn encode_mappings(
         output.width(),
         output.height(),
         background,
-        underlay_base as u32,
-        0,
-        0,
+        layout.underlay_base as u32,
+        layout.overlay_base as u32,
+        layout.overlay as u32,
         0,
     ] {
         bytes.extend_from_slice(&word.to_le_bytes());
@@ -195,16 +227,16 @@ mod tests {
             &underlay_rows,
             [17, 29, 41, 255],
         )?;
-        let layout = MappingLayout::new(Some(primary), Some(underlay), output)?;
+        let layout = MappingLayout::new(Some(primary), Some(underlay), output, 0)?;
         assert_eq!(layout.underlay_base, 17);
         assert_eq!(layout.words, 26);
         let mut bytes = Vec::new();
-        encode_mappings(&mut bytes, Some(primary), Some(underlay), output, layout.underlay_base);
+        encode_mappings(&mut bytes, Some(primary), Some(underlay), output, layout);
         let words = bytes
             .chunks_exact(4)
             .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
             .collect::<Vec<_>>();
-        assert_eq!(&words[..8], &[1, 2, 1, 0xff111d29, 17, 0, 0, 0]);
+        assert_eq!(&words[..8], &[1, 2, 1, 0xff111d29, 17, 26, 0, 0]);
         assert_eq!(
             &words[17..],
             &[
@@ -220,8 +252,8 @@ mod tests {
             ]
         );
         let different_output = Extent::new(1, 1)?;
-        assert!(MappingLayout::new(Some(primary), Some(underlay), different_output).is_err());
-        assert!(MappingLayout::new(None, Some(underlay), output).is_err());
+        assert!(MappingLayout::new(Some(primary), Some(underlay), different_output, 0).is_err());
+        assert!(MappingLayout::new(None, Some(underlay), output, 0).is_err());
         Ok(())
     }
 }

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Draw retained display images into imported composition textures on admitted workers.
 use crate::{
-    DisplayImage, DisplayMapping, GpuDevice, GpuError, SharedTarget,
+    DisplayImage, DisplayMapping, GpuDevice, GpuError, OverlayPixel, SharedTarget,
     window_shader::{Blitter, StagedDraw},
 };
 use std::sync::Arc;
@@ -31,20 +31,23 @@ impl SharedSurface {
         Ok(Self { device, blitter: None, _memory: memory })
     }
     /// Copy a retained image of exactly the target's extent.
+    /// `overlay` pixels, such as selection outlines, are drawn opaque over the display.
     /// # Errors
     /// Rejects foreign devices and differing extents; preserves control, admission and GPU causes.
     pub fn draw(
         &mut self,
         target: &SharedTarget,
         image: &DisplayImage,
+        overlay: &[OverlayPixel],
         context: &JobContext,
     ) -> Result<(), GpuError> {
         if image.extent() != target.extent {
             return Err(GpuError::invalid("Composition target differs from retained image"));
         }
-        self.render(target, image, None, None, context)
+        self.render(target, image, None, None, overlay, context)
     }
     /// Project a retained image into the target through one validated display mapping.
+    /// `overlay` pixels, such as selection outlines, are drawn opaque over the display.
     /// # Errors
     /// Rejects foreign devices and mismatched mappings; preserves original native causes.
     pub fn draw_projected(
@@ -52,14 +55,16 @@ impl SharedSurface {
         target: &SharedTarget,
         image: &DisplayImage,
         mapping: DisplayMapping<'_>,
+        overlay: &[OverlayPixel],
         context: &JobContext,
     ) -> Result<(), GpuError> {
         if mapping.source() != image.extent() || mapping.output() != target.extent {
             return Err(GpuError::invalid("Composition projection differs from its images"));
         }
-        self.render(target, image, Some(mapping), None, context)
+        self.render(target, image, Some(mapping), None, overlay, context)
     }
-    /// Project a retained detail image over a retained fallback, as native window composition does.
+    /// Project a retained detail image over a retained fallback image and its mapping, as native
+    /// window composition does. `overlay` pixels, such as selection outlines, are drawn opaque over the display.
     /// # Errors
     /// Rejects foreign devices and mismatched mappings; preserves original native causes.
     pub fn draw_composited(
@@ -67,8 +72,8 @@ impl SharedSurface {
         target: &SharedTarget,
         image: &DisplayImage,
         mapping: DisplayMapping<'_>,
-        underlay: &DisplayImage,
-        underlay_mapping: DisplayMapping<'_>,
+        (underlay, underlay_mapping): (&DisplayImage, DisplayMapping<'_>),
+        overlay: &[OverlayPixel],
         context: &JobContext,
     ) -> Result<(), GpuError> {
         if mapping.source() != image.extent()
@@ -78,7 +83,14 @@ impl SharedSurface {
         {
             return Err(GpuError::invalid("Composition projection differs from its images"));
         }
-        self.render(target, image, Some(mapping), Some((underlay, underlay_mapping)), context)
+        self.render(
+            target,
+            image,
+            Some(mapping),
+            Some((underlay, underlay_mapping)),
+            overlay,
+            context,
+        )
     }
     fn render(
         &mut self,
@@ -86,6 +98,7 @@ impl SharedSurface {
         image: &DisplayImage,
         mapping: Option<DisplayMapping<'_>>,
         underlay: Option<(&DisplayImage, DisplayMapping<'_>)>,
+        overlay: &[OverlayPixel],
         context: &JobContext,
     ) -> Result<(), GpuError> {
         crate::adapter::check(context)?;
@@ -101,8 +114,13 @@ impl SharedSurface {
             self.blitter =
                 Some(Blitter::new(&self.device, wgpu::TextureFormat::Bgra8Unorm, context)?);
         }
-        let staged =
-            StagedDraw::new(mapping, underlay.map(|(_, mapping)| mapping), target.extent, context)?;
+        let staged = StagedDraw::new(
+            mapping,
+            underlay.map(|(_, mapping)| mapping),
+            overlay,
+            target.extent,
+            context,
+        )?;
         let output = target.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let submission = self.device.submission(context)?;
         let blitter = self

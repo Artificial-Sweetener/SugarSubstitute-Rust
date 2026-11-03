@@ -12,7 +12,7 @@ use sugarsubstitute_contracts::execution::{Operation as ExecutionOperation, *};
 use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
 use sugarsubstitute_image_gpu::{
     AdapterCatalog, AdapterDescriptor, AdapterKey, DisplayImage, DisplayMapping, GpuDevice,
-    GpuEvaluator,
+    GpuEvaluator, OverlayPixel,
     boundary_fixtures::{
         CompositeFixture, CompositeQualification, CompositeSource, qualify_composite,
     },
@@ -244,7 +244,15 @@ fn run(device: Arc<GpuDevice>, context: &JobContext) -> Result<Report> {
         &fallback_columns,
         &fallback_rows,
     )?;
-    let fixture = CompositeFixture::new(primary_source, fallback_source, matte)?;
+    // Selection ants and outline dashes, including a later pixel replacing an earlier one.
+    let overlay = [
+        OverlayPixel { x: 0, y: 0, color: [245, 245, 245] },
+        OverlayPixel { x: 2, y: 2, color: [25, 25, 25] },
+        OverlayPixel { x: 4, y: 3, color: [255, 255, 255] },
+        OverlayPixel { x: 2, y: 2, color: [0, 0, 0] },
+    ];
+    let fixture =
+        CompositeFixture::new(primary_source, fallback_source, matte)?.with_overlay(&overlay);
     let qualification = qualify_composite(fixture, context)?;
     let video_memory = device.video_memory_budget();
     Ok(Report { adapter: device.descriptor().clone(), qualification, video_memory })
