@@ -51,11 +51,15 @@ function regional(entries: number, demand: ReturnType<typeof regionalPromptDeman
 
 test('region names come from the first prompt naming each separator', () => {
   const demand = regionalPromptDemand([
-    [null, ' sky ', ''],
-    ['person', 'ignored'],
+    { path: 'positive', separators: [null, ' sky ', ''] },
+    { path: 'negative', separators: ['person', 'ignored'] },
   ]);
-  expect(demand).toEqual({ names: ['person', 'sky', null], required: 3 });
-  expect(regionalPromptDemand([])).toEqual({ names: [], required: 0 });
+  expect(demand).toEqual({
+    names: ['person', 'sky', null],
+    required: 3,
+    prompts: ['positive', 'negative'],
+  });
+  expect(regionalPromptDemand([])).toEqual({ names: [], required: 0, prompts: [] });
   expect(missingRegionMasks(demand, 2)).toBe(1);
   expect(missingRegionMasks(demand, 4)).toBe(0);
   expect(missingRegionMasks(null, 0)).toBe(0);
@@ -78,7 +82,7 @@ test('region names come from the first prompt naming each separator', () => {
 });
 
 test('generation is refused while prompts declare more regions than the loader holds', async () => {
-  let masks = [regional(1, regionalPromptDemand([[null, 'b']]))];
+  let masks = [regional(1, regionalPromptDemand([{ path: 'p', separators: [null, 'b'] }]))];
   const host = {
     canvasId: 'native',
     execute: jest.fn(async () => ({ kind: 'synced' as const, surfaces: [] })),
@@ -101,7 +105,7 @@ test('generation is refused while prompts declare more regions than the loader h
   await expect(service.assertGenerationReady()).rejects.toThrow(
     'Regional prompt is missing an associated mask: Load Mask Batch has 1 of the 2 masks',
   );
-  masks = [regional(2, regionalPromptDemand([[null, 'b']]))];
+  masks = [regional(2, regionalPromptDemand([{ path: 'p', separators: [null, 'b'] }]))];
   await expect(service.assertGenerationReady()).resolves.toBeUndefined();
 });
 

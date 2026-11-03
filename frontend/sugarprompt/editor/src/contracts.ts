@@ -182,6 +182,8 @@ export interface PromptEditorApi {
     names: readonly RegionName[],
     target: RegionNameTarget,
   ): RegionNameSyncOutcome;
+  /** Mirror another view's hover on a prompt document's separator ordinal, or clear it with null; pointer hover is never overridden and linked hover is never reported. Returns whether the separator is shown hovered. Malformed ordinals throw TypeError. */
+  setLinkedRegionHover(ordinal: number | null): boolean;
   /** Replace validated endpoint/topology authority without source/history edits; context changes retire captured work. */
   setConditioningContext(value: ConditioningContextInput | null): void;
   /** Inspect source-current exact-source UTF-16 scopes; unavailable host context retains independent ownership. */

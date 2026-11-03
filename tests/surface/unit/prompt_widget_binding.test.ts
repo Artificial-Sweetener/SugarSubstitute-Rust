@@ -95,3 +95,23 @@ test('preserves a native accessor and balances graph history when its callback f
   expect(Object.getOwnPropertyDescriptor(widget, 'value')?.get).toBe(descriptor.get);
   expect(widget.value).toBe('new');
 });
+
+test('reports a value written in place of the edit by its own callbacks', () => {
+  const changed = jest.fn();
+  const widget: ComfyWidget = { name: 'value', value: 'before' };
+  const node: ComfyNode = {
+    widgets: [widget],
+    graph: { beforeChange: jest.fn(), afterChange: jest.fn() },
+  };
+  node.onWidgetChanged = () => {
+    widget.value = 'normalized by the host';
+  };
+  const binding = new PromptWidgetBinding(node, widget, changed);
+  binding.commit('typed');
+  expect(widget.value).toBe('normalized by the host');
+  expect(changed.mock.calls).toEqual([['normalized by the host']]);
+  node.onWidgetChanged = undefined;
+  binding.commit('typed again');
+  expect(changed).toHaveBeenCalledTimes(1);
+  binding.dispose();
+});

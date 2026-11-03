@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Find the multiline prompts that condition a regional mask loader's consumers. */
 import { parsePrompt } from '../../../../sugarprompt/core/src/index.js';
-import type { ComfyNode } from '../../types/graph.js';
+import type { ComfyNode, ComfyWidget } from '../../types/graph.js';
 import type { SpatialTopology } from '../domain/CanvasDimensionAuthority.js';
 import { regionalPromptDemand, type RegionalPromptDemand } from '../domain/RegionalPromptDemand.js';
 
@@ -43,7 +43,7 @@ export function readRegionalPrompts(
   const consumers = topology.edges
     .filter((edge) => edge.source === mask && edge.type === 'MASK')
     .map((edge) => edge.target);
-  const prompts: ComfyNode[] = [],
+  const prompts: { readonly path: string; readonly node: ComfyNode }[] = [],
     seen = new Set<string>([mask]);
   let frontier = [...new Set(consumers)];
   for (let hop = 0; hop < PROMPT_HOPS && frontier.length; hop++) {
@@ -54,26 +54,31 @@ export function readRegionalPrompts(
         seen.add(source);
         const live = node(source);
         if ((live?.type ?? live?.class_type) === PROMPT_NODE) {
-          if (live) prompts.push(live);
+          if (live) prompts.push({ path: source, node: live });
         } else next.push(source);
       }
     frontier = next;
   }
   return {
     demand: regionalPromptDemand(
-      prompts.map((prompt) =>
-        parsePrompt(promptText(prompt)).regions.separators.map((separator) => separator.name),
-      ),
+      prompts.map(({ path, node }) => ({
+        path,
+        separators: parsePrompt(promptField(node)?.value ?? '').regions.separators.map(
+          (separator) => separator.name,
+        ),
+      })),
     ),
-    nodes: prompts,
+    nodes: prompts.map(({ node }) => node),
   };
 }
 
-/** Read a prompt node's authored text from its `value` field, or `text` when absent. */
-function promptText(node: ComfyNode): string {
+/** Find a prompt node's authored text field: `value`, or `text` when absent. */
+export function promptField(
+  node: ComfyNode,
+): { readonly widget: ComfyWidget; readonly value: string } | null {
   for (const name of ['value', 'text']) {
-    const value = node.widgets?.find((widget) => widget.name === name)?.value;
-    if (typeof value === 'string') return value;
+    const widget = node.widgets?.find((candidate) => candidate.name === name);
+    if (widget && typeof widget.value === 'string') return { widget, value: widget.value };
   }
-  return '';
+  return null;
 }

@@ -29,7 +29,16 @@ import {
   clearCubePromptWidgetHeight,
 } from '../surface/CubePromptWidgetHeightStore.js';
 
+/** The regional owner that links prompt separators with the mask regions they name. */
+export interface PromptRegionLinks {
+  /** Report pointer hover of a prompt editor's separator, and null when it ends. */
+  hoverPrompt(node: ComfyNode, ordinal: number | null): void;
+  /** Let the regional owner highlight separators hovered in another view. */
+  connectPrompts(editors: Pick<CubePromptEditorHost, 'highlightRegions'>): () => void;
+}
+
 interface PromptSession {
+  readonly node: ComfyNode;
   creating: boolean;
   creation: Promise<void>;
   creationError: unknown;
@@ -49,6 +58,8 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   readonly #retired = new WeakSet<ComfyWidget>();
   readonly #restoreSurfaces = new Map<PromptEditorSurface, () => void>();
   #release: (() => void) | null = null;
+  #regions: PromptRegionLinks | null = null;
+  #releaseRegions: (() => void) | null = null;
   #catalogSnapshot: object | null = null;
   #loraCatalog: LoraResourceAdapter | null = null;
   #stopCatalog: (() => void) | null = null;
@@ -65,9 +76,13 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     this.#report = report;
   }
 
-  /** Enable prompt enhancement before the host renders Cube fields. */
-  setup(): void {
+  /** Enable prompt enhancement and regional links before the host renders Cube fields. */
+  setup(regions: PromptRegionLinks | null = null): void {
     this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
+    if (regions && !this.#regions) {
+      this.#regions = regions;
+      this.#releaseRegions = regions.connectPrompts(this);
+    }
   }
 
   /** Acquire a field presentation without duplicating its native editor or serialized value. */
@@ -91,6 +106,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     let session = this.#sessions.get(surface.widget);
     if (!session) {
       const created: PromptSession = {
+        node: surface.node,
         binding: new PromptWidgetBinding(surface.node, surface.widget, (source) => {
           created.editor?.refresh(source, this.#readOnly(created.active));
         }),
@@ -168,6 +184,12 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     );
   }
 
+  /** Show a region hovered in another view on the matching separator of these prompts' editors. */
+  highlightRegions(prompts: ReadonlySet<ComfyNode>, ordinal: number | null): void {
+    for (const session of this.#sessions.values())
+      if (prompts.has(session.node)) session.editor?.highlightRegion(ordinal);
+  }
+
   /** Retire native documents before replacing an entire workflow; the model catalog is app-wide. */
   beforeConfigureGraph(): void {
     for (const [widget, session] of [...this.#sessions]) {
@@ -180,6 +202,9 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   dispose(): void {
     this.#release?.();
     this.#release = null;
+    this.#releaseRegions?.();
+    this.#releaseRegions = null;
+    this.#regions = null;
     this.#stopCatalog?.();
     this.#stopCatalog = null;
     this.beforeConfigureGraph();
@@ -217,6 +242,13 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
       },
       report: this.#report,
       appearance: this.appearance,
+      regionHover: (ordinal) => {
+        try {
+          this.#regions?.hoverPrompt(session.node, ordinal);
+        } catch (error: unknown) {
+          this.#report(error);
+        }
+      },
     });
     if (session.active) this.#present(session, session.active);
     void this.#loadCatalog(session).catch(this.#report);

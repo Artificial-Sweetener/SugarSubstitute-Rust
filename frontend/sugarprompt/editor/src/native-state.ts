@@ -81,7 +81,7 @@ import { duplicateIgnores } from './duplicate-ignore.js';
 import { documentDiagnostics } from './document-diagnostics.js';
 import { regionDraft } from './region-draft.js';
 import { regionNameInteractions } from './region-name.js';
-import { regionHoverInteractions } from './region-hover.js';
+import { regionHoverInteractions, regionHoverObserver } from './region-hover.js';
 import { regionTheme } from './region-theme.js';
 import { nativeConditioning } from './conditioning-state.js';
 import { regionHost, regionNameObserver } from './region-host.js';
@@ -113,6 +113,8 @@ export interface NativeStateOptions {
   readonly revision: () => number;
   /** Host observation reports accepted authored names; incoming canonical synchronization remains silent. */
   readonly onRegionNameChange?: (change: RegionNameChange) => void;
+  /** Host observation reports pointer hover of prompt separators; linked host hover remains silent. */
+  readonly onRegionHover?: (ordinal: number | null) => void;
   /** Source-free spelling failures are observed at the injected host boundary. */
   readonly onSpellcheckError?: (cause: unknown) => void;
   /** Unexpected browser media failure is observed at the host boundary; expected unavailable images retain fallback rendering. */
@@ -147,6 +149,7 @@ export function createNativeState(source: string, options: NativeStateOptions): 
         observe: options.onRegionNameChange,
       }),
       regionHost,
+      ...(options.onRegionHover ? [regionHoverObserver.of(options.onRegionHover)] : []),
       authorshipExtension,
       compositionHistory,
       typedNormalization(options.lexicon),

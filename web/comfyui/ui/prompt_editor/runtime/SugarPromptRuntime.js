@@ -1,6 +1,6 @@
 import {
   bundledPromptTagCatalog
-} from "./chunk-UEOSKWJX.js";
+} from "./chunk-6SSYSXSF.js";
 import {
   markComfyPromptInput
 } from "./chunk-74D7X3OT.js";
@@ -11,6 +11,7 @@ import {
   LoraMetadataSession,
   LoraPageSession,
   LoraResourceSession,
+  REGION_PALETTE_BASE,
   SavedSegmentSession,
   SceneLoraSession,
   SceneQueueSession,
@@ -77,6 +78,7 @@ import {
   promptWordRange,
   regionNameIdentities,
   regionNameReplacement,
+  regionPaletteColor,
   reorderOriginBoundary,
   requireValue,
   resolveCompletionQuery,
@@ -110,7 +112,7 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-T4QWWIIS.js";
+} from "./chunk-3DYXYQL4.js";
 import {
   SugarPromptMenu
 } from "./chunk-QTBJ64DI.js";
@@ -22461,16 +22463,9 @@ var RegionWidget = class _RegionWidget extends SourceWidget {
 };
 
 // frontend/sugarprompt/editor/src/region-color.ts
-function regionHue(base2, ordinal, total) {
-  const hue = (base2 % 360 + 360) % 360;
-  const offset = ordinal <= 0 ? 0 : total === 2 ? 180 : total === 3 ? ordinal === 1 ? 150 : 210 : total === 4 ? ordinal * 90 : total >= 5 ? ordinal * 360 / total : 0;
-  return Math.floor((hue + offset) % 360);
-}
 function regionChannels(ordinal, total) {
-  if (ordinal === 0) return [79, 109, 245];
-  const hue = regionHue(229, ordinal, total) / 60, saturation = 200 / 255, value = 245 / 255, chroma = saturation * value, x = chroma * (1 - Math.abs(hue % 2 - 1)), minimum = value - chroma;
-  const channels = hue < 1 ? [chroma, x, 0] : hue < 2 ? [x, chroma, 0] : hue < 3 ? [0, chroma, x] : hue < 4 ? [0, x, chroma] : hue < 5 ? [x, 0, chroma] : [chroma, 0, x];
-  return channels.map((channel) => Math.round((channel + minimum) * 255));
+  const { r, g, b } = regionPaletteColor(REGION_PALETTE_BASE, ordinal, total);
+  return [r, g, b];
 }
 function hoverChannels(channels) {
   const [red, green, blue] = channels.map((channel) => channel * 257), maximum = Math.max(red, green, blue), minimum = Math.min(red, green, blue), chroma = maximum - minimum, f = Math.fround;
@@ -26424,6 +26419,13 @@ var RegionRowMarker = class _RegionRowMarker extends RectangleMarker {
 };
 
 // frontend/sugarprompt/editor/src/region-hover.ts
+var regionHoverObserver = Facet.define({
+  /** Duplicate publication owners are observable rather than silently selected. */
+  combine(values) {
+    if (values.length > 1) throw new Error("Multiple region hover observers");
+    return values[0] ?? null;
+  }
+});
 var setRegionHover = StateEffect.define();
 var regionHover = StateField.define({
   /** A new editor starts without pointer authority. */
@@ -26449,25 +26451,56 @@ var regionHoverInteractions = [
   EditorView.domEventHandlers({
     /** A divider hover accents its prepared partition, leaving label text color intact. */
     mousemove(event, view) {
-      const row = event.target instanceof Element ? event.target.closest(".sp-region-separator") : null;
-      const ordinal = row ? Number(row.dataset.regionIndex) : -1;
-      const scopeId = row?.dataset.regionScope;
-      const projection = view.state.field(richProjection);
-      const source = view.state.field(editorFreshness).source;
-      const target = scopeId ? projection.regionHovers[scopeId]?.[ordinal]?.target : void 0;
-      const next = Number.isSafeInteger(ordinal) && ordinal >= 0 && projection.sourceIdentity === source && target ? { source, target } : null;
-      const current6 = view.state.field(regionHover);
-      if (current6?.target !== next?.target || current6?.source !== next?.source)
-        view.dispatch({ effects: setRegionHover.of(next) });
+      pointRegionSeparator(
+        view,
+        event.target instanceof Element ? event.target.closest(".sp-region-separator") : null
+      );
       return false;
     },
     /** Leaving the native surface retires its finite pointer intent. */
     mouseleave(_event, view) {
-      if (view.state.field(regionHover)) view.dispatch({ effects: setRegionHover.of(null) });
+      pointRegionSeparator(view, null);
       return false;
     }
   })
 ];
+function pointRegionSeparator(view, row) {
+  const ordinal = row ? Number(row.dataset.regionIndex) : -1;
+  const scopeId = row?.dataset.regionScope;
+  const projection = view.state.field(richProjection);
+  const source = view.state.field(editorFreshness).source;
+  const target = scopeId ? projection.regionHovers[scopeId]?.[ordinal]?.target : void 0;
+  const next = Number.isSafeInteger(ordinal) && ordinal >= 0 && projection.sourceIdentity === source && target ? { source, target } : null;
+  const current6 = view.state.field(regionHover);
+  if (current6?.target === next?.target && current6?.source === next?.source) return;
+  view.dispatch({ effects: setRegionHover.of(next) });
+  if (next || current6 && !current6.linked) publishPointerHover(view.state, next?.target ?? null);
+}
+function showLinkedRegionHover(view, ordinal) {
+  if (ordinal !== null && (!Number.isSafeInteger(ordinal) || ordinal < 0))
+    throw new TypeError("Invalid region ordinal");
+  const current6 = view.state.field(regionHover);
+  if (current6 && !current6.linked) return current6.target === promptRegionTarget(view.state, ordinal);
+  const target = promptRegionTarget(view.state, ordinal);
+  if ((current6?.target ?? null) === target) return target !== null;
+  view.dispatch({
+    effects: setRegionHover.of(
+      target ? { source: view.state.field(editorFreshness).source, target, linked: true } : null
+    )
+  });
+  return target !== null;
+}
+function promptRegionTarget(state, ordinal) {
+  if (ordinal === null || state.facet(documentKind) !== "prompt") return null;
+  const projection = state.field(richProjection), scopes2 = Object.values(projection.regionHovers);
+  if (projection.sourceIdentity !== state.field(editorFreshness).source || scopes2.length !== 1)
+    return null;
+  return scopes2[0]?.[ordinal]?.target ?? null;
+}
+function publishPointerHover(state, target) {
+  if (state.facet(documentKind) !== "prompt") return;
+  state.facet(regionHoverObserver)?.(target?.ordinal ?? null);
+}
 
 // frontend/sugarprompt/editor/src/native-snapshot-policy.ts
 var snapshotPresentation = Annotation.define();
@@ -46873,6 +46906,7 @@ function createNativeState(source, options) {
         observe: options.onRegionNameChange
       }),
       regionHost,
+      ...options.onRegionHover ? [regionHoverObserver.of(options.onRegionHover)] : [],
       authorshipExtension,
       compositionHistory,
       typedNormalization(options.lexicon),
@@ -47748,6 +47782,7 @@ function mountEditor(parent, options) {
       revision: () => revision,
       ...options.clipboardObserver ? { clipboardObserver: options.clipboardObserver } : {},
       ...options.onRegionNameChange ? { onRegionNameChange: options.onRegionNameChange } : {},
+      ...options.onRegionHover ? { onRegionHover: options.onRegionHover } : {},
       /** The view lifetime publishes snapshots and accepted-input education intent. */
       update: (update) => {
         if (update.transactions.some(changesExactSource)) revision++;
@@ -47900,6 +47935,11 @@ function mountEditor(parent, options) {
       const owner = surface.view.plugin(regionHost);
       if (!owner) throw new Error("Regional host owner unavailable");
       return owner.synchronize(names2, target);
+    },
+    /** Linked hover is transient presentation; it never changes source, selection or history. */
+    setLinkedRegionHover(ordinal) {
+      alive();
+      return showLinkedRegionHover(surface.view, ordinal);
     },
     /** Captured host classification retires source-bound work while the parser's actual document stays reusable. */
     setConditioningContext(value) {
@@ -48196,7 +48236,8 @@ var SugarPromptEditor = class {
       tagLexicon: tagCatalog.lexicon,
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
-      onLoraMediaError: options.report
+      onLoraMediaError: options.report,
+      onRegionHover: options.regionHover
     });
     markComfyPromptInput(this.element);
   }
@@ -48232,6 +48273,10 @@ var SugarPromptEditor = class {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
     this.#queueResources();
+  }
+  /** Show the hover of a region hovered in another view on separator `ordinal`, or clear it. */
+  highlightRegion(ordinal) {
+    if (!this.#disposed) this.#api.setLinkedRegionHover(ordinal);
   }
   /** Expose a source observation for host diagnostics and behavioral tests. */
   snapshot() {

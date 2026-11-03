@@ -1,4 +1,4 @@
-import { maskColor } from './MaskColorScheme.js';
+import { maskColor, regionMaskColor } from './MaskColorScheme.js';
 /** At most this many surfaces cross the wire in one sync, per the canvas contract. */
 export const MAX_WORKFLOW_SURFACES = 64;
 /** At most this many masks belong to one surface, per the canvas contract. */
@@ -8,8 +8,9 @@ export const MAX_SURFACE_MASKS = 32;
  *
  * A mask paired with an image joins that image's surface. An unpaired mask joins the mask-only
  * surface of its resolved size authority, so masks sized by the same nodes share one surface.
- * Ambiguous pairings and unresolved sizes are rejected rather than guessed. Colours rotate over
- * each surface's complete mask list, starting from the accent.
+ * Ambiguous pairings and unresolved sizes are rejected rather than guessed. Scalar mask colours
+ * rotate over each surface's complete mask list, starting from the accent; the regions of an
+ * ordered loader take the regional palette over that loader's own regions, as their prompts do.
  */
 export function planWorkflowSurfaces(facts, accent, labels) {
     const rejected = [];
@@ -43,18 +44,23 @@ export function planWorkflowSurfaces(facts, accent, labels) {
                 rejected.push({ endpoint: mask.key, reason: 'limit' });
             return;
         }
-        const entries = masks.flatMap((mask) => mask.entries.map((entry, index) => ({ mask, entry, label: mask.regions?.names[index] ?? entry.label })));
+        const entries = masks.flatMap((mask) => mask.entries.map((entry, index) => ({
+            mask,
+            entry,
+            label: mask.regions?.names[index] ?? entry.label,
+            region: mask.regions ? regionMaskColor(index, mask.entries.length) : null,
+        })));
         const admitted = entries.slice(0, MAX_SURFACE_MASKS);
         for (const mask of new Set(entries.slice(MAX_SURFACE_MASKS).map(({ mask }) => mask.key)))
             rejected.push({ endpoint: mask, reason: 'limit' });
         surfaces.push({
             ...surface,
-            masks: admitted.map(({ mask, entry, label }, index) => ({
+            masks: admitted.map(({ mask, entry, label, region }, index) => ({
                 key: workflowMaskKey(mask.key, entry.entry),
                 endpoint: mask.key,
                 entry: entry.entry,
                 label,
-                color: maskColor(accent, index, admitted.length),
+                color: region ?? maskColor(accent, index, admitted.length),
                 opacity: mask.opacity,
                 initial: entry.initial,
                 channel: mask.channel,

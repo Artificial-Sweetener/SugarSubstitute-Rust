@@ -15,12 +15,20 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Relate a regional mask loader to the region separators of the prompts it conditions. */
 
-/** Region names and the number of regions the related prompts declare. */
+/** One related prompt's workflow path and the names of its separators, in source order. */
+export interface RegionalPromptSeparators {
+  readonly path: string;
+  readonly separators: readonly (string | null)[];
+}
+
+/** Region names, the number of regions and the prompts that declare them. */
 export interface RegionalPromptDemand {
   /** Name for region `i` (mask `i`), or null when no related prompt names it. */
   readonly names: readonly (string | null)[];
   /** The largest separator count among the related prompts. */
   readonly required: number;
+  /** Workflow paths of the related prompts, in discovery order. */
+  readonly prompts: readonly string[];
 }
 
 /**
@@ -30,17 +38,17 @@ export interface RegionalPromptDemand {
  * non-blank name any prompt gives its separator `i`; the requirement is the largest count.
  */
 export function regionalPromptDemand(
-  prompts: readonly (readonly (string | null)[])[],
+  prompts: readonly RegionalPromptSeparators[],
 ): RegionalPromptDemand {
-  const required = Math.max(0, ...prompts.map((separators) => separators.length));
+  const required = Math.max(0, ...prompts.map(({ separators }) => separators.length));
   const names = Array.from({ length: required }, (_, index) => {
-    for (const separators of prompts) {
+    for (const { separators } of prompts) {
       const name = separators[index]?.trim();
       if (name) return name;
     }
     return null;
   });
-  return { names, required };
+  return { names, required, prompts: prompts.map(({ path }) => path) };
 }
 
 /** Count regions a prompt declares beyond the masks a loader holds. */

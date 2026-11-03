@@ -45,6 +45,7 @@ export class MasonryInputEditor {
   readonly #entryField: NativeNodeChoiceMount | null;
   readonly #maskFields: MaskEditFields;
   readonly #opacity: MaskOpacityField | null;
+  readonly #surface: InputSurfaceCardPort | null;
   #import: MaskImportCommand | null = null;
 
   /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
@@ -173,9 +174,12 @@ export class MasonryInputEditor {
         root.addEventListener(name, (event) => event.stopPropagation());
     const stopBinding = binding.subscribe(() => this.refresh());
     const stopMode = subscribePluginMode(document, () => this.refresh());
+    const stopSurface = surface?.subscribe(() => this.refresh());
+    this.#surface = surface;
     this.#stop = () => {
       stopBinding();
       stopMode();
+      stopSurface?.();
     };
     this.refresh();
   }
@@ -195,7 +199,11 @@ export class MasonryInputEditor {
     this.#maskFields.refresh();
     this.#entryField?.update(
       state.selected ?? '',
-      state.entries.map((entry) => ({ value: entry.id, label: entry.label, blockers: [] })),
+      state.entries.map((entry) => ({
+        value: entry.id,
+        label: this.#surface?.region(entry.id)?.label ?? entry.label,
+        blockers: [],
+      })),
       this.binding.busy,
       passive,
     );

@@ -12,6 +12,7 @@ export class InputPreviewRows {
     element;
     #empty;
     #entries = new Map();
+    #stopHover;
     #alive = true;
     #refreshingNativeSource = false;
     #mode = 'context';
@@ -34,6 +35,9 @@ export class InputPreviewRows {
         this.element.append(this.#empty.element);
         document.defaultView?.addEventListener('focus', this.#nativeReturned);
         document.documentElement.addEventListener('pointerenter', this.#nativeReturned);
+        this.#stopHover = this.#regional
+            ? (surface?.subscribeHover(() => this.#showRegions()) ?? (() => { }))
+            : () => { };
     }
     /** Reconcile only this loader's previews, retaining geometry and cached pixels during replacement. */
     refresh() {
@@ -58,7 +62,8 @@ export class InputPreviewRows {
                 row = this.#row(entry);
                 this.#entries.set(entry.id, row);
             }
-            row.surface.update(entry.label, entry.id === state.selected, this.binding.busy, passive, () => this.#select(entry.id));
+            const region = this.#regional ? (this.surface?.region(entry.id) ?? null) : null;
+            row.surface.update(region?.label ?? entry.label, entry.id === state.selected, this.binding.busy, passive, () => this.#select(entry.id));
             const destination = this.element.querySelectorAll('[data-input-entry]')[index] ?? this.#empty.element;
             if (destination !== row.surface.element)
                 this.element.insertBefore(row.surface.element, destination);
@@ -93,6 +98,7 @@ export class InputPreviewRows {
             else
                 row.content?.refresh();
         }
+        this.#showRegions();
     }
     /** Switch framing on the existing preview surfaces without changing mask settings or source identity. */
     setMaskMode(mode) {
@@ -114,6 +120,7 @@ export class InputPreviewRows {
     /** Release geometry and capture observations before accepting any late interpretation result. */
     dispose() {
         this.#alive = false;
+        this.#stopHover();
         this.element.ownerDocument.defaultView?.removeEventListener('focus', this.#nativeReturned);
         this.element.ownerDocument.documentElement.removeEventListener('pointerenter', this.#nativeReturned);
         for (const row of this.#entries.values()) {
@@ -142,11 +149,23 @@ export class InputPreviewRows {
             this.#refreshingNativeSource = false;
         });
     };
+    /** Whether rows are regions of an ordered mask loader. */
+    get #regional() {
+        return this.binding.loader.kind === 'mask' && this.binding.loader.ordered;
+    }
+    /** Colour each region row and show the hover linked from its prompt or canvas region. */
+    #showRegions() {
+        if (!this.#alive || !this.#regional)
+            return;
+        const hovered = this.surface?.hovered() ?? null;
+        for (const [id, row] of this.#entries)
+            row.surface.region(this.surface?.region(id)?.color ?? null, id === hovered);
+    }
     /** Create one literal, stable entry selection surface without native mask mutation intents. */
     #row(entry) {
         const surface = new InputPreviewSurface(this.element.ownerDocument, readPluginMode(this.element.ownerDocument), () => this.#select(entry.id));
         surface.element.dataset.inputEntry = entry.id;
-        if (this.binding.loader.kind === 'mask' && this.binding.loader.ordered) {
+        if (this.#regional) {
             surface.element.addEventListener('pointerenter', () => this.surface?.hover(entry.id));
             surface.element.addEventListener('pointerleave', () => this.surface?.hover(null));
         }

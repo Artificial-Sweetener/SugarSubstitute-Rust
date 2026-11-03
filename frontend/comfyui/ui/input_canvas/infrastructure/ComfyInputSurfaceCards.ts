@@ -19,6 +19,8 @@ import type { InputLoader } from '../domain/InputLoader.js';
 import type { InputSurfaceCardPort } from '../application/InputEditorPorts.js';
 import type { WorkflowInputRoute } from '../application/WorkflowInputRoute.js';
 import type { WorkflowMaskAppearance } from '../application/WorkflowMaskAppearance.js';
+import type { WorkflowRegionalHover } from '../application/WorkflowRegionalHover.js';
+import type { WorkflowRegionalPrompts } from '../application/WorkflowRegionalPrompts.js';
 import type { WorkflowSurfaceProvisioning } from '../application/WorkflowSurfaceProvisioning.js';
 import type { ComfyInputAssociations } from './ComfyInputAssociations.js';
 import type { ComfyInputBindings } from './ComfyInputBindings.js';
@@ -26,15 +28,17 @@ import type { WorkflowMaskImport } from '../application/WorkflowMaskImport.js';
 
 /** Resolve the card's endpoint at use time so renumbered or moved nodes stay addressed. */
 export class ComfyInputSurfaceCards {
-  /** Share the route, appearance and provisioning owners with the canvas tab controls. */
+  /** Share the route, appearance, provisioning and regional owners with the canvas tab controls. */
   constructor(
     private readonly associations: ComfyInputAssociations,
     private readonly route: Pick<WorkflowInputRoute, 'activateImage' | 'activateMask'>,
-    private readonly appearance: Pick<
-      WorkflowMaskAppearance,
-      'hover' | 'opacity' | 'changeOpacity'
-    >,
+    private readonly appearance: Pick<WorkflowMaskAppearance, 'opacity' | 'changeOpacity'>,
     private readonly provisioning: Pick<WorkflowSurfaceProvisioning, 'subscribe'>,
+    private readonly regions: Pick<WorkflowRegionalPrompts, 'region' | 'subscribe'>,
+    private readonly regionalHover: Pick<
+      WorkflowRegionalHover,
+      'hoverMask' | 'hovered' | 'subscribe'
+    >,
     private readonly imports: Pick<WorkflowMaskImport, 'available' | 'import'>,
     private readonly bindings: Pick<ComfyInputBindings, 'get'>,
   ) {}
@@ -46,6 +50,10 @@ export class ComfyInputSurfaceCards {
     // A mixed image loader whose only used output is MASK acts as a mask endpoint.
     const kind = () =>
       this.associations.inventory.kind(this.associations.key(node, loader.field)) ?? loader.kind;
+    const regional = (): string | null => {
+      const key = endpoint();
+      return key && kind() === 'mask' && loader.ordered ? key : null;
+    };
     return {
       activate: (entry) => {
         const key = endpoint();
@@ -54,8 +62,17 @@ export class ComfyInputSurfaceCards {
         else this.route.activateMask(key, loader.ordered ? entry : null);
       },
       hover: (entry) => {
-        const key = endpoint();
-        if (key && kind() === 'mask' && loader.ordered) this.appearance.hover(key, entry);
+        const key = regional();
+        if (key) this.regionalHover.hoverMask(key, entry);
+      },
+      hovered: () => {
+        const key = regional();
+        return key ? this.regionalHover.hovered(key) : null;
+      },
+      subscribeHover: (listener) => this.regionalHover.subscribe(listener),
+      region: (entry) => {
+        const key = regional();
+        return key ? this.regions.region(key, entry) : null;
       },
       opacity: () => {
         const key = endpoint();
@@ -77,7 +94,14 @@ export class ComfyInputSurfaceCards {
           this.bindings.get(node, loader).append(staged),
         );
       },
-      subscribe: (listener) => this.provisioning.subscribe(listener),
+      subscribe: (listener) => {
+        const stopProvisioning = this.provisioning.subscribe(listener),
+          stopRegions = this.regions.subscribe(listener);
+        return () => {
+          stopProvisioning();
+          stopRegions();
+        };
+      },
     };
   }
 }

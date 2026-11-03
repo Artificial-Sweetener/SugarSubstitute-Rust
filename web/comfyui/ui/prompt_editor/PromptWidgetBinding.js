@@ -43,7 +43,10 @@ export class PromptWidgetBinding {
     read() {
         return typeof this.#widget.value === 'string' ? this.#widget.value : '';
     }
-    /** Commit one source edit through native callbacks and one balanced workflow history bracket. */
+    /**
+     * Commit one source edit through native callbacks and one balanced workflow history bracket.
+     * A value those callbacks write in its place is reported like any external update.
+     */
     commit(source) {
         if (this.#writing || source === this.#widget.value)
             return;
@@ -73,6 +76,10 @@ export class PromptWidgetBinding {
         finally {
             this.#writing = false;
         }
+        // A host owner may rewrite the value while this edit's callbacks run, inside the same step.
+        const settled = widget.value;
+        if (typeof settled === 'string' && settled !== source)
+            this.#changed(settled);
     }
     /** Restore native property ownership while retaining the last committed text. */
     dispose() {

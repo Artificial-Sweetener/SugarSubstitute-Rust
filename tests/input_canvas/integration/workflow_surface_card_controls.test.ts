@@ -34,6 +34,9 @@ function card(initial: number | null) {
   const port: InputSurfaceCardPort = {
     activate: jest.fn(),
     hover: jest.fn(),
+    hovered: () => null,
+    subscribeHover: () => () => {},
+    region: () => null,
     opacity: () => opacity,
     changeOpacity: jest.fn(),
     canImport: () => opacity !== null,

@@ -13,27 +13,8 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prepared regional colors retain the pinned ordinal hues and Qt-compatible native hover lightening. */
-
-/** Related regional rails use complementary, split-complementary, square or evenly spaced hues. */
-export function regionHue(base: number, ordinal: number, total: number): number {
-  const hue = ((base % 360) + 360) % 360;
-  const offset =
-    ordinal <= 0
-      ? 0
-      : total === 2
-        ? 180
-        : total === 3
-          ? ordinal === 1
-            ? 150
-            : 210
-          : total === 4
-            ? ordinal * 90
-            : total >= 5
-              ? (ordinal * 360) / total
-              : 0;
-  return Math.floor((hue + offset) % 360);
-}
+/** Prepared regional colors consume the shared ordinal palette and add Qt-compatible native hover lightening. */
+import { REGION_PALETTE_BASE, regionPaletteColor } from '../../core/src/index.js';
 
 /** Both immutable declarations belong to one source-prepared ordinal palette, not native hover work. */
 export interface PreparedRegionColor {
@@ -41,28 +22,10 @@ export interface PreparedRegionColor {
   readonly hover: string;
 }
 
-/** Preserve the port's existing normal palette before applying the independently qualified Qt operation. */
+/** Read the shared palette's channels for one ordinal of the related separators. */
 function regionChannels(ordinal: number, total: number): readonly number[] {
-  if (ordinal === 0) return [79, 109, 245];
-  const hue = regionHue(229, ordinal, total) / 60,
-    saturation = 200 / 255,
-    value = 245 / 255,
-    chroma = saturation * value,
-    x = chroma * (1 - Math.abs((hue % 2) - 1)),
-    minimum = value - chroma;
-  const channels =
-    hue < 1
-      ? [chroma, x, 0]
-      : hue < 2
-        ? [x, chroma, 0]
-        : hue < 3
-          ? [0, chroma, x]
-          : hue < 4
-            ? [0, x, chroma]
-            : hue < 5
-              ? [x, 0, chroma]
-              : [chroma, 0, x];
-  return channels.map((channel) => Math.round((channel + minimum) * 255));
+  const { r, g, b } = regionPaletteColor(REGION_PALETTE_BASE, ordinal, total);
+  return [r, g, b];
 }
 
 /** Qt6.11.2 QColor.lighter135 preserves16-bit HSV rounding and desaturates value overflow before RGB conversion. */

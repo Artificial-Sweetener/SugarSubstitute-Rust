@@ -4,14 +4,18 @@ export class ComfyInputSurfaceCards {
     route;
     appearance;
     provisioning;
+    regions;
+    regionalHover;
     imports;
     bindings;
-    /** Share the route, appearance and provisioning owners with the canvas tab controls. */
-    constructor(associations, route, appearance, provisioning, imports, bindings) {
+    /** Share the route, appearance, provisioning and regional owners with the canvas tab controls. */
+    constructor(associations, route, appearance, provisioning, regions, regionalHover, imports, bindings) {
         this.associations = associations;
         this.route = route;
         this.appearance = appearance;
         this.provisioning = provisioning;
+        this.regions = regions;
+        this.regionalHover = regionalHover;
         this.imports = imports;
         this.bindings = bindings;
     }
@@ -20,6 +24,10 @@ export class ComfyInputSurfaceCards {
         const endpoint = () => this.associations.inventory.workflowKey(this.associations.key(node, loader.field));
         // A mixed image loader whose only used output is MASK acts as a mask endpoint.
         const kind = () => this.associations.inventory.kind(this.associations.key(node, loader.field)) ?? loader.kind;
+        const regional = () => {
+            const key = endpoint();
+            return key && kind() === 'mask' && loader.ordered ? key : null;
+        };
         return {
             activate: (entry) => {
                 const key = endpoint();
@@ -31,9 +39,18 @@ export class ComfyInputSurfaceCards {
                     this.route.activateMask(key, loader.ordered ? entry : null);
             },
             hover: (entry) => {
-                const key = endpoint();
-                if (key && kind() === 'mask' && loader.ordered)
-                    this.appearance.hover(key, entry);
+                const key = regional();
+                if (key)
+                    this.regionalHover.hoverMask(key, entry);
+            },
+            hovered: () => {
+                const key = regional();
+                return key ? this.regionalHover.hovered(key) : null;
+            },
+            subscribeHover: (listener) => this.regionalHover.subscribe(listener),
+            region: (entry) => {
+                const key = regional();
+                return key ? this.regions.region(key, entry) : null;
             },
             opacity: () => {
                 const key = endpoint();
@@ -54,7 +71,13 @@ export class ComfyInputSurfaceCards {
                     throw new Error('This loader cannot import masks.');
                 await this.imports.import(key, files, (staged) => this.bindings.get(node, loader).append(staged));
             },
-            subscribe: (listener) => this.provisioning.subscribe(listener),
+            subscribe: (listener) => {
+                const stopProvisioning = this.provisioning.subscribe(listener), stopRegions = this.regions.subscribe(listener);
+                return () => {
+                    stopProvisioning();
+                    stopRegions();
+                };
+            },
         };
     }
 }

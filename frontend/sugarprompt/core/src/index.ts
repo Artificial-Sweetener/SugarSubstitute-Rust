@@ -138,6 +138,14 @@ export {
   applyRegionNames,
 } from './prompt/region-name-identity.js';
 export type { RegionName, RegionNameApplication } from './prompt/region-name-identity.js';
+export {
+  REGION_PALETTE_BASE,
+  regionHue,
+  regionPaletteColor,
+  parseRegionHex,
+  formatRegionHex,
+} from './prompt/region-palette.js';
+export type { RegionRgb } from './prompt/region-palette.js';
 export type { SourceReplacement } from './normalization/contracts.js';
 export { ConditioningTopology } from './prompt/conditioning.js';
 export type { ConditioningMode, ConditioningScope } from './prompt/conditioning.js';

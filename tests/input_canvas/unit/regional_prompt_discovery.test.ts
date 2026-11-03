@@ -56,5 +56,9 @@ test('prompts within three upstream hops of the mask consumers name its regions'
     (path) => nodes[path] ?? { type: 'Other', widgets: [] },
   );
   expect(result.nodes).toEqual([nodes.near, nodes.far, nodes.inline]);
-  expect(result.demand).toEqual({ names: ['sky', 'person', 'extra'], required: 3 });
+  expect(result.demand).toEqual({
+    names: ['sky', 'person', 'extra'],
+    required: 3,
+    prompts: ['near', 'far', 'inline'],
+  });
 });
