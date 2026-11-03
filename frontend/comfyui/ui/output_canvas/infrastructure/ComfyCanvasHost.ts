@@ -221,6 +221,7 @@ export class ComfyCanvasHost {
             nativeSurface: () => execution.canvases.surfaceHost('embedded-document'),
             surfacePending: () => presenter.current() === 'pending',
             recover,
+            editing: () => execution.canvases.editHost(),
           });
         return import('./ComfyBrowserCanvasHost.js').then(({ ComfyBrowserCanvasHost }) => {
           if (!acceptsPreparation()) return null;
