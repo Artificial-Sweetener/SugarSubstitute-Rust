@@ -8,9 +8,10 @@
 //! rotates it about its centre. Corner handles scale proportionally unless Shift frees the
 //! aspect ratio, side handles scale one axis, Ctrl+Shift on a side handle skews, Alt scales or
 //! skews about the centre instead of the opposite handle, and Shift snaps rotation to 15°.
-//! Moves are whole document pixels, so moved content stays exact.
+//! Moves follow the pointer exactly, snapping as the `snap` module decides; content moved by a
+//! fraction of a pixel is resampled bilinearly when it lands.
 use crate::tools::{ToolModifiers, TransformAction};
-use crate::{CanvasError, CursorIntent, ResizeDirection, Viewport};
+use crate::{AffineCursor, CanvasError, CursorIntent, Viewport};
 use sugarsubstitute_image_ops::CoverageAffine;
 
 /// Device-pixel reach of a handle.
@@ -96,6 +97,13 @@ impl Frame {
         [Handle::TopLeft, Handle::TopRight, Handle::BottomRight, Handle::BottomLeft]
             .map(|handle| self.affine.map(handle.local(self.rect)))
     }
+    /// Axis-aligned document bounds [left, top, right, bottom] of the transformed box.
+    pub(super) fn bounds(self) -> [f64; 4] {
+        let corners = self.corners();
+        let low = |axis: usize| corners.iter().map(|p| p[axis]).fold(f64::INFINITY, f64::min);
+        let high = |axis: usize| corners.iter().map(|p| p[axis]).fold(f64::NEG_INFINITY, f64::max);
+        [low(0), low(1), high(0), high(1)]
+    }
     fn centre(self) -> [f64; 2] {
         let [left, top, right, bottom] = self.rect;
         [(left + right) / 2.0, (top + bottom) / 2.0]
@@ -139,7 +147,7 @@ impl Frame {
     ) -> Option<CoverageAffine> {
         match grip {
             Grip::Move => {
-                let delta = [(point[0] - origin[0]).round(), (point[1] - origin[1]).round()];
+                let delta = [point[0] - origin[0], point[1] - origin[1]];
                 Some(self.affine.then(CoverageAffine::translation(delta)))
             }
             Grip::Rotate => {
@@ -147,7 +155,7 @@ impl Frame {
                 let angle = |[x, y]: [f64; 2]| (y - centre[1]).atan2(x - centre[0]);
                 let mut turn = angle(point) - angle(origin);
                 if modifiers.shift {
-                    turn = (turn / ROTATION_STEP).round() * ROTATION_STEP;
+                    turn = (turn / ROTATION_STEP).round_ties_even() * ROTATION_STEP;
                 }
                 Some(self.affine.then(rotation(centre, turn)?))
             }
@@ -187,23 +195,39 @@ impl Frame {
         };
         self.affine.then(change).then(inverse).aligned().then(self.affine)
     }
-    /// The cursor for a grip: resize arrows follow the handle's screen direction.
-    pub(super) fn cursor(self, viewport: Viewport, grip: Grip) -> CursorIntent {
-        let direction = |handle: Handle, across: bool| -> Option<ResizeDirection> {
-            let centre = viewport.device_at(self.affine.map(self.centre())).ok()?;
-            let point = viewport.device_at(self.affine.map(handle.local(self.rect))).ok()?;
-            let [x, y] = [point[0] - centre[0], point[1] - centre[1]];
-            Some(ResizeDirection::along(if across { [-y, x] } else { [x, y] }))
+    /// The cursor for a grip, oriented on screen as CuteCanvas orients it: a scale arrow along
+    /// the handle's radial from the box centre, a skew arrow along the side's tangent, and the
+    /// rotation arc along the tangent of the corner nearest the pointer at device `pointer`.
+    pub(super) fn cursor(self, viewport: Viewport, grip: Grip, pointer: [f64; 2]) -> CursorIntent {
+        let device = |local: [f64; 2]| viewport.device_at(self.affine.map(local)).ok();
+        let degrees =
+            |from: [f64; 2], to: [f64; 2]| (to[1] - from[1]).atan2(to[0] - from[0]).to_degrees();
+        let oriented = || -> Option<CursorIntent> {
+            let centre = device(self.centre())?;
+            Some(CursorIntent::Affine(match grip {
+                Grip::Move => return Some(CursorIntent::Move),
+                Grip::Scale(handle) => {
+                    AffineCursor::resize(degrees(centre, device(handle.local(self.rect))?))
+                }
+                Grip::Skew(handle) => {
+                    let end = if handle.across() { Handle::TopRight } else { Handle::BottomLeft };
+                    let start = device(Handle::TopLeft.local(self.rect))?;
+                    AffineCursor::resize(degrees(start, device(end.local(self.rect))?))
+                }
+                Grip::Rotate => {
+                    let distance =
+                        |corner: [f64; 2]| (corner[0] - pointer[0]).hypot(corner[1] - pointer[1]);
+                    let mut corners = [[0.0; 2]; 4];
+                    for (target, corner) in corners.iter_mut().zip(self.corners()) {
+                        *target = viewport.device_at(corner).ok()?;
+                    }
+                    let nearest =
+                        corners.into_iter().min_by(|a, b| distance(*a).total_cmp(&distance(*b)))?;
+                    AffineCursor::rotate(degrees(centre, nearest) + 90.0)
+                }
+            }))
         };
-        let resize = |handle, across| {
-            direction(handle, across).map_or(CursorIntent::Arrow, CursorIntent::Resize)
-        };
-        match grip {
-            Grip::Move => CursorIntent::Move,
-            Grip::Rotate => CursorIntent::Rotate,
-            Grip::Scale(handle) => resize(handle, false),
-            Grip::Skew(handle) => resize(handle, true),
-        }
+        oriented().unwrap_or(CursorIntent::Arrow)
     }
 }
 

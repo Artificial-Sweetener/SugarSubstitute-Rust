@@ -20,9 +20,11 @@ pub(super) fn art(intent: CursorIntent) -> Option<CursorArt> {
         CursorIntent::Arrow
         | CursorIntent::OpenHand
         | CursorIntent::ClosedHand
-        | CursorIntent::Forbidden
         | CursorIntent::Resize(_)
-        | CursorIntent::Rotate => return None,
+        | CursorIntent::Forbidden => return None,
+        CursorIntent::Affine(cursor) => {
+            CursorArt::Affine { rotation: cursor.rotation(), degrees: cursor.degrees() }
+        }
         CursorIntent::BrushOutline(outline) => CursorArt::BrushOutline {
             diameter: outline.diameter(),
             color: outline.color(),

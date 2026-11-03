@@ -6,12 +6,14 @@
 //! a black, white and colour ring 5, 3 and 1 logical pixels wide, a 32 pixel crosshair with a
 //! 5 pixel gap and a 4 pixel padding, and an underscore erase mark. Selection-translate and
 //! move-cut use SugarSubstitute's Fluent-derived artwork at a 40 pixel base size with its
-//! hotspot at (6, 3). Every size here is logical and scales by the display scale; outputs are
+//! hotspot at (6, 3). Transform arrows and the rotation arc reproduce CuteCanvas's transform
+//! cursor factory: a 32 pixel tile, a dark 3.5 pixel stroke under a light 1.5 pixel one, turned
+//! in whole degrees. Every size here is logical and scales by the display scale; outputs are
 //! straight-alpha RGBA, the format native cursor resources take.
 
 use crate::vector::{VectorAsset, VectorViewport};
 use std::io;
-use tiny_skia::{Color, LineCap, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
+use tiny_skia::{Color, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
 
 const PADDING: f32 = 4.0;
 const CROSSHAIR: f32 = 32.0;
@@ -20,6 +22,8 @@ const ARTWORK_SIZE: f32 = 40.0;
 const ARTWORK_HOTSPOT: [f32; 2] = [6.0, 3.0];
 const SELECTION_TRANSLATE: &str = include_str!("../assets/cursors/SelectionTranslateCursor.svg");
 const MOVE_CUT: &str = include_str!("../assets/cursors/MoveCutCursor.svg");
+const AFFINE_SIZE: f32 = 32.0;
+const AFFINE_CENTER: f32 = 16.0;
 
 /// Which canvas cursor to draw.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -40,6 +44,14 @@ pub enum CursorArt {
     SelectionTranslate,
     /// Move-cut artwork.
     MoveCut,
+    /// CuteCanvas's procedural transform cursor: a two-headed arrow, or the rotation arc,
+    /// turned clockwise by `degrees` on a 32 pixel tile with its hotspot at the centre.
+    Affine {
+        /// Whether to draw the rotation arc rather than the arrow.
+        rotation: bool,
+        /// Turn in whole degrees, `0..180`.
+        degrees: u8,
+    },
 }
 
 /// Mark drawn inside the precise crosshair.
@@ -98,6 +110,7 @@ impl CursorArt {
             Self::Precise(mark) => crosshair(mark, scale),
             Self::SelectionTranslate => artwork(SELECTION_TRANSLATE, scale),
             Self::MoveCut => artwork(MOVE_CUT, scale),
+            Self::Affine { rotation, degrees } => affine(rotation, degrees, scale),
         }
     }
 }
@@ -199,6 +212,70 @@ fn erase_mark(pixmap: &mut Pixmap, origin: [f32; 2], extent: f32, scale: f32) {
             pixmap.fill_rect(bar, &solid(color), Transform::identity(), None);
         }
     }
+}
+
+/// CuteCanvas's two-headed arrow or rotation arc, turned clockwise by `degrees` about the
+/// tile's centre.
+fn affine(rotation: bool, degrees: u8, scale: f32) -> io::Result<CursorImage> {
+    let edge = (AFFINE_SIZE * scale).round() as u32;
+    let mut pixmap = pixmap(edge, edge)?;
+    let center = AFFINE_CENTER;
+    let mut path = PathBuilder::new();
+    let transform = if rotation {
+        // Qt measures arc angles counterclockwise from three o'clock with y pointing up.
+        let point = |angle: f32| {
+            let radians = angle.to_radians();
+            [center + 6.0 * radians.cos(), center - 6.0 * radians.sin()]
+        };
+        let start = point(30.0);
+        path.move_to(start[0], start[1]);
+        for step in 1..=105 {
+            let [x, y] = point(30.0 + step as f32);
+            path.line_to(x, y);
+        }
+        let tip = point(135.0);
+        for [dx, dy] in [[-0.5, -4.5], [4.0, -1.5]] {
+            path.move_to(tip[0], tip[1]);
+            path.line_to(tip[0] + dx, tip[1] + dy);
+        }
+        Transform::from_scale(scale, scale).pre_concat(Transform::from_rotate_at(
+            f32::from(degrees),
+            center,
+            center,
+        ))
+    } else {
+        let radians = f32::from(degrees).to_radians();
+        let direction = [radians.cos(), radians.sin()];
+        let normal = [-direction[1], direction[0]];
+        let start = [center - direction[0] * 10.0, center - direction[1] * 10.0];
+        let end = [center + direction[0] * 10.0, center + direction[1] * 10.0];
+        path.move_to(start[0], start[1]);
+        path.line_to(end[0], end[1]);
+        for (tip, sign) in [(start, 1.0), (end, -1.0)] {
+            let base = [tip[0] + direction[0] * 4.5 * sign, tip[1] + direction[1] * 4.5 * sign];
+            for side in [1.0, -1.0] {
+                path.move_to(tip[0], tip[1]);
+                path.line_to(base[0] + normal[0] * 3.0 * side, base[1] + normal[1] * 3.0 * side);
+            }
+        }
+        Transform::from_scale(scale, scale)
+    };
+    let path = path.finish().ok_or_else(|| invalid("Transform cursor geometry is empty"))?;
+    // Qt pens default to square caps and bevel joins.
+    for (color, width) in [([20, 20, 20, 245], 3.5), ([245, 245, 245, 255], 1.5)] {
+        let stroke = Stroke {
+            width,
+            line_cap: LineCap::Square,
+            line_join: LineJoin::Bevel,
+            ..Stroke::default()
+        };
+        let mut paint = Paint { anti_alias: true, ..Paint::default() };
+        let [red, green, blue, alpha] = color;
+        paint.set_color(Color::from_rgba8(red, green, blue, alpha));
+        pixmap.stroke_path(&path, &paint, &stroke, transform, None);
+    }
+    let hotspot = (center * scale).round() as u32;
+    Ok(image(pixmap, [hotspot, hotspot]))
 }
 
 fn artwork(source: &'static str, scale: f32) -> io::Result<CursorImage> {

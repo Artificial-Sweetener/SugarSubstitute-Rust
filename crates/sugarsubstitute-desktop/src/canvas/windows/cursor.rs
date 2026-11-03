@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Own one native window's canvas cursors: the shared Windows arrow and forbidden cursors,
+//! Own one native window's canvas cursors: the shared Windows arrow, size and forbidden cursors,
 //! DPI-sized Qt hands and the rendered editing cursors.
 //!
 //! The standalone canvas peer and the composed main window each own one cache.
@@ -12,15 +12,15 @@ mod resource;
 use ::windows::Win32::UI::{
     HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
     WindowsAndMessaging::{
-        DestroyCursor, GetCursor, HCURSOR, IDC_ARROW, IDC_NO, LoadCursorW, SM_CXCURSOR,
-        SM_CYCURSOR, SetCursor,
+        DestroyCursor, GetCursor, HCURSOR, IDC_ARROW, IDC_NO, IDC_SIZENESW, IDC_SIZENS,
+        IDC_SIZENWSE, IDC_SIZEWE, LoadCursorW, SM_CXCURSOR, SM_CYCURSOR, SetCursor,
     },
 };
 use resource::load_cursor;
 #[cfg(test)]
 use resource::select_frame;
 use std::{cell::RefCell, rc::Rc};
-use sugarsubstitute_canvas::CursorIntent;
+use sugarsubstitute_canvas::{CursorIntent, ResizeDirection};
 
 const OPEN_HAND: &[u8] = include_bytes!("../../../assets/cursors/qt-open-hand.cur");
 const CLOSED_HAND: &[u8] = include_bytes!("../../../assets/cursors/qt-closed-hand.cur");
@@ -104,9 +104,49 @@ struct CursorPair {
     closed: Rc<OwnedCursor>,
 }
 
-struct Cache {
+/// Windows-owned cursors of the current scheme: shared, never destroyed by the canvas.
+#[derive(Clone, Copy)]
+struct System {
     arrow: HCURSOR,
+    horizontal: HCURSOR,
+    vertical: HCURSOR,
+    diagonal_down: HCURSOR,
+    diagonal_up: HCURSOR,
     forbidden: HCURSOR,
+}
+
+impl System {
+    /// Load the scheme's arrow, size and forbidden cursors.
+    fn load() -> Result<Self, Box<dyn Error>> {
+        // SAFETY: Each IDC_* identifier requests a shared Windows cursor that callers never
+        // destroy, so no handle loaded here is private.
+        unsafe {
+            Ok(Self {
+                arrow: LoadCursorW(None, IDC_ARROW)?,
+                horizontal: LoadCursorW(None, IDC_SIZEWE)?,
+                vertical: LoadCursorW(None, IDC_SIZENS)?,
+                diagonal_down: LoadCursorW(None, IDC_SIZENWSE)?,
+                diagonal_up: LoadCursorW(None, IDC_SIZENESW)?,
+                forbidden: LoadCursorW(None, IDC_NO)?,
+            })
+        }
+    }
+
+    /// The shared cursor a system intent selects; every other intent shows the arrow.
+    const fn cursor(self, intent: CursorIntent) -> HCURSOR {
+        match intent {
+            CursorIntent::Resize(ResizeDirection::Horizontal) => self.horizontal,
+            CursorIntent::Resize(ResizeDirection::Vertical) => self.vertical,
+            CursorIntent::Resize(ResizeDirection::DiagonalDown) => self.diagonal_down,
+            CursorIntent::Resize(ResizeDirection::DiagonalUp) => self.diagonal_up,
+            CursorIntent::Forbidden => self.forbidden,
+            _ => self.arrow,
+        }
+    }
+}
+
+struct Cache {
+    system: System,
     pair: Option<CursorPair>,
     rendered: generated::Rendered,
 }
@@ -131,14 +171,10 @@ impl Cursors {
 
     /// Create the shared arrow and private hands at one physical cursor size.
     fn sized(metrics: Metrics) -> Result<Self, Box<dyn Error>> {
-        // SAFETY: IDC_ARROW requests a shared Windows cursor that callers never destroy.
-        let arrow = unsafe { LoadCursorW(None, IDC_ARROW)? };
-        // SAFETY: IDC_NO requests a shared Windows cursor that callers never destroy.
-        let forbidden = unsafe { LoadCursorW(None, IDC_NO)? };
+        let system = System::load()?;
         let pair = CursorPair::new(metrics.size)?;
         Ok(Self(RefCell::new(Cache {
-            arrow,
-            forbidden,
+            system,
             pair: Some(pair),
             rendered: generated::Rendered::default(),
         })))
@@ -171,8 +207,7 @@ impl Cursors {
         Ok(match intent {
             CursorIntent::OpenHand => CursorResource::Owned(pair.open.clone()),
             CursorIntent::ClosedHand => CursorResource::Owned(pair.closed.clone()),
-            CursorIntent::Forbidden => CursorResource::Shared(cache.forbidden),
-            _ => CursorResource::Shared(cache.arrow),
+            _ => CursorResource::Shared(cache.system.cursor(intent)),
         })
     }
 
@@ -187,21 +222,16 @@ impl Cursors {
             return Ok(());
         }
         let pair = CursorPair::new(metrics.size)?;
-        let arrow = if force {
-            // SAFETY: Reload the shared scheme-owned arrow; neither old nor new handle is private.
-            unsafe { LoadCursorW(None, IDC_ARROW)? }
-        } else {
-            self.0.borrow().arrow
-        };
+        let system = if force { System::load()? } else { self.0.borrow().system };
         let mut cache = self.0.borrow_mut();
-        cache.arrow = arrow;
+        cache.system = system;
         cache.pair = Some(pair);
         Ok(())
     }
 
     /// Borrow the Windows-owned arrow for final private-cursor deselection.
     pub(crate) fn arrow(&self) -> HCURSOR {
-        self.0.borrow().arrow
+        self.0.borrow().system.arrow
     }
 
     /// Release cached private cursors after the peer's selected and desired resources have

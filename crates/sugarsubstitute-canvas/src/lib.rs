@@ -24,7 +24,7 @@ pub use archive::{
 pub use comparison::{Comparison, WipeOrientation};
 pub use compile::{CaptureLayers, CompiledView};
 pub use coverage::BackingCoverage;
-pub use cursor::{BrushOutline, CursorIntent, ResizeDirection};
+pub use cursor::{AffineCursor, BrushOutline, CursorIntent, ResizeDirection};
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};
 pub use document::{
     Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession, EditSessionId, Layer,

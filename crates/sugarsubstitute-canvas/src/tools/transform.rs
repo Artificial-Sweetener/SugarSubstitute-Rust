@@ -8,10 +8,12 @@
 //! box frames the selection's bounds or the mask's content bounds. Every handle drag and every
 //! toolbar turn or flip is one session checkpoint. Enter or a double click inside the box
 //! applies the transform as one undo step, Escape cancels it, and either returns to the tool
-//! selected before Transform. The result is resampled once, from the published mask, when the
-//! transform lands: quarter turns, flips and moves permute pixels exactly; anything else is
-//! sampled bilinearly, as CuteCanvas resamples transformed fragments.
+//! selected before Transform. Moving the box follows the pointer and snaps to the canvas, the
+//! selection and other layers. The result is resampled once, from the published mask, when the
+//! transform lands: quarter turns, flips and whole-pixel moves permute pixels exactly; anything
+//! else is sampled bilinearly, as CuteCanvas resamples transformed fragments.
 mod frame;
+mod snap;
 
 use super::{
     CanvasTool, SessionAction, SessionKind, SessionState, ToolButton, ToolCancelReason,
@@ -23,6 +25,7 @@ use crate::{
 };
 pub(super) use frame::segment_distance;
 use frame::{Frame, Grip};
+use snap::MoveSnap;
 use sugarsubstitute_image_ops::CoverageAffine;
 
 /// What the box transforms.
@@ -103,6 +106,7 @@ struct Gesture {
     grip: Grip,
     origin: [f64; 2],
     start: Frame,
+    snap: Option<MoveSnap>,
     latest: CoverageAffine,
 }
 
@@ -152,7 +156,17 @@ impl TransformTool {
             return Ok(());
         };
         let origin = viewport.document_at(position)?;
-        self.gesture = Some(Gesture { grip, origin, start: frame, latest: frame.affine });
+        let snap = match (grip, &self.prepared, context.document()) {
+            (Grip::Move, Some(prepared), Some(document)) => {
+                let (mask, selection) = match prepared.target {
+                    Target::Layer(mask) => (mask, false),
+                    Target::Selection(mask) => (mask, true),
+                };
+                Some(MoveSnap::begin(&document, mask, selection, frame.bounds()))
+            }
+            _ => None,
+        };
+        self.gesture = Some(Gesture { grip, origin, start: frame, snap, latest: frame.affine });
         context.capture_pointer(true);
         Ok(())
     }
@@ -169,6 +183,14 @@ impl TransformTool {
             return Ok(());
         };
         let point = viewport.document_at(position)?;
+        let point = match &mut gesture.snap {
+            Some(snap) => {
+                let raw = [point[0] - gesture.origin[0], point[1] - gesture.origin[1]];
+                let delta = snap.resolve(raw, viewport.zoom(), self.modifiers.ctrl);
+                [gesture.origin[0] + delta[0], gesture.origin[1] + delta[1]]
+            }
+            None => point,
+        };
         let Some(affine) = gesture.start.drag(gesture.grip, gesture.origin, point, self.modifiers)
         else {
             return Ok(());
@@ -319,7 +341,9 @@ impl CanvasTool for TransformTool {
     fn cursor(&self, view: &ToolView<'_>) -> CursorIntent {
         let grip = self.gesture.as_ref().map(|gesture| gesture.grip).or(self.hover);
         match (self.frame(), grip) {
-            (Some(frame), Some(grip)) => frame.cursor(view.navigation.viewport(), grip),
+            (Some(frame), Some(grip)) => {
+                frame.cursor(view.navigation.viewport(), grip, self.position.unwrap_or_default())
+            }
             _ => CursorIntent::Arrow,
         }
     }

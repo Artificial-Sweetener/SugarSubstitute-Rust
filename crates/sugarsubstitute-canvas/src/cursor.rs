@@ -28,15 +28,17 @@ pub enum CursorIntent {
     Move,
     /// The pointer moves selected content out of its layer, leaving the area behind empty.
     MoveCut,
-    /// The tool has nothing it may edit here, such as a mask shape without an editable mask.
-    Forbidden,
-    /// A two-headed resize arrow along one screen direction, for transform handles and shared
-    /// edges, as Qt's size cursors.
+    /// The platform's two-headed size cursor along one of four directions, as Qt's size
+    /// cursors show over a shared edge.
     Resize(ResizeDirection),
-    /// The pointer turns a transform box about its centre.
-    Rotate,
+    /// A procedural arrow or rotation glyph oriented in one-degree steps, as CuteCanvas draws
+    /// for transform handles and shared-edge endpoints.
+    Affine(AffineCursor),
+    /// The platform's forbidden cursor: the tool has nothing it may edit here, such as a mask
+    /// shape without an editable mask, or the handle under the pointer cannot be dragged.
+    Forbidden,
 }
-/// The screen direction a resize arrow points along, in 45° steps.
+/// The screen direction a platform size cursor points along, in 45° steps.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ResizeDirection {
     /// Left and right.
@@ -49,9 +51,10 @@ pub enum ResizeDirection {
     DiagonalUp,
 }
 impl ResizeDirection {
-    /// The direction nearest a screen-space vector, with y pointing down.
+    /// The direction nearest a screen-space vector, with y pointing down; ties round to even
+    /// steps, as Python's `round` does.
     pub fn along([x, y]: [f64; 2]) -> Self {
-        let steps = (y.atan2(x) / std::f64::consts::FRAC_PI_4).round() as i64;
+        let steps = (y.atan2(x) / std::f64::consts::FRAC_PI_4).round_ties_even() as i64;
         match steps.rem_euclid(4) {
             0 => Self::Horizontal,
             1 => Self::DiagonalDown,
@@ -59,6 +62,37 @@ impl ResizeDirection {
             _ => Self::DiagonalUp,
         }
     }
+}
+/// A procedural affine cursor: which glyph, turned to one of 180 one-degree buckets.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct AffineCursor {
+    rotation: bool,
+    degrees: u8,
+}
+impl AffineCursor {
+    /// A two-headed arrow along `degrees`, measured clockwise on screen from the right.
+    pub fn resize(degrees: f64) -> Self {
+        Self { rotation: false, degrees: bucket(degrees) }
+    }
+    /// The rotation arc turned to `degrees`, a tangent angle measured like [`Self::resize`].
+    pub fn rotate(degrees: f64) -> Self {
+        Self { rotation: true, degrees: bucket(degrees) }
+    }
+    /// Whether this is the rotation glyph rather than the arrow.
+    pub const fn rotation(self) -> bool {
+        self.rotation
+    }
+    /// The glyph's turn, `0..180` degrees; opposite directions share a bucket.
+    pub const fn degrees(self) -> u8 {
+        self.degrees
+    }
+}
+/// CuteCanvas's bucket: Python's `round(degrees) % 180`.
+fn bucket(degrees: f64) -> u8 {
+    if !degrees.is_finite() {
+        return 0;
+    }
+    (degrees.round_ties_even() as i64).rem_euclid(180) as u8
 }
 
 /// The ring a brush cursor draws: the brush footprint as it appears on screen.

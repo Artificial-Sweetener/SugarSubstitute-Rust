@@ -122,3 +122,27 @@ fn unsupported_scales_and_ring_sizes_are_rejected() {
     assert!(CursorArt::MoveCut.render(0.0).is_err());
     assert!(CursorArt::Precise(PreciseMark::Add).render(f32::NAN).is_err());
 }
+
+#[test]
+fn transform_arrows_and_rotation_arcs_turn_in_whole_degrees_about_a_centred_hotspot() -> TestResult
+{
+    let level = CursorArt::Affine { rotation: false, degrees: 0 }.render(1.0)?;
+    assert_eq!([level.width(), level.height(), level.hotspot()[0]], [32, 32, 16]);
+    // The light shaft, outlined dark, runs through the centre between the tips at 6 and 26.
+    let shaft = pixel(&level, 16, 16);
+    assert!(shaft[3] > 240 && shaft[0] > 150, "{shaft:?}");
+    let outline = pixel(&level, 16, 14);
+    assert!(outline[3] > 150 && outline[0] < 40, "{outline:?}");
+    assert!(pixel(&level, 7, 16)[3] > 0 && pixel(&level, 25, 16)[3] > 0);
+    assert_eq!(pixel(&level, 16, 6)[3], 0);
+    let upright = CursorArt::Affine { rotation: false, degrees: 90 }.render(1.0)?;
+    assert!(pixel(&upright, 16, 7)[3] > 0 && pixel(&upright, 7, 16)[3] == 0);
+    let rotation = CursorArt::Affine { rotation: true, degrees: 0 }.render(2.0)?;
+    assert_eq!([rotation.width(), rotation.hotspot()[0]], [64, 32]);
+    // The arc's top lies six pixels above the centre; the centre itself stays clear.
+    assert!(pixel(&rotation, 32, 20)[3] > 0);
+    assert_eq!(pixel(&rotation, 32, 32)[3], 0);
+    let turned = CursorArt::Affine { rotation: true, degrees: 90 }.render(2.0)?;
+    assert_ne!(turned.rgba(), rotation.rgba());
+    Ok(())
+}

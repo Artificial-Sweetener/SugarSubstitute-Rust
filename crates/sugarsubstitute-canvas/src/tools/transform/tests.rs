@@ -6,7 +6,7 @@ use crate::tools::TransformAction;
 use crate::tools::tests::editing::{
     Canvas, MASK, OTHER, TOOL, canvas, held, mask_layer, region, run,
 };
-use crate::{DocumentEdit, ResizeDirection, ToolId, tests::harness::TestResult};
+use crate::{AffineCursor, DocumentEdit, ToolId, tests::harness::TestResult};
 use std::time::Duration;
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_image_ops::{Coverage, FULL_COVERAGE, Region};
@@ -125,11 +125,11 @@ fn handles_scale_skew_rotate_and_move_the_frame() -> TestResult {
         let mut canvas = fresh()?;
         assert_corners(corners(&canvas)?, square);
         for (point, cursor) in [
-            ([60.0, 40.0], CursorIntent::Resize(ResizeDirection::Horizontal)),
-            ([60.0, 60.0], CursorIntent::Resize(ResizeDirection::DiagonalDown)),
-            ([40.0, 20.0], CursorIntent::Resize(ResizeDirection::Vertical)),
+            ([60.0, 40.0], CursorIntent::Affine(AffineCursor::resize(0.0))),
+            ([60.0, 60.0], CursorIntent::Affine(AffineCursor::resize(45.0))),
+            ([40.0, 20.0], CursorIntent::Affine(AffineCursor::resize(90.0))),
             ([40.0, 40.0], CursorIntent::Move),
-            ([75.0, 40.0], CursorIntent::Rotate),
+            ([75.0, 40.0], CursorIntent::Affine(AffineCursor::rotate(45.0))),
             ([150.0, 150.0], CursorIntent::Arrow),
         ] {
             canvas.point(point, NONE, context)?;
@@ -153,10 +153,17 @@ fn handles_scale_skew_rotate_and_move_the_frame() -> TestResult {
         let mut canvas = fresh()?;
         canvas.drag(&[[60.0, 40.0], [60.0, 50.0]], held(true, true, false), context)?;
         assert_corners(corners(&canvas)?, [[20.0, 20.0], [60.0, 30.0], [60.0, 70.0], [20.0, 60.0]]);
-        // Inside the box moves it by whole pixels, exactly.
+        // Inside the box moves it by the pointer's exact travel, resampling fractions.
         let mut canvas = fresh()?;
         canvas.drag(&[[40.0, 40.0], [45.6, 52.2]], NONE, context)?;
-        assert_eq!(canvas.shown_bounds(MASK), region(26, 32, 40, 40)?);
+        assert_eq!(canvas.shown_bounds(MASK), region(25, 32, 41, 41)?);
+        // A box edge within 8 device pixels of the canvas edge snaps onto it; Ctrl does not.
+        let mut canvas = fresh()?;
+        canvas.drag(&[[40.0, 40.0], [21.0, 40.0]], NONE, context)?;
+        assert_eq!(canvas.shown_bounds(MASK), region(0, 20, 40, 40)?);
+        let mut canvas = fresh()?;
+        canvas.drag(&[[40.0, 40.0], [21.0, 40.0]], held(false, true, false), context)?;
+        assert_eq!(canvas.shown_bounds(MASK), region(1, 20, 40, 40)?);
         // Outside the box rotates about its centre; Shift snaps to 15°.
         let mut canvas = fresh()?;
         canvas.drag(&[[75.0, 40.0], [40.0, 75.0]], NONE, context)?;

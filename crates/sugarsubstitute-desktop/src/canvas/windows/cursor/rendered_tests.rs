@@ -6,7 +6,7 @@ use super::{
     tests::{LARGE, STANDARD, bitmap_pixels, icon_info, memory_dc},
     *,
 };
-use sugarsubstitute_canvas::BrushOutline;
+use sugarsubstitute_canvas::{AffineCursor, BrushOutline};
 use sugarsubstitute_ui::cursors::{CursorArt, PreciseMark};
 
 fn ring(diameter: u32) -> CursorIntent {
@@ -115,5 +115,37 @@ fn large_rings_stay_within_the_cached_byte_budget() -> Result<(), Box<dyn Error>
     }
     let latest = cursors.resolve(STANDARD, ring(2048))?;
     assert_eq!(cursors.resolve(STANDARD, ring(2048))?.handle(), latest.handle());
+    Ok(())
+}
+
+#[test]
+fn shared_edges_use_system_cursors_and_transform_cursors_stay_bounded() -> Result<(), Box<dyn Error>>
+{
+    let cursors = Cursors::sized(STANDARD)?;
+    let system = [
+        ResizeDirection::Horizontal,
+        ResizeDirection::Vertical,
+        ResizeDirection::DiagonalDown,
+        ResizeDirection::DiagonalUp,
+    ]
+    .map(|direction| cursors.resolve(STANDARD, CursorIntent::Resize(direction)));
+    let forbidden = cursors.resolve(STANDARD, CursorIntent::Forbidden)?;
+    let mut handles = vec![cursors.arrow(), forbidden.handle()];
+    for resource in system {
+        let resource = resource?;
+        assert!(resource.owned().is_none(), "system cursors are shared");
+        assert!(!handles.contains(&resource.handle()));
+        handles.push(resource.handle());
+    }
+    let level = cursors.resolve(STANDARD, CursorIntent::Affine(AffineCursor::resize(0.4)))?;
+    let same = cursors.resolve(STANDARD, CursorIntent::Affine(AffineCursor::resize(180.0)))?;
+    assert_eq!(level.handle(), same.handle(), "opposite directions share one bucket");
+    let rotate = cursors.resolve(STANDARD, CursorIntent::Affine(AffineCursor::rotate(0.0)))?;
+    assert_ne!(rotate.handle(), level.handle());
+    for degrees in 1..40 {
+        cursors
+            .resolve(STANDARD, CursorIntent::Affine(AffineCursor::resize(f64::from(degrees))))?;
+    }
+    assert!(cursors.0.borrow().rendered.len() <= 8, "turned cursors stay within the cache");
     Ok(())
 }
