@@ -32,6 +32,70 @@ impl Inputs {
         }
         Ok(())
     }
+
+    /// Drag the primary mouse button through document points of the shown input document, as
+    /// the desktop adapter delivers a routed gesture.
+    fn stroke(&mut self, points: &[[f64; 2]]) -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_canvas::{PointerSample, ToolButton, ToolInput, ToolModifiers};
+        use sugarsubstitute_desktop::canvas::{Input, Lifetime};
+        let session = self.canvas.session.as_mut().ok_or("The canvas has no session")?;
+        let button = |pressed| {
+            Input::Tool(ToolInput::Button {
+                button: ToolButton::Primary,
+                pressed,
+                modifiers: ToolModifiers::NONE,
+            })
+        };
+        for (index, point) in points.iter().enumerate() {
+            let device = session.device_at(*point)?;
+            let sample = PointerSample::mouse(device, ToolModifiers::NONE);
+            session.input(Input::Tool(ToolInput::Pointer(sample)))?;
+            if index == 0 {
+                session.input(button(true))?;
+            }
+        }
+        session.input(button(false))
+    }
+}
+
+#[test]
+fn a_brush_stroke_made_through_editing_is_restored_after_a_restart() -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let mut first = Inputs::start(directory.path())?;
+    let result = first.workflow(sync(None))?;
+    let image = synced(&result, "image")?.clone();
+    let empty = layer(&image, "empty")?;
+    first.workflow(activate(Some("image"), Some("empty"), "input"))?;
+    first.context_until(|document| document["id"] == image["document"]["id"])?;
+    first.save_until(|| archive.is_file())?;
+    let saved = std::fs::read(&archive)?;
+    let mask = json!([{"kind":"layer", "layerId":empty}]);
+    let blank = first.ask("source.request", Some(capture_command(&image["document"], &mask)))?;
+
+    let brush = first.ask("edit.request", Some(json!({"type":"tool", "tool":"brush"})))?;
+    assert_eq!(brush["result"]["state"]["tool"], "brush", "{brush}");
+    first.stroke(&[[2.0, 3.0], [6.0, 3.0]])?;
+    let state = first.ask("edit.request", Some(json!({"type":"state"})))?;
+    assert_eq!(state["result"]["state"]["history"]["undo"], true, "{state}");
+    let painted = first.ask("source.request", Some(capture_command(&image["document"], &mask)))?;
+    assert_ne!(
+        painted["result"]["snapshots"][0]["pixels"], blank["result"]["snapshots"][0]["pixels"],
+        "the stroke painted the mask"
+    );
+    first.save_until(|| std::fs::read(&archive).is_ok_and(|bytes| bytes != saved))?;
+    first.close()?;
+
+    let mut second = Inputs::start(directory.path())?;
+    second.workflow(sync(None))?;
+    second.context_until(|document| document["id"] == image["document"]["id"])?;
+    let restored =
+        second.ask("source.request", Some(capture_command(&image["document"], &mask)))?;
+    assert_eq!(
+        restored["result"]["snapshots"][0]["pixels"],
+        painted["result"]["snapshots"][0]["pixels"]
+    );
+    second.close()
 }
 
 #[test]

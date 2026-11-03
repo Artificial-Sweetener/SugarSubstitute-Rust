@@ -124,6 +124,13 @@ impl Session {
         self.refresh_editing(now)
     }
 
+    /// The device point that shows document point `point` in the shown document's viewport, so
+    /// host fixtures can deliver tool input at document positions.
+    #[cfg(test)]
+    pub(crate) fn device_at(&self, point: [f64; 2]) -> Result<[f64; 2], Box<dyn Error>> {
+        Ok(self.document.tools.navigation().viewport().device_at(point)?)
+    }
+
     /// Hand the shown tools' deferred work to its job and share a wheel-changed brush size.
     fn settle_tools(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(work) = self.document.tools.take_deferred()
