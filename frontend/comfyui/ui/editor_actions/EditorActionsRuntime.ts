@@ -27,7 +27,11 @@ import { editorModelScopes } from './infrastructure/EditorModelScopeAdapter.js';
 import { EditorContextMenuHost } from './presentation/EditorContextMenuHost.js';
 import { canvasDimensionMenuEntries } from './presentation/CanvasDimensionMenu.js';
 import type { CanvasDimensionCommands } from './application/CanvasDimensionCommands.js';
-import type { DimensionBinding } from './application/CanvasDimensionFields.js';
+import type {
+  DimensionBinding,
+  DimensionFieldTarget,
+} from './application/CanvasDimensionFields.js';
+import type { ContextMenuEntry } from '../menus/ContextMenu.js';
 import { CanvasCancellation } from '../core/embedded/CanvasRuntime.js';
 import { readNativeEditorCard } from './infrastructure/NativeEditorCardAdapter.js';
 import { isRecord } from '../types/common.js';
@@ -41,6 +45,10 @@ export interface EditorActionsRuntimeOptions {
   readonly modelContributions: (root: HTMLElement) => readonly ModelContextContribution[];
   readonly dimensions?: CanvasDimensionCommands;
   readonly workflowContext?: () => unknown;
+  /** Contribute feature-owned entries for the dimension fields' native targets. */
+  readonly dimensionContributions?: (
+    targets: readonly DimensionFieldTarget[],
+  ) => readonly ContextMenuEntry[];
 }
 
 /** Keep storage, appearance, node values and menu policy in separate focused owners. */
@@ -102,7 +110,16 @@ export class EditorActionsRuntime {
   readonly #pagehide = (): void => this.dispose();
 
   /** Scope explicit dimension commands to the workflow and page that supplied their native fields. */
-  #dimensionEntries(binding: DimensionBinding) {
+  #dimensionEntries(binding: DimensionBinding): ContextMenuEntry[] {
+    const targets = [...(binding.width.targets?.() ?? []), ...(binding.height.targets?.() ?? [])];
+    return [
+      ...this.#canvasDimensionEntries(binding),
+      ...(this.#options.dimensionContributions?.(targets) ?? []),
+    ];
+  }
+
+  /** Bind the peer canvas geometry commands to this binding's workflow scope. */
+  #canvasDimensionEntries(binding: DimensionBinding): ContextMenuEntry[] {
     const commands = this.#options.dimensions;
     return canvasDimensionMenuEntries(
       Boolean(commands?.available),

@@ -119,6 +119,9 @@ export class WorkflowSurfaceProvisioning {
         const signature = JSON.stringify([host.canvasId, workflow, surfaces]);
         if (signature === this.#signature)
             return;
+        await this.#followAuthoritySizes(host, workflow, plan);
+        if (this.#disposed)
+            return;
         const result = await host.execute({ type: 'sync', workflow, surfaces });
         if (this.#disposed)
             return;
@@ -152,6 +155,40 @@ export class WorkflowSurfaceProvisioning {
             rejected: plan.rejected,
         });
         this.#bind(host.canvasId, provisioned);
+    }
+    /**
+     * Resize existing mask-only surfaces whose size fields were edited directly, keeping their
+     * pixels centred, so a sync never has to change the size of a surface the canvas holds.
+     */
+    async #followAuthoritySizes(host, workflow, plan) {
+        const state = this.#state;
+        if (state?.workflow !== workflow || state.canvasId !== host.canvasId)
+            return;
+        for (const surface of plan.surfaces) {
+            const current = state.surfaces.find((item) => item.key === surface.key)?.document;
+            if (surface.base.kind !== 'blank' ||
+                !current ||
+                (current.width === surface.base.width && current.height === surface.base.height))
+                continue;
+            const result = await host.execute({
+                type: 'resize',
+                workflow,
+                surface: surface.key,
+                width: surface.base.width,
+                height: surface.base.height,
+                mode: { kind: 'canvas', anchor: 'center' },
+            });
+            if (result.kind === 'failure') {
+                if (result.status !== 'cancelled')
+                    throw new Error(result.message);
+                continue;
+            }
+            const document = result.kind === 'synced'
+                ? result.surfaces.find((item) => item.key === surface.key)?.document
+                : undefined;
+            if (document)
+                this.replaceSurface(surface.key, document);
+        }
     }
     /** Bind each mask loader's entries to their layers through the loader's own binding owner. */
     #bind(canvasId, surfaces) {

@@ -77,6 +77,14 @@ export class EditorActionsRuntime {
     #pagehide = () => this.dispose();
     /** Scope explicit dimension commands to the workflow and page that supplied their native fields. */
     #dimensionEntries(binding) {
+        const targets = [...(binding.width.targets?.() ?? []), ...(binding.height.targets?.() ?? [])];
+        return [
+            ...this.#canvasDimensionEntries(binding),
+            ...(this.#options.dimensionContributions?.(targets) ?? []),
+        ];
+    }
+    /** Bind the peer canvas geometry commands to this binding's workflow scope. */
+    #canvasDimensionEntries(binding) {
         const commands = this.#options.dimensions;
         return canvasDimensionMenuEntries(Boolean(commands?.available), async (action, configure, signal) => {
             if (!commands)

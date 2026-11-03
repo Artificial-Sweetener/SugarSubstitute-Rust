@@ -18,7 +18,7 @@ import type { ComfyAdapter } from '../core/ComfyAdapter.js';
 import type { CubeHostFeedback } from '../core/CubeHostFeedback.js';
 import type { ModelCatalogClient } from '../model_library/ModelCatalogClient.js';
 import type { ModelPickerHost } from '../model_library/ModelPickerHost.js';
-import { EditorActionsRuntime } from './EditorActionsRuntime.js';
+import { EditorActionsRuntime, type EditorActionsRuntimeOptions } from './EditorActionsRuntime.js';
 import { editorActionFeedback } from './infrastructure/EditorActionFeedback.js';
 import type { EditorActionLogger } from './infrastructure/EditorActionFeedback.js';
 import { CanvasDimensionCommands } from './application/CanvasDimensionCommands.js';
@@ -37,6 +37,7 @@ export function createEditorActionsRuntime(
   dimension: {
     readonly canvases: Pick<WorkflowCanvasCoordinator<Blob>, 'geometryHost'>;
     readonly sessions: Pick<WorkflowSessionStore, 'read'>;
+    readonly contributions?: EditorActionsRuntimeOptions['dimensionContributions'];
   },
   preparePrompt: (payload: unknown) => Promise<unknown>,
 ): EditorActionsRuntime {
@@ -59,6 +60,7 @@ export function createEditorActionsRuntime(
     catalog,
     dimensions: new CanvasDimensionCommands(() => dimension.canvases.geometryHost(), discovery),
     workflowContext: () => dimension.sessions.read().active,
+    ...(dimension.contributions ? { dimensionContributions: dimension.contributions } : {}),
     modelContributions: (root) => models.contextContributions(root),
     fetchApi: fetch,
     ...editorActionFeedback(logger, feedback),

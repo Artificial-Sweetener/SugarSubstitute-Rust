@@ -102,28 +102,28 @@ const hostFeedback = new CubeHostFeedback({ toast: ui.toast });
 const cubePreconfiguration = ui.workflowPreconfiguration;
 
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-const { workflowExecution, workflowFields, canvasInputs } = createWorkflowCanvasComposition({
-  api,
-  notifyCanvas: (message) => pushToastMessage('error', 'Canvas delivery failed', message),
-  notifyInput: (title, message) => pushToastMessage('warn', title, message),
-  app: appRef,
-  document: documentRef ?? document,
-  getLiteGraph: () => adapter.getLiteGraph?.(),
+const { workflowExecution, workflowFields, canvasInputs, editorDimensions } =
+  createWorkflowCanvasComposition({
+    api,
+    notify: (severity, title, message) => pushToastMessage(severity, title, message),
+    app: appRef,
+    document: documentRef ?? document,
+    getLiteGraph: () => adapter.getLiteGraph?.(),
 
-  stackControls: () => workflowWorkspace.masonry.stackControls(),
-  getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
-  getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
-  logger,
-  memory: ui.memory,
-  reportPresentationError: (error) => {
-    logger.error('SugarCubes presentation failed', { error });
-    pushToastMessage('error', 'Interface unavailable', readErrorMessage(error));
-  },
-  reportRelationError: (error) => {
-    logger.error('SugarCubes workflow relations failed', { error });
-    pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
-  },
-});
+    stackControls: () => workflowWorkspace.masonry.stackControls(),
+    getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
+    getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
+    logger,
+    memory: ui.memory,
+    reportPresentationError: (error) => {
+      logger.error('SugarCubes presentation failed', { error });
+      pushToastMessage('error', 'Interface unavailable', readErrorMessage(error));
+    },
+    reportRelationError: (error) => {
+      logger.error('SugarCubes workflow relations failed', { error });
+      pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
+    },
+  });
 
 const { appearance, relations, frame, setupPresentation } = workflowFields;
 
@@ -437,7 +437,7 @@ const editorActions = createEditorActionsRuntime(
   logger,
   hostFeedback,
   modelPickers,
-  workflowExecution,
+  editorDimensions,
   prepareAnalysisPrompt,
 );
 

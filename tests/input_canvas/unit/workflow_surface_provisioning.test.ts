@@ -254,3 +254,32 @@ test('no canvas or workflow means no state and no sync', async () => {
   await service.request();
   expect(listener).toHaveBeenCalledTimes(2);
 });
+
+test('a directly edited size authority resizes its existing mask-only surface before syncing', async () => {
+  const sized = (width: number): WorkflowSurfaceFacts => ({
+    images: [],
+    masks: [
+      {
+        ...paired.masks[0]!,
+        image: null,
+        authority: {
+          kind: 'resolved',
+          key: 'latent',
+          width,
+          height: 32,
+          nodes: [{ node: '4', output: 0, width: 'width', height: 'height' }],
+        },
+      },
+    ],
+  });
+  const { host, fake, service } = provisioning(sized(64));
+  await service.request();
+  fake.change(sized(128));
+  await service.request();
+  expect(host.commands.map((command) => command.type)).toEqual(['sync', 'resize', 'sync']);
+  expect(host.commands[1]).toMatchObject({
+    width: 128,
+    height: 32,
+    mode: { kind: 'canvas', anchor: 'center' },
+  });
+});

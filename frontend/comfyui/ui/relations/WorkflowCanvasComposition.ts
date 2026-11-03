@@ -20,6 +20,8 @@ import {
   type WorkflowFieldHostOptions,
 } from './WorkflowFieldComposition.js';
 import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputComposition.js';
+import type { DimensionFieldTarget } from '../editor_actions/application/CanvasDimensionFields.js';
+import type { ContextMenuEntry } from '../menus/ContextMenu.js';
 
 /** Bind peer canvas capabilities without teaching the web output viewer about native document editing. */
 export function createWorkflowCanvasComposition(
@@ -29,14 +31,19 @@ export function createWorkflowCanvasComposition(
   > & {
     api: unknown;
     logger: Pick<Console, 'error' | 'warn'>;
-    notifyCanvas(message: string): void;
-    /** Warn about rejected input files with a title and detail. */
-    notifyInput(title: string, message: string): void;
+    /** Show a non-blocking notification through the product's toast owner. */
+    notify(severity: 'error' | 'warn', title: string, message: string): void;
   },
 ): {
   workflowExecution: ReturnType<typeof createComfyWorkflowExecutionRuntime>;
   workflowFields: ReturnType<typeof createWorkflowFieldHost>;
   canvasInputs: ReturnType<typeof createCanvasInputs>;
+  /** Canvas geometry and feature contributions for the width/height field menu. */
+  editorDimensions: {
+    readonly canvases: typeof workflowExecution.canvases;
+    readonly sessions: typeof workflowExecution.sessions;
+    contributions(targets: readonly DimensionFieldTarget[]): ContextMenuEntry[];
+  };
 } {
   const workflowExecution = createComfyWorkflowExecutionRuntime({
     app: options.app,
@@ -53,7 +60,10 @@ export function createWorkflowCanvasComposition(
     subscribeConnection: (listener) => workflowExecution.subscribeConnection(listener),
   });
   const window = options.document.defaultView;
-  if (window) workflowExecution.bindCanvas(workflowFields.canvas, window, options.notifyCanvas);
+  if (window)
+    workflowExecution.bindCanvas(workflowFields.canvas, window, (message) =>
+      options.notify('error', 'Canvas delivery failed', message),
+    );
   const canvasInputs = createCanvasInputs({
     document: options.document,
     host: (id) => workflowExecution.canvases.sourceHost(id),
@@ -66,12 +76,21 @@ export function createWorkflowCanvasComposition(
     },
     workflowHost: () => workflowExecution.canvases.workflowHost(),
     accent: () => workflowFields.appearance.palette.theme.color,
-    notice: (title, message) => options.notifyInput(title, message),
+    notice: (title, message) => options.notify('warn', title, message),
     legacyHost: (id) => workflowExecution.canvases.maskHost(id),
     graph: () => options.app?.graph,
     report: options.reportPresentationError,
     logger: options.logger,
     memory: options.memory,
   });
-  return { workflowExecution, workflowFields, canvasInputs };
+  return {
+    workflowExecution,
+    workflowFields,
+    canvasInputs,
+    editorDimensions: {
+      canvases: workflowExecution.canvases,
+      sessions: workflowExecution.sessions,
+      contributions: (targets) => canvasInputs.surfaces.resolutionEntries(targets),
+    },
+  };
 }

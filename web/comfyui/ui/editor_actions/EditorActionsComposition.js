@@ -19,6 +19,7 @@ export function createEditorActionsRuntime(adapter, catalog, logger, feedback, m
         catalog,
         dimensions: new CanvasDimensionCommands(() => dimension.canvases.geometryHost(), discovery),
         workflowContext: () => dimension.sessions.read().active,
+        ...(dimension.contributions ? { dimensionContributions: dimension.contributions } : {}),
         modelContributions: (root) => models.contextContributions(root),
         fetchApi: fetch,
         ...editorActionFeedback(logger, feedback),
