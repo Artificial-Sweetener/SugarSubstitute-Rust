@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The editing state the editing UI reads after every command and whenever it changes.
 use super::{registry::canvas_tool, *};
-use sugarsubstitute_canvas::LayerId;
+use sugarsubstitute_canvas::{LayerId, SessionState};
 
 /// The complete editing state of the shown document, before protocol identities and page
 /// coordinates are assigned.
@@ -26,8 +26,9 @@ pub(crate) struct EditState {
     pub(crate) selection: Option<[f64; 4]>,
     /// Whether document undo and redo are available.
     pub(crate) history: [bool; 2],
-    /// Whether a live-previewed coverage modification is open.
-    pub(crate) modifying: bool,
+    /// The unresolved edit session: a move of floating pixels, a transform, shared edges or a
+    /// live-previewed coverage modification, with its own undo and redo availability.
+    pub(crate) session: Option<SessionState>,
     /// Whether the "Edit layer coverage" panel is open.
     pub(crate) coverage_mode: bool,
 }
@@ -73,7 +74,7 @@ impl Session {
             eraser: self.editing.eraser,
             selection,
             history,
-            modifying: document.is_some() && self.document.tools.modifying().is_some(),
+            session: document.and(self.document.tools.session()),
             coverage_mode: self.editing.coverage_mode,
         })
     }

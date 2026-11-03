@@ -4,12 +4,13 @@
 use super::*;
 use sugarsubstitute_canvas::{
     BrushMode, BrushTool, CanvasError, CoverageShapeTool, DocumentSnapshot, LayerContent, LayerId,
-    ShapeKind, ShapeTarget, ToolManager, ToolOptions,
+    MoveTool, SessionKind, ShapeKind, ShapeTarget, SharedEdgesTool, ToolManager, ToolOptions,
+    TransformTool,
 };
 use sugarsubstitute_contracts::execution::MemoryLease;
 
 /// Registry identities of the registered tools; Pan & Zoom is the manager's built-in tool.
-const REGISTERED: [(CanvasToolId, u32); 8] = [
+const REGISTERED: [(CanvasToolId, u32); 11] = [
     (CanvasToolId::Brush, 2),
     (CanvasToolId::Eraser, 3),
     (CanvasToolId::SelectRectangle, 4),
@@ -18,19 +19,25 @@ const REGISTERED: [(CanvasToolId, u32); 8] = [
     (CanvasToolId::MaskRectangle, 7),
     (CanvasToolId::MaskEllipse, 8),
     (CanvasToolId::MaskLasso, 9),
+    (CanvasToolId::Move, 10),
+    (CanvasToolId::Transform, 11),
+    (CanvasToolId::SharedEdges, 12),
 ];
 
-/// What a tool needs before it can be selected.
+/// What a tool needs before it can be selected, as the Python app's tool catalog requires.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Requirement {
     /// Always usable.
     Nothing,
     /// An editable input document.
     Document,
+    /// An active mask in that document, locked or not, as resizing shared edges reshapes
+    /// every visible mask.
+    ActiveMask,
     /// An editable target mask in that document.
     Mask,
-    /// Offered, but not implemented by this host.
-    Unimplemented,
+    /// An editable target mask with something to frame: a selection, or content.
+    Transformable,
 }
 
 const fn requirement(tool: CanvasToolId) -> Requirement {
@@ -39,18 +46,18 @@ const fn requirement(tool: CanvasToolId) -> Requirement {
         CanvasToolId::SelectRectangle | CanvasToolId::SelectEllipse | CanvasToolId::SelectLasso => {
             Requirement::Document
         }
+        CanvasToolId::SharedEdges => Requirement::ActiveMask,
         CanvasToolId::Brush
         | CanvasToolId::Eraser
+        | CanvasToolId::Move
         | CanvasToolId::MaskRectangle
         | CanvasToolId::MaskEllipse
         | CanvasToolId::MaskLasso => Requirement::Mask,
-        CanvasToolId::Move | CanvasToolId::Transform | CanvasToolId::SharedEdges => {
-            Requirement::Unimplemented
-        }
+        CanvasToolId::Transform => Requirement::Transformable,
     }
 }
 
-/// The registry identity of a tool, or `None` for a tool this host does not implement.
+/// The registry identity of a tool.
 pub(super) fn tool_id(tool: CanvasToolId) -> Option<ToolId> {
     if tool == CanvasToolId::PanZoom {
         return Some(ToolId::PAN_ZOOM);
@@ -67,7 +74,7 @@ pub(super) fn canvas_tool(id: ToolId) -> CanvasToolId {
         .map_or(CanvasToolId::PanZoom, |(tool, _)| *tool)
 }
 
-/// Register Brush, Eraser and the selection and mask shapes on an input document's tools.
+/// Register every offered tool but the built-in Pan & Zoom on an input document's tools.
 /// # Errors
 /// Preserves registration admission failures.
 fn register_tools(tools: &mut ToolManager, memory: &MemoryLease) -> Result<(), CanvasError> {
@@ -107,13 +114,34 @@ fn register_tools(tools: &mut ToolManager, memory: &MemoryLease) -> Result<(), C
             CanvasToolId::MaskLasso => {
                 tools.register(id, shape(ShapeTarget::Mask, ShapeKind::Lasso), memory)?;
             }
-            CanvasToolId::PanZoom
-            | CanvasToolId::Move
-            | CanvasToolId::Transform
-            | CanvasToolId::SharedEdges => {}
+            CanvasToolId::Move => tools.register(id, MoveTool::new(), memory)?,
+            CanvasToolId::Transform => tools.register(id, TransformTool::new(), memory)?,
+            CanvasToolId::SharedEdges => tools.register(id, SharedEdgesTool::new(), memory)?,
+            CanvasToolId::PanZoom => {}
         }
     }
     Ok(())
+}
+
+/// Whether `target` names a mask layer of `document`, locked or not.
+fn active_mask(document: &DocumentSnapshot, target: Option<LayerId>) -> bool {
+    document.layers().iter().any(|layer| {
+        Some(layer.id()) == target && matches!(layer.content(), LayerContent::Coverage { .. })
+    })
+}
+
+/// Whether Transform has something to frame: a selection, or content of the editable mask.
+fn transformable(document: &DocumentSnapshot, target: Option<LayerId>) -> bool {
+    if !editable_mask(document, target) {
+        return false;
+    }
+    if let Some(selection) = document.selection() {
+        return selection.bounds().is_some();
+    }
+    document.layers().iter().any(|layer| {
+        Some(layer.id()) == target
+            && matches!(layer.content(), LayerContent::Coverage { coverage, .. } if coverage.content_bounds().is_some())
+    })
 }
 
 /// Whether `target` names an unlocked mask layer of `document`.
@@ -136,12 +164,17 @@ impl Session {
     /// Whether `tool` can be selected on the shown document now.
     pub(super) fn tool_available(&self, tool: CanvasToolId) -> bool {
         let document = self.editable_document();
+        let target = self.document.tools.target();
         match requirement(tool) {
             Requirement::Nothing => true,
             Requirement::Document => document.is_some(),
-            Requirement::Mask => document
-                .is_some_and(|document| editable_mask(&document, self.document.tools.target())),
-            Requirement::Unimplemented => false,
+            Requirement::ActiveMask => {
+                document.is_some_and(|document| active_mask(&document, target))
+            }
+            Requirement::Mask => document.is_some_and(|document| editable_mask(&document, target)),
+            Requirement::Transformable => {
+                document.is_some_and(|document| transformable(&document, target))
+            }
         }
     }
 
@@ -154,12 +187,21 @@ impl Session {
             return Ok(());
         }
         self.register_editing_tools()?;
-        if self.editing.applied != shown {
+        if self.editing.applied == shown {
+            // A tool that settled, as applying a transform does, selected the tool before it.
+            self.editing.tool = canvas_tool(self.document.tools.selected());
+        } else {
             self.configure_brush(CanvasToolId::Brush, self.editing.brush)?;
             self.configure_brush(CanvasToolId::Eraser, self.editing.eraser)?;
             self.editing.applied = shown;
         }
-        let tool = if self.tool_available(self.editing.tool) {
+        // An unresolved edit session keeps its tool until it is applied or cancelled.
+        let session = self
+            .document
+            .tools
+            .session()
+            .is_some_and(|session| session.kind != SessionKind::Modify);
+        let tool = if session || self.tool_available(self.editing.tool) {
             self.editing.tool
         } else {
             CanvasToolId::PanZoom

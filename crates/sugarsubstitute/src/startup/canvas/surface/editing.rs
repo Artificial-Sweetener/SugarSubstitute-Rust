@@ -11,7 +11,7 @@
 use super::input_protocol::{document_id, layer_key};
 use super::*;
 use crate::native_canvas::session::editing::{EditRejection, EditState};
-use sugarsubstitute_canvas::BrushOptions;
+use sugarsubstitute_canvas::{BrushOptions, SessionKind};
 use sugarsubstitute_contracts::{
     canvas_native::{
         CanvasBrushOptions, CanvasEditMode, CanvasEditRequest, CanvasEditSelectionBounds,
@@ -211,10 +211,15 @@ impl NativeSurface {
             selection,
             undo: state.history[0],
             redo: state.history[1],
-            session: state.modifying.then_some(CanvasEditSession {
-                kind: CanvasEditSessionKind::Modify,
-                undo: false,
-                redo: false,
+            session: state.session.map(|session| CanvasEditSession {
+                kind: match session.kind {
+                    SessionKind::Move => CanvasEditSessionKind::Move,
+                    SessionKind::Transform => CanvasEditSessionKind::Transform,
+                    SessionKind::SharedEdges => CanvasEditSessionKind::SharedEdges,
+                    SessionKind::Modify => CanvasEditSessionKind::Modify,
+                },
+                undo: session.undo,
+                redo: session.redo,
             }),
             mode: if state.coverage_mode { CanvasEditMode::Coverage } else { CanvasEditMode::None },
         })

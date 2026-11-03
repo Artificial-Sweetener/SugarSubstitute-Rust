@@ -6,7 +6,8 @@
 use super::*;
 use crate::native_canvas::session::editing::{EditRejection, EditState};
 use sugarsubstitute_canvas::{
-    BrushOptions, CursorIntent, PointerSample, ScrollPhase, ToolButton, ToolInput, ToolModifiers,
+    BrushOptions, CursorIntent, PointerSample, ScrollPhase, SessionKind, ToolButton, ToolInput,
+    ToolModifiers,
 };
 use sugarsubstitute_contracts::canvas_native::{
     CanvasBrushOptions, CanvasBrushTool, CanvasCoverageModify, CanvasEditCommand, CanvasEditMode,
@@ -15,6 +16,7 @@ use sugarsubstitute_contracts::canvas_native::{
 };
 use sugarsubstitute_image_ops::FULL_COVERAGE;
 mod rerun;
+mod sessions;
 
 const NONE: ToolModifiers = ToolModifiers::NONE;
 
@@ -88,20 +90,19 @@ fn every_tool_is_offered_and_mask_tools_need_an_editable_target() -> Result<(), 
         assert_eq!(state.active_mask, Some(layer(&image, "second")?));
         assert_eq!(state.tools.map(|(id, _)| id), CanvasToolId::ALL);
         for tool in CanvasToolId::ALL {
-            let expected = !matches!(
-                tool,
-                CanvasToolId::Move | CanvasToolId::Transform | CanvasToolId::SharedEdges
-            );
+            // Transform needs content or a selection to frame; the new mask is empty.
+            let expected = tool != CanvasToolId::Transform;
             assert_eq!(availability(&state, tool), expected, "{tool:?}");
         }
         assert_eq!(state.history, [false, false]);
         assert_eq!(
             rejected(fixture.edit(CanvasEditCommand::Nudge { dx: 1, dy: 0 })),
-            Some("unsupported")
+            Some("Nothing can be nudged now")
         );
+        assert!(rejected(fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Transform))).is_some());
         assert_eq!(
-            rejected(fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Move))),
-            Some("unsupported")
+            fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Move))?.tool,
+            CanvasToolId::Move
         );
         let chosen = fixture.edit(CanvasEditCommand::Tool(CanvasToolId::MaskEllipse))?;
         assert_eq!(chosen.tool, CanvasToolId::MaskEllipse);
@@ -111,7 +112,9 @@ fn every_tool_is_offered_and_mask_tools_need_an_editable_target() -> Result<(), 
         fixture.settle_inputs()?;
         let state = fixture.session.edit_state()?;
         assert_eq!((state.active_mask, state.tool), (None, CanvasToolId::PanZoom));
-        assert!(!availability(&state, CanvasToolId::Brush));
+        for tool in [CanvasToolId::Brush, CanvasToolId::Move, CanvasToolId::SharedEdges] {
+            assert!(!availability(&state, tool), "{tool:?}");
+        }
         assert!(availability(&state, CanvasToolId::SelectLasso));
         assert!(rejected(fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Eraser))).is_some());
         assert_eq!(fixture.session.editing_cursor(), None, "navigation shows its own hands");
@@ -322,7 +325,7 @@ fn modifications_preview_live_and_enter_applies_while_escape_cancels() -> Result
             })
         };
         let previewing = fixture.edit(modify(CanvasModifyPhase::Preview))?;
-        assert!(previewing.modifying);
+        assert_eq!(previewing.session.map(|session| session.kind), Some(SessionKind::Modify));
         assert_eq!(previewing.tool, CanvasToolId::SelectRectangle, "the chosen tool returns");
         fixture.settle_inputs()?;
         let staged = fixture.session.document.staged.as_ref().ok_or("No modify preview")?;
@@ -334,7 +337,7 @@ fn modifications_preview_live_and_enter_applies_while_escape_cancels() -> Result
         );
         let applied = fixture.edit(CanvasEditCommand::Commit)?;
         fixture.settle_inputs()?;
-        assert!(!applied.modifying && !fixture.session.edit_state()?.modifying);
+        assert!(applied.session.is_none() && fixture.session.edit_state()?.session.is_none());
         let expanded = fixture.snapshot(image.document)?;
         assert_eq!(expanded.revision(), revision + 1, "the modification is one step");
         assert_eq!(expanded.selection().and_then(|selection| selection.bounds()), preview);
@@ -343,7 +346,7 @@ fn modifications_preview_live_and_enter_applies_while_escape_cancels() -> Result
         fixture.settle_inputs()?;
         let cancelled = fixture.edit(CanvasEditCommand::Cancel)?;
         fixture.settle_inputs()?;
-        assert!(!cancelled.modifying);
+        assert!(cancelled.session.is_none());
         assert_eq!(fixture.snapshot(image.document)?.revision(), expanded.revision());
         assert!(fixture.session.document.staged.is_none());
     }

@@ -3,11 +3,14 @@
 //! Carry out `edit.request` commands on the shown input document.
 use super::{registry::tool_id, *};
 use std::fmt;
-use sugarsubstitute_canvas::{CanvasError, CoverageOperation, ModifyPhase, ToolCancelReason};
+use sugarsubstitute_canvas::{
+    CanvasError, CoverageOperation, ModifyPhase, SessionAction, ToolCancelReason, ToolCommand,
+    TransformAction,
+};
 use sugarsubstitute_contracts::canvas_native::{
     CanvasBrushOptions, CanvasBrushTool, CanvasCoverageModify, CanvasEditCommand, CanvasEditMode,
     CanvasHistoryAction, CanvasModifyOperation, CanvasModifyPhase, CanvasModifyTarget,
-    CanvasSelectionAction,
+    CanvasSelectionAction, CanvasSessionAction, CanvasTransformAction,
 };
 
 /// An edit command the shown document cannot carry out; nothing changed.
@@ -15,7 +18,7 @@ use sugarsubstitute_contracts::canvas_native::{
 pub(crate) enum EditRejection {
     /// No editable input document is shown, or the command has nothing to act on now.
     Unavailable(&'static str),
-    /// Move, Transform, edit sessions and nudging are not implemented by this host.
+    /// A tool this host does not offer.
     Unsupported,
 }
 
@@ -59,14 +62,6 @@ impl Session {
         if command == CanvasEditCommand::State {
             return Ok(());
         }
-        if matches!(
-            command,
-            CanvasEditCommand::Nudge { .. }
-                | CanvasEditCommand::Transform(_)
-                | CanvasEditCommand::Session(_)
-        ) {
-            return Err(Box::new(EditRejection::Unsupported));
-        }
         if self.closing || self.editable_document().is_none() {
             return Err(Box::new(EditRejection::Unavailable("No editable input document")));
         }
@@ -82,10 +77,29 @@ impl Session {
                 self.set_brush(tool, brush_options(options)?)?;
             }
             CanvasEditCommand::History(action) => self.step_history(action, now)?,
-            CanvasEditCommand::Commit => self.commit_modification(now)?,
-            CanvasEditCommand::Cancel => self.with_document(|tools, document| {
-                tools.cancel(ToolCancelReason::Requested, Some(document), now)
-            })?,
+            CanvasEditCommand::Commit if self.editing.modification.is_some() => {
+                self.commit_modification(now)?;
+            }
+            CanvasEditCommand::Commit => self.tool_command(ToolCommand::Commit, now)?,
+            CanvasEditCommand::Cancel => self.tool_command(ToolCommand::Cancel, now)?,
+            CanvasEditCommand::Nudge { dx, dy } => {
+                let delta = [i32::from(dx), i32::from(dy)];
+                self.require(ToolCommand::Nudge(delta), now, "Nothing can be nudged now")?;
+            }
+            CanvasEditCommand::Transform(action) => {
+                let action = match action {
+                    CanvasTransformAction::RotateLeft => TransformAction::RotateLeft,
+                    CanvasTransformAction::RotateRight => TransformAction::RotateRight,
+                    CanvasTransformAction::FlipHorizontal => TransformAction::FlipHorizontal,
+                    CanvasTransformAction::FlipVertical => TransformAction::FlipVertical,
+                };
+                self.require(
+                    ToolCommand::Transform(action),
+                    now,
+                    "Nothing can be transformed now",
+                )?;
+            }
+            CanvasEditCommand::Session(action) => self.session_command(action, now)?,
             CanvasEditCommand::Selection(CanvasSelectionAction::Deselect) => {
                 self.with_document(|tools, document| tools.deselect(document).map(drop))?;
             }
@@ -104,10 +118,7 @@ impl Session {
             CanvasEditCommand::Navigation { held } => self.with_document(|tools, document| {
                 tools.temporary_navigation(held, Some(document), now)
             })?,
-            CanvasEditCommand::State
-            | CanvasEditCommand::Nudge { .. }
-            | CanvasEditCommand::Transform(_)
-            | CanvasEditCommand::Session(_) => {}
+            CanvasEditCommand::State => {}
         }
         if self.document.tools.modifying().is_none() {
             self.editing.modification = None;
@@ -141,8 +152,53 @@ impl Session {
         Ok(())
     }
 
-    /// Undo or redo one document step, first cancelling a gesture in progress; an unresolved
-    /// modification must be applied or cancelled first.
+    /// Deliver a typed command to the selected tool: Enter, Escape, and the transform and
+    /// edit-session toolbars. Escape a tool does not take cancels the gesture in progress.
+    fn tool_command(&mut self, command: ToolCommand, now: Duration) -> Result<(), Box<dyn Error>> {
+        self.with_document(|tools, document| tools.command(command, document, now).map(drop))
+    }
+
+    /// Deliver a command that must act, rejecting it when nothing took it.
+    fn require(
+        &mut self,
+        command: ToolCommand,
+        now: Duration,
+        unavailable: &'static str,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut acted = false;
+        self.with_document(|tools, document| {
+            acted = tools.command(command, document, now)?;
+            Ok(())
+        })?;
+        if acted { Ok(()) } else { Err(Box::new(EditRejection::Unavailable(unavailable))) }
+    }
+
+    /// The edit-session toolbar: Undo and Redo step the session's checkpoints, Apply and
+    /// Cancel resolve it; Apply also applies an open coverage modification.
+    fn session_command(
+        &mut self,
+        action: CanvasSessionAction,
+        now: Duration,
+    ) -> Result<(), Box<dyn Error>> {
+        if action == CanvasSessionAction::Apply && self.editing.modification.is_some() {
+            return self.commit_modification(now);
+        }
+        if self.document.tools.session().is_none() {
+            return Err(Box::new(EditRejection::Unavailable("No edit session is open")));
+        }
+        let action = match action {
+            CanvasSessionAction::Undo => SessionAction::Undo,
+            CanvasSessionAction::Redo => SessionAction::Redo,
+            CanvasSessionAction::Apply => SessionAction::Apply,
+            CanvasSessionAction::Cancel => SessionAction::Cancel,
+        };
+        self.tool_command(ToolCommand::Session(action), now)
+    }
+
+    /// Undo or redo for the standard shortcuts: inside an open edit session they step its
+    /// checkpoints and never pass its base, as CuteCanvas's sessions do; otherwise they cancel a
+    /// gesture in progress and step the document. An unresolved modification must be applied
+    /// or cancelled first.
     fn step_history(
         &mut self,
         action: CanvasHistoryAction,
@@ -152,13 +208,11 @@ impl Session {
             return Err(Box::new(EditRejection::Unavailable("A coverage modification is open")));
         }
         self.with_document(|tools, document| {
-            if tools.captured() || tools.preview().is_some() {
-                tools.cancel(ToolCancelReason::Requested, Some(document), now)?;
-            }
             match action {
-                CanvasHistoryAction::Undo => document.undo().map(drop),
-                CanvasHistoryAction::Redo => document.redo().map(drop),
+                CanvasHistoryAction::Undo => tools.undo(document, now),
+                CanvasHistoryAction::Redo => tools.redo(document, now),
             }
+            .map(drop)
         })
     }
 

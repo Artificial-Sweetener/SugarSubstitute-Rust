@@ -3,7 +3,7 @@
 //! The protocol form of editing state and the revisions reports carry.
 
 use super::*;
-use sugarsubstitute_canvas::LayerId;
+use sugarsubstitute_canvas::{LayerId, SessionState};
 use sugarsubstitute_contracts::canvas_native::{CanvasLayerId, CanvasToolId};
 
 fn state(brush: BrushOptions) -> EditState {
@@ -16,7 +16,7 @@ fn state(brush: BrushOptions) -> EditState {
         eraser: BrushOptions::DEFAULT,
         selection: Some([10.0, 20.0, 30.0, 40.0]),
         history: [true, false],
-        modifying: true,
+        session: Some(SessionState { kind: SessionKind::Transform, undo: true, redo: false }),
         coverage_mode: true,
     }
 }
@@ -32,7 +32,9 @@ fn reports_carry_protocol_values_and_advance_their_revision_only_on_change()
     assert_eq!(first.tools.len(), 12);
     assert_eq!((first.undo, first.redo), (true, false));
     assert_eq!(first.mode, CanvasEditMode::Coverage);
-    assert_eq!(first.session.map(|session| session.kind), Some(CanvasEditSessionKind::Modify));
+    let session =
+        CanvasEditSession { kind: CanvasEditSessionKind::Transform, undo: true, redo: false };
+    assert_eq!(first.session, Some(session));
     assert_eq!(first.selection, None, "without an allocation there are no CSS bounds");
     let same = surface.report_edit_state(state(BrushOptions::new(37, 0.255, 0.5)?))?;
     assert_eq!(same.revision, 1, "an unchanged state keeps its revision");
