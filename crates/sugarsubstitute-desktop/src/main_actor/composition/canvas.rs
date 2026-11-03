@@ -137,6 +137,7 @@ impl super::MainActor {
                     region.placement.clip,
                     region.occlusions,
                     region.drag_out,
+                    region.cursor,
                 ))
             }
             _ => None,

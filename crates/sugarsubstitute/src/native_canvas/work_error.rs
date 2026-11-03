@@ -26,6 +26,17 @@ impl Error for WorkError {
         Some(self.0.as_ref())
     }
 }
+/// A worker panicked; the panic's text stays with its execution owner, never in logs.
+#[derive(Debug)]
+pub(super) struct WorkerPanic {
+    pub(super) _cause: sugarsubstitute_contracts::execution::PanicCause,
+}
+impl fmt::Display for WorkerPanic {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Canvas worker panicked")
+    }
+}
+impl Error for WorkerPanic {}
 macro_rules! causes {
     ($($cause:ty),+ $(,)?) => {$ (
         impl From<$cause> for WorkError {

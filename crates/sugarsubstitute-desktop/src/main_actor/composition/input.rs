@@ -13,9 +13,9 @@ use super::cancellation::{self, Interruption};
 use super::cursor::{self, Hands, Pointer, Subscription};
 use super::drag_source;
 use super::drop_target::{DropTarget, Exporter};
-use super::routing::{Button, ClickRule, Message, Routing};
+use super::routing::{Button, ClickRule, Message, Published, Routing};
 use super::{modifiers, *};
-use crate::canvas::{MainCanvasDragOut, MainCanvasGesture, placement::PhysicalRect};
+use crate::canvas::{MainCanvasDragOut, MainCanvasGesture};
 use crate::main_actor::focus::{self, Focus};
 use crate::windows_subclass::{self, Registration};
 use std::cell::{Cell, RefCell};
@@ -439,9 +439,9 @@ impl Input {
     }
 
     /// Install the canvas owner's current input region, or withdraw routing with `None`.
-    /// The region is the shown clip in physical client pixels, its occlusions and whether a
-    /// primary drag from it exports the shown output.
-    pub(super) fn publish(&self, region: Option<(PhysicalRect, &[PhysicalRect], bool)>) {
+    /// The region is the shown clip in physical client pixels, its occlusions, whether a
+    /// primary drag from it exports the shown output and the editing tool's cursor.
+    pub(super) fn publish(&self, region: Option<Published<'_>>) {
         let region = region.filter(|_| self.state.admits());
         self.state.update_routing(|routing| routing.publish(region));
         if let Err(cause) = self.state.present_cursor() {
@@ -449,9 +449,9 @@ impl Input {
         }
     }
 
-    /// Take the oldest gesture routed to native navigation.
+    /// Take the oldest gesture routed to the canvas; see [`State::take_gesture`].
     pub(super) fn take(&self) -> Option<MainCanvasGesture> {
-        self.state.routing.borrow_mut().take()
+        self.state.take_gesture()
     }
 
     /// Queue the OS copy drag of the shown output for this window's next message dispatch.
@@ -597,6 +597,7 @@ unsafe extern "system" fn procedure(
     result
 }
 
+mod gestures;
 mod pen;
 
 #[cfg(test)]

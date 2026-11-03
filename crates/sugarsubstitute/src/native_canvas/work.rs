@@ -41,6 +41,9 @@ pub(super) const IMPORT_BYTES: u64 = 48 * 1024 * 1024;
 pub(super) const GPU_PREPARE_BYTES: u64 = 32 * 1024 * 1024;
 pub(super) const GPU_PROOF_BYTES: u64 = 40 * 1024 * 1024;
 pub(super) type Source = SharedRaster<CacheReader<'static>>;
+/// The exact content a frame shows: document identity, published revision, and the staged
+/// gesture preview generation the session latched, zero for the published revision itself.
+pub(super) type DocumentKey = (u64, u64, u64);
 
 /// Authored document and immutable original source handle; camera state lives outside the document.
 pub(super) struct Scene {
@@ -403,7 +406,7 @@ pub(super) struct Packet {
     pub(super) display_buffers: Option<ProjectionBuffers>,
     pub(super) pixels: Pixels,
     pub(super) view: Viewport,
-    pub(super) document: (u64, u64),
+    pub(super) document: DocumentKey,
     pub(super) elapsed: std::time::Duration,
     pub(super) stats: sugarsubstitute_image_ops::EvaluationStats,
     pub(super) source_revision: u64,
@@ -429,6 +432,7 @@ pub(super) struct Prepare {
     pub(super) reconstruction: Reconstruction,
     pub(super) resources: Resources,
     pub(super) document: DocumentSnapshot,
+    pub(super) key: DocumentKey,
     pub(super) source: Option<Source>,
     pub(super) compared: Option<Source>,
     pub(super) placed: Vec<Source>,

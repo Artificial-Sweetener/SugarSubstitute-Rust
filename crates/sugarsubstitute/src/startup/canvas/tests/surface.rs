@@ -232,13 +232,44 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         return Err("Canvas context is missing".into());
     };
     let value: Value = serde_json::from_slice(context.payload())?;
-    // Editing stays unadvertised until it is serviced.
+    // Every serviced document-editor capability is advertised; returns never reach input
+    // documents.
     assert_eq!(
         value["context"]["canvas"]["capabilities"],
         json!({"displayOutput": true, "insertImageLayer": false, "positionImageLayer": false,
-            "geometry": true, "editing": false, "workflowSurfaces": true})
+            "geometry": true, "editing": true, "workflowSurfaces": true})
     );
     assert_eq!(value["context"]["document"], Value::Null);
+    // Without a shown input document the editing state names no document and offers only
+    // navigation, and commands that need a document are unavailable.
+    let state = CanvasNativeRequest::decode(&serde_json::to_vec(&json!({
+        "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
+        "requestId":101, "type":"edit.request", "command":{"type":"state"}
+    }))?)?;
+    canvas.native(identity, state, memory.claim(64 * 1024)?, Default::default())?;
+    let Some(DesktopStartupCommand::SendCanvasNative(state)) = canvas.take_command() else {
+        return Err("The edit state is missing".into());
+    };
+    let value: Value = serde_json::from_slice(state.payload())?;
+    assert_eq!(value["result"]["kind"], "state");
+    let state = &value["result"]["state"];
+    assert_eq!((&state["document"], &state["tool"]), (&Value::Null, &json!("pan-zoom")));
+    assert_eq!(state["revision"], 1);
+    let offered = state["tools"].as_array().ok_or("No tools")?;
+    assert_eq!(offered.len(), 12);
+    assert!(offered.iter().all(|tool| tool["available"] == (tool["id"] == "pan-zoom")));
+    assert_eq!(state["options"]["brush"], json!({"size": 20, "hardness": 100, "opacity": 100}));
+    let brush = CanvasNativeRequest::decode(&serde_json::to_vec(&json!({
+        "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
+        "requestId":102, "type":"edit.request", "command":{"type":"tool", "tool":"brush"}
+    }))?)?;
+    canvas.native(identity, brush, memory.claim(64 * 1024)?, Default::default())?;
+    let Some(DesktopStartupCommand::SendCanvasNative(brush)) = canvas.take_command() else {
+        return Err("The tool reply is missing".into());
+    };
+    let value: Value = serde_json::from_slice(brush.payload())?;
+    assert_eq!(value["result"]["kind"], "failure");
+    assert_eq!(value["result"]["status"], "unavailable");
     canvas.surface(
         identity,
         request(&panel, 1, "surface.prepare", json!({}))?,

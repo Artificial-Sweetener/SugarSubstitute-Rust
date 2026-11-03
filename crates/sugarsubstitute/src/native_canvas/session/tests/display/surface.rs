@@ -28,7 +28,7 @@ pub(super) fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn 
         },
     )?;
     let identity =
-        (products.document.snapshot().identity(), products.document.snapshot().revision());
+        (products.document.snapshot().identity(), products.document.snapshot().revision(), 0);
     session.document.scene = Some(Scene {
         document: products.document,
         source: None,
@@ -51,6 +51,7 @@ pub(super) fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn 
         pixels: work::DrawPixels::Cpu(products.projection),
         document: identity,
         source_revision: 7,
+        overlay_generation: 0,
         verified: true,
     });
     let spec = session.spec(

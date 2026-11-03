@@ -13,23 +13,25 @@ pub(super) struct FrameReuse {
 
 /// Decide which shown pixels a new frame keeps. A backing of the same document, source,
 /// comparison, reconstruction and size keeps its pixels: a camera move repaints the exposed
-/// strips, and an edit since the shown revision also repaints what it changed, provided the
-/// shown revision's snapshot was kept. Anything else is prepared in full.
+/// strips, and an edit or staged gesture step since the shown content, `identity`, also
+/// repaints what it changed, provided the shown content's snapshot was kept. Anything else is
+/// prepared in full.
 /// # Errors
 /// Preserves viewport mapping and region construction failures.
+#[expect(clippy::too_many_arguments, reason = "Each argument is one independent reuse fact")]
 pub(super) fn frame_reuse(
     shown: Option<&Presented>,
-    shown_document: Option<&DocumentSnapshot>,
+    shown_document: Option<&(work::DocumentKey, DocumentSnapshot)>,
     document: &DocumentSnapshot,
+    identity: work::DocumentKey,
     source_revision: u64,
     comparison: Option<Comparison>,
     reconstruction: Reconstruction,
     view: Viewport,
 ) -> Result<FrameReuse, sugarsubstitute_canvas::CanvasError> {
-    let identity = (document.identity(), document.revision());
-    let earlier = shown_document.filter(|snapshot| {
-        shown.is_some_and(|shown| shown.document == (snapshot.identity(), snapshot.revision()))
-    });
+    let earlier = shown_document
+        .filter(|(key, _)| shown.is_some_and(|shown| shown.document == *key))
+        .map(|(_, snapshot)| snapshot);
     let compatible = shown.filter(|shown| {
         (shown.document == identity || shown.document.0 == identity.0 && earlier.is_some())
             && shown.source_revision == source_revision
@@ -56,9 +58,9 @@ impl Session {
         let Some(scene) = &self.document.scene else {
             return false;
         };
-        let snapshot = scene.document.snapshot();
+        let identity = self.document.shown_key();
         self.document.presented.as_ref().is_some_and(|shown| {
-            shown.document == (snapshot.identity(), snapshot.revision())
+            Some(shown.document) == identity
                 && shown.source_revision == scene.source_revision
                 && shown.view.zoom() > prepared.zoom()
                 && shown.sampling_scale >= prepared.zoom().min(1.0)
@@ -80,7 +82,7 @@ impl Session {
     /// Keep navigation products on canonical source pyramids; no sparse bootstrap sampling.
     fn navigation_request(
         &self,
-        document: (u64, u64),
+        document: work::DocumentKey,
         source_revision: u64,
         extent: sugarsubstitute_image_ops::Extent,
     ) -> Result<Option<(BackingCoverage, Reconstruction)>, Box<dyn Error>> {
@@ -123,7 +125,7 @@ impl Session {
     pub(super) fn detail_view(
         &self,
         target: Viewport,
-        document: (u64, u64),
+        document: work::DocumentKey,
         source_revision: u64,
         reconstruction: Reconstruction,
     ) -> Result<Viewport, Box<dyn Error>> {
@@ -145,8 +147,7 @@ impl Session {
     /// Navigation remains coalesced intent while a current document frame is being prepared.
     pub(super) fn submit_frame(&mut self) -> Result<(), Box<dyn Error>> {
         let scene = self.document.scene.as_ref().ok_or("Canvas document is unavailable")?;
-        let document = scene.document.snapshot();
-        let identity = (document.identity(), document.revision());
+        let (identity, document) = self.document.shown().ok_or("Canvas document is unavailable")?;
         let target_view = self.document.tools.navigation().viewport();
         let comparison = self.comparison_for(target_view)?;
         let document_extent = document.extent();
@@ -216,6 +217,7 @@ impl Session {
             shown,
             self.document.presented_documents[tier.index()].as_ref(),
             &document,
+            identity,
             scene.source_revision,
             comparison,
             reconstruction,
@@ -296,6 +298,7 @@ impl Session {
             reconstruction,
             resources,
             document,
+            key: identity,
             source,
             compared,
             placed,

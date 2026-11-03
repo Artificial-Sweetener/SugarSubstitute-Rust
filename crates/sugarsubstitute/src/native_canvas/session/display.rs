@@ -8,7 +8,7 @@ mod admission;
 /// Preserve the submitted frame identity independently of execution-lane replacement metadata.
 pub(super) struct Displaying {
     pub(super) target: FrameStamp,
-    pub(super) document: (u64, u64),
+    pub(super) document: work::DocumentKey,
     pub(super) source_revision: u64,
     pub(super) job: OwnedJob<work::Draw, WorkError>,
 }
@@ -23,8 +23,24 @@ pub(super) struct DisplayEvidence {
     pub(super) view: Viewport,
     pub(super) coverage: BackingCoverage,
     pub(super) projection: ViewProjection,
-    pub(super) document: (u64, u64),
+    pub(super) document: work::DocumentKey,
     pub(super) source_revision: u64,
+    /// Generation of the presentation overlay drawn into the frame; zero for none.
+    pub(super) overlay: u64,
+}
+
+#[cfg(not(feature = "native-composition"))]
+impl Session {
+    /// The standalone viewer draws no presentation overlay.
+    pub(super) const fn shown_overlay(
+        &self,
+    ) -> Option<&sugarsubstitute_canvas::PresentationOverlay> {
+        None
+    }
+    /// The standalone viewer's overlay generation is always that of no overlay.
+    pub(super) const fn shown_overlay_generation(&self) -> u64 {
+        0
+    }
 }
 
 impl Session {
@@ -225,6 +241,8 @@ impl Session {
             coverage: shown.coverage,
             document,
             source_revision,
+            overlay: self.shown_overlay().cloned(),
+            overlay_generation: self.shown_overlay_generation(),
         };
         self.admit_display(input, mode, input_at, now)
     }
@@ -285,6 +303,7 @@ impl Session {
                     projection: drawing.projection,
                     document: drawing.document,
                     source_revision: drawing.source_revision,
+                    overlay: drawing.overlay_generation,
                 };
                 match drawing.pixels {
                     work::DrawPixels::Cpu(frame) => {
@@ -299,7 +318,15 @@ impl Session {
                                     .into(),
                             );
                         }
-                        let same_sources = self.document.display_source == Some(drawing.source)
+                        // Overlay marks move independently of the projection, so a frame with
+                        // or after them uploads in full.
+                        let overlaid = drawing.overlay_generation != 0
+                            || self
+                                .document
+                                .display_evidence
+                                .is_some_and(|shown| shown.overlay != 0);
+                        let same_sources = !overlaid
+                            && self.document.display_source == Some(drawing.source)
                             && self
                                 .document
                                 .display_evidence

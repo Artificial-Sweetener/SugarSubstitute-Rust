@@ -31,6 +31,9 @@ pub struct MainCanvasInputRegion<'a> {
     /// Whether a primary drag exports the shown output instead of panning: navigation is the
     /// effective tool and the content fits the viewport on both axes, so it cannot pan.
     pub drag_out: bool,
+    /// The effective editing tool's cursor over the region, such as a brush ring or a precise
+    /// crosshair; None while navigation is effective and routing chooses its hands itself.
+    pub cursor: Option<sugarsubstitute_canvas::CursorIntent>,
 }
 
 /// The shown output prepared for one OS drag-out from the native region.

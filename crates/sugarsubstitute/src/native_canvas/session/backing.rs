@@ -108,9 +108,12 @@ pub(super) fn choose_backing(
 }
 
 impl Session {
-    /// Compare every sampled backing identity before reusing an acknowledged display.
+    /// Compare every sampled backing identity and the overlay generation before reusing an
+    /// acknowledged display.
     pub(super) fn display_selection_pending(&self, selection: BackingSelection) -> bool {
         self.expose_pending
+            || self.document.display_evidence.map_or(0, |shown| shown.overlay)
+                != self.shown_overlay_generation()
             || self.document.display_source != Some(selection.primary.source)
             || self.document.display_view != Some(selection.primary.projection.target())
             || !self.document.display_evidence.is_some_and(|evidence| {
@@ -121,11 +124,11 @@ impl Session {
 
     /// Select the best current backing without confusing partial detail with complete coverage.
     pub(super) fn select_backing(&self) -> Result<Option<BackingSelection>, Box<dyn Error>> {
-        let Some(scene) = &self.document.scene else {
+        let (Some(scene), Some((document, snapshot))) =
+            (&self.document.scene, self.document.shown())
+        else {
             return Ok(None);
         };
-        let snapshot = scene.document.snapshot();
-        let document = (snapshot.identity(), snapshot.revision());
         let target = self.document.tools.navigation().viewport();
         let extent = snapshot.extent();
         let layer = |shown: &Presented| -> Option<(Presented, FrameStamp)> {

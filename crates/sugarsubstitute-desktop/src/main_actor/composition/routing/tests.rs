@@ -14,7 +14,7 @@ const RULE: ClickRule = ClickRule { time: 1_000, bounds: [4, 4], limit: 500, dra
 
 fn routing(occlusions: &[PhysicalRect]) -> Result<Routing, crate::DesktopError> {
     let mut routing = Routing::new()?;
-    routing.publish(Some((CLIP, occlusions, false)));
+    routing.publish(Some((CLIP, occlusions, false, None)));
     Ok(routing)
 }
 
@@ -174,7 +174,12 @@ fn withdrawal_cancels_but_a_replaced_region_keeps_the_captured_gesture() -> Test
     let mut routing = routing(&[])?;
     routing.route(press(Button::Primary, [50, 40]));
     drain(&mut routing);
-    routing.publish(Some((CLIP, &[PhysicalRect { x: 40, y: 30, width: 20, height: 20 }], false)));
+    routing.publish(Some((
+        CLIP,
+        &[PhysicalRect { x: 40, y: 30, width: 20, height: 20 }],
+        false,
+        None,
+    )));
     assert_eq!(routing.cursor(), Some(CursorIntent::ClosedHand));
     assert!(routing.route(moved([52, 41], true)));
     assert_eq!(
@@ -194,9 +199,14 @@ fn a_new_occlusion_under_the_pointer_restores_the_browser_cursor() -> TestResult
     let mut routing = routing(&[])?;
     routing.route(moved([15, 25], false));
     assert_eq!(routing.cursor(), Some(CursorIntent::OpenHand));
-    routing.publish(Some((CLIP, &[MENU], false)));
+    routing.publish(Some((CLIP, &[MENU], false, None)));
     assert_eq!(routing.cursor(), None);
-    routing.publish(Some((CLIP, &[PhysicalRect { x: 0, y: 0, width: 1, height: 1 }; 65], false)));
+    routing.publish(Some((
+        CLIP,
+        &[PhysicalRect { x: 0, y: 0, width: 1, height: 1 }; 65],
+        false,
+        None,
+    )));
     assert_eq!(routing.cursor(), None, "an oversized occlusion list withdraws routing");
     assert!(routing.route(wheel([80, 60], 120)));
     Ok(())
@@ -331,7 +341,7 @@ fn interruption_cancels_a_native_drag_and_releases_a_web_gesture_hold() -> TestR
 #[test]
 fn a_fitting_primary_drag_requests_drag_out_once_past_the_threshold() -> TestResult {
     let mut routing = Routing::new()?;
-    routing.publish(Some((CLIP, &[], true)));
+    routing.publish(Some((CLIP, &[], true, None)));
     assert!(routing.route(moved([50, 40], false)));
     assert_eq!(routing.cursor(), Some(CursorIntent::Arrow));
     assert!(routing.route(press(Button::Primary, [50, 40])));
@@ -361,7 +371,7 @@ fn a_pannable_or_middle_drag_keeps_panning_without_drag_out() -> TestResult {
         [pointer([50.0, 40.0]), button(MainCanvasButton::Primary, true), pointer([80.0, 60.0])]
     );
     let mut fitting = Routing::new()?;
-    fitting.publish(Some((CLIP, &[], true)));
+    fitting.publish(Some((CLIP, &[], true, None)));
     assert!(fitting.route(press(Button::Middle, [50, 40])));
     assert!(fitting.route(moved([80, 60], true)));
     assert_eq!(
@@ -374,13 +384,13 @@ fn a_pannable_or_middle_drag_keeps_panning_without_drag_out() -> TestResult {
 #[test]
 fn losing_drag_out_or_the_region_mid_press_never_requests_it() -> TestResult {
     let mut routing = Routing::new()?;
-    routing.publish(Some((CLIP, &[], true)));
+    routing.publish(Some((CLIP, &[], true, None)));
     assert!(routing.route(press(Button::Primary, [50, 40])));
-    routing.publish(Some((CLIP, &[], false)));
+    routing.publish(Some((CLIP, &[], false, None)));
     assert!(routing.route(moved([80, 60], true)));
     assert!(!drain(&mut routing).contains(&DragOut));
     assert_eq!(routing.cursor(), Some(CursorIntent::ClosedHand));
-    routing.publish(Some((CLIP, &[], true)));
+    routing.publish(Some((CLIP, &[], true, None)));
     routing.publish(None);
     assert!(routing.route(moved([90, 60], true)));
     assert_eq!(drain(&mut routing), [Cancel]);
@@ -473,7 +483,7 @@ fn pen_contacts_outside_the_region_and_barrel_presses_stay_with_webview2() -> Te
 #[test]
 fn a_pen_contact_pans_instead_of_requesting_drag_out() -> TestResult {
     let mut routing = Routing::new()?;
-    routing.publish(Some((CLIP, &[], true)));
+    routing.publish(Some((CLIP, &[], true, None)));
     let contact = pen([50, 40], 700, false);
     assert!(!routing.route_pen(Message::Press {
         button: Button::Primary,

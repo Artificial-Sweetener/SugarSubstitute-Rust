@@ -39,7 +39,7 @@ fn shown(
             } else {
                 Filter::Lanczos3
             }),
-            document: (1, 1),
+            document: (1, 1, 0),
             source_revision: 7,
         },
         FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(generation)? },

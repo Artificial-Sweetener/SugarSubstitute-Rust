@@ -171,7 +171,7 @@ fn fractional_pan_repairs_finished_detail_on_the_retained_grid_until_release()
         view: retained.viewport(),
         sampling_scale: retained.viewport().zoom(),
         reconstruction: finished,
-        document: (1, 1),
+        document: (1, 1, 0),
         source_revision: 0,
         comparison: None,
     });
@@ -196,7 +196,7 @@ fn fractional_pan_repairs_finished_detail_on_the_retained_grid_until_release()
     ))))?;
     assert_eq!(session.reconstruction()?, finished);
     let actual = session.document.tools.navigation().viewport();
-    let repair_view = session.detail_view(actual, (1, 1), 0, finished)?;
+    let repair_view = session.detail_view(actual, (1, 1, 0), 0, finished)?;
     assert!(repair_view.shares_sampling_grid(retained.viewport()));
     assert_eq!(session.document.tools.navigation().viewport(), actual);
     let repair = coverage::detail(repair_view)?.viewport().repair_from(retained.viewport())?;
@@ -208,7 +208,7 @@ fn fractional_pan_repairs_finished_detail_on_the_retained_grid_until_release()
         modifiers: ToolModifiers::NONE,
     }))?;
     assert_eq!(session.reconstruction()?, finished);
-    assert_eq!(session.detail_view(actual, (1, 1), 0, finished)?, actual);
+    assert_eq!(session.detail_view(actual, (1, 1, 0), 0, finished)?, actual);
     assert!(!actual.shares_sampling_grid(retained.viewport()));
     Ok(())
 }
@@ -228,7 +228,7 @@ fn pan_detail_grid_requires_the_same_document_source_and_finished_quality()
         view: retained.viewport(),
         sampling_scale: retained.viewport().zoom(),
         reconstruction: finished,
-        document: (1, 1),
+        document: (1, 1, 0),
         source_revision: 7,
         comparison: None,
     });
@@ -244,13 +244,15 @@ fn pan_detail_grid_requires_the_same_document_source_and_finished_quality()
     let actual = session.document.tools.navigation().viewport();
     assert!(!actual.shares_sampling_grid(retained.viewport()));
     assert!(
-        session.detail_view(actual, (1, 1), 7, finished)?.shares_sampling_grid(retained.viewport())
+        session
+            .detail_view(actual, (1, 1, 0), 7, finished)?
+            .shares_sampling_grid(retained.viewport())
     );
     for (document, source, quality) in [
-        ((2, 1), 7, finished),
-        ((1, 2), 7, finished),
-        ((1, 1), 8, finished),
-        ((1, 1), 7, Reconstruction::Preview),
+        ((2, 1, 0), 7, finished),
+        ((1, 2, 0), 7, finished),
+        ((1, 1, 0), 8, finished),
+        ((1, 1, 0), 7, Reconstruction::Preview),
     ] {
         assert_eq!(session.detail_view(actual, document, source, quality)?, actual);
     }
@@ -282,7 +284,7 @@ fn finished_reconstruction_threshold_does_not_turn_nearest_into_a_preview_loop()
         view: retained.viewport(),
         sampling_scale: retained.viewport().zoom(),
         reconstruction: finished,
-        document: (1, 1),
+        document: (1, 1, 0),
         source_revision: 0,
         comparison: None,
     });

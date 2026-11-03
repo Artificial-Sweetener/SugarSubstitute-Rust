@@ -58,7 +58,7 @@ pub(super) fn step(
         display_buffers: input.display_buffers.take(),
         pixels: Pixels::Cpu(pixels),
         view: input.view,
-        document: (input.document.identity(), input.document.revision()),
+        document: input.key,
         elapsed: started.elapsed(),
         stats: renderer.stats(),
         source_revision: input.source_revision,

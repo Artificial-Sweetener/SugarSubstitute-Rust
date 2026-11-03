@@ -28,7 +28,7 @@ pub(crate) struct AcceptedCamera {
 /// Identical destinations can reuse already accepted current evidence without new frame allocation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CameraIntent {
-    document: (u64, u64),
+    document: work::DocumentKey,
     source_revision: u64,
     target: Viewport,
     mode: ZoomMode,
@@ -114,17 +114,15 @@ impl Session {
         {
             return CameraCommandResult::Denied;
         }
-        let Some(scene) = self
-            .document
-            .scene
-            .as_ref()
-            .filter(|scene| scene.source.is_some() && scene.source_revision == self.selection)
-        else {
+        let selected =
+            self.document.scene.as_ref().is_some_and(|scene| {
+                scene.source.is_some() && scene.source_revision == self.selection
+            });
+        let Some(document) = self.document.shown_key().filter(|_| selected) else {
             return CameraCommandResult::NoContent;
         };
-        let snapshot = scene.document.snapshot();
         CameraCommandResult::Accepted(CameraIntent {
-            document: (snapshot.identity(), snapshot.revision()),
+            document,
             source_revision: self.selection,
             target: self.document.tools.navigation().target_viewport(),
             mode: self.document.tools.navigation().zoom_mode(),
@@ -161,9 +159,9 @@ impl Session {
             return None;
         }
         let evidence = self.document.display_evidence?;
-        let snapshot = scene.document.snapshot();
+        let (key, snapshot) = self.document.shown()?;
         if self.document.native_presented != Some(evidence.target)
-            || evidence.document != (snapshot.identity(), snapshot.revision())
+            || evidence.document != key
             || evidence.source_revision != self.selection
         {
             return None;
@@ -182,11 +180,10 @@ impl Session {
     /// An unchanged command can settle against the existing accepted frame without allocation.
     pub(crate) fn settled_camera(&self, intent: CameraIntent) -> CameraSettlement {
         let current = self.document.scene.as_ref().is_some_and(|scene| {
-            let snapshot = scene.document.snapshot();
             scene.source.is_some()
                 && scene.source_revision == self.selection
                 && intent.source_revision == self.selection
-                && intent.document == (snapshot.identity(), snapshot.revision())
+                && self.document.shown_key() == Some(intent.document)
         });
         let navigation = self.document.tools.navigation();
         if self.closing

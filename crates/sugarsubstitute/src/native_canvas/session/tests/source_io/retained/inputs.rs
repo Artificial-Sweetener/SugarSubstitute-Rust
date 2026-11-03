@@ -18,6 +18,7 @@ use std::{
 };
 use sugarsubstitute_canvas::{DocumentSnapshot, LayerContent, LayerId, MaskAppearance};
 
+mod editing;
 mod edits;
 mod masks;
 mod route;
@@ -120,6 +121,7 @@ impl Fixture {
             || session.displaying.is_some()
             || session.retirement.is_some()
             || session.acquisition_retirement.is_some()
+            || session.editing.in_flight()
     }
 
     /// Deliver completions until input work, route changes, frames and disposal are idle.

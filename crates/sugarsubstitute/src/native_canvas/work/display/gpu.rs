@@ -14,15 +14,18 @@ struct VerificationSources<'a> {
 }
 
 /// Never wait for the image-operation renderer lock while drawing a retained native image.
+/// Overlay pixels are drawn over the projection, which then always takes the projected path;
+/// proof-only verification compares canonical sampling and so skips overlaid frames.
 pub(super) fn prepare(
     resources: &Resources,
     frame: &GpuFrame,
     reference: Option<&CpuSurface>,
     underlay: Option<&GpuUnderlay>,
     view: ViewProjection,
+    overlay: &[OverlayPixel],
     context: &JobContext,
 ) -> Result<Option<NativeFrame>, WorkError> {
-    let samples = if view.source() != view.target() || underlay.is_some() {
+    let samples = if view.source() != view.target() || underlay.is_some() || !overlay.is_empty() {
         Some(ProjectionSamples::new(view, context)?)
     } else {
         None
@@ -30,7 +33,7 @@ pub(super) fn prepare(
     let underlay_samples =
         underlay.map(|underlay| ProjectionSamples::new(underlay.view, context)).transpose()?;
     let matte = Pixel::linear(0.018, 0.018, 0.018, 1.0)?;
-    let mut verification = if resources.verify_native {
+    let mut verification = if resources.verify_native && overlay.is_empty() {
         let native = match retry_gpu_readback(
             || frame.image().readback_workspace(context),
             || reclaim_gpu_cache(resources),
@@ -65,6 +68,7 @@ pub(super) fn prepare(
                 samples: samples.as_ref(),
                 underlay: underlay.zip(underlay_samples.as_ref()),
                 matte,
+                overlay,
             };
             return target
                 .draw(&sources, context, || reclaim_gpu_cache(resources))
@@ -78,16 +82,16 @@ pub(super) fn prepare(
                         samples.gpu_mapping(matte)?,
                         underlay.frame.image(),
                         underlay_samples.gpu_mapping(matte)?,
-                        &[],
+                        overlay,
                         context,
                     ),
                 (Some(samples), _, _) => window.prepare_projected(
                     frame.image(),
                     samples.gpu_mapping(matte)?,
-                    &[],
+                    overlay,
                     context,
                 ),
-                (None, _, _) => window.prepare(frame.image(), &[], context),
+                (None, _, _) => window.prepare(frame.image(), overlay, context),
             };
             match prepared {
                 Err(cause) if cause.is_memory_pressure() => match reclaim_gpu_cache(resources)? {

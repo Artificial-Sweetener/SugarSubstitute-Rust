@@ -11,7 +11,7 @@ fn pointer_demand_during_native_presentation_survives_the_earlier_receipt()
     let view = fixture.session.document.tools.navigation().viewport();
     let document =
         fixture.session.document.scene.as_ref().ok_or("Missing document")?.document.snapshot();
-    let identity = (document.identity(), document.revision());
+    let identity = (document.identity(), document.revision(), 0);
     assert!(!fixture.session.expose_pending);
     for _ in 0..100 {
         fixture.session.expose();
@@ -31,7 +31,7 @@ fn pointer_demand_during_native_presentation_survives_the_earlier_receipt()
     assert!(fixture.session.expose_pending, "Earlier queue acceptance consumed newer activity");
     let actual =
         fixture.session.document.scene.as_ref().ok_or("Missing document")?.document.snapshot();
-    assert_eq!((actual.identity(), actual.revision()), identity);
+    assert_eq!((actual.identity(), actual.revision(), 0), identity);
     Ok(())
 }
 

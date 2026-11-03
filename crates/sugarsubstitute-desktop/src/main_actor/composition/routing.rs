@@ -13,6 +13,8 @@
 //! drag threshold ends the native gesture with a drag-out request instead of a pan; pen presses
 //! never start a drag-out, because the OS drag loop follows only the mouse.
 //! Without a region every message belongs to WebView2 alone.
+//! While a native gesture is held, a modifier change without pointer motion re-delivers the
+//! latest sample with the new modifiers, so shape constraints follow Shift and Alt at once.
 //!
 //! This owner performs no native calls; the Win32 adapter samples message facts for it and
 //! drains the bounded gesture queue on the main loop without waiting on the UI thread.
@@ -22,7 +24,7 @@ use crate::canvas::{
     click::{Click, double_click},
     placement::PhysicalRect,
 };
-use sugarsubstitute_canvas::{CursorIntent, PointerKind, PointerSample};
+use sugarsubstitute_canvas::{CursorIntent, PointerKind, PointerSample, ToolModifiers};
 
 /// Routed gestures retained between UI-thread messages and the next main-loop drain.
 pub(super) const QUEUE_CAPACITY: usize = 64;
@@ -85,11 +87,18 @@ pub(super) enum Message {
     Other,
 }
 
+/// One published input region: its clip, its occlusions, whether a primary drag exports the
+/// output, and the effective editing tool's cursor, `None` while navigation chooses its hands.
+pub(super) type Published<'a> = (PhysicalRect, &'a [PhysicalRect], bool, Option<CursorIntent>);
+
 /// Route state confined to the composed window's UI thread.
 pub(super) struct Routing {
     clip: Option<PhysicalRect>,
     occlusions: Vec<PhysicalRect>,
     drag_out: bool,
+    tool_cursor: Option<CursorIntent>,
+    /// The latest sample routed to the canvas, re-delivered when only its modifiers change.
+    sample: Option<PointerSample>,
     /// Primary press point and drag threshold of a gesture that may become a drag-out.
     origin: Option<([i32; 2], [i32; 2])>,
     native: Option<MainCanvasButton>,
@@ -116,6 +125,8 @@ impl Routing {
             clip: None,
             occlusions,
             drag_out: false,
+            tool_cursor: None,
+            sample: None,
             origin: None,
             native: None,
             web: false,
@@ -128,14 +139,18 @@ impl Routing {
         })
     }
 
-    /// Install the current region and whether it offers drag-out, or withdraw it with `None`.
+    /// Install the current region, whether it offers drag-out and the editing tool's cursor, or
+    /// withdraw it with `None`.
     ///
     /// A replaced region keeps a captured native gesture; withdrawal cancels it. A region with
     /// more than [`MAX_INPUT_OCCLUSIONS`] occlusions is invalid and withdraws routing.
-    pub(super) fn publish(&mut self, region: Option<(PhysicalRect, &[PhysicalRect], bool)>) {
+    pub(super) fn publish(&mut self, region: Option<Published<'_>>) {
         match region {
-            Some((clip, occlusions, drag_out)) if occlusions.len() <= MAX_INPUT_OCCLUSIONS => {
+            Some((clip, occlusions, drag_out, tool_cursor))
+                if occlusions.len() <= MAX_INPUT_OCCLUSIONS =>
+            {
                 self.drag_out = drag_out;
+                self.tool_cursor = tool_cursor;
                 if !drag_out {
                     self.origin = None;
                 }
@@ -150,6 +165,7 @@ impl Routing {
                     self.occlusions.clear();
                 }
                 self.drag_out = false;
+                self.tool_cursor = None;
                 self.cancel();
             }
         }
@@ -276,12 +292,26 @@ impl Routing {
         self.web = false;
     }
 
+    /// Re-deliver the latest canvas sample when the held modifiers changed during a native
+    /// gesture without pointer motion; `held` is the keyboard's current modifier state.
+    pub(super) fn refresh_modifiers(&mut self, held: ToolModifiers) {
+        if let Some(sample) = self.sample.filter(|sample| sample.modifiers != held)
+            && self.native.is_some()
+        {
+            self.push(MainCanvasGesture::Pointer(PointerSample { modifiers: held, ..sample }));
+        }
+    }
+
     /// Native cursor that wins over the browser's: the arrow over or during a gesture in a
-    /// region that offers drag-out, closed hand while a native gesture holds capture, open
-    /// hand over the region, otherwise none so WebView2's cursor applies.
+    /// region that offers drag-out, the editing tool's cursor over the region or during its
+    /// gesture, closed hand while a navigation gesture holds capture, open hand over the region,
+    /// otherwise none so WebView2's cursor applies.
     pub(super) const fn cursor(&self) -> Option<CursorIntent> {
-        if self.drag_out && (self.native.is_some() || self.hover) {
+        let engaged = self.native.is_some() || self.hover;
+        if self.drag_out && engaged {
             Some(CursorIntent::Arrow)
+        } else if self.tool_cursor.is_some() && engaged {
+            self.tool_cursor
         } else if self.native.is_some() {
             Some(CursorIntent::ClosedHand)
         } else if self.hover {
@@ -350,6 +380,9 @@ impl Routing {
 
     /// Coalesce consecutive moves; on overflow, replace the backlog with one cancellation.
     fn push(&mut self, gesture: MainCanvasGesture) {
+        if let MainCanvasGesture::Pointer(sample) = gesture {
+            self.sample = Some(sample);
+        }
         if let MainCanvasGesture::Pointer(_) = gesture
             && self.count != 0
         {
@@ -392,3 +425,7 @@ fn pixel(sample: PointerSample) -> [i32; 2] {
 #[cfg(test)]
 #[path = "routing/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "routing/editing_tests.rs"]
+mod editing_tests;

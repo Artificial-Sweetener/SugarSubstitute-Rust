@@ -10,15 +10,16 @@ impl Session {
     /// or failure handling. Camera changes do not retire work for the same authored source.
     pub(super) fn admitted_source_is_current(
         &self,
-        document: (u64, u64),
+        document: work::DocumentKey,
         source_revision: u64,
     ) -> bool {
         source_revision == self.selection
-            && self.document.scene.as_ref().is_some_and(|scene| {
-                let snapshot = scene.document.snapshot();
-                document == (snapshot.identity(), snapshot.revision())
-                    && source_revision == scene.source_revision
-            })
+            && self.document.shown_key() == Some(document)
+            && self
+                .document
+                .scene
+                .as_ref()
+                .is_some_and(|scene| source_revision == scene.source_revision)
     }
     /// Retain actual initialization results or transfer their complete custody to owned cleanup.
     pub(super) fn consume_initialization(&mut self) -> Result<(), Box<dyn Error>> {
@@ -245,9 +246,10 @@ impl Session {
                 let current =
                     if self.closing || self.pending_open.is_some() || self.loading.is_some() {
                         false
-                    } else if let Some(scene) = &self.document.scene {
-                        let snapshot = scene.document.snapshot();
-                        packet.document == (snapshot.identity(), snapshot.revision())
+                    } else if let (Some(scene), Some((key, snapshot))) =
+                        (&self.document.scene, self.document.shown())
+                    {
+                        packet.document == key
                             && packet.source_revision == scene.source_revision
                             && packet.source_revision == self.selection
                             && completed_coverage_is_current(
@@ -391,7 +393,7 @@ impl Session {
                     BackingTier::Navigation => self.document.navigation_presented = Some(shown),
                 }
                 self.document.presented_documents[packet.tier.index()] =
-                    Some(rendering.snapshot.clone());
+                    Some((rendering.document, rendering.snapshot.clone()));
                 self.last_prepare = packet.elapsed;
                 self.last_stats = packet.stats;
                 self.last_surface_work = work;

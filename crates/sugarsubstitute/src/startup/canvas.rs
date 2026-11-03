@@ -260,7 +260,13 @@ impl EmbeddedCanvas {
         storage: sugarsubstitute_desktop::CanvasNativeRequestStorage,
     ) -> Result<(), Box<dyn Error>> {
         self.admit_composition_gpu();
-        self.surface.native(identity, request, claim, storage, self.session.as_mut())
+        let edit = matches!(
+            request,
+            sugarsubstitute_contracts::canvas_native::CanvasNativeRequest::Edit(_)
+        );
+        self.surface.native(identity, request, claim, storage, self.session.as_mut())?;
+        // An edit changes the document or tools now; advance so its frame is admitted at once.
+        if edit { self.poll() } else { Ok(()) }
     }
 
     /// Only composition-hosted main lifetimes deliver canvas messages here, so the first one
@@ -420,10 +426,8 @@ impl EmbeddedCanvas {
         #[cfg(feature = "native-composition")]
         {
             let preview = self.surface.preview_deadline(self.clock.now());
-            match (native, preview) {
-                (Some(a), Some(b)) => Some(a.min(b)),
-                (a, b) => a.or(b),
-            }
+            let editing = self.surface.editing_deadline(self.clock.now());
+            [native, preview, editing].into_iter().flatten().min()
         }
         #[cfg(not(feature = "native-composition"))]
         native

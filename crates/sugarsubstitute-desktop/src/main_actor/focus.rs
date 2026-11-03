@@ -129,6 +129,30 @@ impl Focus {
         }
     }
 
+    /// Give the page's focus to its document body after a press the native canvas captured, as
+    /// a press on the canvas viewport element would, so the editing UI's shortcuts apply rather
+    /// than a text field the person was typing in.
+    ///
+    /// Failure is logged rather than escalated: focus is advisory and the next press retries.
+    #[cfg(feature = "native-composition")]
+    pub(in crate::main_actor) fn focus_page(&self) {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2ExecuteScriptCompletedHandler as Completed;
+        // SAFETY: The retained controller belongs to this UI thread; the script is a constant
+        // and its completion is not observed.
+        let moved = unsafe {
+            self.controller.CoreWebView2().and_then(|browser| {
+                browser.ExecuteScript(
+                    windows::core::w!("document.activeElement?.blur?.()"),
+                    None::<&Completed>,
+                )
+            })
+        };
+        if let Err(cause) = moved {
+            tracing::warn!(operation = "focus_composed_page", cause = %cause,
+                "Page focus stays where it was before the canvas press");
+        }
+    }
+
     /// Remove every registration before the controller is released; failures remain retryable.
     pub(in crate::main_actor) fn retire(&self) -> Result<(), DesktopError> {
         let controller = &self.controller;

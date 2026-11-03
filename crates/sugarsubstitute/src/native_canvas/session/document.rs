@@ -36,8 +36,13 @@ pub(super) struct DocumentState {
     pub(super) presented: Option<Presented>,
     pub(super) fallback_presented: Option<Presented>,
     pub(super) navigation_presented: Option<Presented>,
-    /// The document revision each tier's presented backing shows, by tier.
-    pub(super) presented_documents: [Option<DocumentSnapshot>; 3],
+    /// The content each tier's presented backing shows, by tier.
+    pub(super) presented_documents: [Option<(work::DocumentKey, DocumentSnapshot)>; 3],
+    /// The staged gesture preview frames show instead of the published revision.
+    pub(super) staged: Option<Staged>,
+    /// The latest staged preview generation; each latched preview step takes a new one.
+    #[cfg(feature = "native-composition")]
+    pub(super) staged_generation: u64,
     pub(super) rebuilt: bool,
     /// CPU-prepared previews keep CPU backings and display even in a GPU session.
     pub(super) cpu_only: bool,
@@ -49,7 +54,38 @@ pub(super) struct DocumentState {
     pub(super) input: Option<inputs::InputDocumentId>,
 }
 
+/// A staged gesture preview latched for display. Frames keep showing it until no frame work
+/// is in flight, so live strokes publish frames instead of discarding stale ones.
+pub(super) struct Staged {
+    /// The published revision the preview builds on.
+    pub(super) base: (u64, u64),
+    /// The edit session and stage the preview shows.
+    #[cfg(feature = "native-composition")]
+    pub(super) step: (u64, u64),
+    /// The frame identity of this preview.
+    pub(super) key: work::DocumentKey,
+    /// The staged content.
+    pub(super) snapshot: DocumentSnapshot,
+}
+
 impl DocumentState {
+    /// The content frames show, with its key: the latched gesture preview while it still builds
+    /// on the published revision, otherwise the published revision.
+    pub(super) fn shown(&self) -> Option<(work::DocumentKey, DocumentSnapshot)> {
+        let published = self.scene.as_ref()?.document.snapshot();
+        match &self.staged {
+            Some(staged) if staged.base == (published.identity(), published.revision()) => {
+                Some((staged.key, staged.snapshot.clone()))
+            }
+            _ => Some(((published.identity(), published.revision(), 0), published)),
+        }
+    }
+
+    /// The key of the content frames show; see [`Self::shown`].
+    pub(super) fn shown_key(&self) -> Option<work::DocumentKey> {
+        self.shown().map(|(key, _)| key)
+    }
+
     /// Start an empty document at the existing physical viewport without allocating pixels.
     pub(super) fn new(view: Viewport) -> Self {
         Self {
@@ -79,6 +115,9 @@ impl DocumentState {
             fallback_presented: None,
             navigation_presented: None,
             presented_documents: [None, None, None],
+            staged: None,
+            #[cfg(feature = "native-composition")]
+            staged_generation: 0,
             rebuilt: false,
             cpu_only: false,
             #[cfg(feature = "native-composition")]

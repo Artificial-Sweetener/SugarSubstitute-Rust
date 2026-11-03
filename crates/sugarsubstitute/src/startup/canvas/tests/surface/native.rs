@@ -52,7 +52,7 @@ fn every_family_answers_with_its_own_reply_and_credit_before_the_canvas_starts()
         json!({"kind":"failure", "status":"unavailable", "message":"The canvas is not ready"}),
         json!({"kind":"context", "supported":true, "resize":false, "selectionSupported":true,
             "document":null, "selection":null}),
-        json!({"kind":"failure", "status":"unsupported", "message":""}),
+        json!({"kind":"failure", "status":"unavailable", "message":""}),
         json!({"kind":"failure", "status":"unavailable", "message":"The canvas is not ready"}),
     ];
     for ((request, reply_type), result) in families(&panel)?.into_iter().zip(results) {

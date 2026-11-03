@@ -22,7 +22,7 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
         view,
         sampling_scale: view.zoom(),
         reconstruction: Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3),
-        document: (1, 1),
+        document: (1, 1, 0),
         source_revision: 1,
     };
     let layer = |source| backing::SelectedLayer { shown, source, projection };
@@ -44,8 +44,9 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
         view,
         coverage,
         projection,
-        document: (1, 1),
+        document: (1, 1, 0),
         source_revision: 1,
+        overlay: 0,
     });
     session.pacing.submitted(
         target,
@@ -84,7 +85,7 @@ fn partial_detail_selects_shared_composite_contract_before_cpu_or_gpu_projection
         view: coverage.viewport(),
         sampling_scale: coverage.viewport().zoom(),
         reconstruction,
-        document: (1, 1),
+        document: (1, 1, 0),
         source_revision: 7,
     };
 
@@ -136,8 +137,9 @@ fn composite_evidence_requires_complete_underlay_and_matching_output_camera()
         view: target_view,
         coverage: detail,
         projection: primary,
-        document: (1, 1),
+        document: (1, 1, 0),
         source_revision: 7,
+        overlay: 0,
     };
     assert!(evidence.proves_complete(document)?);
     assert!(!DisplayEvidence { underlay: None, ..evidence }.proves_complete(document)?);

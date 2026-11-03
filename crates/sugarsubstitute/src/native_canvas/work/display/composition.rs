@@ -16,6 +16,8 @@ pub(super) struct Sources<'a> {
     pub(super) samples: Option<&'a ProjectionSamples>,
     pub(super) underlay: Option<(&'a GpuUnderlay, &'a ProjectionSamples)>,
     pub(super) matte: Pixel,
+    /// Presentation marks drawn over the projection.
+    pub(super) overlay: &'a [OverlayPixel],
 }
 
 /// One exported composition texture and its Vulkan import.
@@ -95,8 +97,8 @@ impl CompositionTarget {
                 &mut self.surface,
                 &slot.target,
                 sources.frame.image(),
-                primary,
-                underlay,
+                (primary, underlay),
+                sources.overlay,
                 context,
             ) {
                 Err(cause) if cause.is_memory_pressure() => match reclaim()? {
@@ -142,15 +144,15 @@ fn render(
     surface: &mut SharedSurface,
     target: &SharedTarget,
     image: &DisplayImage,
-    primary: Option<DisplayMapping<'_>>,
-    underlay: Option<(&DisplayImage, DisplayMapping<'_>)>,
+    mappings: (Option<DisplayMapping<'_>>, Option<(&DisplayImage, DisplayMapping<'_>)>),
+    overlay: &[OverlayPixel],
     context: &JobContext,
 ) -> Result<(), GpuError> {
-    match (primary, underlay) {
+    match mappings {
         (Some(mapping), Some(underlay)) => {
-            surface.draw_composited(target, image, mapping, underlay, &[], context)
+            surface.draw_composited(target, image, mapping, underlay, overlay, context)
         }
-        (Some(mapping), None) => surface.draw_projected(target, image, mapping, &[], context),
-        (None, _) => surface.draw(target, image, &[], context),
+        (Some(mapping), None) => surface.draw_projected(target, image, mapping, overlay, context),
+        (None, _) => surface.draw(target, image, overlay, context),
     }
 }

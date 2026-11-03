@@ -165,6 +165,16 @@ impl InputDocuments {
             || self.running.as_ref().is_some_and(|running| running.surface == identity)
     }
 
+    /// The parked input document whose snapshots carry `identity`.
+    pub(super) fn parked_mut(&mut self, identity: u64) -> Option<&mut document::DocumentState> {
+        self.workflows
+            .iter_mut()
+            .flat_map(|(_, surfaces)| surfaces)
+            .find(|surface| surface.identity.get() == identity)?
+            .document
+            .as_deref_mut()
+    }
+
     /// Return an input document to its surface, or retire it when its surface is gone.
     pub(super) fn stow(&mut self, document: Box<document::DocumentState>) {
         let identity = document.input;

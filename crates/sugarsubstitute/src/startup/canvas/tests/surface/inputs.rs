@@ -280,7 +280,7 @@ fn workflow_sync_maps_every_key_to_a_document_and_layer_after_its_work_settles()
     assert_eq!(
         context["context"]["canvas"]["capabilities"],
         json!({"displayOutput":true, "insertImageLayer":false, "positionImageLayer":false,
-            "geometry":true, "editing":false, "workflowSurfaces":true})
+            "geometry":true, "editing":true, "workflowSurfaces":true})
     );
     assert_eq!(context["context"]["document"], Value::Null);
     let result = inputs.workflow(sync(Some("mask.png")))?;

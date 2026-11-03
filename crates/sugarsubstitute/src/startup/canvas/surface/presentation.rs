@@ -54,6 +54,7 @@ impl NativeSurface {
         if self.closed {
             return Ok(());
         }
+        self.poll_editing(session)?;
         self.publish_settled_gesture(session)?;
         if self.poll_attachment(session)? {
             return Ok(());

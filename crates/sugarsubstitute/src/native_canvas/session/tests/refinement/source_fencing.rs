@@ -71,7 +71,7 @@ fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
         observe_terminal(&mut session, &wake, &boundary)?;
         let snapshot =
             session.document.scene.as_ref().ok_or("Missing selected scene")?.document.snapshot();
-        let document = (snapshot.identity(), snapshot.revision());
+        let document = (snapshot.identity(), snapshot.revision(), 0);
         let view = Viewport::new(Extent::new(1, 1)?)?;
         let coverage = BackingCoverage::new(view, [0; 2])?;
         let target = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(2)? };
@@ -103,7 +103,11 @@ fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
                     surface: CpuSurface::from_prepared(update)?,
                 }),
                 view,
-                document: if foreign_document { (document.0 + 1, document.1) } else { document },
+                document: if foreign_document {
+                    (document.0 + 1, document.1, document.2)
+                } else {
+                    document
+                },
                 elapsed: Duration::ZERO,
                 stats: Default::default(),
                 source_revision: u64::from(!foreign_document),

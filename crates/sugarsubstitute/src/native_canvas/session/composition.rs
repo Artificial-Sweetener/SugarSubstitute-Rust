@@ -92,11 +92,11 @@ impl Session {
         } else {
             self.document.display_evidence?
         };
-        let snapshot = scene.document.snapshot();
         let surface = self.document.tools.navigation().viewport().surface();
+        // As for CPU frames, a frame of an earlier revision or gesture step stays presentable.
         if evidence.target != display.target
             || evidence.source_revision != self.selection
-            || evidence.document != (snapshot.identity(), snapshot.revision())
+            || evidence.document.0 != scene.document.snapshot().identity()
             || evidence.view.surface() != surface
             || display.frame.texture().extent() != surface
         {

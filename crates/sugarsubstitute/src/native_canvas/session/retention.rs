@@ -231,10 +231,9 @@ impl document::DocumentState {
         {
             return false;
         }
-        let snapshot = scene.document.snapshot();
-        let identity = (snapshot.identity(), snapshot.revision());
+        let identity = self.shown_key();
         let current = |shown: &Presented| {
-            shown.document == identity
+            Some(shown.document) == identity
                 && shown.source_revision == scene.source_revision
                 && shown.comparison.is_none()
         };

@@ -77,7 +77,7 @@ pub(super) fn prepare(
         display_buffers: None,
         pixels: Pixels::Gpu(GpuPacket { surface, snapshot, work }),
         view: input.view,
-        document: (input.document.identity(), input.document.revision()),
+        document: input.key,
         elapsed: started.elapsed(),
         stats: renderer.stats(),
         source_revision: input.source_revision,

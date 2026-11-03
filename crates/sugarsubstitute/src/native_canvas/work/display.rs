@@ -9,8 +9,10 @@ mod gpu;
 pub(in crate::native_canvas) use composition::{CompositionFrame, CompositionTarget};
 use std::error::Error;
 use std::sync::TryLockError;
-use sugarsubstitute_canvas::{BackingCoverage, ViewProjection};
-use sugarsubstitute_canvas_render::{CpuProjection, GpuFrame, ProjectionBuffer, ProjectionSamples};
+use sugarsubstitute_canvas::{BackingCoverage, PresentationOverlay, ViewProjection};
+use sugarsubstitute_canvas_render::{
+    CpuProjection, GpuFrame, OverlayPixel, OverlayPixels, ProjectionBuffer, ProjectionSamples,
+};
 use sugarsubstitute_image_gpu::WindowFrame;
 use sugarsubstitute_image_gpu::{DisplayReadbackWorkspace, GpuError};
 
@@ -95,8 +97,11 @@ pub(in crate::native_canvas) struct DrawInput {
     pub(in crate::native_canvas) target: FrameStamp,
     pub(in crate::native_canvas) view: ViewProjection,
     pub(in crate::native_canvas) coverage: sugarsubstitute_canvas::BackingCoverage,
-    pub(in crate::native_canvas) document: (u64, u64),
+    pub(in crate::native_canvas) document: DocumentKey,
     pub(in crate::native_canvas) source_revision: u64,
+    /// Presentation marks drawn over the projection, and the generation identifying them.
+    pub(in crate::native_canvas) overlay: Option<PresentationOverlay>,
+    pub(in crate::native_canvas) overlay_generation: u64,
 }
 /// Native consumer of retained GPU display images, fixed when the device is installed.
 pub(in crate::native_canvas) enum DisplayTarget {
@@ -129,8 +134,10 @@ pub(in crate::native_canvas) struct Draw {
     pub(in crate::native_canvas) coverage: sugarsubstitute_canvas::BackingCoverage,
     pub(in crate::native_canvas) projection: ViewProjection,
     pub(in crate::native_canvas) pixels: DrawPixels,
-    pub(in crate::native_canvas) document: (u64, u64),
+    pub(in crate::native_canvas) document: DocumentKey,
     pub(in crate::native_canvas) source_revision: u64,
+    /// Generation of the overlay drawn into these pixels; zero when none was drawn.
+    pub(in crate::native_canvas) overlay_generation: u64,
     pub(in crate::native_canvas) verified: bool,
 }
 impl DrawInput {
@@ -158,12 +165,17 @@ impl DrawInput {
         if underlay != self.underlay.map(|underlay| (underlay.source, underlay.projection)) {
             return Err(WorkError::invalid("Display underlay differs from its retained evidence"));
         }
+        let overlay = self
+            .overlay
+            .as_ref()
+            .map(|overlay| OverlayPixels::rasterize(overlay, self.view.target(), context))
+            .transpose()?;
         let (source, pixels, verified) = match &mut self.source {
             DrawSource::Cpu { surface, storage, underlay } => {
                 let buffer = storage
                     .take()
                     .ok_or_else(|| WorkError::invalid("CPU projection storage is unavailable"))?;
-                let frame = buffer.project_over(
+                let mut frame = buffer.project_over(
                     self.target,
                     surface,
                     self.view,
@@ -171,6 +183,9 @@ impl DrawInput {
                     Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
                     context,
                 )?;
+                if let Some(overlay) = &overlay {
+                    frame.paint_overlay(overlay)?;
+                }
                 (frame.source(), DrawPixels::Cpu(Box::new(frame)), true)
             }
             DrawSource::Gpu { frame, reference, underlay } => {
@@ -180,6 +195,7 @@ impl DrawInput {
                     reference.as_deref(),
                     underlay.as_ref(),
                     self.view,
+                    overlay.as_ref().map_or(&[], OverlayPixels::pixels),
                     context,
                 )?;
                 let verified = native.is_some()
@@ -203,6 +219,7 @@ impl DrawInput {
             pixels,
             document: self.document,
             source_revision: self.source_revision,
+            overlay_generation: overlay.map_or(0, |_| self.overlay_generation),
             verified,
         })
     }

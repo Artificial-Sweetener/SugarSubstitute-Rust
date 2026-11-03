@@ -211,7 +211,7 @@ fn candidate_retains_centered_fit_pixels_and_complete_identity_evidence()
                 assert_eq!(ready.drawing.view.device_at([16.0, 8.0])?, [48.0, 48.0]);
                 assert_eq!(ready.drawing.target, stamp(9, 11)?);
                 assert_eq!(ready.drawing.source, stamp(9, 10)?);
-                assert_eq!(ready.drawing.document, (7, 2));
+                assert_eq!(ready.drawing.document, (7, 2, 0));
                 assert_eq!(ready.scene.source_revision, 7);
                 assert_eq!(ready.drawing.tier, BackingTier::Fallback);
                 assert_eq!(ready.reconstruction, Reconstruction::Finished(Filter::Lanczos3));

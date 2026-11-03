@@ -112,7 +112,7 @@ fn pending_draw_outcome(failure: bool, foreign_payload: bool) -> Result<Fixture,
     let JobOutcome::Success(document) = wake.completion(&client, &mut setup)?.outcome else {
         return Err("Draw fixture document failed".into());
     };
-    let identity = (document.snapshot().identity(), document.snapshot().revision());
+    let identity = (document.snapshot().identity(), document.snapshot().revision(), 0);
     session.document.scene = Some(Scene {
         document,
         source: None,
@@ -138,8 +138,9 @@ fn pending_draw_outcome(failure: bool, foreign_payload: bool) -> Result<Fixture,
         coverage,
         projection,
         pixels: work::DrawPixels::Gpu(None),
-        document: if foreign_payload { (identity.0 + 1, identity.1) } else { identity },
+        document: if foreign_payload { (identity.0 + 1, identity.1, identity.2) } else { identity },
         source_revision: 7,
+        overlay_generation: 0,
         verified: true,
     });
     let job = client.submit_blocking_owned_input(
@@ -237,7 +238,7 @@ fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dy
         },
     )?;
     let document_identity =
-        (products.document.snapshot().identity(), products.document.snapshot().revision());
+        (products.document.snapshot().identity(), products.document.snapshot().revision(), 0);
     session.document.scene = Some(Scene {
         document: products.document,
         source: None,
@@ -264,6 +265,7 @@ fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dy
         projection: ViewProjection::new(source_view, projected_view)?,
         document: document_identity,
         source_revision,
+        overlay: 0,
     });
     session.pacing.submitted(
         target,

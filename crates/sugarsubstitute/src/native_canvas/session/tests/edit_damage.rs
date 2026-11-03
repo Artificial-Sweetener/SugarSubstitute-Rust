@@ -21,7 +21,7 @@ fn mask(coverage: Coverage) -> Result<Layer, Box<dyn Error>> {
 }
 
 fn shown(
-    document: (u64, u64),
+    document: (u64, u64, u64),
     view: Viewport,
     reconstruction: Reconstruction,
 ) -> Result<Presented, Box<dyn Error>> {
@@ -56,8 +56,12 @@ fn an_edit_repaints_its_mapped_region_and_other_documents_repaint_everything()
     let mut view = Viewport::new(Extent::new(1024, 512)?)?;
     view.zoom_at(0.5, [0.0; 2])?;
     let finished = Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3);
-    let earlier = shown((before.identity(), before.revision()), view, finished)?;
-    let reuse = frame_reuse(Some(&earlier), Some(&before), &after, 0, None, finished, view)?;
+    let (before_key, after_key) =
+        ((before.identity(), before.revision(), 0), (after.identity(), after.revision(), 0));
+    let earlier = shown(before_key, view, finished)?;
+    let kept = (before_key, before.clone());
+    let reuse =
+        frame_reuse(Some(&earlier), Some(&kept), &after, after_key, 0, None, finished, view)?;
     assert!(reuse.compatible);
     assert!(reuse.damage.blit().is_none());
     assert_eq!(
@@ -66,16 +70,26 @@ fn an_edit_repaints_its_mapped_region_and_other_documents_repaint_everything()
     );
 
     // Without the shown revision's snapshot, or for another document, everything is prepared.
-    let reuse = frame_reuse(Some(&earlier), None, &after, 0, None, finished, view)?;
+    let reuse = frame_reuse(Some(&earlier), None, &after, after_key, 0, None, finished, view)?;
     assert!(!reuse.compatible);
     assert_eq!(reuse.damage.dirty().pixels(), view.surface().pixels());
-    let other = shown((before.identity() + 1, before.revision()), view, finished)?;
-    let reuse = frame_reuse(Some(&other), Some(&before), &after, 0, None, finished, view)?;
+    let other = shown((before.identity() + 1, before.revision(), 0), view, finished)?;
+    let reuse = frame_reuse(Some(&other), Some(&kept), &after, after_key, 0, None, finished, view)?;
     assert!(!reuse.compatible);
 
     // The same revision keeps everything.
-    let current = shown((after.identity(), after.revision()), view, finished)?;
-    let reuse = frame_reuse(Some(&current), Some(&after), &after, 0, None, finished, view)?;
+    let current = shown(after_key, view, finished)?;
+    let shown_after = (after_key, after.clone());
+    let reuse = frame_reuse(
+        Some(&current),
+        Some(&shown_after),
+        &after,
+        after_key,
+        0,
+        None,
+        finished,
+        view,
+    )?;
     assert!(reuse.compatible && reuse.damage.dirty().is_empty());
     Ok(())
 }

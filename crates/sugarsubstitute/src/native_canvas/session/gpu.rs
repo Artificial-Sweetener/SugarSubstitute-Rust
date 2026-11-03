@@ -112,11 +112,11 @@ impl Session {
         let Some(evidence) = self.document.display_evidence else {
             return Ok(true);
         };
-        let Some(scene) = &self.document.scene else {
+        let (Some(scene), Some((key, snapshot))) = (&self.document.scene, self.document.shown())
+        else {
             return Ok(false);
         };
-        let snapshot = scene.document.snapshot();
-        Ok(evidence.document == (snapshot.identity(), snapshot.revision())
+        Ok(evidence.document == key
             && evidence.source_revision == scene.source_revision
             && self.document.display_source == Some(evidence.source)
             && self.document.display_view == Some(evidence.view)

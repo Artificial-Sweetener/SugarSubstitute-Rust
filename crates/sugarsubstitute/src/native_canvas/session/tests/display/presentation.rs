@@ -259,6 +259,7 @@ fn native_display_prepares_while_reconstruction_retains_the_cpu_interactive_slot
         pixels: work::DrawPixels::Gpu(None),
         document: previous.document,
         source_revision: previous.source_revision,
+        overlay_generation: 0,
         verified: true,
     });
     let job = runtime.client.submit_blocking_owned_input(

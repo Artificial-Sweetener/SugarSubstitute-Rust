@@ -142,7 +142,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         return Err("Refinement document setup failed".into());
     };
     let snapshot = document.snapshot();
-    let identity = (snapshot.identity(), snapshot.revision());
+    let identity = (snapshot.identity(), snapshot.revision(), 0);
     session.document.scene = Some(Scene {
         document,
         source: None,

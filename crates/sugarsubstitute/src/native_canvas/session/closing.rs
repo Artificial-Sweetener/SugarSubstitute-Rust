@@ -76,6 +76,8 @@ impl Session {
         #[cfg(feature = "native-composition")]
         self.close_inputs();
         #[cfg(feature = "native-composition")]
+        self.close_editing();
+        #[cfg(feature = "native-composition")]
         self.close_drag_out()?;
         self.initialization_pending = false;
         self.device_pending = false;

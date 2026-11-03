@@ -37,6 +37,8 @@ impl Session {
         #[cfg(feature = "native-composition")]
         self.consume_input_job()?;
         #[cfg(feature = "native-composition")]
+        self.consume_editing_work()?;
+        #[cfg(feature = "native-composition")]
         self.consume_input_capture()?;
         #[cfg(feature = "native-composition")]
         self.consume_input_persistence()?;
@@ -140,6 +142,8 @@ impl Session {
         {
             return Ok(());
         }
+        #[cfg(feature = "native-composition")]
+        self.prepare_editing()?;
         if self.failed.is_none() {
             self.submit_display()?;
         }
@@ -220,7 +224,9 @@ impl Session {
         #[cfg(not(all(windows, feature = "native-composition")))]
         let graphics_retained = false;
         #[cfg(feature = "native-composition")]
-        let acquisition_pending = self.acquisition_retirement.is_some() || self.inputs.in_flight();
+        let acquisition_pending = self.acquisition_retirement.is_some()
+            || self.inputs.in_flight()
+            || self.editing.in_flight();
         #[cfg(not(feature = "native-composition"))]
         let acquisition_pending = false;
         #[cfg(feature = "native-composition")]

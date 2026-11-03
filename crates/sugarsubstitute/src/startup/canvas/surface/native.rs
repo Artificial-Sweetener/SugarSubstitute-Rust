@@ -5,14 +5,13 @@
 //! Each family entry point receives the decoded request, its ordinary-lane credit and any
 //! bulk-upload storage that covers it. It answers the request exactly once, immediately
 //! through `NativeSurface::answer` or later from a retained wait; cancelling a retained wait
-//! reaches the owner through `NativeSurface::cancel`. Sources, geometry and workflow surfaces
-//! are served from the session's input documents by their own modules; the editing entry point
-//! answers `unsupported`, and `ADVERTISED` keeps that capability off.
+//! reaches the owner through `NativeSurface::cancel`. Sources, geometry, editing and workflow
+//! surfaces are served from the session's input documents by their own modules.
 
 use super::*;
 use sugarsubstitute_contracts::canvas_native::{
-    CanvasEditRequest, CanvasFailure, CanvasFailureStatus, CanvasNativeCapabilities,
-    CanvasNativeReplyPayload, CanvasNativeRequest,
+    CanvasFailure, CanvasFailureStatus, CanvasNativeCapabilities, CanvasNativeReplyPayload,
+    CanvasNativeRequest,
 };
 use sugarsubstitute_desktop::CanvasNativeRequestStorage;
 
@@ -22,7 +21,7 @@ use sugarsubstitute_desktop::CanvasNativeRequestStorage;
 pub(super) const ADVERTISED: CanvasNativeCapabilities = CanvasNativeCapabilities {
     display_output: true,
     geometry: true,
-    editing: false,
+    editing: true,
     workflow_surfaces: true,
 };
 
@@ -50,23 +49,12 @@ impl NativeSurface {
                 self.receive_geometry(identity, request, claim, session)
             }
             CanvasNativeRequest::Edit(request) => {
-                self.receive_edit(identity, request, claim, storage)
+                self.receive_edit(identity, request, claim, session)
             }
             CanvasNativeRequest::Workflow(request) => {
                 self.receive_workflow(identity, request, claim, storage, session)
             }
         }
-    }
-
-    /// Serve `edit.request`: tools, options, history, sessions and coverage modification.
-    fn receive_edit(
-        &mut self,
-        identity: MainIdentity,
-        request: CanvasEditRequest,
-        claim: MemoryClaim,
-        _storage: CanvasNativeRequestStorage,
-    ) -> Result<(), Box<dyn Error>> {
-        self.answer(identity, request.failure_reply(&unsupported())?, claim)
     }
 
     /// Answer a request the current page has no canvas authority for: an empty display-only
@@ -94,8 +82,4 @@ impl NativeSurface {
         let reply = CanvasNativeReply::new(identity, payload, claim)?;
         self.enqueue(DesktopStartupCommand::SendCanvasNative(reply))
     }
-}
-
-fn unsupported() -> CanvasFailure {
-    CanvasFailure::new(CanvasFailureStatus::Unsupported)
 }

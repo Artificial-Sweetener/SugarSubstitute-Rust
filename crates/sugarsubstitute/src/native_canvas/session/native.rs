@@ -40,10 +40,11 @@ impl Session {
         } else {
             self.document.display_evidence?
         };
-        let snapshot = scene.document.snapshot();
+        // A pending frame of an earlier revision or gesture step of this document stays
+        // presentable, so a newer edit never strands it; the next frame replaces it.
         if evidence.target != frame.target
             || evidence.source_revision != self.selection
-            || evidence.document != (snapshot.identity(), snapshot.revision())
+            || evidence.document.0 != scene.document.snapshot().identity()
             || evidence.view.surface() != self.document.tools.navigation().viewport().surface()
         {
             return None;
@@ -191,6 +192,9 @@ impl Lifetime for Session {
                     self.expose();
                 }
             }
+            #[cfg(feature = "native-composition")]
+            Input::Tool(input) => self.tool_input(input, now)?,
+            #[cfg(not(feature = "native-composition"))]
             Input::Tool(input) => self.document.tools.input(
                 input,
                 self.document.scene.as_mut().map(|scene| &mut scene.document),
@@ -320,7 +324,10 @@ impl Lifetime for Session {
                 let wait = deadline.checked_duration_since(self.clock.now()).unwrap_or_default();
                 native_now.checked_add(wait)
             });
-            [presentation, preview, autosave].into_iter().flatten().min()
+            let editing = self
+                .editing_deadline(now)
+                .and_then(|deadline| native_now.checked_add(deadline.saturating_sub(now)));
+            [presentation, preview, autosave, editing].into_iter().flatten().min()
         };
         match (motion, presentation) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -389,8 +396,16 @@ impl Session {
     ) -> Result<(), Box<dyn Error>> {
         let scene =
             self.document.scene.as_ref().ok_or("Canvas display evidence has no document")?;
-        let snapshot = scene.document.snapshot();
-        if evidence.document != (snapshot.identity(), snapshot.revision())
+        let (key, snapshot) = self.document.shown().ok_or("Canvas display has no document")?;
+        if evidence.document != key
+            && evidence.document.0 == key.0
+            && evidence.source_revision == scene.source_revision
+        {
+            // An earlier revision or gesture step reached the screen after a newer one was
+            // published; it proves nothing about the current content, which the next frame shows.
+            return Ok(());
+        }
+        if evidence.document != key
             || evidence.source_revision != scene.source_revision
             || !evidence.proves_complete(snapshot.extent())?
         {

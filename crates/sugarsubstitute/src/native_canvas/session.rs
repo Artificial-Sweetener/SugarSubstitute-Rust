@@ -24,6 +24,8 @@ mod document_transaction;
 #[cfg(feature = "native-composition")]
 mod drag_out;
 #[cfg(feature = "native-composition")]
+pub(crate) mod editing;
+#[cfg(feature = "native-composition")]
 pub(crate) use super::work::{
     Originals as SelectedOriginals, OverviewOriginals, OverviewSelection,
 };
@@ -56,7 +58,7 @@ use super::{
     config::{Config, InitialSource},
     coverage::{self, BackingTier},
     work::{self, Originals, Packet, Resources, Scene},
-    work_error::WorkError,
+    work_error::{WorkError, WorkerPanic},
 };
 use crate::{diagnostics::DiagnosticHealth, job_sequence::JobSequence};
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
@@ -146,7 +148,7 @@ struct Retired {
 /// The original admitted request and its quality remain paired through cancellation acknowledgement.
 struct Rendering {
     job: OwnedJob<Packet, WorkError>,
-    document: (u64, u64),
+    document: work::DocumentKey,
     /// The exact revision being prepared, kept so the next edit repaints only what changed.
     snapshot: DocumentSnapshot,
     source_revision: u64,
@@ -173,7 +175,7 @@ struct Presented {
     coverage: BackingCoverage,
     view: Viewport,
     reconstruction: Reconstruction,
-    document: (u64, u64),
+    document: work::DocumentKey,
     source_revision: u64,
     comparison: Option<Comparison>,
 }
@@ -261,6 +263,9 @@ pub(crate) struct Session {
     /// Authoritative input documents of synced workflow surfaces.
     #[cfg(feature = "native-composition")]
     inputs: inputs::InputDocuments,
+    /// Editing preferences, owned coverage work and the presentation overlay.
+    #[cfg(feature = "native-composition")]
+    editing: editing::Editing,
     rendering: Option<Rendering>,
     displaying: Option<display::Displaying>,
     pending_retirement: Option<Retired>,
@@ -410,6 +415,8 @@ impl Session {
             pending_restore: None,
             #[cfg(feature = "native-composition")]
             inputs: inputs::InputDocuments::default(),
+            #[cfg(feature = "native-composition")]
+            editing: editing::Editing::default(),
             rendering: None,
             displaying: None,
             pending_retirement: None,
@@ -523,13 +530,3 @@ impl Session {
         }
     }
 }
-#[derive(Debug)]
-struct WorkerPanic {
-    _cause: PanicCause,
-}
-impl std::fmt::Display for WorkerPanic {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("Canvas worker panicked")
-    }
-}
-impl Error for WorkerPanic {}

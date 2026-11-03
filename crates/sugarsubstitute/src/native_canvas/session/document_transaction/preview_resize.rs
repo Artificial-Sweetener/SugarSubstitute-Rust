@@ -70,6 +70,7 @@ impl Session {
                 ),
                 document: evidence.document,
                 source_revision: evidence.source_revision,
+                overlay_generation: evidence.overlay,
                 verified: document.native_verified,
             },
             reconstruction: shown.reconstruction,

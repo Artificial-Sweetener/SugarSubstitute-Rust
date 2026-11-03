@@ -59,6 +59,8 @@ impl ReadyPreview {
             coverage: self.drawing.coverage,
             document: self.drawing.document,
             source_revision: self.drawing.source_revision,
+            overlay: None,
+            overlay_generation: 0,
         };
         let CpuStep::Complete(drawing) = input.step(context)? else {
             return Err(WorkError::invalid("Preview display projection did not complete its step"));

@@ -111,6 +111,7 @@ impl Session {
             projection: drawing.projection,
             document: drawing.document,
             source_revision: drawing.source_revision,
+            overlay: drawing.overlay_generation,
         });
         document.native_verified = drawing.verified;
         self.frame_revision = next;

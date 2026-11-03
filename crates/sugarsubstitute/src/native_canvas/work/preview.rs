@@ -139,6 +139,7 @@ impl PreparePreview {
             tier: BackingTier::Fallback,
             reconstruction: Reconstruction::Finished(Filter::Lanczos3),
             resources: resources.clone(),
+            key: (document.identity(), document.revision(), 0),
             document,
             source: scene.source.clone(),
             source_revision: scene.source_revision,
@@ -201,6 +202,8 @@ impl PreparePreview {
             coverage: self.coverage,
             document: packet.document,
             source_revision: packet.source_revision,
+            overlay: None,
+            overlay_generation: 0,
         });
         self.backing = Some(backing);
         self.spare_buffer = Some(spare);

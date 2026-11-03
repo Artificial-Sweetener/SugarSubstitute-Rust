@@ -4,6 +4,7 @@
 
 mod attachment;
 mod capabilities;
+mod editing;
 #[cfg(test)]
 mod fixture_file;
 mod geometry;
@@ -137,6 +138,7 @@ pub(super) struct NativeSurface {
     workflow: workflow::Workflow,
     /// Captures awaiting their jobs and the `source.changed` subscription.
     sources: sources::Sources,
+    editing: editing::Editing,
     /// The latest routed drag-out awaiting its copied original.
     drag_out: Option<input::DragRequest>,
     drag_sequence: u64,
@@ -163,6 +165,7 @@ impl NativeSurface {
             preview: preview::Preview::default(),
             workflow: workflow::Workflow::default(),
             sources: sources::Sources::default(),
+            editing: editing::Editing::default(),
             drag_out: None,
             drag_sequence: 0,
             closed: false,
@@ -432,6 +435,7 @@ impl NativeSurface {
                 .take()
                 .or_else(|| self.preview.camera.take())
                 .or_else(|| self.sources.notification.take())
+                .or_else(|| self.editing.notification.take())
         }
     }
 
@@ -452,6 +456,7 @@ impl NativeSurface {
         self.preview.close_correlations();
         self.workflow.close();
         self.sources.close();
+        self.editing = editing::Editing::default();
         Ok(())
     }
 }
