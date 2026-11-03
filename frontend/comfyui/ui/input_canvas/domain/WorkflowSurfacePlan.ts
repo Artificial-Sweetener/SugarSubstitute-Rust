@@ -14,7 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Decide which input surfaces and masks a workflow-surface canvas must hold for one workflow. */
-import type { CanvasWorkflowSurface } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
+import type {
+  CanvasWorkflowMask,
+  CanvasWorkflowSurface,
+} from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import type { CanvasSurfaceFileReference } from '../../../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
 import type { DimensionAuthority, DimensionAuthorityNode } from './CanvasDimensionAuthority.js';
 import { maskColor } from './MaskColorScheme.js';
@@ -51,6 +54,8 @@ export interface WorkflowMaskEndpoint {
   readonly authority: DimensionAuthority;
   /** Regions declared by related prompts for an ordered loader, or null. */
   readonly regions: RegionalPromptDemand | null;
+  /** The channel the loader reads from its files; alpha means inverted alpha. */
+  readonly channel: CanvasWorkflowMask['channel'];
 }
 /** Graph-derived facts for one workflow, already translated to stable keys. */
 export interface WorkflowSurfaceFacts {
@@ -66,6 +71,7 @@ export interface PlannedSurfaceMask {
   readonly color: string;
   readonly opacity: number;
   readonly initial: CanvasSurfaceFileReference | null;
+  readonly channel: CanvasWorkflowMask['channel'];
 }
 /** One planned surface with the endpoint or authority that owns it. */
 export interface PlannedSurface {
@@ -159,6 +165,7 @@ export function planWorkflowSurfaces(
         color: maskColor(accent, index, admitted.length),
         opacity: mask.opacity,
         initial: entry.initial,
+        channel: mask.channel,
       })),
     });
   };
@@ -205,6 +212,7 @@ export function workflowSyncSurfaces(plan: WorkflowSurfacePlan): readonly Canvas
       color: mask.color,
       opacity: mask.opacity,
       initial: mask.initial,
+      channel: mask.channel,
     })),
   }));
 }

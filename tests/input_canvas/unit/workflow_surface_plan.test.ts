@@ -45,6 +45,7 @@ function mask(
     image,
     authority: unsized,
     regions: null,
+    channel: 'red',
     entries: [{ entry: null, label: key, initial: null }],
     ...extra,
   } satisfies WorkflowMaskEndpoint;
@@ -84,6 +85,7 @@ test('paired masks join their image surface in endpoint order with rotated colou
     color: surface?.masks[1]?.color,
     opacity: 0.25,
     initial: null,
+    channel: 'red',
   });
 });
 

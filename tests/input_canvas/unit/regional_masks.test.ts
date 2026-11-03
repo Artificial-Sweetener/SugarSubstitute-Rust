@@ -19,10 +19,9 @@ import {
   missingRegionMasks,
   regionalPromptDemand,
 } from '../../../frontend/comfyui/ui/input_canvas/domain/RegionalPromptDemand.js';
-import {
-  aspectFit,
-  grayscaleMask,
-} from '../../../frontend/comfyui/ui/input_canvas/domain/MaskImport.js';
+import { grayscaleCoverage } from '../../../frontend/comfyui/ui/input_canvas/domain/MaskImport.js';
+import { encodeCanvasRaster } from '../../../integrations/shared/CanvasRasterEncoding.js';
+import { decodeCanvasRaster } from '../../../frontend/comfyui/ui/core/embedded/CanvasRuntime.js';
 import { planWorkflowSurfaces } from '../../../frontend/comfyui/ui/input_canvas/domain/WorkflowSurfacePlan.js';
 import { WorkflowMaskImport } from '../../../frontend/comfyui/ui/input_canvas/application/WorkflowMaskImport.js';
 import {
@@ -41,6 +40,7 @@ function regional(entries: number, demand: ReturnType<typeof regionalPromptDeman
     image: 'image',
     authority: { kind: 'missing', reason: 'mask_output_is_unused' },
     regions: demand,
+    channel: 'alpha',
     entries: Array.from({ length: entries }, (_, index) => ({
       entry: 'r' + String(index),
       label: 'Mask ' + String(index + 1),
@@ -105,14 +105,13 @@ test('generation is refused while prompts declare more regions than the loader h
   await expect(service.assertGenerationReady()).resolves.toBeUndefined();
 });
 
-test('pictures are aspect-fitted and converted to opaque grayscale coverage', () => {
-  expect(aspectFit(200, 100, 100, 100)).toEqual({ left: 0, top: 25, width: 100, height: 50 });
-  expect(aspectFit(10, 40, 80, 80)).toEqual({ left: 30, top: 0, width: 20, height: 80 });
-  expect(() => aspectFit(0, 1, 1, 1)).toThrow(RangeError);
+test('imported pictures read as Qt gray levels with alpha ignored', () => {
   expect([
-    ...grayscaleMask(Uint8Array.from([255, 255, 255, 255, 255, 0, 0, 128, 9, 9, 9, 0])),
-  ]).toEqual([255, 255, 255, 255, 38, 38, 38, 255, 0, 0, 0, 255]);
-  expect(() => grayscaleMask(new Uint8Array(3))).toThrow(RangeError);
+    ...grayscaleCoverage(
+      Uint8Array.from([255, 255, 255, 0, 255, 0, 0, 128, 0, 255, 0, 255, 0, 0, 255, 9]),
+    ),
+  ]).toEqual([255, 87, 127, 39]);
+  expect(() => grayscaleCoverage(new Uint8Array(3))).toThrow(RangeError);
 });
 
 test('imports stage every picture at the surface size before adding any region', async () => {
@@ -137,6 +136,7 @@ test('imports stage every picture at the surface size before adding any region',
             color: '#479ef5',
             opacity: 0.5,
             initial: null,
+            channel: 'alpha',
             layerId: 'layer',
           },
         ],
@@ -145,14 +145,13 @@ test('imports stage every picture at the surface size before adding any region',
   };
   const raster = jest.fn(
     async (_file: Blob, width: number, height: number): Promise<CanvasPixelRaster> => ({
-      width,
-      height,
-      format: 'rgba8',
-      data: '',
+      ...encodeCanvasRaster(width, height, 'coverage8', new Uint8Array(width * height).fill(200)),
     }),
   );
   let staged = 0;
-  const stage = jest.fn(async () => `sugarcubes/sources/mask-${String(++staged)}.png`);
+  const stage = jest.fn(
+    async (_pixels: CanvasPixelRaster) => `sugarcubes/sources/mask-${String(++staged)}.png`,
+  );
   const imports = new WorkflowMaskImport(
     { state, subscribe: () => () => {} },
     { raster },
@@ -166,6 +165,9 @@ test('imports stage every picture at the surface size before adding any region',
     [8, 4],
     [8, 4],
   ]);
+  const pixels = stage.mock.calls[0]?.[0];
+  expect(pixels?.format).toBe('rgba8');
+  expect(pixels ? [...decodeCanvasRaster(pixels).slice(0, 4)] : []).toEqual([200, 200, 200, 55]);
   expect(append).toHaveBeenCalledWith([
     'sugarcubes/sources/mask-1.png',
     'sugarcubes/sources/mask-2.png',

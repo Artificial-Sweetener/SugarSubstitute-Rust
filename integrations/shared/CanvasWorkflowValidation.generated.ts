@@ -49,7 +49,7 @@ export function isCanvasWorkflowSurfaceBase(
 export function isCanvasWorkflowMask(value: unknown): value is Contract.CanvasWorkflowMask {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 5 &&
+    Object.keys(value).length === 6 &&
     Object.hasOwn(value, 'key') &&
     typeof value['key'] === 'string' &&
     value['key'].length <= 256 &&
@@ -66,7 +66,12 @@ export function isCanvasWorkflowMask(value: unknown): value is Contract.CanvasWo
     value['opacity'] >= 0 &&
     value['opacity'] <= 1 &&
     Object.hasOwn(value, 'initial') &&
-    (isCanvasSurfaceFileReference(value['initial']) || value['initial'] === null)
+    (isCanvasSurfaceFileReference(value['initial']) || value['initial'] === null) &&
+    Object.hasOwn(value, 'channel') &&
+    (value['channel'] === 'red' ||
+      value['channel'] === 'green' ||
+      value['channel'] === 'blue' ||
+      value['channel'] === 'alpha')
   );
 }
 /** Validate a bounded CanvasWorkflowSurface payload before dispatch. */

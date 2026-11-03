@@ -290,3 +290,75 @@ test('an explicit source choice is kept and loaders on multi-field nodes are ski
   expect(twoFields.provisioning.state?.surfaces).toEqual([]);
   expect(twoFields.native.graph.extra).toBeUndefined();
 });
+
+test('an image loader whose only used output is MASK is a mask endpoint read through inverted alpha', async () => {
+  const f = fixture();
+  const image = node(1, 'LoadImage', [], ['IMAGE', 'MASK'], { image: 'photo.png' });
+  const matte = node(2, 'LoadImage', [], ['IMAGE', 'MASK'], { image: 'matte.png' });
+  const mask = node(5, 'LoadImageMask', [], ['MASK'], { image: '', channel: 'red' });
+  const inpaint = node(
+    3,
+    'Inpaint',
+    [
+      ['pixels', 'IMAGE'],
+      ['mask', 'MASK'],
+    ],
+    ['IMAGE'],
+  );
+  const second = node(
+    4,
+    'Inpaint',
+    [
+      ['pixels', 'IMAGE'],
+      ['mask', 'MASK'],
+    ],
+    ['IMAGE'],
+  );
+  f.native.add(image, matte, mask, inpaint, second);
+  f.native.connect(1, image, 0, inpaint, 0);
+  f.native.connect(2, matte, 1, inpaint, 1);
+  f.native.connect(3, image, 0, second, 0);
+  f.native.connect(4, mask, 0, second, 1);
+  f.associations.start();
+  await settle(f.provisioning);
+  expect(
+    f.provisioning.state?.surfaces.map((surface) => [
+      surface.key,
+      surface.masks.map((m) => [m.key, m.channel]),
+    ]),
+  ).toEqual([
+    [
+      JSON.stringify(['1', 'image']),
+      [
+        [JSON.stringify(['2', 'image']), 'alpha'],
+        [JSON.stringify(['5', 'image']), 'red'],
+      ],
+    ],
+  ]);
+  const saved = matte.properties?.sugarcubes_canvas_images as {
+    fields: Record<string, { entries: { source: unknown }[] }>;
+  };
+  expect(saved.fields.image?.entries[0]?.source).toMatchObject({
+    kind: 'canvas',
+    target: { kind: 'layer' },
+  });
+  const both = fixture();
+  const loader = node(2, 'LoadImage', [], ['IMAGE', 'MASK'], { image: 'matte.png' });
+  const consumer = node(
+    3,
+    'Inpaint',
+    [
+      ['pixels', 'IMAGE'],
+      ['mask', 'MASK'],
+    ],
+    ['IMAGE'],
+  );
+  both.native.add(loader, consumer);
+  both.native.connect(1, loader, 0, consumer, 0);
+  both.native.connect(2, loader, 1, consumer, 1);
+  both.associations.start();
+  await settle(both.provisioning);
+  expect(both.provisioning.state?.surfaces).toMatchObject([
+    { key: JSON.stringify(['2', 'image']), base: { kind: 'file' }, masks: [] },
+  ]);
+});

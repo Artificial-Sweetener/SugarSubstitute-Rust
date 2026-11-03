@@ -18,37 +18,39 @@ export class ComfyInputSurfaceCards {
     /** Bind one loader field's card. */
     port(node, loader) {
         const endpoint = () => this.associations.inventory.workflowKey(this.associations.key(node, loader.field));
+        // A mixed image loader whose only used output is MASK acts as a mask endpoint.
+        const kind = () => this.associations.inventory.kind(this.associations.key(node, loader.field)) ?? loader.kind;
         return {
             activate: (entry) => {
                 const key = endpoint();
                 if (!key)
                     return;
-                if (loader.kind === 'image')
+                if (kind() === 'image')
                     this.route.activateImage(key);
                 else
                     this.route.activateMask(key, loader.ordered ? entry : null);
             },
             hover: (entry) => {
                 const key = endpoint();
-                if (key && loader.kind === 'mask' && loader.ordered)
+                if (key && kind() === 'mask' && loader.ordered)
                     this.appearance.hover(key, entry);
             },
             opacity: () => {
                 const key = endpoint();
-                return key && loader.kind === 'mask' ? this.appearance.opacity(key) : null;
+                return key && kind() === 'mask' ? this.appearance.opacity(key) : null;
             },
             changeOpacity: (opacity) => {
                 const key = endpoint();
-                if (key && loader.kind === 'mask')
+                if (key && kind() === 'mask')
                     this.appearance.changeOpacity(key, opacity);
             },
             canImport: () => {
                 const key = endpoint();
-                return Boolean(key && loader.kind === 'mask' && loader.ordered && this.imports.available(key));
+                return Boolean(key && kind() === 'mask' && loader.ordered && this.imports.available(key));
             },
             importMasks: async (files) => {
                 const key = endpoint();
-                if (!key || loader.kind !== 'mask' || !loader.ordered)
+                if (!key || kind() !== 'mask' || !loader.ordered)
                     throw new Error('This loader cannot import masks.');
                 await this.imports.import(key, files, (staged) => this.bindings.get(node, loader).append(staged));
             },

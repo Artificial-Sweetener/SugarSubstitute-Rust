@@ -100,10 +100,9 @@ export class MasonryInputEditor {
             this.#controls.append(actions);
         }
         this.#rows = new InputPreviewRows(document, binding, previews, report, association, surface);
-        this.#opacity =
-            surface && binding.loader.kind === 'mask'
-                ? new MaskOpacityField(surface, fields, maskOpacityLabel(showField ? binding.loader.field : null), report)
-                : null;
+        this.#opacity = surface
+            ? new MaskOpacityField(surface, fields, maskOpacityLabel(showField ? binding.loader.field : null), report)
+            : null;
         this.#maskFields = new MaskEditFields(binding, association, fields, fieldRoot, showField, (mode) => this.#rows.setMaskMode(mode), report);
         this.#status = document.createElement('div');
         this.#status.className = 'sc-input-editor__status';

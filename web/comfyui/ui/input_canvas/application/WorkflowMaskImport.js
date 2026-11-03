@@ -1,6 +1,9 @@
+import { maskSourceImage } from '../domain/MaskSourcePixels.js';
 /**
  * Convert every picture to the loader's surface size before anything is added, so a failed
- * picture adds no region. Each staged file becomes a new region's initial mask; the surface
+ * picture adds no region. Files are staged in the coverage image encoding (rgb = value,
+ * alpha = 255 - value), which every loader channel reads as the same coverage. Each staged file
+ * becomes a new region's initial mask; the surface
  * provisioning then creates and binds its layer.
  */
 export class WorkflowMaskImport {
@@ -24,7 +27,7 @@ export class WorkflowMaskImport {
             throw new Error('The mask has no input canvas.');
         const staged = [];
         for (const file of files)
-            staged.push(await this.assets.stage(await this.rasters.raster(file, surface.document.width, surface.document.height)));
+            staged.push(await this.assets.stage(maskSourceImage(await this.rasters.raster(file, surface.document.width, surface.document.height))));
         if (staged.length)
             append(staged);
     }

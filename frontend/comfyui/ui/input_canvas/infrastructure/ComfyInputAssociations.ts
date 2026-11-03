@@ -62,7 +62,10 @@ export class ComfyInputAssociations implements InputAssetBindingLookup {
   }
 
   /** Expose the field inventory and flattened workflow paths read at the last settled flush. */
-  get inventory(): Pick<ComfyInputAssociationGraph, 'fields' | 'workflowKey' | 'path' | 'node'> {
+  get inventory(): Pick<
+    ComfyInputAssociationGraph,
+    'fields' | 'workflowKey' | 'path' | 'node' | 'kind'
+  > {
     return this.#graph;
   }
 

@@ -1919,9 +1919,10 @@
         "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
         "initial": {
           "oneOf": [{ "$ref": "#/$defs/CanvasSurfaceFileReference" }, { "const": null }]
-        }
+        },
+        "channel": { "enum": ["red", "green", "blue", "alpha"] }
       },
-      "required": ["key", "label", "color", "opacity", "initial"],
+      "required": ["key", "label", "color", "opacity", "initial", "channel"],
       "additionalProperties": false
     },
     "CanvasWorkflowSurface": {

@@ -139,7 +139,7 @@ path = "integrations/contracts/CanvasNativeProtocol.generated.rs"
 owner = "SugarCubes portable canvas contract compiler"
 justification = "This compiler-owned closed version 3 wire-value module contains only schema-derived serde types and shape/bound validation for the document-canvas messages a native host decodes: context, sources, geometry, editing, workflow surfaces and error replies. They share the capability, document, file-reference and failure vocabulary, so one generated module keeps a single Rust type per wire value. Document lifecycle, editing, provisioning and transport policy remain in authored host owners; regeneration and shared vectors verify parity."
 review_by = 2026-11-30
-max_lines = 945
+max_lines = 947
 
 [[waiver]]
 id = "SC-CANVAS-GENERATED-RUST-PROTOCOL"
