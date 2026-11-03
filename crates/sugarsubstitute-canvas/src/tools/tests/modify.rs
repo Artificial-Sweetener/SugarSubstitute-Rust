@@ -189,8 +189,8 @@ fn applying_an_unfinished_preview_computes_it_and_cancel_restores() -> harness::
         )?;
         assert!(canvas.settle(context)?);
         // Space during the preview does not hand input back early.
-        canvas.tools.temporary_navigation(true, Some(&canvas.document), Duration::ZERO)?;
-        canvas.tools.temporary_navigation(false, Some(&canvas.document), Duration::ZERO)?;
+        canvas.tools.temporary_navigation(true, Some(&mut canvas.document), Duration::ZERO)?;
+        canvas.tools.temporary_navigation(false, Some(&mut canvas.document), Duration::ZERO)?;
         assert_eq!(canvas.tools.effective(), ToolId::PAN_ZOOM);
         canvas.modify(
             ModifyTarget::Selection,

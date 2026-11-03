@@ -4,10 +4,13 @@
 //!
 //! A stroke starts on the primary button and is one edit session: every pointer sample adds the
 //! dabs between it and the previous contact, then stages the updated mask so the preview renders
-//! it live, and release commits the stroke as one undo step. Cancelling discards it. Pen
-//! pressure scales the diameter down to 15% of the size; Alt or a pen's eraser end turns the
-//! Brush into an eraser; with a selection present, strokes are clipped to it. The mouse wheel
-//! changes the size by five pixels a notch, and the middle button pans.
+//! it live, and release commits the stroke as one undo step. Cancelling discards it; Space
+//! commits it before temporary navigation takes over. Pen pressure scales the diameter down to
+//! 15% of the size; Alt or a pen's eraser end turns the Brush into an eraser; with a selection
+//! present, strokes are clipped to it. Shift with a mouse press paints a straight line from the
+//! end of the previous stroke as a stroke of its own, and while Shift is held a mouse drag does
+//! not paint. The mouse wheel changes the size by five pixels a notch, and the middle button
+//! pans.
 mod options;
 pub use options::BrushOptions;
 
@@ -33,6 +36,8 @@ pub struct BrushTool {
     options: BrushOptions,
     pointer: Option<PointerSample>,
     stroke: Option<Stroke>,
+    /// Where the last stroke ended, in document pixels: the start of a Shift-click line.
+    anchor: Option<[f64; 2]>,
     wheel: f64,
 }
 
@@ -48,7 +53,7 @@ struct Stroke {
 impl BrushTool {
     /// A brush in `mode` with `options`.
     pub const fn new(mode: BrushMode, options: BrushOptions) -> Self {
-        Self { mode, options, pointer: None, stroke: None, wheel: 0.0 }
+        Self { mode, options, pointer: None, stroke: None, anchor: None, wheel: 0.0 }
     }
     /// Whether this tool paints or erases.
     pub const fn mode(&self) -> BrushMode {
@@ -73,20 +78,23 @@ impl BrushTool {
         let selection = document.selection().cloned();
         let raster = StrokeRaster::new(coverage.clone(), selection, context.memory()?)?;
         let contact = self.contact(sample, context)?;
+        let line = self.anchor.filter(|_| sample.kind == PointerKind::Mouse && modifiers.shift);
+        let start = line.map_or(contact, |anchor| Contact::new(anchor, contact.diameter));
         context.begin_edit()?;
-        context.capture_pointer(true);
         let mut stroke = Stroke { layer, appearance, raster, previous: contact };
         let style = self.style(modifiers.alt || sample.eraser);
-        match stroke.paint(paint::segment(contact, contact, false), style, context) {
-            Ok(()) => {
-                self.stroke = Some(stroke);
-                Ok(())
-            }
-            Err(cause) => {
-                context.cancel_edit();
-                Err(cause)
-            }
+        if let Err(cause) = stroke.paint(paint::segment(start, contact, false), style, context) {
+            context.cancel_edit();
+            return Err(cause);
         }
+        self.anchor = Some(contact.position);
+        if line.is_some() {
+            context.commit_edit()?;
+        } else {
+            context.capture_pointer(true);
+            self.stroke = Some(stroke);
+        }
+        Ok(())
     }
 
     fn extend(
@@ -94,6 +102,10 @@ impl BrushTool {
         sample: PointerSample,
         context: &mut ToolContext<'_>,
     ) -> Result<(), CanvasError> {
+        // CuteCanvas previews a Shift line during a mouse drag instead of painting.
+        if sample.kind == PointerKind::Mouse && sample.modifiers.shift && self.anchor.is_some() {
+            return Ok(());
+        }
         let contact = self.contact(sample, context)?;
         let style = self.style(sample.modifiers.alt || sample.eraser);
         let Some(stroke) = self.stroke.as_mut() else {
@@ -104,6 +116,7 @@ impl BrushTool {
         }
         let dabs = paint::segment(stroke.previous, contact, true);
         stroke.previous = contact;
+        self.anchor = Some(contact.position);
         if let Err(cause) = stroke.paint(dabs, style, context) {
             self.stroke = None;
             context.cancel_edit();
@@ -227,9 +240,22 @@ impl CanvasTool for BrushTool {
         }
     }
 
-    fn cancel(&mut self, _: ToolCancelReason) {
+    fn suspend(&mut self, context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
+        self.finish(context)
+    }
+
+    fn cancel(&mut self, reason: ToolCancelReason) {
         self.stroke = None;
         self.wheel = 0.0;
+        // Leaving the tool or the document forgets where the last stroke ended.
+        if matches!(
+            reason,
+            ToolCancelReason::SelectionChanged
+                | ToolCancelReason::DocumentChanged
+                | ToolCancelReason::Shutdown
+        ) {
+            self.anchor = None;
+        }
     }
 
     /// The brush ring at the on-screen brush size in the target mask's colour, or the arrow when

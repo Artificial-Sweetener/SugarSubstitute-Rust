@@ -190,6 +190,13 @@ pub trait CanvasTool: Send {
     /// Preserve input or document causes. Uncommitted edits remain independently cancellable.
     fn input(&mut self, input: ToolInput, context: &mut ToolContext<'_>)
     -> Result<(), CanvasError>;
+    /// Settle the gesture before temporary Space navigation takes over, for example by
+    /// committing it. The manager then discards any edit the tool left uncommitted.
+    /// # Errors
+    /// Preserve document causes; temporary navigation is not entered on failure.
+    fn suspend(&mut self, _context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
+        Ok(())
+    }
     /// Release transient tool state without I/O. The manager independently cancels capture/edits.
     fn cancel(&mut self, reason: ToolCancelReason);
     /// Resolve feedback from the current shared state without allocating a native cursor.

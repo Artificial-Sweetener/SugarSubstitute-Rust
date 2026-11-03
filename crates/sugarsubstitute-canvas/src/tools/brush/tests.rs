@@ -6,6 +6,7 @@ use super::*;
 use crate::{Document, MaskAppearance, Viewport, tests::harness};
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_ops::{Coverage, Extent, FULL_COVERAGE, ImageError, Region};
+mod lines;
 
 const BRUSH: u32 = 2;
 const ERASER: u32 = 3;

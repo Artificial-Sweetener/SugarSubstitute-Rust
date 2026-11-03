@@ -30,7 +30,7 @@ fn freezing_retires_live_edits_and_restores_persistent_tool_selection() -> harne
         assert!(!tools.captured());
         assert!(tools.preview().is_none());
         assert_eq!(document.snapshot().revision(), 1);
-        tools.temporary_navigation(true, Some(&document), Duration::ZERO)?;
+        tools.temporary_navigation(true, Some(&mut document), Duration::ZERO)?;
         tools.navigate(NavigationCommand::OneToOne, Duration::ZERO)?;
         tools.freeze_at(accepted, Some(&document), Duration::from_millis(40))?;
         assert_eq!(tools.selected(), id);
@@ -81,14 +81,14 @@ fn camera_commands_preserve_live_edits_and_temporary_tool_selection() -> harness
             Duration::ZERO,
         )?;
         tools.cancel(ToolCancelReason::FocusLost, Some(&document), Duration::ZERO)?;
-        tools.temporary_navigation(true, Some(&document), Duration::ZERO)?;
+        tools.temporary_navigation(true, Some(&mut document), Duration::ZERO)?;
         assert!(matches!(
             tools.navigate(NavigationCommand::OneToOne, Duration::ZERO)?,
             NavigationCommandOutcome::Applied { .. }
         ));
         assert_eq!(tools.selected(), id);
         assert_eq!(tools.effective(), ToolId::PAN_ZOOM);
-        tools.temporary_navigation(false, Some(&document), Duration::from_millis(80))?;
+        tools.temporary_navigation(false, Some(&mut document), Duration::from_millis(80))?;
         assert_eq!(tools.effective(), id);
         assert_eq!(document.snapshot().revision(), 2);
         Ok(())

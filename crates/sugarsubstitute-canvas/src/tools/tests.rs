@@ -159,7 +159,7 @@ fn lifecycle_loss_discards_preview_while_completed_gesture_uses_one_history_entr
         assert_eq!(tools.preview().map(|p| p.layers().len()), Some(1));
         assert!(tools.captured());
         assert!(document.snapshot().layers().is_empty());
-        tools.temporary_navigation(true, Some(&document), Duration::ZERO)?;
+        tools.temporary_navigation(true, Some(&mut document), Duration::ZERO)?;
         assert!(tools.preview().is_none());
         assert!(!tools.captured());
         tools.cancel(ToolCancelReason::FocusLost, Some(&document), Duration::ZERO)?;

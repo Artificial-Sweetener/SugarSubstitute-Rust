@@ -198,7 +198,7 @@ impl Lifetime for Session {
             )?,
             Input::TemporaryNavigation(held) => self.document.tools.temporary_navigation(
                 held,
-                self.document.scene.as_ref().map(|scene| &scene.document),
+                self.document.scene.as_mut().map(|scene| &mut scene.document),
                 now,
             )?,
             Input::DisplayRefresh(rate) => {

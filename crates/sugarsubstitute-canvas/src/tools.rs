@@ -318,12 +318,15 @@ impl ToolManager {
         Ok(())
     }
     /// Enter/leave temporary Space navigation without replacing persistent selection.
+    /// Entering first lets the selected tool settle its gesture, as a brush commits its stroke;
+    /// whatever edit remains is then discarded.
     /// # Errors
-    /// Preserves activation errors; current capture and uncommitted edits remain bounded.
+    /// Preserves the tool's settling failure and activation errors; current capture and
+    /// uncommitted edits remain bounded.
     pub fn temporary_navigation(
         &mut self,
         held: bool,
-        document: Option<&Document>,
+        mut document: Option<&mut Document>,
         now: Duration,
     ) -> Result<(), CanvasError> {
         if held == self.space {
@@ -337,8 +340,11 @@ impl ToolManager {
             self.space = held;
             return Ok(());
         }
+        if held {
+            self.dispatch(document.as_deref_mut(), now, |tool, context| tool.suspend(context))?;
+        }
         let id = if held { ToolId::PAN_ZOOM } else { self.selected };
-        self.switch(id, document, ToolCancelReason::TemporaryNavigation, now)?;
+        self.switch(id, document.as_deref(), ToolCancelReason::TemporaryNavigation, now)?;
         self.space = held;
         Ok(())
     }
@@ -350,6 +356,15 @@ impl ToolManager {
         input: ToolInput,
         document: Option<&mut Document>,
         now: Duration,
+    ) -> Result<(), CanvasError> {
+        self.dispatch(document, now, |tool, context| tool.input(input, context))
+    }
+    /// Run one action of the effective tool with the shared edit boundary.
+    fn dispatch(
+        &mut self,
+        document: Option<&mut Document>,
+        now: Duration,
+        action: impl FnOnce(&mut dyn CanvasTool, &mut ToolContext<'_>) -> Result<(), CanvasError>,
     ) -> Result<(), CanvasError> {
         let mut context = ToolContext {
             navigation: &mut self.navigation,
@@ -363,7 +378,7 @@ impl ToolManager {
             now,
         };
         if self.effective == ToolId::PAN_ZOOM {
-            self.pan_zoom.input(input, &mut context)
+            action(&mut self.pan_zoom, &mut context)
         } else {
             let entry = self
                 .registered
@@ -371,7 +386,7 @@ impl ToolManager {
                 .flatten()
                 .find(|entry| entry.id == self.effective)
                 .ok_or(CanvasError::Invalid("Effective tool is not registered"))?;
-            entry.tool.input(input, &mut context)
+            action(entry.tool.as_mut(), &mut context)
         }
     }
     /// Resolve cursor intent without creating native cursor resources or touching image workers.
