@@ -222,6 +222,8 @@ The application settings button uses QFluent's unmodified Setting SVG under GPL-
 
 The generation queue segment uses QFluent's unmodified History SVG under GPL-3.0-or-later. Its source revision, hash and deployment path are recorded in the manifest.
 
+The canvas editing chrome adapts SugarSubstitute's input canvas tool rail, brush settings, contextual toolbars, toolbar placement, canvas menu and coverage editor from revision 34ce6d9976c76ac708b1dbda3920e9311010006a (GPL-3.0-or-later); source fingerprints and adapted owners are recorded in the manifest. Its icons are Microsoft Fluent UI System Icons copied verbatim, Substitute's MIT-licensed Fluent-derived ellipse-selection and mask-shape icons, and QFluent's unmodified clear-selection, accept, close and edit SVGs (GPL-3.0-or-later). Pinned sources, hashes and runtime paths are recorded in the manifest.
+
 CodeMirror, Lezer, and their editing and style helpers are bundled with SugarPrompt. Their MIT license texts are shipped under `third_party/licenses/`; exact versions and the CodeMirror view patch are recorded in `manifest.toml`.
 
 - @codemirror/commands 6.11.1

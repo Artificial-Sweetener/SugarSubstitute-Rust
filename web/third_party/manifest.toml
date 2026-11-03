@@ -338,6 +338,90 @@ vendored_file = "frontend/static/icons/search/arrow-up.svg"
 runtime_file = "web/icons/search/arrow-up.svg"
 sha256 = "56172b2b7f9c077f90f51f147c432fa20cb1bb168230eec33751c493d6824bb6"
 
+[[component.asset]]
+source_path = "assets/Hand Left/SVG/ic_fluent_hand_left_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/pan-zoom.svg"
+runtime_file = "web/icons/canvas-editing/pan-zoom.svg"
+sha256 = "9cec8b15c8551671c1153007943446dca706f0c1b1613753c086e284b4847e04"
+
+[[component.asset]]
+source_path = "assets/Arrow Move/SVG/ic_fluent_arrow_move_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/move.svg"
+runtime_file = "web/icons/canvas-editing/move.svg"
+sha256 = "805e5c7f86ade11d7bdb0610e14d2f544655cda4689615e5559a367ae005fde7"
+
+[[component.asset]]
+source_path = "assets/Paint Brush/SVG/ic_fluent_paint_brush_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/brush.svg"
+runtime_file = "web/icons/canvas-editing/brush.svg"
+sha256 = "eabda6155fed08da0b6d9e726d116e77bf2fd7d5809893508b71849bcee12bf4"
+
+[[component.asset]]
+source_path = "assets/Eraser/SVG/ic_fluent_eraser_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/eraser.svg"
+runtime_file = "web/icons/canvas-editing/eraser.svg"
+sha256 = "8e416de6d847eebb2dc8409f5610585ef418658596ffe56cf03d2a488e1bbc3d"
+
+[[component.asset]]
+source_path = "assets/Select Object/SVG/ic_fluent_select_object_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/select-rectangle.svg"
+runtime_file = "web/icons/canvas-editing/select-rectangle.svg"
+sha256 = "4e929530a89bc0a3c02a9ad2fa1b7592ab1ec1965595cbc08e56a9a09bd124a6"
+
+[[component.asset]]
+source_path = "assets/Lasso/SVG/ic_fluent_lasso_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/select-lasso.svg"
+runtime_file = "web/icons/canvas-editing/select-lasso.svg"
+sha256 = "1b8d00ddde0eaaf83fe8dc785da913de9ba8dc75591459e13408c9b829c58e1b"
+
+[[component.asset]]
+source_path = "assets/Select Object Skew/SVG/ic_fluent_select_object_skew_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/transform.svg"
+runtime_file = "web/icons/canvas-editing/transform.svg"
+sha256 = "325976c72d3bcc3709f4347dc2cbdefae8ad4a77b4bfed085e1688f85204d9d8"
+
+[[component.asset]]
+source_path = "assets/Arrow Autofit Width/SVG/ic_fluent_arrow_autofit_width_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/shared-edges.svg"
+runtime_file = "web/icons/canvas-editing/shared-edges.svg"
+sha256 = "0ad9b6b3dd345c6cb5ccbbbc94c80131d5f67a5bafa7f404182b2960def49e4e"
+
+[[component.asset]]
+source_path = "assets/Arrow Undo/SVG/ic_fluent_arrow_undo_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/undo.svg"
+runtime_file = "web/icons/canvas-editing/undo.svg"
+sha256 = "a6f6566eb86df531ce5332ab4153b056fb8ff8af37655058f30afaf127892a2f"
+
+[[component.asset]]
+source_path = "assets/Arrow Redo/SVG/ic_fluent_arrow_redo_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/redo.svg"
+runtime_file = "web/icons/canvas-editing/redo.svg"
+sha256 = "374ec6ed97949ac3ae5ec6739c283f16a4a56fa7ad374b33e0b15d4d2154b991"
+
+[[component.asset]]
+source_path = "assets/Rotate Left/SVG/ic_fluent_rotate_left_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/rotate-left.svg"
+runtime_file = "web/icons/canvas-editing/rotate-left.svg"
+sha256 = "fc63626ae0ce33ad4a18ab578cc7d06ae7c678ba58c6c52f0fb9bf3a77f8628c"
+
+[[component.asset]]
+source_path = "assets/Rotate Right/SVG/ic_fluent_rotate_right_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/rotate-right.svg"
+runtime_file = "web/icons/canvas-editing/rotate-right.svg"
+sha256 = "e010f73f6b1eea25e32cc91a9a74a2e2003b925d53e8765849f1611e4be9c5b0"
+
+[[component.asset]]
+source_path = "assets/Flip Horizontal/SVG/ic_fluent_flip_horizontal_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/flip-horizontal.svg"
+runtime_file = "web/icons/canvas-editing/flip-horizontal.svg"
+sha256 = "2cb0bce4a4247058ed617bc31bc053d313c267dbf1fed25384cab0a5d2d2d9a1"
+
+[[component.asset]]
+source_path = "assets/Flip Vertical/SVG/ic_fluent_flip_vertical_20_regular.svg"
+vendored_file = "frontend/static/icons/canvas-editing/flip-vertical.svg"
+runtime_file = "web/icons/canvas-editing/flip-vertical.svg"
+sha256 = "5ba451952e70a97b68d8805e39ff62bf26a9c8a697b940747eec5bad02c2fc53"
+
 [[component]]
 name = "Microsoft Fluent UI Emoji"
 license = "MIT"
@@ -974,6 +1058,144 @@ source_path = "qfluentwidgets/_rc/images/icons/History_black.svg"
 vendored_file = "frontend/static/orb/history.svg"
 runtime_file = "web/orb/history.svg"
 sha256 = "7affa00b4b880448871aa84138086ad1e5eaa5ad352b941bcd70542baccfda35"
+
+[[component]]
+name = "Substitute input canvas Fluent artwork"
+license = "MIT"
+license_file = "third_party/licenses/fluentui-system-icons.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
+modifications = "None; Substitute's ellipse-selection and mask-shape icons, derived there from Microsoft Fluent UI System Icons, copied verbatim and tinted through a CSS mask."
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/SelectEllipse20Regular_white.svg"
+vendored_file = "frontend/static/canvas-editing/select-ellipse.svg"
+runtime_file = "web/canvas-editing/select-ellipse.svg"
+sha256 = "5c53c25a7d53b29f13ab9bd6d3810b482a85cad13877e7b62c5b49a8da725f86"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/MaskRectangle20Regular_white.svg"
+vendored_file = "frontend/static/canvas-editing/mask-rectangle.svg"
+runtime_file = "web/canvas-editing/mask-rectangle.svg"
+sha256 = "47a4d146decb1b757d89d570434a26d93e336f5e60e83b7b0285aa2edc6dc411"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/MaskEllipse20Regular_white.svg"
+vendored_file = "frontend/static/canvas-editing/mask-ellipse.svg"
+runtime_file = "web/canvas-editing/mask-ellipse.svg"
+sha256 = "f7d38783f54599360d74c8505fc62b489dd88b6688c0eddf49655b14670ce5eb"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/MaskLasso20Regular_white.svg"
+vendored_file = "frontend/static/canvas-editing/mask-lasso.svg"
+runtime_file = "web/canvas-editing/mask-lasso.svg"
+sha256 = "06fda9ce60afb3a713f3fe3710a830a88e3459fd3ee34d399dd005e145e0f3d5"
+
+[[component]]
+name = "QFluent canvas editing artwork"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/qfluentwidgets.LICENSE.txt"
+source = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets"
+revision = "d90c008c534b2b0079ce7981d19b2bc957b354a5"
+modifications = "None; original clear-selection, accept, close and edit SVGs copied verbatim and tinted through a CSS mask."
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/ClearSelection_white.svg"
+vendored_file = "frontend/static/canvas-editing/deselect.svg"
+runtime_file = "web/canvas-editing/deselect.svg"
+sha256 = "cf054622861c62faf17459afb4b7f3d58d074a1411c899a39b00f2c315858c93"
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/Accept_white.svg"
+vendored_file = "frontend/static/canvas-editing/apply.svg"
+runtime_file = "web/canvas-editing/apply.svg"
+sha256 = "834f797be70c6ce7b5f043608bcc2e8ecee6eac4e5148264d32e7b346b831bda"
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/Close_white.svg"
+vendored_file = "frontend/static/canvas-editing/close.svg"
+runtime_file = "web/canvas-editing/close.svg"
+sha256 = "14a60451f23e1bf73a113011ef76e4bb5ba6cbbeedd661b74017e425d4143642"
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/Edit_white.svg"
+vendored_file = "frontend/static/canvas-editing/modify.svg"
+runtime_file = "web/canvas-editing/modify.svg"
+sha256 = "f1f16233710a7780f4bdf0f0f2332c899e7c5312075207f399a8025aad45d58e"
+
+[[component]]
+name = "SugarSubstitute input canvas editing presentation"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
+modifications = "Input canvas tool rail order and groups, brush settings, contextual selection, modification, transform and edit-session toolbars, toolbar placement, canvas menu and the exclusive coverage editor are adapted to Vue chrome driven only by the sugarcubes.canvas editing contract."
+runtime_files = ["web/comfyui/ui/canvas_editing/application/CanvasEditController.js","web/comfyui/ui/canvas_editing/domain/CanvasCoverageModification.js","web/comfyui/ui/canvas_editing/domain/CanvasEditSurface.js","web/comfyui/ui/canvas_editing/domain/CanvasEditTools.js","web/comfyui/ui/canvas_editing/domain/CanvasToolbarPlacement.js","web/comfyui/ui/canvas_editing/presentation/CanvasBrushOptions.js","web/comfyui/ui/canvas_editing/presentation/CanvasCoverageControls.js","web/comfyui/ui/canvas_editing/presentation/CanvasEditContextMenu.js","web/comfyui/ui/canvas_editing/presentation/CanvasEditIcons.js","web/comfyui/ui/canvas_editing/presentation/CanvasEditOverlay.js","web/comfyui/ui/canvas_editing/presentation/CanvasEditPages.js","web/comfyui/ui/canvas_editing/presentation/CanvasEditText.js","web/comfyui/ui/canvas_editing/presentation/CanvasToolRail.js"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_canvas_tool_layout.py"
+source_sha256 = "31c1f9fd6e10a011ac95175a4b38bcdbd3dc8e2dc4dd1a9c6a99d0d63e455297"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/domain/CanvasEditTools.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_canvas_tool_catalog.py"
+source_sha256 = "95f899d5cbfa2d03b7bd2e1e3d1d8094543d0d4242f63916fb3d49689ebfe486"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/presentation/CanvasEditText.ts", "frontend/comfyui/ui/canvas_editing/presentation/CanvasEditIcons.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/tools/layout_projection.py"
+source_sha256 = "04d4ad3c1f327d7d01e4594092d5613609cf6f43bb5a27fc4079871d6de2c004"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/domain/CanvasEditTools.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/tools/group_menu.py"
+source_sha256 = "586015a379e9e4f3893f7be23f85eff23f97d1e59cbed0dc1706798b7b4e2126"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/presentation/CanvasToolRail.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_brush_settings.py"
+source_sha256 = "1e98c46f1ff02e05b5dc1cff1fe6f1dd63878c68f52f5576ba45ca6366778c47"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/presentation/CanvasBrushOptions.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_contextual_toolbar_controller.py"
+source_sha256 = "851bdf5fdef31c061f72942140e9c0f75ed9ce69b53da5ae3eb70619d81b104e"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/domain/CanvasEditSurface.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/shared/contextual_toolbar/placement.py"
+source_sha256 = "67805e7f761afd65d0e7f6f79f8be8e30afe2e9e2994aa911cf96db20243c709"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/domain/CanvasToolbarPlacement.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_coverage_modification_controls.py"
+source_sha256 = "80bf6ea9a0194052ab1c3e35f3db44cabea5284f8db91fcba2bdcb2801d14585"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/domain/CanvasCoverageModification.ts", "frontend/comfyui/ui/canvas_editing/presentation/CanvasCoverageControls.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_selection_modification_controller.py"
+source_sha256 = "70964a9a5dde812dc4bbb705204994c4a5944b562a8b8a2cf08fa777d8b95268"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/application/CanvasEditController.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_transform_contextual_toolbar.py"
+source_sha256 = "f013422d5477704103f1e12682552fa1ce52bc34a5627f0aeff91b7b409403d7"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/presentation/CanvasEditPages.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_edit_session_toolbar_controller.py"
+source_sha256 = "d134f56d32480f9bfeb2af39b0a3e2b9c86cc3dfd30b804b757ca9829b24681a"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/presentation/CanvasEditPages.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_canvas_context_menu.py"
+source_sha256 = "2a70f99a9930fe29e57eff4a093eb6aeaef97a33efeff2f0ca0170db6d141179"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/presentation/CanvasEditContextMenu.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/canvas/input/input_layer_coverage_edit_mode.py"
+source_sha256 = "3683305e45bfd21271d9b72b023cdadaa44923a737927ee6c33420757b2603be"
+adapted_paths = ["frontend/comfyui/ui/canvas_editing/presentation/CanvasEditOverlay.ts"]
 
 [[component]]
 name = "SugarSubstitute bundled Danbooru prompt tags"
