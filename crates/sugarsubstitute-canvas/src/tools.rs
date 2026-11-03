@@ -8,7 +8,11 @@ mod coverage_commands;
 mod coverage_shape;
 mod coverage_work;
 mod deferred;
+mod move_tool;
 mod pan_zoom;
+mod session;
+mod shared_edges;
+mod transform;
 use crate::{
     CanvasError, CursorIntent, Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession,
     EditSessionId, LayerId, Navigation, NavigationCommand, NavigationCommandOutcome,
@@ -17,15 +21,20 @@ use crate::{
 pub use brush::{BrushMode, BrushOptions, BrushTool};
 pub use context::ToolContext;
 pub use contract::{
-    CanvasTool, PointerKind, PointerSample, Pressure, ToolButton, ToolCancelReason, ToolId,
-    ToolInput, ToolModifiers, ToolOptions, ToolView,
+    CanvasTool, PointerKind, PointerSample, Pressure, SessionAction, SessionKind, SessionState,
+    ToolButton, ToolCancelReason, ToolCommand, ToolId, ToolInput, ToolModifiers, ToolOptions,
+    ToolView, TransformAction,
 };
 pub use coverage_commands::{CoverageModification, CoverageOperation, ModifyPhase, ModifyTarget};
 pub use coverage_shape::{CoverageShapeTool, ShapeKind, ShapeTarget};
 pub use deferred::{DeferredCompletion, DeferredEdit, Disposition, PreparedEdit};
+pub use move_tool::MoveTool;
+pub use session::SESSION_CHECKPOINTS;
+pub use shared_edges::SharedEdgesTool;
 use std::time::Duration;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::ImageError;
+pub use transform::TransformTool;
 
 struct Registered {
     id: ToolId,
@@ -48,7 +57,15 @@ pub struct ToolManager {
     target: Option<LayerId>,
     deferred: Option<DeferredEdit>,
     next_request: u64,
+    previews: context::PreviewOrder,
     modification: Option<coverage_commands::Modification>,
+    previous: ToolId,
+    settled: bool,
+}
+/// The tool an action runs on and the context it runs with, borrowed from disjoint state.
+struct ContextParts<'a> {
+    tool: &'a mut dyn CanvasTool,
+    context: ToolContext<'a>,
 }
 impl ToolManager {
     /// Create navigation as the selected/effective built-in tool with no heap allocation.
@@ -66,7 +83,10 @@ impl ToolManager {
             target: None,
             deferred: None,
             next_request: 0,
+            previews: context::PreviewOrder::default(),
             modification: None,
+            previous: ToolId::PAN_ZOOM,
+            settled: false,
         }
     }
     /// Choose the layer editing tools act on, such as the active mask; `None` leaves them
@@ -157,7 +177,7 @@ impl ToolManager {
         command: NavigationCommand,
         now: Duration,
     ) -> Result<NavigationCommandOutcome, CanvasError> {
-        if self.captured() || (self.edit.is_some() && self.modification.is_none()) {
+        if self.captured() || (self.edit.is_some() && !self.holds_edit()) {
             return Ok(NavigationCommandOutcome::Denied);
         }
         self.navigation.command(command, now)
@@ -171,7 +191,7 @@ impl ToolManager {
         mode: crate::ZoomMode,
         now: Duration,
     ) -> Result<bool, CanvasError> {
-        if self.captured() || (self.edit.is_some() && self.modification.is_none()) {
+        if self.captured() || (self.edit.is_some() && !self.holds_edit()) {
             return Ok(false);
         }
         self.navigation.cancel_command(target, mode, now)
@@ -262,8 +282,10 @@ impl ToolManager {
         self.edit.as_ref().map(EditSession::preview)
     }
     /// Select a tool. While Space is held, update selection without displacing navigation.
+    /// The tool selected before stays remembered, so a tool that settles returns to it.
     /// # Errors
-    /// Preserves current selection/gesture on unknown identity or activation rejection.
+    /// Preserves current selection/gesture on unknown identity, activation rejection or an
+    /// unresolved edit session, which must be applied or cancelled first.
     pub fn select(
         &mut self,
         id: ToolId,
@@ -273,9 +295,14 @@ impl ToolManager {
         if !self.contains(id) {
             return Err(CanvasError::Invalid("Unknown tool identity"));
         }
+        if id == self.selected {
+            return Ok(());
+        }
+        self.refuse_during_session()?;
         if !self.space && self.modification.is_none() {
             self.switch(id, document, ToolCancelReason::SelectionChanged, now)?;
         }
+        self.previous = self.selected;
         self.selected = id;
         Ok(())
     }
@@ -303,7 +330,10 @@ impl ToolManager {
             return Ok(());
         }
         if held {
-            self.dispatch(document.as_deref_mut(), now, |tool, context| tool.suspend(context))?;
+            let effective = self.effective;
+            self.dispatch_to(effective, document.as_deref_mut(), now, |tool, context| {
+                tool.suspend(context)
+            })?;
         }
         let id = if held { ToolId::PAN_ZOOM } else { self.selected };
         self.switch(id, document.as_deref(), ToolCancelReason::TemporaryNavigation, now)?;
@@ -319,16 +349,28 @@ impl ToolManager {
         document: Option<&mut Document>,
         now: Duration,
     ) -> Result<(), CanvasError> {
-        self.dispatch(document, now, |tool, context| tool.input(input, context))
+        let effective = self.effective;
+        self.dispatch_to(effective, document, now, |tool, context| tool.input(input, context))
     }
-    /// Run one action of the effective tool with the shared edit boundary.
-    fn dispatch(
-        &mut self,
-        document: Option<&mut Document>,
+    /// Borrow the tool `id` and a context over the rest of the interaction state.
+    fn context_for<'a>(
+        &'a mut self,
+        id: ToolId,
+        document: Option<&'a mut Document>,
         now: Duration,
-        action: impl FnOnce(&mut dyn CanvasTool, &mut ToolContext<'_>) -> Result<(), CanvasError>,
-    ) -> Result<(), CanvasError> {
-        let mut context = ToolContext {
+    ) -> Result<ContextParts<'a>, CanvasError> {
+        let tool: &mut dyn CanvasTool = if id == ToolId::PAN_ZOOM {
+            &mut self.pan_zoom
+        } else {
+            self.registered
+                .iter_mut()
+                .flatten()
+                .find(|entry| entry.id == id)
+                .ok_or(CanvasError::Invalid("Tool is not registered"))?
+                .tool
+                .as_mut()
+        };
+        let context = ToolContext {
             navigation: &mut self.navigation,
             document,
             edit: &mut self.edit,
@@ -337,19 +379,11 @@ impl ToolManager {
             target: self.target,
             deferred: &mut self.deferred,
             next_request: &mut self.next_request,
+            previews: &mut self.previews,
+            settled: &mut self.settled,
             now,
         };
-        if self.effective == ToolId::PAN_ZOOM {
-            action(&mut self.pan_zoom, &mut context)
-        } else {
-            let entry = self
-                .registered
-                .iter_mut()
-                .flatten()
-                .find(|entry| entry.id == self.effective)
-                .ok_or(CanvasError::Invalid("Effective tool is not registered"))?;
-            action(entry.tool.as_mut(), &mut context)
-        }
+        Ok(ContextParts { tool, context })
     }
     /// Resolve cursor intent without creating native cursor resources or touching image workers.
     pub fn cursor(&self, document: Option<&Document>) -> CursorIntent {
@@ -366,8 +400,9 @@ impl ToolManager {
         self.active().and_then(CanvasTool::overlay)
     }
     /// Cancel capture and staged edits, restoring persistent selection after lifecycle loss.
-    /// An unresolved coverage modification survives focus, geometry and policy changes with its
-    /// preview; the person cancelling, a document change or shutdown cancels it too.
+    /// An unresolved coverage modification or edit session survives focus, geometry and policy
+    /// changes with its preview; the person cancelling, a document change or shutdown cancels it
+    /// too.
     /// # Errors
     /// Preserves clock and activation failures; staged gesture edits are always discarded.
     pub fn cancel(
@@ -380,9 +415,20 @@ impl ToolManager {
             return self.interrupt_modification(reason, document, now);
         }
         self.cancel_active(reason);
+        let ends_sessions = matches!(
+            reason,
+            ToolCancelReason::Requested
+                | ToolCancelReason::DocumentChanged
+                | ToolCancelReason::Shutdown
+        );
+        if ends_sessions && self.selected != self.effective {
+            self.cancel_tool(self.selected, reason);
+        }
         self.capture = false;
-        drop(self.edit.take());
-        self.deferred = None;
+        if !self.session_open() {
+            self.discard_edit();
+            self.deferred = None;
+        }
         self.navigation.input(NavigationInput::Cancel, now)?;
         if self.space {
             self.switch(self.selected, document, reason, now)?;
@@ -401,10 +447,13 @@ impl ToolManager {
             .map(|entry| entry.tool.as_ref())
     }
     fn cancel_active(&mut self, reason: ToolCancelReason) {
-        if self.effective == ToolId::PAN_ZOOM {
+        self.cancel_tool(self.effective, reason);
+    }
+    fn cancel_tool(&mut self, id: ToolId, reason: ToolCancelReason) {
+        if id == ToolId::PAN_ZOOM {
             self.pan_zoom.cancel(reason);
         } else if let Some(entry) =
-            self.registered.iter_mut().flatten().find(|entry| entry.id == self.effective)
+            self.registered.iter_mut().flatten().find(|entry| entry.id == id)
         {
             entry.tool.cancel(reason);
         }
@@ -441,7 +490,9 @@ impl ToolManager {
         self.cancel_active(reason);
         self.capture = false;
         self.navigation = navigation;
-        drop(self.edit.take());
+        if !self.session_open() {
+            self.discard_edit();
+        }
         self.effective = id;
         Ok(())
     }

@@ -239,6 +239,23 @@ fn presentation_overlays_own_tool_feedback_and_animate_only_with_ants() -> harne
         assert_eq!((moving.selection_offset, moving.outline.is_none()), ([3, -1], true));
         assert!(moving.animated());
         assert!(PresentationOverlay::new(extent, None, None, MarchingAnts::default()).is_empty());
+        let corners = [[1.0, 1.0], [9.0, 1.0], [9.0, 8.0], [1.0, 8.0]];
+        let framed = PresentationOverlay::new(
+            extent,
+            None,
+            Some(ToolOverlay::Frame(corners)),
+            MarchingAnts::default(),
+        );
+        assert_eq!(framed.guides, Some(OverlayGuides::Frame(corners)));
+        assert!(!framed.is_empty() && !framed.animated());
+        let seams = [OverlaySeam { start: [5.0, 0.0], end: [5.0, 9.0], focused: true }];
+        let seamed = PresentationOverlay::new(
+            extent,
+            None,
+            Some(ToolOverlay::Seams(&seams)),
+            MarchingAnts::default(),
+        );
+        assert_eq!(seamed.guides, Some(OverlayGuides::Seams(seams.into())));
         Ok(())
     })
 }

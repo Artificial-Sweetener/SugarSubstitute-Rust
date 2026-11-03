@@ -3,7 +3,7 @@
 //! Document edits that shape tools and selection commands compute inside owned jobs.
 use crate::{CanvasError, DocumentEdit, DocumentSnapshot, Layer, LayerContent, LayerId};
 use sugarsubstitute_contracts::execution::JobContext;
-use sugarsubstitute_image_ops::{CombineMode, Coverage};
+use sugarsubstitute_image_ops::{CombineMode, Coverage, CoverageAffine};
 
 /// Join incoming coverage into the snapshot's selection. A result that covers nothing
 /// deselects, so a selection always covers something.
@@ -50,6 +50,48 @@ pub(super) fn reshape_mask(
     Ok(DocumentEdit::Replace(
         layer.clone().with_content(LayerContent::Coverage { coverage, appearance: *appearance }),
     ))
+}
+
+/// Lift the selected pixels of a mask and land them under `affine`, as CuteCanvas places a
+/// floating fragment: the fragment is the mask premultiplied by the selection, the area it
+/// leaves is cut from the mask unless copying, and it lands over the mask through the moved
+/// selection, which becomes the document's selection. One atomic step.
+/// # Errors
+/// Rejects a snapshot without a selection or editable mask and preserves job failures.
+pub(super) fn float(
+    base: &DocumentSnapshot,
+    mask: LayerId,
+    affine: CoverageAffine,
+    copy: bool,
+    context: &JobContext,
+) -> Result<DocumentEdit, CanvasError> {
+    let selection = base.selection().ok_or(CanvasError::Invalid("Nothing is selected"))?;
+    let mut moved = None;
+    let reshaped = reshape_mask(base, mask, |coverage| {
+        let fragment = coverage.combine(selection, CombineMode::Intersect, context)?;
+        let kept = if copy {
+            coverage.clone()
+        } else {
+            coverage.combine(selection, CombineMode::Subtract, context)?
+        };
+        let alpha = selection.transform(affine, context)?;
+        let placed = kept.over(&fragment.transform(affine, context)?, &alpha, context)?;
+        moved = Some(alpha);
+        Ok(placed)
+    })?;
+    Ok(DocumentEdit::Group(vec![reshaped, DocumentEdit::Select(moved.and_then(nonempty))]))
+}
+
+/// A whole mask under `affine`.
+/// # Errors
+/// Rejects a missing or locked mask and preserves job failures.
+pub(super) fn transform_mask(
+    base: &DocumentSnapshot,
+    mask: LayerId,
+    affine: CoverageAffine,
+    context: &JobContext,
+) -> Result<DocumentEdit, CanvasError> {
+    reshape_mask(base, mask, |coverage| Ok(coverage.transform(affine, context)?))
 }
 
 /// The unlocked mask layer with this identity.

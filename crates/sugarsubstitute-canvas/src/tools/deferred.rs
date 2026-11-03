@@ -185,17 +185,19 @@ impl ToolManager {
     pub fn take_deferred(&mut self) -> Option<DeferredEdit> {
         self.deferred.take()
     }
-    /// Whether a tool's gesture is staging an edit, as a brush stroke in progress does. Deferred
-    /// work of this document should wait until it ends: a finished result would displace the
-    /// staged edit, and the gesture's commit would outdate the result.
+    /// Whether a tool's gesture is staging its own edit, as a brush stroke in progress does.
+    /// Deferred work of this document should wait until it ends: a finished result would
+    /// displace the staged edit, and the gesture's commit would outdate the result. A drag whose
+    /// staged edit is its own deferred preview, as Move and Transform drags show, is not one.
     pub const fn staging_gesture(&self) -> bool {
-        self.capture && self.edit.is_some()
+        self.capture && self.edit.is_some() && self.previews.staged.is_none()
     }
     /// Apply finished coverage work. A result computed from a revision the document no longer
     /// shows, or finished while a gesture stages an edit, hands its work back to run again
-    /// against the current revision. A preview replaces the tool's staged preview; a commit
-    /// discards any staged preview and publishes one undo step. While a coverage modification
-    /// is open only its latest request applies, and its commit restores the captured tool.
+    /// against the current revision. A preview replaces the tool's staged preview unless a newer
+    /// one is staged or the previews were discarded after it was requested; a commit discards
+    /// any staged preview and publishes one undo step. While a coverage modification is open
+    /// only its latest request applies, and its commit restores the captured tool.
     /// # Errors
     /// Preserves validation, admission, identity and tool activation failures.
     pub fn complete_deferred(
@@ -207,14 +209,25 @@ impl ToolManager {
         if self.modification.is_some() {
             return self.complete_modification(prepared, document, now);
         }
+        let request = prepared.request();
+        let obsolete = request <= self.previews.floor
+            || self.previews.staged.is_some_and(|staged| staged > request);
+        if prepared.disposition() == Disposition::Preview && obsolete {
+            return Ok(DeferredCompletion::Unchanged);
+        }
         if !prepared.current(document) || self.staging_gesture() {
             return prepared.rerun(document);
         }
-        drop(self.edit.take());
         let applied = match prepared.disposition() {
-            Disposition::Commit => document.apply(prepared.into_edit())?,
+            Disposition::Commit => {
+                drop(self.edit.take());
+                let floor = self.previews.floor.max(request);
+                self.previews = super::context::PreviewOrder { floor, staged: None };
+                document.apply(prepared.into_edit())?
+            }
             Disposition::Preview => {
                 self.stage_deferred(prepared, document)?;
+                self.previews.staged = Some(request);
                 true
             }
         };

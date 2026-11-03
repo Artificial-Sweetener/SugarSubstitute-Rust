@@ -6,7 +6,9 @@ use crate::{Layer, LayerContent, LayerId, ZoomMode, tests::harness};
 use sugarsubstitute_image_ops::Extent;
 mod commands;
 mod deferred;
+pub(in crate::tools) mod editing;
 mod modify;
+mod sessions;
 
 #[test]
 fn rejected_memory_admission_does_not_register_a_tool_or_consume_its_identity()

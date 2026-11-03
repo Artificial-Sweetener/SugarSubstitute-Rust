@@ -168,6 +168,68 @@ pub struct ToolView<'a> {
     /// The layer editing tools act on, such as the active mask.
     pub target: Option<LayerId>,
 }
+/// A typed editing command for the selected tool, as the editing UI sends Enter, Escape, the
+/// arrow keys and the transform and edit-session toolbars.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ToolCommand {
+    /// Enter: commit floating pixels, apply a transform or an edit session.
+    Commit,
+    /// Escape: cancel the gesture, floating pixels, a transform or an edit session.
+    Cancel,
+    /// An arrow key: move content by whole document pixels, `[dx, dy]`.
+    Nudge([i32; 2]),
+    /// A transform toolbar action.
+    Transform(TransformAction),
+    /// An edit-session toolbar action.
+    Session(SessionAction),
+}
+/// Discrete transform toolbar actions, each one edit-session checkpoint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransformAction {
+    /// Turn a quarter counterclockwise about the frame centre.
+    RotateLeft,
+    /// Turn a quarter clockwise about the frame centre.
+    RotateRight,
+    /// Mirror left to right about the frame centre.
+    FlipHorizontal,
+    /// Mirror top to bottom about the frame centre.
+    FlipVertical,
+}
+/// Edit-session toolbar actions.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SessionAction {
+    /// Step back one session checkpoint; never past the session's base.
+    Undo,
+    /// Step forward one undone session checkpoint.
+    Redo,
+    /// Publish the session's current result as one document undo step and close it.
+    Apply,
+    /// Restore the session's base and close it.
+    Cancel,
+}
+/// What an unresolved edit session edits.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SessionKind {
+    /// Floating selected pixels moved by the Move tool.
+    Move,
+    /// A layer or selection under the Transform tool.
+    Transform,
+    /// Masks resized together along their shared edges.
+    SharedEdges,
+    /// A live-previewed expand, contract or feather.
+    Modify,
+}
+/// The unresolved edit session the editing UI reports: its kind and whether its own Undo and
+/// Redo can act.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SessionState {
+    /// What the session edits.
+    pub kind: SessionKind,
+    /// Whether session Undo can act.
+    pub undo: bool,
+    /// Whether session Redo can act.
+    pub redo: bool,
+}
 /// Settings the host chooses for a registered tool, delivered through
 /// [`ToolManager::configure`] and observed through [`ToolManager::options`].
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -217,6 +279,24 @@ pub trait CanvasTool: Send {
     }
     /// Presentation-only feedback for the current gesture, in document coordinates.
     fn overlay(&self) -> Option<ToolOverlay<'_>> {
+        None
+    }
+    /// Act on a typed command; `Ok(false)` when this tool does not take it. A tool asks for the
+    /// previously selected tool back through [`ToolContext::settle`].
+    /// # Errors
+    /// Preserve document causes; the tool's session state stays consistent on failure.
+    fn command(
+        &mut self,
+        _command: ToolCommand,
+        _context: &mut ToolContext<'_>,
+    ) -> Result<bool, CanvasError> {
+        Ok(false)
+    }
+    /// The tool's unresolved edit session. While one is open the tool cannot be changed, its
+    /// preview survives temporary navigation and focus, geometry and policy changes, and
+    /// lifecycle cancellation settles a gesture in flight into a checkpoint instead of
+    /// discarding the session; an explicit cancel, a document change or shutdown cancels it.
+    fn session(&self) -> Option<SessionState> {
         None
     }
 }

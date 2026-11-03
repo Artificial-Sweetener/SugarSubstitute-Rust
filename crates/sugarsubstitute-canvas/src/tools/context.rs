@@ -14,7 +14,16 @@ pub struct ToolContext<'a> {
     pub(super) target: Option<LayerId>,
     pub(super) deferred: &'a mut Option<DeferredEdit>,
     pub(super) next_request: &'a mut u64,
+    pub(super) previews: &'a mut PreviewOrder,
+    pub(super) settled: &'a mut bool,
     pub(super) now: Duration,
+}
+/// Which deferred previews may still be staged: only requests newer than `floor`, and the
+/// request whose result is staged now.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct PreviewOrder {
+    pub(super) floor: u64,
+    pub(super) staged: Option<u64>,
 }
 impl ToolContext<'_> {
     /// Request/release pointer capture for this tool's gesture; only the desktop owns native effects.
@@ -61,12 +70,41 @@ impl ToolContext<'_> {
         let edit = self.edit.take().ok_or(CanvasError::Invalid("Tool has no edit session"))?;
         let result = doc.commit_edit(edit);
         *self.capture = false;
+        self.previews.floor = *self.next_request;
+        self.previews.staged = None;
         result
     }
-    /// Cancel the active edit without changing document content, revision or history.
+    /// Cancel the active edit without changing document content, revision or history. Previews
+    /// requested before now are obsolete and never staged; requested commits still apply.
     pub fn cancel_edit(&mut self) {
         drop(self.edit.take());
         *self.capture = false;
+        self.previews.floor = *self.next_request;
+        self.previews.staged = None;
+        if self.deferred.as_ref().is_some_and(|work| work.disposition() == Disposition::Preview) {
+            *self.deferred = None;
+        }
+    }
+    /// The order of the latest deferred request, such as the preview [`Self::defer`] just made.
+    pub const fn latest_request(&self) -> u64 {
+        *self.next_request
+    }
+    /// The request whose preview is staged now against the document's current revision, when
+    /// one is; a preview of an older revision cannot be published as it stands.
+    pub fn staged_request(&self) -> Option<u64> {
+        let (Some(edit), Some(document)) = (self.edit.as_ref(), self.document.as_deref()) else {
+            return None;
+        };
+        let (preview, current) = (edit.preview(), document.snapshot());
+        let base = preview.base();
+        ((base.identity(), base.revision()) == (current.identity(), current.revision()))
+            .then_some(self.previews.staged)
+            .flatten()
+    }
+    /// Ask for the previously selected tool once this observation or command settles, as
+    /// applying or cancelling a transform returns to the tool it was opened from.
+    pub fn settle(&mut self) {
+        *self.settled = true;
     }
     /// The layer editing tools act on, such as the active mask.
     pub const fn target(&self) -> Option<LayerId> {

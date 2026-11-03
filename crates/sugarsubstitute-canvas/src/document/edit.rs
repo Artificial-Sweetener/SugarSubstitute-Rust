@@ -163,6 +163,11 @@ impl Content {
                 }
                 self.selection = selection;
             }
+            DocumentEdit::Group(edits) => {
+                for edit in edits {
+                    self.apply(edit)?;
+                }
+            }
         }
         Ok(())
     }

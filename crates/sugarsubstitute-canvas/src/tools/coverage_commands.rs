@@ -103,7 +103,8 @@ impl ToolManager {
     }
     /// Remove the selection as one undo step.
     /// # Errors
-    /// Rejects deselecting during a modification and preserves document failures.
+    /// Rejects deselecting during a modification or edit session and preserves document
+    /// failures.
     pub fn deselect(&mut self, document: &mut Document) -> Result<bool, CanvasError> {
         self.refuse_during_modification()?;
         document.apply(crate::DocumentEdit::Select(None))
@@ -111,7 +112,7 @@ impl ToolManager {
     /// Remove the selected area from the target mask, as Delete does, through an owned job; the
     /// selection stays. Returns whether there was anything to clear.
     /// # Errors
-    /// Rejects clearing during a modification.
+    /// Rejects clearing during a modification or edit session.
     pub fn clear_selection(&mut self, document: &Document) -> Result<bool, CanvasError> {
         self.refuse_during_modification()?;
         let snapshot = document.snapshot();
@@ -139,7 +140,7 @@ impl ToolManager {
     /// Apply without an open preview publishes the modification directly.
     /// # Errors
     /// Rejects a missing selection or editable target mask, a different target while one is
-    /// open, and preserves tool activation and document failures.
+    /// open, an unresolved edit session, and preserves tool activation and document failures.
     pub fn modify(
         &mut self,
         target: ModifyTarget,
@@ -148,6 +149,9 @@ impl ToolManager {
         document: &mut Document,
         now: Duration,
     ) -> Result<(), CanvasError> {
+        if self.modification.is_none() {
+            self.refuse_during_session()?;
+        }
         if self.modification.as_ref().is_some_and(|open| open.target != target) {
             return Err(CanvasError::Invalid("Another coverage modification is open"));
         }
@@ -316,6 +320,7 @@ impl ToolManager {
         }
     }
     fn refuse_during_modification(&self) -> Result<(), CanvasError> {
+        self.refuse_during_session()?;
         if self.modification.is_some() {
             return Err(CanvasError::Invalid("A coverage modification is unresolved"));
         }

@@ -12,7 +12,8 @@
 //! rasterizes the overlay again, never document pixels.
 use crate::{CpuProjection, RenderError, cpu::check};
 use sugarsubstitute_canvas::{
-    ANT_DARK, ANT_LIGHT, OverlayOutline, PresentationOverlay, Viewport, outline_light,
+    ANT_DARK, ANT_LIGHT, GUIDE, GUIDE_HANDLE, GUIDE_HANDLE_RADIUS, OverlayGuides, OverlayOutline,
+    PresentationOverlay, Viewport, outline_light,
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 pub use sugarsubstitute_image_gpu::OverlayPixel;
@@ -25,6 +26,7 @@ const BLACK: [u8; 3] = [0, 0, 0];
 enum Stroke {
     Ants(sugarsubstitute_canvas::MarchingAnts),
     Outline,
+    Solid([u8; 3]),
 }
 impl Stroke {
     fn color(self, distance: f64) -> [u8; 3] {
@@ -33,6 +35,7 @@ impl Stroke {
             Self::Ants(_) => ANT_DARK,
             Self::Outline if outline_light(distance) => WHITE,
             Self::Outline => BLACK,
+            Self::Solid(color) => color,
         }
     }
 }
@@ -92,6 +95,9 @@ impl OverlayPixels {
                 }
                 _ => raster.closed(&points, Stroke::Outline, clip)?,
             }
+        }
+        if let Some(guides) = &overlay.guides {
+            raster.guides(guides, view)?;
         }
         Ok(Self { extent, pixels: raster.pixels, _memory: raster.memory })
     }
@@ -162,6 +168,71 @@ fn outline_points(outline: &OverlayOutline, view: Viewport) -> Result<Vec<[f64; 
 }
 
 impl Raster<'_> {
+    /// Draw a transform box with its eight handles, or shared edges with their middle handles,
+    /// as CuteCanvas's cosmetic guide pens and circular affine handles.
+    fn guides(&mut self, guides: &OverlayGuides, view: Viewport) -> Result<(), RenderError> {
+        let solid = Stroke::Solid(GUIDE);
+        match guides {
+            OverlayGuides::Frame(corners) => {
+                let mut points = [[0.0; 2]; 4];
+                for (point, corner) in points.iter_mut().zip(corners) {
+                    *point = view.device_at(*corner)?;
+                }
+                self.closed(&points, solid, None)?;
+                for (index, corner) in points.iter().enumerate() {
+                    let next = points[(index + 1) % points.len()];
+                    let middle = [(corner[0] + next[0]) / 2.0, (corner[1] + next[1]) / 2.0];
+                    self.handle(*corner, GUIDE_HANDLE_RADIUS)?;
+                    self.handle(middle, GUIDE_HANDLE_RADIUS)?;
+                }
+            }
+            OverlayGuides::Seams(seams) => {
+                for seam in seams.iter() {
+                    let (start, end) = (view.device_at(seam.start)?, view.device_at(seam.end)?);
+                    self.segment(start, end, 0.0, solid, None, None)?;
+                    if seam.focused {
+                        // A focused seam is two device pixels wide.
+                        let along = [end[0] - start[0], end[1] - start[1]];
+                        let length = along[0].hypot(along[1]).max(f64::EPSILON);
+                        let shift = [-along[1] / length, along[0] / length];
+                        let offset = |[x, y]: [f64; 2]| [x + shift[0], y + shift[1]];
+                        self.segment(offset(start), offset(end), 0.0, solid, None, None)?;
+                    }
+                    let middle = [(start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0];
+                    let radius = GUIDE_HANDLE_RADIUS + if seam.focused { 1.0 } else { 0.0 };
+                    self.handle(middle, radius)?;
+                }
+            }
+        }
+        check(self.context)
+    }
+    /// A filled circular handle with a one-pixel guide-coloured rim.
+    fn handle(&mut self, [x, y]: [f64; 2], radius: f64) -> Result<(), RenderError> {
+        let [width, height] = [f64::from(self.extent.width()), f64::from(self.extent.height())];
+        let reach = radius + 1.0;
+        let (left, top) = ((x - reach).floor().max(0.0), (y - reach).floor().max(0.0));
+        let (right, bottom) = ((x + reach).ceil().min(width), (y + reach).ceil().min(height));
+        let mut row = top;
+        while row < bottom {
+            let mut column = left;
+            while column < right {
+                let distance = (column + 0.5 - x).hypot(row + 0.5 - y);
+                let color = if distance <= radius - 0.5 {
+                    Some(GUIDE_HANDLE)
+                } else if distance <= radius + 0.5 {
+                    Some(GUIDE)
+                } else {
+                    None
+                };
+                if let Some(color) = color {
+                    self.push(OverlayPixel { x: column as u32, y: row as u32, color })?;
+                }
+                column += 1.0;
+            }
+            row += 1.0;
+        }
+        Ok(())
+    }
     /// Stroke a closed device-space polyline, measuring dash distance from its first point.
     fn closed(
         &mut self,

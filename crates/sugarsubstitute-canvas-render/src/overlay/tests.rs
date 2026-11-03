@@ -33,6 +33,7 @@ fn outline(document: Extent, shape: OverlayOutline) -> PresentationOverlay {
         selection: None,
         selection_offset: [0, 0],
         outline: Some(shape),
+        guides: None,
         ants: MarchingAnts::default(),
         document,
     }
@@ -103,6 +104,7 @@ fn ants_dash_each_boundary_run_through_the_camera_and_phase() -> harness::TestRe
             selection: Some(Arc::clone(&boundary)),
             selection_offset: offset,
             outline: None,
+            guides: None,
             ants: MarchingAnts::at(MarchingAnts::STEP * phase, false),
             document,
         };
@@ -149,6 +151,7 @@ fn magnified_strokes_sample_only_the_visible_surface() -> harness::TestResult {
             selection: Some(boundary),
             selection_offset: [0, 0],
             outline: None,
+            guides: None,
             ants: MarchingAnts::default(),
             document,
         };
@@ -156,6 +159,47 @@ fn magnified_strokes_sample_only_the_visible_surface() -> harness::TestResult {
         // Only the document's left edge crosses the view, one column of 32 rows.
         assert_eq!(pixels.pixels().len(), 32);
         assert!(pixels.pixels().iter().all(|pixel| pixel.x == 10));
+        Ok(())
+    })
+}
+
+#[test]
+fn guides_draw_a_solid_frame_with_handles_and_heavier_focused_seams() -> harness::TestResult {
+    run(|context| {
+        let surface = Extent::new(60, 50)?;
+        let view = Viewport::new(surface)?;
+        let guides = |guides| PresentationOverlay {
+            selection: None,
+            selection_offset: [0, 0],
+            outline: None,
+            guides: Some(guides),
+            ants: MarchingAnts::default(),
+            document: surface,
+        };
+        let corners = [[10.0, 10.0], [40.0, 10.0], [40.0, 30.0], [10.0, 30.0]];
+        let frame =
+            OverlayPixels::rasterize(&guides(OverlayGuides::Frame(corners)), view, context)?;
+        let pixels = painted(&frame)?;
+        let at = |pixels: &[u32], x: usize, y: usize| pixels[y * 60 + x];
+        // Solid guide edges between handles, a filled handle at every corner and midpoint.
+        assert_eq!(at(&pixels, 18, 10), word(GUIDE));
+        assert_eq!(at(&pixels, 33, 10), word(GUIDE));
+        for [x, y] in [[10, 10], [25, 10], [40, 20], [25, 30]] {
+            assert_eq!(at(&pixels, x, y), word(GUIDE_HANDLE), "{x},{y}");
+        }
+        assert_eq!(at(&pixels, 25, 20), GREY);
+        let seam = |focused| {
+            let seams = Arc::from([sugarsubstitute_canvas::OverlaySeam {
+                start: [20.0, 5.0],
+                end: [20.0, 45.0],
+                focused,
+            }]);
+            OverlayPixels::rasterize(&guides(OverlayGuides::Seams(seams)), view, context)
+        };
+        let (plain, focused) = (painted(&seam(false)?)?, painted(&seam(true)?)?);
+        assert_eq!([at(&plain, 20, 10), at(&plain, 19, 10)], [word(GUIDE), GREY]);
+        assert_eq!([at(&focused, 20, 10), at(&focused, 19, 10)], [word(GUIDE); 2]);
+        assert_eq!(at(&plain, 20, 25), word(GUIDE_HANDLE));
         Ok(())
     })
 }

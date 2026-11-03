@@ -30,6 +30,35 @@ pub enum CursorIntent {
     MoveCut,
     /// The tool has nothing it may edit here, such as a mask shape without an editable mask.
     Forbidden,
+    /// A two-headed resize arrow along one screen direction, for transform handles and shared
+    /// edges, as Qt's size cursors.
+    Resize(ResizeDirection),
+    /// The pointer turns a transform box about its centre.
+    Rotate,
+}
+/// The screen direction a resize arrow points along, in 45° steps.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ResizeDirection {
+    /// Left and right.
+    Horizontal,
+    /// Up and down.
+    Vertical,
+    /// Top left to bottom right.
+    DiagonalDown,
+    /// Bottom left to top right.
+    DiagonalUp,
+}
+impl ResizeDirection {
+    /// The direction nearest a screen-space vector, with y pointing down.
+    pub fn along([x, y]: [f64; 2]) -> Self {
+        let steps = (y.atan2(x) / std::f64::consts::FRAC_PI_4).round() as i64;
+        match steps.rem_euclid(4) {
+            0 => Self::Horizontal,
+            1 => Self::DiagonalDown,
+            2 => Self::Vertical,
+            _ => Self::DiagonalUp,
+        }
+    }
 }
 
 /// The ring a brush cursor draws: the brush footprint as it appears on screen.

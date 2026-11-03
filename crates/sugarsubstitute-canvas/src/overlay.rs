@@ -48,6 +48,35 @@ pub enum ToolOverlay<'a> {
     /// The committed selection's ants displaced by whole document pixels while its outline is
     /// dragged.
     SelectionOffset([i64; 2]),
+    /// A transform box through these four corners, clockwise from the frame's top left, with a
+    /// handle at every corner and side midpoint.
+    Frame([[f64; 2]; 4]),
+    /// Shared edges that can be dragged to resize the masks on either side.
+    Seams(&'a [OverlaySeam]),
+}
+/// Guide colour of transform boxes and shared edges, as sRGB bytes, as CuteCanvas draws them.
+pub const GUIDE: [u8; 3] = [82, 139, 205];
+/// Fill of guide handles, as sRGB bytes.
+pub const GUIDE_HANDLE: [u8; 3] = [238, 242, 247];
+/// Radius of a guide handle in device pixels; a focused seam's handle is one pixel larger.
+pub const GUIDE_HANDLE_RADIUS: f64 = 4.0;
+/// One shared edge in document coordinates, with its middle drag handle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OverlaySeam {
+    /// One end of the edge.
+    pub start: [f64; 2],
+    /// The other end of the edge.
+    pub end: [f64; 2],
+    /// Whether the pointer hovers or drags this edge; it is drawn heavier.
+    pub focused: bool,
+}
+/// Owned transform or shared-edge guides that can travel with a presentation job.
+#[derive(Clone, Debug, PartialEq)]
+pub enum OverlayGuides {
+    /// A transform box through four corners.
+    Frame([[f64; 2]; 4]),
+    /// Shared edges.
+    Seams(Arc<[OverlaySeam]>),
 }
 
 /// Animation state of the marching ants: which way the light and dark dashes are shifted.
@@ -129,6 +158,8 @@ pub struct PresentationOverlay {
     pub selection_offset: [i64; 2],
     /// The outline of a shape being drawn.
     pub outline: Option<OverlayOutline>,
+    /// Transform box or shared-edge guides.
+    pub guides: Option<OverlayGuides>,
     /// Ant animation state.
     pub ants: MarchingAnts,
     /// Document extent; drawn outlines are clipped to it like the coverage they produce.
@@ -142,16 +173,21 @@ impl PresentationOverlay {
         tool: Option<ToolOverlay<'_>>,
         ants: MarchingAnts,
     ) -> Self {
-        let (outline, selection_offset) = match tool {
-            Some(ToolOverlay::Outline(shape)) => (Some(shape.into()), [0, 0]),
-            Some(ToolOverlay::SelectionOffset(offset)) => (None, offset),
-            None => (None, [0, 0]),
-        };
-        Self { selection, selection_offset, outline, ants, document }
+        let (mut outline, mut selection_offset, mut guides) = (None, [0, 0], None);
+        match tool {
+            Some(ToolOverlay::Outline(shape)) => outline = Some(shape.into()),
+            Some(ToolOverlay::SelectionOffset(offset)) => selection_offset = offset,
+            Some(ToolOverlay::Frame(corners)) => guides = Some(OverlayGuides::Frame(corners)),
+            Some(ToolOverlay::Seams(seams)) => {
+                guides = Some(OverlayGuides::Seams(Arc::from(seams)))
+            }
+            None => {}
+        }
+        Self { selection, selection_offset, outline, guides, ants, document }
     }
     /// Whether nothing would be drawn.
     pub fn is_empty(&self) -> bool {
-        self.outline.is_none() && !self.animated()
+        self.outline.is_none() && self.guides.is_none() && !self.animated()
     }
     /// Whether the overlay changes over time, so hosts schedule [`MarchingAnts::next_step`].
     pub fn animated(&self) -> bool {

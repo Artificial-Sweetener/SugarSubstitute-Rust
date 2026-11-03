@@ -41,6 +41,32 @@ fn layer(extent: Extent) -> Result<Layer, CanvasError> {
     Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: AssetId([1; 32]), extent })
 }
 #[test]
+fn grouped_edits_publish_as_one_step_or_not_at_all() -> harness::TestResult {
+    execute(|memory| {
+        let extent = Extent::new(100, 100)?;
+        let mut doc = Document::new(1, extent, memory)?;
+        let original = layer(extent)?;
+        let hidden = original.clone().with_visibility(false);
+        let rejected = DocumentEdit::Group(vec![
+            DocumentEdit::Insert { index: 0, layer: original.clone() },
+            DocumentEdit::Remove(LayerId::new(9)?),
+        ]);
+        assert!(doc.apply(rejected).is_err());
+        assert_eq!((doc.snapshot().revision(), doc.snapshot().layers().len()), (1, 0));
+        let grouped = DocumentEdit::Group(vec![
+            DocumentEdit::Insert { index: 0, layer: original },
+            DocumentEdit::Replace(hidden.clone()),
+            DocumentEdit::Select(Some(Coverage::new(extent, 1, memory)?)),
+        ]);
+        assert!(doc.apply(grouped)?);
+        assert_eq!(doc.snapshot().layers(), &[hidden]);
+        assert!(doc.snapshot().selection().is_some());
+        assert!(doc.undo()? && doc.snapshot().layers().is_empty());
+        assert!(doc.snapshot().selection().is_none());
+        Ok(())
+    })
+}
+#[test]
 fn a_multi_update_gesture_publishes_once_and_undo_redo_restore_whole_changes() -> harness::TestResult
 {
     execute(|memory| {

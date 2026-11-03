@@ -227,6 +227,9 @@ pub enum DocumentEdit {
     },
     /// Replace the document's selection; `None` deselects.
     Select(Option<Coverage>),
+    /// Apply edits in order as one atomic step, as floating pixels land on their mask while
+    /// the selection moves with them; any rejected edit rejects the whole group.
+    Group(Vec<DocumentEdit>),
 }
 
 struct Content {

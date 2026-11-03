@@ -24,7 +24,7 @@ pub use archive::{
 pub use comparison::{Comparison, WipeOrientation};
 pub use compile::{CaptureLayers, CompiledView};
 pub use coverage::BackingCoverage;
-pub use cursor::{BrushOutline, CursorIntent};
+pub use cursor::{BrushOutline, CursorIntent, ResizeDirection};
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};
 pub use document::{
     Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession, EditSessionId, Layer,
@@ -35,18 +35,20 @@ pub use navigation::{
     Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput, ScrollPhase, ZoomMode,
 };
 pub use overlay::{
-    ANT_DARK, ANT_DASH, ANT_LIGHT, BoundaryRun, BoundaryWork, CoverageBoundary, MarchingAnts,
-    OUTLINE_DASH, OUTLINE_GAP, OverlayOutline, OverlayShape, PresentationOverlay,
-    SelectionOutlines, ToolOverlay, outline_light,
+    ANT_DARK, ANT_DASH, ANT_LIGHT, BoundaryRun, BoundaryWork, CoverageBoundary, GUIDE,
+    GUIDE_HANDLE, GUIDE_HANDLE_RADIUS, MarchingAnts, OUTLINE_DASH, OUTLINE_GAP, OverlayGuides,
+    OverlayOutline, OverlaySeam, OverlayShape, PresentationOverlay, SelectionOutlines, ToolOverlay,
+    outline_light,
 };
 pub use presentation::{FrameStamp, RenderRequest};
 pub use projection::ViewProjection;
 pub use tools::{
     BrushMode, BrushOptions, BrushTool, CanvasTool, CoverageModification, CoverageOperation,
     CoverageShapeTool, DeferredCompletion, DeferredEdit, Disposition, ModifyPhase, ModifyTarget,
-    PointerKind, PointerSample, PreparedEdit, Pressure, ShapeKind, ShapeTarget, ToolButton,
-    ToolCancelReason, ToolContext, ToolId, ToolInput, ToolManager, ToolModifiers, ToolOptions,
-    ToolView,
+    MoveTool, PointerKind, PointerSample, PreparedEdit, Pressure, SESSION_CHECKPOINTS,
+    SessionAction, SessionKind, SessionState, ShapeKind, ShapeTarget, SharedEdgesTool, ToolButton,
+    ToolCancelReason, ToolCommand, ToolContext, ToolId, ToolInput, ToolManager, ToolModifiers,
+    ToolOptions, ToolView, TransformAction, TransformTool,
 };
 pub use viewport::{MAX_SURFACE_EDGE, Viewport};
 #[cfg(test)]
