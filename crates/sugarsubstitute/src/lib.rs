@@ -36,6 +36,7 @@ mod forwarding_root;
 mod held_child;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod held_fixture;
+pub mod input_documents;
 pub mod instance_conflict;
 mod invocation;
 pub mod job_sequence;

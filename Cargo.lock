@@ -2676,6 +2676,8 @@ dependencies = [
 name = "sugarsubstitute-canvas"
 version = "0.1.0"
 dependencies = [
+ "flate2",
+ "sha2",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
  "sugarsubstitute-image-ops",

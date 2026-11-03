@@ -1472,3 +1472,30 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+# History-free input canvas documents; unknown versions are rejected as observable misses
+# whose files the store preserves as evidence before any replacement.
+[[formats]]
+id = "input-document-archive-v1"
+owner = "sugarsubstitute-canvas"
+sources = ["crates/sugarsubstitute-canvas/src/archive.rs", "crates/sugarsubstitute-canvas/src/archive/encode.rs", "crates/sugarsubstitute-canvas/src/archive/decode.rs", "crates/sugarsubstitute-canvas/src/archive/integrity.rs"]
+source_sha256 = "sha256:425366e9151b3ef411e14673963c082c2f2192f63e84888d8954da944c18da07"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+# Session-directory layout: current archive, recovery copy and digest-named rejection evidence.
+[[formats]]
+id = "input-document-store-v1"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/input_documents.rs", "crates/sugarsubstitute/src/input_documents/files.rs"]
+source_sha256 = "sha256:ff73b413ad5b2487cd73a9d747acbac8819f998c20f3c641b940dfafe3d47abd"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

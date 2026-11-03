@@ -12,10 +12,12 @@
 mod codec;
 mod filters;
 mod path;
+mod tiles;
 
 pub use codec::{coverage_from_u8, coverage_to_u8};
 pub use filters::CombineMode;
 pub use path::Path;
+pub use tiles::{CoverageBuilder, CoverageTileValues};
 
 use crate::{Extent, ImageError, Pixel, Region, TILE_EDGE, check};
 use sha2::{Digest, Sha256};

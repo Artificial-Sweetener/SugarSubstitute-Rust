@@ -9,7 +9,7 @@ use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::{AssetId, Coverage, Extent, VectorRectangle};
 
-const MAX_LAYERS: usize = 32;
+pub(crate) const MAX_LAYERS: usize = 32;
 const HISTORY_LIMIT: usize = 32;
 /// Longest layer name, in characters, matching what the canvas protocol carries.
 const MAX_NAME_CHARACTERS: usize = 256;
@@ -326,6 +326,22 @@ impl Document {
             _history_memory: claim,
         })
     }
+    /// Rebuild persisted content as the document's first revision, with empty history.
+    /// # Errors
+    /// Rejects zero identity, more than 32 layers, duplicate identities, layers or a selection
+    /// that do not match `extent`, and insufficient memory/allocation capacity.
+    pub fn restore(
+        identity: u64,
+        extent: Extent,
+        layers: &[Layer],
+        selection: Option<Coverage>,
+        memory: &MemoryLease,
+    ) -> Result<Self, CanvasError> {
+        validate_stack(extent, layers, selection.as_ref())?;
+        let mut document = Self::new(identity, extent, memory)?;
+        document.current.content = Arc::new(Content::new(extent, layers, selection, memory)?);
+        Ok(document)
+    }
     /// Share the current immutable revision without copying layers or pixels.
     pub fn snapshot(&self) -> DocumentSnapshot {
         self.current.clone()
@@ -394,6 +410,23 @@ fn find(layers: &[Layer], id: LayerId) -> Result<usize, CanvasError> {
         .iter()
         .position(|layer| layer.id == id)
         .ok_or(CanvasError::Invalid("Unknown layer identity"))
+}
+/// Check a complete bottom-to-top stack and selection against the rules every edit keeps.
+pub(crate) fn validate_stack(
+    extent: Extent,
+    layers: &[Layer],
+    selection: Option<&Coverage>,
+) -> Result<(), CanvasError> {
+    let duplicate =
+        |(index, layer): (usize, &Layer)| layers[..index].iter().any(|old| old.id == layer.id);
+    if layers.len() > MAX_LAYERS || layers.iter().enumerate().any(duplicate) {
+        return Err(CanvasError::Invalid("Too many layers or a duplicate layer identity"));
+    }
+    layers.iter().try_for_each(|layer| validate_layer(layer, extent))?;
+    if selection.is_some_and(|selection| selection.extent() != extent) {
+        return Err(CanvasError::Invalid("Selection extent differs from document"));
+    }
+    Ok(())
 }
 fn validate_layer(layer: &Layer, extent: Extent) -> Result<(), CanvasError> {
     if let LayerContent::Raster { extent: source, .. } = &layer.content

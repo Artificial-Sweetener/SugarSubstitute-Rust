@@ -11,6 +11,8 @@ publish.workspace = true
 [dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
+flate2.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }

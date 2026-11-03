@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Native canvas document and viewport state independent of windows and render devices.
+mod archive;
 mod comparison;
 mod compile;
 mod coverage;
@@ -12,6 +13,11 @@ mod presentation;
 mod projection;
 mod tools;
 mod viewport;
+pub use archive::{
+    ArchiveError, ArchiveIntegrity, ArchivedDocument, INPUT_ARCHIVE_VERSION, InputDocumentArchive,
+    MAX_ARCHIVE_BYTES, MAX_ARCHIVED_DOCUMENTS, MAX_DOCUMENT_KEY_BYTES, MAX_HOST_METADATA_BYTES,
+    MAX_SOURCE_REFERENCE_BYTES, SourceReference,
+};
 pub use comparison::{Comparison, WipeOrientation};
 pub use compile::CompiledView;
 pub use coverage::BackingCoverage;
