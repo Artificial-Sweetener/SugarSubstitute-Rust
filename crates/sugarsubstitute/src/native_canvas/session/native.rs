@@ -316,10 +316,11 @@ impl Lifetime for Session {
                     None
                 }
             };
-            match (presentation, preview) {
-                (Some(a), Some(b)) => Some(a.min(b)),
-                (a, b) => a.or(b),
-            }
+            let autosave = self.input_autosave_deadline().and_then(|deadline| {
+                let wait = deadline.checked_duration_since(self.clock.now()).unwrap_or_default();
+                native_now.checked_add(wait)
+            });
+            [presentation, preview, autosave].into_iter().flatten().min()
         };
         match (motion, presentation) {
             (Some(a), Some(b)) => Some(a.min(b)),

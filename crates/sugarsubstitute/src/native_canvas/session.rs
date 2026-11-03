@@ -33,10 +33,6 @@ mod gpu;
 #[cfg(all(windows, feature = "native-composition"))]
 mod host_graphics;
 #[cfg(feature = "native-composition")]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "The workflow-surface protocol adapter is this API's consumer")
-)]
 pub(crate) mod inputs;
 mod native;
 mod preparation;

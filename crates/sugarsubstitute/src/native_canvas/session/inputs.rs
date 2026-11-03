@@ -13,7 +13,9 @@
 //! undo never contradicts the workflow. Appearance commands and canvas geometry changes are
 //! ordinary undoable steps; hover emphasis is presentation only.
 mod apply;
+mod archive;
 mod build;
+mod capture;
 mod contract;
 mod edits;
 mod jobs;
@@ -23,6 +25,11 @@ mod route;
 mod sync;
 
 use super::*;
+pub(crate) use crate::native_canvas::work::capture::CapturePixels;
+pub(crate) use capture::{
+    CaptureEncoder, CaptureRejection, CaptureTarget, CaptureTicket, EncodedCapture, InputCapture,
+    capture_extent,
+};
 pub(crate) use contract::*;
 use std::collections::VecDeque;
 use sugarsubstitute_canvas::{Layer, LayerId, MaskAppearance};
@@ -71,6 +78,8 @@ struct Surface {
     next_layer: u64,
     /// The document while parked here; `None` while it loads or is the session's current one.
     document: Option<Box<document::DocumentState>>,
+    /// Archived content awaiting the base image the next sync acquires.
+    restored: Option<sugarsubstitute_canvas::ArchivedDocument>,
     loaded: bool,
     failure: Option<InputFailure>,
 }
@@ -121,6 +130,8 @@ pub(super) struct InputDocuments {
     unsettled: VecDeque<Arc<dyn acquisition::SourceAcquirer>>,
     retiring: Retiring,
     route: Option<route::Pending>,
+    captures: capture::Captures,
+    persistence: Option<archive::Persistence>,
     /// The output document shown before the current input document, restored on Output.
     pub(super) parked_output: Option<Box<document::DocumentState>>,
 }
@@ -185,6 +196,7 @@ impl InputDocuments {
             || self.parked_output.is_some()
             || !self.retiring.is_empty()
             || !self.queue.is_empty()
+            || self.captures.holds()
     }
 
     /// Whether no work is queued or running, no route change waits and every adapter retired.
@@ -194,6 +206,7 @@ impl InputDocuments {
             && self.running.is_none()
             && self.unsettled.is_empty()
             && self.route.is_none()
+            && !self.captures.in_flight()
     }
 
     /// Whether a job is running.
@@ -204,7 +217,10 @@ impl InputDocuments {
 
     /// Whether running work or adapters still await their terminal outcomes.
     pub(super) fn in_flight(&self) -> bool {
-        self.running.is_some() || !self.unsettled.is_empty()
+        self.running.is_some()
+            || !self.unsettled.is_empty()
+            || self.captures.in_flight()
+            || self.persistence.as_ref().is_some_and(archive::Persistence::in_flight)
     }
 }
 
@@ -231,13 +247,7 @@ impl Surface {
         SurfaceOutcome::Synced(SyncedSurface {
             key: self.key.clone(),
             document: self.identity,
-            revision: snapshot.revision(),
-            geometry: format!(
-                "input-{:x}-{}x{}",
-                self.identity.get() & !IDENTITY_NAMESPACE,
-                extent.width(),
-                extent.height()
-            ),
+            geometry: self.identity.geometry(extent),
             extent,
             masks: self
                 .masks
@@ -281,6 +291,28 @@ impl Session {
         self.document.input.is_some()
     }
 
+    /// The input document the Input route shows, once its swap has completed.
+    pub(crate) fn shown_input(&self) -> Option<ShownInput> {
+        let document = self.document.input?;
+        self.inputs.by_identity(document).filter(|surface| surface.loaded)?;
+        let snapshot = self.document.scene.as_ref()?.document.snapshot();
+        Some(ShownInput { document, snapshot, target: self.document.tools.target() })
+    }
+
+    /// The content revision of every loaded synced document, current or parked.
+    pub(crate) fn input_revisions(&self) -> Vec<(InputDocumentId, u64)> {
+        self.inputs
+            .workflows
+            .iter()
+            .flat_map(|(_, surfaces)| surfaces)
+            .filter(|surface| surface.loaded)
+            .filter_map(|surface| {
+                let scene = self.input_document(surface.identity)?.scene.as_ref()?;
+                Some((surface.identity, scene.document.snapshot().revision()))
+            })
+            .collect()
+    }
+
     /// Read a synced input document for capture, current or parked. With `revision`, a
     /// document whose revision differs, or that queued workflow work is about to change, is
     /// reported stale.
@@ -303,10 +335,16 @@ impl Session {
         if self.inputs.busy(surface.identity)
             || revision.is_some_and(|revision| revision != snapshot.revision())
         {
-            InputSnapshot::Stale(snapshot)
+            InputSnapshot::Stale
         } else {
             InputSnapshot::Current(snapshot)
         }
+    }
+
+    /// The current content of a synced document, whatever work is pending on it.
+    #[cfg(test)]
+    pub(crate) fn input_content(&self, document: InputDocumentId) -> Option<DocumentSnapshot> {
+        Some(self.input_document(document)?.scene.as_ref()?.document.snapshot())
     }
 
     /// Take every reply completed since the last call, oldest first.
@@ -402,6 +440,10 @@ impl Session {
 
     /// Stop input work for close: cancel the running job and release every queued adapter.
     pub(super) fn close_inputs(&mut self) {
+        self.inputs.captures.close();
+        if let Some(persistence) = &mut self.inputs.persistence {
+            persistence.close();
+        }
         if let Some(running) = &self.inputs.running {
             running.job.cancel();
             running.acquirers.iter().for_each(|owner| owner.cancel());

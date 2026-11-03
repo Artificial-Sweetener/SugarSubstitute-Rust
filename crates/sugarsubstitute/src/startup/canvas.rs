@@ -31,6 +31,12 @@ pub(super) use surface::RoutedInput;
 #[cfg(test)]
 mod tests;
 
+/// The input canvas's session directory below the installation root: the installation's
+/// `desktop-data` directory holds user state the installer creates and every installation change
+/// preserves.
+#[cfg(feature = "native-composition")]
+const INPUT_DOCUMENTS: [&str; 2] = ["desktop-data", "input-canvas"];
+
 /// Canvas storage the application's execution capacity funds.
 #[derive(Clone, Copy)]
 pub(super) struct CanvasFunding {
@@ -184,6 +190,10 @@ impl EmbeddedCanvas {
         if let Some(hertz) = self.display {
             session.input(Input::DisplayRefresh(hertz))?;
         }
+        #[cfg(feature = "native-composition")]
+        session.persist_inputs(crate::input_documents::InputDocumentStore::new(
+            INPUT_DOCUMENTS.iter().fold(self.anchor.clone(), |path, part| path.join(part)),
+        )?);
         self.session = Some(session);
         let runtime = Runtime::shared(client, self.scope)?;
         self.session.as_mut().ok_or("Application canvas disappeared")?.start_runtime(runtime)
@@ -216,7 +226,15 @@ impl EmbeddedCanvas {
             {
                 session.close_until(cutoff)?;
             }
-            if !self.reported_ready && session.initialized() && session.renderer_settled() {
+            #[cfg(feature = "native-composition")]
+            let restored = session.inputs_restored();
+            #[cfg(not(feature = "native-composition"))]
+            let restored = true;
+            if !self.reported_ready
+                && session.initialized()
+                && session.renderer_settled()
+                && restored
+            {
                 self.reported_ready = true;
                 tracing::info!(
                     operation = "embedded_canvas_ready",

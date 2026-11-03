@@ -22,7 +22,7 @@ pub use archive::{
     MAX_SOURCE_REFERENCE_BYTES, SourceReference,
 };
 pub use comparison::{Comparison, WipeOrientation};
-pub use compile::CompiledView;
+pub use compile::{CaptureLayers, CompiledView};
 pub use coverage::BackingCoverage;
 pub use cursor::{BrushOutline, CursorIntent};
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};

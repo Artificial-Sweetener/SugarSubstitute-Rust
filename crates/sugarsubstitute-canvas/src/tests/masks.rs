@@ -5,8 +5,8 @@ use super::harness;
 use crate::*;
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_image_ops::{
-    AssetId, Coverage, Evaluator, Extent, FULL_COVERAGE, ImageError, Path, Pixel, RasterSource,
-    Reconstruction, Region,
+    AssetId, Coverage, Evaluator, Extent, FULL_COVERAGE, Filter, ImageError, Path, Pixel,
+    RasterSource, Reconstruction, Region, VectorRectangle,
 };
 
 /// Masks need no image source; any read would be a defect.
@@ -72,6 +72,52 @@ fn mask_layers_draw_tinted_overlays_and_keep_their_names_and_locks() -> harness:
                 .with_name(&"x".repeat(257))
                 .is_err()
         );
+        Ok(())
+    })
+}
+
+#[test]
+fn captures_compose_image_layers_over_transparency_without_mask_overlays() -> harness::TestResult {
+    run(|context| {
+        let extent = Extent::new(16, 16)?;
+        let mut document = Document::new(1, extent, context.memory())?;
+        let red = Pixel::linear(1.0, 0.0, 0.0, 1.0)?;
+        let blue = Pixel::linear(0.0, 0.0, 1.0, 0.5)?;
+        let rectangle = |id, bounds, color| -> Result<Layer, CanvasError> {
+            let shape = VectorRectangle::new(bounds, color)?;
+            Layer::new(LayerId::new(id)?, LayerContent::VectorRectangle(shape))
+        };
+        let full = Coverage::new(extent, FULL_COVERAGE, context.memory())?;
+        let layers = [
+            rectangle(1, [0.0, 0.0, 8.0, 16.0], red)?,
+            mask_layer(2, full)?,
+            rectangle(3, [8.0, 0.0, 16.0, 16.0], blue)?,
+            rectangle(4, [0.0, 0.0, 16.0, 16.0], red)?.with_visibility(false),
+        ];
+        for (index, layer) in layers.into_iter().enumerate() {
+            document.apply(DocumentEdit::Insert { index, layer })?;
+        }
+        assert!(document.set_highlight(Some(LayerId::new(2)?))?);
+        let snapshot = document.snapshot();
+        let sample = |layers: CaptureLayers| -> Result<[Pixel; 2], CanvasError> {
+            let compiled = snapshot.compile_capture(
+                Viewport::new(extent)?,
+                layers,
+                Reconstruction::Finished(Filter::Nearest),
+                context.memory(),
+            )?;
+            let (graph, output) = compiled.into_parts();
+            let mut evaluator = Evaluator::new(graph, NoSource, 16, context.memory())?;
+            let tile = evaluator.tile(output, 0, 0, context)?;
+            let pixel = |x| tile.pixel(x, 4).ok_or(CanvasError::Invalid("Capture lost a pixel"));
+            Ok([pixel(2)?, pixel(12)?])
+        };
+        assert_eq!(sample(CaptureLayers::Composition)?, [red, blue]);
+        assert_eq!(sample(CaptureLayers::Through(LayerId::new(2)?))?, [red, Pixel::TRANSPARENT]);
+        assert_eq!(sample(CaptureLayers::Only(LayerId::new(3)?))?, [Pixel::TRANSPARENT, blue]);
+        assert_eq!(sample(CaptureLayers::Only(LayerId::new(4)?))?, [red, red]);
+        let mask = sample(CaptureLayers::Only(LayerId::new(2)?))?;
+        assert_eq!(mask, [Pixel::TRANSPARENT; 2]);
         Ok(())
     })
 }

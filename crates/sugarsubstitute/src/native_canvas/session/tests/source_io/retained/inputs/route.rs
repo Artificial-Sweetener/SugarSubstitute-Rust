@@ -126,15 +126,16 @@ fn captures_read_parked_documents_and_report_changing_and_retired_ones()
         let blank = synced(&reply, "canvas")?.clone();
         fixture.session.activate_input(WORKFLOW, "image", Some("first"))?;
         fixture.settle_inputs()?;
-        let parked = fixture.session.input_snapshot(blank.document, Some(blank.revision));
+        let revision = fixture.snapshot(blank.document)?.revision();
+        let parked = fixture.session.input_snapshot(blank.document, Some(revision));
         assert!(
             matches!(&parked, InputSnapshot::Current(snapshot) if snapshot.identity() == blank.document.get())
         );
         let current = fixture.session.input_snapshot(image_surface.document, None);
         assert!(matches!(current, InputSnapshot::Current(_)));
         assert!(matches!(
-            fixture.session.input_snapshot(blank.document, Some(blank.revision - 1)),
-            InputSnapshot::Stale(_)
+            fixture.session.input_snapshot(blank.document, Some(revision - 1)),
+            InputSnapshot::Stale
         ));
         // Pending workflow work makes the document stale until it settles.
         let green = image(&directory, "green.png", Extent::new(4, 3)?, |_, _| [0, 255, 0, 255])?;
@@ -146,7 +147,7 @@ fn captures_read_parked_documents_and_report_changing_and_retired_ones()
         fixture.session.sync_inputs(WORKFLOW, vec![changed.clone(), canvas])?;
         assert!(matches!(
             fixture.session.input_snapshot(image_surface.document, None),
-            InputSnapshot::Stale(_)
+            InputSnapshot::Stale
         ));
         fixture.settle_inputs()?;
         assert!(matches!(

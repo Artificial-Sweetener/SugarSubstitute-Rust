@@ -5,14 +5,14 @@
 //! Each family entry point receives the decoded request, its ordinary-lane credit and any
 //! bulk-upload storage that covers it. It answers the request exactly once, immediately
 //! through `NativeSurface::answer` or later from a retained wait; cancelling a retained wait
-//! reaches the owner through `NativeSurface::cancel`. The source, geometry, editing and
-//! workflow entry points answer `unsupported`, and `ADVERTISED` keeps those capabilities off.
+//! reaches the owner through `NativeSurface::cancel`. Sources, geometry and workflow surfaces
+//! are served from the session's input documents by their own modules; the editing entry point
+//! answers `unsupported`, and `ADVERTISED` keeps that capability off.
 
 use super::*;
 use sugarsubstitute_contracts::canvas_native::{
-    CanvasEditRequest, CanvasFailure, CanvasFailureStatus, CanvasGeometryRequest,
-    CanvasNativeCapabilities, CanvasNativeReplyPayload, CanvasNativeRequest, CanvasSourceRequest,
-    CanvasWorkflowRequest,
+    CanvasEditRequest, CanvasFailure, CanvasFailureStatus, CanvasNativeCapabilities,
+    CanvasNativeReplyPayload, CanvasNativeRequest,
 };
 use sugarsubstitute_desktop::CanvasNativeRequestStorage;
 
@@ -21,9 +21,9 @@ use sugarsubstitute_desktop::CanvasNativeRequestStorage;
 /// A capability turns on only together with the entry point that services it.
 pub(super) const ADVERTISED: CanvasNativeCapabilities = CanvasNativeCapabilities {
     display_output: true,
-    geometry: false,
+    geometry: true,
     editing: false,
-    workflow_surfaces: false,
+    workflow_surfaces: true,
 };
 
 impl NativeSurface {
@@ -44,41 +44,18 @@ impl NativeSurface {
                 self.context(identity, request, claim, session)
             }
             CanvasNativeRequest::Source(request) => {
-                self.receive_source(identity, request, claim, storage)
+                self.receive_source(identity, request, claim, storage, session)
             }
             CanvasNativeRequest::Geometry(request) => {
-                self.receive_geometry(identity, request, claim, storage)
+                self.receive_geometry(identity, request, claim, session)
             }
             CanvasNativeRequest::Edit(request) => {
                 self.receive_edit(identity, request, claim, storage)
             }
             CanvasNativeRequest::Workflow(request) => {
-                self.receive_workflow(identity, request, claim, storage)
+                self.receive_workflow(identity, request, claim, storage, session)
             }
         }
-    }
-
-    /// Serve `source.request`: layer context, captures of any synced input document, and
-    /// `source.changed` watching.
-    fn receive_source(
-        &mut self,
-        identity: MainIdentity,
-        request: CanvasSourceRequest,
-        claim: MemoryClaim,
-        _storage: CanvasNativeRequestStorage,
-    ) -> Result<(), Box<dyn Error>> {
-        self.answer(identity, request.failure_reply(&unsupported())?, claim)
-    }
-
-    /// Serve `geometry.request`: document geometry, selection bounds and resizing.
-    fn receive_geometry(
-        &mut self,
-        identity: MainIdentity,
-        request: CanvasGeometryRequest,
-        claim: MemoryClaim,
-        _storage: CanvasNativeRequestStorage,
-    ) -> Result<(), Box<dyn Error>> {
-        self.answer(identity, request.failure_reply(&unsupported())?, claim)
     }
 
     /// Serve `edit.request`: tools, options, history, sessions and coverage modification.
@@ -86,18 +63,6 @@ impl NativeSurface {
         &mut self,
         identity: MainIdentity,
         request: CanvasEditRequest,
-        claim: MemoryClaim,
-        _storage: CanvasNativeRequestStorage,
-    ) -> Result<(), Box<dyn Error>> {
-        self.answer(identity, request.failure_reply(&unsupported())?, claim)
-    }
-
-    /// Serve `workflow.request`: surface provisioning, activation, appearance, resizing and
-    /// hover for the workflow's input documents.
-    fn receive_workflow(
-        &mut self,
-        identity: MainIdentity,
-        request: CanvasWorkflowRequest,
         claim: MemoryClaim,
         _storage: CanvasNativeRequestStorage,
     ) -> Result<(), Box<dyn Error>> {

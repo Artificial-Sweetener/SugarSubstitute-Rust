@@ -17,7 +17,7 @@ fn native(
     }))?)?)
 }
 
-/// One request of every family the canvas does not service yet, with its reply type.
+/// One request of every family except context, with its reply type.
 fn families(
     panel: &PanelSession,
 ) -> Result<Vec<(CanvasNativeRequest, &'static str)>, Box<dyn Error>> {
@@ -42,13 +42,20 @@ fn families(
 }
 
 #[test]
-fn unserviced_families_answer_unsupported_with_their_own_reply_and_credit()
+fn every_family_answers_with_its_own_reply_and_credit_before_the_canvas_starts()
 -> Result<(), Box<dyn Error>> {
     let mut canvas = super::cancellation::waiting_canvas()?;
     let identity = identity()?;
     let panel = PanelSession::for_main(identity)?;
     let memory = MemoryLease::new(64 * 1024, Box::new(Release));
-    for (request, reply_type) in families(&panel)? {
+    let results = [
+        json!({"kind":"failure", "status":"unavailable", "message":"The canvas is not ready"}),
+        json!({"kind":"context", "supported":true, "resize":false, "selectionSupported":true,
+            "document":null, "selection":null}),
+        json!({"kind":"failure", "status":"unsupported", "message":""}),
+        json!({"kind":"failure", "status":"unavailable", "message":"The canvas is not ready"}),
+    ];
+    for ((request, reply_type), result) in families(&panel)?.into_iter().zip(results) {
         let id = request.request_id();
         canvas.native(identity, request, memory.claim(64 * 1024)?, Default::default())?;
         let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
@@ -58,10 +65,7 @@ fn unserviced_families_answer_unsupported_with_their_own_reply_and_credit()
         assert_eq!(value["type"], reply_type);
         assert_eq!(value["requestId"], id);
         assert_eq!(value["session"], panel.as_str());
-        assert_eq!(
-            value["result"],
-            json!({"kind":"failure", "status":"unsupported", "message":""})
-        );
+        assert_eq!(value["result"], result);
         assert!(memory.claim(1).is_err(), "the reply must hold the request's credit");
         drop(reply);
         assert!(canvas.take_command().is_none());

@@ -4,8 +4,12 @@
 
 mod attachment;
 mod capabilities;
+#[cfg(test)]
+mod fixture_file;
+mod geometry;
 mod ingress;
 mod input;
+mod input_protocol;
 mod lifecycle;
 mod native;
 mod navigation;
@@ -16,7 +20,9 @@ mod preview;
 #[cfg(test)]
 #[path = "surface/replies_tests.rs"]
 mod replies_tests;
+mod sources;
 mod viewport;
+mod workflow;
 
 use super::*;
 pub(in crate::startup) use input::RoutedInput;
@@ -127,6 +133,10 @@ pub(super) struct NativeSurface {
     contexts: [Option<Context>; 4],
     replies: [Option<DesktopStartupCommand>; 8],
     preview: preview::Preview,
+    /// Workflow-surface requests awaiting their input work, and the output to return to.
+    workflow: workflow::Workflow,
+    /// Captures awaiting their jobs and the `source.changed` subscription.
+    sources: sources::Sources,
     /// The latest routed drag-out awaiting its copied original.
     drag_out: Option<input::DragRequest>,
     drag_sequence: u64,
@@ -151,6 +161,8 @@ impl NativeSurface {
             contexts: std::array::from_fn(|_| None),
             replies: std::array::from_fn(|_| None),
             preview: preview::Preview::default(),
+            workflow: workflow::Workflow::default(),
+            sources: sources::Sources::default(),
             drag_out: None,
             drag_sequence: 0,
             closed: false,
@@ -252,8 +264,10 @@ impl NativeSurface {
             .find(|slot| slot.is_none())
             .ok_or("Canvas context queue is full")?;
         *slot = Some(Context { identity, request, claim });
-        if session.as_deref().is_some_and(Session::initialized) && self.available(identity) {
-            self.flush_contexts()?;
+        if let Some(session) = session.filter(|session| session.initialized())
+            && self.available(identity)
+        {
+            self.flush_contexts(session)?;
         }
         Ok(())
     }
@@ -357,7 +371,13 @@ impl NativeSurface {
         session.offer_acquirer(&mut Some(owner), CacheReuse::Compatible)
     }
 
-    fn flush_contexts(&mut self) -> Result<(), Box<dyn Error>> {
+    /// Answer waiting context reads with the capabilities and the input document the Input
+    /// route shows, if any.
+    fn flush_contexts(&mut self, session: &Session) -> Result<(), Box<dyn Error>> {
+        let document = session
+            .shown_input()
+            .map(|shown| input_protocol::canvas_document(shown.document, shown.snapshot.extent()))
+            .transpose()?;
         for index in 0..self.contexts.len() {
             if self.contexts[index].as_ref().is_none_or(|context| !self.available(context.identity))
             {
@@ -366,7 +386,7 @@ impl NativeSurface {
             let Some(context) = self.contexts[index].take() else { continue };
             let reply = CanvasNativeReply::new(
                 context.identity,
-                context.request.reply(native::ADVERTISED, None)?,
+                context.request.reply(native::ADVERTISED, document.as_ref())?,
                 context.claim,
             )?;
             self.enqueue(DesktopStartupCommand::SendCanvasNative(reply))?;
@@ -407,7 +427,11 @@ impl NativeSurface {
             self.replies.rotate_left(1);
             Some(command)
         } else {
-            self.preview.notification.take().or_else(|| self.preview.camera.take())
+            self.preview
+                .notification
+                .take()
+                .or_else(|| self.preview.camera.take())
+                .or_else(|| self.sources.notification.take())
         }
     }
 
@@ -426,6 +450,8 @@ impl NativeSurface {
         self.replies = std::array::from_fn(|_| None);
         self.preview.close_watch();
         self.preview.close_correlations();
+        self.workflow.close();
+        self.sources.close();
         Ok(())
     }
 }

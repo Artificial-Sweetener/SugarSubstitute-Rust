@@ -159,6 +159,7 @@ impl InputDocuments {
             masks: Vec::new(),
             next_layer: BASE_LAYER + 1,
             document: None,
+            restored: None,
             loaded: false,
             failure: None,
         })

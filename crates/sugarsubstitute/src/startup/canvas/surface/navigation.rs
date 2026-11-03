@@ -34,6 +34,8 @@ impl NativeSurface {
                 *slot = None;
             }
         }
+        self.workflow.retire(identity);
+        self.sources.retire(identity);
         let mut retained_count = 0;
         for index in 0..self.replies.len() {
             if self.replies[index].as_ref().is_some_and(|command| {

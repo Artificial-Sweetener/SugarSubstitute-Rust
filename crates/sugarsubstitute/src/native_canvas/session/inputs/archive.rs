@@ -1,0 +1,370 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Persist the input documents in the session directory and restore them at startup.
+//!
+//! At startup the archive loads before any workflow sync is admitted. Its host metadata
+//! restores every workflow's surfaces with their document and layer identities, synced mask
+//! state and the active input document. Blank-based documents are rebuilt at once; a file-based
+//! document keeps its archived layers until the next sync re-acquires its base image, and then
+//! keeps its masks when the image's size is unchanged. An archive the store rejects, or whose
+//! metadata is invalid, leaves no documents: the next sync rebuilds them from the workflow.
+//!
+//! After that, every change to the documents or their synced state advances a content
+//! generation that [`Autosave`] coalesces into one save of only changed content. Close cancels
+//! a running save and the startup load.
+mod metadata;
+
+use super::*;
+use crate::input_documents::{
+    Autosave, AutosavePolicy, InputDocumentStore, Restored, SaveOutcome, StoreError,
+};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use sugarsubstitute_canvas::{
+    ArchiveError, ArchivedDocument, InputDocumentArchive, LayerContent, SourceReference,
+};
+
+/// Debounce of automatic saves.
+const POLICY: AutosavePolicy = AutosavePolicy {
+    quiet: Duration::from_secs(2),
+    longest: Duration::from_secs(10),
+    timeout: Duration::from_secs(60),
+};
+
+/// Startup restore and automatic saving of one session directory.
+pub(in crate::native_canvas::session) struct Persistence {
+    store: InputDocumentStore,
+    load: Load,
+    autosave: Option<Autosave>,
+    generation: u64,
+    signature: Option<u64>,
+}
+
+enum Load {
+    Pending,
+    Running(OwnedJob<Restored, StoreError>),
+    Done,
+}
+
+impl Persistence {
+    /// Whether the startup load or a save awaits its terminal outcome.
+    pub(super) fn in_flight(&self) -> bool {
+        matches!(self.load, Load::Running(_))
+            || self.autosave.as_ref().is_some_and(Autosave::saving)
+    }
+
+    /// Cancel the startup load and a running save; their outcomes are still observed.
+    pub(super) fn close(&mut self) {
+        if let Load::Running(job) = &self.load {
+            job.cancel();
+        }
+        if let Some(autosave) = &self.autosave {
+            autosave.cancel();
+        }
+    }
+}
+
+impl Session {
+    /// Persist input documents in `store`'s session directory. Call before the canvas runtime
+    /// starts; the archive loads once canvas storage is ready.
+    pub(crate) fn persist_inputs(&mut self, store: InputDocumentStore) {
+        self.inputs.persistence = Some(Persistence {
+            store,
+            load: Load::Pending,
+            autosave: None,
+            generation: 0,
+            signature: None,
+        });
+    }
+
+    /// Whether archived documents, if any, are restored, so workflow syncs may proceed.
+    pub(crate) fn inputs_restored(&self) -> bool {
+        self.inputs
+            .persistence
+            .as_ref()
+            .is_none_or(|persistence| matches!(persistence.load, Load::Done))
+    }
+
+    /// Start the startup load once canvas storage exists.
+    pub(in crate::native_canvas::session) fn submit_input_restore(
+        &mut self,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.closing
+            || !self
+                .inputs
+                .persistence
+                .as_ref()
+                .is_some_and(|persistence| matches!(persistence.load, Load::Pending))
+        {
+            return Ok(());
+        }
+        let memory = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.memory.clone();
+        let spec = self.spec(
+            Operation::Infrastructure,
+            JobClass::InfrastructureOrdinary,
+            InputDocumentStore::load_reservation(),
+            Duration::from_secs(60),
+            None,
+        )?;
+        let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
+        let persistence = self.inputs.persistence.as_mut().ok_or("Input persistence vanished")?;
+        match persistence.store.submit_load(&runtime.client, &runtime.scope, spec, memory) {
+            Ok(job) => persistence.load = Load::Running(job),
+            Err(cause) if activity::retryable(&cause) => {}
+            Err(cause) => return Err(cause.into()),
+        }
+        Ok(())
+    }
+
+    /// Observe the startup load and a finished save.
+    pub(in crate::native_canvas::session) fn consume_input_persistence(
+        &mut self,
+    ) -> Result<(), Box<dyn Error>> {
+        let now = self.clock.now();
+        let Some(persistence) = self.inputs.persistence.as_mut() else { return Ok(()) };
+        if let Some(autosave) = &mut persistence.autosave
+            && let Some(outcome) = autosave.observe(now)?
+        {
+            match outcome {
+                SaveOutcome::Saved(receipt) => tracing::debug!(
+                    operation = "input_documents_autosave",
+                    bytes = receipt.bytes,
+                    "Input documents saved"
+                ),
+                SaveOutcome::Unchanged => {}
+                SaveOutcome::Failed(_) => {}
+                SaveOutcome::Stopped(kind) => {
+                    tracing::debug!(operation = "input_documents_autosave", outcome = ?kind, "Input document save stopped")
+                }
+            }
+        }
+        let Load::Running(job) = &mut persistence.load else { return Ok(()) };
+        let Some(completion) = job.try_take_completion() else { return Ok(()) };
+        persistence.load = Load::Done;
+        let archive = match completion.outcome {
+            JobOutcome::Success(restored) => {
+                for rejection in &restored.rejected {
+                    tracing::warn!(operation = "input_documents_restore", file = ?rejection.file, cause = %rejection.cause, "An input-document archive was rejected; its file is kept");
+                }
+                restored.archive.map(|(_, archive)| archive)
+            }
+            JobOutcome::Failure(cause) => {
+                tracing::warn!(operation = "input_documents_restore", cause = %cause, "Input documents could not be loaded; they are rebuilt from the workflow");
+                None
+            }
+            other => {
+                tracing::warn!(operation = "input_documents_restore", outcome = ?other.kind(), "Input document loading stopped; they are rebuilt from the workflow");
+                None
+            }
+        };
+        let restored = match archive {
+            Some(archive) if !self.closing => match self.restore_inputs(&archive) {
+                Ok(()) => Some(archive),
+                Err(cause) => {
+                    tracing::warn!(operation = "input_documents_restore", cause = %cause, "Archived input documents are inconsistent; they are rebuilt from the workflow");
+                    self.inputs.workflows.clear();
+                    None
+                }
+            },
+            _ => None,
+        };
+        let persistence = self.inputs.persistence.as_mut().ok_or("Input persistence vanished")?;
+        persistence.autosave =
+            Some(Autosave::new(persistence.store.clone(), POLICY, 0, restored.as_ref()));
+        persistence.signature = None;
+        Ok(())
+    }
+
+    /// Advance the content generation after any change and start a due save.
+    pub(in crate::native_canvas::session) fn advance_input_autosave(
+        &mut self,
+    ) -> Result<(), Box<dyn Error>> {
+        let saving = self
+            .inputs
+            .persistence
+            .as_ref()
+            .is_some_and(|persistence| persistence.autosave.is_some());
+        if self.closing || !saving {
+            return Ok(());
+        }
+        let signature = self.input_signature();
+        let now = self.clock.now();
+        let Some(persistence) = self.inputs.persistence.as_mut() else { return Ok(()) };
+        let Some(autosave) = persistence.autosave.as_mut() else { return Ok(()) };
+        match persistence.signature.replace(signature) {
+            None => {}
+            Some(previous) if previous == signature => {}
+            Some(_) => {
+                persistence.generation += 1;
+                autosave.changed(persistence.generation, now)?;
+            }
+        }
+        if autosave.deadline().is_none_or(|deadline| deadline > now) {
+            return Ok(());
+        }
+        let mut autosave = persistence.autosave.take().ok_or("Autosave vanished")?;
+        let polled = match self.runtime.as_ref() {
+            Some(runtime) => {
+                autosave.poll(now, &runtime.client, &runtime.scope, &self.sequence, || {
+                    self.input_archive()
+                })
+            }
+            None => Ok(None),
+        };
+        if let Some(persistence) = self.inputs.persistence.as_mut() {
+            persistence.autosave = Some(autosave);
+        }
+        if let Err(cause) = polled {
+            tracing::warn!(operation = "input_documents_autosave", cause = %cause, "Input documents remain unsaved");
+        }
+        Ok(())
+    }
+
+    /// When the next automatic save is due.
+    pub(in crate::native_canvas::session) fn input_autosave_deadline(&self) -> Option<Moment> {
+        self.inputs.persistence.as_ref()?.autosave.as_ref()?.deadline()
+    }
+
+    /// Every input document's current content, with the synced state that maps it.
+    fn input_archive(&self) -> Result<InputDocumentArchive, ArchiveError> {
+        let mut documents = Vec::new();
+        for surface in self.inputs.workflows.iter().flat_map(|(_, surfaces)| surfaces) {
+            let snapshot = self
+                .input_document(surface.identity)
+                .and_then(|document| document.scene.as_ref())
+                .filter(|_| surface.loaded)
+                .map(|scene| scene.document.snapshot());
+            match (snapshot, &surface.restored) {
+                (Some(snapshot), _) => {
+                    let reference = match &surface.loaded_base {
+                        Some(Base::File(reference)) => {
+                            Some(SourceReference::new(reference.as_bytes())?)
+                        }
+                        _ => None,
+                    };
+                    let key = surface.identity.key();
+                    documents
+                        .push(ArchivedDocument::capture(&key, &snapshot, |_| reference.clone())?);
+                }
+                (None, Some(restored)) => documents.push(restored.clone()),
+                (None, None) => {}
+            }
+        }
+        let active = self.document.input.map(|document| (document, self.document.tools.target()));
+        InputDocumentArchive::new(documents, &metadata::encode(&self.inputs, active)?)
+    }
+
+    /// Rebuild the archived surfaces; documents of blank-based surfaces are restored at once.
+    fn restore_inputs(&mut self, archive: &InputDocumentArchive) -> Result<(), Box<dyn Error>> {
+        let restored = metadata::decode(archive.host_metadata())?;
+        let memory = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.memory.clone();
+        self.inputs.next_identity = self.inputs.next_identity.max(restored.next_identity);
+        for (workflow, mut surfaces) in restored.workflows {
+            for surface in &mut surfaces {
+                let Some(document) = archive.document(&surface.identity.key()) else { continue };
+                // A blank backing's size changes only through resizes, so the archived extent
+                // is the surface's current one.
+                if matches!(surface.desired_base, Base::Blank(_)) {
+                    let mut state = self.restored_document(surface.identity, document, &memory)?;
+                    surface.reconcile(&mut state, &memory)?;
+                    surface.document = Some(state);
+                    surface.loaded = true;
+                    surface.loaded_base = Some(Base::Blank(document.extent()));
+                } else {
+                    surface.restored = Some(document.clone());
+                }
+            }
+            self.inputs.workflows.push((workflow, surfaces));
+        }
+        if let Some((document, target)) = restored.active
+            && self.inputs.by_identity(document).is_some()
+        {
+            self.inputs.route = Some(route::Pending::Input { surface: document, target });
+        }
+        Ok(())
+    }
+
+    /// A parked document holding archived content under `identity`, with empty history.
+    fn restored_document(
+        &self,
+        identity: InputDocumentId,
+        archived: &ArchivedDocument,
+        memory: &MemoryLease,
+    ) -> Result<Box<document::DocumentState>, Box<dyn Error>> {
+        let now = self.navigation_time();
+        let document = archived.restore(identity.get(), memory)?;
+        let viewport = Viewport::new(self.document.tools.navigation().viewport().surface())?;
+        let mut state = Box::new(document::DocumentState::new(viewport));
+        state.tools.set_refresh_rate(self.display_refresh)?;
+        state.tools.set_content(Some(archived.extent()), Some(&document), now)?;
+        state.scene = Some(Scene {
+            document,
+            source: None,
+            source_revision: 0,
+            original: None,
+            compared: None,
+            placed: Vec::new(),
+        });
+        state.input = Some(identity);
+        state.initial_preview = true;
+        Ok(state)
+    }
+
+    /// A process-local digest of everything an archive would record.
+    fn input_signature(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        for (workflow, surfaces) in &self.inputs.workflows {
+            workflow.hash(&mut hasher);
+            for surface in surfaces {
+                metadata::hash_surface(surface, &mut hasher);
+                let revision = self
+                    .input_document(surface.identity)
+                    .and_then(|document| document.scene.as_ref())
+                    .map(|scene| scene.document.snapshot().revision());
+                revision.hash(&mut hasher);
+            }
+        }
+        self.document.input.hash(&mut hasher);
+        self.document.tools.target().map(LayerId::get).hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+impl Surface {
+    /// Replace a freshly created document's content with this surface's archived layers and
+    /// selection when the new base has the archived extent, keeping the new base layer.
+    pub(super) fn adopt_restored(
+        &mut self,
+        scene: &mut Scene,
+        memory: &MemoryLease,
+    ) -> Result<(), Box<dyn Error>> {
+        let Some(archived) = self.restored.take() else { return Ok(()) };
+        let snapshot = scene.document.snapshot();
+        if archived.extent() != snapshot.extent() {
+            return Ok(());
+        }
+        let base = LayerId::new(BASE_LAYER)?;
+        let mut layers = snapshot
+            .layers()
+            .iter()
+            .filter(|layer| layer.id() == base)
+            .cloned()
+            .collect::<Vec<_>>();
+        layers.extend(
+            archived
+                .layers()
+                .iter()
+                .filter(|layer| {
+                    layer.id() != base && matches!(layer.content(), LayerContent::Coverage { .. })
+                })
+                .cloned(),
+        );
+        scene.document = sugarsubstitute_canvas::Document::restore(
+            snapshot.identity(),
+            snapshot.extent(),
+            &layers,
+            archived.selection().cloned(),
+            memory,
+        )?;
+        Ok(())
+    }
+}

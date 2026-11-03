@@ -29,6 +29,7 @@ mod gate;
 mod hidden_selection;
 mod host;
 mod input;
+mod inputs;
 mod inspection;
 mod jpeg;
 mod native;
@@ -231,10 +232,11 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         return Err("Canvas context is missing".into());
     };
     let value: Value = serde_json::from_slice(context.payload())?;
-    // Geometry, editing and workflow surfaces stay unadvertised until they are serviced.
+    // Editing stays unadvertised until it is serviced.
     assert_eq!(
         value["context"]["canvas"]["capabilities"],
-        json!({"displayOutput": true, "insertImageLayer": false, "positionImageLayer": false})
+        json!({"displayOutput": true, "insertImageLayer": false, "positionImageLayer": false,
+            "geometry": true, "editing": false, "workflowSurfaces": true})
     );
     assert_eq!(value["context"]["document"], Value::Null);
     canvas.surface(

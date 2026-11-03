@@ -37,7 +37,9 @@ impl NativeSurface {
         }) {
             let session = session.ok_or("An active canvas operation lost its session")?;
             self.withdraw_pending(session, CanvasSurfaceReplyStatus::Cancelled)?;
-        } else {
+        } else if !self.cancel_workflow(identity, request_id)?
+            && !self.cancel_capture(identity, request_id, session)?
+        {
             super::lifecycle::unmatched(request_id);
         }
         self.enqueue(DesktopStartupCommand::CompletePanelIngress(

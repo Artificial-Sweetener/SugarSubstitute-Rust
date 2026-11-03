@@ -4304,10 +4304,26 @@ rationale = "An owned temporary PNG fixture exercises acquisition cancellation a
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained/inputs.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:9009d60483507f275018f8c510d8e0c9d20c70e019b0a014d627a399742d19d2"
+source_sha256 = "sha256:89844cdb12431bae4b6a4103916d829eb18c0d28406dc61cb090a699886cc934"
 capabilities = ["std::fs::File::create"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while input documents load, re-base and retire through the canvas worker."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:59c33d75b0c63d92eb7aafe0d52dc006cf2007fbaeb5f57cfe3cf6cd69573416"
+capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while workflow surfaces sync, capture and restore through the native protocol."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs/persistence.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:75e40dced99201da6396f3c30a863db6b08a7b0e54157a75ce1d5d1ecc041481"
+capabilities = ["std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::write"]
+disposition = "fixture"
+rationale = "An owned temporary session directory is inspected for saved archives and seeded with a corrupt one to qualify restore and rebuild."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests.rs"
@@ -4320,7 +4336,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:211cac4546a97109b6cfa02fb3b61e90ee706eb9395a2d76b7245d805f6d6380"
+source_sha256 = "sha256:179381f9e243b3cd134055ae82c7f6967b81d45e72d566b66f09ffd9adc8dc33"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."

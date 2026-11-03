@@ -59,7 +59,9 @@ impl NativeSurface {
             return Ok(());
         }
         if session.initialized() {
-            self.flush_contexts()?;
+            self.flush_contexts(session)?;
+            self.poll_workflow(session)?;
+            self.poll_sources(session)?;
         }
         self.follow_rebuilt_selection(session);
         let Some(pending) = &self.pending else { return Ok(()) };

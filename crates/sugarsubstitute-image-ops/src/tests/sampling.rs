@@ -259,6 +259,21 @@ fn display_lookup_tracks_srgb_transfer_within_one_output_level() -> TestResult {
 }
 
 #[test]
+fn straight_export_unpremultiplies_through_the_same_display_lookup() -> TestResult {
+    run(MEMORY, |context| {
+        let encoder = SrgbEncoder::new(context.memory())?;
+        let half_red = Pixel::linear(1.0, 0.2, 0.0, 0.5)?;
+        let opaque = encoder.encode(Pixel::linear(1.0, 0.2, 0.0, 1.0)?)?;
+        let straight = encoder.encode_straight(half_red.channels());
+        assert_eq!(straight[..3], opaque[..3]);
+        assert_eq!(straight[3], 128);
+        assert_eq!(encoder.encode_straight(Pixel::TRANSPARENT.channels()), [0; 4]);
+        assert_eq!(encoder.encode_straight([1.2, 0.0, 0.0, 1.2]), [255, 0, 0, 255]);
+        Ok(())
+    })
+}
+
+#[test]
 fn display_quantization_preserves_reference_bytes_around_every_half_step() -> TestResult {
     run(MEMORY, |context| {
         let encoder = SrgbEncoder::new(context.memory())?;

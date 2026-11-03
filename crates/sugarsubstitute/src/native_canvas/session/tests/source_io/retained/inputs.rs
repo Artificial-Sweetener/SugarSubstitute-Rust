@@ -172,10 +172,9 @@ impl Fixture {
 
     /// The current content of a synced document.
     fn snapshot(&self, document: InputDocumentId) -> Result<DocumentSnapshot, Box<dyn Error>> {
-        match self.session.input_snapshot(document, None) {
-            InputSnapshot::Current(snapshot) | InputSnapshot::Stale(snapshot) => Ok(snapshot),
-            InputSnapshot::Unavailable => Err("The input document is unavailable".into()),
-        }
+        self.session
+            .input_content(document)
+            .ok_or_else(|| "The input document is unavailable".into())
     }
 }
 

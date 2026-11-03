@@ -76,7 +76,7 @@ fn initial_files_load_through_their_channel_and_other_sizes_are_rejected()
         // Without a file the masks keep their content; the same file is not loaded again.
         let revision = snapshot.revision();
         let reply = fixture.sync(vec![spec(false)?])?;
-        assert_eq!(synced(&reply, "image")?.revision, revision);
+        assert_eq!(fixture.snapshot(synced(&reply, "image")?.document)?.revision(), revision);
         let unchanged = coverage(&fixture.snapshot(loaded.document)?, layer(&loaded, "red")?)?;
         assert_eq!(unchanged.value(1, 0), coverage_from_u8(sample(1, 0)[0]));
         let (again, source) = file("input/pattern.png", &pattern);
@@ -93,7 +93,7 @@ fn initial_files_load_through_their_channel_and_other_sizes_are_rejected()
             masks,
         )])?;
         assert_eq!(source.acquisitions.load(Ordering::SeqCst), 0);
-        assert_eq!(synced(&reply, "image")?.revision, revision);
+        assert_eq!(fixture.snapshot(synced(&reply, "image")?.document)?.revision(), revision);
         // A different file replaces the mask, and the load is not an undoable step.
         let full = image(&directory, "full.png", extent, |_, _| [255, 255, 255, 255])?;
         let mut masks = vec![mask("red", Some(file("input/full.png", &full).0))?];

@@ -67,10 +67,13 @@ impl Session {
     ) -> Result<(), Box<dyn Error>> {
         let memory = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.memory.clone();
         match (applies, product) {
-            (Applies::Create(base), Product::Created(scene)) => {
+            (Applies::Create(base), Product::Created(mut scene)) => {
                 if self.inputs.by_identity(identity).is_none_or(|surface| surface.loaded) {
                     self.inputs.retiring.scenes.push(scene);
                     return Ok(());
+                }
+                if let Some(surface) = self.inputs.by_identity_mut(identity) {
+                    surface.adopt_restored(&mut scene, &memory)?;
                 }
                 let now = self.navigation_time();
                 let viewport =

@@ -1487,6 +1487,20 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# Host metadata inside an input-document archive: workflow surfaces with their document and
+# layer identities, synced mask state and the active input document. Unknown versions and
+# inconsistent mappings are rejected, and documents are rebuilt from the workflow.
+[[formats]]
+id = "input-document-host-metadata-v1"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/native_canvas/session/inputs/archive/metadata.rs"]
+source_sha256 = "sha256:91c663775e807addd02beec862934ebd9aff4be6c4cec6a2ea1b458de60118cd"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
 # Session-directory layout: current archive, recovery copy and digest-named rejection evidence.
 [[formats]]
 id = "input-document-store-v1"

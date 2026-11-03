@@ -164,6 +164,7 @@ impl NativeSurface {
                         }
                     }
                 }
+                self.workflow.offered(&file, compared);
                 session.frame_selection(inspection.map(|inspection| NavigationCommand::Frame {
                     center: inspection.center(),
                     span: inspection.span(),
@@ -197,7 +198,7 @@ impl NativeSurface {
     /// Offer the selected output, with any comparison output, as the session's next source.
     /// Returns `Some(false)` while the session cannot accept a source and `None` when a
     /// qualification fixture reference does not resolve inside its output folder.
-    fn offer_selection(
+    pub(super) fn offer_selection(
         &mut self,
         identity: MainIdentity,
         file: &CanvasFileReference,
@@ -238,7 +239,7 @@ impl NativeSurface {
 
     /// Identify a single output for retention by the backend that serves it and its output
     /// reference; qualification fixtures are identified by their reference alone.
-    fn retention_key(
+    pub(super) fn retention_key(
         &self,
         identity: MainIdentity,
         target: &ComfyViewTarget,

@@ -12,6 +12,37 @@ impl InputDocumentId {
     pub(crate) const fn get(self) -> u64 {
         self.0
     }
+
+    /// Protocol text naming this document, stable for its surface's lifetime and restarts.
+    pub(crate) fn key(self) -> String {
+        format!("input-{:x}", self.0 & !IDENTITY_NAMESPACE)
+    }
+
+    /// The identity [`Self::key`] names; this does not check that it is synced.
+    pub(crate) fn from_key(key: &str) -> Option<Self> {
+        let digits = key.strip_prefix("input-")?;
+        if digits.is_empty() || digits.starts_with('0') || digits.len() > 16 {
+            return None;
+        }
+        let value = u64::from_str_radix(digits, 16).ok()?;
+        (value & IDENTITY_NAMESPACE == 0).then_some(Self(value | IDENTITY_NAMESPACE))
+    }
+
+    /// The geometry revision of this document at `extent`: it changes exactly when the
+    /// document's pixel geometry changes.
+    pub(crate) fn geometry(self, extent: Extent) -> String {
+        format!("{}-{}x{}", self.key(), extent.width(), extent.height())
+    }
+}
+
+/// The input document the Input route shows, with its content and editing target.
+pub(crate) struct ShownInput {
+    /// Its identity.
+    pub(crate) document: InputDocumentId,
+    /// Its current content.
+    pub(crate) snapshot: DocumentSnapshot,
+    /// The active mask the editing tools target, if any.
+    pub(crate) target: Option<LayerId>,
 }
 
 /// A ComfyUI file, named by its host reference text, and the inert one-use adapter that
@@ -197,8 +228,7 @@ pub(crate) struct SyncedSurface {
     pub(crate) key: Arc<str>,
     /// Document identity.
     pub(crate) document: InputDocumentId,
-    /// Current document revision.
-    pub(crate) revision: u64,
+
     /// Changes exactly when the document's pixel geometry changes.
     pub(crate) geometry: String,
     /// Document pixel size.
@@ -239,7 +269,7 @@ pub(crate) enum InputSnapshot {
     /// The document's current content, at the expected revision when one was given.
     Current(DocumentSnapshot),
     /// The document changed since the expected revision, or workflow work is about to change it.
-    Stale(DocumentSnapshot),
+    Stale,
     /// No synced document has this identity, or it is not loaded yet.
     Unavailable,
 }

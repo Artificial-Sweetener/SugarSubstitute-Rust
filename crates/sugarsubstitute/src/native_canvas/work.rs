@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare original assets and viewport pixels exclusively on execution-owned workers.
 use super::{budget, coverage::BackingTier, work_error::WorkError};
+#[cfg(feature = "native-composition")]
+pub(super) mod capture;
 mod cpu;
 mod display;
 mod gpu;

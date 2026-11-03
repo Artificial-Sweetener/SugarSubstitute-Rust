@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compile authored content into explicit image operations at the requested evaluation grid.
 use crate::{
-    CanvasError, Comparison, DocumentSnapshot, LayerContent, MaskAppearance, Viewport,
-    WipeOrientation,
+    CanvasError, Comparison, DocumentSnapshot, Layer, LayerContent, LayerId, MaskAppearance,
+    Viewport, WipeOrientation,
 };
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_ops::{
@@ -16,6 +16,44 @@ type PyramidAvailability<'a> =
 
 mod raster;
 use raster::{GraphSource, RasterGrid, RasterPlacement, raster_node};
+
+/// The authored image layers a capture composes. Coverage (mask) layers are view-only
+/// appearance and never take part.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CaptureLayers {
+    /// Every visible image layer, bottom to top.
+    Composition,
+    /// Visible image layers from the bottom up to and including this layer.
+    Through(LayerId),
+    /// This one layer, even while it is hidden.
+    Only(LayerId),
+}
+
+impl CaptureLayers {
+    /// Whether the layer at `index` of `layers` takes part.
+    fn includes(self, index: usize, layer: &Layer, layers: &[Layer]) -> bool {
+        if matches!(layer.content(), LayerContent::Coverage { .. }) || layer.opacity() <= 0.0 {
+            return false;
+        }
+        match self {
+            Self::Composition => layer.visible(),
+            Self::Through(top) => {
+                layer.visible()
+                    && layers.iter().position(|candidate| candidate.id() == top) >= Some(index)
+            }
+            Self::Only(only) => layer.id() == only,
+        }
+    }
+}
+
+/// What one compilation composes and what it composes over.
+#[derive(Clone, Copy)]
+enum Composed {
+    /// Every visible layer, mask overlays included, over an opaque matte.
+    View(Pixel),
+    /// Selected image layers over transparency.
+    Capture(CaptureLayers),
+}
 
 /// One immutable image graph for a document revision and physical evaluation grid.
 /// Source pyramids use canonical content keys; vectors rasterize at the requested device resolution.
@@ -61,7 +99,22 @@ impl DocumentSnapshot {
         reconstruction: Reconstruction,
         memory: &MemoryLease,
     ) -> Result<CompiledView, CanvasError> {
-        self.compile(view, comparison, matte, reconstruction, memory, None)
+        self.compile(view, comparison, Composed::View(matte), reconstruction, memory, None)
+    }
+
+    /// Compile the selected image layers over transparency for a source capture, at the
+    /// viewport's evaluation grid. The output is linear premultiplied; mask overlays and hover
+    /// emphasis never take part.
+    /// # Errors
+    /// Reports invalid coordinates, graph limits and original memory/operation failures.
+    pub fn compile_capture(
+        &self,
+        view: Viewport,
+        layers: CaptureLayers,
+        reconstruction: Reconstruction,
+        memory: &MemoryLease,
+    ) -> Result<CompiledView, CanvasError> {
+        self.compile(view, None, Composed::Capture(layers), reconstruction, memory, None)
     }
 
     /// Compile navigation using the nearest ready canonical pyramid covering the requested view.
@@ -79,23 +132,32 @@ impl DocumentSnapshot {
         memory: &MemoryLease,
         ready: impl Fn(&Graph, NodeId, Region) -> Result<bool, ImageError>,
     ) -> Result<CompiledView, CanvasError> {
-        self.compile(view, comparison, matte, reconstruction, memory, Some(&ready))
+        self.compile(view, comparison, Composed::View(matte), reconstruction, memory, Some(&ready))
     }
 
     fn compile(
         &self,
         view: Viewport,
         comparison: Option<Comparison>,
-        matte: Pixel,
+        composed: Composed,
         reconstruction: Reconstruction,
         memory: &MemoryLease,
         ready: PyramidAvailability<'_>,
     ) -> Result<CompiledView, CanvasError> {
-        if matte.channels()[3] != 1.0 {
+        let (matte, capture) = match composed {
+            Composed::View(matte) => (matte, None),
+            Composed::Capture(layers) => (Pixel::TRANSPARENT, Some(layers)),
+        };
+        if capture.is_none() && matte.channels()[3] != 1.0 {
             return Err(CanvasError::Invalid("Canvas matte must be opaque"));
         }
+        let layers = self.layers();
+        let included = |index: usize, layer: &Layer| match capture {
+            None => layer.visible() && layer.opacity() > 0.0,
+            Some(capture) => capture.includes(index, layer, layers),
+        };
         let target = view.surface();
-        let mut graph = Graph::new(graph_capacity(self, comparison), memory)?;
+        let mut graph = Graph::new(graph_capacity(self, comparison, &included), memory)?;
         let background = graph.add(Operation::Solid { extent: target, color: matte })?;
         let document = self.extent();
         let raster = RasterGrid { document, view, reconstruction, ready };
@@ -105,7 +167,8 @@ impl DocumentSnapshot {
         }
         let mut composite =
             graph.add(Operation::Solid { extent: target, color: Pixel::TRANSPARENT })?;
-        for layer in self.layers().iter().filter(|layer| layer.visible() && layer.opacity() > 0.0) {
+        for (_, layer) in layers.iter().enumerate().filter(|(index, layer)| included(*index, layer))
+        {
             match layer.content() {
                 LayerContent::Exposure { stops } => {
                     let adjusted =
@@ -194,7 +257,10 @@ impl DocumentSnapshot {
             let foreground = graph.add(Operation::Mask { input: compared, mask })?;
             composite = graph.add(Operation::Over { background: composite, foreground })?;
         }
-        let output = graph.add(Operation::Over { background, foreground: composite })?;
+        let output = match capture {
+            Some(_) => composite,
+            None => graph.add(Operation::Over { background, foreground: composite })?,
+        };
         Ok(CompiledView { graph, output, sampling_scale })
     }
 }
@@ -213,12 +279,18 @@ fn reductions(extent: Extent) -> usize {
     (u32::BITS - (extent.width().max(extent.height()) - 1).leading_zeros()) as usize
 }
 
-/// Admit the actual maximum operation inventory for these layers, including every explicit mip.
-fn graph_capacity(document: &DocumentSnapshot, comparison: Option<Comparison>) -> usize {
+/// Admit the actual maximum operation inventory for the included layers, including every
+/// explicit mip.
+fn graph_capacity(
+    document: &DocumentSnapshot,
+    comparison: Option<Comparison>,
+    included: &dyn Fn(usize, &Layer) -> bool,
+) -> usize {
     let sampled = reductions(document.extent()) + 2;
     // Comparison: its own pyramid plus resample, document clip, clip mask, wipe, mask and over.
     let mut capacity = 3 + comparison.map_or(0, |comparison| reductions(comparison.extent()) + 8);
-    for layer in document.layers().iter().filter(|layer| layer.visible() && layer.opacity() > 0.0) {
+    let layers = document.layers().iter().enumerate();
+    for (_, layer) in layers.filter(|(index, layer)| included(*index, layer)) {
         let mask = if layer.mask().is_some() { sampled } else { 1 };
         match layer.content() {
             LayerContent::Exposure { .. } => capacity += 2 + mask,

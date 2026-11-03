@@ -37,6 +37,10 @@ impl Session {
         #[cfg(feature = "native-composition")]
         self.consume_input_job()?;
         #[cfg(feature = "native-composition")]
+        self.consume_input_capture()?;
+        #[cfg(feature = "native-composition")]
+        self.consume_input_persistence()?;
+        #[cfg(feature = "native-composition")]
         self.advance_acquirer_retirement()?;
         if self.deferred_retirement.is_none() {
             self.consume_frame()?;
@@ -100,6 +104,12 @@ impl Session {
         }
         #[cfg(feature = "native-composition")]
         self.submit_input_job()?;
+        #[cfg(feature = "native-composition")]
+        self.submit_input_capture()?;
+        #[cfg(feature = "native-composition")]
+        self.submit_input_restore()?;
+        #[cfg(feature = "native-composition")]
+        self.advance_input_autosave()?;
         if self.picker {
             return Ok(());
         }

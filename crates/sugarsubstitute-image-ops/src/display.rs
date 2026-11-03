@@ -31,6 +31,22 @@ impl SrgbEncoder {
     pub fn encode(&self, pixel: Pixel) -> Result<[u8; 4], ImageError> {
         encode(pixel, |index| self.table[index])
     }
+    /// Convert linear premultiplied channels to straight `[red, green, blue, alpha]` sRGB8, the
+    /// interchange form of exported pixels. Coverage is clamped to `[0, 1]` and color to the
+    /// display range; zero coverage encodes as transparent black.
+    pub fn encode_straight(&self, channels: [f32; 4]) -> [u8; 4] {
+        let alpha = if channels[3].is_finite() { channels[3].clamp(0.0, 1.0) } else { 0.0 };
+        if alpha == 0.0 {
+            return [0; 4];
+        }
+        let mut result = [0; 4];
+        for (output, input) in result[..3].iter_mut().zip(channels) {
+            *output = self.table[index(input / alpha)];
+        }
+        // The bounded product rounds half up without scalar roundf.
+        result[3] = (alpha * 255.0 + 0.5) as u8;
+        result
+    }
     /// Encode an occasional opaque constant using the exact lookup quantization without allocation.
     /// Image loops use the retained encoder; backgrounds and display uniforms need no new table.
     /// # Errors
@@ -61,11 +77,16 @@ fn encode(pixel: Pixel, mut transfer: impl FnMut(usize) -> u8) -> Result<[u8; 4]
     }
     let mut result = [255; 4];
     for (output, input) in result[..3].iter_mut().zip(channels) {
-        let scaled = input.clamp(0.0, 1.0) * (LEVELS - 1) as f32;
-        let integer = scaled as u32;
-        // The bounded nonnegative fraction preserves half-up rounding without scalar roundf.
-        let index = (integer + u32::from(scaled - integer as f32 >= 0.5)) as usize;
-        *output = transfer(index);
+        *output = transfer(index(input));
     }
     Ok(result)
+}
+
+/// Nearest 16-bit transfer index of one linear channel clamped to the display range.
+fn index(linear: f32) -> usize {
+    let bounded = if linear.is_finite() { linear.clamp(0.0, 1.0) } else { 0.0 };
+    let scaled = bounded * (LEVELS - 1) as f32;
+    let integer = scaled as u32;
+    // The bounded nonnegative fraction preserves half-up rounding without scalar roundf.
+    (integer + u32::from(scaled - integer as f32 >= 0.5)) as usize
 }
