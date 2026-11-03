@@ -222,6 +222,8 @@ fn foreign_chunk_preserves_current_transfer_and_matching_gap_aborts_it_explicitl
 fn original_begin_deadline_wakes_and_expires_without_chunk_renewal() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     fixture.commit(4)?;
+    // The deadline jump below shares the execution clock; it must expire only the begin lease.
+    fixture.settle()?;
     watch(&mut fixture, 100, true)?;
     begin(&mut fixture, 200, "preview:1", 3)?;
     assert!(fixture.canvas.next_deadline().is_some());

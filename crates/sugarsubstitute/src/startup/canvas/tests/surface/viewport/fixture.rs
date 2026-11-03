@@ -269,6 +269,30 @@ impl Fixture {
         Ok(if delivering { Execution::Delivering } else { Execution::Idle })
     }
 
+    /// Present every frame until all admitted work and presentation deadlines have settled.
+    /// Injected time advances only while no job runs, so settling never expires admitted work.
+    pub(in crate::startup::canvas::tests::surface) fn settle(
+        &mut self,
+    ) -> Result<(), Box<dyn Error>> {
+        for _ in 0..500 {
+            let observed = self.wake.revision();
+            self.pump()?;
+            if let Some(target) = prepared_frame(&self.canvas)
+                .filter(|frame| frame.content.pending())
+                .map(|frame| frame.content.target())
+            {
+                self.canvas.presented(target)?;
+                continue;
+            }
+            match self.execution()? {
+                Execution::Idle if self.canvas.next_deadline().is_none() => return Ok(()),
+                Execution::Idle | Execution::Delivering => self.advance(100),
+                Execution::Running => self.wake.wait_after(observed)?,
+            }
+        }
+        Err("Canvas work never settled".into())
+    }
+
     /// Classify one scope's admitted work, so other scopes sharing this owner can hold its lanes.
     pub(in crate::startup::canvas::tests::surface) fn scope_work(
         &self,

@@ -6,38 +6,16 @@ use super::*;
 use gate::Gate;
 use viewport::fixture::{Execution, Fixture};
 
-/// Present every frame until all admitted work and presentation deadlines have settled.
-fn settle(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
-    for _ in 0..500 {
-        let observed = fixture.wake.revision();
-        fixture.advance(100);
-        fixture.pump()?;
-        if let Some(target) = prepared_frame(&fixture.canvas)
-            .filter(|frame| frame.content.pending())
-            .map(|frame| frame.content.target())
-        {
-            fixture.canvas.presented(target)?;
-            continue;
-        }
-        match fixture.execution()? {
-            Execution::Idle if fixture.canvas.next_deadline().is_none() => return Ok(()),
-            Execution::Idle | Execution::Delivering => {}
-            Execution::Running => fixture.wake.wait_after(observed)?,
-        }
-    }
-    Err("Canvas work never settled".into())
-}
-
 #[test]
 fn selecting_a_shown_output_again_presents_it_once_without_acquiring_it()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     fixture.commit(4)?;
-    settle(&mut fixture)?;
+    fixture.settle()?;
     let wide = fixture.accepted()?;
     fixture.select(5, "tall.png")?;
     fixture.complete(5)?;
-    settle(&mut fixture)?;
+    fixture.settle()?;
     assert_ne!(fixture.accepted()?.extent, wide.extent);
 
     let counting = Gate::new(fixture.output("wide.png"), true, fixture.wake.clone());
@@ -82,6 +60,6 @@ fn selecting_a_shown_output_again_presents_it_once_without_acquiring_it()
     );
     assert_eq!(camera.extent, wide.extent);
     assert_eq!(camera.viewport, wide.viewport);
-    settle(&mut fixture)?;
+    fixture.settle()?;
     fixture.finish()
 }

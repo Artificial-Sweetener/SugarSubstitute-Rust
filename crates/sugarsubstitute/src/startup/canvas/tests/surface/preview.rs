@@ -162,6 +162,8 @@ fn actual_preview_upload_acknowledgement_can_cross_the_original_deadline()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     fixture.commit(4)?;
+    // The deadline jump below shares the execution clock; it must expire only the preview.
+    fixture.settle()?;
     watch(&mut fixture, 100, true)?;
     transfer(&mut fixture, 200, "preview:1", JPEG)?;
     let target = wait_frame(&mut fixture)?;
