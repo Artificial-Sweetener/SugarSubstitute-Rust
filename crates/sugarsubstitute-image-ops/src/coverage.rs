@@ -9,7 +9,11 @@
 //! are all equal are stored as one value. Clones share tiles, and an edit copies only the tiles
 //! it touches, so undo history and published snapshots stay cheap. Every coverage carries a
 //! content fingerprint, which graph evaluation uses as its structural identity.
+//!
+//! Every read sees only the extent. Content moved beyond it is kept aside, so geometric edits
+//! that bring it back restore it, as CuteCanvas keeps a moved layer's pixels.
 mod affine;
+mod beyond;
 mod codec;
 mod filters;
 mod geometry;
@@ -63,11 +67,14 @@ pub struct Coverage {
     extent: Extent,
     columns: u32,
     tiles: Arc<Tiles>,
+    beyond: Option<Arc<beyond::Beyond>>,
 }
 
 impl PartialEq for Coverage {
     fn eq(&self, other: &Self) -> bool {
-        self.extent == other.extent && self.tiles.fingerprint == other.tiles.fingerprint
+        self.extent == other.extent
+            && self.tiles.fingerprint == other.tiles.fingerprint
+            && self.outside() == other.outside()
     }
 }
 
@@ -80,6 +87,7 @@ impl Coverage {
             extent,
             columns: extent.width().div_ceil(TILE_EDGE),
             tiles: Arc::new(Tiles::new(extent, value, BTreeMap::new(), memory)?),
+            beyond: None,
         })
     }
 
@@ -88,7 +96,8 @@ impl Coverage {
         self.extent
     }
 
-    /// Content identity covering the extent and every value.
+    /// Content identity covering the extent and every value inside it; content beyond the
+    /// extent is not drawn and does not change it.
     pub fn fingerprint(&self) -> [u8; 32] {
         self.tiles.fingerprint
     }
@@ -284,8 +293,9 @@ impl Coverage {
         self.rewrite(region, context.memory(), Some(context), per_value(change))
     }
 
-    /// Invert every value. Untouched tiles stay untouched, so inversion costs only the stored
-    /// tiles and inverting twice restores the original identity.
+    /// Invert every value inside the extent; content beyond it is kept as it is. Untouched tiles
+    /// stay untouched, so inversion costs only the stored tiles and inverting twice restores the
+    /// original identity.
     /// # Errors
     /// Preserves memory pressure.
     pub fn invert(&self, memory: &MemoryLease) -> Result<Self, ImageError> {
@@ -312,7 +322,8 @@ impl Coverage {
             slots.insert(*key, inverted);
         }
         let default = FULL_COVERAGE - self.tiles.default;
-        Ok(Self { tiles: Arc::new(Tiles::new(self.extent, default, slots, memory)?), ..*self })
+        let tiles = Arc::new(Tiles::new(self.extent, default, slots, memory)?);
+        Ok(Self { tiles, ..self.clone() })
     }
 
     /// Rewrite a region tile by tile; `change(x, y, row)` rewrites the in-region values of one
@@ -408,8 +419,9 @@ impl Coverage {
 
     /// Bytes of tile storage this coverage holds, shared storage included.
     pub fn stored_bytes(&self) -> u64 {
-        self.tiles.slots.values().filter(|slot| matches!(slot, Slot::Stored(_))).count() as u64
-            * (TILE_VALUES * size_of::<u16>()) as u64
+        let stored = self.tiles.slots.values().filter(|slot| matches!(slot, Slot::Stored(_)));
+        let outside = self.outside().map_or(0, |(frame, _)| frame.stored_bytes());
+        stored.count() as u64 * (TILE_VALUES * size_of::<u16>()) as u64 + outside
     }
 
     fn validate(&self, region: Region, length: usize) -> Result<(), ImageError> {

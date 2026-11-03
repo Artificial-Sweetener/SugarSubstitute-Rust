@@ -237,10 +237,10 @@ fn truncated_flipped_oversized_and_unknown_archives_are_rejected() -> harness::T
             );
         }
         let mut future = bytes.clone();
-        future[8] = 2;
+        future[8] = 3;
         assert!(matches!(
             InputDocumentArchive::decode(&future, memory, context),
-            Err(ArchiveError::UnsupportedVersion(2))
+            Err(ArchiveError::UnsupportedVersion(3))
         ));
         let mut trailing = bytes.clone();
         trailing.push(0);
@@ -324,6 +324,51 @@ fn streamed_integrity_checks_agree_with_whole_archive_checks() -> harness::TestR
         assert!(matches!(extended.update(&[0]), Err(ArchiveError::Corrupt(_))));
         let mut foreign = ArchiveIntegrity::new();
         assert!(matches!(foreign.update(b"PNG\r\n\x1a\n\0"), Err(ArchiveError::Corrupt(_))));
+        Ok(())
+    })
+}
+
+#[test]
+fn coverage_beyond_the_document_round_trips_and_version_one_archives_migrate() -> harness::TestResult
+{
+    run(|context| {
+        let memory = context.memory();
+        let extent = Extent::new(64, 48)?;
+        let mut document = Document::new(3, extent, memory).map_err(canvas)?;
+        let square = Path::rectangle([40.0, 10.0, 60.0, 30.0])?.rasterize(extent, context)?;
+        let moved = square.translate([20, -15], context)?;
+        assert!(moved.outside().is_some());
+        let appearance = MaskAppearance::new([1, 2, 3], 0.5).map_err(canvas)?;
+        let content = LayerContent::Coverage { coverage: moved, appearance };
+        let layer = Layer::new(LayerId::new(5).map_err(canvas)?, content).map_err(canvas)?;
+        document.apply(DocumentEdit::Insert { index: 0, layer }).map_err(canvas)?;
+        let captured = ArchivedDocument::capture("k", &document.snapshot(), |_| None)?;
+        let archive = InputDocumentArchive::new(vec![captured], b"")?;
+        let bytes = archive.encode(context)?;
+        assert_eq!(u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]), 2);
+        let decoded = InputDocumentArchive::decode(&bytes, memory, context)?;
+        assert_eq!(decoded, archive);
+        let restored = match decoded.documents()[0].layers()[0].content() {
+            LayerContent::Coverage { coverage, .. } => coverage.translate([-20, 15], context)?,
+            _ => return Err(ArchiveError::Invalid("Mask layer lost")),
+        };
+        assert_eq!(restored, square);
+        // Version 1 coverage has no beyond field; version 2 requires one.
+        let decode = |bytes: &[u8]| InputDocumentArchive::decode(bytes, memory, context);
+        let selection = [1, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0];
+        let migrated = decode(&seal(1, &one_document(&selection)))?;
+        assert!(migrated.documents()[0].selection().is_some());
+        assert!(decode(&seal(2, &one_document(&selection))).is_err());
+        let mut tagged = selection.to_vec();
+        tagged.push(0);
+        assert_eq!(decode(&seal(2, &one_document(&tagged)))?, migrated);
+        // A selection never keeps content beyond the document.
+        let mut beyond = selection.to_vec();
+        beyond.extend_from_slice(&[1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        // One pixel of full coverage, canonical, just right of the document.
+        beyond.extend_from_slice(&[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
+        beyond.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff]);
+        assert!(matches!(decode(&seal(2, &one_document(&beyond))), Err(ArchiveError::Corrupt(_))));
         Ok(())
     })
 }

@@ -58,7 +58,7 @@ fn reference_smooth(source: &[u16], from: (usize, usize), to: (usize, usize)) ->
 }
 
 #[test]
-fn reframing_places_coverage_at_an_offset_and_crops_what_falls_outside() -> TestResult {
+fn reframing_places_coverage_at_an_offset_and_keeps_what_falls_outside_beyond() -> TestResult {
     run(MEMORY, |context| {
         let extent = Extent::new(200, 150)?;
         let coverage = pattern(extent, context)?;
@@ -87,7 +87,7 @@ fn reframing_places_coverage_at_an_offset_and_crops_what_falls_outside() -> Test
         assert_eq!(coverage.reframe(extent, [0, 0], context.memory(), context)?, coverage);
         let gone = coverage.reframe(extent, [500, 0], context.memory(), context)?;
         assert_eq!(gone.uniform(), Some(0));
-        assert_eq!(gone.stored_bytes(), 0, "uncovered target tiles store nothing");
+        assert_eq!(gone.reframe(extent, [-500, 0], context.memory(), context)?, coverage);
         // A select-all only covers the area it is placed over.
         let all = Coverage::new(Extent::new(10, 10)?, FULL, context.memory())?;
         let padded = all.reframe(Extent::new(20, 10)?, [5, 0], context.memory(), context)?;

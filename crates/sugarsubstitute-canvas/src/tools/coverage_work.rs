@@ -103,6 +103,7 @@ pub(super) fn editable_mask(document: &DocumentSnapshot, target: LayerId) -> Opt
     })
 }
 
+/// A selection: only what lies on the document, and only when it covers something.
 fn nonempty(coverage: Coverage) -> Option<Coverage> {
-    coverage.bounds().map(|_| coverage)
+    coverage.bounds().map(|_| coverage.without_outside())
 }

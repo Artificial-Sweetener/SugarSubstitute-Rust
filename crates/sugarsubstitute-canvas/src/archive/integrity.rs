@@ -3,6 +3,7 @@
 //! Check an archive's header and digest incrementally, without decompressing its body.
 use super::{
     ArchiveError, HEADER_BYTES, INPUT_ARCHIVE_VERSION, MAGIC, MAX_ARCHIVE_BYTES, MAX_PAYLOAD_BYTES,
+    OLDEST_INPUT_ARCHIVE_VERSION,
 };
 use sha2::{Digest, Sha256};
 
@@ -89,7 +90,7 @@ impl ArchiveIntegrity {
         }
         if header.len() >= 12 {
             let version = u32::from_le_bytes(field(header, 8));
-            if version != INPUT_ARCHIVE_VERSION {
+            if !(OLDEST_INPUT_ARCHIVE_VERSION..=INPUT_ARCHIVE_VERSION).contains(&version) {
                 return Err(ArchiveError::UnsupportedVersion(version));
             }
         }

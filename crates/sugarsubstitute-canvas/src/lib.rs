@@ -19,7 +19,7 @@ mod viewport;
 pub use archive::{
     ArchiveError, ArchiveIntegrity, ArchivedDocument, INPUT_ARCHIVE_VERSION, InputDocumentArchive,
     MAX_ARCHIVE_BYTES, MAX_ARCHIVED_DOCUMENTS, MAX_DOCUMENT_KEY_BYTES, MAX_HOST_METADATA_BYTES,
-    MAX_SOURCE_REFERENCE_BYTES, SourceReference,
+    MAX_SOURCE_REFERENCE_BYTES, OLDEST_INPUT_ARCHIVE_VERSION, SourceReference,
 };
 pub use comparison::{Comparison, WipeOrientation};
 pub use compile::{CaptureLayers, CompiledView};

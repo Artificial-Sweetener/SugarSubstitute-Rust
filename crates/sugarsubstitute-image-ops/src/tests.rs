@@ -7,6 +7,7 @@ use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
 mod bilinear;
 mod coverage;
+mod coverage_beyond;
 mod coverage_geometry;
 mod coverage_tiles;
 mod coverage_transform;

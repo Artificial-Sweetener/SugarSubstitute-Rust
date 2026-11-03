@@ -82,6 +82,16 @@ fn coverage(hash: &mut Sha256, coverage: Option<&Coverage>) {
         Some(coverage) => {
             hash.update([1]);
             hash.update(coverage.fingerprint());
+            match coverage.outside() {
+                None => hash.update([0]),
+                Some((frame, origin)) => {
+                    hash.update([1]);
+                    origin.iter().for_each(|value| hash.update(value.to_le_bytes()));
+                    hash.update(frame.extent().width().to_le_bytes());
+                    hash.update(frame.extent().height().to_le_bytes());
+                    hash.update(frame.fingerprint());
+                }
+            }
         }
     }
 }

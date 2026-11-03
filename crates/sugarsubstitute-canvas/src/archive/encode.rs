@@ -183,6 +183,22 @@ impl Payload<'_> {
     }
 
     fn coverage(&mut self, coverage: &Coverage) -> Result<(), ArchiveError> {
+        self.tiles(coverage)?;
+        match coverage.outside() {
+            None => self.u8(0),
+            Some((frame, [x, y])) => {
+                self.u8(1)?;
+                self.u64(x as u64)?;
+                self.u64(y as u64)?;
+                self.u32(frame.extent().width())?;
+                self.u32(frame.extent().height())?;
+                self.tiles(frame)
+            }
+        }
+    }
+
+    /// A coverage's default value and its non-default tiles in ascending index order.
+    fn tiles(&mut self, coverage: &Coverage) -> Result<(), ArchiveError> {
         self.u16(coverage.default_value())?;
         self.u64(coverage.tile_values().count() as u64)?;
         for (index, values) in coverage.tile_values() {

@@ -44,28 +44,28 @@ struct Prepared {
     preview: Previewed,
 }
 impl Prepared {
-    /// Frame the selection's bounds, or the target mask's content.
+    /// Frame the selection's bounds, or the target mask's whole content, including what lies
+    /// beyond the document.
     fn from(document: &DocumentSnapshot, mask: Option<LayerId>) -> Option<Self> {
         let mask = mask?;
         let layer = coverage_work::editable_mask(document, mask)?;
         let (target, bounds) = match document.selection() {
-            Some(selection) => (Target::Selection(mask), selection.bounds()?),
+            Some(selection) => {
+                let bounds = selection.bounds()?;
+                let bounds = [bounds.x(), bounds.y(), bounds.right(), bounds.bottom()];
+                (Target::Selection(mask), bounds.map(i64::from))
+            }
             None => {
                 let crate::LayerContent::Coverage { coverage, .. } = layer.content() else {
                     return None;
                 };
-                (Target::Layer(mask), coverage.bounds()?)
+                (Target::Layer(mask), coverage.content_bounds()?)
             }
         };
         Some(Self {
             base: (document.identity(), document.revision()),
             target,
-            rect: [
-                f64::from(bounds.x()),
-                f64::from(bounds.y()),
-                f64::from(bounds.right()),
-                f64::from(bounds.bottom()),
-            ],
+            rect: bounds.map(|value| value as f64),
             affines: Checkpoints::new(CoverageAffine::IDENTITY),
             preview: Previewed::default(),
         })

@@ -5,8 +5,9 @@
 //! Combination is alpha compositing of coverage. Expand and contract are flat square
 //! morphology, and feather approximates a Gaussian with three box passes; both treat
 //! everything outside the extent as uncovered. Filters work on a dense copy of the affected
-//! region only, so their cost follows the covered area rather than the document size.
-use super::{Coverage, FULL_COVERAGE, multiply};
+//! region only, so their cost follows the covered area rather than the document size. Coverage
+//! that keeps content beyond its extent is filtered whole, as one layer raster.
+use super::{Coverage, FULL_COVERAGE, beyond, multiply};
 use crate::{ImageError, Region, check};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 
@@ -37,7 +38,7 @@ impl CombineMode {
 }
 
 impl Coverage {
-    /// Combine `incoming` into this coverage.
+    /// Combine `incoming` into this coverage, content beyond the extent included.
     /// # Errors
     /// Rejects a different extent and preserves cancellation and memory pressure.
     pub fn combine(
@@ -51,6 +52,20 @@ impl Coverage {
         }
         if mode == CombineMode::Replace {
             return Ok(incoming.clone());
+        }
+        if incoming.beyond.is_some() {
+            let Some(frame) = beyond::union(self.content_bounds(), incoming.content_bounds())
+            else {
+                return Ok(self.clone());
+            };
+            let incoming = incoming.whole_in(frame, context.memory(), context)?;
+            return self.edit_whole(frame, context.memory(), context, |whole| {
+                whole.combine(&incoming, mode, context)
+            });
+        }
+        if mode == CombineMode::Intersect && self.beyond.is_some() {
+            // Nothing beyond the extent meets incoming coverage that lies wholly inside it.
+            return self.without_outside().combine(incoming, mode, context);
         }
         // Only regions where either side is covered can change, apart from intersect, which
         // also clears everything outside the incoming coverage.
@@ -94,6 +109,9 @@ impl Coverage {
             return Ok(self.clone());
         }
         let boxed = ((radius * 0.577_35).round() as u32).max(1);
+        if self.beyond.is_some() {
+            return self.grown_edit(3 * boxed, context, |whole| whole.feather(radius, context));
+        }
         let Some(region) = self.affected(3 * boxed) else {
             return Ok(self.clone());
         };
@@ -121,7 +139,12 @@ impl Coverage {
         if radius == 0 {
             return Ok(self.clone());
         }
-        let Some(region) = self.affected(if grow { radius } else { 0 }) else {
+        let margin = if grow { radius } else { 0 };
+        if self.beyond.is_some() {
+            return self
+                .grown_edit(margin, context, |whole| whole.morphology(radius, grow, context));
+        }
+        let Some(region) = self.affected(margin) else {
             return Ok(self.clone());
         };
         let _claim = context.memory().claim(region.pixels() * 2 + 64)?;

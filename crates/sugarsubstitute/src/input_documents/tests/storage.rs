@@ -237,11 +237,15 @@ fn unsupported_and_truncated_archives_are_observable_misses() -> TestResult {
     fixture.save(&fixture.archive(1, b"first")?)??;
     let bytes = std::fs::read(fixture.path(CURRENT_ARCHIVE))?;
     let mut future = bytes.clone();
-    future[8] = 2;
+    let unsupported = sugarsubstitute_canvas::INPUT_ARCHIVE_VERSION + 1;
+    future[8..12].copy_from_slice(&unsupported.to_le_bytes());
     std::fs::write(fixture.path(CURRENT_ARCHIVE), &future)?;
     let loaded = fixture.load()?;
     assert!(loaded.archive.is_none());
-    assert!(matches!(loaded.rejected[0].cause, ArchiveError::UnsupportedVersion(2)));
+    assert!(matches!(
+        loaded.rejected[0].cause,
+        ArchiveError::UnsupportedVersion(version) if version == unsupported
+    ));
     std::fs::write(fixture.path(CURRENT_ARCHIVE), &bytes[..bytes.len() - 9])?;
     let loaded = fixture.load()?;
     assert!(loaded.archive.is_none());

@@ -5,7 +5,7 @@
 //! Both operations build the result tile by tile, so their cost follows the target extent and
 //! uncovered target tiles store nothing. Scratch buffers are charged to the running job; the
 //! result's tiles are charged to the lease that will retain them.
-use super::{Coverage, CoverageTile, FULL_COVERAGE, Slot, TILE_VALUES, Tiles, tile_index};
+use super::{Coverage, CoverageTile, FULL_COVERAGE, Slot, TILE_VALUES, Tiles, beyond, tile_index};
 use crate::{Extent, ImageError, Region, TILE_EDGE, check};
 use std::{collections::BTreeMap, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
@@ -27,12 +27,34 @@ struct Taps {
 }
 
 impl Coverage {
-    /// Place this coverage inside a new `extent`, its origin at `offset` in target pixels.
-    /// Target pixels outside the placed coverage are uncovered and source pixels outside the
-    /// target are cropped, as a canvas resize does. `memory` funds the result's tiles.
+    /// Place this coverage's whole content, including what lies beyond its extent, inside a new
+    /// `extent` with its origin at `offset` in target pixels, as a canvas resize does. Target
+    /// pixels outside the placed content are uncovered; content falling outside the target is
+    /// kept beyond it. `memory` funds the result's tiles.
     /// # Errors
     /// Preserves cancellation, deadline and memory pressure.
     pub fn reframe(
+        &self,
+        extent: Extent,
+        offset: [i64; 2],
+        memory: &MemoryLease,
+        context: &JobContext,
+    ) -> Result<Self, ImageError> {
+        let target = beyond::rect(extent, [-offset[0], -offset[1]]);
+        if self.within(target) {
+            return self.place(extent, offset, memory, context);
+        }
+        let Some(frame) = self.content_bounds() else {
+            return Self::new(extent, 0, memory);
+        };
+        let whole = self.whole_in(frame, memory, context)?;
+        let origin = [frame[0] + offset[0], frame[1] + offset[1]];
+        Self::from_whole(extent, &whole, origin, memory, context)
+    }
+
+    /// Place the content inside this coverage's extent into a new `extent`, its origin at
+    /// `offset`, cropping whatever falls outside.
+    pub(super) fn place(
         &self,
         extent: Extent,
         offset: [i64; 2],
@@ -68,8 +90,9 @@ impl Coverage {
         })
     }
 
-    /// Resample this coverage to `extent`, mapping pixel centers proportionally on each axis.
-    /// `memory` funds the result's tiles.
+    /// Resample the content inside this coverage's extent to `extent`, mapping pixel centers
+    /// proportionally on each axis; content beyond the extent is not kept. `memory` funds the
+    /// result's tiles.
     /// # Errors
     /// Preserves cancellation, deadline and memory pressure.
     pub fn resample(
@@ -193,7 +216,8 @@ impl Coverage {
             }
             slots.insert(key, Slot::Stored(Arc::new(CoverageTile::new(tile, memory)?)));
         }
-        Ok(Self { extent, columns, tiles: Arc::new(Tiles::new(extent, 0, slots, memory)?) })
+        let tiles = Arc::new(Tiles::new(extent, 0, slots, memory)?);
+        Ok(Self { extent, columns, tiles, beyond: None })
     }
 }
 

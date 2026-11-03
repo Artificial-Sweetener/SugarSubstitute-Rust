@@ -448,8 +448,15 @@ pub(crate) fn validate_stack(
         return Err(CanvasError::Invalid("Too many layers or a duplicate layer identity"));
     }
     layers.iter().try_for_each(|layer| validate_layer(layer, extent))?;
+    validate_selection(selection, extent)
+}
+/// A selection lies on the document: it spans its extent and keeps nothing beyond it.
+fn validate_selection(selection: Option<&Coverage>, extent: Extent) -> Result<(), CanvasError> {
     if selection.is_some_and(|selection| selection.extent() != extent) {
         return Err(CanvasError::Invalid("Selection extent differs from document"));
+    }
+    if selection.is_some_and(|selection| selection.outside().is_some()) {
+        return Err(CanvasError::Invalid("Selection keeps content beyond the document"));
     }
     Ok(())
 }

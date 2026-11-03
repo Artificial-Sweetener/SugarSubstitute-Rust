@@ -28,6 +28,7 @@ pub(super) fn archive(
     }
     let payload = ArchiveIntegrity::check(bytes)?;
     let mut reader = Reader {
+        version: u32::from_le_bytes(super::integrity::field(bytes, 8)),
         input: DeflateDecoder::new(&bytes[HEADER_BYTES..]),
         remaining: payload,
         memory,
@@ -70,6 +71,7 @@ fn image(cause: ImageError) -> ArchiveError {
 
 /// Decompressed payload reads limited to the declared payload length.
 struct Reader<'a> {
+    version: u32,
     input: DeflateDecoder<&'a [u8]>,
     remaining: u64,
     memory: &'a MemoryLease,
@@ -241,6 +243,24 @@ impl Reader<'_> {
     }
 
     fn coverage(&mut self, extent: Extent) -> Result<Coverage, ArchiveError> {
+        let coverage = self.tiles(extent)?;
+        if self.version < 2 {
+            return Ok(coverage);
+        }
+        match self.u8()? {
+            0 => Ok(coverage),
+            1 => {
+                let origin = [self.u64()? as i64, self.u64()? as i64];
+                let frame = self.extent()?;
+                let frame = self.tiles(frame)?;
+                coverage.with_outside(frame, origin).map_err(image)
+            }
+            _ => Err(ArchiveError::Corrupt("Unknown coverage beyond tag")),
+        }
+    }
+
+    /// A coverage's default value and its non-default tiles, validated against `extent`.
+    fn tiles(&mut self, extent: Extent) -> Result<Coverage, ArchiveError> {
         let mut builder = CoverageBuilder::new(extent, self.u16()?);
         let count = self.u64()?;
         let tiles = u64::from(extent.width().div_ceil(TILE_EDGE))

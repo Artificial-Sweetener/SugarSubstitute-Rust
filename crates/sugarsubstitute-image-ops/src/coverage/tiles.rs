@@ -125,6 +125,7 @@ impl CoverageBuilder {
             extent: self.extent,
             columns: self.extent.width().div_ceil(TILE_EDGE),
             tiles: Arc::new(Tiles::new(self.extent, self.default, self.slots, memory)?),
+            beyond: None,
         })
     }
 

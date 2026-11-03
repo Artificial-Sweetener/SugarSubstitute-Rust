@@ -9,7 +9,11 @@
 //! pixel centres, such as a quarter turn, a flip or a whole-pixel move after
 //! [`CoverageAffine::aligned`], lands every sample exactly on a source centre, so it permutes
 //! values without blending and round trips exactly.
-use super::{Coverage, FULL_COVERAGE, multiply};
+use super::{
+    Coverage, FULL_COVERAGE,
+    beyond::{self, Frame, extent_of, intersection, rect},
+    multiply,
+};
 use crate::{ImageError, Region, check};
 use sugarsubstitute_contracts::execution::JobContext;
 
@@ -124,29 +128,26 @@ impl CoverageAffine {
         self == Self::IDENTITY
     }
 
-    /// The pixel region covering `region` after mapping, grown by one pixel for the bilinear
-    /// footprint, or `None` when it lies wholly beyond `[0, width) × [0, height)`.
-    fn mapped(self, region: Region, width: u32, height: u32) -> Option<Region> {
-        let [left, top] = [f64::from(region.x()), f64::from(region.y())];
-        let [right, bottom] = [f64::from(region.right()), f64::from(region.bottom())];
+    /// The signed pixel rectangle covering `frame` after mapping, grown by one pixel for the
+    /// bilinear footprint.
+    fn reach(self, [left, top, right, bottom]: Frame) -> Frame {
+        let [left, top, right, bottom] = [left, top, right, bottom].map(|value| value as f64);
         let corners =
             [[left, top], [right, top], [right, bottom], [left, bottom]].map(|p| self.map(p));
         let low = |axis: usize| corners.iter().map(|p| p[axis]).fold(f64::INFINITY, f64::min);
         let high = |axis: usize| corners.iter().map(|p| p[axis]).fold(f64::NEG_INFINITY, f64::max);
-        let x0 = (low(0).floor() - 1.0).max(0.0);
-        let y0 = (low(1).floor() - 1.0).max(0.0);
-        let x1 = (high(0).ceil() + 1.0).min(f64::from(width));
-        let y1 = (high(1).ceil() + 1.0).min(f64::from(height));
-        if x0 >= x1 || y0 >= y1 {
-            return None;
-        }
-        Region::new(x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32).ok()
+        [
+            low(0).floor() as i64 - 1,
+            low(1).floor() as i64 - 1,
+            high(0).ceil() as i64 + 1,
+            high(1).ceil() as i64 + 1,
+        ]
     }
 }
 
 impl Coverage {
-    /// This coverage mapped through `affine` and resampled bilinearly; coverage leaving the
-    /// extent is dropped and the area it uncovers is empty.
+    /// This coverage's whole content mapped through `affine` and resampled bilinearly. Content
+    /// leaving the extent is kept beyond it; the area it uncovers is empty.
     /// # Errors
     /// Rejects a map without an inverse and preserves cancellation, deadline and memory pressure.
     pub fn transform(
@@ -160,34 +161,68 @@ impl Coverage {
         }
         let inverse =
             affine.inverse().ok_or(ImageError::Invalid("Coverage transform is not invertible"))?;
-        let mut moved = Self::new(self.extent, 0, context.memory())?;
-        let Some(source) = self.bounds() else {
+        let Some(content) = self.content_bounds() else {
+            return Self::new(self.extent, 0, context.memory());
+        };
+        let document = rect(self.extent, [0, 0]);
+        let reach = affine.reach(content);
+        let inside = self.within(document);
+        let (source, source_frame) = if inside {
+            (self.clone(), document)
+        } else {
+            (self.whole_in(content, context.memory(), context)?, content)
+        };
+        if inside && intersection(reach, document) == Some(reach) {
+            return source.sample(source_frame, document, reach, inverse, context);
+        }
+        let target = source.sample(source_frame, reach, reach, inverse, context)?;
+        Self::from_whole(self.extent, &target, [reach[0], reach[1]], context.memory(), context)
+    }
+
+    /// Sample this coverage, whose top left lies at `source[..2]`, through `inverse` into a new
+    /// coverage over the frame `target`, computing only the pixels inside `reach`.
+    fn sample(
+        &self,
+        source: Frame,
+        target: Frame,
+        reach: Frame,
+        inverse: CoverageAffine,
+        context: &JobContext,
+    ) -> Result<Self, ImageError> {
+        let mut moved = Self::new(extent_of(target)?, 0, context.memory())?;
+        let (Some(bounds), Some(computed)) = (self.bounds(), intersection(reach, target)) else {
             return Ok(moved);
         };
-        let Some(target) = affine.mapped(source, self.extent.width(), self.extent.height()) else {
-            return Ok(moved);
-        };
-        let _claim = context.memory().claim(source.pixels() * 2 + 64)?;
+        let _claim = context.memory().claim(bounds.pixels() * 2 + 64)?;
         let mut values = Vec::new();
-        values.try_reserve_exact(source.pixels() as usize)?;
-        values.resize(source.pixels() as usize, 0);
-        self.read(source, &mut values)?;
+        values.try_reserve_exact(bounds.pixels() as usize)?;
+        values.resize(bounds.pixels() as usize, 0);
+        self.read(bounds, &mut values)?;
         check(context)?;
-        let width = source.width() as usize;
+        let width = bounds.width() as usize;
         let at = |x: f64, y: f64| -> f64 {
-            let (left, top) = (f64::from(source.x()), f64::from(source.y()));
+            let (left, top) = (f64::from(bounds.x()), f64::from(bounds.y()));
             if x < left
                 || y < top
-                || x >= f64::from(source.right())
-                || y >= f64::from(source.bottom())
+                || x >= f64::from(bounds.right())
+                || y >= f64::from(bounds.bottom())
             {
                 return 0.0;
             }
             f64::from(values[(y - top) as usize * width + (x - left) as usize])
         };
-        moved.update_in_job(target, context, |x, y, _| {
-            let [u, v] = inverse.map([f64::from(x) + 0.5, f64::from(y) + 0.5]);
-            let (u, v) = (u - 0.5, v - 0.5);
+        let region = Region::new(
+            (computed[0] - target[0]) as u32,
+            (computed[1] - target[1]) as u32,
+            (computed[2] - computed[0]) as u32,
+            (computed[3] - computed[1]) as u32,
+        )?;
+        let (shift, unshift) = ([target[0], target[1]], [source[0], source[1]]);
+        moved.update_in_job(region, context, |x, y, _| {
+            let point =
+                [(i64::from(x) + shift[0]) as f64 + 0.5, (i64::from(y) + shift[1]) as f64 + 0.5];
+            let [u, v] = inverse.map(point);
+            let (u, v) = (u - unshift[0] as f64 - 0.5, v - unshift[1] as f64 - 0.5);
             let (x0, y0) = (u.floor(), v.floor());
             let (fx, fy) = (u - x0, v - y0);
             let sample = if fx == 0.0 && fy == 0.0 {
@@ -213,6 +248,17 @@ impl Coverage {
     ) -> Result<Self, ImageError> {
         if fragment.extent != self.extent || alpha.extent != self.extent {
             return Err(ImageError::Invalid("Placed coverage extents differ"));
+        }
+        if self.beyond.is_some() || fragment.beyond.is_some() || alpha.beyond.is_some() {
+            let bounds = [self, fragment, alpha].map(Self::content_bounds);
+            let Some(frame) = bounds.into_iter().reduce(beyond::union).flatten() else {
+                return Ok(self.clone());
+            };
+            let memory = context.memory();
+            let [kept, fragment, alpha] =
+                [self, fragment, alpha].map(|coverage| coverage.whole_in(frame, memory, context));
+            let placed = kept?.over(&fragment?, &alpha?, context)?;
+            return Self::from_whole(self.extent, &placed, [frame[0], frame[1]], memory, context);
         }
         let Some(region) = union(alpha.bounds(), fragment.bounds()) else {
             return Ok(self.clone());

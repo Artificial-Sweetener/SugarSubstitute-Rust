@@ -1479,13 +1479,13 @@ migrations = []
 id = "input-document-archive-v1"
 owner = "sugarsubstitute-canvas"
 sources = ["crates/sugarsubstitute-canvas/src/archive.rs", "crates/sugarsubstitute-canvas/src/archive/encode.rs", "crates/sugarsubstitute-canvas/src/archive/decode.rs", "crates/sugarsubstitute-canvas/src/archive/integrity.rs"]
-source_sha256 = "sha256:425366e9151b3ef411e14673963c082c2f2192f63e84888d8954da944c18da07"
+source_sha256 = "sha256:81568b86af1ea93440e8060e74a5bab907af32156b8b0d11b1f6e5bae6a8963d"
 classification = "authored_document"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
-compatibility = "reject"
-migrations = []
+current_version = 2
+accepted_versions = [1, 2]
+compatibility = "migrate"
+migrations = ["1->2"]
 
 # Host metadata inside an input-document archive: workflow surfaces with their document and
 # layer identities, synced mask state and the active input document. Unknown versions and

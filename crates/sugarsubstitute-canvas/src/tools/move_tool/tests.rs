@@ -198,3 +198,27 @@ fn locked_and_missing_masks_are_never_moved() -> TestResult {
         Ok(())
     })
 }
+
+#[test]
+fn masks_and_floating_pixels_moved_off_the_document_come_back_whole() -> TestResult {
+    run(|context| {
+        let mut canvas = canvas(context, MoveTool::new(), &[[150, 20, 190, 60]])?;
+        let original = mask(&canvas.document.snapshot())?;
+        canvas.drag(&[[160.0, 30.0], [200.0, 30.0]], NONE, context)?;
+        assert_eq!(canvas.bounds(MASK), region(190, 20, 10, 40)?);
+        assert_eq!(mask(&canvas.document.snapshot())?.content_bounds(), Some([190, 20, 230, 60]));
+        canvas.drag(&[[195.0, 30.0], [155.0, 30.0]], NONE, context)?;
+        assert_eq!(mask(&canvas.document.snapshot())?, original);
+        // Floating pixels landed half beyond the edge return whole with a later move.
+        canvas.select([150, 20, 190, 60], context)?;
+        canvas.drag(&[[160.0, 30.0], [190.0, 30.0]], NONE, context)?;
+        assert!(canvas.command(ToolCommand::Commit, context)?);
+        let landed = canvas.document.snapshot();
+        assert_eq!(selected(&landed), region(180, 20, 20, 40)?);
+        assert_eq!(mask(&landed)?.content_bounds(), Some([180, 20, 220, 60]));
+        canvas.document.apply(DocumentEdit::Select(None))?;
+        canvas.drag(&[[185.0, 30.0], [155.0, 30.0]], NONE, context)?;
+        assert_eq!(mask(&canvas.document.snapshot())?, original);
+        Ok(())
+    })
+}

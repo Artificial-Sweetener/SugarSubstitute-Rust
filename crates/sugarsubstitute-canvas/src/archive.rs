@@ -22,7 +22,9 @@
 //! The payload is little-endian: the metadata blob, then documents in ascending key byte
 //! order. Coverage is stored as its default value and its non-default tiles in ascending
 //! index order, each uniform (one value) or stored (128×128 values), so coverage, selection
-//! and masks round-trip with identical values and fingerprints. Decoding validates every
+//! and masks round-trip with identical values and fingerprints. Since version 2 every coverage is
+//! followed by the content it keeps beyond the document: a zero tag, or a one tag, the signed
+//! top left corner, the width and height, and that content as coverage. Decoding validates every
 //! bound, the digest and all content before returning anything; no partially decoded
 //! archive is ever observable.
 mod decode;
@@ -39,8 +41,12 @@ use std::{error::Error, fmt, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
 use sugarsubstitute_image_ops::{Coverage, Extent, ImageError};
 
-/// Format version this build writes and the only one it reads.
-pub const INPUT_ARCHIVE_VERSION: u32 = 1;
+/// Format version this build writes.
+pub const INPUT_ARCHIVE_VERSION: u32 = 2;
+/// Oldest format version this build reads. Version 1 predates coverage kept beyond the
+/// document: its coverage decodes as version 2 coverage that keeps nothing beyond, and the next
+/// save writes version 2.
+pub const OLDEST_INPUT_ARCHIVE_VERSION: u32 = 1;
 /// Largest encoded archive, in bytes.
 pub const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
 /// Largest number of documents in one archive.
@@ -295,8 +301,10 @@ impl InputDocumentArchive {
                 1024 + 128 + source
             });
             let coverages = document.coverages().map(|coverage| {
-                let tiles = coverage.tile_values().count() as u64;
-                16 + tiles * 11 + coverage.stored_bytes()
+                let outside =
+                    coverage.outside().map_or(0, |(frame, _)| frame.tile_values().count());
+                let tiles = (coverage.tile_values().count() + outside) as u64;
+                48 + tiles * 11 + coverage.stored_bytes()
             });
             512 + layers.chain(coverages).fold(0, u64::saturating_add)
         });

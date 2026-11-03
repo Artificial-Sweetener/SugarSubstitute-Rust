@@ -158,9 +158,7 @@ impl Content {
                 self.layers.insert(index, layer);
             }
             DocumentEdit::Select(selection) => {
-                if selection.as_ref().is_some_and(|selection| selection.extent() != self.extent) {
-                    return Err(CanvasError::Invalid("Selection extent differs from document"));
-                }
+                validate_selection(selection.as_ref(), self.extent)?;
                 self.selection = selection;
             }
             DocumentEdit::Group(edits) => {
