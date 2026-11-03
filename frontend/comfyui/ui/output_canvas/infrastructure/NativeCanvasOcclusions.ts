@@ -24,9 +24,9 @@ import { observeNativeCanvasOverlays } from './NativeCanvasOverlayObserver.js';
 
 type Occlusion = NonNullable<CanvasSurfaceGeometry['occlusions']>[number];
 
-/** The attachment's own chrome over its viewport: tab strips, status, divider and grid. */
+/** The attachment's own chrome over its viewport: tabs, status, divider, grid and editing tools. */
 const ATTACHMENT_CHROME =
-  '.sc-output-tabstrip, .sc-output-status, .sc-output-wipe, .sc-output-overview';
+  '.sc-output-tabstrip, .sc-output-status, .sc-output-wipe, .sc-output-overview, .sc-canvas-edit-chrome';
 /** Elements examined per measurement, in document order, bounding work in large documents. */
 const MAX_SCANNED_ELEMENTS = 6000;
 /** Positioned elements over the viewport whose paint order is confirmed per measurement. */
