@@ -8,7 +8,8 @@
 //! [`AutosavePolicy::longest`] while changes keep arriving. One save runs at a time; changes
 //! during a save wait for the next one. Content whose fingerprint matches the last saved or
 //! restored content is not written again. A failed or stopped save leaves the content unsaved
-//! and retries after the quiet period.
+//! and retries after the quiet period. At close, [`Autosave::flush`] saves whatever is unsaved at
+//! once within the shutdown bound.
 use super::{InputDocumentStore, SaveReceipt, StoreError};
 use crate::job_sequence::JobSequence;
 use std::{error::Error, fmt, time::Duration};
@@ -73,6 +74,18 @@ impl AutosaveSchedule {
     /// Start the due save, returning the generation to capture.
     pub fn begin(&mut self, now: Moment) -> Option<u64> {
         if self.saving.is_some() || !self.dirty() || self.due.is_none_or(|due| due > now) {
+            return None;
+        }
+        self.saving = Some(self.latest);
+        self.first = None;
+        self.due = None;
+        Some(self.latest)
+    }
+
+    /// Start a save of the latest generation now, whatever its debounce, such as at close.
+    /// Returns `None` while nothing is unsaved or a save is running.
+    pub fn flush(&mut self) -> Option<u64> {
+        if self.saving.is_some() || !self.dirty() {
             return None;
         }
         self.saving = Some(self.latest);
@@ -212,7 +225,42 @@ impl Autosave {
         if self.schedule.begin(now).is_none() {
             return Ok(None);
         }
-        let submitted = self.submit(now, execution, scope, jobs, capture);
+        let deadline = now.checked_add(self.schedule.policy.timeout)?;
+        self.start(now, deadline, execution, scope, jobs, capture)
+    }
+
+    /// Save every unsaved change now, regardless of the debounce, with a job deadline no later
+    /// than `cutoff`, such as the bounded shutdown's. A save that cannot finish by then is
+    /// stopped before it replaces the current archive, which stays intact.
+    /// # Errors
+    /// Preserves capture, identity and admission failures; the content stays dirty.
+    pub fn flush<P: ExecutionPort>(
+        &mut self,
+        now: Moment,
+        cutoff: Moment,
+        execution: &P,
+        scope: &Scope,
+        jobs: &JobSequence,
+        capture: impl FnOnce() -> Result<InputDocumentArchive, ArchiveError>,
+    ) -> Result<Option<SaveOutcome>, AutosaveError> {
+        if self.schedule.flush().is_none() {
+            return Ok(None);
+        }
+        let deadline = now.checked_add(self.schedule.policy.timeout)?.min(cutoff);
+        self.start(now, deadline, execution, scope, jobs, capture)
+    }
+
+    /// Submit the save the schedule just began, recording a failure to start as unsaved.
+    fn start<P: ExecutionPort>(
+        &mut self,
+        now: Moment,
+        deadline: Moment,
+        execution: &P,
+        scope: &Scope,
+        jobs: &JobSequence,
+        capture: impl FnOnce() -> Result<InputDocumentArchive, ArchiveError>,
+    ) -> Result<Option<SaveOutcome>, AutosaveError> {
+        let submitted = self.submit(deadline, execution, scope, jobs, capture);
         match submitted {
             Ok(Some(running)) => {
                 self.running = Some(running);
@@ -262,7 +310,7 @@ impl Autosave {
 
     fn submit<P: ExecutionPort>(
         &self,
-        now: Moment,
+        deadline: Moment,
         execution: &P,
         scope: &Scope,
         jobs: &JobSequence,
@@ -277,7 +325,7 @@ impl Autosave {
             id: jobs.allocate().map_err(AutosaveError::Identity)?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
-            deadline: Some(now.checked_add(self.schedule.policy.timeout)?),
+            deadline: Some(deadline),
             reservation_bytes: InputDocumentStore::save_reservation(&archive),
             replacement: None,
         };

@@ -11,17 +11,24 @@ fn session_directory(anchor: &std::path::Path) -> std::path::PathBuf {
 
 impl Inputs {
     /// Let autosave debounce periods elapse on the fixture clock and deliver completions until
-    /// `saved` holds; a save that could not be admitted retries after a further quiet period.
+    /// `saved` holds. The clock advances again only after a quiet stretch, so a running save never
+    /// outlives its deadline on the fixture clock; a save that could not be admitted retries
+    /// after the next quiet period.
     fn save_until(&mut self, saved: impl Fn() -> bool) -> Result<(), Box<dyn Error>> {
         let deadline = Instant::now() + Duration::from_secs(30);
+        // Observe the latest change before its quiet period elapses.
+        self.ask("context.request", None)?;
         while !saved() {
             if Instant::now() >= deadline {
                 return Err("The input documents were not saved".into());
             }
-            // Observe the latest change before its quiet period elapses.
-            self.ask("context.request", None)?;
             self.clock.0.fetch_add(3_000_000_000, Ordering::SeqCst);
-            self.ask("context.request", None)?;
+            let quiet = Instant::now() + Duration::from_secs(2);
+            while !saved() && Instant::now() < quiet {
+                let observed = self.wake.revision();
+                self.ask("context.request", None)?;
+                self.wait_briefly(observed);
+            }
         }
         Ok(())
     }
@@ -103,6 +110,28 @@ fn a_corrupt_archive_is_kept_as_evidence_while_documents_rebuild_from_the_workfl
                 .is_ok_and(|bytes| bytes.starts_with(b"SSINDOC\0"))
     })?;
     inputs.close()
+}
+
+#[test]
+fn closing_saves_edits_made_before_the_autosave_debounce_elapses() -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let mut first = Inputs::start(directory.path())?;
+    first.workflow(sync(None))?;
+    first.save_until(|| archive.is_file())?;
+    let saved = std::fs::read(&archive)?;
+    // The edit lands on the fixture clock with no time for its debounce to elapse.
+    let resize = json!({"type":"resize", "workflow":WORKFLOW, "surface":"latent", "width":7,
+        "height":3, "mode":{"kind":"scale", "resampling":"nearest"}});
+    let resized = first.workflow(resize)?;
+    let latent = synced(&resized, "latent")?.clone();
+    first.close()?;
+    assert_ne!(std::fs::read(&archive)?, saved, "close saved the edit");
+
+    let mut second = Inputs::start(directory.path())?;
+    let result = second.workflow(sync(None))?;
+    assert_eq!(synced(&result, "latent")?, &latent);
+    second.close()
 }
 
 fn capture_command(document: &Value, targets: &Value) -> Value {

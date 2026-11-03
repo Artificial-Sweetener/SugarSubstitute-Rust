@@ -444,6 +444,7 @@ impl Session {
         if let Some(persistence) = &mut self.inputs.persistence {
             persistence.close();
         }
+        self.close_input_documents();
         if let Some(running) = &self.inputs.running {
             running.job.cancel();
             running.acquirers.iter().for_each(|owner| owner.cancel());

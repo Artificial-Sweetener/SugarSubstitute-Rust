@@ -338,3 +338,38 @@ fn autosave_coalesces_changes_and_skips_content_already_on_disk() -> TestResult 
     assert_eq!(restored(&fixture.load()?), Some((ArchiveFile::Current, &second)));
     Ok(())
 }
+
+#[test]
+fn a_close_flush_saves_at_once_and_one_past_its_cutoff_keeps_the_previous_archive() -> TestResult {
+    let fixture = Fixture::new()?;
+    let mut autosave = Autosave::new(fixture.store.clone(), POLICY, 0, None);
+    let first = fixture.archive(1, b"first")?;
+    autosave.changed(1, at(0))?;
+    assert_eq!(autosave.deadline(), Some(at(500)), "the debounce has not elapsed");
+    let captured = first.clone();
+    let cutoff = Moment::from_nanos(60_000_000_000);
+    let started =
+        autosave.flush(at(0), cutoff, &fixture.client, &fixture.scope, &fixture.jobs, || {
+            Ok(captured)
+        })?;
+    assert!(started.is_none() && autosave.saving(), "the flush ignores the debounce");
+    let outcome = fixture.settle(|| Ok(autosave.observe(at(0))?))?;
+    assert!(matches!(outcome, SaveOutcome::Saved(_)));
+    assert!(!autosave.dirty());
+    // A final save whose shutdown cutoff has passed never replaces the archive on disk.
+    autosave.changed(2, at(0))?;
+    let second = fixture.archive(2, b"second")?;
+    let late =
+        autosave.flush(at(0), at(0), &fixture.client, &fixture.scope, &fixture.jobs, || Ok(second));
+    match late {
+        Err(AutosaveError::Admission(_)) => {}
+        Ok(None) if autosave.saving() => {
+            let outcome = fixture.settle(|| Ok(autosave.observe(at(0))?))?;
+            assert!(matches!(outcome, SaveOutcome::Stopped(_) | SaveOutcome::Failed(_)));
+        }
+        other => return Err(format!("A late flush started unexpectedly: {other:?}").into()),
+    }
+    assert!(autosave.dirty(), "the unsaved change stays unsaved");
+    assert_eq!(restored(&fixture.load()?), Some((ArchiveFile::Current, &first)));
+    Ok(())
+}
