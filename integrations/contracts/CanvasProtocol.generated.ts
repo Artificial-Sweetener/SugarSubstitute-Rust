@@ -14,20 +14,37 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts. */
-import type { CanvasSurfaceMessage } from './CanvasSurfaceProtocol.generated.js';
+import type {
+  CanvasSurfaceMessage,
+  CanvasSurfaceFileReference,
+} from './CanvasSurfaceProtocol.generated.js';
+/** Describe the schema-defined CanvasLayerCapabilities wire value. */
+export type CanvasLayerCapabilities = {
+  readonly displayOutput: boolean;
+  readonly insertImageLayer: boolean;
+  readonly positionImageLayer: boolean;
+};
+/** Describe the schema-defined CanvasGeometryCapabilities wire value. */
+export type CanvasGeometryCapabilities = {
+  readonly displayOutput: boolean;
+  readonly insertImageLayer: boolean;
+  readonly positionImageLayer: boolean;
+  readonly geometry: boolean;
+};
+/** Describe the schema-defined CanvasEditingCapabilities wire value. */
+export type CanvasEditingCapabilities = {
+  readonly displayOutput: boolean;
+  readonly insertImageLayer: boolean;
+  readonly positionImageLayer: boolean;
+  readonly geometry: boolean;
+  readonly editing: boolean;
+  readonly workflowSurfaces: boolean;
+};
 /** Describe the schema-defined CanvasCapabilities wire value. */
 export type CanvasCapabilities =
-  | {
-      readonly displayOutput: boolean;
-      readonly insertImageLayer: boolean;
-      readonly positionImageLayer: boolean;
-    }
-  | {
-      readonly displayOutput: boolean;
-      readonly insertImageLayer: boolean;
-      readonly positionImageLayer: boolean;
-      readonly geometry: boolean;
-    };
+  | CanvasLayerCapabilities
+  | CanvasGeometryCapabilities
+  | CanvasEditingCapabilities;
 /** Describe the schema-defined CanvasDescriptor wire value. */
 export type CanvasDescriptor = {
   readonly id: string;
@@ -298,6 +315,237 @@ export type CanvasGeometryReply = {
   readonly type: 'geometry.reply';
   readonly result: CanvasGeometryResult;
 };
+/** Describe the schema-defined CanvasToolId wire value. */
+export type CanvasToolId =
+  | 'pan-zoom'
+  | 'move'
+  | 'brush'
+  | 'eraser'
+  | 'select-rectangle'
+  | 'select-ellipse'
+  | 'select-lasso'
+  | 'mask-rectangle'
+  | 'mask-ellipse'
+  | 'mask-lasso'
+  | 'transform'
+  | 'shared-edges';
+/** Describe the schema-defined CanvasBrushOptions wire value. */
+export type CanvasBrushOptions = {
+  readonly size: number;
+  readonly hardness: number;
+  readonly opacity: number;
+};
+/** Describe the schema-defined CanvasEditCommand wire value. */
+export type CanvasEditCommand =
+  | { readonly type: 'state' }
+  | { readonly type: 'tool'; readonly tool: CanvasToolId }
+  | {
+      readonly type: 'options';
+      readonly tool: 'brush' | 'eraser';
+      readonly options: CanvasBrushOptions;
+    }
+  | { readonly type: 'history'; readonly action: 'undo' | 'redo' }
+  | { readonly type: 'commit' }
+  | { readonly type: 'cancel' }
+  | { readonly type: 'nudge'; readonly dx: number; readonly dy: number }
+  | { readonly type: 'selection'; readonly action: 'deselect' | 'clear' }
+  | {
+      readonly type: 'modify';
+      readonly target: 'selection' | 'mask';
+      readonly operation: 'expand' | 'contract' | 'feather';
+      readonly pixels: number;
+      readonly phase: 'preview' | 'apply' | 'cancel';
+    }
+  | { readonly type: 'mode'; readonly mode: 'none' | 'coverage' }
+  | {
+      readonly type: 'transform';
+      readonly action: 'rotate-left' | 'rotate-right' | 'flip-horizontal' | 'flip-vertical';
+    }
+  | { readonly type: 'session'; readonly action: 'undo' | 'redo' | 'apply' | 'cancel' }
+  | { readonly type: 'navigation'; readonly held: boolean };
+/** Describe the schema-defined CanvasEditTool wire value. */
+export type CanvasEditTool = { readonly id: CanvasToolId; readonly available: boolean };
+/** Describe the schema-defined CanvasEditToolOptions wire value. */
+export type CanvasEditToolOptions = {
+  readonly brush: CanvasBrushOptions;
+  readonly eraser: CanvasBrushOptions;
+};
+/** Describe the schema-defined CanvasEditSelectionBounds wire value. */
+export type CanvasEditSelectionBounds = {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+};
+/** Describe the schema-defined CanvasEditSelection wire value. */
+export type CanvasEditSelection = { readonly bounds: CanvasEditSelectionBounds };
+/** Describe the schema-defined CanvasEditHistory wire value. */
+export type CanvasEditHistory = { readonly undo: boolean; readonly redo: boolean };
+/** Describe the schema-defined CanvasEditSession wire value. */
+export type CanvasEditSession = {
+  readonly kind: 'move' | 'transform' | 'shared-edges' | 'modify';
+  readonly undo: boolean;
+  readonly redo: boolean;
+};
+/** Describe the schema-defined CanvasEditState wire value. */
+export type CanvasEditState = {
+  readonly revision: number;
+  readonly document: string | null;
+  readonly activeMask: string | null;
+  readonly tool: CanvasToolId;
+  readonly tools: readonly CanvasEditTool[];
+  readonly options: CanvasEditToolOptions;
+  readonly selection: CanvasEditSelection | null;
+  readonly history: CanvasEditHistory;
+  readonly session: CanvasEditSession | null;
+  readonly mode: 'none' | 'coverage';
+};
+/** Describe the schema-defined CanvasEditResult wire value. */
+export type CanvasEditResult =
+  | { readonly kind: 'state'; readonly state: CanvasEditState }
+  | {
+      readonly kind: 'failure';
+      readonly status: 'unavailable' | 'unsupported' | 'stale' | 'cancelled' | 'error';
+      readonly message: string;
+    };
+/** Describe the schema-defined CanvasEditRequest wire value. */
+export type CanvasEditRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'edit.request';
+  readonly command: CanvasEditCommand;
+};
+/** Describe the schema-defined CanvasEditReply wire value. */
+export type CanvasEditReply = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'edit.reply';
+  readonly result: CanvasEditResult;
+};
+/** Describe the schema-defined CanvasEditChanged wire value. */
+export type CanvasEditChanged = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: 0;
+  readonly type: 'edit.changed';
+  readonly state: CanvasEditState;
+};
+/** Describe the schema-defined CanvasWorkflowSurfaceBase wire value. */
+export type CanvasWorkflowSurfaceBase =
+  | { readonly kind: 'file'; readonly file: CanvasSurfaceFileReference }
+  | { readonly kind: 'blank'; readonly width: number; readonly height: number };
+/** Describe the schema-defined CanvasWorkflowMask wire value. */
+export type CanvasWorkflowMask = {
+  readonly key: string;
+  readonly label: string;
+  readonly color: string;
+  readonly opacity: number;
+  readonly initial: CanvasSurfaceFileReference | null;
+};
+/** Describe the schema-defined CanvasWorkflowSurface wire value. */
+export type CanvasWorkflowSurface = {
+  readonly key: string;
+  readonly label: string;
+  readonly base: CanvasWorkflowSurfaceBase;
+  readonly masks: readonly CanvasWorkflowMask[];
+};
+/** Describe the schema-defined CanvasWorkflowAppearance wire value. */
+export type CanvasWorkflowAppearance = {
+  readonly surface: string;
+  readonly mask: string;
+  readonly color: string;
+  readonly opacity: number;
+};
+/** Describe the schema-defined CanvasWorkflowResizeMode wire value. */
+export type CanvasWorkflowResizeMode =
+  | {
+      readonly kind: 'canvas';
+      readonly anchor:
+        | 'top-left'
+        | 'top'
+        | 'top-right'
+        | 'left'
+        | 'center'
+        | 'right'
+        | 'bottom-left'
+        | 'bottom'
+        | 'bottom-right';
+    }
+  | { readonly kind: 'scale'; readonly resampling: 'nearest' | 'smooth' };
+/** Describe the schema-defined CanvasWorkflowCommand wire value. */
+export type CanvasWorkflowCommand =
+  | {
+      readonly type: 'sync';
+      readonly workflow: string;
+      readonly surfaces: readonly CanvasWorkflowSurface[];
+    }
+  | {
+      readonly type: 'activate';
+      readonly workflow: string;
+      readonly route: 'input' | 'output';
+      readonly surface: string | null;
+      readonly mask: string | null;
+    }
+  | {
+      readonly type: 'appearance';
+      readonly workflow: string;
+      readonly masks: readonly CanvasWorkflowAppearance[];
+    }
+  | {
+      readonly type: 'resize';
+      readonly workflow: string;
+      readonly surface: string;
+      readonly width: number;
+      readonly height: number;
+      readonly mode: CanvasWorkflowResizeMode;
+    }
+  | {
+      readonly type: 'hover';
+      readonly workflow: string;
+      readonly surface: string;
+      readonly mask: string | null;
+    };
+/** Describe the schema-defined CanvasWorkflowMaskLayer wire value. */
+export type CanvasWorkflowMaskLayer = { readonly key: string; readonly layerId: string };
+/** Describe the schema-defined CanvasWorkflowSyncedSurface wire value. */
+export type CanvasWorkflowSyncedSurface = {
+  readonly key: string;
+  readonly document: CanvasDocument;
+  readonly masks: readonly CanvasWorkflowMaskLayer[];
+};
+/** Describe the schema-defined CanvasWorkflowResult wire value. */
+export type CanvasWorkflowResult =
+  | { readonly kind: 'synced'; readonly surfaces: readonly CanvasWorkflowSyncedSurface[] }
+  | { readonly kind: 'activated' }
+  | { readonly kind: 'applied' }
+  | {
+      readonly kind: 'failure';
+      readonly status: 'unavailable' | 'unsupported' | 'stale' | 'cancelled' | 'error';
+      readonly message: string;
+    };
+/** Describe the schema-defined CanvasWorkflowRequest wire value. */
+export type CanvasWorkflowRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'workflow.request';
+  readonly command: CanvasWorkflowCommand;
+};
+/** Describe the schema-defined CanvasWorkflowReply wire value. */
+export type CanvasWorkflowReply = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 3;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'workflow.reply';
+  readonly result: CanvasWorkflowResult;
+};
 /** Describe every version-three canvas message. */
 export type CanvasMessage =
   | CanvasReadRequest
@@ -311,4 +559,9 @@ export type CanvasMessage =
   | CanvasSourceChanged
   | CanvasGeometryRequest
   | CanvasGeometryReply
+  | CanvasEditRequest
+  | CanvasEditReply
+  | CanvasEditChanged
+  | CanvasWorkflowRequest
+  | CanvasWorkflowReply
   | CanvasSurfaceMessage;

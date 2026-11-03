@@ -19,6 +19,8 @@ import type { CanvasMaskHost } from './CanvasMasks.js';
 import type { CanvasSourceHost } from './CanvasSources.js';
 import type { CanvasGeometryHost } from './CanvasGeometry.js';
 import type { CanvasSurfaceHost } from './CanvasSurface.js';
+import type { CanvasEditHost } from './CanvasEditing.js';
+import type { CanvasWorkflowHost } from './CanvasWorkflowSurfaces.js';
 
 /** Receive supported output in a destination captured before execution begins. */
 export interface CanvasOutputBinding<Output> {
@@ -52,6 +54,8 @@ export interface CanvasAdapter<Submission, Output, ViewState, Preview> {
     readonly layers?: CanvasLayerHost | undefined;
     readonly masks?: CanvasMaskHost | undefined;
     readonly sources?: CanvasSourceHost | undefined;
+    readonly editing?: CanvasEditHost | undefined;
+    readonly workflow?: CanvasWorkflowHost | undefined;
     readonly surface?: CanvasSurfaceHost | undefined;
     readonly output: CanvasOutputCapability<Submission, Output>;
     readonly outputView?: {

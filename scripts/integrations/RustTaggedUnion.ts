@@ -20,11 +20,24 @@ interface Field {
   readonly field: string;
   readonly type: string;
   readonly valid: readonly string[];
-  readonly requiredOption?: boolean;
+  /** A serde field attribute, such as the required-nullable decoder, placed above the member. */
+  readonly attribute?: string | null;
+}
+const SCALARS = ['f64', 'u64', 'i64', 'bool', '()'];
+
+/** Read the shared discriminator: commands and messages use `type`, results use `kind`. */
+function discriminator(value: Schema): 'type' | 'kind' {
+  const first = Array.isArray(value.oneOf) ? (value.oneOf[0] as unknown) : undefined;
+  const properties =
+    first && typeof first === 'object' && !Array.isArray(first)
+      ? (first as Schema).properties
+      : undefined;
+  const key = properties && typeof properties === 'object' ? Object.keys(properties)[0] : undefined;
+  return key === 'kind' ? 'kind' : 'type';
 }
 
 /** Reject ambiguous tags and unsupported branch shapes before emitting any Rust. */
-function branches(value: Schema): readonly { tag: string; properties: Schema }[] {
+function branches(value: Schema, tagKey: string): readonly { tag: string; properties: Schema }[] {
   if (
     Object.keys(value).length !== 1 ||
     !Array.isArray(value.oneOf) ||
@@ -51,15 +64,15 @@ function branches(value: Schema): readonly { tag: string; properties: Schema }[]
     )
       throw new Error('Rust contract tagged branches must be closed and fully required.');
     const fields = properties as Schema;
-    const discriminator = fields.type;
+    const tagSchema = fields[tagKey];
     if (
-      !discriminator ||
-      typeof discriminator !== 'object' ||
-      Array.isArray(discriminator) ||
-      Object.keys(discriminator).join() !== 'const'
+      !tagSchema ||
+      typeof tagSchema !== 'object' ||
+      Array.isArray(tagSchema) ||
+      Object.keys(tagSchema).join() !== 'const'
     )
       throw new Error('Rust contract tagged branches need an exact type constant.');
-    const tag = (discriminator as Schema).const;
+    const tag = (tagSchema as Schema).const;
     if (
       typeof tag !== 'string' ||
       tag.length > 64 ||
@@ -71,9 +84,50 @@ function branches(value: Schema): readonly { tag: string; properties: Schema }[]
     tags.add(tag);
     return {
       tag,
-      properties: Object.fromEntries(Object.entries(fields).filter(([k]) => k !== 'type')),
+      properties: Object.fromEntries(Object.entries(fields).filter(([k]) => k !== tagKey)),
     };
   });
+}
+
+/** Rebind a struct-style check to the borrowed member a match pattern binds. */
+function bindCheck(check: string, { field, type }: Field): string {
+  const member = `self\\.${field.replace(/[^A-Za-z0-9_]/g, (character) => `\\${character}`)}\\b`;
+  return check
+    .replace(new RegExp(`&${member}`, 'g'), field)
+    .replace(
+      new RegExp(`${member} ==`, 'g'),
+      type === 'String' ? `${field}.as_str() ==` : `(*${field}) ==`,
+    )
+    .replace(new RegExp(member, 'g'), SCALARS.includes(type) ? `(*${field})` : field);
+}
+
+/** Lay out one variant as rustfmt does, keeping attributed members on their own lines. */
+function declaration(variant: string, fields: readonly Field[]): string {
+  const members = fields.map(({ field, type }) => `${field}: ${type}`).join(', ');
+  const single = `    ${variant} {${members ? ` ${members} ` : ''}},`;
+  if (single.length <= 100 && fields.every(({ attribute }) => !attribute)) return single;
+  const lines = fields.map(
+    ({ field, type, attribute }) =>
+      `${attribute ? `        ${attribute}\n` : ''}        ${field}: ${type},`,
+  );
+  return `    ${variant} {\n${lines.join('\n')}\n    },`;
+}
+
+/** Lay out one validation arm as rustfmt does for short and wrapped patterns and bodies. */
+function arm(variant: string, fields: readonly Field[], checks: readonly string[]): string {
+  const bindings = fields.map(({ field, valid }) => (valid.length ? field : `${field}: _`));
+  const validation = checks.length ? checks.join(' && ') : 'true';
+  const shape = bindings.length ? `{ ${bindings.join(', ')} }` : '{}';
+  const single = `            Self::${variant} ${shape} => ${validation},`;
+  if (single.length <= 100) return single;
+  const wrappedBody = (indent: string) =>
+    `${indent}    ${validation.length + indent.length + 4 <= 100 ? validation : checks.join(`\n${indent}        && `)}`;
+  const head = `            Self::${variant} ${shape} => {`;
+  if (head.length <= 100) return `${head}\n${wrappedBody('            ')}\n            }`;
+  const pattern = `            Self::${variant} {\n${bindings.map((binding) => `                ${binding},`).join('\n')}\n            }`;
+  const tail = `            } => ${validation},`;
+  if (tail.length <= 100) return `${pattern} => ${validation},`;
+  return `${pattern} => {\n${wrappedBody('            ')}\n            }`;
 }
 
 /** Preserve closed branches, including empty struct variants which reject extra members. */
@@ -82,48 +136,21 @@ export function rustTaggedUnion(
   schema: Schema,
   compile: (key: string, value: unknown, variant: string) => Field,
 ): string {
-  const variants = branches(schema).map(({ tag, properties }) => {
+  const tagKey = discriminator(schema);
+  const variants = branches(schema, tagKey).map(({ tag, properties }) => {
     const variant = tag.replace(/(^|-)([a-z])/g, (_, _separator: string, letter: string) =>
       letter.toUpperCase(),
     );
     const fields = Object.entries(properties).map(([key, value]) => compile(key, value, variant));
-    if (fields.some(({ requiredOption }) => requiredOption))
-      throw new Error('Rust contract tagged branches do not support nullable members.');
-    const checks = fields.flatMap(({ field, type, valid }) =>
-      valid.map((check) =>
-        check
-          .replaceAll(`&self.${field}`, field)
-          .replaceAll(
-            `self.${field} ==`,
-            type === 'String' ? `${field}.as_str() ==` : `(*${field}) ==`,
-          )
-          .replaceAll(
-            `self.${field}`,
-            ['f64', 'u64', 'bool', '()'].includes(type) ? `(*${field})` : field,
-          ),
-      ),
-    );
-    const pattern = fields
-      .map(({ field, valid }) => (valid.length ? field : `${field}: _`))
-      .join(', ');
-    const validation = checks.length ? checks.join(' && ') : 'true';
-    const body =
-      validation.length + 16 <= 100 ? validation : checks.join('\n                    && ');
-    const shape = pattern ? `{ ${pattern} }` : '{}';
-    const arm = `            Self::${variant} ${shape} => ${validation},`;
-    const members = fields.map(({ field, type }) => `${field}: ${type}`).join(', ');
-    const declaration = `    ${variant} {${members ? ` ${members} ` : ''}},`;
+    const checks = fields.flatMap((field) => field.valid.map((check) => bindCheck(check, field)));
     return {
-      declaration: `    #[serde(rename = ${JSON.stringify(tag)})]\n${declaration.length <= 100 ? declaration : `    ${variant} {\n${fields.map(({ field, type }) => `        ${field}: ${type},`).join('\n')}\n    },`}`,
-      arm:
-        arm.length <= 100
-          ? arm
-          : `            Self::${variant} ${shape} => {\n                ${body}\n            }`,
+      declaration: `    #[serde(rename = ${JSON.stringify(tag)})]\n${declaration(variant, fields)}`,
+      arm: arm(variant, fields, checks),
     };
   });
   return `/// Schema-defined untrusted ${name} data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type", deny_unknown_fields, rename_all_fields = "camelCase")]
+#[serde(tag = "${tagKey}", deny_unknown_fields, rename_all_fields = "camelCase")]
 pub(super) enum ${name} {
 ${variants.map(({ declaration }) => declaration).join('\n')}
 }

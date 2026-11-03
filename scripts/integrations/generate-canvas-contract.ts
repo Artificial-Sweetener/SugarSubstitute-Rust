@@ -19,61 +19,88 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { contractBindings } from './ContractBindings.js';
 import { rustContractBindings } from './RustContractBindings.js';
+import { rustContractDefinitions } from './RustContractDefinitions.js';
 
-/** Retain only the display-only native context supported by the desktop host. */
-function nativeContextDefinitions(definitions: Record<string, unknown>): Record<string, unknown> {
+/**
+ * Place each capability family's guards in its own generated module. Families may share only
+ * the document module; the root module re-exports every guard and keeps the message union.
+ */
+const ORDINARY_VALIDATION_MODULES = [
+  {
+    file: 'integrations/shared/CanvasDocumentValidation.generated.ts',
+    matches: /^CanvasDocument$/,
+  },
+  {
+    file: 'integrations/shared/CanvasContextValidation.generated.ts',
+    matches: /^Canvas(?:\w*Capabilities|Descriptor|Context)$/,
+  },
+  {
+    file: 'integrations/shared/CanvasSourceValidation.generated.ts',
+    matches: /^Canvas(?:Source\w+|InputTarget|InputSource|PixelRaster)$/,
+  },
+  {
+    file: 'integrations/shared/CanvasGeometryValidation.generated.ts',
+    matches:
+      /^Canvas(?:Geometry(?:Command|Result|Request|Reply)|Dimension\w*|ScaleOutput|SelectionBounds)$/,
+  },
+  {
+    file: 'integrations/shared/CanvasEditValidation.generated.ts',
+    matches: /^Canvas(?:Edit(?!ing)\w+|ToolId|BrushOptions)$/,
+  },
+  {
+    file: 'integrations/shared/CanvasWorkflowValidation.generated.ts',
+    matches: /^CanvasWorkflow\w+$/,
+  },
+];
+
+/** Name the document-canvas messages the desktop host decodes or encodes natively. */
+const NATIVE_MESSAGES = [
+  'CanvasReadRequest',
+  'CanvasReadReply',
+  'CanvasErrorReply',
+  'CanvasSourceRequest',
+  'CanvasSourceReply',
+  'CanvasSourceChanged',
+  'CanvasGeometryRequest',
+  'CanvasGeometryReply',
+  'CanvasEditRequest',
+  'CanvasEditReply',
+  'CanvasEditChanged',
+  'CanvasWorkflowRequest',
+  'CanvasWorkflowReply',
+];
+
+/**
+ * Select the native host's wire definitions after proving the context still carries a nullable
+ * document and a capability union that admits both the layer-only form the web canvas and
+ * editors advertise and the editing form the native host advertises.
+ */
+function nativeProtocolDefinitions(definitions: Record<string, unknown>): Record<string, unknown> {
   const object = (value: unknown): Record<string, unknown> => {
     if (!value || typeof value !== 'object' || Array.isArray(value))
       throw new Error('Invalid canvas context schema.');
     return value as Record<string, unknown>;
   };
-  const capabilities = object(definitions.CanvasCapabilities).oneOf;
-  const descriptor = object(definitions.CanvasDescriptor);
-  const context = object(definitions.CanvasContext);
-  const reply = object(definitions.CanvasReadReply);
-  const descriptorProperties = object(descriptor.properties);
-  const contextProperties = object(context.properties);
-  const replyProperties = object(reply.properties);
-  const documents = object(contextProperties.document).oneOf;
+  const capabilities = JSON.stringify(object(definitions.CanvasCapabilities).oneOf ?? null);
+  const layer = object(definitions.CanvasLayerCapabilities);
+  const descriptor = object(object(definitions.CanvasDescriptor).properties);
+  const context = object(object(definitions.CanvasContext).properties);
+  const reply = object(object(definitions.CanvasReadReply).properties);
+  const documents = object(context.document).oneOf;
   if (
-    !Array.isArray(capabilities) ||
-    capabilities.length !== 2 ||
-    !Array.isArray(documents) ||
-    documents.length !== 2 ||
+    !capabilities.includes(JSON.stringify({ $ref: '#/$defs/CanvasLayerCapabilities' })) ||
+    !capabilities.includes(JSON.stringify({ $ref: '#/$defs/CanvasEditingCapabilities' })) ||
+    JSON.stringify(layer.required) !==
+      JSON.stringify(['displayOutput', 'insertImageLayer', 'positionImageLayer']) ||
     JSON.stringify(documents) !==
       JSON.stringify([{ $ref: '#/$defs/CanvasDocument' }, { const: null }]) ||
-    JSON.stringify(descriptorProperties.capabilities) !==
+    JSON.stringify(descriptor.capabilities) !==
       JSON.stringify({ $ref: '#/$defs/CanvasCapabilities' }) ||
-    JSON.stringify(contextProperties.canvas) !==
-      JSON.stringify({ $ref: '#/$defs/CanvasDescriptor' }) ||
-    JSON.stringify(replyProperties.context) !== JSON.stringify({ $ref: '#/$defs/CanvasContext' })
+    JSON.stringify(context.canvas) !== JSON.stringify({ $ref: '#/$defs/CanvasDescriptor' }) ||
+    JSON.stringify(reply.context) !== JSON.stringify({ $ref: '#/$defs/CanvasContext' })
   )
-    throw new Error('Canvas context schema no longer supports the native display-only form.');
-  return {
-    CanvasReadRequest: definitions.CanvasReadRequest,
-    CanvasFailure: definitions.CanvasFailure,
-    CanvasErrorReply: definitions.CanvasErrorReply,
-    CanvasNativeCapabilities: capabilities[0],
-    CanvasNativeDescriptor: {
-      ...descriptor,
-      properties: {
-        ...descriptorProperties,
-        capabilities: { $ref: '#/$defs/CanvasNativeCapabilities' },
-      },
-    },
-    CanvasNativeContext: {
-      ...context,
-      properties: {
-        ...contextProperties,
-        canvas: { $ref: '#/$defs/CanvasNativeDescriptor' },
-        document: { const: null },
-      },
-    },
-    CanvasNativeReadReply: {
-      ...reply,
-      properties: { ...replyProperties, context: { $ref: '#/$defs/CanvasNativeContext' } },
-    },
-  };
+    throw new Error('Canvas context schema no longer supports the native document forms.');
+  return rustContractDefinitions(definitions, NATIVE_MESSAGES);
 }
 /** Preserve the public canvas build entry point while sharing schema policy. */
 export async function canvasBindings(
@@ -155,10 +182,14 @@ export async function canvasBindings(
       recordImport: './ContractRecord.js',
       description: 'every version-three canvas message',
       external: {
-        name: 'CanvasSurfaceMessage',
+        names: ['CanvasSurfaceMessage', 'CanvasSurfaceFileReference'],
         typesImport: './CanvasSurfaceProtocol.generated.js',
         validationImport: './CanvasSurfaceValidation.generated.js',
       },
+      validationModules: ORDINARY_VALIDATION_MODULES.map(({ file, matches }) => ({
+        file,
+        definitions: Object.keys(ordinaryDefinitions).filter((name) => matches.test(name)),
+      })),
     },
   );
   const surfaces = await contractBindings(
@@ -238,8 +269,8 @@ export async function canvasBindings(
         prefix: 'CanvasSurface',
       },
     ),
-    'integrations/contracts/CanvasNativeContext.generated.rs': rustContractBindings(
-      nativeContextDefinitions(schema.$defs),
+    'integrations/contracts/CanvasNativeProtocol.generated.rs': rustContractBindings(
+      nativeProtocolDefinitions(schema.$defs),
       schemaText,
       {
         schema: 'canvas.schema.json',

@@ -59,17 +59,19 @@ export class WorkflowCanvasCoordinator {
     }
     /** Resolve dimension editing independently of output delivery or source-raster capture. */
     geometryHost(canvasId) {
-        const hosts = [...this.#entries.values()]
-            .flatMap(({ adapter }) => adapter.capabilities.geometry ? [adapter.capabilities.geometry] : [])
-            .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
-        return hosts.length === 1 ? (hosts[0] ?? null) : null;
+        return this.#identifiedHost(({ geometry }) => geometry, canvasId);
     }
     /** Resolve source reads independently of output routing or mask interpretation. */
     sourceHost(canvasId) {
-        const hosts = [...this.#entries.values()]
-            .flatMap(({ adapter }) => adapter.capabilities.sources ? [adapter.capabilities.sources] : [])
-            .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
-        return hosts.length === 1 ? (hosts[0] ?? null) : null;
+        return this.#identifiedHost(({ sources }) => sources, canvasId);
+    }
+    /** Resolve editing commands on a canvas that advertises them, independently of output routing. */
+    editHost(canvasId) {
+        return this.#identifiedHost(({ editing }) => editing, canvasId);
+    }
+    /** Resolve workflow surface provisioning on a canvas that advertises it. */
+    workflowHost(canvasId) {
+        return this.#identifiedHost(({ workflow }) => workflow, canvasId);
     }
     /** Resolve the existing layer primitive by peer identity without exposing a particular editor. */
     layerHost(canvasId) {
@@ -93,8 +95,15 @@ export class WorkflowCanvasCoordinator {
     }
     /** Resolve one unambiguous mask capability by canvas identity independently of output routing. */
     maskHost(canvasId) {
+        return this.#identifiedHost(({ masks }) => masks, canvasId);
+    }
+    /** Select the sole identified host of one capability; ambiguity and anonymity resolve to null. */
+    #identifiedHost(select, canvasId) {
         const hosts = [...this.#entries.values()]
-            .flatMap(({ adapter }) => (adapter.capabilities.masks ? [adapter.capabilities.masks] : []))
+            .flatMap(({ adapter }) => {
+            const host = select(adapter.capabilities);
+            return host ? [host] : [];
+        })
             .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
         return hosts.length === 1 ? (hosts[0] ?? null) : null;
     }

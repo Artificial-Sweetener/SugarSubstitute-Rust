@@ -39,7 +39,9 @@ export function contractValidationModules(
     readonly importPath: string;
     readonly header: string;
     readonly recordGuard: string;
-    readonly external?: { readonly name: string; readonly guard: string } | undefined;
+    readonly external?:
+      | { readonly names: ReadonlySet<string>; readonly validationImport: string }
+      | undefined;
   },
 ): Record<string, string> {
   const owners = new Map(guards.map(({ name }) => [name, options.validation]));
@@ -67,7 +69,7 @@ export function contractValidationModules(
       for (const name of guard.references) {
         const owner = owners.get(name);
         if (!owner) {
-          if (name !== options.external?.name)
+          if (!options.external?.names.has(name))
             throw new Error('Unknown contract validation reference.');
         } else if (owner !== file) {
           const names = imports.get(owner) ?? new Set<string>();
@@ -110,9 +112,13 @@ export function contractValidationModules(
             .join('\n')
         : '';
     const external = options.external;
+    // Each module imports only the external guards its own validators reference.
+    const externalNames = external
+      ? [...external.names].filter((name) => local.some(({ references }) => references.has(name)))
+      : [];
     const externalGuard =
-      external && local.some(({ references }) => references.has(external.name))
-        ? external.guard
+      external && externalNames.length
+        ? `import { ${externalNames.map((name) => `is${name}`).join(', ')} } from '${external.validationImport}';\n`
         : '';
     sources[file] =
       `${options.header}import type * as Contract from '${options.importPath}';\n${imports}\n${externalGuard}${local.some(({ source }) => source.includes('isRecord(')) ? options.recordGuard : ''}${local.map(({ source }) => source).join('\n')}\n${exports}`;

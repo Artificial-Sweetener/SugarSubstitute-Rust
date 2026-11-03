@@ -79,6 +79,54 @@ test('keeps branch-local validators distinct when variants reuse a field name', 
   expect(source).toContain('fn valid_fixture_command_second_selection(');
 });
 
+test('tags result unions by kind and binds signed and nullable members in their variants', () => {
+  const kind = (tag: string, fields: Schema = {}): Schema => {
+    const properties = { kind: { const: tag }, ...fields };
+    return {
+      type: 'object',
+      properties,
+      required: Object.keys(properties),
+      additionalProperties: false,
+    };
+  };
+  const source = compile({
+    oneOf: [
+      kind('moved', {
+        dx: { type: 'integer', minimum: -100, maximum: 100 },
+        layerId: { oneOf: [{ type: 'string', maxLength: 128 }, { const: null }] },
+        color: {
+          oneOf: [{ type: 'string', maxLength: 7, pattern: '^#[a-fA-F0-9]{6}$' }, { const: null }],
+        },
+      }),
+      kind('cleared'),
+    ],
+  });
+  expect(source).toContain('tag = "kind", deny_unknown_fields');
+  expect(source).toContain('        dx: i64,');
+  expect(source).toContain(
+    '        #[serde(deserialize_with = "deserialize_required_option")]\n        layer_id: Option<String>,',
+  );
+  expect(source).toContain('(-100..=100).contains(dx)');
+  expect(source).toContain('valid_optional_text(layer_id.as_deref(), 128)');
+  expect(source).toContain('valid_optional_color(color.as_deref())');
+  expect(source).toContain('fn deserialize_required_option<');
+  expect(source).toContain('Cleared {}');
+});
+
+test('rebinds only the exact member when one field name prefixes another', () => {
+  const source = compile({
+    oneOf: [
+      branch('scale', {
+        held: { type: 'number', minimum: 0, maximum: 1 },
+        heldLong: { type: 'number', minimum: 0, maximum: 2 },
+      }),
+      branch('read'),
+    ],
+  });
+  expect(source).toContain('(0.0..=1.0).contains(held)');
+  expect(source).toContain('(0.0..=2.0).contains(held_long)');
+});
+
 test.each([
   { oneOf: [] },
   { oneOf: [branch('read')] },
@@ -95,14 +143,11 @@ test.each([
   { oneOf: [branch('read'), null] },
   { oneOf: [branch('read'), branch('fit')], additionalProperties: false },
   { oneOf: [branch('read'), branch('fit', { payload: { type: 'object' } })] },
+  { oneOf: [branch('read'), branch('fit', { count: { oneOf: [{ const: null }, { const: 1 }] } })] },
   {
     oneOf: [
       branch('read'),
-      branch('fit', {
-        color: {
-          oneOf: [{ type: 'string', maxLength: 7, pattern: '^#[a-fA-F0-9]{6}$' }, { const: null }],
-        },
-      }),
+      branch('fit', { label: { oneOf: [{ type: 'string', maxLength: 8 }, { type: 'boolean' }] } }),
     ],
   },
 ])('rejects unsupported or ambiguous tagged schema %#', (node) => {

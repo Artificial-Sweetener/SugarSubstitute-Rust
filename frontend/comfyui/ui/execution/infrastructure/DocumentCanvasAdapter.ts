@@ -41,6 +41,18 @@ export function documentCanvasAdapter<Bytes>(
       get sources() {
         return host.sources ?? undefined;
       },
+      get editing() {
+        const capabilities = host.readCanvas()?.capabilities;
+        return capabilities && 'editing' in capabilities && capabilities.editing
+          ? (host.editing ?? undefined)
+          : undefined;
+      },
+      get workflow() {
+        const capabilities = host.readCanvas()?.capabilities;
+        return capabilities && 'workflowSurfaces' in capabilities && capabilities.workflowSurfaces
+          ? (host.workflow ?? undefined)
+          : undefined;
+      },
       get masks() {
         return host.masks ?? undefined;
       },

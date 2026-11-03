@@ -33,6 +33,8 @@ import type { CanvasMaskHost } from '../../../../../integrations/contracts/Canva
 import type { CanvasSourceHost } from '../../../../../integrations/contracts/CanvasSources.js';
 import type { CanvasLayerHost } from '../../../../../integrations/contracts/CanvasHost.js';
 import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/CanvasSurface.js';
+import type { CanvasEditHost } from '../../../../../integrations/contracts/CanvasEditing.js';
+import type { CanvasWorkflowHost } from '../../../../../integrations/contracts/CanvasWorkflowSurfaces.js';
 
 interface CanvasEntry<Bytes> {
   readonly adapter: WorkflowCanvasAdapter<Bytes>;
@@ -109,22 +111,22 @@ export class WorkflowCanvasCoordinator<Bytes> {
 
   /** Resolve dimension editing independently of output delivery or source-raster capture. */
   geometryHost(canvasId?: string): CanvasGeometryHost | null {
-    const hosts = [...this.#entries.values()]
-      .flatMap(({ adapter }) =>
-        adapter.capabilities.geometry ? [adapter.capabilities.geometry] : [],
-      )
-      .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
-    return hosts.length === 1 ? (hosts[0] ?? null) : null;
+    return this.#identifiedHost(({ geometry }) => geometry, canvasId);
   }
 
   /** Resolve source reads independently of output routing or mask interpretation. */
   sourceHost(canvasId?: string): CanvasSourceHost | null {
-    const hosts = [...this.#entries.values()]
-      .flatMap(({ adapter }) =>
-        adapter.capabilities.sources ? [adapter.capabilities.sources] : [],
-      )
-      .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
-    return hosts.length === 1 ? (hosts[0] ?? null) : null;
+    return this.#identifiedHost(({ sources }) => sources, canvasId);
+  }
+
+  /** Resolve editing commands on a canvas that advertises them, independently of output routing. */
+  editHost(canvasId?: string): CanvasEditHost | null {
+    return this.#identifiedHost(({ editing }) => editing, canvasId);
+  }
+
+  /** Resolve workflow surface provisioning on a canvas that advertises it. */
+  workflowHost(canvasId?: string): CanvasWorkflowHost | null {
+    return this.#identifiedHost(({ workflow }) => workflow, canvasId);
   }
 
   /** Resolve the existing layer primitive by peer identity without exposing a particular editor. */
@@ -151,8 +153,19 @@ export class WorkflowCanvasCoordinator<Bytes> {
 
   /** Resolve one unambiguous mask capability by canvas identity independently of output routing. */
   maskHost(canvasId?: string): CanvasMaskHost | null {
+    return this.#identifiedHost(({ masks }) => masks, canvasId);
+  }
+
+  /** Select the sole identified host of one capability; ambiguity and anonymity resolve to null. */
+  #identifiedHost<Host extends { readonly canvasId: string }>(
+    select: (capabilities: WorkflowCanvasAdapter<Bytes>['capabilities']) => Host | undefined,
+    canvasId: string | undefined,
+  ): Host | null {
     const hosts = [...this.#entries.values()]
-      .flatMap(({ adapter }) => (adapter.capabilities.masks ? [adapter.capabilities.masks] : []))
+      .flatMap(({ adapter }) => {
+        const host = select(adapter.capabilities);
+        return host ? [host] : [];
+      })
       .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
     return hosts.length === 1 ? (hosts[0] ?? null) : null;
   }

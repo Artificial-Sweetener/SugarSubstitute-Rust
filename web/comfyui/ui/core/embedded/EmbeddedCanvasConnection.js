@@ -31,6 +31,14 @@ export class EmbeddedCanvasConnection {
     get sources() {
         return this.#client?.sources ?? null;
     }
+    /** Expose editing commands on the authenticated session; adapters gate them by capability. */
+    get editing() {
+        return this.#client?.editing ?? null;
+    }
+    /** Expose workflow surface provisioning on the same correlated request sequence. */
+    get workflow() {
+        return this.#client?.workflow ?? null;
+    }
     /** Expose mask transport only after the panel navigation has authenticated. */
     get masks() {
         return this.#masks;

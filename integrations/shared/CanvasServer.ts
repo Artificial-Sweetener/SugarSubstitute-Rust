@@ -116,6 +116,20 @@ export class CanvasServer {
       this.#entries.get(value.requestId)?.cancellation.cancel();
       return true;
     }
+    // Editor ports advertise neither editing nor workflow surfaces; refuse them explicitly.
+    if (value.type === 'edit.request' || value.type === 'workflow.request') {
+      const result = {
+        kind: 'failure',
+        status: 'unsupported',
+        message: 'This canvas does not support native editing.',
+      } as const;
+      this.#send(
+        value.type === 'edit.request'
+          ? { ...this.#envelope(value.requestId), type: 'edit.reply', result }
+          : { ...this.#envelope(value.requestId), type: 'workflow.reply', result },
+      );
+      return true;
+    }
     if (
       value.type !== 'context.request' &&
       value.type !== 'image.insert' &&

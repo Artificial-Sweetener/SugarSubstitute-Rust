@@ -28,6 +28,8 @@ import {
 import type { BrowserPanelTransport } from './BrowserPanelTransport.js';
 import type { CanvasGeometryHost } from '../../../../../integrations/contracts/CanvasGeometry.js';
 import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/CanvasSurface.js';
+import type { CanvasEditHost } from '../../../../../integrations/contracts/CanvasEditing.js';
+import type { CanvasWorkflowHost } from '../../../../../integrations/contracts/CanvasWorkflowSurfaces.js';
 /** Report whether native output discovery has concluded, without exposing the canvas session. */
 export interface NativeSurfaceDiscovery {
   /** True once this page's native canvas session settled at least one context and surface discovery. */
@@ -49,6 +51,14 @@ export class EmbeddedCanvasConnection implements CanvasLayerHost, NativeSurfaceD
   /** Expose source reads on the authenticated canvas connection without a second request sequence. */
   get sources(): CanvasSourceHost | null {
     return this.#client?.sources ?? null;
+  }
+  /** Expose editing commands on the authenticated session; adapters gate them by capability. */
+  get editing(): CanvasEditHost | null {
+    return this.#client?.editing ?? null;
+  }
+  /** Expose workflow surface provisioning on the same correlated request sequence. */
+  get workflow(): CanvasWorkflowHost | null {
+    return this.#client?.workflow ?? null;
   }
   /** Expose mask transport only after the panel navigation has authenticated. */
   get masks(): CanvasMaskClient | null {
