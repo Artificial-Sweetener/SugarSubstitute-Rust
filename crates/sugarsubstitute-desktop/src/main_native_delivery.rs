@@ -64,6 +64,19 @@ impl NativeDelivery {
         }
     }
 
+    /// Move public response bytes to the bulk owner; receipts carry none.
+    ///
+    /// The delivery keeps its original allocation claim and transport correlation.
+    pub(crate) fn take_payload(&mut self) -> Option<Vec<u8>> {
+        match self {
+            Self::Context(value) => Some(value.take_payload()),
+            Self::Surface(value) => Some(value.take_payload()),
+            Self::Presentation(value) => Some(value.take_payload()),
+            Self::Memory(value) => Some(value.take_payload()),
+            Self::Ingress(_) => None,
+        }
+    }
+
     /// Drop encoded storage before recovering its original noncloneable allocation claim.
     pub(crate) fn into_claim(self) -> MemoryClaim {
         match self {

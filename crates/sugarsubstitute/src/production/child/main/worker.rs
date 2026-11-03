@@ -74,7 +74,7 @@ pub(super) fn submit(
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
             deadline: Some(original),
-            reservation_bytes: MainWindowRequest::KNOWN_STORAGE_BYTES,
+            reservation_bytes: MainWindowRequest::RESERVATION_BYTES,
             replacement: None,
         },
         input,

@@ -61,7 +61,7 @@ fn absent_grant_is_worker_state_failure_and_retains_actual_projected_input()
     assert!(construction.is_none());
     assert_eq!(job.spec().operation, Operation::Infrastructure);
     assert_eq!(job.spec().class, JobClass::InfrastructureOrdinary);
-    assert_eq!(job.spec().reservation_bytes, MainWindowRequest::KNOWN_STORAGE_BYTES);
+    assert_eq!(job.spec().reservation_bytes, MainWindowRequest::RESERVATION_BYTES);
     assert_eq!(job.spec().deadline, Some(original));
     let completed = rig.completion(&mut job)?;
     let JobOutcome::Failure(failure) = completed.outcome else {

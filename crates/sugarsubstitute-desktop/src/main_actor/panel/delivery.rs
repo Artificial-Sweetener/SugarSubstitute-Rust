@@ -26,7 +26,7 @@ struct Parameters<'a> {
 /// # Errors
 /// Rejects oversized or non-UTF-8 payloads and final parameters exceeding native admission.
 pub(super) fn encode(context: i64, payload: &[u8]) -> Result<String, DesktopError> {
-    encode_message(context, payload, None)
+    inline(context, payload, None)?.ok_or_else(exceeded)
 }
 
 /// Qualify an ordinary response with the exact private ticket that admitted its request.
@@ -35,34 +35,21 @@ pub(super) fn encode_owned(
     payload: &[u8],
     ticket: crate::main_panel_ingress::Ticket,
 ) -> Result<String, DesktopError> {
-    encode_message(context, payload, Some(ticket))
+    inline(context, payload, Some(ticket))?.ok_or_else(exceeded)
 }
 
-/// Serialize one bounded private control operation through the same native CDP owner.
-pub(super) fn transport(
-    context: i64,
-    action: &str,
-    lane: crate::main_panel_ingress::Lane,
-    ticket: crate::main_panel_ingress::Ticket,
-) -> Result<String, DesktopError> {
-    parameters(
-        context,
-        &format!(
-            "globalThis.__sugarcubes_substitute_transport_v1({action:?},{:?},{})",
-            lane.token(),
-            ticket.0
-        ),
-    )
-}
-
-/// Borrow already-validated public JSON and optionally append its private admission identity.
-fn encode_message(
+/// Encode inline when the final command admits it; `None` hands the bytes to the bulk owner.
+///
+/// The optional ticket qualifies an ordinary response with its private admission identity.
+/// # Errors
+/// Rejects non-UTF-8 payloads; size alone never fails here.
+pub(super) fn inline(
     context: i64,
     payload: &[u8],
     ticket: Option<crate::main_panel_ingress::Ticket>,
-) -> Result<String, DesktopError> {
+) -> Result<Option<String>, DesktopError> {
     if payload.len() > MAX_PAYLOAD_BYTES {
-        return Err(DesktopError::message("encode_panel_delivery", "payload bound exceeded"));
+        return Ok(None);
     }
     let payload = std::str::from_utf8(payload)
         .map_err(|cause| DesktopError::new("encode_panel_utf8", cause))?;
@@ -70,21 +57,44 @@ fn encode_message(
         Some(ticket) => format!("{PREFIX}{payload},{})", ticket.0),
         None => format!("{PREFIX}{payload})"),
     };
-    parameters(context, &expression)
+    let parameters = encode_parameters(context, &expression)?;
+    Ok((parameters.len() <= MAX_PARAMETERS_BYTES).then_some(parameters))
 }
 
-/// Enforce the final command bound for both public delivery and private admission effects.
-fn parameters(context: i64, expression: &str) -> Result<String, DesktopError> {
-    let parameters = serde_json::to_string(&Parameters {
-        expression,
-        context_id: context,
-        return_by_value: true,
-    })
-    .map_err(|cause| DesktopError::new("encode_panel_delivery", cause))?;
+/// Serialize one bounded private control operation through the same native CDP owner.
+///
+/// An ordinary-lane grant also carries the upload token for that credit's bulk body.
+pub(super) fn transport(
+    context: i64,
+    action: &str,
+    lane: crate::main_panel_ingress::Lane,
+    ticket: crate::main_panel_ingress::Ticket,
+    upload: Option<crate::main_bulk::Token>,
+) -> Result<String, DesktopError> {
+    let upload = upload.map(|token| format!(",{:?}", token.hex())).unwrap_or_default();
+    let parameters = encode_parameters(
+        context,
+        &format!(
+            "globalThis.__sugarcubes_substitute_transport_v1({action:?},{:?},{}{upload})",
+            lane.token(),
+            ticket.0
+        ),
+    )?;
     if parameters.len() > MAX_PARAMETERS_BYTES {
-        return Err(DesktopError::message("encode_panel_delivery", "command input bound exceeded"));
+        return Err(exceeded());
     }
     Ok(parameters)
+}
+
+/// Report a final command that exceeds native admission.
+fn exceeded() -> DesktopError {
+    DesktopError::message("encode_panel_delivery", "command input bound exceeded")
+}
+
+/// Serialize the fixed `Runtime.evaluate` parameters around one expression.
+fn encode_parameters(context: i64, expression: &str) -> Result<String, DesktopError> {
+    serde_json::to_string(&Parameters { expression, context_id: context, return_by_value: true })
+        .map_err(|cause| DesktopError::new("encode_panel_delivery", cause))
 }
 
 #[cfg(test)]

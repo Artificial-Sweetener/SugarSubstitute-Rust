@@ -12,17 +12,23 @@ use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
 
 const PROTOCOL_SCRIPT: &str = include_str!("bridge_protocol.js");
+const BULK_SCRIPT: &str = include_str!("bridge_bulk.js");
 const TRANSPORT_SCRIPT: &str = include_str!("bridge.js");
-const SCRIPT_COUNT: usize = 2;
+const SCRIPT_COUNT: usize = 3;
 
 /// Compose the document-start scripts for one browser lifetime.
 ///
 /// The protocol script is a function expression invoked with the page's output surface
 /// preference. Only a composition-hosted browser advertises host presentation; a windowed
-/// browser leaves the preference absent so the page presents its canvas itself.
+/// browser leaves the preference absent so the page presents its canvas itself. The bulk script
+/// installs before the transport, which requires both the policy and the bulk origin helper.
 fn scripts(hosting: MainHosting) -> [String; SCRIPT_COUNT] {
     let preference = if hosting.presents_native_canvas() { "'host'" } else { "undefined" };
-    [format!("{}({preference});\n", PROTOCOL_SCRIPT.trim_end()), TRANSPORT_SCRIPT.to_owned()]
+    [
+        format!("{}({preference});\n", PROTOCOL_SCRIPT.trim_end()),
+        BULK_SCRIPT.to_owned(),
+        TRANSPORT_SCRIPT.to_owned(),
+    ]
 }
 
 /// Own every setup callback, script identifier and registration until checked removal.

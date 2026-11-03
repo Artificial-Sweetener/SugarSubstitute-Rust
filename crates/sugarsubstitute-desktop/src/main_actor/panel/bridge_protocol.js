@@ -10,6 +10,19 @@
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
+  // The memory budget protocol versions independently of the version-three transport.
+  const version = value => value.protocol === 'sugarcubes.memory' ? 1 : 3;
+  const notification = value => value.protocol === 'sugarcubes.panel' ||
+    value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
+    value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
+    ['surface.presentation.changed', 'surface.camera.changed'].includes(value.type);
+  function acceptsReply(type, value) {
+    const expected = type.startsWith('surface.preview.') ? 'surface.reply' :
+      type.replace(/[^.]+$/, 'reply');
+    return value.type === expected || value.type === 'error.reply' ||
+      expected === 'surface.viewport.reply' && value.type === 'surface.reply' &&
+      ['stale', 'cancelled', 'unavailable', 'error'].includes(value.status);
+  }
   const policy = Object.freeze({
     host,
     outputSurfacePreference: outputSurfacePreference === 'host' ? 'host' : undefined,
@@ -24,8 +37,7 @@
     },
     control: value => value.protocol === 'sugarcubes.panel' && controls.includes(value.type) ||
       value.protocol === 'sugarcubes.memory' && memoryReports.includes(value.type),
-    // The memory budget protocol versions independently of the version-three transport.
-    version: value => value.protocol === 'sugarcubes.memory' ? 1 : 3,
+    version,
     request: type => requestTypes.includes(type),
     cancelled(value) {
       const envelope = { protocol: value.protocol, version: 3, session: value.session,
@@ -36,17 +48,15 @@
           status: 'cancelled', message: '' } :
         { ...envelope, type: 'error.reply', failure: { status: 'cancelled', message: '' } };
     },
-    acceptsReply(type, value) {
-      const expected = type.startsWith('surface.preview.') ? 'surface.reply' :
-        type.replace(/[^.]+$/, 'reply');
-      return value.type === expected || value.type === 'error.reply' ||
-        expected === 'surface.viewport.reply' && value.type === 'surface.reply' &&
-        ['stale', 'cancelled', 'unavailable', 'error'].includes(value.status);
-    },
-    notification: value => value.protocol === 'sugarcubes.panel' ||
-      value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
-      value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
-      ['surface.presentation.changed', 'surface.camera.changed'].includes(value.type),
+    // Settle a request the transport could not carry.
+    failed: (value, status) => ({ protocol: value.protocol, version: 3, session: value.session,
+      requestId: value.requestId, type: 'error.reply', failure: { status, message: '' } }),
+    // Accept only the expected reply to one admitted request, inline or bulk.
+    reply: (request, value) => !!value && value.version === 3 && value.protocol === 'sugarcubes.canvas' &&
+      value.session === request.session && value.requestId === request.requestId &&
+      acceptsReply(request.type, value),
+    notification: (value, session) => !!value && value.version === version(value) &&
+      value.session === session && notification(value),
   });
   Object.defineProperty(globalThis, '__sugarcubes_substitute_policy_v3', { value: policy });
   globalThis.__sugarcubes_substitute_install_v3?.();

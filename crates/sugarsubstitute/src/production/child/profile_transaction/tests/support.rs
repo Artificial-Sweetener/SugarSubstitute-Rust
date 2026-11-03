@@ -119,7 +119,7 @@ pub(super) fn transaction(rig: &Rig) -> TestResult<ProfileTransaction> {
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
             deadline: Some(Moment::from_nanos(100)),
-            reservation_bytes: MainWindowRequest::KNOWN_STORAGE_BYTES,
+            reservation_bytes: MainWindowRequest::RESERVATION_BYTES,
             replacement: None,
         },
         move |context| -> Result<ProfileTransaction, ProfileError> {

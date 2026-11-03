@@ -24,13 +24,13 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/child/main/worker/tests.rs"
-source_sha256 = "sha256:1645016df2feb366c4ba7220855146f6dcd4ccda3c6c7ad8040e2843e6aa338a"
+source_sha256 = "sha256:9470da85e9d541ae2534f930d1c1e43e04b6bef1565bf55dd45bc7c84ca86099"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Exercise real owned-input admission while an absent grant stays absent."
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/child/profile_transaction/tests/support.rs"
-source_sha256 = "sha256:fb17280837e51f58b3a9405aa18670fb49b0134586703cd77e27d89737faa7db"
+source_sha256 = "sha256:40f7ecf997c0d4810126369267561ac649a3daa342b87535a259cb5c87c6af3b"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Use the real central executor, clock, scopes, notices and worker joins."
 
@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:03c194115ee712602000816d3c59b42bb5ad2aec44e48db53e5e2c2865a3a25d"
+source_sha256 = "sha256:8eeeea26fc51bb56cfee6b6d9a09c6d6072285ad0674a77c4a6ee154cdbef1f4"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -144,13 +144,13 @@ rationale = "Behavioral fixture creates a hidden OS STATIC window with a technic
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:00b6cf85ae774599db95e158ec80177677d9701c1bee0585abd235fa047dfaed"
+source_sha256 = "sha256:f59af12f81d64cdcedf0247c4a2aa08967e24850f238d22c0fb18b614733aade"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/render_preview/capture_tests.rs"
-source_sha256 = "sha256:948d235db208988695a149562548b2008a1c014ac0ef43a58267e4676757d66d"
+source_sha256 = "sha256:363ce483f11d9d84353f3f08fbefb8f5e9c4cb51e1e9dc25cb385c1aaf48aba8"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Exercise actual COM callback obligations with a fake external completion boundary."
 
@@ -168,7 +168,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_window_tests.rs"
-source_sha256 = "sha256:dfbeed65f1416a385bd2ed9e5cc9852a75e59f3e0d6afe08607455b7cf8e882d"
+source_sha256 = "sha256:e78d6773442038e89ff0a7e6b6148ace5565572828a0a05184f1f6ca6228b9fb"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Check bounded native-host input and exact origin admission without creating windows."
 
@@ -450,7 +450,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:487c6c41e09acd27ecd1d98e774009078fda816e69a641ec5fbefc223a3b56bb"
+source_sha256 = "sha256:4ebb3c72441a947866b1a2fc2beb3ea0d991232ad217c46641fd139a66f9f929"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -714,18 +714,24 @@ rationale = "Hidden native picker lifecycle fixtures preserve original paths and
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js"
-source_sha256 = "sha256:074d8aa3bf479b7dbe975ee0de876e53c9c995fbc47a1878e9262b1dbebb8cd1"
+source_sha256 = "sha256:30730fba471e04164fe48a76a50275232e97dd5f2a5bc6716acc0bcb241ec5a0"
 kind = "native"
 rationale = "The bounded WebView transport defines technical JavaScript properties and error diagnostics; it does not construct product-facing text or select a locale."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:f16c3067be0c3d07f1ee6262a1199183e96fa3a9ff94bfc0dda76a7c4b6da4e4"
+source_sha256 = "sha256:6b23d05a943940ef3530e3a851a22c7ea57ee26e3fbbfc9b037a990c776b8ee1"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js"
+source_sha256 = "sha256:158054025803b438e583153e561386a02d3ba7b77b7b6e284b63c561b0a9fb10"
+kind = "native"
+rationale = "The bulk-origin transport helper moves exact JSON bytes through host-issued single-use fetch tokens; it defines technical properties and empty protocol errors and constructs no product-facing text or locale choice."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:f0567e6514bc28d3ed839d1fec3ef5fdda3f8d50056be4bfbb14674d708f2f47"
+source_sha256 = "sha256:c9485f904e02fc1ca7416e0353be0bb81ba7bc80262f895f054106108e952620"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."

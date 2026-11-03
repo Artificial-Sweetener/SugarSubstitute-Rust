@@ -57,6 +57,20 @@ boundary = "browser"
 rationale = "Isolated installed-ComfyUI browser qualification uses its supported export/download APIs and same-origin bounded PNG read with original cutoff and AbortController teardown."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:158054025803b438e583153e561386a02d3ba7b77b7b6e284b63c561b0a9fb10"
+boundary = "browser"
+rationale = "The panel bridge fetches only the reserved host-intercepted bulk origin with host-issued single-use tokens, no credentials, no cache, no redirects and AbortController teardown; WebView2 answers it in-process and nothing reaches the network."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:c9485f904e02fc1ca7416e0353be0bb81ba7bc80262f895f054106108e952620"
+boundary = "fixture"
+rationale = "The isolated JavaScript VM fixture fakes the browser fetch boundary to exercise the production bulk-origin upload, download, ordering and teardown without any network access."
+
+[[records]]
 path = "installer/prepare-runtime.mjs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:400561271dcf1e1d407e828b8aa4bd28697cf1ddea6a9451aaf9e85a9f39509e"

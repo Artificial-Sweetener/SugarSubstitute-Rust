@@ -89,6 +89,8 @@ pub(crate) struct MainActor {
     canvas_replies: panel::Replies,
     panel_messages: panel::HostMessages,
     panel_transport: panel::admission::Admission,
+    /// Oversized panel messages and their single-use tokens, shared with the bulk origin.
+    bulk: Rc<crate::main_bulk::Transfers>,
     panel_navigation_started: bool,
     receivers: Option<crate::windows_main_receivers::Receivers>,
     events: Option<Rc<Events>>,
@@ -133,6 +135,18 @@ impl MainActor {
             request.storage_lease(),
         )?;
         let panel_transport = panel::admission::Admission::new(request.storage_lease())?;
+        let bulk_partition = request
+            .storage_lease()
+            .claim(crate::main_bulk::SESSION_BYTES)
+            .map_err(|cause| DesktopError::new("claim_bulk_transfers", cause))?
+            .into_lease();
+        // The serialized page origin is the root URL without its path.
+        let page_origin = crate::main_navigation::root_url(request.origin());
+        let bulk = Rc::new(crate::main_bulk::Transfers::new(
+            page_origin.trim_end_matches('/').to_owned(),
+            bulk_partition,
+            crate::windows_main_receivers::random_token,
+        )?);
         Ok(Self {
             request: Some(request),
             admission,
@@ -159,6 +173,7 @@ impl MainActor {
             canvas_replies: panel::Replies::new(),
             panel_messages: panel::HostMessages::new(),
             panel_transport,
+            bulk,
             panel_navigation_started: false,
             receivers: None,
             events: Some(events),

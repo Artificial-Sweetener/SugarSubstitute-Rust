@@ -6,6 +6,7 @@
 //! owner. Native getters return before queue borrowing; no callback drives construction,
 //! navigation, cleanup or an event loop. Checked removal preserves failed native slots.
 
+mod bulk;
 mod completion;
 mod downloads;
 mod navigation;
@@ -13,6 +14,7 @@ use crate::{
     DesktopError,
     main_events::{Command, Events, Kind},
 };
+pub(crate) use bulk::random_token;
 #[cfg(feature = "k1-native-qualification")]
 pub(crate) use downloads::qualification::DownloadWitness;
 use std::rc::Rc;
@@ -58,6 +60,7 @@ impl Drop for NativeString {
 pub(crate) struct Receivers {
     subscriptions: Vec<Subscription>,
     navigation: navigation::Navigation,
+    bulk: bulk::BulkOrigin,
     downloads: Rc<downloads::Owner>,
     operations: Rc<completion::Operations>,
     events: Rc<Events>,
@@ -71,12 +74,14 @@ impl Receivers {
         events: Rc<Events>,
         lease: &MemoryLease,
         origin: sugarsubstitute_contracts::configuration::LoopbackOrigin,
+        transfers: Rc<crate::main_bulk::Transfers>,
     ) -> Result<Self, DesktopError> {
         let claim =
             lease.claim(65536).map_err(|cause| DesktopError::new("claim_main_receivers", cause))?;
         let mut owner = Self {
             subscriptions: Vec::new(),
             navigation: navigation::Navigation::new(origin),
+            bulk: bulk::BulkOrigin::new(transfers),
             downloads: downloads::Owner::new(origin)?,
             operations: completion::Operations::new(events.clone())?,
             events,
@@ -100,7 +105,10 @@ impl Receivers {
     pub(crate) fn install_next(&mut self) -> Result<bool, DesktopError> {
         self.require_outer_call()?;
         if self.subscriptions.len() == SOURCES.len() {
-            return self.navigation.install(&self.core, &self.events, &self.downloads);
+            if !self.navigation.install(&self.core, &self.events, &self.downloads)? {
+                return Ok(false);
+            }
+            return self.bulk.install(&self.core, &self.events);
         }
         let (name, kind) = SOURCES[self.subscriptions.len()];
         let name = HSTRING::from(name);
@@ -241,6 +249,9 @@ impl Receivers {
             return Ok(false);
         }
         if self.operations.pending() != 0 {
+            return Ok(false);
+        }
+        if !self.bulk.retire_step(&self.core)? {
             return Ok(false);
         }
         if !self.navigation.retire_step(&self.core)? {

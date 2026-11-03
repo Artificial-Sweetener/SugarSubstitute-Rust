@@ -145,7 +145,8 @@ impl MainActor {
         let readiness = &self.readiness;
         let revealed = self.revealed;
         let transport = &mut self.panel_transport;
-        self.canvas_replies.progress(admitted, |delivery| {
+        let bulk = &self.bulk;
+        self.canvas_replies.progress(admitted, |mut delivery| {
             if delivery.lane().is_none()
                 && (delivery.identity() != admission.identity()
                     || admission.closing()
@@ -162,18 +163,35 @@ impl MainActor {
                 readiness.as_ref().and_then(MainReadiness::panel_context).ok_or_else(|| {
                     DesktopError::message("send_panel", "current top document is absent")
                 })?;
+            bulk.synchronize(Some(context));
             let (parameters, correlation) = if let Some(lane) = delivery.lane() {
                 let ticket = transport.begin_delivery(&delivery)?;
-                let parameters = match delivery.payload() {
-                    Some(payload) => delivery::encode_owned(context, payload, ticket)?,
-                    None => delivery::transport(context, "a", lane, ticket)?,
+                let inline = match delivery.payload() {
+                    Some(payload) => delivery::inline(context, payload, Some(ticket))?,
+                    None => Some(delivery::transport(context, "a", lane, ticket, None)?),
+                };
+                let parameters = match inline {
+                    Some(parameters) => parameters,
+                    None => match stage(bulk, context, &mut delivery) {
+                        Some(envelope) => delivery::encode_owned(context, &envelope, ticket)?,
+                        // The bridge answers the waiting request with an unavailable error.
+                        None => delivery::transport(context, "r", lane, ticket, None)?,
+                    },
                 };
                 (parameters, DeliveryCorrelation::Transport(ticket))
             } else {
                 let payload = delivery.payload().ok_or_else(|| {
                     DesktopError::message("send_panel", "notification payload is absent")
                 })?;
-                (delivery::encode(context, payload)?, DeliveryCorrelation::Presentation)
+                let parameters = match delivery::inline(context, payload, None)? {
+                    Some(parameters) => parameters,
+                    None => match stage(bulk, context, &mut delivery) {
+                        Some(envelope) => delivery::encode(context, &envelope)?,
+                        // A refused snapshot releases its claim; the next one supersedes it.
+                        None => return Ok(()),
+                    },
+                };
+                (parameters, DeliveryCorrelation::Presentation)
             };
             receivers.deliver(&parameters, OwnedDelivery { context, correlation, delivery })
         })
@@ -195,6 +213,7 @@ impl MainActor {
             .then(|| self.readiness.as_ref().and_then(MainReadiness::panel_context))
             .flatten();
         self.panel_transport.synchronize(context);
+        self.bulk.synchronize(context);
         if self.events()?.take_panel_overflow() {
             self.panel_transport.overflow();
         }
@@ -207,7 +226,12 @@ impl MainActor {
         let Some(action) = self.panel_transport.action()? else {
             return Ok(false);
         };
-        let parameters = delivery::transport(context, action.code(), action.lane, action.ticket)?;
+        let upload = (action.lane == crate::main_panel_ingress::Lane::Ordinary
+            && action.kind == crate::main_panel_ingress::TransportActionKind::Grant)
+            .then(|| self.bulk.grant(context, action.ticket))
+            .transpose()?;
+        let parameters =
+            delivery::transport(context, action.code(), action.lane, action.ticket, upload)?;
         self.receivers()?.call(
             Command::PanelTransport { context, action },
             "Runtime.evaluate",
@@ -215,4 +239,21 @@ impl MainActor {
         )?;
         Ok(true)
     }
+}
+
+/// Move an oversized payload to the bulk owner and return the envelope that names it.
+///
+/// A refusal is logged here and answered by the caller; the payload is released either way.
+fn stage(
+    bulk: &crate::main_bulk::Transfers,
+    context: i64,
+    delivery: &mut NativeDelivery,
+) -> Option<Vec<u8>> {
+    let payload = delivery.take_payload()?;
+    bulk.stage(context, payload, std::time::Instant::now())
+        .inspect_err(|refusal| {
+            tracing::warn!(operation="bulk_delivery_refused", request_id=?delivery.request_id(),
+                refusal=?refusal, "Oversized panel delivery could not be staged");
+        })
+        .ok()
 }

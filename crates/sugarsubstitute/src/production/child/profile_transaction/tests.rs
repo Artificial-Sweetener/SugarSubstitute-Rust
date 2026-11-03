@@ -137,7 +137,7 @@ fn actual_request_folder_and_context_retain_original_reservation_after_worker_jo
     assert_eq!(transaction.requested.units, r"E:\profile".encode_utf16().collect::<Vec<_>>());
     assert_eq!(transaction.original_deadline(), Moment::from_nanos(100));
     drop(rig.owner);
-    assert_eq!(rig.scope.snapshot().reserved_bytes, MainWindowRequest::KNOWN_STORAGE_BYTES);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, MainWindowRequest::RESERVATION_BYTES);
     drop(transaction);
     assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
     Ok(())
@@ -160,7 +160,7 @@ fn close_rejects_actual_observation_without_losing_its_original_facts() -> TestR
     assert!(matches!(transaction.observe(&mut original), Err(ProfileError::Closed)));
     drop(transaction);
     drop(rig.owner);
-    assert_eq!(rig.scope.snapshot().reserved_bytes, MainWindowRequest::KNOWN_STORAGE_BYTES);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, MainWindowRequest::RESERVATION_BYTES);
     let sugarsubstitute_desktop::DesktopStartupObservation::EnvironmentPrepared { facts, .. } =
         original.ok_or("Original observation missing")?
     else {
@@ -278,7 +278,7 @@ fn closed_profile_activity_keeps_pending_custody_without_retrying_authorization(
         Err(ProfileError::Closed)
     ));
     assert_eq!(transaction.original_deadline(), Moment::from_nanos(100));
-    assert_eq!(rig.scope.snapshot().reserved_bytes, MainWindowRequest::KNOWN_STORAGE_BYTES);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, MainWindowRequest::RESERVATION_BYTES);
     drop(transaction);
     drop(rig.owner);
     assert_eq!(rig.scope.snapshot().reserved_bytes, 0);

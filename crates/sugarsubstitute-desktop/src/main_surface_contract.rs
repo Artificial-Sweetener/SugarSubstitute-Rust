@@ -251,6 +251,12 @@ impl SurfaceReply {
         &self.payload
     }
 
+    /// Move oversized encoded bytes to the bulk owner; the claim remains with delivery custody.
+    #[cfg(target_os = "windows")]
+    pub(crate) fn take_payload(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.payload)
+    }
+
     /// Match delivery to the admitted ordinary request without decoding its response again.
     #[cfg(any(target_os = "windows", test))]
     pub(crate) const fn request_id(&self) -> u64 {

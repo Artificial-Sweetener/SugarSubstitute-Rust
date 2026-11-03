@@ -120,6 +120,10 @@ pub struct MainWindowRequest {
 impl MainWindowRequest {
     /// Conservative initial ceiling for known native-observer storage, in bytes.
     pub const KNOWN_STORAGE_BYTES: u64 = 4 * 1024 * 1024;
+    /// In-flight bulk panel transfer partition, in bytes: one 96 MiB message per direction.
+    pub const BULK_TRANSFER_BYTES: u64 = 192 * 1024 * 1024;
+    /// Complete reservation a main lifetime requires: observer storage plus bulk transfers.
+    pub const RESERVATION_BYTES: u64 = Self::KNOWN_STORAGE_BYTES + Self::BULK_TRANSFER_BYTES;
     /// Maximum retained profile-path allocation, in platform encoded bytes.
     pub const PROFILE_PATH_BYTES: usize = 128 * 1024;
 
@@ -169,7 +173,7 @@ impl MainWindowRequest {
         {
             return Err(MainRequestError::ProfilePath);
         }
-        if lease.bytes() < Self::KNOWN_STORAGE_BYTES {
+        if lease.bytes() < Self::RESERVATION_BYTES {
             return Err(MainRequestError::InsufficientMemory);
         }
         if profile.allocated_bytes() > 64 {

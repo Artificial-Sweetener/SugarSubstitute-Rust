@@ -261,6 +261,7 @@ impl MainActor {
                         self.events()?.clone(),
                         self.request()?.storage_lease(),
                         self.request()?.origin(),
+                        self.bulk.clone(),
                     )?);
                 } else if self
                     .receivers

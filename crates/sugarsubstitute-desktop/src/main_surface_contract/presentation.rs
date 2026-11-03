@@ -88,6 +88,12 @@ impl SurfacePresentation {
         &self.payload
     }
 
+    /// Move oversized encoded bytes to the bulk owner; the claim remains with delivery custody.
+    #[cfg(target_os = "windows")]
+    pub(crate) fn take_payload(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.payload)
+    }
+
     /// Borrow the attachment correlation; it grants no native surface authority.
     pub fn address(&self) -> &CanvasSurfaceAddress {
         &self.address

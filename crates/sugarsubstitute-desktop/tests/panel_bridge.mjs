@@ -8,10 +8,11 @@ import { Script, createContext } from 'node:vm';
 const sourcePath = process.argv[2] ?? new URL('../src/main_actor/panel/bridge.js', import.meta.url);
 const source = readFileSync(sourcePath, 'utf8');
 const policySource = readFileSync(new URL('../src/main_actor/panel/bridge_protocol.js', import.meta.url), 'utf8');
+const bulkSource = readFileSync(new URL('../src/main_actor/panel/bridge_bulk.js', import.meta.url), 'utf8');
 // Match the host's composition: the protocol expression receives the output surface preference.
 const policyFor = preference => `${policySource.trimEnd()}(${preference});\n`;
-const sources = [policyFor("'host'"), source];
-const windowedSources = [policyFor('undefined'), source];
+const sources = [policyFor("'host'"), bulkSource, source];
+const windowedSources = [policyFor('undefined'), bulkSource, source];
 const binding = '__sugarcubes_substitute_send_v3';
 const host = 'ai.artificialsweetener.sugarsubstitute';
 const session = 'session-12345678';
@@ -33,10 +34,10 @@ function transportError(error, code) {
   assert.equal(error.cause.code, `panel.transport.${code}`);
   return true;
 }
-function fixture(post, scripts = sources) {
+function fixture(post, scripts = sources, fetch = undefined) {
   const sent = [], received = [], events = new Map(), window = {};
   window.top = window;
-  const context = createContext({ window, URLSearchParams, TextEncoder,
+  const context = createContext({ window, URLSearchParams, TextEncoder, TextDecoder, AbortController, fetch,
     location: { search: `?sc-panel-host=${host}&sc-panel-session=${session}&sc-panel-transport=native` },
     [binding]: payload => { if (post) post(payload); sent.push(payload); },
     addEventListener: (name, listener) => events.set(name, listener) });
@@ -49,6 +50,23 @@ function envelope(payload) {
   return JSON.stringify({ name: binding, payload, executionContextId: 0 }).replace('"executionContextId":0', '"executionContextId":-9223372036854775808');
 }
 const framed = (message, lane = 'o', ticket = maxTicket) => `1:${lane}:${ticket}:${JSON.stringify(message)}`;
+const grant = 'ab'.repeat(16);
+const bulkOrigin = 'https://sugarsubstitute-bulk.invalid/';
+const bulkEnvelope = (token, bytes) => JSON.stringify({ transport: 'sugarsubstitute.bulk', version: 1, token, bytes });
+const settle = () => new Promise(resolve => setImmediate(resolve));
+// Fake only the browser fetch boundary; `respond` returns a response or throws for a network failure.
+function bulkFetch(respond = () => ({ status: 204 })) {
+  const requests = [];
+  const fetch = (url, init) => {
+    requests.push({ url, init });
+    return Promise.resolve().then(() => respond(url, init));
+  };
+  return { fetch, requests };
+}
+function body(text, status = 200) {
+  const bytes = Buffer.from(text);
+  return { status, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
+}
 function admit(message, lane = 'o') {
   const f = fixture();
   assert.equal(f.receipt('g', lane, maxTicket), true);
@@ -67,34 +85,38 @@ test('only a composition-hosted browser advertises host output presentation', ()
   assert.equal(Object.hasOwn(windowed, 'outputSurfacePreference'), false);
   assert.equal(windowed.preferencePolicy, 'saved');
 });
-test('escaped selection refuses before custody and permits a later small request', () => {
-  const f = fixture(), request = selection('\\'.repeat(3800));
+test('escaped selection beyond the native frame uploads before custody and later small requests stay inline', async () => {
+  const transfer = bulkFetch(), f = fixture(undefined, sources, transfer.fetch), request = selection('\\'.repeat(3800));
   request.file.subfolder = '\\'.repeat(3800);
   assert.ok(Buffer.byteLength(JSON.stringify(request)) <= 16384);
   assert.ok(envelope(framed(request)).length + 1 > 16384);
-  assert.throws(() => f.bridge.send(request), error => transportError(error, 'bound'));
+  f.receipt('g', 'o', 1, grant);
+  f.bridge.send(request);
   assert.deepEqual(f.sent, []);
+  await settle();
+  assert.equal(transfer.requests.length, 1);
+  assert.equal(transfer.requests[0].init.body, JSON.stringify(request));
+  assert.deepEqual(f.sent, [`1:o:1:${bulkEnvelope(grant, Buffer.byteLength(JSON.stringify(request)))}`]);
   f.receipt('g', 'c', 1);
   f.bridge.send(control());
-  assert.deepEqual(f.sent, [framed(control(), 'c', 1)]);
+  assert.deepEqual(f.sent.slice(1), [framed(control(), 'c', 1)]);
 });
 test('UTF-16 boundary includes private prefix, terminator and maximum context identity', () => {
   const overhead = envelope(framed(selection())).length + 1;
   const exact = selection('x'.repeat(16384 - overhead)), f = admit(exact);
   assert.equal(envelope(f.sent[0]).length + 1, 16384);
-  assert.throws(() => f.bridge.send(selection(`${exact.file.filename}x`)), error => transportError(error, 'bound'));
-  assert.equal(f.sent.length, 1);
+  assert.equal(admit(selection(`${exact.file.filename}x`)).sent.length, 0);
 });
 // Well-formed JSON has UTF16 units <= UTF8 bytes <= 3 * UTF16 units.
 // ASCII framing/escaping preserves bytes minus units, so these two 16384
 // bounds imply native UTF8 <= 27305, within its independent 32768-byte limit.
 for (const character of ['\\', '"', '\0', '\n', '漢', '🙂', '\u2028', '\u2029', '漢\\🙂"\n', '\ud800漢\u07ff']) {
-  test(`admission preserves ${JSON.stringify(character)} at the first native limit`, () => {
+  test(`admission preserves ${JSON.stringify(character)} inline up to the first native limit`, async () => {
     let first = 0, last = 20000;
     while (first < last) {
       const middle = Math.ceil((first + last) / 2);
-      try { admit(selection(character.repeat(middle))); first = middle; }
-      catch (error) { transportError(error, 'bound'); last = middle - 1; }
+      if (admit(selection(character.repeat(middle))).sent.length === 1) first = middle;
+      else last = middle - 1;
     }
     const exact = selection(character.repeat(first)), f = admit(exact);
     const payload = JSON.stringify(exact), native = envelope(f.sent[0]);
@@ -105,11 +127,16 @@ for (const character of ['\\', '"', '\0', '\n', '漢', '🙂', '\u2028', '\u2029
     assert.equal(Buffer.byteLength(native) - native.length, Buffer.byteLength(payload) - payload.length);
     assert.ok(Buffer.byteLength(native) <= 27305);
     assert.ok(Buffer.byteLength(native) <= 32768);
-    assert.throws(() => f.bridge.send(selection(character.repeat(first + 1))), error => transportError(error, 'bound'));
-    assert.equal(f.sent.length, 1);
+    const transfer = bulkFetch(), next = fixture(undefined, sources, transfer.fetch);
+    const beyond = selection(character.repeat(first + 1));
+    next.receipt('g', 'o', 1, grant);
+    next.bridge.send(beyond);
+    assert.deepEqual(next.sent, []);
+    await settle();
+    assert.equal(transfer.requests[0].init.body, JSON.stringify(beyond));
+    assert.deepEqual(next.sent, [`1:o:1:${bulkEnvelope(grant, Buffer.byteLength(JSON.stringify(beyond)))}`]);
   });
-}
-test('control grant is independent and configure can start context before applied', () => {
+}test('control grant is independent and configure can start context before applied', () => {
   const f = fixture();
   f.bridge.send(control());
   assert.equal(f.sent.length, 0);
@@ -664,8 +691,8 @@ for (const request of [watch(), previewRequest('chunk')]) {
   });
 }
 
-test('maximum preview chunk fits both public bounds and oversized encoded bytes refuse before custody', () => {
-  const request = previewRequest('chunk'), f = fixture();
+test('maximum preview chunk fits both public bounds and oversized encoded bytes travel through the bulk origin', async () => {
+  const transfer = bulkFetch(), request = previewRequest('chunk'), f = fixture(undefined, sources, transfer.fetch);
   assert.equal(request.data.length, 10924);
   f.receipt('g', 'o', 1);
   f.bridge.send(request);
@@ -673,15 +700,15 @@ test('maximum preview chunk fits both public bounds and oversized encoded bytes 
   assert.ok(Buffer.byteLength(JSON.stringify(request)) <= 16384);
   assert.ok(envelope(f.sent[0]).length + 1 <= 16384);
   const oversized = previewRequest('chunk', 2, Buffer.alloc(16384).toString('base64'));
-  assert.throws(() => f.bridge.send(oversized), error => transportError(error, 'bound'));
+  f.bridge.send(oversized);
   assert.equal(f.sent.length, 1);
   const reply = canvas(1, 'surface.reply', { address, revision: 1, status: 'applied', message: '' });
   assert.equal(f.deliver(reply, 1), true);
-  f.receipt('g', 'o', 2);
-  f.bridge.send(viewport(2));
-  assert.equal(f.sent[1], framed(viewport(2), 'o', 2));
+  assert.equal(f.receipt('g', 'o', 2, grant), true);
+  await settle();
+  assert.equal(transfer.requests[0].init.body, JSON.stringify(oversized));
+  assert.equal(f.sent[1], `1:o:2:${bulkEnvelope(grant, Buffer.byteLength(JSON.stringify(oversized)))}`);
 });
-
 test('presentation notifications interleave preview bytes and final viewport without releasing custody', () => {
   const f = fixture(), notification = presentation();
   f.receipt('g', 'o', 1);
@@ -739,4 +766,112 @@ test('every shared surface and context request type is admitted by the bridge po
     .filter(type => type.startsWith('surface.') || type === 'context.request');
   assert.ok(sharedTypes.includes('surface.overview') && sharedTypes.includes('surface.select'));
   for (const type of sharedTypes) assert.ok(policy.request(type), `${type} is not admitted`);
+});
+
+test('oversized ordinary request uploads under its credit grant and sends only the envelope', async () => {
+  const transfer = bulkFetch(), f = fixture(undefined, sources, transfer.fetch);
+  const request = selection('x'.repeat(20 * 1024 * 1024)), encoded = JSON.stringify(request);
+  assert.equal(f.receipt('g', 'o', 3, grant), true);
+  f.bridge.send(request);
+  assert.deepEqual(f.sent, []);
+  await settle();
+  const [upload] = transfer.requests;
+  assert.equal(upload.url, `${bulkOrigin}u/${grant}`);
+  assert.equal(upload.init.method, 'POST');
+  assert.equal(upload.init.body, encoded);
+  for (const [key, value] of Object.entries({ mode: 'cors', credentials: 'omit', cache: 'no-store',
+    redirect: 'error', referrerPolicy: 'no-referrer' })) assert.equal(upload.init[key], value);
+  assert.equal(upload.init.signal.aborted, false);
+  assert.deepEqual(f.sent, [`1:o:3:${bulkEnvelope(grant, Buffer.byteLength(encoded))}`]);
+  assert.ok(f.sent[0].length < 256);
+  assert.equal(f.deliver(canvas(1, 'surface.reply', { address, revision: 1, status: 'applied', message: '' }), 3), true);
+  assert.equal(f.receipt('g', 'o', 4, 'cd'.repeat(16)), true);
+});
+test('a failed or ungranted upload still sends its envelope so the host refuses the credit', async () => {
+  const failing = bulkFetch(() => { throw new TypeError('network'); });
+  const f = fixture(undefined, sources, failing.fetch), request = selection('x'.repeat(20000));
+  f.receipt('g', 'o', 1, grant);
+  f.bridge.send(request);
+  await settle();
+  assert.deepEqual(f.sent, [`1:o:1:${bulkEnvelope(grant, Buffer.byteLength(JSON.stringify(request)))}`]);
+  assert.equal(f.receipt('r', 'o', 1), true);
+  assert.deepEqual(f.received, [canvas(1, 'error.reply', { failure: { status: 'unavailable', message: '' } })]);
+  const ungranted = bulkFetch(), g = fixture(undefined, sources, ungranted.fetch);
+  g.receipt('g', 'o', 1);
+  g.bridge.send(request);
+  await settle();
+  assert.equal(ungranted.requests.length, 0);
+  assert.deepEqual(g.sent, [`1:o:1:${JSON.stringify({ transport: 'sugarsubstitute.bulk', version: 1, bytes: Buffer.byteLength(JSON.stringify(request)) })}`]);
+});
+test('oversized control and messages beyond the bulk bound refuse before custody', () => {
+  const f = fixture(undefined, sources, bulkFetch().fetch);
+  f.receipt('g', 'c', 1);
+  f.receipt('g', 'o', 1, grant);
+  assert.throws(() => f.bridge.send(control('rejected', { message: 'x'.repeat(20000) })), error => transportError(error, 'bound'));
+  assert.throws(() => f.bridge.send(selection('x'.repeat(100663296))), error => transportError(error, 'bound'));
+  assert.deepEqual(f.sent, []);
+  f.bridge.send(control());
+  assert.deepEqual(f.sent, [framed(control(), 'c', 1)]);
+});
+test('bulk reply downloads exact bytes, validates like inline and preserves host order', async () => {
+  const reply = canvas(1, 'context.reply', { message: 'r'.repeat(40 * 1024 * 1024) }), text = JSON.stringify(reply);
+  const transfer = bulkFetch(url => url === `${bulkOrigin}d/${grant}` ? body(text) : body('', 404));
+  const f = fixture(undefined, sources, transfer.fetch), notification = control('configure');
+  f.receipt('g', 'o', 1, grant);
+  f.bridge.send(canvas());
+  assert.equal(f.deliver(JSON.parse(bulkEnvelope(grant, Buffer.byteLength(text))), 1), true);
+  assert.equal(f.deliver(notification), true);
+  assert.deepEqual(f.received, []);
+  assert.equal(f.receipt('g', 'o', 2, 'cd'.repeat(16)), true, 'the delivered envelope settled the credit');
+  await settle();
+  assert.equal(transfer.requests[0].init.method, 'GET');
+  assert.equal(f.received.length, 2);
+  assert.equal(f.received[0].message.length, reply.message.length);
+  assert.deepEqual(f.received[1], notification);
+});
+test('a bulk reply failing download, size or reply validation settles as unavailable', async () => {
+  const wrong = JSON.stringify(canvas(1, 'context.reply', { session: 'another-session' }));
+  for (const respond of [() => body('', 404), () => body('{"x":1}', 200), () => body(wrong)]) {
+    const f = fixture(undefined, sources, bulkFetch(respond).fetch);
+    f.receipt('g', 'o', 1, grant);
+    f.bridge.send(canvas());
+    assert.equal(f.deliver(JSON.parse(bulkEnvelope(grant, Buffer.byteLength(wrong))), 1), true);
+    await settle();
+    assert.deepEqual(f.received, [canvas(1, 'error.reply', { failure: { status: 'unavailable', message: '' } })]);
+  }
+});
+test('bulk notifications validate as inline notifications and invalid ones are dropped', async () => {
+  const valid = JSON.stringify(presentation()), foreign = JSON.stringify({ ...presentation(), session: 'another-session' });
+  const transfer = bulkFetch(url => body(url.endsWith('cd'.repeat(16)) ? foreign : valid));
+  const f = fixture(undefined, sources, transfer.fetch);
+  assert.equal(f.deliver(JSON.parse(bulkEnvelope('cd'.repeat(16), Buffer.byteLength(foreign)))), true);
+  assert.equal(f.deliver(JSON.parse(bulkEnvelope(grant, Buffer.byteLength(valid)))), true);
+  await settle();
+  assert.deepEqual(f.received, [presentation()]);
+});
+test('malformed bulk envelopes are not deliveries', () => {
+  const f = fixture(undefined, sources, bulkFetch().fetch);
+  f.receipt('g', 'o', 1, grant);
+  f.bridge.send(canvas());
+  const valid = JSON.parse(bulkEnvelope(grant, 10));
+  for (const value of [{ ...valid, extra: 1 }, { ...valid, token: grant.toUpperCase() }, { ...valid, bytes: 0 },
+    { ...valid, bytes: 100663297 }, { ...valid, version: 2 }, { ...valid, transport: 'other' }]) {
+    assert.equal(f.deliver(value, 1), false);
+    assert.equal(f.deliver(value), false);
+  }
+  assert.equal(f.deliver(valid, 2), false, 'a foreign ticket cannot settle the active request');
+});
+test('pagehide aborts in-flight transfers and drops pending deliveries', async () => {
+  const signals = [];
+  const pending = (url, init) => { signals.push(init.signal); return new Promise(() => {}); };
+  const f = fixture(undefined, sources, pending);
+  f.receipt('g', 'o', 1, grant);
+  f.bridge.send(canvas());
+  f.deliver(JSON.parse(bulkEnvelope(grant, 10)), 1);
+  f.deliver(control('configure'));
+  f.events.get('pagehide')();
+  assert.equal(signals.length, 1);
+  assert.equal(signals[0].aborted, true);
+  await settle();
+  assert.deepEqual(f.received, []);
 });

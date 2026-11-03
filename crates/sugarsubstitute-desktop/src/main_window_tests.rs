@@ -82,18 +82,18 @@ fn request(
 fn native_request_owns_existing_credit_without_granting_profile_or_process_authority() -> Result {
     let released = Arc::new(AtomicU64::new(0));
     let request =
-        request(settings(), absolute(), MainWindowRequest::KNOWN_STORAGE_BYTES, released.clone())??;
+        request(settings(), absolute(), MainWindowRequest::RESERVATION_BYTES, released.clone())??;
     assert_eq!(request.identity().run.generation, RunGeneration::new(1)?);
     assert_eq!(request.profile().as_str(), "desktop-1");
     assert_eq!(request.profile_directory(), absolute());
-    assert_eq!(request.storage_lease().bytes(), MainWindowRequest::KNOWN_STORAGE_BYTES);
+    assert_eq!(request.storage_lease().bytes(), MainWindowRequest::RESERVATION_BYTES);
     assert_eq!(request.versions().frontend(), "1.47.11");
-    let remaining = MainWindowRequest::KNOWN_STORAGE_BYTES - request.allocated_metadata_bytes();
+    let remaining = MainWindowRequest::RESERVATION_BYTES - request.allocated_metadata_bytes();
     let claim = request.storage_lease().claim(remaining)?;
     drop(request);
     assert_eq!(released.load(Ordering::SeqCst), 0);
     drop(claim);
-    assert_eq!(released.load(Ordering::SeqCst), MainWindowRequest::KNOWN_STORAGE_BYTES);
+    assert_eq!(released.load(Ordering::SeqCst), MainWindowRequest::RESERVATION_BYTES);
     Ok(())
 }
 #[test]
@@ -102,26 +102,26 @@ fn invalid_size_label_path_or_credit_rejects_before_native_effect() -> Result {
         let mut invalid = settings();
         invalid.logical_width = dimension;
         assert!(matches!(
-            request(invalid, absolute(), 4 * 1024 * 1024, Arc::default())?,
+            request(invalid, absolute(), MainWindowRequest::RESERVATION_BYTES, Arc::default())?,
             Err(MainRequestError::Dimensions)
         ));
     }
     let mut invalid = settings();
     invalid.labels.close = "bad\0label";
     assert!(matches!(
-        request(invalid, absolute(), 4 * 1024 * 1024, Arc::default())?,
+        request(invalid, absolute(), MainWindowRequest::RESERVATION_BYTES, Arc::default())?,
         Err(MainRequestError::CaptionLabel)
     ));
     let mut nul = absolute().into_os_string();
     nul.push("\0value");
     for path in [PathBuf::from("relative"), PathBuf::from(nul)] {
         assert!(matches!(
-            request(settings(), path, 4 * 1024 * 1024, Arc::default())?,
+            request(settings(), path, MainWindowRequest::RESERVATION_BYTES, Arc::default())?,
             Err(MainRequestError::ProfilePath)
         ));
     }
     assert!(matches!(
-        request(settings(), absolute(), 4 * 1024 * 1024 - 1, Arc::default())?,
+        request(settings(), absolute(), MainWindowRequest::RESERVATION_BYTES - 1, Arc::default())?,
         Err(MainRequestError::InsufficientMemory)
     ));
     Ok(())
@@ -138,20 +138,21 @@ fn short_data_with_oversized_allocations_is_rejected_before_retention() -> Resul
     let mut path = PathBuf::with_capacity(MainWindowRequest::PROFILE_PATH_BYTES + 1);
     path.push(absolute());
     assert!(matches!(
-        request(settings(), path, 4 * 1024 * 1024, Arc::default())?,
+        request(settings(), path, MainWindowRequest::RESERVATION_BYTES, Arc::default())?,
         Err(MainRequestError::ProfilePath)
     ));
     let mut namespace = String::with_capacity(1024 * 1024);
     namespace.push_str("profile");
     let profile = ProfileId::new(namespace)?;
     let result = MainWindowRequest::new(
-        request(settings(), absolute(), 4 * 1024 * 1024, Arc::default())??.identity(),
+        request(settings(), absolute(), MainWindowRequest::RESERVATION_BYTES, Arc::default())??
+            .identity(),
         LoopbackOrigin::parse("http://127.0.0.1:8188/", 8188)?,
         profile,
         absolute(),
         ServedFrontendVersions::new("1".into(), "1".into())?,
         settings(),
-        MemoryLease::new(4 * 1024 * 1024, Box::new(Release(Arc::default()))),
+        MemoryLease::new(MainWindowRequest::RESERVATION_BYTES, Box::new(Release(Arc::default()))),
     );
     assert!(matches!(result, Err(MainRequestError::ProfileCapacity)));
     Ok(())
@@ -160,10 +161,12 @@ fn short_data_with_oversized_allocations_is_rejected_before_retention() -> Resul
 #[test]
 fn existing_claims_prevent_retaining_metadata_even_when_reservation_total_is_sufficient() -> Result
 {
-    let lease = MemoryLease::new(4 * 1024 * 1024, Box::new(Release(Arc::default())));
+    let lease =
+        MemoryLease::new(MainWindowRequest::RESERVATION_BYTES, Box::new(Release(Arc::default())));
     let blocked = lease.claim(lease.bytes())?;
     let result = MainWindowRequest::new(
-        request(settings(), absolute(), 4 * 1024 * 1024, Arc::default())??.identity(),
+        request(settings(), absolute(), MainWindowRequest::RESERVATION_BYTES, Arc::default())??
+            .identity(),
         LoopbackOrigin::parse("http://127.0.0.1:8188/", 8188)?,
         ProfileId::new("profile".into())?,
         absolute(),
@@ -179,10 +182,14 @@ fn existing_claims_prevent_retaining_metadata_even_when_reservation_total_is_suf
 }
 #[test]
 fn diagnostics_never_echo_profile_paths_or_version_payloads() -> Result {
-    let failure =
-        request(settings(), PathBuf::from("sensitive-profile"), 4 * 1024 * 1024, Arc::default())?
-            .err()
-            .ok_or("Invalid path accepted")?;
+    let failure = request(
+        settings(),
+        PathBuf::from("sensitive-profile"),
+        MainWindowRequest::RESERVATION_BYTES,
+        Arc::default(),
+    )?
+    .err()
+    .ok_or("Invalid path accepted")?;
     assert!(!failure.to_string().contains("sensitive-profile"));
     for label in [String::new(), "x".repeat(65), "hidden\0value".into()] {
         let error = ServedFrontendVersions::new(label.clone(), "0.15.0".into())
@@ -211,7 +218,7 @@ fn exact_loopback_origin_preserves_served_paths_queries_and_fragments() -> Resul
 fn normal_main_navigation_identifies_the_current_panel_without_changing_the_owned_origin() -> Result
 {
     let request =
-        request(settings(), absolute(), MainWindowRequest::KNOWN_STORAGE_BYTES, Arc::default())??;
+        request(settings(), absolute(), MainWindowRequest::RESERVATION_BYTES, Arc::default())??;
     let identity = request.identity();
     let expected = sugarsubstitute_contracts::panel::PanelSession::for_main(identity)?;
     for (root, port) in
@@ -272,7 +279,7 @@ fn recovery_labels_are_bounded_at_request_admission_before_native_initialization
         let mut invalid = settings();
         invalid.recovery.retry_ready = label;
         assert!(matches!(
-            request(invalid, absolute(), MainWindowRequest::KNOWN_STORAGE_BYTES, Arc::default())?,
+            request(invalid, absolute(), MainWindowRequest::RESERVATION_BYTES, Arc::default())?,
             Err(MainRequestError::CaptionLabel)
         ));
     }
@@ -284,14 +291,10 @@ fn every_canonical_locale_retry_pair_fits_the_original_native_request_budget() -
         let mut localized = settings();
         localized.recovery =
             MainRecoveryLabels { retry: messages.retry, retry_ready: messages.retry_ready };
-        let actual = request(
-            localized,
-            absolute(),
-            MainWindowRequest::KNOWN_STORAGE_BYTES,
-            Arc::default(),
-        )??;
+        let actual =
+            request(localized, absolute(), MainWindowRequest::RESERVATION_BYTES, Arc::default())??;
         assert_eq!(actual.settings().recovery.retry_ready, messages.retry_ready);
-        assert_eq!(actual.storage_lease().bytes(), MainWindowRequest::KNOWN_STORAGE_BYTES);
+        assert_eq!(actual.storage_lease().bytes(), MainWindowRequest::RESERVATION_BYTES);
     }
     Ok(())
 }

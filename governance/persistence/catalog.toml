@@ -1464,8 +1464,8 @@ migrations = []
 [[formats]]
 id = "native-panel-admission-v1"
 owner = "sugarsubstitute-desktop"
-sources = ["crates/sugarsubstitute-desktop/src/main_panel_ingress.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/admission.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/delivery.rs"]
-source_sha256 = "sha256:166ea4d67b4168f2461fddba65225a2b034986887b4db46431b2c174fa0eaca5"
+sources = ["crates/sugarsubstitute-desktop/src/main_panel_ingress.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js", "crates/sugarsubstitute-desktop/src/main_bulk.rs", "crates/sugarsubstitute-desktop/src/main_bulk/wire.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/admission.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/delivery.rs"]
+source_sha256 = "sha256:5ede2df67c79f47e51d461b2a18e3f89b94678c976a8e8f8507d0ad063c704f8"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

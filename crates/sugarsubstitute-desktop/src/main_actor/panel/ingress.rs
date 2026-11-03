@@ -33,10 +33,32 @@ impl MainActor {
         if !self.panel_transport.issued(context, frame.lane, frame.ticket) {
             return Ok(None);
         }
+        // An envelope names a body uploaded under this ordinary credit; the token is spent
+        // either way, and the body takes the same decode, lane and credit checks below.
+        let upload = match crate::main_bulk::Envelope::decode(frame.payload()) {
+            None => None,
+            Some(envelope) => {
+                let upload = (frame.lane == crate::main_panel_ingress::Lane::Ordinary)
+                    .then(|| {
+                        let now = std::time::Instant::now();
+                        self.bulk.take_upload(context, frame.ticket, envelope, now)
+                    })
+                    .flatten();
+                if upload.is_none() {
+                    tracing::debug!(
+                        operation = "bulk_envelope_rejected",
+                        "Bulk envelope named no matching upload for its credit"
+                    );
+                    self.panel_transport.reject(frame.lane, frame.ticket);
+                    return Ok(None);
+                }
+                upload
+            }
+        };
+        let payload = upload.as_ref().map_or(frame.payload(), crate::main_bulk::Upload::text);
         let session = sugarsubstitute_contracts::panel::PanelSession::for_main(self.identity())
             .map_err(|cause| DesktopError::new("panel_session_identity", cause))?;
-        let Some(message) = crate::main_panel_ingress::decode_payload(frame.payload(), &session)
-        else {
+        let Some(message) = crate::main_panel_ingress::decode_payload(payload, &session) else {
             self.panel_transport.reject(frame.lane, frame.ticket);
             return Ok(None);
         };

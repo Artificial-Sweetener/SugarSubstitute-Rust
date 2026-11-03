@@ -6,18 +6,20 @@ use super::*;
 
 #[test]
 fn composition_hosting_invokes_the_protocol_with_host_presentation() {
-    let [protocol, transport] = scripts(MainHosting::Composition);
+    let [protocol, bulk, transport] = scripts(MainHosting::Composition);
     assert!(protocol.starts_with(PROTOCOL_SCRIPT.trim_end()));
     assert!(protocol.ends_with("})('host');\n"));
+    assert_eq!(bulk, BULK_SCRIPT);
     assert_eq!(transport, TRANSPORT_SCRIPT);
 }
 
 #[test]
 fn windowed_hosting_leaves_the_output_surface_preference_absent() {
-    let [protocol, transport] = scripts(MainHosting::Windowed);
+    let [protocol, bulk, transport] = scripts(MainHosting::Windowed);
     assert!(protocol.starts_with(PROTOCOL_SCRIPT.trim_end()));
     assert!(protocol.ends_with("})(undefined);\n"));
     assert!(!protocol.ends_with("('host');\n"));
+    assert_eq!(bulk, BULK_SCRIPT);
     assert_eq!(transport, TRANSPORT_SCRIPT);
 }
 

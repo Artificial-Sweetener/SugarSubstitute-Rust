@@ -4,7 +4,8 @@
   let installed = false;
   function install() {
     const policy = globalThis.__sugarcubes_substitute_policy_v3;
-    if (installed || !policy) return;
+    const bulk = globalThis.__sugarcubes_substitute_bulk_v1;
+    if (installed || !policy || !bulk) return;
     const host = policy.host;
     const session = policy.session(location.search);
     if (window !== window.top || !session) return;
@@ -12,7 +13,6 @@
     const sendNative = globalThis[binding];
     if (typeof sendNative !== 'function') return;
     const listeners = new Set();
-    const encoder = new TextEncoder();
     const lanes = Object.fromEntries(['o', 'c', 'x'].map(lane =>
       [lane, { credit: 0, last: 0, active: null }]));
     const queues = { o: [], c: [], x: [] };
@@ -23,10 +23,9 @@
     function emit(value) {
       for (const listener of [...listeners]) if (listeners.has(listener)) listener(value);
     }
+    const order = bulk.order(emit);
     function failure(record, status) {
-      const value = record.value;
-      emit({ protocol: value.protocol, version: 3, session, requestId: value.requestId,
-        type: 'error.reply', failure: { status, message: '' } });
+      order.push({ value: policy.failed(record.value, status) });
       record.done = true;
     }
     function queueControl(record, first = false) {
@@ -34,6 +33,12 @@
       if (index >= 0) { if (!first) queues.c[index] = record; }
       else if (first) queues.c.unshift(record);
       else queues.c.push(record);
+    }
+    function broken(record, lane, direct, error) {
+      failed = true;
+      if (lane === 'o' && !direct) failure(record, 'unavailable');
+      for (const item of queues.o.splice(0)) failure(item, 'unavailable');
+      if (direct) deny('binding', error);
     }
     function flush(lane, direct = false) {
       const slot = lanes[lane];
@@ -44,14 +49,11 @@
       record.ticket = slot.credit;
       slot.credit = 0;
       slot.active = record;
-      try { sendNative('1:' + lane + ':' + record.ticket + ':' + record.encoded); }
-      catch (error) {
-        failed = true;
-        if (lane === 'o' && !direct) failure(record, 'unavailable');
-        for (const item of queues.o.splice(0)) failure(item, 'unavailable');
-        if (direct) deny('binding', error);
-        return false;
-      }
+      const post = payload => sendNative('1:' + lane + ':' + record.ticket + ':' + payload);
+      if (record.bytes) bulk.send(slot.upload, record, () => !closed && !failed && slot.active === record &&
+        !record.done, frame => { try { post(frame); } catch (error) { broken(record, lane); } });
+      else try { post(record.encoded); }
+      catch (error) { broken(record, lane, direct, error); return false; }
       return true;
     }
     function cancel(record) {
@@ -59,7 +61,7 @@
       const index = queues.o.findIndex(item => item.value.requestId === id);
       if (index >= 0) {
         const [waiting] = queues.o.splice(index, 1);
-        emit(policy.cancelled(waiting.value));
+        order.push({ value: policy.cancelled(waiting.value) });
         waiting.done = true;
         return;
       }
@@ -74,12 +76,9 @@
       ...(policy.outputSurfacePreference === 'host' ? { outputSurfacePreference: 'host' } : {}),
       send(input) {
         const encoded = JSON.stringify(input);
-        if (typeof encoded !== 'string' ||
-            encoder.encode(encoded).byteLength > 16384)
-          deny('bound');
-        const envelope = JSON.stringify({ name: binding, payload: '1:o:9007199254740991:' + encoded, executionContextId: 0 });
-        if (envelope.length + 20 > 16384)
-          deny('bound');
+        if (typeof encoded !== 'string') deny('bound');
+        const bytes = bulk.size(encoded, binding);
+        if (bytes > bulk.max) deny('bound');
         const value = JSON.parse(encoded);
         if (!value || value.session !== session || value.version !== policy.version(value))
           deny();
@@ -91,9 +90,10 @@
           else if (policy.request(value.type)) lane = 'o';
         }
         if (!lane) deny();
+        if (bytes && lane !== 'o') deny('bound');
         if (lane === 'x' && closed) return;
         if (closed || failed) deny('closed');
-        const record = { encoded, value };
+        const record = { encoded, value, bytes };
         if (lane === 'o') {
           if ([lanes.o.active, ...queues.o].some(item => item && item.value.requestId === value.requestId))
             deny('duplicate');
@@ -118,7 +118,7 @@
     installed = true;
     Object.defineProperty(globalThis, 'sugarcubesPanelHost', { value: bridge });
     Object.defineProperty(globalThis, '__sugarcubes_substitute_transport_v1', {
-      value(action, lane, ticket) {
+      value(action, lane, ticket, upload) {
         if (closed || failed || !Object.hasOwn(lanes, lane) || !Number.isSafeInteger(ticket) || ticket < 1) return false;
         const slot = lanes[lane];
         if (action === 'g') {
@@ -126,6 +126,7 @@
           slot.active = null;
           slot.credit = ticket;
           slot.last = ticket;
+          slot.upload = upload;
           return flush(lane);
         }
         if (slot.credit === ticket && (action === 'r' || action === 'a' && lane !== 'o')) { slot.credit = 0; return true; }
@@ -147,26 +148,30 @@
     Object.defineProperty(globalThis, '__sugarcubes_substitute_deliver_v3', {
       value(value, ticket) {
         if (closed) return false;
+        const big = bulk.envelope(value);
+        let record = null;
         if (ticket === undefined) {
-          if (!value || value.version !== policy.version(value) || value.session !== session ||
-              !policy.notification(value)) return false;
-          emit(value);
-          return true;
+          if (!big && !policy.notification(value, session)) return false;
+        } else {
+          record = lanes.o.active;
+          if (!record || record.ticket !== ticket || record.done || !big && !policy.reply(record.value, value))
+            return false;
         }
-        const active = lanes.o.active;
-        if (!active || active.ticket !== ticket || active.done || !value || value.version !== 3 ||
-            value.protocol !== 'sugarcubes.canvas' || value.session !== session ||
-            value.requestId !== active.value.requestId) return false;
-        if (!policy.acceptsReply(active.value.type, value)) return false;
-        emit(value);
-        active.done = true;
-        if (queues.x[0]?.value.requestId === value.requestId) queues.x.length = 0;
+        if (!big) order.push({ value });
+        else bulk.receive(value, order, message => !record ? policy.notification(message, session) ? message : null :
+          policy.reply(record.value, message) ? message : policy.failed(record.value, 'unavailable'));
+        if (record) {
+          record.done = true;
+          if (queues.x[0]?.value.requestId === record.value.requestId) queues.x.length = 0;
+        }
         return true;
       },
     });
     addEventListener('pagehide', () => {
       closed = true;
+      bulk.close();
       for (const queue of Object.values(queues)) queue.length = 0;
+      order.clear();
       listeners.clear();
     }, { once: true });
   }
