@@ -57,6 +57,12 @@ impl MemoryLease {
         Arc::ptr_eq(&self.0, &other.0)
     }
 
+    /// Bytes currently claimed across every clone of this reservation, as its owner reports
+    /// them in diagnostics. The value is a snapshot; concurrent claims may change it at once.
+    pub fn claimed_bytes(&self) -> u64 {
+        self.0.claimed.load(Ordering::Acquire)
+    }
+
     /// Claim part of the shared charge for one independently owned allocation.
     ///
     /// Claims across every cloned lease atomically share this reservation's byte
@@ -137,6 +143,12 @@ impl MemoryClaim {
     /// Return the single shared admission reservation in bytes.
     pub fn reserved_bytes(&self) -> u64 {
         self.lease.bytes()
+    }
+
+    /// Whether this claim is charged to `lease`'s reservation, so an owner retaining the
+    /// allocation beyond a job can tell whether it must claim it again under its own lease.
+    pub fn charged_to(&self, lease: &MemoryLease) -> bool {
+        self.lease.same_reservation(lease)
     }
     /// Dedicate this claim's bytes to a separate lease.
     ///

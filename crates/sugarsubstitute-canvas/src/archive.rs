@@ -38,7 +38,7 @@ pub use integrity::ArchiveIntegrity;
 
 use crate::{CanvasError, Document, DocumentSnapshot, Layer, LayerContent, LayerId};
 use std::{error::Error, fmt, sync::Arc};
-use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
+use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::{Coverage, Extent, ImageError};
 
 /// Format version this build writes.
@@ -274,11 +274,12 @@ impl InputDocumentArchive {
             .map(Coverage::stored_bytes)
             .fold(0, u64::saturating_add)
     }
-    /// Encode the archive, checking cancellation and deadline between tiles.
+    /// Encode the archive, checking cancellation and deadline between tiles. The returned
+    /// claim on the job's lease funds the encoded bytes; keep it for as long as they live.
     /// # Errors
     /// Rejects an encoding beyond [`MAX_ARCHIVE_BYTES`] and preserves cancellation, deadline
     /// and memory failures.
-    pub fn encode(&self, context: &JobContext) -> Result<Vec<u8>, ArchiveError> {
+    pub fn encode(&self, context: &JobContext) -> Result<(Vec<u8>, MemoryClaim), ArchiveError> {
         encode::archive(self, context)
     }
     /// Decode and fully validate archive bytes, charging restored coverage to `memory`.

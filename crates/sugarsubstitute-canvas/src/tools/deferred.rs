@@ -11,10 +11,14 @@
 //! or stroke that changed the document first. Work whose result is still unusable after
 //! [`DeferredEdit::MAX_RUNS`] runs is abandoned, so a document that keeps changing cannot hold
 //! the work queue forever.
+//!
+//! The job computes under its own working reservation, and its result moves to the document's
+//! lease before the job ends: a document keeps results in its content and history, and must
+//! not keep each job's whole working reservation admitted for as long as it does.
 use super::ToolManager;
 use crate::{CanvasError, Document, DocumentEdit, DocumentSnapshot, EditSessionId};
 use std::time::Duration;
-use sugarsubstitute_contracts::execution::JobContext;
+use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
 
 /// What a finished deferred edit does to the document.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,6 +38,8 @@ pub(super) type Work =
 /// Pending work and the exact revision it was requested against.
 pub struct DeferredEdit {
     base: DocumentSnapshot,
+    /// The lease of the document the result lands in, which takes over the result's charge.
+    memory: MemoryLease,
     disposition: Disposition,
     request: u64,
     /// How many times this work has run already.
@@ -82,12 +88,13 @@ impl DeferredEdit {
     pub const MAX_RUNS: u8 = 8;
 
     pub(super) fn new(
-        base: DocumentSnapshot,
+        document: &Document,
         disposition: Disposition,
         request: u64,
         work: Work,
     ) -> Self {
-        Self { base, disposition, request, runs: 0, work }
+        let (base, memory) = (document.snapshot(), document.memory().clone());
+        Self { base, memory, disposition, request, runs: 0, work }
     }
     /// The revision this work reads.
     pub const fn base(&self) -> &DocumentSnapshot {
@@ -113,13 +120,16 @@ impl DeferredEdit {
             return Err(CanvasError::Invalid("Deferred work belongs to another document"));
         }
         self.base = current;
+        self.memory = document.memory().clone();
         Ok(())
     }
-    /// Run the work inside an owned execution job.
+    /// Run the work inside an owned execution job, then charge its result to the document's
+    /// lease, so the job's working reservation is released when the job ends.
     /// # Errors
-    /// Preserves the work's cancellation, deadline, memory and validation failures.
+    /// Preserves the work's cancellation, deadline, memory and validation failures, and rejects
+    /// a result the document's lease cannot hold.
     pub fn run(self, context: &JobContext) -> Result<PreparedEdit, CanvasError> {
-        let edit = (self.work)(&self.base, context)?;
+        let edit = (self.work)(&self.base, context)?.adopt(&self.memory)?;
         Ok(PreparedEdit {
             base: (self.base.identity(), self.base.revision()),
             disposition: self.disposition,
@@ -161,6 +171,7 @@ impl PreparedEdit {
         }
         Ok(DeferredCompletion::Rerun(DeferredEdit {
             base,
+            memory: document.memory().clone(),
             disposition: self.disposition,
             request: self.request,
             runs: self.runs,
@@ -256,11 +267,10 @@ pub(super) fn request(
     next_request: &mut u64,
     work: Work,
 ) -> Result<DeferredEdit, CanvasError> {
-    let base =
-        document.map(Document::snapshot).ok_or(CanvasError::Invalid("No editable document"))?;
+    let document = document.ok_or(CanvasError::Invalid("No editable document"))?;
     let request = next_request
         .checked_add(1)
         .ok_or(CanvasError::Invalid("Deferred request order exhausted"))?;
     *next_request = request;
-    Ok(DeferredEdit::new(base, disposition, request, work))
+    Ok(DeferredEdit::new(document, disposition, request, work))
 }

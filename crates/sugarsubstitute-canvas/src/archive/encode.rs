@@ -15,7 +15,7 @@ use sugarsubstitute_image_ops::{Coverage, CoverageTileValues, ImageError};
 pub(super) fn archive(
     archive: &InputDocumentArchive,
     context: &JobContext,
-) -> Result<Vec<u8>, ArchiveError> {
+) -> Result<(Vec<u8>, MemoryClaim), ArchiveError> {
     check(context)?;
     let limit = archive.encoded_bound().min(MAX_ARCHIVE_BYTES);
     let claim = context.memory().claim(limit).map_err(ImageError::from)?;
@@ -42,7 +42,7 @@ pub(super) fn archive(
         .finalize();
     sink.bytes[32..HEADER_BYTES].copy_from_slice(&digest);
     check(context)?;
-    Ok(sink.bytes)
+    Ok((sink.bytes, sink._claim))
 }
 
 /// Map writer failures: exceeding the claimed bound is an oversized archive; other compressor

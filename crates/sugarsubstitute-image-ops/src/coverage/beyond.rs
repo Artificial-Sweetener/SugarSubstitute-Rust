@@ -19,8 +19,8 @@ pub(super) type Frame = [i64; 4];
 /// Content beyond the extent: `frame` with its top left corner at `origin`.
 #[derive(Debug)]
 pub(super) struct Beyond {
-    origin: [i64; 2],
-    frame: Coverage,
+    pub(super) origin: [i64; 2],
+    pub(super) frame: Coverage,
 }
 
 impl Coverage {

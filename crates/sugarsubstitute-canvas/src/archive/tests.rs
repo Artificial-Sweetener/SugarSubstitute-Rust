@@ -138,7 +138,7 @@ fn archives_round_trip_every_layer_kind_coverage_tile_and_selection_exactly() ->
 {
     run(|context| {
         let archive = rich_archive(context)?;
-        let bytes = archive.encode(context)?;
+        let (bytes, _claim) = archive.encode(context)?;
         assert!(bytes.len() as u64 <= archive.encoded_bound());
         let decoded = InputDocumentArchive::decode(&bytes, context.memory(), context)?;
         assert_eq!(decoded, archive);
@@ -164,7 +164,7 @@ fn archives_round_trip_every_layer_kind_coverage_tile_and_selection_exactly() ->
         assert_eq!(decoded.stored_tile_bytes(), archive.stored_tile_bytes());
         let all = decoded.document("workflow-a/node-9").and_then(ArchivedDocument::selection);
         assert_eq!(all.and_then(Coverage::uniform), Some(FULL_COVERAGE));
-        assert_eq!(decoded.encode(context)?, bytes, "encoding is deterministic");
+        assert_eq!(decoded.encode(context)?.0, bytes, "encoding is deterministic");
         assert_eq!(decoded.fingerprint(), archive.fingerprint());
         let renamed = InputDocumentArchive::new(archive.documents().to_vec(), b"other")?;
         assert_ne!(renamed.fingerprint(), archive.fingerprint(), "metadata is content");
@@ -217,7 +217,7 @@ fn archive_content_outside_its_bounds_is_refused_before_encoding() -> harness::T
 fn truncated_flipped_oversized_and_unknown_archives_are_rejected() -> harness::TestResult {
     run(|context| {
         let memory = context.memory();
-        let bytes = rich_archive(context)?.encode(context)?;
+        let (bytes, _claim) = rich_archive(context)?.encode(context)?;
         for length in [0, 11, 40, HEADER_BYTES, bytes.len() - 1] {
             assert!(
                 matches!(
@@ -313,7 +313,7 @@ fn sealed_archives_with_invalid_content_are_rejected() -> harness::TestResult {
 #[test]
 fn streamed_integrity_checks_agree_with_whole_archive_checks() -> harness::TestResult {
     run(|context| {
-        let bytes = rich_archive(context)?.encode(context)?;
+        let (bytes, _claim) = rich_archive(context)?.encode(context)?;
         let mut integrity = ArchiveIntegrity::new();
         for chunk in bytes.chunks(7) {
             integrity.update(chunk)?;
@@ -344,7 +344,7 @@ fn coverage_beyond_the_document_round_trips_and_version_one_archives_migrate() -
         document.apply(DocumentEdit::Insert { index: 0, layer }).map_err(canvas)?;
         let captured = ArchivedDocument::capture("k", &document.snapshot(), |_| None)?;
         let archive = InputDocumentArchive::new(vec![captured], b"")?;
-        let bytes = archive.encode(context)?;
+        let (bytes, _claim) = archive.encode(context)?;
         assert_eq!(u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]), 2);
         let decoded = InputDocumentArchive::decode(&bytes, memory, context)?;
         assert_eq!(decoded, archive);

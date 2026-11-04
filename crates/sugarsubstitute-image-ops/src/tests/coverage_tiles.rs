@@ -84,3 +84,47 @@ fn coverage_import_rejects_noncanonical_and_malformed_tiles() -> TestResult {
         Ok(())
     })
 }
+
+/// A document's lease in tests: a fixed reservation whose final release needs no owner.
+struct Unowned;
+impl sugarsubstitute_contracts::execution::MemoryRelease for Unowned {
+    fn release(&self, _: u64) {}
+}
+
+#[test]
+fn adopted_coverage_moves_its_charge_to_the_keeping_lease_and_keeps_shared_tiles_intact()
+-> TestResult {
+    run(MEMORY, |context| {
+        let document =
+            sugarsubstitute_contracts::execution::MemoryLease::new(MEMORY, Box::new(Unowned));
+        let extent = Extent::new(300, 200)?;
+        let base = Coverage::new(extent, 0, &document)?;
+        let mut kept = base.clone();
+        kept.update(Region::new(0, 0, 100, 100)?, &document, |x, _, _| x as u16)?;
+        // A job paints one tile of its own beside the tile the document already charges.
+        let mut result = kept.clone();
+        result.update(Region::new(140, 10, 20, 20)?, context.memory(), |_, y, _| y as u16)?;
+        let job_charged = context.memory().claimed_bytes();
+        assert!(job_charged > 0 && !result.charged_to(&document));
+        let painted = result.value(150, 20);
+        let before = document.claimed_bytes();
+        let adopted = result.clone().adopt(&document)?;
+        assert_eq!(adopted, result);
+        assert!(adopted.charged_to(&document));
+        assert!(document.claimed_bytes() > before);
+        // The job's copy is still shared by `result`, so its charge stays until that drops.
+        drop(result);
+        assert_eq!(context.memory().claimed_bytes(), 0);
+        assert_eq!((adopted.value(50, 50), adopted.value(150, 20)), (50, painted));
+        // Coverage already charged to the lease adopts without any new charge.
+        let charged = document.claimed_bytes();
+        let again = adopted.clone().adopt(&document)?;
+        assert_eq!(document.claimed_bytes(), charged);
+        assert_eq!(again, adopted);
+        // A lease too small for the move refuses it as a memory failure.
+        let small = sugarsubstitute_contracts::execution::MemoryLease::new(64, Box::new(Unowned));
+        assert!(matches!(again.adopt(&small), Err(ImageError::Memory(_))));
+        assert_eq!(small.claimed_bytes(), 0);
+        Ok(())
+    })
+}

@@ -149,3 +149,17 @@ fn carved_leases_isolate_their_bytes_until_their_last_claim_drops() -> Result<()
     assert_eq!(released.calls.load(Ordering::SeqCst), 1);
     Ok(())
 }
+
+#[test]
+fn claims_report_their_reservation_and_the_ledger_reports_claimed_bytes()
+-> Result<(), MemoryClaimError> {
+    let released = Arc::new(Releases::default());
+    let (first, second) = (lease(64, &released), lease(64, &released));
+    let claim = first.claim(40)?;
+    assert!(claim.charged_to(&first) && claim.charged_to(&first.clone()));
+    assert!(!claim.charged_to(&second));
+    assert_eq!((first.claimed_bytes(), second.claimed_bytes()), (40, 0));
+    drop(claim);
+    assert_eq!(first.claimed_bytes(), 0);
+    Ok(())
+}

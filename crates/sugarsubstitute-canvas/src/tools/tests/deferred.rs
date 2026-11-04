@@ -343,3 +343,53 @@ fn deferred_previews_stage_renderable_snapshots_without_publishing() -> harness:
         run().map_err(|cause| ImageError::Source(Box::new(cause)))
     })
 }
+
+/// A document lease in tests: a fixed reservation whose final release needs no owner.
+struct DocumentLease;
+impl sugarsubstitute_contracts::execution::MemoryRelease for DocumentLease {
+    fn release(&self, _: u64) {}
+}
+
+#[test]
+fn deferred_results_move_to_the_document_lease_and_release_the_job_reservation()
+-> harness::TestResult {
+    harness::run(8 * 1024 * 1024, |context| {
+        let run = || -> Result<(), CanvasError> {
+            let memory = sugarsubstitute_contracts::execution::MemoryLease::new(
+                8 * 1024 * 1024,
+                Box::new(DocumentLease),
+            );
+            let mut tools = manager()?;
+            let id = ToolId::new(2)?;
+            let tool = DeferringTool { disposition: Disposition::Commit, seen: None };
+            tools.register(id, tool, &memory)?;
+            let mut document = Document::new(1, Extent::new(64, 64)?, &memory)?;
+            tools.select(id, Some(&document), Duration::ZERO)?;
+            tools.input(press(), Some(&mut document), Duration::ZERO)?;
+            let deferred = tools.take_deferred().ok_or(CanvasError::Invalid("No deferred work"))?;
+            let before = memory.claimed_bytes();
+            let prepared = deferred.run(context)?;
+            // The result is the document's to keep: nothing stays charged to the job.
+            assert_eq!(context.memory().claimed_bytes(), 0);
+            assert!(memory.claimed_bytes() > before);
+            assert!(tools.complete_deferred(prepared, &mut document, Duration::ZERO)?.applied());
+            let selection = document.snapshot().selection().cloned();
+            assert!(selection.is_some_and(|selection| selection.charged_to(&memory)));
+            assert_eq!(context.memory().claimed_bytes(), 0);
+
+            // A document lease that cannot hold the result refuses the work as a memory failure.
+            let full =
+                memory.claim(memory.bytes() - memory.claimed_bytes()).map_err(ImageError::from)?;
+            tools.input(press(), Some(&mut document), Duration::ZERO)?;
+            let refused = tools
+                .take_deferred()
+                .ok_or(CanvasError::Invalid("No deferred work"))?
+                .run(context)
+                .err();
+            assert!(matches!(refused, Some(CanvasError::Image(ImageError::Memory(_)))));
+            drop(full);
+            Ok(())
+        };
+        run().map_err(|cause| ImageError::Source(Box::new(cause)))
+    })
+}

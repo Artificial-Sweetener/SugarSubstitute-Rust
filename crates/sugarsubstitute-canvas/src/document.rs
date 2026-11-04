@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Revisioned document metadata and reversible commands sharing original image assets.
+mod custody;
 mod damage;
 mod edit;
 mod highlight;

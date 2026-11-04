@@ -72,7 +72,8 @@ pub(super) fn save(
     archive: &InputDocumentArchive,
     context: &JobContext,
 ) -> Result<SaveReceipt, StoreError> {
-    let bytes = archive.encode(context)?;
+    // The claim funds the encoded bytes while the verification decode charges its own tiles.
+    let (bytes, _claim) = archive.encode(context)?;
     if InputDocumentArchive::decode(&bytes, context.memory(), context)? != *archive {
         return Err(StoreError::Unverified);
     }

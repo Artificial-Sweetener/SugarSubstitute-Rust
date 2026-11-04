@@ -16,6 +16,7 @@ mod affine;
 mod beyond;
 mod boundary;
 mod codec;
+mod custody;
 mod filters;
 mod geometry;
 mod mapping;
@@ -467,8 +468,11 @@ fn uniform_value(values: &[u16], region: Region) -> Option<u16> {
 }
 
 impl CoverageTile {
+    /// Bytes one stored tile charges: its values and their bookkeeping.
+    const CHARGE_BYTES: u64 = (TILE_VALUES * size_of::<u16>() + 64) as u64;
+
     fn new(values: Vec<u16>, memory: &MemoryLease) -> Result<Self, ImageError> {
-        let claim = memory.claim((TILE_VALUES * size_of::<u16>() + 64) as u64)?;
+        let claim = memory.claim(Self::CHARGE_BYTES)?;
         // Hash little-endian bytes in contiguous blocks: the digest is the same as hashing each
         // value in turn, without a hasher call per value.
         let mut hash = Sha256::new();
@@ -484,13 +488,18 @@ impl CoverageTile {
 }
 
 impl Tiles {
+    /// Bytes a tile map of slots entries charges.
+    const fn charge_bytes(slots: usize) -> u64 {
+        (slots * (size_of::<Slot>() + 32) + 64) as u64
+    }
+
     fn new(
         extent: Extent,
         default: u16,
         slots: BTreeMap<u64, Slot>,
         memory: &MemoryLease,
     ) -> Result<Self, ImageError> {
-        let claim = memory.claim((slots.len() * (size_of::<Slot>() + 32) + 64) as u64)?;
+        let claim = memory.claim(Self::charge_bytes(slots.len()))?;
         let mut hash = Sha256::new();
         hash.update(b"sugarsubstitute-coverage-v1\0");
         hash.update(extent.width().to_le_bytes());
