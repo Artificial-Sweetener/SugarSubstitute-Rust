@@ -30831,7 +30831,9 @@ var PromptWrapLayout = class {
 var promptWrapLayout = [
   wrapMarks,
   ViewPlugin.fromClass(PromptWrapLayout),
-  EditorView.theme({ ".sp-prompt-keep": { whiteSpace: "nowrap" } })
+  // Keep groups only stop wrapping; whitespace stays preserved like the rest of the prompt, so
+  // spaces inside a group keep their width and Firefox types U+0020 rather than U+00A0 there.
+  EditorView.theme({ ".sp-prompt-keep": { whiteSpace: "pre" } })
 ];
 
 // frontend/sugarprompt/editor/src/conditioning-state.ts
