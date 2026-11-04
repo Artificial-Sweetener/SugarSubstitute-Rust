@@ -80,10 +80,12 @@ fn quarter_turns_and_flips_are_exact_and_opposite_actions_cancel() -> TestResult
             Canvas::coverage(&canvas.shown(), MASK).ok_or(CanvasError::Invalid("No mask"))?;
         assert_eq!(flipped.value(63, 30), original.value(21, 30));
         let revision = canvas.document.snapshot().revision();
+        // Enter applies in place: Transform stays selected and frames the landed result.
         assert!(canvas.command(ToolCommand::Commit, context)?);
         assert_eq!(canvas.document.snapshot().revision(), revision + 1);
-        assert_eq!(canvas.tools.selected(), ToolId::new(OTHER)?);
+        assert_eq!(canvas.tools.selected(), ToolId::new(TOOL)?);
         assert!(canvas.tools.session().is_none() && canvas.tools.preview_snapshot().is_none());
+        assert_corners(corners(&canvas)?, [[21.0, 30.0], [64.0, 30.0], [64.0, 92.0], [21.0, 92.0]]);
         let landed = Canvas::coverage(&canvas.document.snapshot(), MASK);
         assert_eq!(landed.map(|coverage| coverage.fingerprint()), Some(flipped.fingerprint()));
         assert!(canvas.document.undo()?);
@@ -104,15 +106,12 @@ fn cancel_restores_the_base_and_session_history_steps_through_actions() -> TestR
         let session = canvas.tools.session().ok_or(CanvasError::Invalid("No session"))?;
         assert_eq!((session.undo, session.redo), (true, true));
         assert_eq!(canvas.shown_bounds(MASK), region(30, 10, 20, 40)?);
+        // Escape discards the session in place: Transform stays selected and frames the base.
         assert!(canvas.command(ToolCommand::Cancel, context)?);
         assert_eq!(canvas.document.snapshot().revision(), revision);
         assert!(canvas.tools.preview_snapshot().is_none() && canvas.tools.session().is_none());
-        assert_eq!(canvas.tools.selected(), ToolId::new(OTHER)?);
-        // Enter without a change only returns to the previous tool.
-        canvas.tools.select(ToolId::new(TOOL)?, Some(&canvas.document), Duration::ZERO)?;
-        assert!(canvas.command(ToolCommand::Commit, context)?);
-        assert_eq!(canvas.document.snapshot().revision(), revision);
-        assert_eq!(canvas.tools.selected(), ToolId::new(OTHER)?);
+        assert_eq!(canvas.tools.selected(), ToolId::new(TOOL)?);
+        assert_corners(corners(&canvas)?, [[20.0, 20.0], [60.0, 20.0], [60.0, 40.0], [20.0, 40.0]]);
         Ok(())
     })
 }
@@ -200,7 +199,67 @@ fn selections_transform_their_pixels_and_double_clicks_apply() -> TestResult {
         canvas.settle(context)?;
         assert_eq!(canvas.document.snapshot().revision(), revision + 1);
         assert_eq!(canvas.bounds(MASK), region(50, 40, 10, 20)?);
+        assert_eq!(canvas.tools.selected(), ToolId::new(TOOL)?);
+        // Without a change a double click inside the box does nothing.
+        canvas.tools.input(
+            ToolInput::DoubleClick([50.0, 50.0]),
+            Some(&mut canvas.document),
+            Duration::ZERO,
+        )?;
+        canvas.settle(context)?;
+        assert_eq!(canvas.document.snapshot().revision(), revision + 1);
+        assert_eq!(canvas.tools.selected(), ToolId::new(TOOL)?);
+        Ok(())
+    })
+}
+
+#[test]
+fn keys_without_a_change_do_nothing_and_escape_cancels_a_drag_in_place() -> TestResult {
+    run(|context| {
+        let mut canvas = canvas(context, TransformTool::new(), &[[20, 20, 60, 40]])?;
+        let frame = [[20.0, 20.0], [60.0, 20.0], [60.0, 40.0], [20.0, 40.0]];
+        let revision = canvas.document.snapshot().revision();
+        for command in [ToolCommand::Commit, ToolCommand::Cancel] {
+            assert!(!canvas.command(command, context)?, "{command:?}");
+            assert_eq!(canvas.tools.selected(), ToolId::new(TOOL)?);
+            assert!(canvas.tools.session().is_none());
+            assert_corners(corners(&canvas)?, frame);
+        }
+        // Escape during the first drag discards it, releases the pointer and keeps the tool.
+        canvas.point([40.0, 30.0], NONE, context)?;
+        canvas.button(true, NONE, context)?;
+        canvas.point([50.0, 35.0], NONE, context)?;
+        assert!(canvas.tools.preview_snapshot().is_some());
+        assert!(canvas.command(ToolCommand::Cancel, context)?);
+        assert!(!canvas.tools.captured());
+        assert!(canvas.tools.preview_snapshot().is_none() && canvas.tools.session().is_none());
+        assert_eq!(canvas.tools.selected(), ToolId::new(TOOL)?);
+        assert_corners(corners(&canvas)?, frame);
+        assert_eq!(canvas.document.snapshot().revision(), revision);
+        Ok(())
+    })
+}
+
+#[test]
+fn the_toolbar_apply_and_cancel_return_to_the_previous_tool() -> TestResult {
+    run(|context| {
+        let mut canvas = canvas(context, TransformTool::new(), &[[20, 20, 60, 40]])?;
+        let revision = canvas.document.snapshot().revision();
+        // Cancel leaves Transform even before a change opens the session.
+        assert!(canvas.command(ToolCommand::Session(SessionAction::Cancel), context)?);
         assert_eq!(canvas.tools.selected(), ToolId::new(OTHER)?);
+        canvas.tools.select(ToolId::new(TOOL)?, Some(&canvas.document), Duration::ZERO)?;
+        canvas.command(turn(TransformAction::RotateRight), context)?;
+        assert!(canvas.command(ToolCommand::Session(SessionAction::Cancel), context)?);
+        assert_eq!(canvas.document.snapshot().revision(), revision);
+        assert_eq!(canvas.tools.selected(), ToolId::new(OTHER)?);
+        canvas.tools.select(ToolId::new(TOOL)?, Some(&canvas.document), Duration::ZERO)?;
+        canvas.command(turn(TransformAction::RotateRight), context)?;
+        assert!(canvas.command(ToolCommand::Session(SessionAction::Apply), context)?);
+        assert_eq!(canvas.document.snapshot().revision(), revision + 1);
+        assert_eq!(canvas.shown_bounds(MASK), region(30, 10, 20, 40)?);
+        assert_eq!(canvas.tools.selected(), ToolId::new(OTHER)?);
+        assert!(canvas.tools.session().is_none());
         Ok(())
     })
 }

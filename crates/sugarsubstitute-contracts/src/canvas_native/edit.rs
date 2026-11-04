@@ -231,7 +231,7 @@ impl CanvasEditMode {
     }
 }
 
-/// Transform toolbar actions; apply and cancel arrive as commit and cancel.
+/// Transform toolbar actions; its Apply and Cancel arrive as session actions.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CanvasTransformAction {
     /// Rotate 90° counter-clockwise.
@@ -244,7 +244,8 @@ pub enum CanvasTransformAction {
     FlipVertical,
 }
 
-/// Edit-session toolbar actions.
+/// Edit-session toolbar actions. Applying or cancelling a transform this way also leaves
+/// Transform, and Cancel does so before the first change opens its session.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CanvasSessionAction {
     /// Undo within the session.
@@ -273,9 +274,11 @@ pub enum CanvasEditCommand {
     },
     /// Document undo or redo.
     History(CanvasHistoryAction),
-    /// Enter: commit the active gesture, floating pixels, transform or session.
+    /// Enter: commit the active gesture, floating pixels, transform or session. An unchanged
+    /// transform has nothing to commit.
     Commit,
-    /// Escape: cancel the active gesture, floating pixels, transform or session.
+    /// Escape: cancel the active gesture, floating pixels, transform or session. An unchanged
+    /// transform has nothing to cancel.
     Cancel,
     /// Arrow keys, in document pixels `-100..=100` per axis.
     Nudge {

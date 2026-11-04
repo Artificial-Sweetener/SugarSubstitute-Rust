@@ -5,7 +5,7 @@
 //!
 //! Sessions follow the Python app's CuteCanvas policy: Undo stays inside an open session and
 //! never passes its base, and tool changes are refused until the session is applied or
-//! cancelled. A tool that settles, as applying or cancelling a transform does, gets the tool
+//! cancelled. A tool that settles, as the Transform toolbar's Apply and Cancel do, gets the tool
 //! selected before it back.
 use super::{
     CanvasTool, SessionAction, SessionKind, SessionState, ToolCancelReason, ToolCommand,
@@ -35,7 +35,7 @@ impl ToolManager {
     /// Deliver a typed command to the selected tool, even while Space navigation is effective.
     /// Escape a tool does not take cancels its gesture through the lifecycle, as before; during
     /// a coverage modification Escape cancels the modification. A tool settling its session,
-    /// as applying or cancelling a transform does, restores the tool selected before it, or Pan
+    /// as the Transform toolbar's Apply and Cancel do, restores the tool selected before it, or Pan
     /// & Zoom. Returns whether anything acted.
     /// # Errors
     /// Rejects nudges beyond ±100 pixels and preserves tool, activation and document failures.

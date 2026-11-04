@@ -174,7 +174,8 @@ impl Session {
     }
 
     /// The edit-session toolbar: Undo and Redo step the session's checkpoints, Apply and
-    /// Cancel resolve it; Apply also applies an open coverage modification.
+    /// Cancel resolve it; Apply also applies an open coverage modification. Before a change
+    /// Transform has no session, and its toolbar's Cancel still leaves the tool.
     fn session_command(
         &mut self,
         action: CanvasSessionAction,
@@ -184,6 +185,15 @@ impl Session {
             return self.commit_modification(now);
         }
         if self.document.tools.session().is_none() {
+            let transforming =
+                tool_id(CanvasToolId::Transform) == Some(self.document.tools.selected());
+            if action == CanvasSessionAction::Cancel && transforming {
+                return self.require(
+                    ToolCommand::Session(SessionAction::Cancel),
+                    now,
+                    "No edit session is open",
+                );
+            }
             return Err(Box::new(EditRejection::Unavailable("No edit session is open")));
         }
         let action = match action {

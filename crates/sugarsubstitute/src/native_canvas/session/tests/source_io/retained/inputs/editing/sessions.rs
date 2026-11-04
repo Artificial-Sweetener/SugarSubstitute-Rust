@@ -151,7 +151,7 @@ fn move_lands_fractional_and_snapped_drags_and_floats_selections_in_a_session()
 }
 
 #[test]
-fn transform_sessions_undo_inside_themselves_then_apply_or_cancel_back_to_the_previous_tool()
+fn transform_sessions_resolve_in_place_by_key_and_back_to_the_previous_tool_by_toolbar()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     {
@@ -182,10 +182,10 @@ fn transform_sessions_undo_inside_themselves_then_apply_or_cancel_back_to_the_pr
         fixture.edit(CanvasEditCommand::Session(CanvasSessionAction::Redo))?;
         assert_eq!(fixture.snapshot(image.document)?.revision(), revision);
 
-        // Enter applies the turn as one step and returns to the tool chosen before.
+        // Enter applies the turn as one step in place; Transform stays chosen.
         let applied = fixture.edit(CanvasEditCommand::Commit)?;
         fixture.settle_inputs()?;
-        assert_eq!((applied.tool, session(&applied)), (CanvasToolId::MaskRectangle, None));
+        assert_eq!((applied.tool, session(&applied)), (CanvasToolId::Transform, None));
         let turned = fixture.snapshot(image.document)?;
         assert_eq!(turned.revision(), revision + 1);
         // The 30×10 bar turned a quarter about its centre (25, 15) stands 10×30.
@@ -195,15 +195,32 @@ fn transform_sessions_undo_inside_themselves_then_apply_or_cancel_back_to_the_pr
             [FULL_COVERAGE, 0, FULL_COVERAGE]
         );
 
-        // Escape discards a flip and also returns to the previous tool.
-        fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Transform))?;
+        // Escape discards a flip in place; without a change Enter and Escape do nothing.
         fixture.edit(turn(CanvasTransformAction::FlipVertical))?;
         fixture.settle_inputs()?;
         let cancelled = fixture.edit(CanvasEditCommand::Cancel)?;
         fixture.settle_inputs()?;
-        assert_eq!((cancelled.tool, session(&cancelled)), (CanvasToolId::MaskRectangle, None));
+        assert_eq!((cancelled.tool, session(&cancelled)), (CanvasToolId::Transform, None));
         assert_eq!(fixture.snapshot(image.document)?.revision(), revision + 1);
         assert!(fixture.session.document.staged.is_none());
+        for command in [CanvasEditCommand::Commit, CanvasEditCommand::Cancel] {
+            let unchanged = fixture.edit(command)?;
+            assert_eq!((unchanged.tool, session(&unchanged)), (CanvasToolId::Transform, None));
+        }
+        assert_eq!(fixture.snapshot(image.document)?.revision(), revision + 1);
+
+        // The toolbar's Cancel leaves Transform before any change, and its Apply after one.
+        let left = fixture.edit(CanvasEditCommand::Session(CanvasSessionAction::Cancel))?;
+        assert_eq!((left.tool, session(&left)), (CanvasToolId::MaskRectangle, None));
+        fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Transform))?;
+        fixture.edit(turn(CanvasTransformAction::RotateLeft))?;
+        fixture.settle_inputs()?;
+        let applied = fixture.edit(CanvasEditCommand::Session(CanvasSessionAction::Apply))?;
+        fixture.settle_inputs()?;
+        assert_eq!((applied.tool, session(&applied)), (CanvasToolId::MaskRectangle, None));
+        assert_eq!(fixture.snapshot(image.document)?.revision(), revision + 2);
+        // Elsewhere, session actions without a session stay refused.
+        assert!(fixture.edit(CanvasEditCommand::Session(CanvasSessionAction::Cancel)).is_err());
     }
     fixture.finish().map(drop)
 }

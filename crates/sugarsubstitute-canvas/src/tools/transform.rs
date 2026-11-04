@@ -5,11 +5,13 @@
 //! Behaviour follows the Python app's transform contextual toolbar over CuteCanvas's transform
 //! tool. With a selection the tool transforms the selected pixels of the target mask as a
 //! floating fragment, and the selection with them; otherwise it transforms the whole mask. The
-//! box frames the selection's bounds or the mask's content bounds. Every handle drag and every
-//! toolbar turn or flip is one session checkpoint. Enter or a double click inside the box
-//! applies the transform as one undo step, Escape cancels it, and either returns to the tool
-//! selected before Transform. Moving the box follows the pointer and snaps to the canvas, the
-//! selection and other layers. The result is resampled once, from the published mask, when the
+//! box frames the selection's bounds or the mask's content bounds. The session opens at the
+//! first change: every handle drag and every toolbar turn or flip is one session checkpoint.
+//! Enter or a double click inside the box applies the transform as one undo step and Escape
+//! cancels it; the tool stays selected and frames the result, and without a change these keys
+//! do nothing. The toolbar's Apply and Cancel resolve the same way and then return to the tool
+//! selected before Transform; Cancel does so even before any change. Moving the box follows the
+//! pointer and snaps to the canvas, the selection and other layers. The result is resampled once, from the published mask, when the
 //! transform lands: quarter turns, flips and whole-pixel moves permute pixels exactly; anything
 //! else is sampled bilinearly, as CuteCanvas resamples transformed fragments.
 mod frame;
@@ -212,9 +214,20 @@ impl TransformTool {
         };
         prepared.affines.record(gesture.latest).map(drop)
     }
-    /// Apply or cancel the transform and return to the tool selected before Transform.
-    fn settle(&mut self, apply: bool, context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
-        self.gesture = None;
+    /// Whether a drag or a recorded change is unresolved.
+    fn unresolved(&self) -> bool {
+        self.gesture.is_some()
+            || self.prepared.as_ref().is_some_and(|prepared| prepared.affines.changed())
+    }
+    /// Apply or cancel the unresolved transform in place, as Enter, Escape and a double click do,
+    /// and frame the result. Returns whether there was anything to resolve.
+    fn resolve(&mut self, apply: bool, context: &mut ToolContext<'_>) -> Result<bool, CanvasError> {
+        if !self.unresolved() {
+            return Ok(false);
+        }
+        if self.gesture.take().is_some() {
+            context.capture_pointer(false);
+        }
         if let Some(mut prepared) = self.prepared.take() {
             let affine = *prepared.affines.current();
             if apply && prepared.affines.changed() && !affine.is_identity() {
@@ -224,6 +237,13 @@ impl TransformTool {
                 prepared.preview.discard(context);
             }
         }
+        self.refresh(context.document().as_ref(), context.target());
+        Ok(true)
+    }
+    /// Resolve the transform and return to the tool selected before Transform, as the toolbar's
+    /// Apply and Cancel do.
+    fn settle(&mut self, apply: bool, context: &mut ToolContext<'_>) -> Result<(), CanvasError> {
+        self.resolve(apply, context)?;
         context.settle();
         Ok(())
     }
@@ -265,7 +285,7 @@ impl CanvasTool for TransformTool {
                     None => false,
                 };
                 if inside && self.gesture.is_none() {
-                    self.settle(true, context)?;
+                    self.resolve(true, context)?;
                 }
                 Ok(())
             }
@@ -287,11 +307,13 @@ impl CanvasTool for TransformTool {
         }
         self.refresh(context.document().as_ref(), context.target());
         match command {
-            ToolCommand::Commit | ToolCommand::Session(SessionAction::Apply) => {
+            ToolCommand::Commit => self.resolve(true, context),
+            ToolCommand::Cancel => self.resolve(false, context),
+            ToolCommand::Session(SessionAction::Apply) => {
                 self.settle(true, context)?;
                 Ok(true)
             }
-            ToolCommand::Cancel | ToolCommand::Session(SessionAction::Cancel) => {
+            ToolCommand::Session(SessionAction::Cancel) => {
                 self.settle(false, context)?;
                 Ok(true)
             }
@@ -324,12 +346,16 @@ impl CanvasTool for TransformTool {
     fn cancel(&mut self, reason: ToolCancelReason) {
         self.hover = None;
         let gesture = self.gesture.take();
-        if matches!(
-            reason,
-            ToolCancelReason::Requested
-                | ToolCancelReason::DocumentChanged
-                | ToolCancelReason::Shutdown
-        ) {
+        let ends_session = match reason {
+            // Escape with nothing to resolve keeps the box: there is no session to end.
+            ToolCancelReason::Requested => {
+                gesture.is_some()
+                    || self.prepared.as_ref().is_some_and(|prepared| prepared.affines.changed())
+            }
+            ToolCancelReason::DocumentChanged | ToolCancelReason::Shutdown => true,
+            _ => false,
+        };
+        if ends_session {
             self.prepared = None;
         } else if let (Some(gesture), Some(prepared)) = (gesture, &mut self.prepared) {
             // The latest preview already shows the interrupted drag; keep it as a checkpoint.

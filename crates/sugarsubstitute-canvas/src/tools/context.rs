@@ -102,7 +102,7 @@ impl ToolContext<'_> {
             .flatten()
     }
     /// Ask for the previously selected tool once this observation or command settles, as
-    /// applying or cancelling a transform returns to the tool it was opened from.
+    /// the Transform toolbar's Apply and Cancel return to the tool it was opened from.
     pub fn settle(&mut self) {
         *self.settled = true;
     }

@@ -50,7 +50,8 @@ fn sessions_refuse_tool_changes_and_route_undo_until_resolved() -> harness::Test
         assert_eq!(canvas.document.snapshot().revision(), revision);
         // Selection commands wait for the session too.
         assert!(canvas.tools.deselect(&mut canvas.document).is_err());
-        assert!(canvas.command(ToolCommand::Commit, context)?);
+        // The toolbar's Apply resolves the session and returns to the tool chosen before.
+        assert!(canvas.command(ToolCommand::Session(SessionAction::Apply), context)?);
         assert!(canvas.tools.session().is_none());
         assert_eq!(canvas.tools.selected(), other);
         assert!(canvas.tools.undo(&mut canvas.document, Duration::ZERO)?);
