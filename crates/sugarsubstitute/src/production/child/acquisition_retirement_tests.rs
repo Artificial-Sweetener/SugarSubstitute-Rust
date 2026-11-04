@@ -226,3 +226,36 @@ fn acquisition_authenticated_denial_requires_actual_current_absence_and_ack_befo
     );
     Ok(())
 }
+
+/// Without a live acquisition the child cannot recover a request cutoff; the returned failure
+/// must reach the relay as a closed request deadline rather than an opaque cause.
+#[test]
+fn unrecovered_request_cutoff_after_grant_projects_a_closed_deadline_category() -> Result<()> {
+    use sugarsubstitute_desktop::{
+        StartupCauseCode as Code, StartupChildFailure, StartupRequestCause as Request,
+    };
+    let (mut c, _owner, _clock) = child()?;
+    let mut ledger = requests::tests::requests_for_run(c.run)?;
+    let original = Moment::from_nanos(100);
+    let h = ledger.prepare(original, CounterDeadline::new(100, 100)?)?;
+    ledger.output_pull(h, false)?;
+    let rejected =
+        ledger.outbound(h, original, original).err().ok_or("Original cutoff rejection absent")?;
+    let cause = ledger.expiry(h, rejected)?;
+    assert!(c.acquire.is_none());
+    let returned = c
+        .recover_acquisition_expiry(Box::new(cause))
+        .err()
+        .ok_or("Unowned request cutoff was recovered")?;
+    assert!(returned.is::<requests::RequestExpiry>());
+    assert_eq!(
+        ProductionChild::startup_cause_code(returned.as_ref()),
+        Code::Request(Request::Deadline)
+    );
+    let named = StartupChildFailure::retain(Step::Channel, returned);
+    assert_eq!(
+        ProductionChild::startup_cause_code(named.as_ref()),
+        Code::Request(Request::Deadline)
+    );
+    Ok(())
+}

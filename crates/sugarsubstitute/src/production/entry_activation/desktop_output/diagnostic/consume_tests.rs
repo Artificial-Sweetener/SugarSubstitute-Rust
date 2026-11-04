@@ -13,7 +13,8 @@ fn consumer_failure_grammar_rejects_foreign_observation_fields_unknown_categorie
         actual,
         Some(ConsumeFailureDetail {
             stage: Stage::ChildDelivery,
-            code: Code::Bootstrap(sugarsubstitute_desktop::StartupBootstrapCause::Transport)
+            code: Code::Bootstrap(sugarsubstitute_desktop::StartupBootstrapCause::Transport),
+            step: None,
         })
     );
     for bad in [
@@ -51,6 +52,14 @@ fn consumer_failure_grammar_rejects_foreign_observation_fields_unknown_categorie
         "Transcript(StreamEnded)",
         "Transcript(Exhausted)",
         "Transcript(SnapshotCapacity)",
+        "Pipe(DeadlineExpired)",
+        "Challenge(Busy)",
+        "Output(Deadline)",
+        "Output(Terminal(TimedOut))",
+        "Time(Regression)",
+        "Execution",
+        "Protocol",
+        "MainTerminal(Failure)",
     ] {
         assert!(parse_failure(LINE.replace("Bootstrap(Transport)", code).as_bytes()).is_some());
     }
@@ -64,6 +73,13 @@ fn consumer_failure_grammar_rejects_foreign_observation_fields_unknown_categorie
         "NativeOs(CounterQuery,4294967296)",
         "Os(+1)",
         "Os(-0)",
+        "Pipe(Unknown)",
+        "Pipe(Busy",
+        "Challenge(busy)",
+        "Output(Terminal(Unknown))",
+        "Output(Terminal)",
+        "Time(Regression,1)",
+        "MainTerminal(PRIVATE)",
     ] {
         assert!(parse_failure(LINE.replace("Bootstrap(Transport)", code).as_bytes()).is_none());
     }
@@ -129,9 +145,73 @@ fn actual_production_consumer_formatter_roundtrips_closed_stage_category_within_
             owner.feed(OutputStream::Stderr, 1, false, false, &bytes, |v| seen.push(v));
             assert_eq!(seen.len(), 1);
             assert!(
-                matches!(seen[0],Observation::Failure(f) if f.startup.is_none()&&f.consume==Some(ConsumeFailureDetail{stage,code:category}))
+                matches!(seen[0],Observation::Failure(f) if f.startup.is_none()&&f.consume==Some(ConsumeFailureDetail{stage,code:category,step:None}))
             );
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn consumer_failure_names_the_child_step_and_rejects_foreign_or_repeated_steps() {
+    let named = format!("{} child_step=Channel", LINE.replace("Bootstrap(Transport)", "Opaque"));
+    assert_eq!(
+        parse_failure(named.as_bytes()).and_then(|f| f.consume),
+        Some(ConsumeFailureDetail {
+            stage: Stage::ChildDelivery,
+            code: Code::Opaque,
+            step: Some(sugarsubstitute_desktop::StartupChildStep::Channel),
+        })
+    );
+    for &step in sugarsubstitute_desktop::StartupChildStep::ALL {
+        let line = format!("{LINE} child_step={}", step.token());
+        assert_eq!(
+            parse_failure(line.as_bytes()).and_then(|f| f.consume.and_then(|c| c.step)),
+            Some(step)
+        );
+    }
+    for bad in [
+        format!("{LINE} child_step=PRIVATE"),
+        format!("{LINE} child_step=channel"),
+        format!("{LINE} child_step=Channel child_step=Channel"),
+        format!("{LINE} child_step=Channel cause=PRIVATE"),
+        format!("{LINE} step=Channel"),
+        LINE.replace("category=", "child_step=Channel category="),
+    ] {
+        assert!(parse_failure(bad.as_bytes()).is_none(), "{bad}");
+    }
+}
+
+#[test]
+fn production_formatter_roundtrips_child_step_and_new_categories_within_line_bound()
+-> Result<(), Box<dyn std::error::Error>> {
+    use sugarsubstitute_desktop::{
+        StartupChallengeCause, StartupChildStep, StartupOutputCause, StartupPipeCause,
+    };
+    for (category, step) in [
+        (Code::Challenge(StartupChallengeCause::Busy), StartupChildStep::Channel),
+        (Code::Pipe(StartupPipeCause::DeadlineExpired), StartupChildStep::Control),
+        (
+            Code::Output(StartupOutputCause::Terminal(
+                sugarsubstitute_contracts::execution::TerminalKind::TimedOut,
+            )),
+            StartupChildStep::AttemptRetention,
+        ),
+        (Code::Opaque, StartupChildStep::AcquisitionExpiry),
+    ] {
+        let stage = Stage::ChildDelivery;
+        let bytes = super::super::tests::formatted_owner_diagnostics(|| {
+            tracing::warn!(operation="desktop_failure_transition",boundary=%"PollFrame",kind=%"Other",consume_stage=?stage,category=%category,child_step=%step.token(),"First owned desktop failure retained");
+        })?;
+        assert!(bytes.split(|byte| *byte == b'\n').all(|line| line.len() <= 512));
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, &bytes, |v| seen.push(v));
+        assert_eq!(seen.len(), 1);
+        assert!(matches!(
+            seen[0],
+            Observation::Failure(f) if f.consume == Some(ConsumeFailureDetail { stage, code: category, step: Some(step) })
+        ));
     }
     Ok(())
 }

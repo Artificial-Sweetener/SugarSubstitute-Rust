@@ -3,7 +3,7 @@
 //! Retain actual consumer errors at their authored stage without changing completion delivery.
 use super::StartupBackend;
 use std::error::Error;
-use sugarsubstitute_desktop::{StartupConsumeFailure, StartupConsumeStage};
+use sugarsubstitute_desktop::{StartupChildFailure, StartupConsumeFailure, StartupConsumeStage};
 
 /// Enrich only an actual returned error, preserving its original Box and direct typed category.
 pub(super) fn observe<B: StartupBackend, T>(
@@ -12,7 +12,8 @@ pub(super) fn observe<B: StartupBackend, T>(
 ) -> Result<T, Box<dyn Error>> {
     result.map_err(|cause| {
         let code = B::startup_cause_code(cause.as_ref());
-        StartupConsumeFailure::retain(stage, code, cause)
+        let step = StartupChildFailure::step_of(cause.as_ref());
+        StartupConsumeFailure::retain(stage, code, step, cause)
     })
 }
 
@@ -30,8 +31,10 @@ pub(super) fn delivery<B: StartupBackend, T>(
         StartupConsumeStage::CanvasDelivery
     };
     super::delivery::resolve(super::delivery::resolve(render, child), canvas).map_err(|cause| {
-        let code = B::startup_cause_code(super::delivery::first_cause(cause.as_ref()));
-        StartupConsumeFailure::retain(stage, code, cause)
+        let first = super::delivery::first_cause(cause.as_ref());
+        let code = B::startup_cause_code(first);
+        let step = StartupChildFailure::step_of(first);
+        StartupConsumeFailure::retain(stage, code, step, cause)
     })
 }
 

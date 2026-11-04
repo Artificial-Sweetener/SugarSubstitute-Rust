@@ -330,50 +330,52 @@ impl ProductionChild {
         self.grant = None;
         Ok(())
     }
+    /// Advance channel, acquisition, control and output work; each error names its step.
     pub(super) fn activity(&mut self, prepared: Option<&PreparedChildStartup>) -> Result<()> {
         if !self.shutdown.closing()
             && self.attempt.is_none()
             && let Some(pending) = self.acquire
             && !pending.retiring
-            && self.expire_acquisition()?
+            && step(Step::AcquisitionExpiry, self.expire_acquisition())?
         {
             return Ok(());
         }
+        // Acquisition cutoff recovery inspects the channel's concrete error before it is named.
         if let Err(cause) =
             self.bootstrap.channel_mut().activity(NonZeroUsize::MIN.saturating_add(31))
         {
-            return self.recover_acquisition_expiry(cause);
+            return step(Step::Channel, self.recover_acquisition_expiry(cause));
         }
         if self.output.closing() {
-            self.advance_output()?;
+            step(Step::OutputRetirement, self.advance_output())?;
         }
         let route = ActivityRoute::select(self.shutdown.closing(), self.attempt.as_ref());
         match route {
             ActivityRoute::Shutdown => {
-                self.retire_acquire()?;
-                return self.advance_shutdown();
+                step(Step::Shutdown, self.retire_acquire())?;
+                return step(Step::Shutdown, self.advance_shutdown());
             }
             ActivityRoute::AttemptCleanup => {
-                self.retire_acquire()?;
-                self.advance_control()?;
-                return self.advance_attempt();
+                step(Step::AttemptCleanup, self.retire_acquire())?;
+                step(Step::AttemptCleanup, self.advance_control())?;
+                return step(Step::AttemptCleanup, self.advance_attempt());
             }
             ActivityRoute::Startup => {}
         }
         if let Some(prepared) = prepared {
-            self.send_acquire(prepared)?;
+            step(Step::Acquisition, self.send_acquire(prepared))?;
         }
         if self.acquire.is_some_and(|p| p.retiring) {
             return Ok(());
         }
-        self.receive_acquire()?;
+        step(Step::Acquisition, self.receive_acquire())?;
         if self.acquire.is_some_and(|p| p.retiring) {
             return Ok(());
         }
-        self.advance_attempt()?;
-        self.advance_control()?;
-        self.advance_profile()?;
-        self.advance_output()
+        step(Step::Attempt, self.advance_attempt())?;
+        step(Step::Control, self.advance_control())?;
+        step(Step::Profile, self.advance_profile())?;
+        step(Step::OutputPull, self.advance_output())
     }
 }
 

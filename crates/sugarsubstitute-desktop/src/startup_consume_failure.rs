@@ -3,6 +3,9 @@
 //! Retain actual bounded startup consumer failures without observation inference.
 use crate::StartupCauseCode;
 use std::{error::Error, fmt};
+#[path = "startup_consume_failure/child_step.rs"]
+mod child_step;
+pub use child_step::{StartupChildFailure, StartupChildStep};
 
 /// The authored consumer operation that actually returned the first error.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,20 +34,23 @@ pub enum StartupConsumeStage {
 pub struct StartupConsumeFailure {
     stage: StartupConsumeStage,
     code: StartupCauseCode,
+    step: Option<StartupChildStep>,
     cause: Box<dyn Error>,
 }
 impl StartupConsumeFailure {
     /// Transfer the actual returned Box without inspecting arbitrary callbacks.
+    /// The caller supplies the category and child step of the first underlying cause.
     /// Already retained first-stage facts and their original cause remain unchanged.
     pub fn retain(
         stage: StartupConsumeStage,
         code: StartupCauseCode,
+        step: Option<StartupChildStep>,
         cause: Box<dyn Error>,
     ) -> Box<dyn Error> {
         if cause.downcast_ref::<Self>().is_some() {
             return cause;
         }
-        Box::new(Self { stage, code, cause })
+        Box::new(Self { stage, code, step, cause })
     }
     /// Return the actual first authored consumer stage.
     pub const fn stage(&self) -> StartupConsumeStage {
@@ -53,6 +59,10 @@ impl StartupConsumeFailure {
     /// Return the direct sealed cause category supplied by its authoritative owner.
     pub const fn code(&self) -> StartupCauseCode {
         self.code
+    }
+    /// Return the production child step that returned the cause, when the child named one.
+    pub const fn step(&self) -> Option<StartupChildStep> {
+        self.step
     }
     /// Borrow the same original Box payload without walking its sources.
     pub fn original(&self) -> &(dyn Error + 'static) {

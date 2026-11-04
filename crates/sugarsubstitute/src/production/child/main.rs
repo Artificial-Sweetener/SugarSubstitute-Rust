@@ -15,6 +15,16 @@ use failure::MainPreparationFailure;
 #[path = "main/terminal.rs"]
 mod terminal;
 use terminal::{MainTerminalIssue, MainTerminalOwner};
+
+/// Name a failed main window request by its terminal kind; other causes stay with their owners.
+pub(super) fn cause_code(
+    cause: &(dyn Error + 'static),
+) -> Option<sugarsubstitute_desktop::StartupCauseCode> {
+    cause
+        .downcast_ref::<MainTerminalIssue>()
+        .and_then(MainTerminalIssue::kind)
+        .map(sugarsubstitute_desktop::StartupCauseCode::MainTerminal)
+}
 type MainJob = OwnedJob<PreparedMain, MainPreparationFailure>;
 type MainTerminal = JobCompletion<PreparedMain, MainPreparationFailure>;
 pub(super) struct MainPreparation {

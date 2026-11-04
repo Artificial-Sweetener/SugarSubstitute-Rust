@@ -106,14 +106,17 @@ mod startup_consume_failure;
 #[allow(unsafe_code)]
 mod startup_error_dialog;
 mod startup_failure;
-pub use startup_consume_failure::{StartupConsumeFailure, StartupConsumeStage};
+pub use startup_consume_failure::{
+    StartupChildFailure, StartupChildStep, StartupConsumeFailure, StartupConsumeStage,
+};
 #[cfg(target_os = "windows")]
 pub use startup_error_dialog::show_startup_failure;
 mod timing;
 pub use startup_failure::{
     StartupBootstrapCause, StartupCanvasMessageCause, StartupCaptureState, StartupCauseCode,
-    StartupCloseFailure, StartupCloseStage, StartupNativeCause, StartupObservationKind,
-    StartupRequestCause,
+    StartupChallengeCause, StartupCloseFailure, StartupCloseStage, StartupNativeCause,
+    StartupObservationKind, StartupOutputCause, StartupPipeCause, StartupRequestCause,
+    StartupTimeCause,
 };
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]

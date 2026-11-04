@@ -217,3 +217,52 @@ fn actual_consume_execution_envelope_projects_native_code_and_preserves_original
     ));
     Ok(())
 }
+
+/// The bind5 incident relayed only `ChildDelivery` and `Opaque`; a named child step and the
+/// concrete category of the child's own errors must now reach the stage owner instead.
+#[test]
+fn child_delivery_keeps_the_child_step_and_projects_the_child_owned_category()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_desktop::{
+        StartupChildFailure, StartupChildStep as Step, StartupOutputCause, StartupTimeCause,
+    };
+    let authored: Box<dyn Error> = "Bounded native lifecycle messages full".into();
+    let address = authored.as_ref() as *const dyn Error as *const ();
+    for (step, cause, expected) in [
+        (Step::Channel, authored, Code::Opaque),
+        (
+            Step::Output,
+            Box::new(crate::production_output::OutputError::Deadline) as Box<dyn Error>,
+            Code::Output(StartupOutputCause::Deadline),
+        ),
+        (
+            Step::Panel,
+            Box::new(sugarsubstitute_application::panel::PanelClockError::Regressed),
+            Code::Time(StartupTimeCause::Regression),
+        ),
+    ] {
+        let error = delivery::<ProductionChild, _>(
+            Ok(42),
+            Err(StartupChildFailure::retain(step, cause)),
+            Ok(()),
+        )
+        .err()
+        .ok_or("Child error absent")?;
+        let retained = error.downcast_ref::<StartupConsumeFailure>().ok_or("Facts absent")?;
+        assert_eq!(retained.stage(), StartupConsumeStage::ChildDelivery);
+        assert_eq!(retained.code(), expected);
+        assert_eq!(retained.step(), Some(step));
+        let child = retained
+            .original()
+            .downcast_ref::<StartupChildFailure>()
+            .ok_or("Child step custody lost")?;
+        if step == Step::Channel {
+            assert!(std::ptr::eq(child.original() as *const dyn Error as *const (), address));
+        }
+    }
+    let plain = delivery::<ProductionChild, _>(Ok(42), Err("plain".into()), Ok(()))
+        .err()
+        .ok_or("Plain error absent")?;
+    assert_eq!(plain.downcast_ref::<StartupConsumeFailure>().and_then(|f| f.step()), None);
+    Ok(())
+}

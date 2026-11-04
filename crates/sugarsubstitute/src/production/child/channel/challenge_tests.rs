@@ -310,3 +310,41 @@ fn close_fences_every_phase_and_late_native_callback_without_erasing_pending_evi
     }
     Ok(())
 }
+
+/// A newer coordinator challenge while an admitted response awaits its acknowledgement fails
+/// the child; the relay must name that exchange rather than an opaque cause.
+#[test]
+fn newer_challenge_during_an_unacknowledged_response_reports_a_closed_busy_category() -> TestResult
+{
+    let binding = registered()?;
+    let mut ui = UiChallengeExchange::new(&binding)?;
+    let mut requests = ClientRequests::new(&binding)?;
+    processed(&mut ui, &binding)?;
+    let response = ui.response(&mut requests, Moment::from_nanos(1))?.ok_or("No response")?;
+    requests.admitted(response.header)?;
+    ui.admitted(response.header)?;
+    ui.expire(&mut requests, Moment::from_nanos(150))?;
+    let newer = ui.receive(
+        header(&binding),
+        UiChallengeId::new(42)?,
+        Moment::from_nanos(300),
+        Moment::from_nanos(150),
+    );
+    assert_eq!(newer, Err(ChallengeError::Busy));
+    let cause: Box<dyn Error> = Box::new(ChallengeError::Busy);
+    let step = sugarsubstitute_desktop::StartupChildFailure::retain(
+        sugarsubstitute_desktop::StartupChildStep::Channel,
+        cause,
+    );
+    assert_eq!(
+        super::super::cause_code(
+            step.downcast_ref::<sugarsubstitute_desktop::StartupChildFailure>()
+                .ok_or("Child step lost")?
+                .original()
+        ),
+        Some(sugarsubstitute_desktop::StartupCauseCode::Challenge(
+            sugarsubstitute_desktop::StartupChallengeCause::Busy
+        ))
+    );
+    Ok(())
+}

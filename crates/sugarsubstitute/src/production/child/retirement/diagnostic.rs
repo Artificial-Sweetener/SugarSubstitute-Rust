@@ -43,6 +43,18 @@ pub(super) fn cause_code(
     use sugarsubstitute_desktop::{
         StartupCauseCode as Code, StartupNativeCause as Native, StartupRequestCause as Request,
     };
+    if let Some(step) = cause.downcast_ref::<sugarsubstitute_desktop::StartupChildFailure>() {
+        return cause_code(step.original());
+    }
+    if let Some(inner) = diagnostics::preparation_cause(cause) {
+        return cause_code(inner);
+    }
+    if let Some(code) = channel::cause_code(cause)
+        .or_else(|| main::cause_code(cause))
+        .or_else(|| child_cause_code(cause))
+    {
+        return code;
+    }
     if let Some(native) =
         sugarsubstitute_execution::windows::NativeObservationError::from_execution_cause(cause)
     {
@@ -86,10 +98,6 @@ pub(super) fn cause_code(
             bootstrap::ChildBootstrapIssue::Configuration => Bootstrap::Configuration,
             bootstrap::ChildBootstrapIssue::Deadline => Bootstrap::Deadline,
         })
-    } else if let Some(crate::production_output::OutputError::Transcript(transcript)) =
-        cause.downcast_ref::<crate::production_output::OutputError>()
-    {
-        Code::Transcript(*transcript)
     } else if let Some(closed) =
         cause.downcast_ref::<sugarsubstitute_desktop::StartupCloseFailure>()
     {
@@ -97,4 +105,43 @@ pub(super) fn cause_code(
     } else {
         Code::direct(cause)
     }
+}
+
+/// Project the child's own expiry, output, panel-clock and wire-decoding owners.
+fn child_cause_code(
+    cause: &(dyn Error + 'static),
+) -> Option<sugarsubstitute_desktop::StartupCauseCode> {
+    use crate::production_output::OutputError;
+    use sugarsubstitute_application::panel::PanelClockError;
+    use sugarsubstitute_desktop::{
+        StartupCauseCode as Code, StartupOutputCause as Output, StartupTimeCause as Time,
+    };
+    if cause.downcast_ref::<requests::RequestExpiry>().is_some() {
+        return Some(Code::Request(sugarsubstitute_desktop::StartupRequestCause::Deadline));
+    }
+    if let Some(output) = cause.downcast_ref::<OutputError>() {
+        return Some(match output {
+            OutputError::Transcript(transcript) => Code::Transcript(*transcript),
+            OutputError::Input(_) => Code::Output(Output::Input),
+            OutputError::Clock(_) => Code::Output(Output::Clock),
+            OutputError::Time(_) => Code::Output(Output::Time),
+            OutputError::Claim(_) => Code::Output(Output::Claim),
+            OutputError::Protocol(_) => Code::Output(Output::Protocol),
+            OutputError::Identity => Code::Output(Output::Identity),
+            OutputError::Order => Code::Output(Output::Order),
+            OutputError::Cancelled => Code::Output(Output::Cancelled),
+            OutputError::Deadline => Code::Output(Output::Deadline),
+            OutputError::Poisoned => Code::Output(Output::Poisoned),
+            OutputError::Terminal(kind) => Code::Output(Output::Terminal(*kind)),
+        });
+    }
+    if let Some(clock) = cause.downcast_ref::<PanelClockError>() {
+        return Some(Code::Time(match clock {
+            PanelClockError::Regressed => Time::Regression,
+            PanelClockError::DeadlineOverflow => Time::Overflow,
+        }));
+    }
+    cause
+        .downcast_ref::<sugarsubstitute_supervision::lifecycle_protocol::ProtocolError>()
+        .map(|_| Code::Protocol)
 }

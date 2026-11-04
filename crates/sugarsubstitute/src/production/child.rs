@@ -59,7 +59,8 @@ use std::{error::Error, num::NonZeroUsize};
 use sugarsubstitute_application::startup::ConnectionBudget;
 use sugarsubstitute_contracts::{execution::*, lifecycle::*, startup::*};
 use sugarsubstitute_desktop::{
-    DesktopStartupCommand, DesktopStartupObservation, MainWindowSettings, StartupPreparationStep,
+    DesktopStartupCommand, DesktopStartupObservation, MainWindowSettings, StartupChildFailure,
+    StartupChildStep as Step, StartupPreparationStep,
 };
 use sugarsubstitute_execution::{
     ExecutionClient, ProcessLifetimeCapture,
@@ -69,6 +70,10 @@ use sugarsubstitute_execution::{
 };
 use sugarsubstitute_supervision::lifecycle_protocol::{LeaseReference, WireHeader};
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
+/// Name the consumer step whose call returned an error, keeping an inner step already named.
+fn step<T>(step: Step, result: Result<T>) -> Result<T> {
+    result.map_err(|cause| StartupChildFailure::retain(step, cause))
+}
 /// Inert application role data; paths/settings grant no native profile or backend privilege.
 pub(in crate::production) struct ChildInputs {
     pub(in crate::production) qualification: super::qualification::QualificationIntent,
@@ -233,25 +238,25 @@ impl ProductionChild {
             self.main.capture(batch);
             self.output.capture(batch);
             if let Err(cause) = bootstrap {
-                return Err(Box::new(cause));
+                return Err(StartupChildFailure::retain(Step::Bootstrap, Box::new(cause)));
             }
-            if self.expire_acquisition()? {
+            if step(Step::AcquisitionExpiry, self.expire_acquisition())? {
                 return Ok(());
             }
-            self.consume_main()?;
-            self.consume_output()?;
+            step(Step::Main, self.consume_main())?;
+            step(Step::Output, self.consume_output())?;
             self.activity(prepared)?;
-            self.advance_panel()
+            step(Step::Panel, self.advance_panel())
         })();
         self.failed |= result.is_err();
         self.bootstrap.report_preparation();
         if !self.shutdown.closing() && self.diagnostics.check().is_err() {
             self.failed = true;
-            return self.observe_diagnostics(result);
+            return step(Step::Diagnostics, self.observe_diagnostics(result));
         }
         match result {
             Err(cause) if self.attempt.is_some() && !self.shutdown.closing() => {
-                self.retain_attempt_failure(cause)?;
+                step(Step::AttemptRetention, self.retain_attempt_failure(cause))?;
                 Ok(())
             }
             result => result,

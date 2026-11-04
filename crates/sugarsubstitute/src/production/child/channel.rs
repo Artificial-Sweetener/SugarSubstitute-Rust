@@ -31,6 +31,9 @@ mod application;
 mod challenge;
 #[path = "channel/commands.rs"]
 mod commands;
+#[path = "channel/diagnostic.rs"]
+mod diagnostic;
+pub(super) use diagnostic::cause_code;
 #[path = "channel/expiry.rs"]
 pub(super) mod expiry;
 #[path = "channel/incoming.rs"]

@@ -86,8 +86,14 @@ pub(super) fn emit(operation: &'static str, cause: &(dyn Error + 'static)) -> bo
     if operation == "poll_frame" {
         if let Some(consumed) = cause.downcast_ref::<crate::StartupConsumeFailure>() {
             let actual = classify(operation, cause);
-            tracing::warn!(operation="desktop_failure_transition",boundary=?actual.boundary,kind=?actual.kind,
-                consume_stage=?consumed.stage(),category=%consumed.code(),"First owned desktop failure retained");
+            if let Some(step) = consumed.step() {
+                tracing::warn!(operation="desktop_failure_transition",boundary=?actual.boundary,kind=?actual.kind,
+                    consume_stage=?consumed.stage(),category=%consumed.code(),child_step=%step.token(),
+                    "First owned desktop failure retained");
+            } else {
+                tracing::warn!(operation="desktop_failure_transition",boundary=?actual.boundary,kind=?actual.kind,
+                    consume_stage=?consumed.stage(),category=%consumed.code(),"First owned desktop failure retained");
+            }
             return true;
         }
         return false;

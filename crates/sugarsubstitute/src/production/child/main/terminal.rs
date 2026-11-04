@@ -60,6 +60,10 @@ impl MainTerminalIssue {
             _ => None,
         }
     }
+    /// Return the retained request job's terminal kind without touching its outcome payload.
+    pub(in crate::production) fn kind(&self) -> Option<TerminalKind> {
+        self.0.get().map(|done| done.outcome.kind())
+    }
 }
 impl fmt::Debug for MainTerminalIssue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

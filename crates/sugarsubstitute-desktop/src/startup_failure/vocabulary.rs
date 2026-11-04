@@ -7,11 +7,12 @@
 //! without a second vocabulary. Every parser accepts exactly one canonical token, allocates
 //! nothing and retains no input.
 use super::{
-    StartupBootstrapCause, StartupCaptureState, StartupCauseCode, StartupCloseStage,
-    StartupNativeCause, StartupRequestCause,
+    StartupBootstrapCause, StartupCaptureState, StartupCauseCode, StartupChallengeCause,
+    StartupCloseStage, StartupNativeCause, StartupOutputCause, StartupPipeCause,
+    StartupRequestCause, StartupTimeCause,
 };
-use crate::StartupConsumeStage;
-use sugarsubstitute_contracts::transcript::TranscriptError;
+use crate::{StartupChildStep, StartupConsumeStage};
+use sugarsubstitute_contracts::{execution::TerminalKind, transcript::TranscriptError};
 
 /// Derive the token list and exact parser of a fieldless enum from one variant listing.
 ///
@@ -32,6 +33,47 @@ macro_rules! closed_tokens {
             pub fn parse(token: &str) -> Option<Self> {
                 Self::ALL.iter().copied().find(|variant| variant.token() == token)
             }
+        }
+    };
+    // A category with one nested variant emits `Nested(inner)` through its `Debug` form.
+    ($name:ident { $($variant:ident),+ $(,)? } nested $nested:ident($inner:path)) => {
+        impl $name {
+            /// Every fieldless variant, in declaration order.
+            pub const FIELDLESS: &'static [Self] = &[$(Self::$variant),+];
+
+            /// The fieldless variant's token, identical to its `Debug` form.
+            const fn fieldless_token(self) -> Option<&'static str> {
+                match self { $(Self::$variant => Some(stringify!($variant)),)+ Self::$nested(_) => None }
+            }
+
+            /// Decode one exact token, including the nested variant's inner token.
+            pub fn parse(token: &str) -> Option<Self> {
+                let nested = concat!(stringify!($nested), "(");
+                if let Some(inner) = token.strip_prefix(nested).and_then(|v| v.strip_suffix(')')) {
+                    return $inner(inner).map(Self::$nested);
+                }
+                Self::FIELDLESS.iter().copied().find(|variant| variant.fieldless_token() == Some(token))
+            }
+        }
+    };
+}
+
+/// Derive the variant list, token and exact parser of an enum owned by another crate.
+///
+/// The token match is exhaustive, so a variant added by the owning crate fails to compile here.
+macro_rules! foreign_tokens {
+    ($all:ident, $token:ident, $parse:ident, $name:ident { $($variant:ident),+ $(,)? }) => {
+        /// Every variant, in declaration order.
+        pub(super) const $all: &[$name] = &[$($name::$variant),+];
+
+        /// The variant's diagnostic token, identical to its `Debug` form.
+        const fn $token(value: $name) -> &'static str {
+            match value { $($name::$variant => stringify!($variant)),+ }
+        }
+
+        /// Decode one exact token; unknown, extended or differently cased text is refused.
+        pub(super) fn $parse(token: &str) -> Option<$name> {
+            $all.iter().copied().find(|variant| $token(*variant) == token)
         }
     };
 }
@@ -186,6 +228,78 @@ closed_tokens!(StartupBootstrapCause {
     Configuration,
     Deadline,
 });
+closed_tokens!(StartupPipeCause {
+    Closed,
+    Busy,
+    NotReady,
+    InvalidOperation,
+    DeadlineExpired,
+    InvalidDeadline,
+    InvalidMessage,
+    AlreadyTransferred,
+});
+closed_tokens!(StartupChallengeCause {
+    Registration,
+    Closed,
+    Identity,
+    Busy,
+    Replay,
+    Order,
+    Rejected
+});
+closed_tokens!(StartupOutputCause {
+    Input,
+    Clock,
+    Time,
+    Claim,
+    Protocol,
+    Identity,
+    Order,
+    Cancelled,
+    Deadline,
+    Poisoned,
+} nested Terminal(parse_terminal_kind));
+closed_tokens!(StartupTimeCause { Overflow, Regression });
+closed_tokens!(StartupChildStep {
+    Bootstrap,
+    AcquisitionExpiry,
+    Main,
+    Output,
+    Channel,
+    OutputRetirement,
+    Shutdown,
+    AttemptCleanup,
+    Acquisition,
+    Attempt,
+    Control,
+    Profile,
+    OutputPull,
+    Panel,
+    AttemptRetention,
+    Diagnostics,
+});
+foreign_tokens!(
+    TERMINAL_KINDS,
+    terminal_token,
+    parse_terminal_kind,
+    TerminalKind { Success, Failure, Panicked, Cancelled, TimedOut, Coalesced }
+);
+foreign_tokens!(
+    TRANSCRIPT_ERRORS,
+    transcript_token,
+    transcript,
+    TranscriptError {
+        ZeroIdentity,
+        Bound,
+        EmptyGap,
+        InvalidStyle,
+        ForeignResource,
+        Sequence,
+        StreamEnded,
+        Exhausted,
+        SnapshotCapacity,
+    }
+);
 closed_tokens!(StartupConsumeStage {
     Retry,
     ExecutionDrain,
@@ -223,6 +337,21 @@ impl StartupCauseCode {
         if let Some(inner) = wrapped("CanvasMessage(") {
             return StartupCanvasMessageCause::parse(inner).map(Self::CanvasMessage);
         }
+        if let Some(inner) = wrapped("Pipe(") {
+            return StartupPipeCause::parse(inner).map(Self::Pipe);
+        }
+        if let Some(inner) = wrapped("Challenge(") {
+            return StartupChallengeCause::parse(inner).map(Self::Challenge);
+        }
+        if let Some(inner) = wrapped("Output(") {
+            return StartupOutputCause::parse(inner).map(Self::Output);
+        }
+        if let Some(inner) = wrapped("Time(") {
+            return StartupTimeCause::parse(inner).map(Self::Time);
+        }
+        if let Some(inner) = wrapped("MainTerminal(") {
+            return parse_terminal_kind(inner).map(Self::MainTerminal);
+        }
         if let Some(inner) = wrapped("Os(") {
             return signed(inner).map(Self::Os);
         }
@@ -243,25 +372,11 @@ impl StartupCauseCode {
             "Denied" => Self::Denied,
             "InvalidInput" => Self::InvalidInput,
             "Io" => Self::Io,
+            "Execution" => Self::Execution,
+            "Protocol" => Self::Protocol,
             _ => return None,
         })
     }
-}
-
-/// Decode a transcript rejection by its `Debug` form.
-fn transcript(value: &str) -> Option<TranscriptError> {
-    Some(match value {
-        "ZeroIdentity" => TranscriptError::ZeroIdentity,
-        "Bound" => TranscriptError::Bound,
-        "EmptyGap" => TranscriptError::EmptyGap,
-        "InvalidStyle" => TranscriptError::InvalidStyle,
-        "ForeignResource" => TranscriptError::ForeignResource,
-        "Sequence" => TranscriptError::Sequence,
-        "StreamEnded" => TranscriptError::StreamEnded,
-        "Exhausted" => TranscriptError::Exhausted,
-        "SnapshotCapacity" => TranscriptError::SnapshotCapacity,
-        _ => return None,
-    })
 }
 
 /// Decode canonical signed decimal: no plus sign, leading zeroes or negative zero.

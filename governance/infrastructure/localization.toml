@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:e85dd4e86c308e2223a6418d8aa067d8038318672189d6ccc2083d3eef1b44ac"
+source_sha256 = "sha256:681b28e54f47b22772a3b85a231165b0c262b32bca8ab60b21e114729ef12195"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -408,7 +408,7 @@ rationale = "The explicit splash demo composes DesktopOptions.title from message
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/child/main.rs"
-source_sha256 = "sha256:b124d4dd258933ef94b0b3ad0a9a0b157999a866cacebcc4f9d66af4a95bc330"
+source_sha256 = "sha256:7961a596b73331ac0eea9df4c2b42b577f04bb67172c7767bce61df156d54f3e"
 kind = "presentation"
 rationale = "Reapply caption/recovery labels from the authenticated configuration locale to the retained main settings; diagnostics and backend transcript remain original."
 

@@ -3,9 +3,17 @@
 //! Retain original startup close errors with inert, closed diagnostic facts.
 
 use std::{error::Error, fmt, io::ErrorKind};
-use sugarsubstitute_contracts::transcript::TranscriptError;
+use sugarsubstitute_contracts::{
+    execution::{ExecutionError, TerminalKind, TimeError},
+    transcript::TranscriptError,
+};
+#[path = "startup_failure/child_causes.rs"]
+mod child_causes;
 #[path = "startup_failure/vocabulary.rs"]
 mod vocabulary;
+pub use child_causes::{
+    StartupChallengeCause, StartupOutputCause, StartupPipeCause, StartupTimeCause,
+};
 pub use vocabulary::{StartupCanvasMessageCause, StartupObservationKind};
 
 /// The first authored close operation that actually returned the retained error.
@@ -148,6 +156,20 @@ pub enum StartupCauseCode {
     Transcript(TranscriptError),
     /// A native canvas message could not be bound for delivery.
     CanvasMessage(StartupCanvasMessageCause),
+    /// Direct lifecycle pipe command rejection.
+    Pipe(StartupPipeCause),
+    /// Rejected coordinator UI watchdog challenge exchange.
+    Challenge(StartupChallengeCause),
+    /// Managed output ingestion failure other than a transcript rejection.
+    Output(StartupOutputCause),
+    /// Invalid monotonic clock observation or unrepresentable deadline.
+    Time(StartupTimeCause),
+    /// The execution owner failed an infrastructure operation such as its clock.
+    Execution,
+    /// A coordinator frame failed closed wire decoding.
+    Protocol,
+    /// The main window request job ended without success.
+    MainTerminal(TerminalKind),
 }
 
 impl StartupCauseCode {
@@ -183,6 +205,15 @@ impl StartupCauseCode {
                 ErrorKind::InvalidData | ErrorKind::InvalidInput => Self::InvalidInput,
                 _ => Self::Io,
             };
+        }
+        if let Some(time) = cause.downcast_ref::<TimeError>() {
+            return Self::Time(match time {
+                TimeError::Overflow => StartupTimeCause::Overflow,
+                TimeError::Regression => StartupTimeCause::Regression,
+            });
+        }
+        if cause.downcast_ref::<ExecutionError>().is_some() {
+            return Self::Execution;
         }
         Self::Opaque
     }

@@ -66,9 +66,11 @@ pub(in super::super) fn relay(run: RunKey, failure: Failure) {
                                 capture_snapshot=?startup.capture,code=%startup.code,
                                 "Observed first closed owned desktop failure");
     } else if let Some(consume) = failure.consume {
+        let child_step =
+            consume.step.map_or("None", sugarsubstitute_desktop::StartupChildStep::token);
         tracing::warn!(target: "sugarsubstitute::production::entry_activation::desktop_output",operation="desktop_child_failure",run=?run,
                                 boundary=%failure.boundary,kind=%failure.kind,
-                                consume_stage=?consume.stage,category=%consume.code,
+                                consume_stage=?consume.stage,category=%consume.code,child_step=%child_step,
                                 "Observed first closed owned desktop failure");
     } else if let Some(console) = failure.console {
         tracing::warn!(target: "sugarsubstitute::production::entry_activation::desktop_output",

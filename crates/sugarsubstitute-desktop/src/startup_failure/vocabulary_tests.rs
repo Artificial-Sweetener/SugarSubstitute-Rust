@@ -39,6 +39,14 @@ fn every_fieldless_failure_fact_decodes_from_its_emitted_form() {
         StartupBootstrapCause::parse(v)
     });
     round_trips(StartupConsumeStage::ALL, StartupConsumeStage::token, StartupConsumeStage::parse);
+    round_trips(StartupPipeCause::ALL, StartupPipeCause::token, StartupPipeCause::parse);
+    round_trips(StartupChallengeCause::ALL, StartupChallengeCause::token, |v| {
+        StartupChallengeCause::parse(v)
+    });
+    round_trips(StartupTimeCause::ALL, StartupTimeCause::token, StartupTimeCause::parse);
+    round_trips(StartupChildStep::ALL, StartupChildStep::token, StartupChildStep::parse);
+    round_trips(TERMINAL_KINDS, terminal_token, parse_terminal_kind);
+    round_trips(TRANSCRIPT_ERRORS, transcript_token, transcript);
     assert_eq!(StartupObservationKind::CanvasNativeMessage.to_string(), "CanvasNativeMessage");
 }
 
@@ -67,6 +75,17 @@ fn cause_samples() -> Vec<StartupCauseCode> {
     samples.extend(
         StartupCanvasMessageCause::ALL.iter().map(|cause| StartupCauseCode::CanvasMessage(*cause)),
     );
+    samples.extend(StartupPipeCause::ALL.iter().map(|cause| StartupCauseCode::Pipe(*cause)));
+    samples.extend(StartupChallengeCause::ALL.iter().map(|v| StartupCauseCode::Challenge(*v)));
+    samples.extend(StartupTimeCause::ALL.iter().map(|cause| StartupCauseCode::Time(*cause)));
+    samples.extend(StartupOutputCause::FIELDLESS.iter().map(|v| StartupCauseCode::Output(*v)));
+    for &kind in TERMINAL_KINDS {
+        samples.extend([
+            StartupCauseCode::Output(StartupOutputCause::Terminal(kind)),
+            StartupCauseCode::MainTerminal(kind),
+        ]);
+    }
+    samples.extend([StartupCauseCode::Execution, StartupCauseCode::Protocol]);
     for transcript in [
         TranscriptError::ZeroIdentity,
         TranscriptError::Bound,
@@ -106,7 +125,26 @@ fn cause_samples() -> Vec<StartupCauseCode> {
             | StartupCauseCode::Request(_)
             | StartupCauseCode::Bootstrap(_)
             | StartupCauseCode::Transcript(_)
-            | StartupCauseCode::CanvasMessage(_) => {}
+            | StartupCauseCode::CanvasMessage(_)
+            | StartupCauseCode::Pipe(_)
+            | StartupCauseCode::Challenge(_)
+            | StartupCauseCode::Output(
+                StartupOutputCause::Input
+                | StartupOutputCause::Clock
+                | StartupOutputCause::Time
+                | StartupOutputCause::Claim
+                | StartupOutputCause::Protocol
+                | StartupOutputCause::Identity
+                | StartupOutputCause::Order
+                | StartupOutputCause::Cancelled
+                | StartupOutputCause::Deadline
+                | StartupOutputCause::Poisoned
+                | StartupOutputCause::Terminal(_),
+            )
+            | StartupCauseCode::Time(_)
+            | StartupCauseCode::Execution
+            | StartupCauseCode::Protocol
+            | StartupCauseCode::MainTerminal(_) => {}
         }
     }
     samples
@@ -138,6 +176,16 @@ fn every_cause_code_decodes_from_its_emitted_form_and_noncanonical_text_is_refus
         "Transcript(Other)",
         "CanvasMessage(Other)",
         "CanvasMessage(Storage)x",
+        "Pipe(Other)",
+        "Challenge(busy)",
+        "Output(Terminal)",
+        "Output(Terminal(Other))",
+        "Output(Terminal(TimedOut)",
+        "Output(Time(Regression))",
+        "Time(Regression,1)",
+        "MainTerminal()",
+        "execution",
+        "Protocol(1)",
     ] {
         assert_eq!(StartupCauseCode::parse(refused), None, "{refused}");
     }

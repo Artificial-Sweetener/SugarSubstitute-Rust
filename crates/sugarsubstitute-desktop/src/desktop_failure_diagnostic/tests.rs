@@ -348,6 +348,7 @@ fn actual_poll_frame_consumer_failure_emits_one_closed_stage_without_inferred_ob
     let cause = crate::StartupConsumeFailure::retain(
         crate::StartupConsumeStage::ChildDelivery,
         crate::StartupCauseCode::Bootstrap(crate::StartupBootstrapCause::Transport),
+        Some(crate::StartupChildStep::Channel),
         original,
     );
     let mut first = None;
@@ -376,6 +377,7 @@ fn actual_poll_frame_consumer_failure_emits_one_closed_stage_without_inferred_ob
         ("kind", "Other"),
         ("consume_stage", "ChildDelivery"),
         ("category", "Bootstrap(Transport)"),
+        ("child_step", "Channel"),
     ] {
         assert!(events[0].iter().any(|(k, v)| k == key && v == value));
     }
@@ -388,6 +390,26 @@ fn actual_poll_frame_consumer_failure_emits_one_closed_stage_without_inferred_ob
     drop(events);
     drop(first);
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
+#[test]
+fn consumer_failure_without_a_child_step_emits_no_step_field() -> Result<(), Box<dyn Error>> {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let cause = crate::StartupConsumeFailure::retain(
+        crate::StartupConsumeStage::ExecutionDrain,
+        crate::StartupCauseCode::Challenge(crate::StartupChallengeCause::Busy),
+        None,
+        Box::new(std::io::Error::other("PRIVATE")),
+    );
+    let mut first = None;
+    tracing::dispatcher::with_default(&tracing::Dispatch::new(Sink(events.clone())), || {
+        DesktopError::retain_first(&mut first, DesktopError::boxed("poll_frame", cause));
+    });
+    let events = events.lock().map_err(|_| std::io::Error::other("Fixture lock"))?;
+    assert_eq!(events.len(), 1);
+    assert!(events[0].iter().any(|(k, v)| k == "category" && v == "Challenge(Busy)"));
+    assert!(!events[0].iter().any(|(k, v)| k == "child_step" || v.contains("PRIVATE")));
     Ok(())
 }
 

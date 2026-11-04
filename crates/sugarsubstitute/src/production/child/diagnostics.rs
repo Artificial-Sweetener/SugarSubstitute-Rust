@@ -15,6 +15,12 @@ impl ProductionChild {
         })
     }
 }
+/// Borrow the diagnostic or application cause a preparation diagnostic failure retained.
+pub(super) fn preparation_cause<'a>(
+    cause: &'a (dyn Error + 'static),
+) -> Option<&'a (dyn Error + 'static)> {
+    cause.downcast_ref::<PreparationDiagnosticFailure>().map(|failure| failure.cause.as_ref())
+}
 /// Keep real closed bootstrap predicates alongside the original diagnostic/application cause.
 #[derive(Debug)]
 struct PreparationDiagnosticFailure {
