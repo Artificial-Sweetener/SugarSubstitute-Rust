@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own PhotoPro workspace materials and Photoshop-style tool button presentation. */
+import { pluginToolbarPropertiesToggle } from '../frame/PluginFrameStyles.js';
 
 /** Share toolbar and cube tool states while retaining generation's segmented control. */
 export function photoProWorkspaceCss(): string {
@@ -35,7 +36,7 @@ export function photoProWorkspaceCss(): string {
     ${tools},${cubes},${add} { box-sizing:border-box; border:1px solid transparent; border-radius:0; background:transparent; box-shadow:none; color:var(--sc-photopro-tool-foreground); }
     ${tools} { width:28px; height:28px; min-width:28px; min-height:28px; padding:0; flex:none; }
     ${tools} :is(i,svg,.sc-application-gear) { width:14px; height:14px; font-size:14px; }
-    html[data-sc-visual-style="photopro"] [data-sc-plugin-toolbar] > :has(button > i:is([class~="icon-[lucide--panel-right]"],[class~="icon-[lucide--panel-left]"])) { width:28px; height:28px; }
+    html[data-sc-visual-style="photopro"] ${pluginToolbarPropertiesToggle} { width:28px; height:28px; }
     ${tools}:is(:hover,:focus-visible),${cubes}:is(:hover,:focus-within),${add}:is(:hover,:focus-visible) { background:var(--sc-photopro-tool-hover-fill); border-color:var(--sc-photopro-tool-hover-border); }
     ${tools}:is(:hover,:focus-visible) { border-radius:4px; }
     ${tools}:is(:active,[aria-pressed="true"],[aria-expanded="true"],[aria-checked="true"]),${cubes}[data-selected] { background:var(--sc-photopro-tool-selected-fill); border-color:var(--sc-photopro-tool-selected-border); }
