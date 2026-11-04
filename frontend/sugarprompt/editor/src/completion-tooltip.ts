@@ -33,6 +33,7 @@ import { completionWall, installCompletionWall } from './completion-wall-state.j
 import { prepareLoraWallLayout, loraWallVisibleRange } from './lora-wall-layout.js';
 import {
   createCompletionOption,
+  relabelCompletionRow,
   paintCompletionMedia,
   type CompletionOptionDOM,
 } from './completion-option-dom.js';
@@ -389,12 +390,14 @@ class CompletionTooltip implements TooltipView {
     this.scrollbar.session(session.result, session.presentation);
     if (this.disposed || this.view.state.field(completionSession) !== session) return;
     const model = requireValue(session.result.options[0], 'completion-tooltip').kind === 'lora';
-    if (this.presentation !== session.presentation) {
+    // Plain rows survive a new presentation and are relabeled in place below; model walls rebuild.
+    const relabel = this.presentation !== session.presentation;
+    if (relabel && (model || this.dom.classList.contains('sp-completion-wall'))) {
       this.nodes.clear();
       this.content.replaceChildren();
-      this.presentation = session.presentation;
-      this.dom.classList.toggle('sp-completion-wall', model);
     }
+    this.presentation = session.presentation;
+    this.dom.classList.toggle('sp-completion-wall', model);
     this.result = session.result;
     this.viewport.id = session.id;
     const wall = this.view.state.field(completionWall);
@@ -411,18 +414,21 @@ class CompletionTooltip implements TooltipView {
         this.nodes.delete(index);
       }
     for (const index of indices) {
+      const option = requireValue(session.result.options[index], 'completion-tooltip');
+      const count = session.result.options.length;
       let node = this.nodes.get(index);
+      if (node && relabel && !relabelCompletionRow(node, option, session.id, index, count)) {
+        const replaced = node.dom;
+        node = createCompletionOption(option, session.id, index, count);
+        this.nodes.set(index, node);
+        replaced.replaceWith(node.dom);
+      }
       if (!node) {
-        node = createCompletionOption(
-          requireValue(session.result.options[index], 'completion-tooltip'),
-          session.id,
-          index,
-          session.result.options.length,
-        );
+        node = createCompletionOption(option, session.id, index, count);
         this.nodes.set(index, node);
         this.content.append(node.dom);
       }
-      node.option = requireValue(session.result.options[index], 'completion-tooltip');
+      node.option = option;
       node.dom.setAttribute('aria-selected', String(index === session.selected));
       const box = model && wall?.result === session.result ? wall.layout.boxes[index] : null;
       if (model) {

@@ -92,3 +92,40 @@ test.each(['nodes-1', 'nodes-2'] as const)(
   },
   60_000,
 );
+
+test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s relabels the existing suggestion rows when typing refreshes the list',
+  async (renderer) => {
+    const page = await mountPrompt(fixture, renderer, '');
+    try {
+      await page.locator('.cm-content').focus();
+      await page.keyboard.type('blue');
+      await suggests(page, /^blue eyes,/, 'eyes');
+      const first = await page.getByRole('option').first().elementHandle();
+      if (!first) throw new Error('Missing first suggestion row');
+      const before = await first.getAttribute('aria-label');
+      await page.keyboard.type('_hai');
+      await page.waitForFunction(([row, label]) => row?.getAttribute('aria-label') !== label, [
+        first,
+        before,
+      ] as const);
+      const shown = await page.evaluate(
+        (row) => ({
+          first: document.querySelector('[role="option"]') === row,
+          label: row.querySelector('.cm-completionLabel')?.textContent ?? '',
+          aria: row.getAttribute('aria-label') ?? '',
+        }),
+        first,
+      );
+      expect(shown.first).toBe(true);
+      expect(shown.label).toMatch(/^blue hair/u);
+      expect(shown.aria.startsWith(shown.label)).toBe(true);
+      await page.keyboard.press('Tab');
+      await expectSource(page, `${shown.label.replace(/,$/u, '')}, `);
+      expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+  60_000,
+);
