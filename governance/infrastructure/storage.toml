@@ -1038,8 +1038,8 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:6a4c2432d0251d22b58964e77586d048dd7ba3ad1e42d7147c91ac1160eb5c70"
-capabilities = ["assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
+source_sha256 = "sha256:91c152afe6b8e6b146084aa25c34f82080ab9343235c3398ad9b191fac550de4"
+capabilities = ["assert_eq! restricted capability fragments", "std::fs::create_dir", "std::fs::metadata", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify actual protected rollover, restart, export and preservation on admitted native workers. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 

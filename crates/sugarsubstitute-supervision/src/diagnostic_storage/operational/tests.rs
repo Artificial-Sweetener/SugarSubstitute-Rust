@@ -123,3 +123,97 @@ fn native_writer_contention_and_overload_are_observable_without_new_pages() -> T
         Ok(())
     })
 }
+/// A writer terminated or cancelled between stage creation and publication leaves its exact
+/// stage behind. The next writer retires it under writer custody and keeps every page.
+#[test]
+fn interrupted_page_stage_is_retired_under_writer_custody_and_pages_survive() -> TestResult {
+    worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let path = temporary.path().join("operational");
+        protection::with(context, |protection| {
+            protection.directory(&path, Mode::CreateNew, context)?;
+            append_at(&path, &["operation=before\n".into()], 0, protection, context)?;
+            let page = std::fs::read(path.join("page-0.json"))?;
+            let root = Directory::open(&path, false)?;
+            let stage = StreamStage::plan(&root, "page-1.json", 64, context)?;
+            let name = stage.stage_name()?.to_owned();
+            let mut interrupted = stage.create(context)?;
+            interrupted.append(b"{\"schema\":1,", context)?;
+            drop(interrupted);
+            assert!(path.join(&name).exists());
+            append_at(&path, &["operation=after\n".into()], 0, protection, context)?;
+            assert!(!path.join(&name).exists());
+            assert_eq!(std::fs::read(path.join("page-0.json"))?, page);
+            let export = export_at(&path, protection, context)?;
+            let text = std::str::from_utf8(export.as_bytes()).map_err(io::Error::other)?;
+            assert!(text.contains("operation=before\n"));
+            assert!(text.ends_with("operation=after\n"));
+            assert_eq!(std::fs::read_dir(&path)?.count(), 4);
+            // Repeated interruptions past one bounded inventory page are all observed and retired.
+            for _ in 0..40 {
+                drop(StreamStage::plan(&root, "page-2.json", 8, context)?.create(context)?);
+            }
+            append_at(&path, &["operation=later\n".into()], 0, protection, context)?;
+            assert_eq!(std::fs::read_dir(&path)?.count(), 5);
+            // An interrupted stage left before any page or owner exists is also retired.
+            let fresh = temporary.path().join("fresh");
+            protection.directory(&fresh, Mode::CreateNew, context)?;
+            let root = Directory::open(&fresh, false)?;
+            drop(StreamStage::plan(&root, "owner", 8, context)?.create(context)?);
+            append_at(&fresh, &["operation=first\n".into()], 0, protection, context)?;
+            assert_eq!(std::fs::read(fresh.join("owner"))?, MARKER);
+            Ok(())
+        })?;
+        Ok(())
+    })
+}
+#[test]
+fn stage_lookalikes_and_oversized_stages_are_preserved_and_fail_closed() -> TestResult {
+    worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let path = temporary.path().join("operational");
+        protection::with(context, |protection| {
+            protection.directory(&path, Mode::CreateNew, context)?;
+            append_at(&path, &["operation=before\n".into()], 0, protection, context)?;
+            let identity = "0123456789abcdef0123456789abcdef";
+            for (name, directory) in [
+                ("record-stream-foreign".to_owned(), false),
+                (format!("record-stream-{}", identity.to_uppercase()), false),
+                (format!("record-stream-{identity}"), true),
+            ] {
+                let target = path.join(&name);
+                if directory {
+                    std::fs::create_dir(&target)?;
+                } else {
+                    std::fs::write(&target, b"preserved")?;
+                }
+                assert!(
+                    append_at(&path, &["operation=after\n".into()], 0, protection, context)
+                        .is_err()
+                );
+                assert!(export_at(&path, protection, context).is_err());
+                assert!(target.exists());
+                if directory {
+                    std::fs::remove_dir(&target)?;
+                } else {
+                    assert_eq!(std::fs::read(&target)?, b"preserved");
+                    std::fs::remove_file(&target)?;
+                }
+            }
+            let root = Directory::open(&path, false)?;
+            let stage = StreamStage::plan(&root, "page-1.json", PAGE_BYTES as u64 + 1, context)?;
+            let name = stage.stage_name()?.to_owned();
+            let mut oversized = stage.create(context)?;
+            for chunk in vec![b'x'; PAGE_BYTES + 1].chunks(8192) {
+                oversized.append(chunk, context)?;
+            }
+            drop(oversized);
+            assert!(
+                append_at(&path, &["operation=after\n".into()], 0, protection, context).is_err()
+            );
+            assert_eq!(std::fs::metadata(path.join(&name))?.len(), PAGE_BYTES as u64 + 1);
+            Ok(())
+        })?;
+        Ok(())
+    })
+}

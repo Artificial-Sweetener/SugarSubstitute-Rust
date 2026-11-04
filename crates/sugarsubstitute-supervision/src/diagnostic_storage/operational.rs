@@ -4,14 +4,15 @@
 //!
 //! Calls run on finite admitted execution workers. Shared durable storage owns
 //! account discovery, protection, native identity pins, staging and publication.
-//! Only recognized schema-one pages rotate. Unknown entries and incident stores
+//! Only recognized schema-one pages rotate. A page stage abandoned by an interrupted
+//! writer is retired under writer custody; other unknown entries and incident stores
 //! remain intact. No native handle or storage lease escapes a call.
 #[cfg(any(test, feature = "boundary-fixtures"))]
 use crate::durable_storage::protected::directories::Mode;
 use crate::durable_storage::{
     check,
-    files::Directory,
-    invalid, protection,
+    files::{self, Directory},
+    invalid, protection, retirement,
     streamed_record::{StreamRead, StreamStage},
 };
 use serde::{Deserialize, Serialize};
@@ -93,7 +94,7 @@ fn append_at(
     let _memory = context.memory().claim(2 * 1024 * 1024).map_err(io::Error::other)?;
     let root = Directory::open(path, false)?.resolved()?;
     let _writer = contention::acquire(protection, &root.path().join("writer"), context)?;
-    let entries = inventory(&root, context)?;
+    let entries = inventory(&root, protection, context)?;
     match read(&root, "owner", context) {
         Ok(bytes) if bytes == MARKER => {}
         Ok(_) => return Err(invalid("Operational diagnostic owner changed")),
@@ -132,7 +133,7 @@ fn export_at(
     let memory = context.memory().claim(2 * 1024 * 1024).map_err(io::Error::other)?;
     let root = Directory::open(path, false)?.resolved()?;
     let _writer = contention::acquire(protection, &root.path().join("writer"), context)?;
-    inventory(&root, context)?;
+    inventory(&root, protection, context)?;
     if read(&root, "owner", context)? != MARKER {
         return Err(invalid("Operational diagnostic owner changed"));
     }
@@ -154,21 +155,83 @@ fn export_at(
     Ok(OperationalDiagnosticExport { bytes, _memory: memory })
 }
 
-/// Refuse unknown siblings before publication; interrupted stages are preserved and observable.
-fn inventory(root: &Directory, context: &JobContext) -> io::Result<usize> {
+/// Refuse unknown siblings before publication and return the recognized entry count.
+///
+/// The caller holds the exclusive writer rendezvous, and every page stage is created under it,
+/// so a stage visible now belongs to a writer that was terminated, cancelled or expired before
+/// publishing. Such a stage never became a page; it is verified and retired so one interrupted
+/// write cannot block every later launch. Anything else unrecognized stays intact and fails.
+fn inventory(
+    root: &Directory,
+    protection: &protection::Protection,
+    context: &JobContext,
+) -> io::Result<usize> {
     let mut inventory = crate::RecordDirectory::open(root.path(), false, false, context)?;
-    let entries = inventory.page(true, context)?;
-    if entries.len() > PAGES + 2
-        || entries.iter().any(|entry| {
-            entry.directory
-                || entry.name != "owner"
-                    && entry.name != "writer"
-                    && !(0..PAGES).any(|slot| entry.name == format!("page-{slot}.json"))
-        })
-    {
+    let mut entries = inventory.page(true, context)?;
+    // Interrupted stages can push the directory past one bounded page; observe every entry.
+    loop {
+        let next = inventory.page(false, context)?;
+        if next.is_empty() {
+            break;
+        }
+        entries.extend(next);
+    }
+    let mut recognized = 0;
+    let mut interrupted = Vec::new();
+    for entry in &entries {
+        if !entry.directory && interrupted_page_stage(&entry.name) {
+            interrupted.push(entry.name.as_str());
+        } else if !entry.directory
+            && (entry.name == "owner"
+                || entry.name == "writer"
+                || (0..PAGES).any(|slot| entry.name == format!("page-{slot}.json")))
+        {
+            recognized += 1;
+        } else {
+            return Err(invalid("Unrecognized operational diagnostic storage is preserved"));
+        }
+    }
+    if recognized > PAGES + 2 {
         return Err(invalid("Unrecognized operational diagnostic storage is preserved"));
     }
-    Ok(entries.len())
+    for name in interrupted {
+        retire_interrupted_stage(root, name, protection, context)?;
+    }
+    Ok(recognized)
+}
+/// Match only the exact sibling names `StreamStage` allocates for page publication.
+fn interrupted_page_stage(name: &str) -> bool {
+    name.strip_prefix("record-stream-").is_some_and(|identity| {
+        let guid = identity.len() == 36
+            && identity.char_indices().all(|(index, ch)| {
+                if matches!(index, 8 | 13 | 18 | 23) {
+                    ch == '-'
+                } else {
+                    ch.is_ascii_digit() || ('A'..='F').contains(&ch)
+                }
+            });
+        let compact = identity.len() == 32
+            && identity.chars().all(|ch| ch.is_ascii_digit() || ('a'..='f').contains(&ch));
+        guid || compact
+    })
+}
+/// Retire one never-published stage only while it is a protected, single-link regular file
+/// within page admission, deleting exactly the inspected native identity.
+fn retire_interrupted_stage(
+    root: &Directory,
+    name: &str,
+    protection: &protection::Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    // The bounded stream reader rejects links, foreign protection and stages beyond page admission.
+    drop(StreamRead::open(root, name, PAGE_BYTES as u64, context)?);
+    let parent = root.retained()?;
+    let file = parent.read(name)?;
+    files::single_link(&file)?;
+    protection.verify_file(&file)?;
+    let identity = files::file_identity(&file)?;
+    drop(file);
+    retirement::file(&parent, name, identity)
 }
 /// Reject future schemas, duplicate sequences and invalid events without changing original bytes.
 fn pages(root: &Directory, context: &JobContext) -> io::Result<Vec<(usize, Page)>> {

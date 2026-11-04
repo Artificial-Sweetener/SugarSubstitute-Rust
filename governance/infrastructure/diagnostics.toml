@@ -24,9 +24,9 @@ rationale = "Process-global supported subscriber and original diagnostic failure
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:78bd879a24cce44d1f215fc80ec0383f35dd53387493956811cbc43636c6f22f"
+source_sha256 = "sha256:d58ca889c5d8d591d493825e765f5fb3871d15825bfcf684d714f7c65806648b"
 disposition = "storage"
-rationale = "Bounded operational pages and export through shared protected durable storage, separate from preserved incident records."
+rationale = "Bounded operational pages and export through shared protected durable storage, separate from preserved incident records. Under exclusive writer custody it retires only verified page stages abandoned by interrupted writers."
 
 [[records]]
 path = "installer/worker/main.ts"
