@@ -13,6 +13,15 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/**
+ * Comfy's properties-panel toggle inside the plugin toolbar, matched by its icon.
+ *
+ * Class selectors, not `[class~=…]`: Chromium cannot scope `:has()` invalidation for attribute selectors on
+ * `class`, so every class change anywhere (each prompt-editor keystroke) restyled the whole document.
+ */
+export const pluginToolbarPropertiesToggle =
+  '[data-sc-plugin-toolbar] > :has(button > i:is(.icon-\\[lucide--panel-right\\], .icon-\\[lucide--panel-left\\]))';
+
 /** Paint Plugin Mode's existing toolbar and remove orb-dependent frame geometry. */
 export const pluginFrameCss = `
   :root[data-sc-plugin-mode] { --sc-generation-top-radius:6px; }
@@ -28,5 +37,5 @@ export const pluginFrameCss = `
   .sc-plugin-toolbar-start .sc-application-gear { display:block; width:16px; height:16px; background:currentColor; mask:var(--sc-application-glyph) center/contain no-repeat; }
   .sc-application-gear[hidden] { display:none; }
   [data-sc-plugin-toolbar] > .sc-generation-strip { position:relative; top:auto; right:auto; margin-left:0; flex:none; order:10; align-self:center; align-items:center; }
-  [data-sc-plugin-toolbar] > :has(button > i:is([class~="icon-[lucide--panel-right]"], [class~="icon-[lucide--panel-left]"])) { order:11; }
+  ${pluginToolbarPropertiesToggle} { order:11; }
 `;
