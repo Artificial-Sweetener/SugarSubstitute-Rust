@@ -16,51 +16,7 @@
 /** Resolve the vendored editing artwork, tinted by the current text colour through a CSS mask. */
 import { h, type VNode } from 'vue';
 import type { CanvasToolId } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
-
-/** Microsoft Fluent UI System Icons, copied verbatim at the pinned upstream revision. */
-const FLUENT = [
-  'pan-zoom',
-  'move',
-  'brush',
-  'eraser',
-  'select-rectangle',
-  'select-lasso',
-  'transform',
-  'shared-edges',
-  'undo',
-  'redo',
-  'rotate-left',
-  'rotate-right',
-  'flip-horizontal',
-  'flip-vertical',
-] as const;
-/** SugarSubstitute's Fluent-derived shape artwork and QFluent's dialog artwork. */
-const SUBSTITUTE = [
-  'select-ellipse',
-  'mask-rectangle',
-  'mask-ellipse',
-  'mask-lasso',
-  'deselect',
-  'apply',
-  'close',
-  'modify',
-] as const;
-
-export type CanvasEditIconName = (typeof FLUENT)[number] | (typeof SUBSTITUTE)[number];
-
-const URLS = new Map<CanvasEditIconName, string>([
-  ...FLUENT.map(
-    (name) =>
-      [
-        name,
-        new URL(`../../../../icons/canvas-editing/${name}.svg`, import.meta.url).href,
-      ] as const,
-  ),
-  ...SUBSTITUTE.map(
-    (name) =>
-      [name, new URL(`../../../../canvas-editing/${name}.svg`, import.meta.url).href] as const,
-  ),
-]);
+import { canvasEditIconUrl, type CanvasEditIconName } from './CanvasEditArtwork.js';
 
 /** Each tool's artwork, as the reference catalogue assigns it. */
 export const CANVAS_TOOL_ICONS: Readonly<Record<CanvasToolId, CanvasEditIconName>> = Object.freeze({
@@ -80,7 +36,7 @@ export const CANVAS_TOOL_ICONS: Readonly<Record<CanvasToolId, CanvasEditIconName
 
 /** Express one icon as the CSS mask image its element is tinted through. */
 function maskImage(name: CanvasEditIconName): string {
-  return `url("${URLS.get(name) ?? ''}")`;
+  return `url("${canvasEditIconUrl(name)}")`;
 }
 
 /** Render one decorative icon; its accessible name belongs to the owning control. */

@@ -21,7 +21,8 @@ import type {
 } from '../application/CanvasEditController.js';
 import { canvasEditToolAvailable } from '../domain/CanvasEditTools.js';
 import { CanvasCoverageControls } from './CanvasCoverageControls.js';
-import { canvasEditIcon, type CanvasEditIconName } from './CanvasEditIcons.js';
+import type { CanvasEditIconName } from './CanvasEditArtwork.js';
+import { canvasEditIcon } from './CanvasEditIcons.js';
 import { CANVAS_EDIT_TEXT, CANVAS_TOOL_LABELS } from './CanvasEditText.js';
 
 /** Render an icon-only command with its name as tooltip and accessible label. */

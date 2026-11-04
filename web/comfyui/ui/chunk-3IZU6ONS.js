@@ -6,7 +6,7 @@ import {
   CANVAS_TOOL_ICONS,
   canvasEditIcon,
   createCanvasEditIcon
-} from "./chunk-OJAGEWGI.js";
+} from "./chunk-X5ULNSRV.js";
 import {
   defineComponent,
   h,

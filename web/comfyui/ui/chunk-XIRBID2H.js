@@ -1,16 +1,16 @@
 import {
   CanvasToolRail
-} from "./chunk-SPRG3KUF.js";
+} from "./chunk-3IZU6ONS.js";
 import {
   CanvasBrushOptions
-} from "./chunk-RFPYVIN5.js";
+} from "./chunk-NC4KX5LX.js";
 import {
   CanvasContextualToolbar
-} from "./chunk-RGC6RW6D.js";
+} from "./chunk-NOFDFIDV.js";
 import {
   canvasEditToolAvailable,
   iconButton
-} from "./chunk-CTNOBNH6.js";
+} from "./chunk-OWTPCN3N.js";
 import {
   CanvasCoverageControls
 } from "./chunk-36SKP3QA.js";

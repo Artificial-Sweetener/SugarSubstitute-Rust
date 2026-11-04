@@ -263,7 +263,12 @@ async function main(): Promise<void> {
       'output_canvas/presentation/vue',
       'canvas_editing/presentation',
     ],
-    ['menus/ContextMenu.js', 'menus/FloatingSurface.js'],
+    // Artwork resolves relative to its own module, so it keeps its canonical location.
+    [
+      'menus/ContextMenu.js',
+      'menus/FloatingSurface.js',
+      'canvas_editing/presentation/CanvasEditArtwork.js',
+    ],
   );
   deferBrowserCanvasModules(generatedRoot);
   stageStaticAssets();
