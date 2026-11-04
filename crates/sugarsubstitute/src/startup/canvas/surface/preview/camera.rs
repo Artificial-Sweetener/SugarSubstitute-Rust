@@ -14,8 +14,10 @@ impl NativeSurface {
 
     /// Publish one settled camera for the shown, committed final once motion and capture end
     /// and native acceptance matches the destination. Moves, previews, overview grids and
-    /// superseded selections publish nothing. The camera shares the presentation sequence and
-    /// watch storage; without a current watch or storage it is dropped like any observation.
+    /// superseded selections publish nothing, nor does an input document shown without a
+    /// selection, which has no selection revision to name. The camera shares the presentation
+    /// sequence and watch storage; without a current watch or storage it is dropped like any
+    /// observation.
     ///
     /// # Errors
     /// Preserves viewport snapshot, sequence and notification encoding failures.

@@ -7,7 +7,9 @@ use super::*;
 impl NativeSurface {
     /// Keep acknowledged native pixels during a same-attachment source replacement, and show
     /// them at changed geometry until a frame at that geometry is presented. Hidden surfaces
-    /// and revoked bindings withdraw them instead.
+    /// and revoked bindings withdraw them instead, as does a binding whose presented input
+    /// document left the screen without a document to replace it, such as the Output route
+    /// with no selected output.
     pub(in crate::startup::canvas) fn presentation<'a>(
         &self,
         session: &'a Session,
@@ -33,7 +35,10 @@ impl NativeSurface {
             .or(self.retained.as_ref())
             .and_then(|binding| {
                 let presented = binding.presented?;
-                if self.closed || !binding.committed {
+                if self.closed
+                    || !binding.committed
+                    || (binding.presented_input && !binding.shows_document(session))
+                {
                     return None;
                 }
                 Some(MainCanvasRetention {
@@ -113,7 +118,8 @@ impl NativeSurface {
         }
     }
 
-    /// Borrow the selected current frame only after the attachment requests commit.
+    /// Borrow the current frame only after the attachment requests commit and the binding
+    /// shows a document or a preview.
     pub(in crate::startup::canvas) fn frame<'a>(
         &self,
         session: &'a Session,
@@ -129,7 +135,9 @@ impl NativeSurface {
         } else {
             self.binding.as_ref()?
         };
-        if (!binding.selected && !self.has_preview_candidate() && !self.has_shown_preview())
+        if (!binding.shows_document(session)
+            && !self.has_preview_candidate()
+            && !self.has_shown_preview())
             || !binding.committed
         {
             return None;
@@ -189,6 +197,7 @@ impl NativeSurface {
             shown: placement,
             allocation: binding.allocation.ok_or("Canvas allocation disappeared")?,
         });
+        binding.presented_input = !preview && session.input_shown();
         let final_selected = !preview
             && accepted.is_some_and(|camera| {
                 Some(camera.source_revision) == binding.source_intent_revision

@@ -6,7 +6,8 @@ use super::*;
 use sugarsubstitute_desktop::canvas::CanvasGraphics;
 
 impl Session {
-    /// Request the device only after an output is selected for the embedded surface.
+    /// Request the device only once the embedded surface has content to present: a selected
+    /// output, an offered preview, or an input document the Input route shows.
     pub(crate) fn request_host_graphics(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing {
             return Err("Canvas graphics admission is closed".into());

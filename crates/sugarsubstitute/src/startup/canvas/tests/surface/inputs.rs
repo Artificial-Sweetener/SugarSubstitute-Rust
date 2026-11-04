@@ -7,6 +7,7 @@ use super::*;
 
 mod identities;
 mod persistence;
+mod presentation;
 mod sources;
 
 /// The workflow every fixture syncs.

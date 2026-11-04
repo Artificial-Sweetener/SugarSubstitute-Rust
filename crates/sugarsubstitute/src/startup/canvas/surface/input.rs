@@ -33,9 +33,10 @@ pub(in crate::startup) enum RoutedInput {
 }
 
 impl NativeSurface {
-    /// Publish the region only while a committed final image, not a preview or overview grid,
-    /// is shown at the acknowledged placement of the current geometry and no modal blocks it.
-    /// It offers drag-out for a single selected output whose content cannot pan.
+    /// Publish the region only while a committed document, a selected final image or the Input
+    /// route's input document but never a preview or overview grid, is shown at the
+    /// acknowledged placement of the current geometry and no modal blocks it. It offers
+    /// drag-out only for a single selected output whose content cannot pan.
     pub(in crate::startup::canvas) fn input_region(
         &self,
         session: &Session,
@@ -45,7 +46,7 @@ impl NativeSurface {
         let navigable = !self.closed
             && !self.restoring
             && binding.committed
-            && binding.selected
+            && binding.shows_document(session)
             && !binding.overview
             && !binding.modal
             && !self.has_shown_preview()

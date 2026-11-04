@@ -46,6 +46,7 @@ impl NativeSurface {
             drag_name: None,
             committed: false,
             presented: None,
+            presented_input: false,
         });
         self.hold(identity, request, claim, PendingKind::Prepare);
         self.poll_attachment(session)?;

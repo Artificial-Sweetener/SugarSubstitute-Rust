@@ -86,7 +86,7 @@ impl NativeSurface {
                 binding.allocation = Some(allocation);
                 let committed = binding.committed;
                 let wait = committed
-                    && (binding.selected || preview_shown)
+                    && (binding.shows_document(session) || preview_shown)
                     && projected.is_some()
                     && binding.presented.is_none_or(|previous| {
                         Some(previous.placement) != projected || previous.allocation != allocation
@@ -179,8 +179,11 @@ impl NativeSurface {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
                 }
                 binding.committed = true;
-                let kind =
-                    if binding.selected { PendingKind::Commit } else { PendingKind::EmptyCommit };
+                let kind = if binding.shows_document(session) {
+                    PendingKind::Commit
+                } else {
+                    PendingKind::EmptyCommit
+                };
                 self.hold(identity, request, claim, kind);
                 Ok(())
             }

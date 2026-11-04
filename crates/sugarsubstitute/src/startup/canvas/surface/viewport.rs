@@ -11,7 +11,8 @@ use sugarsubstitute_contracts::canvas_surface::{
 };
 
 impl NativeSurface {
-    /// Admit commands only on the selected, committed and visible attachment already authorized.
+    /// Admit commands only on the committed and visible attachment already authorized while it
+    /// shows a document or a preview.
     /// A read uses the same revision stream and waits for settled presentation without moving it.
     /// A camera command is refused with `unavailable` while a routed native gesture holds
     /// capture; the navigation tool owns the camera until that gesture's release or cancel.
@@ -25,7 +26,7 @@ impl NativeSurface {
     ) -> Result<(), Box<dyn Error>> {
         if !self.binding.as_ref().is_some_and(|binding| {
             binding.committed
-                && (binding.selected || self.has_shown_preview())
+                && (binding.shows_document(session) || self.has_shown_preview())
                 && binding.placement.is_some()
         }) {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);

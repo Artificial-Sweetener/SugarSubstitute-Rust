@@ -20,7 +20,9 @@ pub(super) enum Pending {
 impl Session {
     /// Show `surface`'s document on the Input route with `mask` as the editing tools' target.
     /// The swap completes on a later poll once the outgoing document's work has settled and
-    /// the surface's document has loaded; a newer route request replaces it.
+    /// the surface's document has loaded; a newer route request replaces it. The shown document
+    /// is presented without any output selection, so activation requests the embedded drawing
+    /// device an output selection would otherwise have requested.
     ///
     /// # Errors
     /// Rejects an unknown workflow, surface or mask, or a closing canvas, with
@@ -46,7 +48,7 @@ impl Session {
         } else {
             self.inputs.route = Some(Pending::Input { surface: identity, target });
         }
-        Ok(())
+        self.request_host_graphics()
     }
 
     /// Return to the Output route. Returns whether it shows the output that was showing before

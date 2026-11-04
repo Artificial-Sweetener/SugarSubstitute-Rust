@@ -82,9 +82,22 @@ struct Binding {
     presented_overview: bool,
     committed: bool,
     presented: Option<MainCanvasRetention>,
+    /// The presented pixels show the input document the Input route showed, so they are
+    /// retained only while the binding still shows a document.
+    presented_input: bool,
     /// Filename leaf of the selected single output, which a drag-out exports; none for an
     /// overview or comparison selection.
     drag_name: Option<String>,
+}
+
+impl Binding {
+    /// Whether this binding shows a document: its selected output, or the input document the
+    /// Input route shows, which needs no output selection. Presentation, geometry waits, camera
+    /// commands and routed input all treat either as the binding's shown content; previews and
+    /// overview grids keep their own rules.
+    fn shows_document(&self, session: &Session) -> bool {
+        self.selected || session.input_shown()
+    }
 }
 
 #[derive(Clone, Copy)]
