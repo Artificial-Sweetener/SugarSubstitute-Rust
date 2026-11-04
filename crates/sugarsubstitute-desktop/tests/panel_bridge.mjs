@@ -11,8 +11,12 @@ const policySource = readFileSync(new URL('../src/main_actor/panel/bridge_protoc
 const bulkSource = readFileSync(new URL('../src/main_actor/panel/bridge_bulk.js', import.meta.url), 'utf8');
 // Match the host's composition: the protocol expression receives the output surface preference.
 const policyFor = preference => `${policySource.trimEnd()}(${preference});\n`;
-const sources = [policyFor("'host'"), bulkSource, source];
-const windowedSources = [policyFor('undefined'), bulkSource, source];
+// Match the host's composition: the bulk expression receives the absolute reserved path.
+const bulkFor = path => `${bulkSource.trimEnd()}(${JSON.stringify(path)});\n`;
+const pageOrigin = 'http://127.0.0.1:8188';
+const bulkPath = '/__sugarsubstitute/bulk/';
+const sources = [policyFor("'host'"), bulkFor(bulkPath), source];
+const windowedSources = [policyFor('undefined'), bulkFor(bulkPath), source];
 const binding = '__sugarcubes_substitute_send_v3';
 const host = 'ai.artificialsweetener.sugarsubstitute';
 const session = 'session-12345678';
@@ -34,11 +38,11 @@ function transportError(error, code) {
   assert.equal(error.cause.code, `panel.transport.${code}`);
   return true;
 }
-function fixture(post, scripts = sources, fetch = undefined) {
+function fixture(post, scripts = sources, fetch = undefined, origin = pageOrigin) {
   const sent = [], received = [], events = new Map(), window = {};
   window.top = window;
   const context = createContext({ window, URLSearchParams, TextEncoder, TextDecoder, AbortController, fetch,
-    location: { search: `?sc-panel-host=${host}&sc-panel-session=${session}&sc-panel-transport=native` },
+    location: { origin, search: `?sc-panel-host=${host}&sc-panel-session=${session}&sc-panel-transport=native` },
     [binding]: payload => { if (post) post(payload); sent.push(payload); },
     addEventListener: (name, listener) => events.set(name, listener) });
   for (const script of scripts) new Script(script).runInContext(context);
@@ -51,7 +55,7 @@ function envelope(payload) {
 }
 const framed = (message, lane = 'o', ticket = maxTicket) => `1:${lane}:${ticket}:${JSON.stringify(message)}`;
 const grant = 'ab'.repeat(16);
-const bulkOrigin = 'https://sugarsubstitute-bulk.invalid/';
+const bulkBase = `${pageOrigin}${bulkPath}`;
 const bulkEnvelope = (token, bytes) => JSON.stringify({ transport: 'sugarsubstitute.bulk', version: 1, token, bytes });
 const settle = () => new Promise(resolve => setImmediate(resolve));
 // Fake only the browser fetch boundary; `respond` returns a response or throws for a network failure.
@@ -691,7 +695,7 @@ for (const request of [watch(), previewRequest('chunk')]) {
   });
 }
 
-test('maximum preview chunk fits both public bounds and oversized encoded bytes travel through the bulk origin', async () => {
+test('maximum preview chunk fits both public bounds and oversized encoded bytes travel through the bulk channel', async () => {
   const transfer = bulkFetch(), request = previewRequest('chunk'), f = fixture(undefined, sources, transfer.fetch);
   assert.equal(request.data.length, 10924);
   f.receipt('g', 'o', 1);
@@ -808,10 +812,10 @@ test('oversized ordinary request uploads under its credit grant and sends only t
   assert.deepEqual(f.sent, []);
   await settle();
   const [upload] = transfer.requests;
-  assert.equal(upload.url, `${bulkOrigin}u/${grant}`);
+  assert.equal(upload.url, `${bulkBase}u/${grant}`);
   assert.equal(upload.init.method, 'POST');
   assert.equal(upload.init.body, encoded);
-  for (const [key, value] of Object.entries({ mode: 'cors', credentials: 'omit', cache: 'no-store',
+  for (const [key, value] of Object.entries({ mode: 'same-origin', credentials: 'omit', cache: 'no-store',
     redirect: 'error', referrerPolicy: 'no-referrer' })) assert.equal(upload.init[key], value);
   assert.equal(upload.init.signal.aborted, false);
   assert.deepEqual(f.sent, [`1:o:3:${bulkEnvelope(grant, Buffer.byteLength(encoded))}`]);
@@ -847,7 +851,7 @@ test('oversized control and messages beyond the bulk bound refuse before custody
 });
 test('bulk reply downloads exact bytes, validates like inline and preserves host order', async () => {
   const reply = canvas(1, 'context.reply', { message: 'r'.repeat(40 * 1024 * 1024) }), text = JSON.stringify(reply);
-  const transfer = bulkFetch(url => url === `${bulkOrigin}d/${grant}` ? body(text) : body('', 404));
+  const transfer = bulkFetch(url => url === `${bulkBase}d/${grant}` ? body(text) : body('', 404));
   const f = fixture(undefined, sources, transfer.fetch), notification = control('configure');
   f.receipt('g', 'o', 1, grant);
   f.bridge.send(canvas());
@@ -906,4 +910,23 @@ test('pagehide aborts in-flight transfers and drops pending deliveries', async (
   assert.equal(signals[0].aborted, true);
   await settle();
   assert.deepEqual(f.received, []);
+});test('bulk URLs join the document origin captured at start to the host-supplied reserved path', async () => {
+  const remote = 'https://proxy.example', path = '/comfy/__sugarsubstitute/bulk/';
+  const reply = canvas(1, 'surface.reply', { address, revision: 1, status: 'applied', message: 'r'.repeat(20000) });
+  const text = JSON.stringify(reply);
+  const transfer = bulkFetch((url, init) => init.method === 'GET' ? body(text) : { status: 204 });
+  const scripts = [policyFor("'host'"), bulkFor(path), source];
+  const f = fixture(undefined, scripts, transfer.fetch, remote);
+  f.context.location.origin = 'https://elsewhere.example';
+  f.receipt('g', 'o', 1, grant);
+  f.bridge.send(selection('x'.repeat(20000)));
+  await settle();
+  assert.equal(f.deliver(JSON.parse(bulkEnvelope('cd'.repeat(16), Buffer.byteLength(text))), 1), true);
+  await settle();
+  assert.deepEqual(transfer.requests.map(({ url, init }) => [init.method, url, init.mode]), [
+    ['POST', `${remote}${path}u/${grant}`, 'same-origin'],
+    ['GET', `${remote}${path}d/${'cd'.repeat(16)}`, 'same-origin'],
+  ]);
+  assert.equal(f.received[0].message.length, reply.message.length);
+  assert.ok(!bulkSource.includes('.invalid'));
 });

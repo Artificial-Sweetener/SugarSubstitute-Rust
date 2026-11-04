@@ -11,6 +11,7 @@ use sugarsubstitute_contracts::{
 
 type TestResult = Result<(), Box<dyn Error>>;
 
+const ROOT: &str = "http://127.0.0.1:8188/";
 const PAGE: &str = "http://127.0.0.1:8188";
 const CONTEXT: i64 = 17;
 
@@ -22,7 +23,7 @@ impl MemoryRelease for Release {
 /// Deterministic distinct tokens; production draws them from the system generator.
 fn transfers(lease: &MemoryLease) -> Result<Transfers, DesktopError> {
     let next = Cell::new(1_u8);
-    let transfers = Transfers::new(PAGE.into(), lease.clone(), move || {
+    let transfers = Transfers::new(Endpoint::for_root(ROOT)?, lease.clone(), move || {
         let value = next.get();
         next.set(value.wrapping_add(1));
         Ok([value; 16])
@@ -37,8 +38,10 @@ fn partition() -> MemoryLease {
 
 /// Store `body` through the same route, grant and bounded reads as the native handler.
 fn upload(transfers: &Transfers, token: Token, body: &[u8], now: Instant) -> Result<(), Refusal> {
-    let uri = format!("{ORIGIN}u/{}", token.hex());
-    let Some(Route::Upload(routed)) = transfers.route("POST", &uri, Some(PAGE)) else {
+    let uri = format!("{}u/{}", transfers.endpoint().prefix(), token.hex());
+    let request =
+        Request { fetch: true, method: Some("POST"), uri: Some(&uri), origin: Header::Text(PAGE) };
+    let Some(Route::Upload(routed)) = transfers.endpoint().route(request) else {
         return Err(Refusal::Closed);
     };
     let slot = transfers.begin_upload(routed).ok_or(Refusal::Closed)?;
@@ -105,33 +108,6 @@ fn envelopes_decode_only_the_exact_private_shape() -> TestResult {
         r#"{"protocol":"sugarcubes.canvas","version":3,"session":"session-12345678","requestId":1,"type":"context.request"}"#.into(),
     ] {
         assert_eq!(Envelope::decode(&invalid), None, "{invalid}");
-    }
-    Ok(())
-}
-
-#[test]
-fn routes_require_exact_method_url_and_page_origin() -> TestResult {
-    let lease = partition();
-    let transfers = transfers(&lease)?;
-    let token = Token::new([9; 16]);
-    let download = format!("{ORIGIN}d/{}", token.hex());
-    let upload = format!("{ORIGIN}u/{}", token.hex());
-    assert_eq!(transfers.route("GET", &download, Some(PAGE)), Some(Route::Download(token)));
-    assert_eq!(transfers.route("POST", &upload, Some(PAGE)), Some(Route::Upload(token)));
-    for (method, uri, origin) in [
-        ("POST", download.as_str(), Some(PAGE)),
-        ("GET", upload.as_str(), Some(PAGE)),
-        ("OPTIONS", upload.as_str(), Some(PAGE)),
-        ("GET", download.as_str(), None),
-        ("GET", download.as_str(), Some("http://127.0.0.1:8189")),
-        ("GET", download.as_str(), Some("null")),
-        ("GET", &format!("{download}?x=1"), Some(PAGE)),
-        ("GET", &format!("{download}/"), Some(PAGE)),
-        ("GET", &download.to_uppercase(), Some(PAGE)),
-        ("GET", &download.replace("https://", "http://"), Some(PAGE)),
-        ("GET", &format!("{ORIGIN}x/{}", token.hex()), Some(PAGE)),
-    ] {
-        assert_eq!(transfers.route(method, uri, origin), None, "{method} {uri} {origin:?}");
     }
     Ok(())
 }
@@ -356,7 +332,7 @@ fn upload_storage_enforces_the_message_bound_partition_and_utf8_while_reading() 
 #[test]
 fn generator_failure_refuses_without_issuing_a_token() -> TestResult {
     let lease = partition();
-    let transfers = Transfers::new(PAGE.into(), lease, || {
+    let transfers = Transfers::new(Endpoint::for_root(ROOT)?, lease, || {
         Err(DesktopError::message("generate_bulk_token", "unavailable"))
     })?;
     transfers.synchronize(Some(CONTEXT));

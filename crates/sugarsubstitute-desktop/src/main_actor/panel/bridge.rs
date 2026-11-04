@@ -21,14 +21,21 @@ const SCRIPT_COUNT: usize = 3;
 /// The protocol script is a function expression invoked with the page's output surface
 /// preference. Only a composition-hosted browser advertises host presentation; a windowed
 /// browser leaves the preference absent so the page presents its canvas itself. The bulk script
-/// installs before the transport, which requires both the policy and the bulk origin helper.
-fn scripts(hosting: MainHosting) -> [String; SCRIPT_COUNT] {
+/// is a function expression invoked with the endpoint's absolute reserved path, which it appends
+/// to the document's own `location.origin`. It installs before the transport, which requires
+/// both the policy and the bulk channel helper.
+fn scripts(
+    hosting: MainHosting,
+    endpoint: &crate::main_bulk::Endpoint,
+) -> Result<[String; SCRIPT_COUNT], DesktopError> {
     let preference = if hosting.presents_native_canvas() { "'host'" } else { "undefined" };
-    [
+    let path = serde_json::to_string(endpoint.path())
+        .map_err(|cause| DesktopError::new("compose_panel_bridge", cause))?;
+    Ok([
         format!("{}({preference});\n", PROTOCOL_SCRIPT.trim_end()),
-        BULK_SCRIPT.to_owned(),
+        format!("{}({path});\n", BULK_SCRIPT.trim_end()),
         TRANSPORT_SCRIPT.to_owned(),
-    ]
+    ])
 }
 
 /// Own every setup callback, script identifier and registration until checked removal.
@@ -48,6 +55,7 @@ impl Bridge {
         events: Rc<Events>,
         lease: &MemoryLease,
         hosting: MainHosting,
+        endpoint: &crate::main_bulk::Endpoint,
     ) -> Result<Self, DesktopError> {
         let claim = lease
             .claim(64 * 1024)
@@ -56,7 +64,7 @@ impl Bridge {
             core,
             shared: callback::Shared::new(events)?,
             ledger: Ledger::new(SCRIPT_COUNT),
-            sources: scripts(hosting),
+            sources: scripts(hosting, endpoint)?,
             scripts: std::array::from_fn(|_| None),
             _claim: claim,
         })

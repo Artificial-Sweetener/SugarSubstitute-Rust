@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-// Move oversized panel messages through the host-owned bulk origin as exact JSON text.
-// Tokens are host-issued and single-use; the host validates every uploaded byte again.
-(() => {
-  const origin = 'https://sugarsubstitute-bulk.invalid/';
+// Move oversized panel messages as exact JSON text through the host-intercepted reserved path
+// on this document's own origin, which a `connect-src 'self'` policy admits. The host invokes
+// this expression with the absolute reserved path; tokens are host-issued and single-use, and
+// the host validates every uploaded byte again.
+(path => {
+  // Captured at document start, before page scripts run.
+  const base = location.origin + path;
   const inline = 16384, max = 100663296;
   // Captured at document start, before page scripts can replace them.
   const fetchNative = globalThis.fetch, Abort = globalThis.AbortController;
@@ -12,13 +15,13 @@
   let closed = false;
   const token = value => typeof value === 'string' && /^[0-9a-f]{32}$/.test(value);
   // Hold each transfer's abort handle until its body settles so pagehide can stop it.
-  function request(path, init, read) {
+  function request(route, init, read) {
     if (closed || typeof fetchNative !== 'function' || typeof Abort !== 'function')
       return Promise.reject(new TypeError(''));
     const abort = new Abort();
     transfers.add(abort);
-    return new Promise(resolve => resolve(Reflect.apply(fetchNative, globalThis, [origin + path,
-      { ...init, signal: abort.signal, mode: 'cors', credentials: 'omit', cache: 'no-store',
+    return new Promise(resolve => resolve(Reflect.apply(fetchNative, globalThis, [base + route,
+      { ...init, signal: abort.signal, mode: 'same-origin', credentials: 'omit', cache: 'no-store',
         redirect: 'error', referrerPolicy: 'no-referrer' }])))
       .then(read).finally(() => transfers.delete(abort));
   }
@@ -80,4 +83,4 @@
   });
   Object.defineProperty(globalThis, '__sugarcubes_substitute_bulk_v1', { value: bulk });
   globalThis.__sugarcubes_substitute_install_v3?.();
-})();
+})

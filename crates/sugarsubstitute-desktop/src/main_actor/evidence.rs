@@ -157,6 +157,7 @@ impl MainActor {
                         self.events()?.clone(),
                         self.request()?.storage_lease(),
                         self.hosting(),
+                        self.bulk.endpoint(),
                     )?);
                     None
                 } else {

@@ -726,12 +726,12 @@ rationale = "The native bootstrap policy validates session query identities and 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js"
-source_sha256 = "sha256:158054025803b438e583153e561386a02d3ba7b77b7b6e284b63c561b0a9fb10"
+source_sha256 = "sha256:c37b552f226cbddafd351a0d93026e530482f082b896e41ee241ad5173cebf9e"
 kind = "native"
-rationale = "The bulk-origin transport helper moves exact JSON bytes through host-issued single-use fetch tokens; it defines technical properties and empty protocol errors and constructs no product-facing text or locale choice."
+rationale = "The bulk channel transport helper moves exact JSON bytes through host-issued single-use fetch tokens on a reserved same-origin path; it defines technical properties and empty protocol errors and constructs no product-facing text or locale choice."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:44740f18974d2412a2339cfd39a6f9e1746bf9d1aa79e8954ec33508311d1578"
+source_sha256 = "sha256:d460c21f3025978229748a1b3a4d2cd5af9a23b12a81fb8051bdf7e3b4649a1d"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."

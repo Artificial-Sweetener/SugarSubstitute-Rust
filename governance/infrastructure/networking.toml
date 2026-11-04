@@ -59,16 +59,16 @@ rationale = "Isolated installed-ComfyUI browser qualification uses its supported
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:158054025803b438e583153e561386a02d3ba7b77b7b6e284b63c561b0a9fb10"
+source_sha256 = "sha256:c37b552f226cbddafd351a0d93026e530482f082b896e41ee241ad5173cebf9e"
 boundary = "browser"
-rationale = "The panel bridge fetches only the reserved host-intercepted bulk origin with host-issued single-use tokens, no credentials, no cache, no redirects and AbortController teardown; WebView2 answers it in-process and nothing reaches the network."
+rationale = "The panel bridge fetches only the host-intercepted reserved path on its own document origin with host-issued single-use tokens, same-origin mode, no credentials, no cache, no redirects and AbortController teardown; WebView2 answers every request under that path in-process and none reaches the network or the ComfyUI server."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:44740f18974d2412a2339cfd39a6f9e1746bf9d1aa79e8954ec33508311d1578"
+source_sha256 = "sha256:d460c21f3025978229748a1b3a4d2cd5af9a23b12a81fb8051bdf7e3b4649a1d"
 boundary = "fixture"
-rationale = "The isolated JavaScript VM fixture fakes the browser fetch boundary to exercise the production bulk-origin upload, download, ordering and teardown without any network access."
+rationale = "The isolated JavaScript VM fixture fakes the browser fetch boundary to exercise the production bulk channel upload, download, same-origin URL construction, ordering and teardown without any network access."
 
 [[records]]
 path = "installer/prepare-runtime.mjs"

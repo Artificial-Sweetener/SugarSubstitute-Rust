@@ -60,7 +60,7 @@ impl Drop for NativeString {
 pub(crate) struct Receivers {
     subscriptions: Vec<Subscription>,
     navigation: navigation::Navigation,
-    bulk: bulk::BulkOrigin,
+    bulk: bulk::BulkChannel,
     downloads: Rc<downloads::Owner>,
     operations: Rc<completion::Operations>,
     events: Rc<Events>,
@@ -81,7 +81,7 @@ impl Receivers {
         let mut owner = Self {
             subscriptions: Vec::new(),
             navigation: navigation::Navigation::new(origin),
-            bulk: bulk::BulkOrigin::new(transfers),
+            bulk: bulk::BulkChannel::new(transfers),
             downloads: downloads::Owner::new(origin)?,
             operations: completion::Operations::new(events.clone())?,
             events,

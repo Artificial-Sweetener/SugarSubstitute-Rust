@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Carry oversized panel messages through single-use tokens on one host-owned origin.
+//! Carry oversized panel messages through single-use tokens on a host-intercepted path.
 //!
-//! The page context is untrusted: other extensions share it, so the bulk origin moves only
+//! The channel occupies [`endpoint::RESERVED_PATH`] under the connected frontend root on the
+//! page's own origin (see [`Endpoint`]); the host answers it in-process and nothing reaches the
+//! network.
+//! The page context is untrusted: other extensions share it, so the channel moves only
 //! exact JSON bytes and grants nothing. An uploaded body re-enters the same framing, ticket,
 //! session and decode admission as an inline lane message. A downloaded body reaches the
 //! bridge's unchanged reply or notification validation. Every token is 128 random bits,
@@ -18,14 +21,11 @@ use std::{
 };
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryClaimError, MemoryLease};
 
+mod endpoint;
 mod wire;
+pub(crate) use endpoint::{Endpoint, Header, Request};
 pub(crate) use wire::{Envelope, Route, Token};
 
-/// The reserved origin; `.invalid` never resolves, so only the host's handler can answer it.
-pub(crate) const ORIGIN: &str = "https://sugarsubstitute-bulk.invalid/";
-/// The WebView2 request filter that routes every bulk-origin fetch to the host's handler.
-#[cfg(target_os = "windows")]
-pub(crate) const FILTER: &str = "https://sugarsubstitute-bulk.invalid/*";
 /// Largest serialized message carried in either direction, in UTF-8 bytes.
 ///
 /// A 64 MiB raster is 89,478,488 base64 characters; the remainder covers its JSON.
@@ -232,19 +232,19 @@ impl State {
 
 /// Own every bulk token and body for one main lifetime's current panel document.
 pub(crate) struct Transfers {
-    origin: String,
+    endpoint: Endpoint,
     lease: MemoryLease,
     random: Box<dyn Fn() -> Result<[u8; 16], DesktopError>>,
     state: RefCell<State>,
 }
 
 impl Transfers {
-    /// Bind the registry to the page origin allowed to fetch and to its byte partition.
+    /// Bind the registry to the connected frontend's reserved endpoint and its byte partition.
     ///
-    /// `origin` is the exact serialized page origin (`http://127.0.0.1:8188`); `lease` is the
-    /// dedicated partition bounding in-flight bytes; `random` returns 16 cryptographic bytes.
+    /// `endpoint` names the only URLs the host answers; `lease` is the dedicated partition
+    /// bounding in-flight bytes; `random` returns 16 cryptographic bytes.
     pub(crate) fn new(
-        origin: String,
+        endpoint: Endpoint,
         lease: MemoryLease,
         random: impl Fn() -> Result<[u8; 16], DesktopError> + 'static,
     ) -> Result<Self, DesktopError> {
@@ -253,13 +253,12 @@ impl Transfers {
             .staged
             .try_reserve_exact(MAX_DOWNLOADS)
             .map_err(|cause| DesktopError::new("allocate_bulk_transfers", cause))?;
-        Ok(Self { origin, lease, random: Box::new(random), state: RefCell::new(state) })
+        Ok(Self { endpoint, lease, random: Box::new(random), state: RefCell::new(state) })
     }
 
-    /// Borrow the page origin echoed in CORS responses.
-    #[cfg(target_os = "windows")]
-    pub(crate) fn origin(&self) -> &str {
-        &self.origin
+    /// Borrow the reserved endpoint this registry's tokens are served from.
+    pub(crate) fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
     }
 
     /// Fence a changed document exactly as panel admission does: old tokens never cross it.
@@ -297,22 +296,6 @@ impl Transfers {
         state.received = None;
         state.grant = Some(Grant { token, context, ticket });
         Ok(token)
-    }
-
-    /// Match one native request to a live operation without consuming anything.
-    ///
-    /// The method, exact URL and CORS `Origin` must all match; there is no query, fragment,
-    /// alternate spelling or redirect.
-    pub(crate) fn route(&self, method: &str, uri: &str, origin: Option<&str>) -> Option<Route> {
-        if origin != Some(self.origin.as_str()) {
-            return None;
-        }
-        let path = uri.strip_prefix(ORIGIN)?;
-        match (method, path.split_at_checked(2)?) {
-            ("GET", ("d/", token)) => Token::parse(token).map(Route::Download),
-            ("POST", ("u/", token)) => Token::parse(token).map(Route::Upload),
-            _ => None,
-        }
     }
 
     /// Consume a staged message for its one native response.

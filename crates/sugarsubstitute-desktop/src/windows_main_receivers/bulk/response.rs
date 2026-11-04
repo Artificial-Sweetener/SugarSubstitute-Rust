@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Construct bulk-origin responses and the read-only stream that serves one staged message.
+//! Construct bulk channel responses and the read-only stream that serves one staged message.
 //!
-//! WebView2 may read a response stream from a background thread, so the stream is agile and
-//! holds only immutable bytes, an atomic cursor and the bytes' memory claim, which drop when
-//! WebView2 releases its last reference.
+//! The channel is same-origin, so no response grants cross-origin (CORS) access: a document on
+//! another origin can never read one. WebView2 may read a response stream from a background
+//! thread, so the stream is agile and holds only immutable bytes, an atomic cursor and the
+//! bytes' memory claim, which drop when WebView2 releases its last reference.
 
 use super::*;
 use crate::main_bulk::Download;
@@ -21,30 +22,25 @@ use windows::{
 /// Every response forbids caching and content sniffing.
 const PRIVATE: &str = "Cache-Control: no-store\r\nX-Content-Type-Options: nosniff";
 
-/// Serve one staged message to the page origin that requested it.
+/// Serve one staged message to the page that requested it.
 pub(super) fn message(
     environment: &ICoreWebView2Environment,
-    origin: &str,
     download: Download,
 ) -> Result<ICoreWebView2WebResourceResponse, DesktopError> {
     let (bytes, claim) = download.into_parts();
     let stream: IStream = Body { bytes, position: AtomicU64::new(0), _claim: claim }.into();
-    let headers = format!(
-        "Content-Type: application/json; charset=utf-8\r\n{PRIVATE}\r\nAccess-Control-Allow-Origin: {origin}\r\nVary: Origin"
-    );
+    let headers = format!("Content-Type: application/json; charset=utf-8\r\n{PRIVATE}");
     create(environment, Some(&stream), 200, w!("OK"), &headers)
 }
 
-/// Acknowledge a received upload to the page origin; the lane envelope names it next.
+/// Acknowledge a received upload; the lane envelope names it next.
 pub(super) fn accepted(
     environment: &ICoreWebView2Environment,
-    origin: &str,
 ) -> Result<ICoreWebView2WebResourceResponse, DesktopError> {
-    let headers = format!("{PRIVATE}\r\nAccess-Control-Allow-Origin: {origin}\r\nVary: Origin");
-    create(environment, None, 204, w!("No Content"), &headers)
+    create(environment, None, 204, w!("No Content"), PRIVATE)
 }
 
-/// Answer every unmatched or refused request without CORS access or a body.
+/// Answer every unmatched or refused request without a body.
 pub(super) fn missing(
     environment: &ICoreWebView2Environment,
 ) -> Result<ICoreWebView2WebResourceResponse, DesktopError> {

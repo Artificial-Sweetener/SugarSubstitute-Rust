@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Spell bulk tokens, envelopes and origin routes exactly; every other spelling is rejected.
+//! Spell bulk tokens, envelopes and channel routes exactly; every other spelling is rejected.
 
 use super::MAX_MESSAGE_BYTES;
 use crate::DesktopError;
@@ -105,7 +105,7 @@ impl Envelope {
     }
 }
 
-/// The two operations the bulk origin serves; everything else is answered with 404.
+/// The two operations the bulk channel serves; everything else is answered with 404.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Route {
     /// `GET /d/<token>` retrieves one staged host message.
