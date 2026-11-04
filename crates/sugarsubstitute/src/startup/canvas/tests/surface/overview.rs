@@ -81,14 +81,10 @@ fn an_overview_records_each_lifecycle_step_once_through_its_reply() -> Result<()
     use crate::canvas_surface_diagnostic::{Operation, Stage, Status, Wait};
     let mut fixture = Fixture::empty()?;
     let lines = DiagnosticLines::default();
-    let writer = lines.clone();
-    let guard =
-        tracing::subscriber::set_default(crate::diagnostics::fixture_subscriber(move || {
-            writer.clone()
-        }));
+    let capture = lines.observe();
     present_grid(&mut fixture, 3)?;
     wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
-    drop(guard);
+    drop(capture);
     let records = lines.requests(3)?;
     assert!(
         records

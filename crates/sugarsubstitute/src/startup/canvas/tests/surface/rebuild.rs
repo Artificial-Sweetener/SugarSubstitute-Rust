@@ -72,14 +72,10 @@ fn a_selection_whose_cached_source_is_corrupt_is_applied_from_its_rebuild()
         .to_path_buf();
     assert!(corrupt_archives(&directory, 320, 160)? > 0, "the wide archive was not cached");
     let lines = DiagnosticLines::default();
-    let writer = lines.clone();
-    let guard =
-        tracing::subscriber::set_default(crate::diagnostics::fixture_subscriber(move || {
-            writer.clone()
-        }));
+    let capture = lines.observe();
     fixture.select(6, "wide.png")?;
     let replied = fixture.complete(6);
-    drop(guard);
+    drop(capture);
     replied?;
     let rebound = lines
         .requests(6)?

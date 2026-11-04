@@ -197,18 +197,11 @@ disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
 [[records]]
-path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/overview.rs"
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/capture.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:ab31a6586e384d4a2c5af65dbb659c48c2065586de55023f0e2db4bf9d6a163c"
+source_sha256 = "sha256:8fbb9b06352433084e9da0d186786e3e035a9d7b605731b14eef4e97c37c5119"
 disposition = "fixture"
-rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
-
-[[records]]
-path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/rebuild.rs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:f359f7bd37fdbd8d808c8f2b2c52f903a8a8719300c3f5fa68e6a4b71b4f13c8"
-disposition = "fixture"
-rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+rationale = "Canvas surface tests capture the application formatter's output on their own thread, with a second never-installed registrar keeping shared callsite interest stable under parallel tests; runtime construction is unchanged."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/shutdown.rs"
