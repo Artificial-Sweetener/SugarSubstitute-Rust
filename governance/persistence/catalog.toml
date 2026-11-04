@@ -714,6 +714,31 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# Closed bulk channel refusal facts use the existing authenticated 512-byte stderr decoder.
+[[formats]]
+id = "child-bulk-channel-refusal-diagnostic"
+owner = "sugarsubstitute-desktop"
+sources = ["crates/sugarsubstitute-desktop/src/bulk_channel_diagnostic.rs"]
+source_sha256 = "sha256:9caa10cde7bb9433a7e9c019d193d4f5055a0c6f2dad5d077aa720adf366aeec"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "child-bulk-channel-refusal-diagnostic-decoder"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/bulk.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output.rs"]
+source_sha256 = "sha256:5dcdb6109950a8b4cd0f011696a9e328794ce288d664f7e95d58fc9d01acf1f4"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
 # Optional closed console observations preserve legacy fields and confer no authority.
 # Older decoders ignore enriched records; canonical operation/code grammar has one owner.
 
@@ -733,7 +758,7 @@ migrations = []
 id = "child-console-first-failure-diagnostic-decoder"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/console.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/failure.rs"]
-source_sha256 = "sha256:b1126b77d574b5316ff65bee2ce568143bff25e8cb6f5f9de71612fa0871b8b7"
+source_sha256 = "sha256:e2f563105cecd069d8c274d5bde4814610ba07e40873a295f7e3c9d2f41e1624"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -964,7 +989,7 @@ migrations = []
 id = "desktop-startup-readiness-acknowledgement-diagnostic"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/production/startup_readiness_diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output.rs"]
-source_sha256 = "sha256:c2e075539f974e5a784f3c35afeb7698dd3847eeecaec3afa5d1ce76829f0697"
+source_sha256 = "sha256:23bb281a7c8d9427fa4ee91c38f63e8d6f184b95d35fd1887710c154078e4c2a"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -976,7 +1001,7 @@ migrations = []
 id = "desktop-canvas-surface-request-diagnostic"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/canvas_surface_diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output.rs"]
-source_sha256 = "sha256:9e93aa49c5029ecea98a22215ae10ac2103d1812737efde9eef3de70e423e922"
+source_sha256 = "sha256:e003491258595f9873a092a6f72e454cc417ba65843ef7ca89655b3c7932828d"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1465,7 +1490,7 @@ migrations = []
 id = "native-panel-admission-v1"
 owner = "sugarsubstitute-desktop"
 sources = ["crates/sugarsubstitute-desktop/src/main_panel_ingress.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js", "crates/sugarsubstitute-desktop/src/main_bulk.rs", "crates/sugarsubstitute-desktop/src/main_bulk/wire.rs", "crates/sugarsubstitute-desktop/src/main_bulk/endpoint.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/admission.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/delivery.rs"]
-source_sha256 = "sha256:a0146c5cf0e69ce3587e822cb1482d174f51390c565f6088ff1a4c97a090dfeb"
+source_sha256 = "sha256:8d89013b22d781a86c3d9350d1df335328717800d6e2560f7279dfe1f754face"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

@@ -9,6 +9,7 @@
 
 use super::{Route, Token};
 use crate::DesktopError;
+use crate::bulk_channel_diagnostic::{Miss, Origin};
 
 /// Reserved path segment appended to the frontend root the host navigates to.
 ///
@@ -123,22 +124,41 @@ impl Endpoint {
     /// The request must be a Fetch API request with the exact method and URL: there is no query,
     /// fragment, alternate spelling or trailing segment. A present `Origin` header must be this
     /// page's origin. An absent one is admitted because browsers omit it from same-origin `GET`
-    /// requests; the single-use token remains the capability either way. `None` means the
-    /// caller answers with a local refusal.
-    pub(crate) fn route(&self, request: Request<'_>) -> Option<Route> {
-        let origin_admitted = match request.origin {
-            Header::Absent => true,
-            Header::Text(origin) => origin == self.origin,
-            Header::Unreadable => false,
+    /// requests; the single-use token remains the capability either way.
+    ///
+    /// # Errors
+    /// Returns the first failed check, in the order URL, prefix, route, capability form, origin
+    /// and resource context, so a later [`Miss`] proves every earlier check passed. The caller
+    /// answers any miss with a local refusal.
+    pub(crate) fn route(&self, request: Request<'_>) -> Result<Route, Miss> {
+        let path = request
+            .uri
+            .ok_or(Miss::UrlUnreadable)?
+            .strip_prefix(self.prefix.as_str())
+            .ok_or(Miss::PrefixMismatch)?;
+        let (route, token) = path.split_at_checked(2).ok_or(Miss::RouteMismatch)?;
+        let route: fn(Token) -> Route = match (request.method, route) {
+            (Some("GET"), "d/") => Route::Download,
+            (Some("POST"), "u/") => Route::Upload,
+            _ => return Err(Miss::RouteMismatch),
         };
-        if !request.fetch || !origin_admitted {
-            return None;
+        let token = Token::parse(token).ok_or(Miss::MalformedCapability)?;
+        if !matches!(self.origin(request.origin), Origin::Absent | Origin::Matching) {
+            return Err(Miss::ForeignOrigin);
         }
-        let path = request.uri?.strip_prefix(self.prefix.as_str())?;
-        match (request.method?, path.split_at_checked(2)?) {
-            ("GET", ("d/", token)) => Token::parse(token).map(Route::Download),
-            ("POST", ("u/", token)) => Token::parse(token).map(Route::Upload),
-            _ => None,
+        if !request.fetch {
+            return Err(Miss::NonFetchContext);
+        }
+        Ok(route(token))
+    }
+
+    /// Classify a request's `Origin` header against this page's origin.
+    pub(crate) fn origin(&self, header: Header<'_>) -> Origin {
+        match header {
+            Header::Absent => Origin::Absent,
+            Header::Text(origin) if origin == self.origin => Origin::Matching,
+            Header::Text(_) => Origin::Other,
+            Header::Unreadable => Origin::Unreadable,
         }
     }
 }

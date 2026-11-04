@@ -155,6 +155,13 @@ disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
 [[records]]
+path = "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/bulk_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:29001c9b945c8cf5b3e830df6942f9aba4d94cfc731917f385170c8d236e96bd"
+disposition = "fixture"
+rationale = "Captures the application formatter's output as the child's stderr and the parent's log to prove a desktop bulk channel refusal crosses the relay; runtime construction is unchanged."
+
+[[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/desktop_output/qualification_tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:c7bdf65c626ce00a65b4686155352d7293de9ee0dd44b3bac5c221698ad680f6"

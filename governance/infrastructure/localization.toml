@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:49f61f0640f6dd6d981c33ccf58e506eb951b6f4d026877c36d37df8bbbfef9f"
+source_sha256 = "sha256:2bd309b323ceab8c0b72231b19b3b194b78c24c223b3f930fbe81f95a20c014c"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 

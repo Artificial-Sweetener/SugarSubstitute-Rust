@@ -41,10 +41,10 @@ fn upload(transfers: &Transfers, token: Token, body: &[u8], now: Instant) -> Res
     let uri = format!("{}u/{}", transfers.endpoint().prefix(), token.hex());
     let request =
         Request { fetch: true, method: Some("POST"), uri: Some(&uri), origin: Header::Text(PAGE) };
-    let Some(Route::Upload(routed)) = transfers.endpoint().route(request) else {
+    let Ok(Route::Upload(routed)) = transfers.endpoint().route(request) else {
         return Err(Refusal::Closed);
     };
-    let slot = transfers.begin_upload(routed).ok_or(Refusal::Closed)?;
+    let slot = transfers.begin_upload(routed).map_err(|_| Refusal::Closed)?;
     let mut buffer = transfers.upload_buffer();
     let mut offset = 0;
     while buffer.fill(|chunk| {
@@ -123,10 +123,10 @@ fn staged_messages_are_single_use_bounded_and_claimed_until_served() -> TestResu
     let named = Envelope::decode(std::str::from_utf8(&encoded)?).ok_or("Missing envelope")?;
     assert_eq!(named.bytes, body.len());
     assert!(lease.claim(SESSION_BYTES - body.len() as u64 + 1).is_err());
-    let served = transfers.take_download(named.token, now).ok_or("Missing staged message")?;
+    let served = transfers.take_download(named.token, now).map_err(|miss| format!("{miss}"))?;
     assert_eq!(served.bytes(), body.as_slice());
     assert_eq!(served.claimed(), body.len() as u64);
-    assert!(transfers.take_download(named.token, now).is_none(), "token replayed");
+    assert!(matches!(transfers.take_download(named.token, now), Err(Miss::DownloadUnknown)));
     drop(served);
     assert!(lease.claim(SESSION_BYTES).is_ok());
     let mut tokens = Vec::new();
@@ -159,7 +159,7 @@ fn staged_messages_expire_and_in_flight_bytes_stay_within_the_partition() -> Tes
         .map_err(|cause| format!("{cause:?}"))?;
     assert!(matches!(transfers.stage(CONTEXT, vec![b'c'; 1], now), Err(Refusal::Memory(_))));
     let later = now + LIFETIME;
-    assert!(transfers.take_download(first.token, later).is_none(), "expired token served");
+    assert!(matches!(transfers.take_download(first.token, later), Err(Miss::DownloadExpired)));
     assert!(lease.claim(SESSION_BYTES).is_ok(), "expired bodies kept their claims");
     Ok(())
 }
@@ -174,8 +174,8 @@ fn a_changed_document_or_closed_window_releases_every_token_and_body() -> TestRe
     let grant = transfers.grant(CONTEXT, Ticket(3))?;
     transfers.synchronize(Some(CONTEXT + 1));
     assert!(lease.claim(SESSION_BYTES).is_ok());
-    assert!(transfers.take_download(staged.token, now).is_none());
-    assert!(transfers.begin_upload(grant).is_none());
+    assert!(matches!(transfers.take_download(staged.token, now), Err(Miss::DownloadUnknown)));
+    assert!(matches!(transfers.begin_upload(grant), Err(Miss::UploadUnknown)));
     assert!(transfers.grant(CONTEXT + 1, Ticket(4)).is_err(), "a fenced registry reopened");
     let reopened = self::transfers(&lease)?;
     reopened.grant(CONTEXT, Ticket(5))?;
@@ -262,7 +262,7 @@ fn upload_tokens_are_single_use_and_bound_to_their_document_ticket_and_size() ->
     let body = vec![b'{'; 20 * 1024 * 1024];
     let token = transfers.grant(CONTEXT, Ticket(7))?;
     upload(&transfers, token, &body, now).map_err(|cause| format!("{cause:?}"))?;
-    assert!(transfers.begin_upload(token).is_none(), "upload grant replayed");
+    assert!(matches!(transfers.begin_upload(token), Err(Miss::UploadUnknown)), "grant replayed");
     assert!(transfers.take_upload(CONTEXT, Ticket(8), envelope(token, body.len()), now).is_none());
     assert!(
         transfers.take_upload(CONTEXT, Ticket(7), envelope(token, body.len()), now).is_none(),
@@ -281,7 +281,7 @@ fn upload_tokens_are_single_use_and_bound_to_their_document_ticket_and_size() ->
         transfers.take_upload(CONTEXT, Ticket(10), envelope(token, 1), now).is_none(),
         "an envelope without a body was admitted"
     );
-    assert!(transfers.begin_upload(token).is_none(), "an envelope left its grant live");
+    assert!(matches!(transfers.begin_upload(token), Err(Miss::UploadUnknown)), "grant left live");
 
     let token = transfers.grant(CONTEXT, Ticket(11))?;
     upload(&transfers, token, &body, now).map_err(|cause| format!("{cause:?}"))?;
@@ -320,11 +320,19 @@ fn upload_storage_enforces_the_message_bound_partition_and_utf8_while_reading() 
     assert!(small.claim(UPLOAD_STEP as u64).is_ok());
 
     let token = transfers.grant(CONTEXT, Ticket(5))?;
-    let slot = transfers.begin_upload(token).ok_or("Missing grant")?;
+    let slot = transfers.begin_upload(token).map_err(|miss| format!("{miss}"))?;
     let mut buffer = transfers.upload_buffer();
     assert!(matches!(buffer.fill(|_| None), Err(Refusal::Read)));
     assert!(matches!(buffer.fill(|chunk| Some(chunk.len() + 1)), Err(Refusal::Read)));
     drop((slot, buffer));
+    for (refusal, miss) in [
+        (Refusal::Closed, Miss::UploadClosed),
+        (Refusal::Size, Miss::UploadSize),
+        (Refusal::Capacity, Miss::UploadCapacity),
+        (Refusal::Read, Miss::UploadRead),
+    ] {
+        assert_eq!(refusal.upload_miss(), miss);
+    }
     assert!(lease.claim(SESSION_BYTES).is_ok());
     Ok(())
 }

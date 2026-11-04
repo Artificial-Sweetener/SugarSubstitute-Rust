@@ -14,6 +14,7 @@
 //!
 //! All state is UI-affine. Callers pass the observation instant so expiry is deterministic.
 
+use crate::bulk_channel_diagnostic::Miss;
 use crate::{DesktopError, MainWindowRequest, main_panel_ingress::Ticket};
 use std::{
     cell::RefCell,
@@ -67,6 +68,20 @@ impl std::fmt::Display for Refusal {
             Self::Read => "Bulk transfer body could not be read",
             Self::Native(_) => "Bulk transfer token or envelope could not be produced",
         })
+    }
+}
+
+impl Refusal {
+    /// The closed diagnostic reason this refusal reports when it ends an accepted upload.
+    pub(crate) const fn upload_miss(&self) -> Miss {
+        match self {
+            Self::Closed => Miss::UploadClosed,
+            Self::Size => Miss::UploadSize,
+            Self::Capacity => Miss::UploadCapacity,
+            Self::Memory(_) => Miss::UploadMemory,
+            Self::Read => Miss::UploadRead,
+            Self::Native(_) => Miss::UploadNative,
+        }
     }
 }
 
@@ -299,26 +314,46 @@ impl Transfers {
     }
 
     /// Consume a staged message for its one native response.
-    pub(crate) fn take_download(&self, token: Token, now: Instant) -> Option<Download> {
+    ///
+    /// # Errors
+    /// Reports a token that names no staged message, one whose lifetime ended by `now`, and one
+    /// staged for a panel document that is no longer current. The token is spent either way.
+    pub(crate) fn take_download(&self, token: Token, now: Instant) -> Result<Download, Miss> {
         let mut state = self.state.borrow_mut();
-        state.purge(now);
-        let index = state.staged.iter().position(|staged| staged.token == token)?;
+        let index = state
+            .staged
+            .iter()
+            .position(|staged| staged.token == token)
+            .ok_or(Miss::DownloadUnknown)?;
         let staged = state.staged.swap_remove(index);
-        state.current(staged.context).then_some(staged.download)
+        state.purge(now);
+        if staged.expires <= now {
+            return Err(Miss::DownloadExpired);
+        }
+        if !state.current(staged.context) {
+            return Err(Miss::DownloadStale);
+        }
+        Ok(staged.download)
     }
 
     /// Consume the upload capability before reading any request body.
-    pub(crate) fn begin_upload(&self, token: Token) -> Option<UploadSlot> {
+    ///
+    /// # Errors
+    /// Reports a token that names no live grant, and a grant issued for a panel document that is
+    /// no longer current, which is spent.
+    pub(crate) fn begin_upload(&self, token: Token) -> Result<UploadSlot, Miss> {
         let mut state = self.state.borrow_mut();
-        if state.grant.as_ref().is_none_or(|grant| grant.token != token) {
-            return None;
+        let grant = match state.grant.take() {
+            Some(grant) if grant.token == token => grant,
+            other => {
+                state.grant = other;
+                return Err(Miss::UploadUnknown);
+            }
+        };
+        if !state.current(grant.context) {
+            return Err(Miss::UploadStale);
         }
-        let grant = state.grant.take()?;
-        state.current(grant.context).then_some(UploadSlot {
-            token: grant.token,
-            context: grant.context,
-            ticket: grant.ticket,
-        })
+        Ok(UploadSlot { token: grant.token, context: grant.context, ticket: grant.ticket })
     }
 
     /// Lend storage claimed from the session partition for one request body.

@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode only complete closed preparation fields, discarding every other raw line.
 use sugarsubstitute_contracts::{execution::TerminalKind, transcript::OutputStream};
+#[path = "diagnostic/bulk.rs"]
+pub(super) mod bulk;
 #[path = "diagnostic/close.rs"]
 pub(super) mod close;
 #[path = "diagnostic/console.rs"]
@@ -69,6 +71,7 @@ pub(super) enum Observation {
     Probe(sugarsubstitute_desktop::frontend_probe_diagnostic::Record),
     Readiness(crate::production::startup_readiness_diagnostic::Record),
     Canvas(crate::canvas_surface_diagnostic::Record),
+    Bulk(sugarsubstitute_desktop::bulk_channel_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
 }
@@ -87,9 +90,13 @@ pub(super) struct Diagnostic {
     probe_emitted: u8,
     probe_timeout_seen: bool,
     canvas_emitted: u16,
+    bulk_emitted: u16,
 }
 /// Canvas request lifecycle records relayed per child run; later records are discarded.
 const CANVAS_RECORDS: u16 = 4096;
+/// Bulk channel refusals relayed per child run; a page can provoke them, so later ones are
+/// discarded.
+const BULK_RECORDS: u16 = 256;
 impl Diagnostic {
     pub(super) const fn new() -> Self {
         Self {
@@ -105,6 +112,7 @@ impl Diagnostic {
             probe_emitted: 0,
             probe_timeout_seen: false,
             canvas_emitted: 0,
+            bulk_emitted: 0,
         }
     }
     /// The authenticated output owner validates Run before these inert byte facts.
@@ -150,6 +158,16 @@ impl Diagnostic {
                         if self.canvas_emitted < CANVAS_RECORDS {
                             self.canvas_emitted += 1;
                             emit(Observation::Canvas(record));
+                        }
+                    } else if let Some(record) =
+                        sugarsubstitute_desktop::bulk_channel_diagnostic::Record::parse(
+                            &self.bytes[..self.length],
+                        )
+                    {
+                        // Page-provoked refusals keep their own budget, apart from the phase cap.
+                        if self.bulk_emitted < BULK_RECORDS {
+                            self.bulk_emitted += 1;
+                            emit(Observation::Bulk(record));
                         }
                     } else if let Some(probe) =
                         sugarsubstitute_desktop::frontend_probe_diagnostic::Record::parse(

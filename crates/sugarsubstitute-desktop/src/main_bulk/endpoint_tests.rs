@@ -3,6 +3,7 @@
 //! Derive the reserved same-origin prefix and match only its exact routes.
 
 use super::*;
+use crate::bulk_channel_diagnostic::{Miss, Origin};
 use std::error::Error;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -46,13 +47,13 @@ fn local_and_remote_roots_reserve_the_same_path_on_their_own_origin() -> TestRes
         let page = Header::Text(origin);
         assert_eq!(
             endpoint.route(observed("GET", &download, Header::Absent)),
-            Some(Route::Download(token))
+            Ok(Route::Download(token))
         );
-        assert_eq!(endpoint.route(observed("GET", &download, page)), Some(Route::Download(token)));
-        assert_eq!(endpoint.route(observed("POST", &upload, page)), Some(Route::Upload(token)));
+        assert_eq!(endpoint.route(observed("GET", &download, page)), Ok(Route::Download(token)));
+        assert_eq!(endpoint.route(observed("POST", &upload, page)), Ok(Route::Upload(token)));
         assert_eq!(
             endpoint.route(observed("POST", &upload, Header::Absent)),
-            Some(Route::Upload(token))
+            Ok(Route::Upload(token))
         );
     }
     Ok(())
@@ -95,7 +96,11 @@ fn routes_match_only_their_own_scheme_host_port_and_base_path() -> TestResult {
         (&remote, format!("https://proxy.example:8443/comfy/__sugarsubstitute/bulk/d/{token}")),
         (&remote, format!("https://other.example/comfy/__sugarsubstitute/bulk/d/{token}")),
     ] {
-        assert_eq!(endpoint.route(observed("GET", &uri, Header::Absent)), None, "{uri}");
+        assert_eq!(
+            endpoint.route(observed("GET", &uri, Header::Absent)),
+            Err(Miss::PrefixMismatch),
+            "{uri}"
+        );
     }
     Ok(())
 }
@@ -114,33 +119,69 @@ fn routes_require_exact_method_url_and_any_present_page_origin() -> TestResult {
     let escaped = download.replace("/bulk/", "/%62ulk/");
     let suffixed: Vec<String> =
         ["?x=1", "#x", "/", "0"].iter().map(|suffix| format!("{download}{suffix}")).collect();
+    let foreign = |uri, origin| (observed("GET", uri, origin), Miss::ForeignOrigin);
     let mut rejected = vec![
-        observed("POST", &download, page),
-        observed("GET", &upload, page),
-        observed("OPTIONS", &upload, page),
-        observed("HEAD", &download, Header::Absent),
-        observed("GET", &download, Header::Text("http://127.0.0.1:8189")),
-        observed("GET", &download, Header::Text("https://127.0.0.1:8188")),
-        observed("POST", &upload, Header::Text("http://localhost:8188")),
-        observed("GET", &download, Header::Text("null")),
-        observed("GET", &download, Header::Text("")),
-        observed("GET", &download, Header::Unreadable),
-        observed("POST", &upload, Header::Unreadable),
-        observed("GET", &uppercase, page),
-        observed("GET", &uppercase_token, page),
-        observed("GET", &other_route, page),
-        observed("GET", &bare_route, page),
-        observed("GET", endpoint.prefix(), page),
-        observed("GET", &doubled, page),
-        observed("GET", &escaped, page),
-        Request { fetch: false, ..observed("GET", &download, page) },
-        Request { fetch: false, ..observed("POST", &upload, page) },
-        Request { method: None, ..observed("GET", &download, page) },
-        Request { uri: None, ..observed("GET", &download, page) },
+        (observed("POST", &download, page), Miss::RouteMismatch),
+        (observed("GET", &upload, page), Miss::RouteMismatch),
+        (observed("OPTIONS", &upload, page), Miss::RouteMismatch),
+        (observed("HEAD", &download, Header::Absent), Miss::RouteMismatch),
+        foreign(&download, Header::Text("http://127.0.0.1:8189")),
+        foreign(&download, Header::Text("https://127.0.0.1:8188")),
+        (observed("POST", &upload, Header::Text("http://localhost:8188")), Miss::ForeignOrigin),
+        foreign(&download, Header::Text("null")),
+        foreign(&download, Header::Text("")),
+        foreign(&download, Header::Unreadable),
+        (observed("POST", &upload, Header::Unreadable), Miss::ForeignOrigin),
+        (observed("GET", &uppercase, page), Miss::PrefixMismatch),
+        (observed("GET", &uppercase_token, page), Miss::MalformedCapability),
+        (observed("GET", &other_route, page), Miss::RouteMismatch),
+        (observed("GET", &bare_route, page), Miss::MalformedCapability),
+        (observed("GET", endpoint.prefix(), page), Miss::RouteMismatch),
+        (observed("GET", &doubled, page), Miss::RouteMismatch),
+        (observed("GET", &escaped, page), Miss::PrefixMismatch),
+        (Request { fetch: false, ..observed("GET", &download, page) }, Miss::NonFetchContext),
+        (Request { fetch: false, ..observed("POST", &upload, page) }, Miss::NonFetchContext),
+        (Request { method: None, ..observed("GET", &download, page) }, Miss::RouteMismatch),
+        (Request { uri: None, ..observed("GET", &download, page) }, Miss::UrlUnreadable),
     ];
-    rejected.extend(suffixed.iter().map(|uri| observed("GET", uri, page)));
-    for request in rejected {
-        assert_eq!(endpoint.route(request), None, "{request:?}");
+    rejected
+        .extend(suffixed.iter().map(|uri| (observed("GET", uri, page), Miss::MalformedCapability)));
+    for (request, miss) in rejected {
+        assert_eq!(endpoint.route(request), Err(miss), "{request:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn a_later_miss_proves_every_earlier_check_passed() -> TestResult {
+    let endpoint = Endpoint::for_root(&format!("{PAGE}/"))?;
+    let (download, _) = routes(&endpoint);
+    let other = Header::Text("http://127.0.0.1:8189");
+    let malformed = format!("{}d/{}", endpoint.prefix(), "z".repeat(32));
+    fn hidden(request: Request<'_>) -> Request<'_> {
+        Request { fetch: false, ..request }
+    }
+    // Each request fails several checks; the earliest in route order is reported.
+    for (request, miss) in [
+        (Request { uri: None, ..hidden(observed("POST", &download, other)) }, Miss::UrlUnreadable),
+        (hidden(observed("GET", "http://x/", other)), Miss::PrefixMismatch),
+        (hidden(observed("POST", &download, other)), Miss::RouteMismatch),
+        (hidden(observed("GET", &malformed, other)), Miss::MalformedCapability),
+        (hidden(observed("GET", &download, other)), Miss::ForeignOrigin),
+        (hidden(observed("GET", &download, Header::Absent)), Miss::NonFetchContext),
+    ] {
+        assert_eq!(endpoint.route(request), Err(miss), "{request:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn origin_headers_classify_against_the_page_origin() -> TestResult {
+    let endpoint = Endpoint::for_root(&format!("{PAGE}/"))?;
+    assert_eq!(endpoint.origin(Header::Absent), Origin::Absent);
+    assert_eq!(endpoint.origin(Header::Text(PAGE)), Origin::Matching);
+    assert_eq!(endpoint.origin(Header::Text("http://127.0.0.1:8189")), Origin::Other);
+    assert_eq!(endpoint.origin(Header::Text("null")), Origin::Other);
+    assert_eq!(endpoint.origin(Header::Unreadable), Origin::Unreadable);
     Ok(())
 }

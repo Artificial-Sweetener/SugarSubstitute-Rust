@@ -9,11 +9,15 @@
 //! synchronously and locally: native getters return before the transfer registry is borrowed,
 //! a request body is read in claimed bounded steps, and anything that is not a live single-use
 //! token — another context, method, path, origin or token, or a failed native read — receives
-//! an empty 404 while no body is retained. No request under the prefix reaches the network.
+//! an empty 404 while no body is retained. Each such refusal is recorded as one closed
+//! [`crate::bulk_channel_diagnostic::Record`] naming the failed check, the raw resource context,
+//! the method class and the `Origin` relation, never the URL, token or body. No request under
+//! the prefix reaches the network.
 
 mod response;
 
 use super::*;
+use crate::bulk_channel_diagnostic::{self, Method};
 use crate::main_bulk::{Endpoint, Header, Refusal, Request, Route, Transfers, UploadBuffer};
 use std::{ffi::c_void, time::Instant};
 use webview2_com::WebResourceRequestedEventHandler;
@@ -208,7 +212,7 @@ fn serve(
     let status = unsafe { (request.vtable().Headers)(request.as_raw(), &mut raw) };
     let headers: ICoreWebView2HttpRequestHeaders = adopt(raw, status, "bulk_request_headers")?;
     let origin = origin_header(&headers)?;
-    let route = transfers.endpoint().route(Request {
+    let request_view = Request {
         fetch: context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH,
         method: method.as_ref().map(Ascii::as_str),
         uri: uri.as_ref().map(Ascii::as_str),
@@ -217,27 +221,33 @@ fn serve(
             Some(None) => Header::Unreadable,
             None => Header::Absent,
         },
-    });
+    };
+    let refuse = |miss| {
+        bulk_channel_diagnostic::Record {
+            miss,
+            context: context.0,
+            method: Method::classify(request_view.method),
+            origin: transfers.endpoint().origin(request_view.origin),
+        }
+        .emit();
+        response::missing(environment)
+    };
     let now = Instant::now();
-    match route {
-        Some(Route::Download(token)) => match transfers.take_download(token, now) {
-            Some(download) => response::message(environment, download),
-            None => refused(environment, "unknown_download"),
+    match transfers.endpoint().route(request_view) {
+        Ok(Route::Download(token)) => match transfers.take_download(token, now) {
+            Ok(download) => response::message(environment, download),
+            Err(miss) => refuse(miss),
         },
-        Some(Route::Upload(token)) => match transfers.begin_upload(token) {
-            Some(slot) => match read(&request, transfers)
+        Ok(Route::Upload(token)) => match transfers.begin_upload(token) {
+            Ok(slot) => match read(&request, transfers)
                 .and_then(|buffer| transfers.finish_upload(slot, buffer, now))
             {
                 Ok(()) => response::accepted(environment),
-                Err(refusal) => {
-                    tracing::warn!(operation="bulk_upload_refused", refusal=?refusal,
-                        "Bulk panel upload was refused and its body released");
-                    response::missing(environment)
-                }
+                Err(refusal) => refuse(refusal.upload_miss()),
             },
-            None => refused(environment, "unknown_upload"),
+            Err(miss) => refuse(miss),
         },
-        None => refused(environment, "unmatched_request"),
+        Err(miss) => refuse(miss),
     }
 }
 
@@ -257,19 +267,6 @@ fn origin_header(
         .ok()
         .and_then(|origin| ascii(&origin));
     Ok(Some(origin))
-}
-
-/// Observe a page-controlled miss without echoing its URL or token.
-fn refused(
-    environment: &ICoreWebView2Environment,
-    reason: &'static str,
-) -> Result<ICoreWebView2WebResourceResponse, DesktopError> {
-    tracing::debug!(
-        operation = "bulk_channel_miss",
-        reason,
-        "Bulk channel request matched nothing"
-    );
-    response::missing(environment)
 }
 
 /// Read one request body into storage claimed from the session partition.
