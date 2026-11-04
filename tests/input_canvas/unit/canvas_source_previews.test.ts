@@ -76,7 +76,13 @@ function fixture(observesChanges = true) {
       : null,
   };
   const report = jest.fn();
-  const store = new CanvasSourcePreviews(new CanvasSourceCapture(() => host), () => host, report);
+  const workflow = { current: null as string | null };
+  const store = new CanvasSourcePreviews(
+    new CanvasSourceCapture(() => host),
+    () => host,
+    report,
+    () => workflow.current,
+  );
   const source: Exclude<CanvasInputSource, { kind: 'file' }> = {
     kind: 'canvas',
     canvasId: 'editor',
@@ -85,6 +91,7 @@ function fixture(observesChanges = true) {
   };
   return {
     store,
+    workflow,
     source,
     execute,
     report,
@@ -243,5 +250,35 @@ test('shares the largest mounted display capture and reuses it for smaller consu
   stopLarge();
   stopSmall();
   f.store.dispose();
+  expect(f.report).not.toHaveBeenCalled();
+});
+
+test('a workflow switch recaptures mounted previews and keys later ones by the new workflow', async () => {
+  const f = fixture(false);
+  f.workflow.current = 'workflow-a';
+  const before = jest.fn<(value: CanvasSourcePreview) => void>();
+  const stopBefore = f.store.observe(f.source, before);
+  await settled();
+  expect(before.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'pixels', revision: '1' });
+  // The next workflow's canvas numbers its documents afresh, so the same source names new pixels.
+  f.changed();
+  f.workflow.current = 'workflow-b';
+  const after = jest.fn<(value: CanvasSourcePreview) => void>();
+  const stopAfter = f.store.observe(f.source, after);
+  expect(after.mock.calls[0]?.[0]).toEqual({ kind: 'loading' });
+  f.store.workflowChanged();
+  await settled();
+  const revisions = (listener: typeof after) =>
+    listener.mock.calls.flatMap(([value]) => (value.kind === 'pixels' ? [value.revision] : []));
+  expect(revisions(after)).toEqual(['2']);
+  expect(after.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'pixels', revision: '2' });
+  expect(revisions(before)).toEqual(['1', '2']);
+  expect(before.mock.calls.at(-2)?.[0]).toEqual({ kind: 'loading' });
+  const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+  f.store.workflowChanged();
+  await settled();
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(captures);
+  stopBefore();
+  stopAfter();
   expect(f.report).not.toHaveBeenCalled();
 });

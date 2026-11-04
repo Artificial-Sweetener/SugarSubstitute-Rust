@@ -74,6 +74,8 @@ export interface WorkflowSurfaceOptions {
 /** Owners of workflow input surfaces and their host-facing adapters. */
 export interface WorkflowSurfaces {
   readonly provisioning: WorkflowSurfaceProvisioning;
+  /** The loaded workflow's input-canvas identity, or null while it has none. */
+  workflow(): string | null;
   readonly route: CanvasRoutePort;
   readonly cards: ComfyInputSurfaceCards;
   /** Link prompt editors' separator hover with mask rows and canvas masks. */
@@ -133,6 +135,7 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
   const dialog = new CanvasResolutionDialog(options.document);
   return {
     provisioning,
+    workflow: () => state.loaded(),
     route: {
       read: () => {
         const view = route.read();
