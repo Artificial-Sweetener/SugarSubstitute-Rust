@@ -24,6 +24,7 @@ import {
 import { promptWordRange } from '../../core/src/prompt/selection.js';
 import { featureEnabled } from '../../services/src/index.js';
 import { semanticStructures } from './structure.js';
+import { regionContentCaret } from './region-caret.js';
 import { featureProfile } from './features.js';
 import { richRendering } from './presentation.js';
 import { currentInputProjection } from './rich-projection.js';
@@ -232,8 +233,10 @@ export class PromptMouseSelection {
     }
     let pointerAnchor: PointerHit | null = null;
     if (!target && event.detail === 1) {
-      pointerAnchor = hit;
-      target = EditorSelection.cursor(hit.pos, hit.assoc);
+      // A click on a regional separator row places the caret in that region's content.
+      const content = event.shiftKey ? hit.pos : regionContentCaret(state, hit.pos, true);
+      pointerAnchor = content === hit.pos ? hit : { pos: content, assoc: 1 };
+      target = EditorSelection.cursor(pointerAnchor.pos, pointerAnchor.assoc);
     }
     if (!target) return null;
     if (reveal) {
