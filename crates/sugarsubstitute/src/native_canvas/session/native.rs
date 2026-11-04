@@ -30,10 +30,10 @@ impl Session {
         {
             return None;
         }
-        let scene = self.document.scene.as_ref()?;
-        if scene.source.is_none() || scene.source_revision != self.selection {
+        if !self.draws_current_selection() {
             return None;
         }
+        let scene = self.document.scene.as_ref()?;
         let frame = self.frame()?;
         let evidence = if frame.pending {
             self.document.pending_cpu_evidence?

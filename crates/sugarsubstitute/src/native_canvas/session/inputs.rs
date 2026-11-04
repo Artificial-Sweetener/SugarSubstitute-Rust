@@ -311,6 +311,16 @@ impl Session {
         self.document.input.is_some()
     }
 
+    /// Whether the current document is drawable content of the current selection: a loaded
+    /// source image, or the shown input document, which draws its layers even when a blank
+    /// base gives it no source image. Frames and camera evidence exist only for such content.
+    pub(super) fn draws_current_selection(&self) -> bool {
+        self.document.scene.as_ref().is_some_and(|scene| {
+            (scene.source.is_some() || self.input_shown())
+                && scene.source_revision == self.selection
+        })
+    }
+
     /// The input document the Input route shows, once its swap has completed.
     pub(crate) fn shown_input(&self) -> Option<ShownInput> {
         let document = self.document.input?;

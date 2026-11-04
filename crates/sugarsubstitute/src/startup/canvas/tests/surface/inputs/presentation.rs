@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! The Input route presents its document and routes canvas input on an attachment that has
-//! never shown an output, as it does after an output selection, and the Output route hides
-//! it again.
+//! The Input route presents its document, whether it has an image base or a blank one, and
+//! routes canvas input on an attachment that has never shown an output, as it does after an
+//! output selection, and the Output route hides it again.
 
 use super::super::viewport::fixture::{Execution, Fixture};
 use super::*;
@@ -11,15 +11,65 @@ use sugarsubstitute_desktop::canvas::{MainCanvasGesture, MainCanvasInput};
 
 /// Opaque red, the colour of the fixture's `wide.png`.
 const RED: u32 = 0xffff_0000;
+/// The sRGB 24,24,24 backing a blank input document draws.
+const BACKING: u32 = 0xff18_1818;
 
 /// One file surface over the fixture's 320x160 red image.
-fn surfaces() -> Value {
+fn image_surface() -> Value {
     json!({"type":"sync", "workflow":WORKFLOW, "surfaces":[
         {"key":"image", "label":"Load Image",
          "base":{"kind":"file", "file":input_file("wide.png")},
          "masks":[{"key":"painted", "label":"Painted", "color":"#00ff00", "opacity":0.5,
                    "initial":null, "channel":"red"}]}
     ]})
+}
+
+/// One mask-only synthetic surface over a blank 160x80 base, the viewport's aspect.
+fn blank_surface() -> Value {
+    json!({"type":"sync", "workflow":WORKFLOW, "surfaces":[
+        {"key":"latent", "label":"Empty Latent",
+         "base":{"kind":"blank", "width":160, "height":80},
+         "masks":[{"key":"region", "label":"Region", "color":"#0000ff", "opacity":0.5,
+                   "initial":null, "channel":"red"}]}
+    ]})
+}
+
+/// A prepared visible attachment the page committed while no output was selected, and the
+/// lease carrying native lane credit for its workflow requests.
+fn committed_empty() -> Result<(Fixture, MemoryLease), Box<dyn Error>> {
+    let mut fixture = Fixture::empty()?;
+    fixture.send(3, "surface.commit", json!({}))?;
+    assert!(matches!(fixture.canvas.presentation(), MainCanvasPresentation::Hide));
+    let identity = fixture.identity;
+    fixture.canvas.hidden(identity)?;
+    fixture.take(3, "applied")?;
+    Ok((fixture, MemoryLease::new(64 * 1024 * 1024, Box::new(Release))))
+}
+
+/// Route a wheel notch and present its frames, requiring the gesture to reach the document
+/// and the region to stay published.
+fn zoom(fixture: &mut Fixture, phase: &str) -> Result<(), Box<dyn Error>> {
+    let wheel =
+        MainCanvasInput { identity: fixture.identity, gesture: MainCanvasGesture::Wheel(1.0) };
+    assert_eq!(fixture.canvas.input(wheel)?, RoutedInput::Applied, "{phase}");
+    present(fixture, phase)?;
+    assert!(
+        fixture.canvas.input_region().is_some(),
+        "{phase}: the zoomed document keeps its region"
+    );
+    Ok(())
+}
+
+/// Return to the Output route with no selected output, which hides the attachment again.
+fn leave(fixture: &mut Fixture, memory: &MemoryLease, id: u64) -> Result<(), Box<dyn Error>> {
+    workflow(fixture, memory, id, activate(None, None, "output"))?;
+    hide(fixture)?;
+    assert!(!input_shown(fixture));
+    assert!(fixture.canvas.input_region().is_none());
+    let refused =
+        MainCanvasInput { identity: fixture.identity, gesture: MainCanvasGesture::Wheel(1.0) };
+    assert_eq!(fixture.canvas.input(refused)?, RoutedInput::Refused);
+    Ok(())
 }
 
 /// Send one `workflow.request` the way the page does and pump until its reply arrives,
@@ -150,15 +200,8 @@ fn input_shown(fixture: &Fixture) -> bool {
 #[test]
 fn the_input_route_presents_and_routes_input_before_any_output_is_selected()
 -> Result<(), Box<dyn Error>> {
-    let mut fixture = Fixture::empty()?;
-    let memory = MemoryLease::new(64 * 1024 * 1024, Box::new(Release));
-    // The page commits its attachment while no output has been selected.
-    fixture.send(3, "surface.commit", json!({}))?;
-    assert!(matches!(fixture.canvas.presentation(), MainCanvasPresentation::Hide));
-    let identity = fixture.identity;
-    fixture.canvas.hidden(identity)?;
-    fixture.take(3, "applied")?;
-    assert_eq!(workflow(&mut fixture, &memory, 100, surfaces())?["kind"], "synced");
+    let (mut fixture, memory) = committed_empty()?;
+    assert_eq!(workflow(&mut fixture, &memory, 100, image_surface())?["kind"], "synced");
     let activated = workflow(&mut fixture, &memory, 101, activate(Some("image"), None, "input"))?;
     assert_eq!(activated, json!({"kind":"activated"}));
 
@@ -169,17 +212,34 @@ fn the_input_route_presents_and_routes_input_before_any_output_is_selected()
     let region = fixture.canvas.input_region().ok_or("The input document has no input region")?;
     assert_eq!(region.placement.clip, PhysicalRect { x: 10, y: 20, width: 80, height: 40 });
     assert!(!region.drag_out, "an input document is not an output to drag out");
-    let wheel = MainCanvasInput { identity, gesture: MainCanvasGesture::Wheel(1.0) };
-    assert_eq!(fixture.canvas.input(wheel)?, RoutedInput::Applied);
-    present(&mut fixture, "wheel")?;
-    assert!(fixture.canvas.input_region().is_some(), "the zoomed document keeps its region");
+    zoom(&mut fixture, "image wheel")?;
+    leave(&mut fixture, &memory, 102)?;
+    fixture.finish()
+}
 
-    // The Output route has no output to show, so the attachment hides again.
-    workflow(&mut fixture, &memory, 102, activate(None, None, "output"))?;
-    hide(&mut fixture)?;
-    assert!(!input_shown(&fixture));
-    assert!(fixture.canvas.input_region().is_none());
-    let refused = MainCanvasInput { identity, gesture: MainCanvasGesture::Wheel(1.0) };
-    assert_eq!(fixture.canvas.input(refused)?, RoutedInput::Refused);
+/// A mask-only synthetic surface has a blank base and no source image; the Input route still
+/// presents its backing and routes input to it.
+#[test]
+fn the_input_route_presents_and_routes_input_on_a_mask_only_surface() -> Result<(), Box<dyn Error>>
+{
+    let (mut fixture, memory) = committed_empty()?;
+    assert_eq!(workflow(&mut fixture, &memory, 100, blank_surface())?["kind"], "synced");
+    let activated =
+        workflow(&mut fixture, &memory, 101, activate(Some("latent"), Some("region"), "input"))?;
+    assert_eq!(activated, json!({"kind":"activated"}));
+
+    let pixels = present(&mut fixture, "blank")?;
+    assert!(input_shown(&fixture));
+    let backing = pixels.iter().filter(|&&pixel| pixel == BACKING).count();
+    assert!(
+        backing * 2 > pixels.len(),
+        "the blank document's backing is shown: {backing}/{}, first {:x?}",
+        pixels.len(),
+        pixels.first()
+    );
+    let region = fixture.canvas.input_region().ok_or("The blank document has no input region")?;
+    assert!(!region.drag_out, "an input document is not an output to drag out");
+    zoom(&mut fixture, "blank wheel")?;
+    leave(&mut fixture, &memory, 102)?;
     fixture.finish()
 }

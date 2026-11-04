@@ -78,10 +78,10 @@ impl Session {
         {
             return None;
         }
-        let scene = self.document.scene.as_ref()?;
-        if scene.source.is_none() || scene.source_revision != self.selection {
+        if !self.draws_current_selection() {
             return None;
         }
+        let scene = self.document.scene.as_ref()?;
         let (display, pending) = match (&self.composition_pending, &self.composition_shown) {
             (Some(display), _) => (display, true),
             (None, Some(display)) => (display, false),

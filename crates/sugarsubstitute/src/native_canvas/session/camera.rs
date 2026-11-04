@@ -114,10 +114,7 @@ impl Session {
         {
             return CameraCommandResult::Denied;
         }
-        let selected =
-            self.document.scene.as_ref().is_some_and(|scene| {
-                scene.source.is_some() && scene.source_revision == self.selection
-            });
+        let selected = self.draws_current_selection();
         let Some(document) = self.document.shown_key().filter(|_| selected) else {
             return CameraCommandResult::NoContent;
         };
@@ -154,8 +151,7 @@ impl Session {
         if self.closing || self.presentation.gpu_window().is_some() || self.source_failed() {
             return None;
         }
-        let scene = self.document.scene.as_ref()?;
-        if scene.source.is_none() || scene.source_revision != self.selection {
+        if !self.draws_current_selection() {
             return None;
         }
         let evidence = self.document.display_evidence?;
@@ -179,12 +175,9 @@ impl Session {
     /// Resolve a qualified destination only after motion ends and its exact camera is accepted.
     /// An unchanged command can settle against the existing accepted frame without allocation.
     pub(crate) fn settled_camera(&self, intent: CameraIntent) -> CameraSettlement {
-        let current = self.document.scene.as_ref().is_some_and(|scene| {
-            scene.source.is_some()
-                && scene.source_revision == self.selection
-                && intent.source_revision == self.selection
-                && self.document.shown_key() == Some(intent.document)
-        });
+        let current = self.draws_current_selection()
+            && intent.source_revision == self.selection
+            && self.document.shown_key() == Some(intent.document);
         let navigation = self.document.tools.navigation();
         if self.closing
             || self.document_suspended
