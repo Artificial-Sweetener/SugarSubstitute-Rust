@@ -53,14 +53,18 @@ class NativeGraphTap {
             this.#wrappers.set('onAfterChange', { wrapper, previous });
             graph.onAfterChange = wrapper;
         }
-        for (const method of ['add', 'remove']) {
+        for (const method of ['add', 'remove', 'clear']) {
+            if (typeof graph[method] !== 'function')
+                continue;
             if (graph[method] === this.#wrappers.get(method)?.wrapper)
                 continue;
             const previous = graph[method];
+            // Clearing a graph removes every node without calling its per-node removal method.
+            const kind = method === 'clear' ? 'remove' : method;
             const wrapper = (...args) => {
                 const result = previous.apply(graph, args);
                 if (this.#current(method, wrapper))
-                    this.#notify(method, args[0]);
+                    this.#notify(kind, method === 'clear' ? null : args[0]);
                 return result;
             };
             this.#wrappers.set(method, { wrapper, previous });
