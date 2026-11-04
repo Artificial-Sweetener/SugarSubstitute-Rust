@@ -94,6 +94,38 @@ test.each(['nodes-1', 'nodes-2'] as const)(
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s retexts the mounted ghost completion while typing refreshes the suggestion',
+  async (renderer) => {
+    const page = await mountPrompt(fixture, renderer, '');
+    try {
+      await page.locator('.cm-content').focus();
+      await page.keyboard.type('blue');
+      await suggests(page, /^blue eyes,/, 'eyes');
+      const ghost = await page.locator('.cm-content .cm-tag-ghost').elementHandle();
+      if (!ghost) throw new Error('Missing ghost completion');
+      await page.keyboard.type('_ey');
+      await suggests(page, /^blue eyes,/, 'es');
+      expect(
+        await ghost.evaluate((element) => ({
+          connected: element.isConnected,
+          text: element.textContent,
+          ghosts: document.querySelectorAll('.cm-content .cm-tag-ghost').length,
+        })),
+      ).toEqual({ connected: true, text: 'es', ghosts: 1 });
+      await expectSource(page, 'blue_ey');
+      // Leaving the query retires the ghost entirely.
+      await page.keyboard.press('Comma');
+      await expectSource(page, 'blue_ey,');
+      await page.waitForFunction(() => !document.querySelector('.cm-content .cm-tag-ghost'));
+      expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+  60_000,
+);
+
+test.each(['nodes-1', 'nodes-2'] as const)(
   '%s relabels the existing suggestion rows when typing refreshes the list',
   async (renderer) => {
     const page = await mountPrompt(fixture, renderer, '');

@@ -197,7 +197,7 @@ function codePointSize(code) {
 }
 
 // node_modules/@codemirror/state/dist/index.js
-var Text = class _Text {
+var Text2 = class _Text {
   /**
   Get the line description around the given position.
   */
@@ -346,7 +346,7 @@ var Text = class _Text {
     return text.length <= 32 ? new TextLeaf(text) : TextNode.from(TextLeaf.split(text, []));
   }
 };
-var TextLeaf = class _TextLeaf extends Text {
+var TextLeaf = class _TextLeaf extends Text2 {
   constructor(text, length = textLength(text)) {
     super();
     this.text = text;
@@ -428,7 +428,7 @@ var TextLeaf = class _TextLeaf extends Text {
     return target;
   }
 };
-var TextNode = class _TextNode extends Text {
+var TextNode = class _TextNode extends Text2 {
   constructor(children, length) {
     super();
     this.children = children;
@@ -558,7 +558,7 @@ var TextNode = class _TextNode extends Text {
     return chunked.length == 1 ? chunked[0] : new _TextNode(chunked, length);
   }
 };
-Text.empty = /* @__PURE__ */ new TextLeaf([""], 0);
+Text2.empty = /* @__PURE__ */ new TextLeaf([""], 0);
 function textLength(text) {
   let length = -1;
   for (let line of text)
@@ -719,7 +719,7 @@ var LineCursor = class {
   }
 };
 if (typeof Symbol != "undefined") {
-  Text.prototype[Symbol.iterator] = function() {
+  Text2.prototype[Symbol.iterator] = function() {
     return this.iter();
   };
   RawTextCursor.prototype[Symbol.iterator] = PartialTextCursor.prototype[Symbol.iterator] = LineCursor.prototype[Symbol.iterator] = function() {
@@ -978,8 +978,8 @@ var ChangeSet = class _ChangeSet extends ChangeDesc {
         sections[i + 1] = len;
         let index = i >> 1;
         while (inserted.length < index)
-          inserted.push(Text.empty);
-        inserted.push(len ? doc2.slice(pos, pos + len) : Text.empty);
+          inserted.push(Text2.empty);
+        inserted.push(len ? doc2.slice(pos, pos + len) : Text2.empty);
       }
       pos += len;
     }
@@ -1112,7 +1112,7 @@ var ChangeSet = class _ChangeSet extends ChangeDesc {
         let { from, to = from, insert: insert2 } = spec;
         if (from > to || from < 0 || to > length)
           throw new RangeError(`Invalid change range ${from} to ${to} (in doc of length ${length})`);
-        let insText = !insert2 ? Text.empty : typeof insert2 == "string" ? Text.of(insert2.split(lineSep || DefaultSplit)) : insert2;
+        let insText = !insert2 ? Text2.empty : typeof insert2 == "string" ? Text2.of(insert2.split(lineSep || DefaultSplit)) : insert2;
         let insLen = insText.length;
         if (from == to && insLen == 0)
           return;
@@ -1153,8 +1153,8 @@ var ChangeSet = class _ChangeSet extends ChangeDesc {
         sections.push(part[0], 0);
       } else {
         while (inserted.length < i)
-          inserted.push(Text.empty);
-        inserted[i] = Text.of(part.slice(1));
+          inserted.push(Text2.empty);
+        inserted[i] = Text2.of(part.slice(1));
         sections.push(part[0], inserted[i].length);
       }
     }
@@ -1189,7 +1189,7 @@ function addInsert(values, sections, value) {
     values[values.length - 1] = values[values.length - 1].append(value);
   } else {
     while (values.length < index)
-      values.push(Text.empty);
+      values.push(Text2.empty);
     values.push(value);
   }
 }
@@ -1201,7 +1201,7 @@ function iterChanges(desc, f, individual) {
       posA += len;
       posB += len;
     } else {
-      let endA = posA, endB = posB, text = Text.empty;
+      let endA = posA, endB = posB, text = Text2.empty;
       for (; ; ) {
         endA += len;
         endB += ins;
@@ -1335,11 +1335,11 @@ var SectionIter = class {
   }
   get text() {
     let { inserted } = this.set, index = this.i - 2 >> 1;
-    return index >= inserted.length ? Text.empty : inserted[index];
+    return index >= inserted.length ? Text2.empty : inserted[index];
   }
   textBit(len) {
     let { inserted } = this.set, index = this.i - 2 >> 1;
-    return index >= inserted.length && !len ? Text.empty : inserted[index].slice(this.off, len == null ? void 0 : this.off + len);
+    return index >= inserted.length && !len ? Text2.empty : inserted[index].slice(this.off, len == null ? void 0 : this.off + len);
   }
   forward(len) {
     if (len == this.len)
@@ -2544,7 +2544,7 @@ var EditorState = class _EditorState {
   [`Text`](https://codemirror.net/6/docs/ref/#state.Text) instance from the given string.
   */
   toText(string2) {
-    return Text.of(string2.split(this.facet(_EditorState.lineSeparator) || DefaultSplit));
+    return Text2.of(string2.split(this.facet(_EditorState.lineSeparator) || DefaultSplit));
   }
   /**
   Return the given range of the document as a string.
@@ -2611,7 +2611,7 @@ var EditorState = class _EditorState {
   */
   static create(config = {}) {
     let configuration = Configuration.resolve(config.extensions || [], /* @__PURE__ */ new Map());
-    let doc2 = config.doc instanceof Text ? config.doc : Text.of((config.doc || "").split(configuration.staticFacet(_EditorState.lineSeparator) || DefaultSplit));
+    let doc2 = config.doc instanceof Text2 ? config.doc : Text2.of((config.doc || "").split(configuration.staticFacet(_EditorState.lineSeparator) || DefaultSplit));
     let selection = !config.selection ? EditorSelection.single(0) : config.selection instanceof EditorSelection ? config.selection : EditorSelection.single(config.selection.anchor, config.selection.head);
     checkSelection(selection, doc2.length);
     if (!configuration.staticFacet(allowMultipleSelections))
@@ -5764,10 +5764,10 @@ var WidgetTile = class _WidgetTile extends Tile {
   }
   get overrideDOMText() {
     if (!this.length)
-      return Text.empty;
+      return Text2.empty;
     let { root } = this;
     if (!root)
-      return Text.empty;
+      return Text2.empty;
     let start = this.posAtStart;
     return root.view.state.doc.slice(start, start + this.length);
   }
@@ -5795,7 +5795,7 @@ var WidgetBufferTile = class extends Tile {
     return true;
   }
   get overrideDOMText() {
-    return Text.empty;
+    return Text2.empty;
   }
   coordsIn(pos, side, rtl) {
     let rect = this.dom.getBoundingClientRect();
@@ -7787,7 +7787,7 @@ function applyDOMChange(view, domChange) {
       change = {
         from: sel.from,
         to: sel.to,
-        insert: Text.of(domChange.text.slice(sel.from - from, selEnd).split(LineBreakPlaceholder))
+        insert: Text2.of(domChange.text.slice(sel.from - from, selEnd).split(LineBreakPlaceholder))
       };
     } else if (diff = findDiff(cmp, domChange.text, preferredPos - from, preferredSide)) {
       if (browser.chrome && lastKey == 13 && diff.toB == diff.from + 2 && domChange.text.slice(diff.from, diff.toB) == LineBreakPlaceholder + LineBreakPlaceholder)
@@ -7795,7 +7795,7 @@ function applyDOMChange(view, domChange) {
       change = {
         from: from + diff.from,
         to: from + diff.toA,
-        insert: Text.of(domChange.text.slice(diff.from, diff.toB).split(LineBreakPlaceholder))
+        insert: Text2.of(domChange.text.slice(diff.from, diff.toB).split(LineBreakPlaceholder))
       };
     }
   } else if (newSel && (!view.hasFocus && state.facet(editable) || sameSelPos(newSel, sel))) {
@@ -7806,7 +7806,7 @@ function applyDOMChange(view, domChange) {
   if ((browser.mac || browser.android) && change && change.from == change.to && change.from == sel.head - 1 && /^\. ?$/.test(change.insert.toString()) && view.contentDOM.getAttribute("autocorrect") == "off") {
     if (newSel && change.insert.length == 2)
       newSel = EditorSelection.single(newSel.main.anchor - 1, newSel.main.head - 1);
-    change = { from: change.from, to: change.to, insert: Text.of([change.insert.toString().replace(".", " ")]) };
+    change = { from: change.from, to: change.to, insert: Text2.of([change.insert.toString().replace(".", " ")]) };
   } else if (state.doc.lineAt(sel.from).to < sel.to && view.docView.lineHasWidget(sel.to) && view.inputState.insertingTextAt > Date.now() - 50) {
     change = {
       from: sel.from,
@@ -7816,7 +7816,7 @@ function applyDOMChange(view, domChange) {
   } else if (browser.chrome && change && change.from == change.to && change.from == sel.head && change.insert.toString() == "\n " && view.lineWrapping) {
     if (newSel)
       newSel = EditorSelection.single(newSel.main.anchor - 1, newSel.main.head - 1);
-    change = { from: sel.from, to: sel.to, insert: Text.of([" "]) };
+    change = { from: sel.from, to: sel.to, insert: Text2.of([" "]) };
   }
   if (change) {
     return applyDOMChangeInner(view, change, newSel, lastKey);
@@ -8757,7 +8757,7 @@ function clearHeightChangeFlag() {
 var HeightOracle = class {
   constructor(lineWrapping) {
     this.lineWrapping = lineWrapping;
-    this.doc = Text.empty;
+    this.doc = Text2.empty;
     this.heightSamples = {};
     this.lineHeight = 14;
     this.charWidth = 7;
@@ -9585,7 +9585,7 @@ var ViewState = class {
     let guessWrapping = state.facet(contentAttributes).some((v) => typeof v != "function" && v.class == "cm-lineWrapping");
     this.heightOracle = new HeightOracle(guessWrapping);
     this.stateDeco = staticDeco(state);
-    this.heightMap = HeightMap.empty().applyChanges(this.stateDeco, Text.empty, this.heightOracle.setDoc(state.doc), [new ChangedRange(0, 0, 0, state.doc.length)]);
+    this.heightMap = HeightMap.empty().applyChanges(this.stateDeco, Text2.empty, this.heightOracle.setDoc(state.doc), [new ChangedRange(0, 0, 0, state.doc.length)]);
     for (let i = 0; i < 2; i++) {
       this.viewport = this.getViewport(0, null);
       if (!this.updateForViewport())
@@ -9736,7 +9736,7 @@ var ViewState = class {
       clearHeightChangeFlag();
       for (let vp of this.viewports) {
         let heights = vp.from == this.viewport.from ? lineHeights : view.docView.measureVisibleLineHeights(vp);
-        this.heightMap = (refresh ? HeightMap.empty().applyChanges(this.stateDeco, Text.empty, this.heightOracle, [new ChangedRange(0, 0, 0, view.state.doc.length)]) : this.heightMap).updateHeight(oracle, 0, refresh, new MeasuredHeights(vp.from, heights));
+        this.heightMap = (refresh ? HeightMap.empty().applyChanges(this.stateDeco, Text2.empty, this.heightOracle, [new ChangedRange(0, 0, 0, view.state.doc.length)]) : this.heightMap).updateHeight(oracle, 0, refresh, new MeasuredHeights(vp.from, heights));
       }
       if (heightChangeFlag)
         result2 |= 2;
@@ -10916,10 +10916,10 @@ var EditContextManager = class {
       let change = {
         from: diff.from + from,
         to: diff.toA + from,
-        insert: Text.of(e.text.slice(diff.from, diff.toB).split("\n"))
+        insert: Text2.of(e.text.slice(diff.from, diff.toB).split("\n"))
       };
       if ((browser.mac || browser.android) && change.from == head - 1 && /^\. ?$/.test(e.text) && view.contentDOM.getAttribute("autocorrect") == "off")
-        change = { from, to, insert: Text.of([e.text.replace(".", " ")]) };
+        change = { from, to, insert: Text2.of([e.text.replace(".", " ")]) };
       this.pendingContextChange = change;
       if (!view.state.readOnly) {
         let newLen = this.to - this.from + (change.to - change.from + change.insert.length);
@@ -17256,7 +17256,7 @@ var splitLine = ({ state, dispatch }) => {
     return false;
   let changes = state.changeByRange((range) => {
     return {
-      changes: { from: range.from, to: range.to, insert: Text.of(["", ""]) },
+      changes: { from: range.from, to: range.to, insert: Text2.of(["", ""]) },
       range: EditorSelection.cursor(range.from)
     };
   });
@@ -17407,7 +17407,7 @@ function newlineAndIndent(atEof) {
       if (explode)
         insert2.push(indentString(state, cx.lineIndent(line.from, -1)));
       return {
-        changes: { from, to, insert: Text.of(insert2) },
+        changes: { from, to, insert: Text2.of(insert2) },
         range: EditorSelection.cursor(from + 1 + insert2[1].length)
       };
     });
@@ -17624,7 +17624,7 @@ function prepareExactReplacementRange(state, from, to) {
         changes: {
           from: start,
           to: end,
-          insert: Text.of(encoded.logical.split("\n"))
+          insert: Text2.of(encoded.logical.split("\n"))
         },
         selection: { anchor: start + encoded.logical.length },
         effects: [restoreEndings.of(next)],
@@ -33668,8 +33668,18 @@ var CompletionGhost = class extends WidgetType {
     const span = document.createElement("span");
     span.className = "cm-tag-ghost";
     span.setAttribute("aria-hidden", "true");
-    span.textContent = this.text;
+    span.append(document.createTextNode(this.text));
     return span;
+  }
+  /**
+   * Retext the mounted ghost in place: inserting or removing elements makes the page's
+   * document-wide :has() rules restyle the whole document in Chromium.
+   */
+  updateDOM(dom) {
+    const text = dom.firstChild;
+    if (!(text instanceof Text) || dom.childNodes.length !== 1) return false;
+    text.data = this.text;
+    return true;
   }
   /** Pointer events remain on native editable text. */
   ignoreEvent() {
@@ -33679,6 +33689,7 @@ var CompletionGhost = class extends WidgetType {
 var GhostProjection = class {
   decorations = Decoration.none;
   view;
+  shown = false;
   /** Initialize from already prepared native completion metadata. */
   constructor(view) {
     this.view = view;
@@ -33690,14 +33701,16 @@ var GhostProjection = class {
   }
   /** Composition/focus observations suppress ghost rendering without inspecting or preparing source. */
   refresh() {
-    const state = this.view.state, selected = selectedCompletion(state);
-    const prepared4 = selected;
-    this.decorations = prepared4?.ghost && prepared4.freshness === state.field(editorFreshness) && prepared4.caret === state.selection.main.head && state.selection.main.empty && !state.readOnly && this.view.hasFocus && !this.view.compositionStarted && !this.view.composing && featureEnabled(state.facet(featureProfile), "autocomplete_ghost_text") ? Decoration.set([
-      Decoration.widget({
-        widget: new CompletionGhost(prepared4.ghost),
-        side: 1
-      }).range(prepared4.caret)
-    ]) : Decoration.none;
+    const state = this.view.state, prepared4 = selectedCompletion(state), caret = state.selection.main.head;
+    const visible = state.selection.main.empty && !state.readOnly && this.view.hasFocus && !this.view.compositionStarted && !this.view.composing && featureEnabled(state.facet(featureProfile), "autocomplete_ghost_text");
+    const text = visible && prepared4?.ghost && prepared4.freshness === state.field(editorFreshness) && prepared4.caret === caret ? prepared4.ghost : (
+      // Typing inside the query keeps the shown ghost mounted but empty until refreshed rows arrive.
+      visible && this.shown && state.field(completionSession)?.phase === "refreshing" ? "" : null
+    );
+    this.shown = text !== null;
+    this.decorations = text === null ? Decoration.none : Decoration.set([
+      Decoration.widget({ widget: new CompletionGhost(text), side: 1 }).range(caret)
+    ]);
   }
 };
 var completionGhostProjection = [
@@ -46724,7 +46737,7 @@ var reorderInteractions = [
 function createNativeState(source, options) {
   const encoded = encodeSource(source);
   const state = EditorState.create({
-    doc: options.document?.doc ?? Text.of(encoded.logical.split("\n")),
+    doc: options.document?.doc ?? Text2.of(encoded.logical.split("\n")),
     ...options.document ? { selection: options.document.selection } : {},
     extensions: [
       ...options.document ? documentSeedExtensions(options.document) : [],
