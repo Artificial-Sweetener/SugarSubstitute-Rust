@@ -283,17 +283,6 @@ const importHostCoordinator = new CubeImportHostCoordinator({
   getRuntime: requireCubeRuntime,
   logger,
 });
-const graphConfigurationLifecycle = new CubeGraphConfigurationLifecycle({
-  app: appRef,
-  ui,
-  runtimeLifecycle: cubeRuntimeLifecycle,
-  requireRuntime: requireCubeRuntime,
-  preconfiguration: cubePreconfiguration,
-  affordances: cubeAffordances,
-  overlays: overlayManager,
-  feedback: hostFeedback,
-  logger,
-});
 const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
   api,
   app: appRef,
@@ -374,6 +363,18 @@ const promptEditors = new CubePromptEditorHost(
   modelBackgroundReporter(logger, 'prompt editor'),
   new OwnedSurfaceAppearance(document, appearance.state),
 );
+const graphConfigurationLifecycle = new CubeGraphConfigurationLifecycle({
+  app: appRef,
+  ui,
+  runtimeLifecycle: cubeRuntimeLifecycle,
+  requireRuntime: requireCubeRuntime,
+  preconfiguration: cubePreconfiguration,
+  affordances: cubeAffordances,
+  overlays: overlayManager,
+  feedback: hostFeedback,
+  promptEditors,
+  logger,
+});
 const modelUpdates = new ModelUpdateClient((path, options) => api.fetchApi(path, options));
 const modelDetectors = new ModelDetectorClient((path, options) => api.fetchApi(path, options));
 /** Route update failures through the established SugarCubes feedback owner. */
@@ -515,7 +516,6 @@ export const sugarCubesExtension: SugarCubesExtension = {
   },
   beforeConfigureGraph(graphData?: unknown) {
     canvasInputs.beforeConfigureGraph();
-    promptEditors.beforeConfigureGraph();
     workflowHistory.setConfiguring(true);
     relations.beforeConfigureGraph();
     workflowWorkspace.masonry.beforeConfigureGraph();

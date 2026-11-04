@@ -169,3 +169,33 @@ test('retains an editor through renderer remounts but releases it when its node 
   }
   expect(liveEditors.size).toBe(0);
 });
+
+test('restores a retained prompt once its workflow finishes configuring while replaced prompts stay native', async () => {
+  const host = promptHost();
+  host.setup();
+  try {
+    const graph = { _nodes: [] as ComfyNode[] };
+    const retained = mountPrompt(host, graph, 1);
+    const replaced = mountPrompt(host, graph, 2);
+    await settle();
+    expect(liveEditors.size).toBe(2);
+
+    host.beforeConfigureGraph();
+    expect(liveEditors.size).toBe(0);
+    // Configuration drops the replaced node; the retained node keeps its exact graph lifetime.
+    graph._nodes.splice(graph._nodes.indexOf(replaced.surface.node), 1);
+    expect(host.mount(retained.surface)).toBeNull();
+    host.afterConfigureGraph();
+
+    expect(host.mount(replaced.surface)).toBeNull();
+    const restored = host.mount(retained.surface);
+    expect(restored).not.toBeNull();
+    await settle();
+    expect(liveEditors.size).toBe(1);
+    restored?.();
+  } finally {
+    host.dispose();
+    document.body.replaceChildren();
+  }
+  expect(liveEditors.size).toBe(0);
+});

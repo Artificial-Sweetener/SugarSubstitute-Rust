@@ -29,6 +29,12 @@ interface LifecycleLogger {
   error(...values: unknown[]): void;
 }
 
+/** A presentation owner whose sessions pause while Comfy configures a graph. */
+interface GraphConfigurationParticipant {
+  beforeConfigureGraph(): void;
+  afterConfigureGraph(): void;
+}
+
 interface CubeGraphConfigurationLifecycleOptions {
   app: ComfyApplication | null;
   ui: SugarCubesUI;
@@ -37,6 +43,7 @@ interface CubeGraphConfigurationLifecycleOptions {
   preconfiguration: CubeWorkflowPreconfiguration;
   affordances: CubeAffordanceHostLifecycle;
   overlays: OverlayManager;
+  promptEditors: GraphConfigurationParticipant;
   feedback: CubeHostFeedback;
   logger: LifecycleLogger;
 }
@@ -49,6 +56,7 @@ export class CubeGraphConfigurationLifecycle {
   beforeConfigureGraph(graphData?: unknown): void {
     const options = this.options;
     try {
+      options.promptEditors.beforeConfigureGraph();
       options.runtimeLifecycle.reset();
       options.preconfiguration.prepare(graphData);
       options.affordances.attach(options.requireRuntime());
@@ -65,6 +73,8 @@ export class CubeGraphConfigurationLifecycle {
   /** Restore Cube state after Comfy finishes configuring the active graph. */
   afterConfigureGraph(missingNodeTypes: unknown[], comfyApp: ComfyApp): void {
     const options = this.options;
+    // Retained prompts may present their editor again once the configuration window closes.
+    options.promptEditors.afterConfigureGraph();
     try {
       const runtime = options.requireRuntime();
       runtime.hostPlacementGuard.completeHydration();
