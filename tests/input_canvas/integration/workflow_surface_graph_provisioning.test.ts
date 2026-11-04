@@ -51,6 +51,15 @@ function loaders(): ComfyInputLoaders {
       input: { required: { image: ['COMBO', { image_upload: true }], channel: ['COMBO'] } },
       output: ['MASK'],
     },
+    'SimpleSyrup.LoadMaskBatch': {
+      input: {
+        required: {
+          image: ['COMBO', { image_upload: true, allow_batch: true }],
+          channel: ['COMBO'],
+        },
+      },
+      output: ['MASK'],
+    },
   });
   return value;
 }
@@ -363,4 +372,58 @@ test('an image loader whose only used output is MASK is a mask endpoint read thr
   expect(both.provisioning.state?.surfaces).toMatchObject([
     { key: JSON.stringify(['2', 'image']), base: { kind: 'file' }, masks: [] },
   ]);
+});
+
+/** Wire an image, an ordered mask loader and an inpaint consumer whose regions the image sizes. */
+function regionalGraph(f: ReturnType<typeof fixture>, files: readonly string[]) {
+  const image = node(1, 'LoadImage', [], ['IMAGE', 'MASK'], { image: 'photo.png' });
+  const mask = node(2, 'SimpleSyrup.LoadMaskBatch', [], ['MASK'], { image: [], channel: 'red' });
+  const inpaint = node(
+    3,
+    'Inpaint',
+    [
+      ['pixels', 'IMAGE'],
+      ['mask', 'MASK'],
+    ],
+    ['IMAGE'],
+  );
+  f.native.add(image, mask, inpaint);
+  f.native.connect(1, image, 0, inpaint, 0);
+  f.native.connect(2, mask, 0, inpaint, 1);
+  // Comfy creates a node, which may bind it, before configure assigns the authored widget values.
+  const binding = f.bindings.get(mask, f.definitions.read('SimpleSyrup.LoadMaskBatch')!);
+  const field = mask.widgets?.find((widget) => widget.name === 'image');
+  if (field) field.value = [...files];
+  return { mask, binding };
+}
+
+test('an ordered mask loader seeds one region per authored mask file, in order', async () => {
+  const f = fixture();
+  const { mask, binding } = regionalGraph(f, ['regions/sky.png', 'ground.png [output]']);
+  f.associations.start();
+  await settle(f.provisioning);
+  const sync = f.commands.find((command) => command.type === 'sync');
+  if (sync?.type !== 'sync') throw new Error('The workflow was not synced.');
+  expect(sync.surfaces[0]?.masks.map((region) => [region.label, region.initial])).toEqual([
+    ['Mask 1', { filename: 'sky.png', subfolder: 'regions', type: 'input' }],
+    ['Mask 2', { filename: 'ground.png', subfolder: '', type: 'output' }],
+  ]);
+  const saved = mask.properties?.[MASK_BINDING_KEY] as { entries: { source: unknown }[] };
+  expect(saved.entries.map((entry) => entry.source)).toEqual([
+    expect.objectContaining({ target: { kind: 'layer', layerId: 'layer-0-0' } }),
+    expect.objectContaining({ target: { kind: 'layer', layerId: 'layer-0-1' } }),
+  ]);
+  expect(binding.state.entries).toHaveLength(2);
+  expect(f.report).not.toHaveBeenCalled();
+});
+
+test('an ordered mask loader without authored files starts with one blank region', async () => {
+  const f = fixture();
+  regionalGraph(f, []);
+  f.associations.start();
+  await settle(f.provisioning);
+  const sync = f.commands.find((command) => command.type === 'sync');
+  if (sync?.type !== 'sync') throw new Error('The workflow was not synced.');
+  expect(sync.surfaces[0]?.masks.map((region) => region.initial)).toEqual([null]);
+  expect(f.report).not.toHaveBeenCalled();
 });
