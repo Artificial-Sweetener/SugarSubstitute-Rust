@@ -121,6 +121,38 @@ describe('canvas contextual toolbar', () => {
     expect(f.query('.sc-canvas-edit-toolbar')?.dataset.canvasPlacement).toBe('300,556');
   });
 
+  test('arms the transform page as soon as Transform is chosen, before any change', async () => {
+    const f = await mountEditing(editState({ tool: 'transform' }));
+    expect(f.query('.sc-canvas-edit-rail')).toBeNull();
+    expect(f.query('.sc-canvas-edit-toolbar')?.dataset.canvasSurface).toBe('transform');
+    expect(f.query('.sc-canvas-edit-label')?.textContent).toBe('Transform');
+    const button = (action: string) =>
+      f.query<HTMLButtonElement>(`.sc-canvas-edit-toolbar [data-canvas-action="${action}"]`);
+    for (const action of ['rotate-left', 'rotate-right', 'flip-horizontal', 'flip-vertical'])
+      expect(button(action)?.disabled).toBe(false);
+    expect(button('session-undo')?.disabled).toBe(true);
+    expect(button('session-redo')?.disabled).toBe(true);
+    expect(button('apply')?.disabled).toBe(true);
+    expect(button('cancel')?.disabled).toBe(false);
+    await f.click('[data-canvas-action="cancel"]');
+    await f.click('[data-canvas-action="rotate-right"]');
+    // The first turn opens the host's session; Apply then commits it.
+    await f.push({ session: { kind: 'transform', undo: true, redo: false } });
+    expect(button('session-undo')?.disabled).toBe(false);
+    expect(button('apply')?.disabled).toBe(false);
+    await f.click('.sc-canvas-edit-toolbar [data-canvas-action="apply"]');
+    expect(f.host.sent()).toEqual([
+      { type: 'cancel' },
+      { type: 'transform', action: 'rotate-right' },
+      { type: 'commit' },
+    ]);
+    await f.push({ tool: 'transform', session: null, selection });
+    expect(f.query('.sc-canvas-edit-label')?.textContent).toBe('Transform selection');
+    await f.push({ tool: 'pan-zoom', selection: null });
+    expect(f.query('.sc-canvas-edit-toolbar')).toBeNull();
+    expect(f.query('.sc-canvas-edit-rail')).not.toBeNull();
+  });
+
   test('presents the edit-session toolbar for an armed or active shared-edge session', async () => {
     const f = await mountEditing(editState({ tool: 'shared-edges' }));
     expect(f.query('.sc-canvas-edit-label')?.textContent).toBe('Resize shared edges');
