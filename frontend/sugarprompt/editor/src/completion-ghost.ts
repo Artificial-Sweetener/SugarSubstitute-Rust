@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Ghost projection reads the selected native completion's prepared text; it never participates in source, selection or history. */
-import { selectedCompletion } from './completion-session.js';
+import { completionSession, selectedCompletion } from './completion-session.js';
 import {
   Decoration,
   ViewPlugin,
@@ -44,8 +44,18 @@ class CompletionGhost extends WidgetType {
     const span = document.createElement('span');
     span.className = 'cm-tag-ghost';
     span.setAttribute('aria-hidden', 'true');
-    span.textContent = this.text;
+    span.append(document.createTextNode(this.text));
     return span;
+  }
+  /**
+   * Retext the mounted ghost in place: inserting or removing elements makes the page's
+   * document-wide :has() rules restyle the whole document in Chromium.
+   */
+  override updateDOM(dom: HTMLElement): boolean {
+    const text = dom.firstChild;
+    if (!(text instanceof Text) || dom.childNodes.length !== 1) return false;
+    text.data = this.text;
+    return true;
   }
   /** Pointer events remain on native editable text. */
   override ignoreEvent(): boolean {
@@ -57,6 +67,7 @@ class CompletionGhost extends WidgetType {
 class GhostProjection {
   decorations: DecorationSet = Decoration.none;
   private readonly view: EditorView;
+  private shown = false;
   /** Initialize from already prepared native completion metadata. */
   constructor(view: EditorView) {
     this.view = view;
@@ -69,25 +80,32 @@ class GhostProjection {
   /** Composition/focus observations suppress ghost rendering without inspecting or preparing source. */
   refresh(): void {
     const state = this.view.state,
-      selected = selectedCompletion(state);
-    const prepared = selected;
-    this.decorations =
-      prepared?.ghost &&
-      prepared.freshness === state.field(editorFreshness) &&
-      prepared.caret === state.selection.main.head &&
+      prepared = selectedCompletion(state),
+      caret = state.selection.main.head;
+    const visible =
       state.selection.main.empty &&
       !state.readOnly &&
       this.view.hasFocus &&
       !this.view.compositionStarted &&
       !this.view.composing &&
-      featureEnabled(state.facet(featureProfile), 'autocomplete_ghost_text')
-        ? Decoration.set([
-            Decoration.widget({
-              widget: new CompletionGhost(prepared.ghost),
-              side: 1,
-            }).range(prepared.caret),
-          ])
-        : Decoration.none;
+      featureEnabled(state.facet(featureProfile), 'autocomplete_ghost_text');
+    const text =
+      visible &&
+      prepared?.ghost &&
+      prepared.freshness === state.field(editorFreshness) &&
+      prepared.caret === caret
+        ? prepared.ghost
+        : // Typing inside the query keeps the shown ghost mounted but empty until refreshed rows arrive.
+          visible && this.shown && state.field(completionSession)?.phase === 'refreshing'
+          ? ''
+          : null;
+    this.shown = text !== null;
+    this.decorations =
+      text === null
+        ? Decoration.none
+        : Decoration.set([
+            Decoration.widget({ widget: new CompletionGhost(text), side: 1 }).range(caret),
+          ]);
   }
 }
 
