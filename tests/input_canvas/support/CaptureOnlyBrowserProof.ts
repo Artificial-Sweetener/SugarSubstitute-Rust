@@ -109,7 +109,7 @@ async function mount(): Promise<void> {
     new CanvasSourceCapture(() => host),
     () => host,
     report,
-    () => null,
+    { loaded: () => null, holds: () => true },
   );
   const binding = createComfyInputBinding(node, loader, {
     host: () => host,

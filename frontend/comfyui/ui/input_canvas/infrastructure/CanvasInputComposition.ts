@@ -84,7 +84,14 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
   );
   const rasters = new BrowserInputRasters(document, (input, init) => fetch(input, init));
   const maskEditing = new BrowserMaskEditing();
-  const previews = new CanvasSourcePreviews(capture, host, report, () => surfaces.workflow());
+  const previews = new CanvasSourcePreviews(capture, host, report, {
+    loaded: () => surfaces.workflow(),
+    holds: (canvasId, workflow) => {
+      if (!options.canvases.provisions(canvasId)) return true;
+      const held = surfaces.provisioning.state;
+      return held?.canvasId === canvasId && held.workflow === workflow;
+    },
+  });
   const legacy = new LegacyMaskMigration(legacyHost, assets);
   const defaults = new ComfyInputSourceDefaults(host, legacy, (id) =>
     options.canvases.provisions(id),
@@ -132,11 +139,12 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     associations,
     surfaces.cards,
   );
-  // Recapture previews once the canvas holds another workflow's documents.
+  // Previews of a workflow wait until the canvas holds its documents; capture them then.
   let held = surfaces.provisioning.state;
   const stopHeld = surfaces.provisioning.subscribe(() => {
     const next = surfaces.provisioning.state;
-    if (next?.workflow !== held?.workflow && next) previews.refresh(next.canvasId);
+    if (next && (next.workflow !== held?.workflow || next.canvasId !== held.canvasId))
+      previews.refresh(next.canvasId);
     held = next;
   });
   const canvasReady = (): void => {

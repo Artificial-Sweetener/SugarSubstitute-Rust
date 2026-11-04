@@ -74,7 +74,7 @@ export interface WorkflowSurfaceOptions {
 /** Owners of workflow input surfaces and their host-facing adapters. */
 export interface WorkflowSurfaces {
   readonly provisioning: WorkflowSurfaceProvisioning;
-  /** The loaded workflow's input-canvas identity, or null while it has none. */
+  /** The loaded workflow's input-canvas identity, or null when no workflow is loaded. */
   workflow(): string | null;
   readonly route: CanvasRoutePort;
   readonly cards: ComfyInputSurfaceCards;

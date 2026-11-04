@@ -73,10 +73,13 @@ export class ComfyWorkflowInputState implements WorkflowInputSelectionStore {
     return id;
   }
 
-  /** Read the loaded workflow's recorded identity without assigning or replacing one. */
+  /**
+   * Read the loaded workflow's identity without assigning or replacing one: its recorded
+   * identity, or the shared empty identity while it has none.
+   */
   loaded(): string | null {
     const root = this.root();
-    return root ? (this.#read(root)?.id ?? null) : null;
+    return root ? (this.#read(root)?.id ?? EMPTY_WORKFLOW) : null;
   }
 
   /** Read the remembered selection when it belongs to the requested workflow. */

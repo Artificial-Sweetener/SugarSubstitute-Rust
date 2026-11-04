@@ -122,12 +122,10 @@ export function sourceMaskFixture(observesChanges = true) {
     () => false,
   );
   const sourcePreparation = new InputSourcePreparation(capture, assets);
-  const previews = new CanvasSourcePreviews(
-    capture,
-    () => host,
-    report,
-    () => null,
-  );
+  const previews = new CanvasSourcePreviews(capture, () => host, report, {
+    loaded: () => null,
+    holds: () => true,
+  });
   const files = {
     interpret: jest.fn(
       async (): Promise<CanvasPixelRaster> => ({
