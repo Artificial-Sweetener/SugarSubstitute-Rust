@@ -53,6 +53,23 @@ describe('NativeSubgraphChangeObserver', () => {
     expect(changed).toHaveBeenCalledTimes(1);
     observer.dispose();
   });
+  test('reports clearing a whole graph as node removal and restores its clear method', async () => {
+    const clear = jest.fn<() => string>(() => 'cleared');
+    const subgraph = { add: jest.fn(), remove: jest.fn(), clear };
+    const changed = jest.fn();
+    const observer = new NativeSubgraphChangeObserver(
+      subgraph,
+      changed,
+      (kind) => kind === 'add' || kind === 'remove',
+    );
+    // Comfy's Clear Workflow empties the graph without calling remove for each node.
+    expect(subgraph.clear()).toBe('cleared');
+    expect(clear).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+    expect(changed).toHaveBeenCalledWith([{ kind: 'remove', info: null }]);
+    observer.dispose();
+    expect(subgraph.clear).toBe(clear);
+  });
   test('releases pending notifications with the observed graph lifetime', async () => {
     const subgraph = {
       onAfterChange: null as ((graph: unknown) => void) | null,

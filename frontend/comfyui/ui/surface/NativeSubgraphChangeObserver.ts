@@ -30,10 +30,11 @@ export interface ObservableNativeSubgraph {
   onAfterChange?: NativeAfterChange | null;
   add?: (...args: never[]) => unknown;
   remove?: (...args: never[]) => unknown;
+  clear?: (...args: never[]) => unknown;
 }
 
 type NativeGraphTapListener = (kind: NativeGraphChangeKind, info: unknown) => void;
-type TappedMethod = 'onAfterChange' | 'add' | 'remove';
+type TappedMethod = 'onAfterChange' | 'add' | 'remove' | 'clear';
 
 /**
  * Own the single interception of one native graph's change methods.
@@ -75,12 +76,15 @@ class NativeGraphTap {
       this.#wrappers.set('onAfterChange', { wrapper, previous });
       graph.onAfterChange = wrapper;
     }
-    for (const method of ['add', 'remove'] as const) {
+    for (const method of ['add', 'remove', 'clear'] as const) {
+      if (typeof graph[method] !== 'function') continue;
       if (graph[method] === this.#wrappers.get(method)?.wrapper) continue;
       const previous = graph[method] as NativeMutation;
+      // Clearing a graph removes every node without calling its per-node removal method.
+      const kind = method === 'clear' ? 'remove' : method;
       const wrapper: NativeMutation = (...args) => {
         const result = previous.apply(graph, args);
-        if (this.#current(method, wrapper)) this.#notify(method, args[0]);
+        if (this.#current(method, wrapper)) this.#notify(kind, method === 'clear' ? null : args[0]);
         return result;
       };
       this.#wrappers.set(method, { wrapper, previous });
