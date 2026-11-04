@@ -7,7 +7,6 @@ import { chooseCanvasInput, defaultCanvasInput } from '../domain/CanvasInputSour
 export class InputBindingController {
     loader;
     port;
-    initial;
     host;
     nextId;
     report;
@@ -24,17 +23,18 @@ export class InputBindingController {
     #error = null;
     #disposed = false;
     #generation = 0;
+    #authored;
     /** Bind persistence and external capabilities without browser or Comfy globals. */
     constructor(loader, port, initial, host, files, nextId, report, maskEditing, canvases, refreshPreviews) {
         this.loader = loader;
         this.port = port;
-        this.initial = initial;
         this.host = host;
         this.nextId = nextId;
         this.report = report;
         this.maskEditing = maskEditing;
         this.canvases = canvases;
         this.refreshPreviews = refreshPreviews;
+        this.#authored = initial;
         this.preview = new InputPreviewInterpretation(loader, files, () => port.settings());
         this.#stopWidgets = port.subscribe((intent) => {
             this.adoptFiles(intent);
@@ -43,7 +43,39 @@ export class InputBindingController {
     }
     /** Re-read metadata so native undo owns authored source state. */
     get state() {
-        return this.port.read() ?? this.initial;
+        return this.port.read() ?? this.#authoredState();
+    }
+    /**
+     * Seed an unsaved loader from the files its graph field authors now, as the Python app seeds a
+     * regional mask collection from the graph's authored mask paths: one entry per file in order,
+     * or one empty entry when it names none.
+     *
+     * Comfy assigns loaded widget values without a change callback, so the seed follows the field
+     * rather than the value seen when this owner was created. An entry keeps its identity while
+     * its file remains, so a surface plan and the provisioning that follows name the same regions.
+     */
+    #authoredState() {
+        const files = this.port.files(), seeded = this.#authored;
+        if (JSON.stringify(files) === JSON.stringify(seeded.files))
+            return seeded;
+        const remaining = [...seeded.entries];
+        const entries = (files.length ? files : [null]).map((file, index) => {
+            const found = remaining.findIndex((entry) => entry.source.kind === 'file' && entry.source.file === file);
+            return ((found < 0 ? null : remaining.splice(found, 1)[0]) ?? {
+                id: this.nextId(),
+                label: `${inputLabel(this.loader.kind)} ${String(index + 1)}`,
+                source: { kind: 'file', file },
+            });
+        });
+        this.#authored = {
+            ...seeded,
+            files,
+            entries,
+            selected: entries.some((entry) => entry.id === seeded.selected)
+                ? seeded.selected
+                : (entries[0]?.id ?? null),
+        };
+        return this.#authored;
     }
     /** Expose only initialization as busy; source changes do not edit native document state. */
     get busy() {
