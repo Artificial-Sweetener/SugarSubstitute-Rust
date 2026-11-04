@@ -12,18 +12,8 @@ pub(in super::super) struct ConsumeFailureDetail {
 pub(super) fn parse(
     mut fields: std::str::SplitAsciiWhitespace<'_>,
 ) -> Option<ConsumeFailureDetail> {
-    let stage = match fields.next()?.strip_prefix("consume_stage=")? {
-        "Retry" => Stage::Retry,
-        "ExecutionDrain" => Stage::ExecutionDrain,
-        "RenderDelivery" => Stage::RenderDelivery,
-        "ChildDelivery" => Stage::ChildDelivery,
-        "StartupEvent" => Stage::StartupEvent,
-        "PolicyObservation" => Stage::PolicyObservation,
-        "EffectRouting" => Stage::EffectRouting,
-        "DeadlineRefresh" => Stage::DeadlineRefresh,
-        _ => return None,
-    };
-    let code = super::startup::code(fields.next()?.strip_prefix("category=")?)?;
+    let stage = Stage::parse(fields.next()?.strip_prefix("consume_stage=")?)?;
+    let code = Code::parse(fields.next()?.strip_prefix("category=")?)?;
     if fields.next().is_some() {
         return None;
     }

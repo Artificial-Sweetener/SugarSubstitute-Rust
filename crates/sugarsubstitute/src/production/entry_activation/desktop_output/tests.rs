@@ -268,7 +268,7 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
         seen[4],
         Observation::Failure(Failure { boundary: "ObserveStartup", kind: "Other", startup: Some(detail), consume: None, console: None })
             if detail == (startup::StartupFailureDetail {
-                observation: "CloseRequested",
+                observation: sugarsubstitute_desktop::StartupObservationKind::CloseRequested,
                 stage: sugarsubstitute_desktop::StartupCloseStage::CaptureObservation,
                 capture: sugarsubstitute_desktop::StartupCaptureState::CounterFailed,
                 code: sugarsubstitute_desktop::StartupCauseCode::Native(sugarsubstitute_desktop::StartupNativeCause::CounterConversion,Some(u32::MAX)),

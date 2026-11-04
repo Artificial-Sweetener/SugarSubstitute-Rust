@@ -100,16 +100,8 @@ fn consumer_failure_reuses_first_generic_slot_with_unchanged_progress_and_main_r
 #[test]
 fn actual_production_consumer_formatter_roundtrips_closed_stage_category_within_original_line_bound()
 -> Result<(), Box<dyn std::error::Error>> {
-    for stage in [
-        Stage::Retry,
-        Stage::ExecutionDrain,
-        Stage::RenderDelivery,
-        Stage::ChildDelivery,
-        Stage::StartupEvent,
-        Stage::PolicyObservation,
-        Stage::EffectRouting,
-        Stage::DeadlineRefresh,
-    ] {
+    // Every stage the desktop can name, including the canvas's own delivery stage.
+    for &stage in Stage::ALL {
         use sugarsubstitute_contracts::transcript::TranscriptError as Transcript;
         for category in [
             Code::Native(
@@ -125,6 +117,7 @@ fn actual_production_consumer_formatter_roundtrips_closed_stage_category_within_
             Code::Transcript(Transcript::StreamEnded),
             Code::Transcript(Transcript::Exhausted),
             Code::Transcript(Transcript::SnapshotCapacity),
+            Code::CanvasMessage(sugarsubstitute_desktop::StartupCanvasMessageCause::Storage),
         ] {
             let bytes = super::super::tests::formatted_owner_diagnostics(|| {
                 tracing::warn!(operation="desktop_failure_transition",boundary=%"PollFrame",kind=%"Other",consume_stage=?stage,category=%category,"First owned desktop failure retained");

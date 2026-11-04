@@ -4,18 +4,16 @@
 use super::super::{Diagnostic, Observation, parse_failure};
 use super::*;
 use sugarsubstitute_contracts::transcript::OutputStream;
+use sugarsubstitute_desktop::StartupNativeCause as Native;
 
 const LINE: &str = "operation=\"desktop_failure_transition\" boundary=ObserveStartup kind=Other observation=CloseRequested close_stage=CaptureObservation capture_snapshot=CounterFailed code=Native(CounterConversion)";
 
 #[test]
-fn qualification_observation_tags_follow_feature_and_keep_closed_payload_free_grammar() {
-    for kind in ["MainPreviewCaptured", "MainPreviewFailed"] {
-        let line = LINE.replace("CloseRequested", kind);
+fn every_observation_the_desktop_can_name_decodes_and_keeps_payload_free_grammar() {
+    for &kind in ObservationKind::ALL {
+        let line = LINE.replace("CloseRequested", kind.token());
         let parsed = parse_failure(line.as_bytes()).and_then(|failure| failure.startup);
-        #[cfg(feature = "k1-native-qualification")]
-        assert_eq!(parsed.map(|detail| detail.observation), Some(kind));
-        #[cfg(not(feature = "k1-native-qualification"))]
-        assert!(parsed.is_none());
+        assert_eq!(parsed.map(|detail| detail.observation), Some(kind), "{line}");
         for payload in [" png=PRIVATE", " bytes=PRIVATE", " image=PRIVATE", " identity=PRIVATE"] {
             assert!(parse_failure(format!("{line}{payload}").as_bytes()).is_none());
         }
@@ -25,13 +23,31 @@ fn qualification_observation_tags_follow_feature_and_keep_closed_payload_free_gr
     );
 }
 
+/// A refused canvas reply during a native canvas message is the first failure the parent relays.
+#[test]
+fn a_canvas_message_failure_and_canvas_close_stage_reach_the_relay() {
+    let line = LINE
+        .replace("CloseRequested", "CanvasNativeMessage")
+        .replace("CaptureObservation", "CanvasRetirement")
+        .replace("Native(CounterConversion)", "CanvasMessage(Storage)");
+    let actual = parse_failure(line.as_bytes()).and_then(|failure| failure.startup);
+    assert_eq!(
+        actual,
+        Some(StartupFailureDetail {
+            observation: ObservationKind::CanvasNativeMessage,
+            stage: Stage::CanvasRetirement,
+            capture: Capture::CounterFailed,
+            code: Code::CanvasMessage(sugarsubstitute_desktop::StartupCanvasMessageCause::Storage),
+        })
+    );
+}
 #[test]
 fn startup_failure_grammar_keeps_closed_facts_and_rejects_duplicates_foreign_or_raw_tokens() {
     let actual = parse_failure(LINE.as_bytes()).and_then(|failure| failure.startup);
     assert_eq!(
         actual,
         Some(StartupFailureDetail {
-            observation: "CloseRequested",
+            observation: ObservationKind::CloseRequested,
             stage: Stage::CaptureObservation,
             capture: Capture::CounterFailed,
             code: Code::Native(Native::CounterConversion, None)
@@ -176,7 +192,7 @@ fn actual_main_absence_failure_enrichment_uses_its_own_closed_observation_token(
         let line =
             LINE.replace("observation=CloseRequested", &format!("observation={observation}"));
         let actual = parse_failure(line.as_bytes()).and_then(|failure| failure.startup);
-        assert_eq!(actual.map(|facts| facts.observation), Some(observation));
+        assert_eq!(actual.map(|facts| facts.observation.token()), Some(observation));
         assert_eq!(parse_failure(format!("{line}Unknown").as_bytes()), None);
     }
 }

@@ -5,12 +5,12 @@
 use super::*;
 use crate::{
     DesktopStartupObservation, StartupCaptureState, StartupCauseCode, StartupCloseFailure,
-    StartupCloseStage,
+    StartupCloseStage, StartupObservationKind,
 };
 
 /// Retain the exact content failure and actual observation tag without payload projection.
 struct ObservationFailure {
-    kind: &'static str,
+    kind: StartupObservationKind,
     cause: Box<dyn Error>,
 }
 impl std::fmt::Debug for ObservationFailure {
@@ -31,51 +31,51 @@ impl Error for ObservationFailure {
 
 /// Copy only a closed kind from the actual native observation before transferring it.
 #[cfg(any(target_os = "windows", test))]
-pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> &'static str {
+pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> StartupObservationKind {
+    use StartupObservationKind as Kind;
     match observation {
-        DesktopStartupObservation::NativeActivity { .. } => "NativeActivity",
-        DesktopStartupObservation::UiChallengeProcessed(_) => "UiChallengeProcessed",
-        DesktopStartupObservation::NativeRetired(_) => "NativeRetired",
-        DesktopStartupObservation::SplashPresented(_) => "SplashPresented",
-        DesktopStartupObservation::EnvironmentPrepared { .. } => "EnvironmentPrepared",
-        DesktopStartupObservation::ControllerPrepared { .. } => "ControllerPrepared",
-        DesktopStartupObservation::NavigationStarted(_) => "NavigationStarted",
-        DesktopStartupObservation::FrontendReceipt { .. } => "FrontendReceipt",
-        DesktopStartupObservation::SplashRetired(_) => "SplashRetired",
-        DesktopStartupObservation::MainRevealed(_) => "MainRevealed",
-        DesktopStartupObservation::PanelMessage(_) => "PanelMessage",
-        DesktopStartupObservation::MemoryMessage(_) => "MemoryMessage",
-        DesktopStartupObservation::BrowserProcesses { .. } => "BrowserProcesses",
-        DesktopStartupObservation::SurfaceMessage(_) => "SurfaceMessage",
+        DesktopStartupObservation::NativeActivity { .. } => Kind::NativeActivity,
+        DesktopStartupObservation::UiChallengeProcessed(_) => Kind::UiChallengeProcessed,
+        DesktopStartupObservation::NativeRetired(_) => Kind::NativeRetired,
+        DesktopStartupObservation::SplashPresented(_) => Kind::SplashPresented,
+        DesktopStartupObservation::EnvironmentPrepared { .. } => Kind::EnvironmentPrepared,
+        DesktopStartupObservation::ControllerPrepared { .. } => Kind::ControllerPrepared,
+        DesktopStartupObservation::NavigationStarted(_) => Kind::NavigationStarted,
+        DesktopStartupObservation::FrontendReceipt { .. } => Kind::FrontendReceipt,
+        DesktopStartupObservation::SplashRetired(_) => Kind::SplashRetired,
+        DesktopStartupObservation::MainRevealed(_) => Kind::MainRevealed,
+        DesktopStartupObservation::PanelMessage(_) => Kind::PanelMessage,
+        DesktopStartupObservation::MemoryMessage(_) => Kind::MemoryMessage,
+        DesktopStartupObservation::BrowserProcesses { .. } => Kind::BrowserProcesses,
+        DesktopStartupObservation::SurfaceMessage(_) => Kind::SurfaceMessage,
         #[cfg(feature = "native-composition")]
-        DesktopStartupObservation::CanvasInput(_) => "CanvasInput",
+        DesktopStartupObservation::CanvasInput(_) => Kind::CanvasInput,
         #[cfg(feature = "native-composition")]
-        DesktopStartupObservation::CanvasDisplay(_) => "CanvasDisplay",
-        DesktopStartupObservation::CanvasNativeMessage(_) => "CanvasNativeMessage",
-        DesktopStartupObservation::MainReloadRequested { .. } => "MainReloadRequested",
+        DesktopStartupObservation::CanvasDisplay(_) => Kind::CanvasDisplay,
+        DesktopStartupObservation::CanvasNativeMessage(_) => Kind::CanvasNativeMessage,
+        DesktopStartupObservation::MainReloadRequested { .. } => Kind::MainReloadRequested,
         #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
-        DesktopStartupObservation::MainPreviewCaptured(_) => "MainPreviewCaptured",
+        DesktopStartupObservation::MainPreviewCaptured(_) => Kind::MainPreviewCaptured,
         #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
-        DesktopStartupObservation::MainPreviewFailed { .. } => "MainPreviewFailed",
-        DesktopStartupObservation::MainRetired(_) => "MainRetired",
-        DesktopStartupObservation::MainAbsent(_) => "MainAbsent",
-        DesktopStartupObservation::BackendRetryRequested { .. } => "BackendRetryRequested",
-        DesktopStartupObservation::CloseRequested => "CloseRequested",
-        DesktopStartupObservation::Failed { .. } => "Failed",
+        DesktopStartupObservation::MainPreviewFailed { .. } => Kind::MainPreviewFailed,
+        DesktopStartupObservation::MainRetired(_) => Kind::MainRetired,
+        DesktopStartupObservation::MainAbsent(_) => Kind::MainAbsent,
+        DesktopStartupObservation::BackendRetryRequested { .. } => Kind::BackendRetryRequested,
+        DesktopStartupObservation::CloseRequested => Kind::CloseRequested,
+        DesktopStartupObservation::Failed { .. } => Kind::Failed,
     }
 }
-
 impl super::super::DesktopError {
     /// Copy the closed kind before the real content observation consumes its owned payload.
     #[cfg(any(target_os = "windows", test))]
     pub(crate) fn startup_observation_kind(
         observation: &DesktopStartupObservation,
-    ) -> &'static str {
+    ) -> StartupObservationKind {
         observation_kind(observation)
     }
     /// Preserve the actual failed content observation with its unchanged original Box.
     #[cfg(any(target_os = "windows", test))]
-    pub(crate) fn observed_startup(kind: &'static str, cause: Box<dyn Error>) -> Self {
+    pub(crate) fn observed_startup(kind: StartupObservationKind, cause: Box<dyn Error>) -> Self {
         Self::new("observe_startup", ObservationFailure { kind, cause })
     }
 }

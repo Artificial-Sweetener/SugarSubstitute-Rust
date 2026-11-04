@@ -111,8 +111,9 @@ pub use startup_consume_failure::{StartupConsumeFailure, StartupConsumeStage};
 pub use startup_error_dialog::show_startup_failure;
 mod timing;
 pub use startup_failure::{
-    StartupBootstrapCause, StartupCaptureState, StartupCauseCode, StartupCloseFailure,
-    StartupCloseStage, StartupNativeCause, StartupRequestCause,
+    StartupBootstrapCause, StartupCanvasMessageCause, StartupCaptureState, StartupCauseCode,
+    StartupCloseFailure, StartupCloseStage, StartupNativeCause, StartupObservationKind,
+    StartupRequestCause,
 };
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]

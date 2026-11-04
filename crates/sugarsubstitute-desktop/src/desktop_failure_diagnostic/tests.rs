@@ -120,7 +120,7 @@ fn preview_kind_classification_retains_the_native_cause_without_projecting_paylo
             },
         ),
     };
-    assert_eq!(DesktopError::startup_observation_kind(&observation), "MainPreviewFailed");
+    assert_eq!(DesktopError::startup_observation_kind(&observation).token(), "MainPreviewFailed");
     assert_eq!(formatted.load(Ordering::SeqCst), 0);
     assert_eq!(inspected.load(Ordering::SeqCst), 0);
     assert_eq!(dropped.load(Ordering::SeqCst), 0);
@@ -416,13 +416,15 @@ fn actual_main_absence_observation_tag_remains_distinct_from_retired_without_ide
     assert_eq!(
         DesktopError::startup_observation_kind(&crate::DesktopStartupObservation::MainAbsent(
             identity
-        )),
+        ))
+        .token(),
         "MainAbsent"
     );
     assert_eq!(
         DesktopError::startup_observation_kind(&crate::DesktopStartupObservation::MainRetired(
             identity
-        )),
+        ))
+        .token(),
         "MainRetired"
     );
     assert_eq!(
@@ -431,7 +433,8 @@ fn actual_main_absence_observation_tag_remains_distinct_from_retired_without_ide
                 identity,
                 reason: crate::MainReloadReason::Navigation,
             }
-        ),
+        )
+        .token(),
         "MainReloadRequested"
     );
     Ok(())

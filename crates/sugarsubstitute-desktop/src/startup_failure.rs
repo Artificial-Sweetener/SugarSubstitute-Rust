@@ -4,6 +4,9 @@
 
 use std::{error::Error, fmt, io::ErrorKind};
 use sugarsubstitute_contracts::transcript::TranscriptError;
+#[path = "startup_failure/vocabulary.rs"]
+mod vocabulary;
+pub use vocabulary::{StartupCanvasMessageCause, StartupObservationKind};
 
 /// The first authored close operation that actually returned the retained error.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -143,6 +146,8 @@ pub enum StartupCauseCode {
     Bootstrap(StartupBootstrapCause),
     /// Actual typed transcript rejection; original output completion custody stays owned.
     Transcript(TranscriptError),
+    /// A native canvas message could not be bound for delivery.
+    CanvasMessage(StartupCanvasMessageCause),
 }
 
 impl StartupCauseCode {
@@ -150,6 +155,15 @@ impl StartupCauseCode {
     pub fn direct(cause: &(dyn Error + 'static)) -> Self {
         if let Some(transcript) = cause.downcast_ref::<TranscriptError>() {
             return Self::Transcript(*transcript);
+        }
+        if let Some(message) = cause.downcast_ref::<crate::CanvasNativeReplyError>() {
+            return Self::CanvasMessage(match message {
+                crate::CanvasNativeReplyError::Storage => StartupCanvasMessageCause::Storage,
+                crate::CanvasNativeReplyError::ForeignNavigation => {
+                    StartupCanvasMessageCause::ForeignNavigation
+                }
+                crate::CanvasNativeReplyError::Identity(_) => StartupCanvasMessageCause::Identity,
+            });
         }
         #[cfg(target_os = "windows")]
         if let Some(native) = cause.downcast_ref::<windows::core::Error>() {
@@ -182,6 +196,7 @@ impl fmt::Display for StartupCauseCode {
             Self::Request(kind) => write!(formatter, "Request({kind:?})"),
             Self::Bootstrap(kind) => write!(formatter, "Bootstrap({kind:?})"),
             Self::Transcript(kind) => write!(formatter, "Transcript({kind:?})"),
+            Self::CanvasMessage(kind) => write!(formatter, "CanvasMessage({kind:?})"),
             _ => write!(formatter, "{self:?}"),
         }
     }
