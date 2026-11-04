@@ -206,27 +206,21 @@ impl Session {
             self.rebind_input_source()?;
         }
         let selection = self.selection;
-        let Some(surface) = self.inputs.by_identity_mut(identity) else {
+        if self.inputs.by_identity(identity).is_none() {
             return Ok(());
-        };
-        let mut parked = match current {
-            true => None,
-            false => Some(surface.document.take().ok_or("Input document is unavailable")?),
-        };
-        let document: &mut document::DocumentState = match &mut parked {
-            Some(document) => document,
-            None => &mut self.document,
-        };
-        let rebased = surface.rebase(document, base, &memory, now);
-        if current && let Some(scene) = document.scene.as_mut() {
-            scene.source_revision = selection;
         }
-        if parked.is_some() {
-            surface.document = parked;
-        }
-        let replaced = rebased?;
-        surface.loaded_base = Some(loaded);
-        surface.failure = None;
+        let replaced = self
+            .with_input_document(identity, |surface, document, current| {
+                let rebased = surface.rebase(document, base, &memory, now);
+                if current && let Some(scene) = document.scene.as_mut() {
+                    scene.source_revision = selection;
+                }
+                let replaced = rebased?;
+                surface.loaded_base = Some(loaded);
+                surface.failure = None;
+                Ok::<_, Box<dyn Error>>(replaced)
+            })
+            .ok_or("Input document is unavailable")??;
         self.inputs.retiring.sources.push(replaced);
         Ok(())
     }

@@ -5,7 +5,9 @@
 //! Each synced surface owns one authoritative document: a locked base layer (a ComfyUI input
 //! image or a blank backing) and one coverage layer per mask. Documents are created and
 //! re-based by owned jobs, survive every route change and memory decision, and leave only
-//! through a later sync that no longer lists them or through session close. Surface keys, mask
+//! through a later sync that no longer lists them or through session close. Workflow work reaches
+//! a document wherever the session holds it, including while a document preparation or a shown
+//! preview retains it, so a mask file requested before then still lands. Surface keys, mask
 //! keys, document identities and layer identities stay stable for the surface's lifetime.
 //!
 //! Structural changes a workflow drives (masks added or removed, labels, synced appearance,
@@ -76,7 +78,8 @@ struct Surface {
     loaded_base: Option<Base>,
     masks: Vec<Mask>,
     next_layer: u64,
-    /// The document while parked here; `None` while it loads or is the session's current one.
+    /// The document while parked here; `None` while it loads, is the session's current one or
+    /// presentation custody retains it.
     document: Option<Box<document::DocumentState>>,
     /// Archived content awaiting the base image the next sync acquires.
     restored: Option<sugarsubstitute_canvas::ArchivedDocument>,
@@ -283,15 +286,21 @@ impl Surface {
 }
 
 impl Session {
-    /// The input document with `identity`, wherever it is held: current or parked.
+    /// The input document with `identity`, wherever the session holds it: current, parked with
+    /// its surface, or retained by presentation custody (a document preparation or a shown
+    /// preview). Workflow work reaches it in every place.
     fn input_document(&self, identity: InputDocumentId) -> Option<&document::DocumentState> {
         if self.document.input == Some(identity) {
             return Some(&self.document);
         }
-        self.inputs.by_identity(identity)?.document.as_deref()
+        match self.inputs.by_identity(identity)?.document.as_deref() {
+            Some(document) => Some(document),
+            None => self.retained_input(identity),
+        }
     }
 
-    /// Mutable access to the input document with `identity`, and whether it is current.
+    /// Mutable access to the input document with `identity`, wherever the session holds it, and
+    /// whether it is current.
     pub(super) fn input_document_mut(
         &mut self,
         identity: InputDocumentId,
@@ -299,11 +308,42 @@ impl Session {
         if self.document.input == Some(identity) {
             return Some((&mut self.document, true));
         }
-        self.inputs
-            .by_identity_mut(identity)?
-            .document
-            .as_deref_mut()
-            .map(|document| (document, false))
+        let Session { inputs, document_transaction, preview, .. } = self;
+        match inputs.by_identity_mut(identity)?.document.as_deref_mut() {
+            Some(document) => Some((document, false)),
+            None => document_transaction::retained_input_mut(
+                document_transaction.as_mut(),
+                preview,
+                identity,
+            )
+            .map(|document| (document, false)),
+        }
+    }
+
+    /// Run `work` on the surface of input document `identity` together with that document,
+    /// wherever the session holds it, and whether it is current. `None` when the surface or its
+    /// document is absent.
+    fn with_input_document<R>(
+        &mut self,
+        identity: InputDocumentId,
+        work: impl FnOnce(&mut Surface, &mut document::DocumentState, bool) -> R,
+    ) -> Option<R> {
+        let Session { document, inputs, document_transaction, preview, .. } = self;
+        let surface = inputs.by_identity_mut(identity)?;
+        if document.input == Some(identity) {
+            return Some(work(surface, document, true));
+        }
+        if let Some(mut parked) = surface.document.take() {
+            let outcome = work(surface, &mut parked, false);
+            surface.document = Some(parked);
+            return Some(outcome);
+        }
+        let retained = document_transaction::retained_input_mut(
+            document_transaction.as_mut(),
+            preview,
+            identity,
+        )?;
+        Some(work(surface, retained, false))
     }
 
     /// Whether the current document is an input document.

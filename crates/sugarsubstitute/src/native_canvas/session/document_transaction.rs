@@ -260,8 +260,38 @@ impl Session {
             && self.retirement.is_none()
     }
 
+    /// The input document `identity` while presentation custody holds it away from its surface:
+    /// as the document a preparation retains for rollback, or behind a shown preview.
+    pub(super) fn retained_input(
+        &self,
+        identity: inputs::InputDocumentId,
+    ) -> Option<&document::DocumentState> {
+        let preparation =
+            self.document_transaction.as_ref().map(|transaction| &transaction.previous);
+        preparation
+            .into_iter()
+            .chain(self.preview.parked.as_ref())
+            .map(|retained| &*retained.document)
+            .find(|document| document.input == Some(identity))
+    }
+
     /// Transfer any retained predecessor with the closing document to the existing worker.
     pub(super) fn take_retained_document(&mut self) -> Option<RetainedDocument> {
         self.document_transaction.take().map(|transaction| transaction.previous)
     }
+}
+
+/// Mutable [`Session::retained_input`] over the fields that hold it, so a caller can borrow the
+/// session's other fields, such as the input documents' records, alongside it.
+pub(super) fn retained_input_mut<'a>(
+    transaction: Option<&'a mut Transaction>,
+    preview: &'a mut PreviewState,
+    identity: inputs::InputDocumentId,
+) -> Option<&'a mut document::DocumentState> {
+    transaction
+        .map(|transaction| &mut transaction.previous)
+        .into_iter()
+        .chain(preview.parked.as_mut())
+        .map(|retained| &mut *retained.document)
+        .find(|document| document.input == Some(identity))
 }

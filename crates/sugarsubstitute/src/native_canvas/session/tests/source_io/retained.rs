@@ -93,7 +93,18 @@ impl Fixture {
 
     /// Start like `start`, funding `retained_document_bytes` for retained output documents.
     fn funded(attached: bool, retained_document_bytes: u64) -> Result<Self, Box<dyn Error>> {
-        let (mut session, clock, directory) = session()?;
+        let (session, clock, directory) = session()?;
+        Self::launch(session, clock, directory, attached, retained_document_bytes)
+    }
+
+    /// Start a prepared `session` the way [`Self::funded`] does, keeping `directory` with it.
+    fn launch(
+        mut session: Session,
+        clock: Arc<TestClock>,
+        directory: tempfile::TempDir,
+        attached: bool,
+        retained_document_bytes: u64,
+    ) -> Result<Self, Box<dyn Error>> {
         session.config.initial = InitialSource::AwaitHost;
         session.config.retained_document_bytes = retained_document_bytes;
         if attached {

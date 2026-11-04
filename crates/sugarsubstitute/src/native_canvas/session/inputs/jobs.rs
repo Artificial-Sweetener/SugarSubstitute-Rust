@@ -238,6 +238,12 @@ impl Session {
                 let Some(expected) =
                     snapshot.as_ref().filter(|_| present).map(DocumentSnapshot::extent)
                 else {
+                    tracing::warn!(
+                        operation = "canvas_input_work",
+                        document_id = identity.get(),
+                        layer = layer.get(),
+                        "A mask file cannot load: its document or mask is unavailable"
+                    );
                     self.fail_input_import(
                         identity,
                         layer,
@@ -246,6 +252,8 @@ impl Session {
                     for owner in task.acquirers() {
                         self.inputs.release(owner);
                     }
+                    // No job completion follows to answer the request that asked for the file.
+                    self.settle_input_tickets();
                     return Ok(None);
                 };
                 let owner = file.acquirer.clone();
@@ -270,6 +278,7 @@ impl Session {
                         identity,
                         InputFailure::message("Only a loaded blank-based surface can be resized"),
                     );
+                    self.settle_input_tickets();
                     return Ok(None);
                 };
                 let masks: Vec<_> = snapshot

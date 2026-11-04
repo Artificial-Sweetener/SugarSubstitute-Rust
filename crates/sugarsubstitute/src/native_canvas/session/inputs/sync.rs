@@ -93,7 +93,7 @@ impl Session {
         Ok(ticket)
     }
 
-    /// Bring a loaded document, current or parked, in line with its surface.
+    /// Bring a loaded document, wherever the session holds it, in line with its surface.
     pub(super) fn reconcile_input(
         &mut self,
         identity: InputDocumentId,
@@ -101,20 +101,11 @@ impl Session {
         let Some(memory) = self.resources.as_ref().map(|resources| resources.memory.clone()) else {
             return Ok(());
         };
-        let current = self.document.input == Some(identity);
-        let Some(surface) = self.inputs.by_identity_mut(identity).filter(|surface| surface.loaded)
-        else {
-            return Ok(());
-        };
-        if current {
-            return surface.reconcile(&mut self.document, &memory);
-        }
-        let Some(mut document) = surface.document.take() else {
-            return Ok(());
-        };
-        let reconciled = surface.reconcile(&mut document, &memory);
-        surface.document = Some(document);
-        reconciled
+        self.with_input_document(identity, |surface, document, _| match surface.loaded {
+            true => surface.reconcile(document, &memory),
+            false => Ok(()),
+        })
+        .unwrap_or(Ok(()))
     }
 
     /// Withdraw a surface no longer listed. Its parked document retires at once; a shown one

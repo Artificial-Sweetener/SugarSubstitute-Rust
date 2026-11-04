@@ -22,6 +22,7 @@ mod editing;
 mod edits;
 mod masks;
 mod route;
+mod seeds;
 
 const WORKFLOW: &str = "workflow-0b6f0c84-6c5e-4b0f-9d0c-2c1d0f1e2a3b";
 
