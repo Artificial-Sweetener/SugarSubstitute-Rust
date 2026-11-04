@@ -62,6 +62,23 @@ describe('canvas editing surface', () => {
     });
   });
 
+  test('arms the affine page from the selected Transform tool before its session opens', () => {
+    expect(canvasEditSurface(editState({ tool: 'transform' }), false)).toEqual({
+      kind: 'transform',
+      target: 'layer',
+    });
+    expect(canvasEditSurface(editState({ tool: 'transform', selection }), false)).toEqual({
+      kind: 'transform',
+      target: 'selection',
+    });
+    expect(canvasEditSurface(editState({ tool: 'transform', selection }), true)).toEqual({
+      kind: 'modify',
+    });
+    expect(canvasEditSurface(editState({ tool: 'move', selection }), false)).toEqual({
+      kind: 'selection',
+    });
+  });
+
   test('hides the rail and options only while an exclusive editor owns input', () => {
     expect(canvasEditChromeSuppressed({ kind: 'coverage' })).toBe(true);
     expect(canvasEditChromeSuppressed({ kind: 'modify' })).toBe(true);

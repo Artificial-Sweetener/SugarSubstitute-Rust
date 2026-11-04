@@ -29,7 +29,7 @@ function canvasEditSurface(state, modifying) {
     return { kind: "session", tool: session.kind, armed: false };
   if (!session && state.tool === "shared-edges")
     return { kind: "session", tool: "shared-edges", armed: true };
-  if (session?.kind === "transform")
+  if (session?.kind === "transform" || !session && state.tool === "transform")
     return { kind: "transform", target: state.selection ? "selection" : "layer" };
   if (state.selection) return { kind: "selection" };
   return { kind: "none" };

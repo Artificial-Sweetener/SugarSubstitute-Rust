@@ -10,7 +10,7 @@ import {
 import {
   CanvasEditOverlay,
   canvasEditSurface
-} from "../../chunk-37JKSW67.js";
+} from "../../chunk-RSU6XRSZ.js";
 import "../../chunk-Z4OXHAHO.js";
 import "../../chunk-3IZU6ONS.js";
 import "../../chunk-NC4KX5LX.js";

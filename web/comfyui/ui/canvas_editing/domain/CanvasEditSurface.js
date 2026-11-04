@@ -4,6 +4,9 @@
  * The exclusive coverage panel wins, then a selection modification preview, then a non-affine
  * edit session (or the armed shared-edges tool), then an affine transform, then the selection
  * actions. `modifying` is the page's own preview request, which may precede the host's session.
+ * The host only selects Transform when it has something to frame, and opens its session at the
+ * first change, so the selected tool alone arms the affine page: rotate and flip act at once,
+ * while Apply waits for a change and Cancel leaves the tool.
  */
 export function canvasEditSurface(state, modifying) {
     const session = state.session;
@@ -15,7 +18,7 @@ export function canvasEditSurface(state, modifying) {
         return { kind: 'session', tool: session.kind, armed: false };
     if (!session && state.tool === 'shared-edges')
         return { kind: 'session', tool: 'shared-edges', armed: true };
-    if (session?.kind === 'transform')
+    if (session?.kind === 'transform' || (!session && state.tool === 'transform'))
         return { kind: 'transform', target: state.selection ? 'selection' : 'layer' };
     if (state.selection)
         return { kind: 'selection' };
