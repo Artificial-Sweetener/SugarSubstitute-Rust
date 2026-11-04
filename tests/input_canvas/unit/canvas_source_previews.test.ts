@@ -76,13 +76,12 @@ function fixture(observesChanges = true) {
       : null,
   };
   const report = jest.fn();
-  const workflow = { current: null as string | null };
-  const store = new CanvasSourcePreviews(
-    new CanvasSourceCapture(() => host),
-    () => host,
-    report,
-    () => workflow.current,
-  );
+  // The loaded workflow, and the workflow whose documents the canvas holds.
+  const workflow = { current: null as string | null, held: null as string | null };
+  const store = new CanvasSourcePreviews(new CanvasSourceCapture(() => host), () => host, report, {
+    loaded: () => workflow.current,
+    holds: (_canvasId: string, observed: string | null) => observed === workflow.held,
+  });
   const source: Exclude<CanvasInputSource, { kind: 'file' }> = {
     kind: 'canvas',
     canvasId: 'editor',
@@ -255,14 +254,14 @@ test('shares the largest mounted display capture and reuses it for smaller consu
 
 test('a workflow switch recaptures mounted previews and keys later ones by the new workflow', async () => {
   const f = fixture(false);
-  f.workflow.current = 'workflow-a';
+  f.workflow.current = f.workflow.held = 'workflow-a';
   const before = jest.fn<(value: CanvasSourcePreview) => void>();
   const stopBefore = f.store.observe(f.source, before);
   await settled();
   expect(before.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'pixels', revision: '1' });
   // The next workflow's canvas numbers its documents afresh, so the same source names new pixels.
   f.changed();
-  f.workflow.current = 'workflow-b';
+  f.workflow.current = f.workflow.held = 'workflow-b';
   const after = jest.fn<(value: CanvasSourcePreview) => void>();
   const stopAfter = f.store.observe(f.source, after);
   expect(after.mock.calls[0]?.[0]).toEqual({ kind: 'loading' });
@@ -272,13 +271,44 @@ test('a workflow switch recaptures mounted previews and keys later ones by the n
     listener.mock.calls.flatMap(([value]) => (value.kind === 'pixels' ? [value.revision] : []));
   expect(revisions(after)).toEqual(['2']);
   expect(after.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'pixels', revision: '2' });
-  expect(revisions(before)).toEqual(['1', '2']);
-  expect(before.mock.calls.at(-2)?.[0]).toEqual({ kind: 'loading' });
+  // The earlier workflow's preview is no longer held, so it stays loading.
+  expect(revisions(before)).toEqual(['1']);
+  expect(before.mock.calls.at(-1)?.[0]).toEqual({ kind: 'loading' });
   const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
   f.store.workflowChanged();
   await settled();
   expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(captures);
   stopBefore();
   stopAfter();
+  expect(f.report).not.toHaveBeenCalled();
+});
+
+test('a preview waits for the canvas to hold its workflow and drops captures from an earlier one', async () => {
+  const f = fixture(false);
+  const captures = () => f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+  f.workflow.current = 'workflow-b';
+  f.workflow.held = 'workflow-a';
+  const preview = jest.fn<(value: CanvasSourcePreview) => void>();
+  const stop = f.store.observe(f.source, preview);
+  await settled();
+  // The canvas still holds the earlier workflow, whose documents share these identities.
+  expect(captures()).toBe(0);
+  expect(preview.mock.calls.map(([value]) => value.kind)).toEqual(['loading']);
+  f.workflow.held = 'workflow-b';
+  const release = f.hold();
+  f.store.refresh('editor');
+  await settled();
+  expect(captures()).toBe(1);
+  // The canvas moves to another workflow while that capture is in flight.
+  f.workflow.held = 'workflow-c';
+  release();
+  await settled();
+  expect(preview.mock.calls.map(([value]) => value.kind)).toEqual(['loading']);
+  f.changed();
+  f.workflow.held = 'workflow-b';
+  f.store.refresh('editor');
+  await settled();
+  expect(preview.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'pixels', revision: '2' });
+  stop();
   expect(f.report).not.toHaveBeenCalled();
 });

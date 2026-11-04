@@ -65,10 +65,13 @@ export class ComfyWorkflowInputState {
         this.#write(root, { version: 1, id, route: 'output', surface: null, mask: null });
         return id;
     }
-    /** Read the loaded workflow's recorded identity without assigning or replacing one. */
+    /**
+     * Read the loaded workflow's identity without assigning or replacing one: its recorded
+     * identity, or the shared empty identity while it has none.
+     */
     loaded() {
         const root = this.root();
-        return root ? (this.#read(root)?.id ?? null) : null;
+        return root ? (this.#read(root)?.id ?? EMPTY_WORKFLOW) : null;
     }
     /** Read the remembered selection when it belongs to the requested workflow. */
     read(workflow) {

@@ -5,7 +5,7 @@ export class CanvasSourcePreviews {
     capture;
     host;
     report;
-    workflow;
+    workflows;
     #entries = new Map();
     #hosts = new Map();
     #dirty = new Set();
@@ -17,15 +17,17 @@ export class CanvasSourcePreviews {
     /**
      * Reuse the same validated capture path as full-resolution queue preparation.
      *
-     * `workflow` names the loaded workflow, or null. A workflow canvas numbers each workflow's
-     * input documents and layers afresh, so the same source names different pixels in another
-     * workflow; each preview is keyed by the workflow loaded when it was observed.
+     * A workflow canvas numbers each workflow's input documents and layers afresh, so the same
+     * source names different pixels in another workflow. Each preview is keyed by the workflow
+     * loaded when it was observed, is captured only while the canvas holds that workflow and
+     * shows loading until then; a result arriving after the canvas moved on is dropped. The owner
+     * calls `refresh` once the canvas holds another workflow, which captures the waiting previews.
      */
-    constructor(capture, host, report, workflow) {
+    constructor(capture, host, report, workflows) {
         this.capture = capture;
         this.host = host;
         this.report = report;
-        this.workflow = workflow;
+        this.workflows = workflows;
     }
     /** Share raw source pixels so a channel change can reinterpret them without a native round trip. */
     observe(source, listener, maximumSize = 288, representation = 'raw', cohort = null) {
@@ -36,8 +38,9 @@ export class CanvasSourcePreviews {
             cohortId = this.#cohorts.get(cohort) ?? ++this.#nextCohort;
             this.#cohorts.set(cohort, cohortId);
         }
+        const workflow = this.workflows.loaded();
         const key = JSON.stringify([
-            this.workflow(),
+            workflow,
             cohortId,
             canvasInputSourceKey(source),
             maximumSize === 0 ? 'full' : 'display',
@@ -46,6 +49,7 @@ export class CanvasSourcePreviews {
         let entry = this.#entries.get(key);
         if (!entry) {
             entry = {
+                workflow,
                 cohort: cohortId,
                 source,
                 maximumSize,
@@ -91,7 +95,7 @@ export class CanvasSourcePreviews {
      * the new workflow. An unchanged workflow is a no-op.
      */
     workflowChanged() {
-        const workflow = this.workflow();
+        const workflow = this.workflows.loaded();
         if (this.#disposed || workflow === this.#workflow)
             return;
         this.#workflow = workflow;
@@ -127,6 +131,10 @@ export class CanvasSourcePreviews {
         this.#entries.clear();
         this.#dirty.clear();
     }
+    /** Whether the canvas holds the documents of the workflow this preview was observed in. */
+    #held(entry) {
+        return this.workflows.holds(entry.source.canvasId, entry.workflow);
+    }
     /** Fence in-flight results whenever a later committed edit supersedes their native revision. */
     #invalidate(key, entry) {
         entry.serial++;
@@ -157,7 +165,8 @@ export class CanvasSourcePreviews {
         const groups = new Map();
         for (const key of requested) {
             const entry = this.#entries.get(key);
-            if (!entry)
+            // Waits, showing loading, until the owner refreshes the canvas holding its workflow.
+            if (!entry || !this.#held(entry))
                 continue;
             const groupKey = JSON.stringify([entry.source.canvasId, entry.maximumSize, entry.cohort]);
             const group = groups.get(groupKey) ?? [];
@@ -197,7 +206,8 @@ export class CanvasSourcePreviews {
                     catch (error) {
                         if (this.#disposed ||
                             !batch.some((request) => this.#entries.get(request.key) === request.entry &&
-                                request.serial === request.entry.serial))
+                                request.serial === request.entry.serial &&
+                                this.#held(request.entry)))
                             continue;
                         const unavailable = error instanceof CanvasSourceUnavailable;
                         if (!unavailable)
@@ -222,7 +232,10 @@ export class CanvasSourcePreviews {
     /** Publish only to the exact still-mounted source generation that requested this snapshot. */
     #publish(request, value) {
         const { key, entry, serial } = request;
-        if (this.#disposed || this.#entries.get(key) !== entry || entry.serial !== serial)
+        if (this.#disposed ||
+            this.#entries.get(key) !== entry ||
+            entry.serial !== serial ||
+            !this.#held(entry))
             return;
         entry.value = value;
         for (const listener of entry.listeners)

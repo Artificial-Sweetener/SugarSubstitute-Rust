@@ -38,7 +38,20 @@ export type CanvasSourcePreview =
     }
   | { readonly kind: 'error'; readonly message: string; readonly unavailable?: boolean };
 
+/** The workflows whose input documents previews may show. */
+export interface CanvasPreviewWorkflows {
+  /** The loaded workflow's identity, or null when no workflow is loaded. */
+  loaded(): string | null;
+  /**
+   * Whether the canvas holds this workflow's input documents. A canvas whose documents are not
+   * scoped to workflows holds every workflow's.
+   */
+  holds(canvasId: string, workflow: string | null): boolean;
+}
+
 interface PreviewEntry {
+  /** The workflow loaded when the preview was observed; its documents are the ones it shows. */
+  readonly workflow: string | null;
   readonly cohort: number;
   readonly source: Exclude<CanvasInputSource, { kind: 'file' }>;
   readonly representation: 'raw' | 'image';
@@ -62,15 +75,17 @@ export class CanvasSourcePreviews {
   /**
    * Reuse the same validated capture path as full-resolution queue preparation.
    *
-   * `workflow` names the loaded workflow, or null. A workflow canvas numbers each workflow's
-   * input documents and layers afresh, so the same source names different pixels in another
-   * workflow; each preview is keyed by the workflow loaded when it was observed.
+   * A workflow canvas numbers each workflow's input documents and layers afresh, so the same
+   * source names different pixels in another workflow. Each preview is keyed by the workflow
+   * loaded when it was observed, is captured only while the canvas holds that workflow and
+   * shows loading until then; a result arriving after the canvas moved on is dropped. The owner
+   * calls `refresh` once the canvas holds another workflow, which captures the waiting previews.
    */
   constructor(
     private readonly capture: CanvasSourceCapture,
     private readonly host: (canvasId: string) => CanvasSourceHost | null,
     private readonly report: (error: unknown) => void,
-    private readonly workflow: () => string | null,
+    private readonly workflows: CanvasPreviewWorkflows,
   ) {}
 
   /** Share raw source pixels so a channel change can reinterpret them without a native round trip. */
@@ -87,8 +102,9 @@ export class CanvasSourcePreviews {
       cohortId = this.#cohorts.get(cohort) ?? ++this.#nextCohort;
       this.#cohorts.set(cohort, cohortId);
     }
+    const workflow = this.workflows.loaded();
     const key = JSON.stringify([
-      this.workflow(),
+      workflow,
       cohortId,
       canvasInputSourceKey(source),
       maximumSize === 0 ? 'full' : 'display',
@@ -97,6 +113,7 @@ export class CanvasSourcePreviews {
     let entry = this.#entries.get(key);
     if (!entry) {
       entry = {
+        workflow,
         cohort: cohortId,
         source,
         maximumSize,
@@ -142,7 +159,7 @@ export class CanvasSourcePreviews {
    * the new workflow. An unchanged workflow is a no-op.
    */
   workflowChanged(): void {
-    const workflow = this.workflow();
+    const workflow = this.workflows.loaded();
     if (this.#disposed || workflow === this.#workflow) return;
     this.#workflow = workflow;
     for (const [key, entry] of this.#entries) {
@@ -179,6 +196,11 @@ export class CanvasSourcePreviews {
     this.#dirty.clear();
   }
 
+  /** Whether the canvas holds the documents of the workflow this preview was observed in. */
+  #held(entry: PreviewEntry): boolean {
+    return this.workflows.holds(entry.source.canvasId, entry.workflow);
+  }
+
   /** Fence in-flight results whenever a later committed edit supersedes their native revision. */
   #invalidate(key: string, entry: PreviewEntry): void {
     entry.serial++;
@@ -210,7 +232,8 @@ export class CanvasSourcePreviews {
     const groups = new Map<string, { key: string; entry: PreviewEntry; serial: number }[]>();
     for (const key of requested) {
       const entry = this.#entries.get(key);
-      if (!entry) continue;
+      // Waits, showing loading, until the owner refreshes the canvas holding its workflow.
+      if (!entry || !this.#held(entry)) continue;
       const groupKey = JSON.stringify([entry.source.canvasId, entry.maximumSize, entry.cohort]);
       const group = groups.get(groupKey) ?? [];
       group.push({ key, entry, serial: entry.serial });
@@ -253,7 +276,8 @@ export class CanvasSourcePreviews {
               !batch.some(
                 (request) =>
                   this.#entries.get(request.key) === request.entry &&
-                  request.serial === request.entry.serial,
+                  request.serial === request.entry.serial &&
+                  this.#held(request.entry),
               )
             )
               continue;
@@ -285,7 +309,13 @@ export class CanvasSourcePreviews {
     value: CanvasSourcePreview,
   ): void {
     const { key, entry, serial } = request;
-    if (this.#disposed || this.#entries.get(key) !== entry || entry.serial !== serial) return;
+    if (
+      this.#disposed ||
+      this.#entries.get(key) !== entry ||
+      entry.serial !== serial ||
+      !this.#held(entry)
+    )
+      return;
     entry.value = value;
     for (const listener of entry.listeners) listener(value);
   }
