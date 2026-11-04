@@ -270,3 +270,58 @@ fn unexpected_client_open_still_delivers_fatal_original_error_without_reprobe() 
     assert!(lock(&boundary.client_launches).is_empty());
     Ok(())
 }
+
+/// A concurrent launch can hold the coordinator's only free pipe instance at the moment this
+/// client opens. The occupied endpoint is retried under the original probe like absence, never
+/// failing the session that owns this client.
+#[test]
+fn occupied_endpoint_reprobes_under_original_budget_then_delivers_launch() -> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, false)?;
+    boundary.busy_endpoint.store(true, Ordering::Release);
+    let (_scope, mut session) = client(&rig, &boundary)?;
+    let EntryTransportObservation::ConnectionRetired { connection, failure: Some(cause) } =
+        fact(&rig, &session.control, |fact| {
+            matches!(fact, EntryTransportObservation::ConnectionRetired { .. })
+        })?
+    else {
+        return Err("Missing exact retired occupancy cause".into());
+    };
+    assert!(matches!(cause, EntryTransportError::EndpointBusy(_)));
+    assert_eq!(connection.get(), 1);
+    assert_eq!(cause.native_cause().map(|cause| cause.stage()), Some("entry_open_client"));
+    assert!(session.completion.try_take_completion().is_none());
+    rig.clock.wait_until_registered(Moment::from_nanos(2_000_000_000))?;
+    assert_eq!(boundary.connects_issued.load(Ordering::Acquire), 1);
+    assert!(lock(&boundary.client_launches).is_empty());
+    boundary.busy_endpoint.store(false, Ordering::Release);
+    rig.clock.advance(2_000_000_000);
+    fact(&rig, &session.control, |fact| {
+        matches!(fact, EntryTransportObservation::OutcomeReceived { .. })
+    })?;
+    assert_eq!(lock(&boundary.client_launches).len(), 1);
+    let completed = rig.completion(&mut session.completion)?;
+    assert!(
+        matches!(completed.outcome, JobOutcome::Success(report) if report.retired_connections == 2)
+    );
+    assert_eq!(boundary.connects_issued.load(Ordering::Acquire), 2);
+    Ok(())
+}
+
+#[test]
+fn persistently_occupied_endpoint_stops_at_original_total_cutoff_without_authority() -> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, false)?;
+    boundary.busy_endpoint.store(true, Ordering::Release);
+    let (_scope, mut session) = client(&rig, &boundary)?;
+    fact(&rig, &session.control, |fact| {
+        matches!(fact, EntryTransportObservation::ConnectionRetired { .. })
+    })?;
+    rig.clock.wait_until_registered(Moment::from_nanos(2_000_000_000))?;
+    rig.clock.advance(30_000_000_000);
+    assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::TimedOut));
+    assert_eq!(boundary.connects_issued.load(Ordering::Acquire), 1);
+    assert_eq!(boundary.writes.load(Ordering::Acquire), 0);
+    assert!(lock(&boundary.client_launches).is_empty());
+    Ok(())
+}

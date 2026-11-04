@@ -51,6 +51,7 @@ enum RawCause {
     Clock(NativeObservationError),
     PeerDisconnected(NativeObservationError),
     EndpointAbsent(NativeObservationError),
+    EndpointBusy(NativeObservationError),
     Native {
         cause: NativeObservationError,
         identity_unrestored: bool,
@@ -117,6 +118,7 @@ impl EntryPreparedCause {
             EntryTransportError::Clock(cause) => Self(RawCause::Clock(cause)),
             EntryTransportError::PeerDisconnected(cause) => Self(RawCause::PeerDisconnected(cause)),
             EntryTransportError::EndpointAbsent(cause) => Self(RawCause::EndpointAbsent(cause)),
+            EntryTransportError::EndpointBusy(cause) => Self(RawCause::EndpointBusy(cause)),
             EntryTransportError::Native { cause, identity_unrestored } => {
                 Self(RawCause::Native { cause, identity_unrestored })
             }
@@ -141,9 +143,9 @@ impl EntryPreparedCause {
             RawCause::Shape(_) => EntryPreparedCauseKind::Shape,
             RawCause::Clock(_) => EntryPreparedCauseKind::Clock,
             RawCause::Native { .. } => EntryPreparedCauseKind::Native,
-            RawCause::PeerDisconnected(_) | RawCause::EndpointAbsent(_) => {
-                EntryPreparedCauseKind::Retirement
-            }
+            RawCause::PeerDisconnected(_)
+            | RawCause::EndpointAbsent(_)
+            | RawCause::EndpointBusy(_) => EntryPreparedCauseKind::Retirement,
         }
     }
     /// Borrow nonclone actual original preparation control/error data.
@@ -162,6 +164,7 @@ impl EntryPreparedCause {
             RawCause::Clock(cause)
             | RawCause::PeerDisconnected(cause)
             | RawCause::EndpointAbsent(cause)
+            | RawCause::EndpointBusy(cause)
             | RawCause::Native { cause, .. } => Some(cause),
             RawCause::Retirement { original, cleanup, .. } => original.native().or(Some(cleanup)),
             RawCause::Preparation(_) | RawCause::Inert(_) | RawCause::Shape(_) => None,
@@ -179,6 +182,7 @@ impl EntryPreparedCause {
             RawCause::Clock(cause)
             | RawCause::PeerDisconnected(cause)
             | RawCause::EndpointAbsent(cause)
+            | RawCause::EndpointBusy(cause)
             | RawCause::Native { cause, .. } => cause.owner_panic_cause(),
             RawCause::Inert(_) | RawCause::Shape(_) => None,
         }
@@ -194,7 +198,8 @@ impl EntryPreparedCause {
             | RawCause::Shape(_)
             | RawCause::Clock(_)
             | RawCause::PeerDisconnected(_)
-            | RawCause::EndpointAbsent(_) => false,
+            | RawCause::EndpointAbsent(_)
+            | RawCause::EndpointBusy(_) => false,
         }
     }
     pub(super) fn contains_panic(&self) -> bool {
@@ -221,7 +226,9 @@ impl Error for EntryPreparedCause {
             RawCause::Retirement { original, .. } => Some(original.as_ref()),
             // Preserve the genuine underlying primary; the cloneable native wrapper stays private.
             RawCause::Clock(cause) | RawCause::Native { cause, .. } => cause.source(),
-            RawCause::PeerDisconnected(cause) | RawCause::EndpointAbsent(cause) => Some(cause),
+            RawCause::PeerDisconnected(cause)
+            | RawCause::EndpointAbsent(cause)
+            | RawCause::EndpointBusy(cause) => Some(cause),
             RawCause::Shape(cause) => Some(cause),
             RawCause::Inert(_) => None,
         }

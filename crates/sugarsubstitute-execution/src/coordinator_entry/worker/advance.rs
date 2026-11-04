@@ -171,12 +171,15 @@ impl Active {
         };
         let lease = self.lease.as_mut().ok_or(EntryTransportError::InvalidPhase)?;
         let connected = lease.connect(index, issue);
-        if let Err(error @ EntryTransportError::EndpointAbsent(_)) = &connected
+        if let Err(
+            error @ (EntryTransportError::EndpointAbsent(_) | EntryTransportError::EndpointBusy(_)),
+        ) = &connected
             && !self.work.shared.server
             && !error.contains_owner_panic()
         {
             // Retire this exact unaccepted attempt before an original-budget retry.
-            // Missing endpoint facts never authenticate a peer or grant election authority.
+            // Missing or fully occupied endpoint facts never authenticate a peer or grant
+            // election authority; another launch probing the same coordinator is not a failure.
             self.connections[index].failure = Some(error.clone());
             self.return_unsubmitted =
                 self.work.input.as_ref().is_some_and(|input| input.recover_unsubmitted);

@@ -174,6 +174,11 @@ pub enum EntryTransportError {
     /// Actual unaccepted client open found no local endpoint. This observation
     /// grants no peer, election or ownership authority; bounded original probing remains required.
     EndpointAbsent(NativeObservationError),
+    /// Actual unaccepted client open found the local endpoint present but every listening
+    /// instance held by other peers, such as a concurrent launch probing the same coordinator.
+    /// This grants no peer, election or ownership authority; bounded original probing remains
+    /// required and an endpoint that never frees still stops at the original total cutoff.
+    EndpointBusy(NativeObservationError),
     /// Preserve original native failure and sticky thread identity restoration facts.
     Native {
         /// Original owned cause, including bounded cleanup causes and owner panic.
@@ -212,6 +217,7 @@ impl EntryTransportError {
             Self::Clock(cause)
             | Self::PeerDisconnected(cause)
             | Self::EndpointAbsent(cause)
+            | Self::EndpointBusy(cause)
             | Self::Native { cause, .. } => Some(cause),
             Self::Retirement { original, cleanup, .. } => match original.native_cause() {
                 Some(cause) => Some(cause),
@@ -295,6 +301,10 @@ impl fmt::Debug for EntryTransportError {
                 .finish_non_exhaustive(),
             Self::EndpointAbsent(cause) => formatter
                 .debug_struct("EntryTransportError::EndpointAbsent")
+                .field("stage", &cause.stage())
+                .finish_non_exhaustive(),
+            Self::EndpointBusy(cause) => formatter
+                .debug_struct("EntryTransportError::EndpointBusy")
                 .field("stage", &cause.stage())
                 .finish_non_exhaustive(),
             Self::Clock(cause) => formatter

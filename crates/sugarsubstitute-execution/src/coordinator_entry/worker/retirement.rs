@@ -39,6 +39,7 @@ impl Active {
                         cause,
                         EntryTransportError::PeerDisconnected(_)
                             | EntryTransportError::EndpointAbsent(_)
+                            | EntryTransportError::EndpointBusy(_)
                     )
                 })
                 .cloned();
