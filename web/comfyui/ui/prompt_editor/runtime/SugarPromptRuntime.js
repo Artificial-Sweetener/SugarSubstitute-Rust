@@ -31159,6 +31159,37 @@ var semanticRefresh = ViewPlugin.fromClass(SemanticRefresh, {
   }
 });
 
+// frontend/sugarprompt/editor/src/region-caret.ts
+function regionRowAt(state, position) {
+  let row = null;
+  state.field(richProjection).decorations.between(position, position, (from, to, decoration) => {
+    if (decoration.spec.widget instanceof RegionWidget) row = { from, to };
+  });
+  return row;
+}
+function regionContentCaret(state, position, forward) {
+  const row = regionRowAt(state, position);
+  if (!row) return position;
+  const line = state.doc.lineAt(row.from);
+  const following = line.to < state.doc.length ? line.to + 1 : null;
+  const previous = line.from > 0 ? line.from - 1 : null;
+  return (forward ? following : previous ?? following) ?? row.to;
+}
+function openRegionContent(transaction) {
+  if (!transaction.docChanged || !transaction.isUserEvent("input.type") || transaction.isUserEvent("input.type.compose"))
+    return transaction;
+  const start = transaction.startState;
+  let insertion = null, changes = 0;
+  transaction.changes.iterChanges((from, to, _fromB, _toB, inserted) => {
+    changes++;
+    if (from === to && inserted.length > 0 && inserted.sliceString(0, 1) !== "\n") insertion = from;
+  });
+  if (changes !== 1 || insertion === null || insertion !== start.doc.length) return transaction;
+  if (regionRowAt(start, insertion)?.to !== insertion) return transaction;
+  return [transaction, { changes: { from: insertion, insert: "\n" }, sequential: true }];
+}
+var regionCaret = EditorState.transactionFilter.of(openRegionContent);
+
 // frontend/sugarprompt/editor/src/mouse-selection.ts
 var PromptMouseSelection = class {
   pending = null;
@@ -31309,8 +31340,9 @@ var PromptMouseSelection = class {
     }
     let pointerAnchor = null;
     if (!target && event.detail === 1) {
-      pointerAnchor = hit;
-      target = EditorSelection.cursor(hit.pos, hit.assoc);
+      const content2 = event.shiftKey ? hit.pos : regionContentCaret(state, hit.pos, true);
+      pointerAnchor = content2 === hit.pos ? hit : { pos: content2, assoc: 1 };
+      target = EditorSelection.cursor(pointerAnchor.pos, pointerAnchor.assoc);
     }
     if (!target) return null;
     if (reveal) {
@@ -36397,6 +36429,10 @@ function navigateSelection(view, forward, extend, move) {
   const ranges = view.state.selection.ranges.map((original) => {
     const range = extend && original.undirectional && original.head >= original.anchor !== forward ? EditorSelection.range(original.head, original.anchor) : original;
     const moved = move(range);
+    if (!extend) {
+      const head = regionContentCaret(view.state, moved.head, forward);
+      if (head !== moved.head) return EditorSelection.cursor(head, forward ? 1 : -1);
+    }
     return extend ? EditorSelection.range(
       range.anchor,
       moved.head,
@@ -47053,6 +47089,7 @@ function createNativeState(source, options) {
       exactWeightInteractions,
       regionNameInteractions,
       regionHoverInteractions,
+      regionCaret,
       promptCompletions,
       EditorState.transactionFilter.of(
         (transaction) => transaction.startState.readOnly && changesExactSource(transaction) && !transaction.annotation(synchronizedRegionNames) ? [] : transaction

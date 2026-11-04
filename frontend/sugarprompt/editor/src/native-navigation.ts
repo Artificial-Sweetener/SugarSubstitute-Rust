@@ -23,6 +23,7 @@ import {
   cursorLineDown,
 } from '@codemirror/commands';
 import { moveByGrapheme, moveByGraphemeLine } from './grapheme-motion.js';
+import { regionContentCaret } from './region-caret.js';
 
 /** Move or extend the authoritative native selection; horizontal commands retain no caret or source state of their own. */
 export function horizontalNavigation(view: EditorView, right: boolean, extend: boolean): boolean {
@@ -57,6 +58,11 @@ function navigateSelection(
         ? EditorSelection.range(original.head, original.anchor)
         : original;
     const moved = move(range);
+    if (!extend) {
+      // Separator rows hold no caret: arrows continue into the neighbouring region's content.
+      const head = regionContentCaret(view.state, moved.head, forward);
+      if (head !== moved.head) return EditorSelection.cursor(head, forward ? 1 : -1);
+    }
     return extend
       ? EditorSelection.range(
           range.anchor,

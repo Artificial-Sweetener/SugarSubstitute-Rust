@@ -84,6 +84,7 @@ import { regionDraft } from './region-draft.js';
 import { regionNameInteractions } from './region-name.js';
 import { regionHoverInteractions, regionHoverObserver } from './region-hover.js';
 import { regionTheme } from './region-theme.js';
+import { regionCaret } from './region-caret.js';
 import { nativeConditioning } from './conditioning-state.js';
 import { regionHost, regionNameObserver } from './region-host.js';
 import { clipboardCommands, type ClipboardObserver } from './native-clipboard.js';
@@ -184,6 +185,7 @@ export function createNativeState(source: string, options: NativeStateOptions): 
       exactWeightInteractions,
       regionNameInteractions,
       regionHoverInteractions,
+      regionCaret,
       promptCompletions,
       EditorState.transactionFilter.of((transaction) =>
         transaction.startState.readOnly &&
