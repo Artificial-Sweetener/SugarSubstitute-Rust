@@ -13,16 +13,23 @@ use crate::native_canvas::session::inputs::{
     SurfaceBase, SurfaceSpec,
 };
 use std::collections::VecDeque;
+use sugarsubstitute_contracts::canvas_native::CanvasNativeReplyPayload;
 use sugarsubstitute_contracts::canvas_native::{
     CanvasFailure, CanvasFailureStatus, CanvasMaskChannel, CanvasMaskKey, CanvasWorkflowCommand,
     CanvasWorkflowMask, CanvasWorkflowRequest, CanvasWorkflowRoute, CanvasWorkflowSurface,
     CanvasWorkflowSurfaceBase,
 };
 use sugarsubstitute_contracts::canvas_surface::CanvasFileReference;
-use sugarsubstitute_desktop::CanvasNativeRequestStorage;
+use sugarsubstitute_desktop::{CanvasNativeReply, CanvasNativeRequestStorage};
 use sugarsubstitute_image_ops::Extent;
 /// Workflow requests that may wait for restored documents or for their input work.
 const MAX_HELD: usize = 16;
+/// The page's answer when input work fails for a reason other than a typed rejection.
+const PROVISION_FAILED: &str = "The canvas could not prepare this workflow's inputs";
+/// The page's answer when the canvas memory budget cannot hold a settled reply.
+const REPLY_REFUSED: &str = "The canvas cannot hold this workflow's reply now";
+/// The page's answer when a settled key map cannot be encoded within the protocol's bounds.
+const REPLY_UNENCODABLE: &str = "The workflow's input key map exceeds the canvas protocol";
 
 /// One workflow request awaiting restored documents or its ticket's reply.
 struct Held {
@@ -178,21 +185,54 @@ impl NativeSurface {
                 self.answer(identity, payload, claim)
             }
             Err(cause) => {
-                let Some(rejection) = cause.downcast_ref::<InputRejection>() else {
-                    return Err(cause);
-                };
-                let failure = match rejection {
-                    InputRejection::Invalid(message) => {
-                        failure(CanvasFailureStatus::Error, message)
-                    }
-                    InputRejection::Unknown => {
-                        failure(CanvasFailureStatus::Stale, &rejection.to_string())
-                    }
-                    InputRejection::Unavailable(message) => {
-                        failure(CanvasFailureStatus::Unavailable, message)
-                    }
-                };
-                self.answer(identity, request.failure_reply(&failure)?, claim)
+                let answer = refusal(cause.as_ref());
+                if cause.downcast_ref::<InputRejection>().is_none() {
+                    tracing::warn!(
+                        operation = "canvas_workflow_provision",
+                        request_id = request.envelope().request_id(),
+                        workflow = %workflow_of(request.command()),
+                        cause = %cause,
+                        "Workflow input work was refused to the page"
+                    );
+                }
+                self.answer(identity, request.failure_reply(&answer)?, claim)
+            }
+        }
+    }
+
+    /// Answer a held sync or resize. A reply larger than the lane credit's inline bound is
+    /// charged to the canvas memory budget; one the budget cannot hold is refused to the page.
+    fn answer_settled(
+        &mut self,
+        held: Held,
+        payload: CanvasNativeReplyPayload,
+        session: &Session,
+    ) -> Result<(), Box<dyn Error>> {
+        let length = payload.as_bytes().len();
+        if length <= CanvasNativeReply::INLINE_PAYLOAD_BYTES {
+            return self.answer(held.identity, payload, held.claim);
+        }
+        let storage = session
+            .preview_resident()
+            .ok_or_else(|| Box::<dyn Error>::from("The canvas memory budget is closed"))
+            .and_then(|memory| Ok(memory.claim(u64::try_from(length)?)?));
+        match storage {
+            Ok(storage) => {
+                let reply =
+                    CanvasNativeReply::with_storage(held.identity, payload, held.claim, storage)?;
+                self.enqueue(DesktopStartupCommand::SendCanvasNative(reply))
+            }
+            Err(cause) => {
+                tracing::warn!(
+                    operation = "canvas_workflow_reply",
+                    request_id = held.request.envelope().request_id(),
+                    workflow = %workflow_of(held.request.command()),
+                    reply_bytes = length as u64,
+                    cause = %cause,
+                    "The canvas memory budget refused a workflow reply"
+                );
+                let unheld = failure(CanvasFailureStatus::Unavailable, REPLY_REFUSED);
+                self.answer(held.identity, held.request.failure_reply(&unheld)?, held.claim)
             }
         }
     }
@@ -217,11 +257,23 @@ impl NativeSurface {
             };
             let Some(held) = self.workflow.held.remove(index) else { break };
             let reply = held.reply.as_ref().ok_or("Held workflow reply disappeared")?;
-            let payload = match synced(reply) {
-                Ok(surfaces) => held.request.synced_reply(&surfaces)?,
+            let encoded = synced(reply).and_then(|surfaces| {
+                held.request.synced_reply(&surfaces).map_err(|cause| {
+                    tracing::warn!(
+                        operation = "canvas_workflow_reply",
+                        request_id = held.request.envelope().request_id(),
+                        workflow = %workflow_of(held.request.command()),
+                        cause = %cause,
+                        "A settled workflow key map could not be encoded"
+                    );
+                    failure(CanvasFailureStatus::Error, REPLY_UNENCODABLE)
+                })
+            });
+            let payload = match encoded {
+                Ok(payload) => payload,
                 Err(failure) => held.request.failure_reply(&failure)?,
             };
-            self.answer(held.identity, payload, held.claim)?;
+            self.answer_settled(held, payload, session)?;
         }
         while session.inputs_restored() && self.free_replies() > 0 {
             let Some(index) = self.workflow.held.iter().position(|held| held.ticket.is_none())
@@ -391,5 +443,55 @@ impl NativeSurface {
         let owner = super::super::comfy_source::ComfySource::new(backend, target, None)
             .map_err(|_| failure(CanvasFailureStatus::Error, "An input file is unreachable"))?;
         Ok(ComfyFile { reference, acquirer: Arc::new(owner) })
+    }
+}
+
+/// The workflow a command addresses.
+fn workflow_of(command: &CanvasWorkflowCommand) -> &str {
+    match command {
+        CanvasWorkflowCommand::Sync { workflow, .. }
+        | CanvasWorkflowCommand::Activate { workflow, .. }
+        | CanvasWorkflowCommand::Appearance { workflow, .. }
+        | CanvasWorkflowCommand::Resize { workflow, .. }
+        | CanvasWorkflowCommand::Hover { workflow, .. } => workflow.as_str(),
+    }
+}
+
+/// The page's typed answer to input work that did not start or did not complete. A typed
+/// rejection keeps its own status and message; any other failure is an actionable error, so a
+/// failed provisioning never ends the application.
+fn refusal(cause: &(dyn Error + 'static)) -> CanvasFailure {
+    match cause.downcast_ref::<InputRejection>() {
+        Some(InputRejection::Invalid(message)) => failure(CanvasFailureStatus::Error, message),
+        Some(rejection @ InputRejection::Unknown) => {
+            failure(CanvasFailureStatus::Stale, &rejection.to_string())
+        }
+        Some(InputRejection::Unavailable(message)) => {
+            failure(CanvasFailureStatus::Unavailable, message)
+        }
+        None => failure(CanvasFailureStatus::Error, PROVISION_FAILED),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_input_work_is_answered_with_its_typed_status_or_an_actionable_error() {
+        let refused = |cause: Box<dyn Error>| refusal(cause.as_ref());
+        assert_eq!(
+            refused(Box::new(InputRejection::Unavailable("The canvas is closing"))),
+            failure(CanvasFailureStatus::Unavailable, "The canvas is closing")
+        );
+        assert_eq!(
+            refused(Box::new(InputRejection::Invalid("Input surface keys repeat"))),
+            failure(CanvasFailureStatus::Error, "Input surface keys repeat")
+        );
+        assert_eq!(refused(Box::new(InputRejection::Unknown)).status, CanvasFailureStatus::Stale);
+        assert_eq!(
+            refused("Input document identity exhausted".into()),
+            failure(CanvasFailureStatus::Error, PROVISION_FAILED)
+        );
     }
 }

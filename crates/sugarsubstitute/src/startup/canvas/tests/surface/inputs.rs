@@ -371,3 +371,53 @@ fn activation_shows_input_documents_in_the_context_until_the_output_route_return
     assert_eq!(inputs.workflow(resize("image"))?["status"], "error");
     inputs.close()
 }
+
+/// A sync of many blank surfaces whose key map exceeds the lane credit's inline bound, as
+/// SugarCubes declares them for a large regional workflow.
+fn wide_sync(count: usize) -> Value {
+    let surfaces: Vec<Value> = (0..count)
+        .map(|index| {
+            let masks: Vec<Value> = (0..4)
+                .map(|entry| {
+                    json!({"key":format!("[\"[\\\"{}\\\",\\\"mask\\\"]\",\"5b0c7a3e-{index:04}-4f6d-9a1b-c2d3e4f5a6{entry:02}\"]", 900 + index),
+                       "label":format!("Region {index}.{entry}"), "color":"#ff0000", "opacity":0.5,
+                       "initial":null, "channel":"red"})
+                })
+                .collect();
+            json!({"key":format!("@synthetic/{:016x}", 0xb01c_0000_u64 + index as u64),
+                "label":format!("Bulk {index}"), "base":{"kind":"blank", "width":8, "height":8},
+                "masks":masks})
+        })
+        .collect();
+    json!({"type":"sync", "workflow":WORKFLOW, "surfaces":surfaces})
+}
+
+#[test]
+fn a_sync_whose_key_map_exceeds_the_inline_reply_bound_is_answered_and_the_canvas_keeps_serving()
+-> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let mut inputs = Inputs::start(directory.path())?;
+    for count in [3, 40, 64] {
+        let id = inputs.send("workflow.request", Some(wide_sync(count)))?;
+        let reply = inputs.reply(id)?;
+        assert!(
+            count == 3
+                || serde_json::to_vec(&reply)?.len()
+                    > sugarsubstitute_desktop::CanvasNativeReply::INLINE_PAYLOAD_BYTES,
+            "{count} surfaces must exceed the inline bound"
+        );
+        let result = &reply["result"];
+        assert_eq!(result["kind"], "synced", "{result}");
+        assert_eq!(result["surfaces"].as_array().map(Vec::len), Some(count));
+        let masks: usize = result["surfaces"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|surface| surface["masks"].as_array().map_or(0, Vec::len))
+            .sum();
+        assert_eq!(masks, count * 4);
+        // The canvas still answers its next request.
+        assert!(inputs.ask("context.request", None)?["context"].is_object());
+    }
+    inputs.close()
+}
