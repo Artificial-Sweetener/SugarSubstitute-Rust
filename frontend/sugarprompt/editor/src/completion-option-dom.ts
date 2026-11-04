@@ -25,6 +25,8 @@ import {
 /** An option node retains immutable candidate provenance and the actual raster it last painted. */
 export interface CompletionOptionDOM {
   readonly dom: HTMLElement;
+  readonly label: HTMLElement;
+  readonly detail: HTMLElement;
   option: PreparedCompletion;
   readonly backing: HTMLElement | null;
   media: PreparedLoraMedia | null;
@@ -71,7 +73,38 @@ export function createCompletionOption(
     dom.append(backing, initial);
   } else dom.className = 'sp-completion-row';
   dom.append(label, detail);
-  return { dom, option, backing, media: null };
+  return { dom, label, detail, option, backing, media: null };
+}
+
+/**
+ * Repaint a plain row in place for another candidate at the same position.
+ *
+ * Only text and attributes change, so each keystroke's refreshed list causes no structural DOM change:
+ * in Chromium every inserted or removed node restyles ComfyUI's whole document, whose stylesheets carry
+ * document-wide `:has()` rules. Model tiles own raster backing and are rebuilt instead.
+ */
+export function relabelCompletionRow(
+  node: CompletionOptionDOM,
+  option: PreparedCompletion,
+  id: string,
+  index: number,
+  count: number,
+): boolean {
+  if (node.option.kind === 'lora' || option.kind === 'lora') return false;
+  node.dom.id = `${id}-${index}`;
+  node.dom.setAttribute('aria-setsize', String(count));
+  node.dom.setAttribute('aria-label', option.label + (option.detail ? `, ${option.detail}` : ''));
+  writeText(node.label, option.label);
+  writeText(node.detail, option.detail);
+  node.option = option;
+  return true;
+}
+
+/** Replace a lone text node's data rather than the node itself. */
+function writeText(element: HTMLElement, text: string): void {
+  const only = element.firstChild;
+  if (only?.nodeType === Node.TEXT_NODE && only === element.lastChild) only.nodeValue = text;
+  else element.textContent = text;
 }
 
 /** Actual descriptor/raster identity prevents repaint on unrelated source selection or geometry changes. */
