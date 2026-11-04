@@ -60,3 +60,13 @@ test('a workflow sharing its identity with another open workflow is a copy and t
   expect(f.state.workflow(false)).toBe('workflow-id2');
   expect(f.commit).toHaveBeenCalledTimes(1);
 });
+
+test('the loaded identity is read without assigning, replacing or committing one', () => {
+  const f = fixture();
+  expect(f.state.loaded()).toBeNull();
+  expect(f.root.extra).toEqual({ other: true });
+  f.state.workflow(true);
+  f.peers.push({ extra: { [WORKFLOW_INPUT_STATE_KEY]: { id: 'workflow-id1' } } });
+  expect(f.state.loaded()).toBe('workflow-id1');
+  expect(f.commit).not.toHaveBeenCalled();
+});

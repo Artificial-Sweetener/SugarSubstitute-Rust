@@ -25,7 +25,7 @@ export function createCanvasInputs(options) {
     const capture = new CanvasSourceCapture(host, (canvasId, documentId) => surfaces.provisioning.document(canvasId, documentId));
     const rasters = new BrowserInputRasters(document, (input, init) => fetch(input, init));
     const maskEditing = new BrowserMaskEditing();
-    const previews = new CanvasSourcePreviews(capture, host, report);
+    const previews = new CanvasSourcePreviews(capture, host, report, () => surfaces.workflow());
     const legacy = new LegacyMaskMigration(legacyHost, assets);
     const defaults = new ComfyInputSourceDefaults(host, legacy, (id) => options.canvases.provisions(id));
     const bindings = new ComfyInputBindings(loaders, {
@@ -56,12 +56,21 @@ export function createCanvasInputs(options) {
         report,
     });
     const masonry = new MasonryInputHost(document, loaders, previews, (file) => assets.file(file), report, bindings, associations, surfaces.cards);
+    // Recapture previews once the canvas holds another workflow's documents.
+    let held = surfaces.provisioning.state;
+    const stopHeld = surfaces.provisioning.subscribe(() => {
+        const next = surfaces.provisioning.state;
+        if (next?.workflow !== held?.workflow && next)
+            previews.refresh(next.canvasId);
+        held = next;
+    });
     const canvasReady = () => {
         void surfaces.provisioning.refresh();
     };
     document.addEventListener('sugarcubes-canvas-ready', canvasReady);
     document.defaultView?.addEventListener('pagehide', () => {
         document.removeEventListener('sugarcubes-canvas-ready', canvasReady);
+        stopHeld();
         surfaces.dispose();
         associations.dispose();
         bindings.clear();
@@ -101,6 +110,7 @@ export function createCanvasInputs(options) {
             bindings.clear();
         },
         afterConfigureGraph: async () => {
+            previews.workflowChanged();
             associations.start();
             void surfaces.provisioning.refresh();
             await bindings.ready();

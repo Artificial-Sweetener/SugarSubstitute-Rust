@@ -35,6 +35,7 @@ export function createWorkflowSurfaces(options) {
     const dialog = new CanvasResolutionDialog(options.document);
     return {
         provisioning,
+        workflow: () => state.loaded(),
         route: {
             read: () => {
                 const view = route.read();

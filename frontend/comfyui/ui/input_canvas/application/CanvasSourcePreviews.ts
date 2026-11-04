@@ -57,12 +57,20 @@ export class CanvasSourcePreviews {
   #nextCohort = 0;
   #pending = false;
   #disposed = false;
+  #workflow: string | null = null;
 
-  /** Reuse the same validated capture path as full-resolution queue preparation. */
+  /**
+   * Reuse the same validated capture path as full-resolution queue preparation.
+   *
+   * `workflow` names the loaded workflow, or null. A workflow canvas numbers each workflow's
+   * input documents and layers afresh, so the same source names different pixels in another
+   * workflow; each preview is keyed by the workflow loaded when it was observed.
+   */
   constructor(
     private readonly capture: CanvasSourceCapture,
     private readonly host: (canvasId: string) => CanvasSourceHost | null,
     private readonly report: (error: unknown) => void,
+    private readonly workflow: () => string | null,
   ) {}
 
   /** Share raw source pixels so a channel change can reinterpret them without a native round trip. */
@@ -80,6 +88,7 @@ export class CanvasSourcePreviews {
       this.#cohorts.set(cohort, cohortId);
     }
     const key = JSON.stringify([
+      this.workflow(),
       cohortId,
       canvasInputSourceKey(source),
       maximumSize === 0 ? 'full' : 'display',
@@ -124,6 +133,24 @@ export class CanvasSourcePreviews {
           this.#hosts.delete(host);
         }
     };
+  }
+
+  /**
+   * Drop every captured preview once another workflow is loaded.
+   *
+   * Mounted previews show loading and capture again; previews observed from now on are keyed by
+   * the new workflow. An unchanged workflow is a no-op.
+   */
+  workflowChanged(): void {
+    const workflow = this.workflow();
+    if (this.#disposed || workflow === this.#workflow) return;
+    this.#workflow = workflow;
+    for (const [key, entry] of this.#entries) {
+      entry.value = { kind: 'loading' };
+      for (const listener of entry.listeners) listener(entry.value);
+      this.#invalidate(key, entry);
+    }
+    this.#schedule();
   }
 
   /** Mark only the changed canvas's mounted sources dirty without graph discovery or file uploads. */

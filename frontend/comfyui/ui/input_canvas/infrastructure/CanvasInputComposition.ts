@@ -84,7 +84,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
   );
   const rasters = new BrowserInputRasters(document, (input, init) => fetch(input, init));
   const maskEditing = new BrowserMaskEditing();
-  const previews = new CanvasSourcePreviews(capture, host, report);
+  const previews = new CanvasSourcePreviews(capture, host, report, () => surfaces.workflow());
   const legacy = new LegacyMaskMigration(legacyHost, assets);
   const defaults = new ComfyInputSourceDefaults(host, legacy, (id) =>
     options.canvases.provisions(id),
@@ -132,6 +132,13 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     associations,
     surfaces.cards,
   );
+  // Recapture previews once the canvas holds another workflow's documents.
+  let held = surfaces.provisioning.state;
+  const stopHeld = surfaces.provisioning.subscribe(() => {
+    const next = surfaces.provisioning.state;
+    if (next?.workflow !== held?.workflow && next) previews.refresh(next.canvasId);
+    held = next;
+  });
   const canvasReady = (): void => {
     void surfaces.provisioning.refresh();
   };
@@ -140,6 +147,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     'pagehide',
     () => {
       document.removeEventListener('sugarcubes-canvas-ready', canvasReady);
+      stopHeld();
       surfaces.dispose();
       associations.dispose();
       bindings.clear();
@@ -189,6 +197,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
       bindings.clear();
     },
     afterConfigureGraph: async () => {
+      previews.workflowChanged();
       associations.start();
       void surfaces.provisioning.refresh();
       await bindings.ready();
