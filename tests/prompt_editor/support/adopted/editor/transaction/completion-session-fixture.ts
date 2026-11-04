@@ -94,21 +94,16 @@ export function sessionResult(
         'nameRange' in query
           ? loraReplacement(scope.target.scope.mapping.text, query, row.name)
           : { range, text: row.name };
-      const acceptance = prepareScopedCompletionEdit(
-        state,
-        scope,
-        replacement.range,
-        replacement.text,
-        range,
-      );
-      if (!acceptance) throw new Error('fixture-genuine-completion-edit-rejected');
+      if (!prepareScopedCompletionEdit(state, scope, replacement.range, replacement.text))
+        throw new Error('fixture-genuine-completion-edit-rejected');
       return {
         label: row.name,
         detail: '',
         freshness: state.field(editorFreshness),
         caret,
         ghost: row.name.slice(2),
-        acceptance: { keyboard: acceptance, pointer: acceptance },
+        prepareEdit: (current: EditorState) =>
+          prepareScopedCompletionEdit(current, scope, replacement.range, replacement.text),
         ...(kind === 'tag'
           ? { kind: 'tag' as const }
           : {

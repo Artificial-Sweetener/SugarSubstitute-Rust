@@ -1,6 +1,6 @@
 import {
   bundledPromptTagCatalog
-} from "./chunk-3QEAS2MJ.js";
+} from "./chunk-3T2W33S6.js";
 import {
   markComfyPromptInput
 } from "./chunk-74D7X3OT.js";
@@ -44,14 +44,11 @@ import {
   isDiagnosticCommitBoundary,
   isPreparedSpellingCandidates,
   isSpellcheckSession,
-  isStructuralQuote,
   isWildcardCompletionBody,
   loraCompletionSuffix,
-  loraNameContent,
   loraNameKey,
   loraReplacement,
   mapReorderSelection,
-  mapVisibleSource,
   mutateWildcardTag,
   normalizePasteRange,
   normalizeSceneTitle,
@@ -114,7 +111,7 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-GHE3WHFX.js";
+} from "./chunk-HM6G4V2F.js";
 import {
   SugarPromptMenu
 } from "./chunk-QTBJ64DI.js";
@@ -23756,52 +23753,26 @@ function refocusCapturedHandoff(view, handoff) {
 }
 
 // frontend/sugarprompt/editor/src/document-value-continuation-recipes.ts
-var retiredSplices = /* @__PURE__ */ new WeakSet();
 function authentic(recipe) {
-  const { edit, transaction, context, splice } = recipe;
-  const spliceMatches = !splice || !retiredSplices.has(splice) && !!transaction && splice.edit === edit && splice.from === recipe.from && splice.to === recipe.to && splice.insert instanceof Text && splice.insert.eq(recipe.insert) && splice.selection === transaction.newSelection && splice.effects === transaction.effects;
-  if (splice && !spliceMatches) retiredSplices.add(splice);
-  return currentDocumentValueEdit(edit.startState, context, edit) === null && edit.transactions.length === (transaction ? 1 : 0) && (edit.transactions[0] ?? null) === transaction && spliceMatches;
+  const { edit, transaction, context } = recipe;
+  return currentDocumentValueEdit(edit.startState, context, edit) === null && edit.transactions.length === (transaction ? 1 : 0) && (edit.transactions[0] ?? null) === transaction;
 }
-function recipeFor(state, context, edit, splice) {
+function recipeFor(state, context, edit) {
   if (currentDocumentValueEdit(state, context, edit) !== null || edit.transactions.length > 1)
     return null;
-  const transaction = edit.transactions[0] ?? null;
-  const from = splice?.from ?? 0, to = splice?.to ?? state.doc.length;
-  if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from || to > state.doc.length)
-    return null;
-  if (splice) {
-    const mapping = edit.target.entry.semanticMapping;
-    if (!mapping || [from, to].some(
-      (position) => position < mapping.logicalRange.from || position > mapping.logicalRange.to || mapping.logicalToDecoded[position - mapping.logicalRange.from] == null
-    ))
-      return null;
-  }
-  let contained = true;
-  transaction?.changes.iterChangedRanges((start, end) => {
-    if (start < from || end > to) contained = false;
-  });
-  const insert2 = transaction ? transaction.newDoc.slice(
-    transaction.changes.mapPos(from, -1),
-    transaction.changes.mapPos(to, 1)
-  ) : state.doc;
-  const recipe = { edit, transaction, context, splice, from, to, insert: insert2 };
-  return contained && authentic(recipe) ? recipe : null;
+  const recipe = { edit, transaction: edit.transactions[0] ?? null, context };
+  return authentic(recipe) ? recipe : null;
 }
-function compileNativeRecipe(state, origin, lineage, changed, recipe) {
+function compileNativeRecipe(state, origin, recipe) {
   const original = recipe.transaction;
   if (!original) {
-    if (changed || !state.doc.eq(origin.doc) || !selectionMatches(state.selection, selectionContents(origin.selection)))
+    if (!state.doc.eq(origin.doc) || !selectionMatches(state.selection, selectionContents(origin.selection)))
       throw new Error("native-continuation-noop-mismatch");
     return state.update({ annotations: Transaction.addToHistory.of(false) });
   }
   if (state === origin) return original;
   const transaction = state.update({
-    changes: changed ? {
-      from: lineage.mapPos(recipe.from, -1),
-      to: lineage.mapPos(recipe.to, 1),
-      insert: recipe.insert
-    } : original.changes,
+    changes: original.changes,
     selection: original.newSelection,
     effects: original.effects,
     annotations: [
@@ -23846,53 +23817,6 @@ function compileNativeRecipe(state, origin, lineage, changed, recipe) {
   return transaction;
 }
 
-// frontend/sugarprompt/editor/src/document-value-completion-evidence.ts
-var mutatedResults = /* @__PURE__ */ new WeakSet();
-function completionResultMatches(receipt) {
-  const result2 = receipt.result;
-  if (!result2) return true;
-  const matches = !mutatedResults.has(result2) && result2.query === receipt.query && result2.from === requireValue(receipt.queryBounds, "document-value-completion-evidence")[3] && result2.to === requireValue(receipt.queryBounds, "document-value-completion-evidence")[4] && result2.query.scope === requireValue(receipt.recipes[0], "document-value-completion-evidence").edit.target.scope && result2.query.from === requireValue(receipt.queryBounds, "document-value-completion-evidence")[0] && result2.query.contentFrom === requireValue(receipt.queryBounds, "document-value-completion-evidence")[1] && result2.query.to === requireValue(receipt.queryBounds, "document-value-completion-evidence")[2] && result2.query.kind === receipt.kind && result2.options.length === receipt.candidates.length && receipt.candidates.every(
-    (candidate2, index) => Object.hasOwn(result2.options, index) && result2.options[index] === candidate2.option && candidate2.option.kind === candidate2.kind && candidate2.option.caret === candidate2.caret && candidate2.option.freshness === candidate2.freshness && candidate2.option.acceptance.keyboard === candidate2.keyboard && candidate2.option.acceptance.pointer === candidate2.pointer && candidate2.edits.every(
-      (expected) => expected.acceptance.edit === expected.edit && expected.acceptance.splice === expected.splice && expected.acceptance.right === expected.right && (expected.right === null || expected.right.splice === expected.rightSplice && expected.right.match === expected.rightMatch && expected.right.match.maximumSourcePrefixLength === expected.maximum && expected.right.match.consumesSourcePrefix === expected.consumes)
-    )
-  );
-  if (!matches) mutatedResults.add(result2);
-  return matches;
-}
-
-// frontend/sugarprompt/core/src/completion/continuation.ts
-function stableCompletionContent(kind, text) {
-  if (kind === "scene")
-    return !/[\0\n-\r\x1c-\x1e\x85\u2028\u2029]/u.test(text);
-  if (kind === "wildcard") return !/[{},]/u.test(text) && !whitespace.test(text);
-  return kind === "lora" ? loraNameContent(text) : !/[\\()[\]{}<>,:'"\s\0]/u.test(text.replace(/[ \t]/gu, ""));
-}
-function stableTagText(text) {
-  return stableCompletionContent("tag", text.replace(/['"]/gu, ""));
-}
-function stableTagCompletionPrefix(text) {
-  let from = 0;
-  for (const escape of parenthesisEscapes(text)) {
-    if (!stableTagText(text.slice(from, escape.from))) return false;
-    from = escape.to;
-  }
-  return stableTagText(text.slice(from));
-}
-function stableCompletionEdit(kind, before, removed, inserted, after) {
-  if (!stableCompletionContent(kind, removed) || !stableCompletionContent(kind, inserted))
-    return false;
-  if (kind !== "tag") return true;
-  const left = before.slice(-3), right = after.slice(0, 3);
-  if (parenthesisEscapes(left.slice(-1) + (removed[0] ?? right[0] ?? "")).length) return false;
-  if (left.endsWith("'") && isStructuralQuote(left + removed.slice(0, 2) + right, left.length - 1) !== isStructuralQuote(left + inserted.slice(0, 2) + right, left.length - 1))
-    return false;
-  const oldBefore = left + removed.slice(-2), newBefore = left + inserted.slice(-2);
-  return !right.startsWith("'") || isStructuralQuote(oldBefore + right, oldBefore.length) === isStructuralQuote(newBefore + right, newBefore.length);
-}
-function hasCompletionPrefix(sourcePrefix) {
-  return Array.from(mapVisibleSource(sourcePrefix.slice(0, 4)).text).length >= 2;
-}
-
 // frontend/sugarprompt/editor/src/document-value-continuation.ts
 var refused = Object.freeze({
   status: "rejected",
@@ -23907,7 +23831,7 @@ function issue(receipt) {
   return handle;
 }
 function prepareNativeEditContinuation(state, context, edit) {
-  const recipe = recipeFor(state, context, edit, null);
+  const recipe = recipeFor(state, context, edit);
   return recipe ? {
     status: "ready",
     value: issue({
@@ -23915,84 +23839,9 @@ function prepareNativeEditContinuation(state, context, edit) {
       tip: state,
       selection: selectionContents(state.selection),
       endings: [...state.field(lineEndings)],
-      recipes: [recipe],
-      lineage: state.changes([]).desc,
-      result: null,
-      candidates: [],
-      queryBounds: null,
-      kind: null,
-      query: null,
-      caret: state.selection.main.head,
-      queryTo: 0,
-      changed: false
+      recipe
     })
   } : refused;
-}
-function prepareNativeCompletionContinuation(state, scope, result2) {
-  if (result2.query.scope !== scope.target.scope || !result2.options.length || !state.selection.main.empty)
-    return refused;
-  const recipes = [], candidates = [];
-  for (const option of result2.options) {
-    if (option.freshness !== state.field(editorFreshness) || option.caret !== state.selection.main.head)
-      return refused;
-    for (const activation of ["keyboard", "pointer"]) {
-      const acceptance = option.acceptance[activation];
-      for (const [edit, splice] of [
-        [acceptance.edit, null],
-        ...acceptance.splice ? [[acceptance.splice.edit, acceptance.splice]] : [],
-        ...acceptance.right ? [[acceptance.right.splice.edit, acceptance.right.splice]] : []
-      ]) {
-        const recipe = recipeFor(state, scope.context, edit, splice);
-        if (!recipe || edit.target.scope !== scope.target.scope) return refused;
-        recipes.push(recipe);
-      }
-    }
-    candidates.push({
-      option,
-      kind: option.kind,
-      caret: option.caret,
-      freshness: option.freshness,
-      keyboard: option.acceptance.keyboard,
-      pointer: option.acceptance.pointer,
-      edits: [option.acceptance.keyboard, option.acceptance.pointer].map((acceptance) => ({
-        acceptance,
-        edit: acceptance.edit,
-        splice: acceptance.splice,
-        right: acceptance.right,
-        rightSplice: acceptance.right?.splice ?? null,
-        rightMatch: acceptance.right?.match ?? null,
-        maximum: acceptance.right?.match.maximumSourcePrefixLength ?? null,
-        consumes: acceptance.right?.match.consumesSourcePrefix ?? null
-      }))
-    });
-  }
-  const query = result2.query;
-  if (![query.from, query.contentFrom, query.to].every(Number.isSafeInteger) || query.from < 0 || query.contentFrom < query.from || query.to < query.contentFrom || query.to > state.doc.length)
-    return refused;
-  const mapping = scope.target.entry.semanticMapping;
-  if (!mapping || [query.from, query.contentFrom, query.to].some(
-    (position) => position < mapping.logicalRange.from || position > mapping.logicalRange.to || mapping.logicalToDecoded[position - mapping.logicalRange.from] == null
-  ))
-    return refused;
-  return {
-    status: "ready",
-    value: issue({
-      origin: state,
-      tip: state,
-      selection: selectionContents(state.selection),
-      endings: [...state.field(lineEndings)],
-      recipes,
-      candidates,
-      queryBounds: [query.from, query.contentFrom, query.to, result2.from, result2.to],
-      kind: query.kind,
-      lineage: state.changes([]).desc,
-      result: result2,
-      query,
-      caret: state.selection.main.head,
-      queryTo: query.to,
-      changed: false
-    })
-  };
 }
 function valid(receipt, state) {
   if (receipt.tip !== state) return false;
@@ -24000,122 +23849,28 @@ function valid(receipt, state) {
     (ending, index) => Object.hasOwn(state.field(lineEndings), index) && state.field(lineEndings)[index] === ending
   );
   if (!intact) mutatedTips.add(receipt);
-  return intact && !mutatedTips.has(receipt) && completionResultMatches(receipt) && !state.readOnly && receipt.recipes.every(authentic);
+  return intact && !mutatedTips.has(receipt) && !state.readOnly && authentic(receipt.recipe);
 }
-function nativeInputSelection(transaction, caret) {
-  const mapped = transaction.startState.selection.map(transaction.changes, 1);
-  if (selectionMatches(transaction.state.selection, selectionContents(mapped))) return true;
-  const backward = transaction.isUserEvent("delete.backward"), forward = transaction.isUserEvent("delete.forward");
-  if (!backward && !forward) return false;
-  let adjacent = true, count = 0;
-  transaction.changes.iterChanges((from, to, _a2, _b, inserted) => {
-    count++;
-    if (from >= to || inserted.length !== 0 || (backward ? to !== transaction.startState.selection.main.head : from !== transaction.startState.selection.main.head))
-      adjacent = false;
-  });
-  if (!adjacent || count !== 1 || !transaction.startState.selection.main.empty) return false;
-  return [0, backward ? -1 : 1].some((assoc) => {
-    const ranges = [...mapped.ranges];
-    ranges[mapped.mainIndex] = EditorSelection.cursor(caret, assoc);
-    return selectionMatches(
-      transaction.state.selection,
-      selectionContents(EditorSelection.create(ranges, mapped.mainIndex))
-    );
-  });
-}
-function follow(handle, transaction, allowInput) {
+function followNativeEditContinuation(handle, transaction) {
   const previous = receipts3.get(handle);
   if (!(transaction instanceof Transaction) || !previous || !valid(previous, transaction.startState))
     return retired;
   const state = transaction.state, before = transaction.startState.field(editorFreshness), after = state.field(editorFreshness);
-  if (state.readOnly || transaction.isUserEvent("input.type.compose") || before.context !== after.context || transaction.effects.some((effect) => effect.is(installAuthorship)))
+  if (state.readOnly || transaction.isUserEvent("input.type.compose") || before.context !== after.context || transaction.effects.some((effect) => effect.is(installAuthorship)) || changesExactSource(transaction) || before.source !== after.source || state.doc !== transaction.startState.doc || !selectionMatches(state.selection, previous.selection) || state.field(lineEndings) !== transaction.startState.field(lineEndings))
     return retired;
-  const sourceChanged = changesExactSource(transaction);
-  let caret = previous.caret, queryTo = previous.queryTo, recipes = previous.recipes;
-  if (!sourceChanged) {
-    if (before.source !== after.source || state.doc !== transaction.startState.doc || !selectionMatches(state.selection, previous.selection) || state.field(lineEndings) !== transaction.startState.field(lineEndings))
-      return retired;
-  } else {
-    const query = previous.query;
-    if (!allowInput || !query || query.scope.container.location.kind !== "prompt" || !transaction.docChanged || transaction.isUserEvent("input.type.compose") || !transaction.isUserEvent("input.type") && !transaction.isUserEvent("delete") || !state.selection.main.empty)
-      return retired;
-    let count = 0, stable = true;
-    transaction.changes.iterChanges((from, to, _a2, _b, inserted) => {
-      count++;
-      if (from < query.contentFrom || to > previous.queryTo || query.kind === "tag" && to > previous.caret || !stableCompletionEdit(
-        query.kind,
-        transaction.startState.doc.sliceString(Math.max(0, from - 3), from),
-        transaction.startState.doc.sliceString(from, to),
-        inserted.toString(),
-        transaction.startState.doc.sliceString(
-          to,
-          Math.min(transaction.startState.doc.length, to + 3)
-        )
-      ))
-        stable = false;
-      recipes = recipes.filter(
-        (recipe) => from >= previous.lineage.mapPos(recipe.from, -1) && to <= previous.lineage.mapPos(recipe.to, 1)
-      );
-    });
-    caret = transaction.changes.mapPos(caret, 1);
-    queryTo = transaction.changes.mapPos(queryTo, 1);
-    if (count !== 1 || !stable || !recipes.length || state.selection.main.head !== caret || caret < query.contentFrom || caret > queryTo || query.kind === "tag" && (/^[ \t]/u.test(state.doc.sliceString(query.contentFrom, query.contentFrom + 1)) || !hasCompletionPrefix(
-      state.doc.sliceString(query.contentFrom, Math.min(caret, query.contentFrom + 4))
-    )))
-      return retired;
-    if (!nativeInputSelection(transaction, caret)) return retired;
-  }
-  const receipt = {
-    ...previous,
-    tip: state,
-    selection: selectionContents(state.selection),
-    endings: [...state.field(lineEndings)],
-    recipes,
-    lineage: previous.lineage.composeDesc(transaction.changes.desc),
-    caret,
-    queryTo,
-    changed: previous.changed || sourceChanged
-  };
   return {
     status: "ready",
-    value: {
-      continuation: issue(receipt),
-      phase: receipt.changed ? "refreshing" : "ready",
-      caret,
-      queryTo
-    }
+    value: issue({
+      ...previous,
+      tip: state,
+      selection: selectionContents(state.selection),
+      endings: [...state.field(lineEndings)]
+    })
   };
-}
-function followNativeEditContinuation(handle, transaction) {
-  const outcome = follow(handle, transaction, false);
-  return outcome.status === "ready" ? { status: "ready", value: outcome.value.continuation } : outcome;
-}
-function followNativeCompletionContinuation(handle, transaction) {
-  return follow(handle, transaction, true);
-}
-function compile(state, receipt, recipe) {
-  return valid(receipt, state) && receipt.recipes.includes(recipe) && authentic(recipe) ? {
-    status: "ready",
-    value: compileNativeRecipe(state, receipt.origin, receipt.lineage, receipt.changed, recipe)
-  } : refused;
 }
 function nativeEditContinuationTransaction(state, handle) {
   const receipt = receipts3.get(handle);
-  return receipt && !receipt.result ? compile(state, receipt, requireValue(receipt.recipes[0], "document-value-continuation")) : refused;
-}
-function completionContinuationTransaction(state, handle, result2, index, activation) {
-  const receipt = receipts3.get(handle), option = Number.isSafeInteger(index) ? result2.options[index] : void 0;
-  if (!receipt || !completionResultMatches(receipt) || receipt.result !== result2 || !option || result2.query !== receipt.query)
-    return refused;
-  const acceptance = option.acceptance[activation];
-  let splice = receipt.changed ? acceptance.splice : null;
-  const right = acceptance.right;
-  if (receipt.changed && right && receipt.caret - result2.query.contentFrom <= right.match.maximumSourcePrefixLength && right.match.consumesSourcePrefix(state.doc.sliceString(result2.query.contentFrom, receipt.caret)))
-    splice = right.splice;
-  if (receipt.changed && !splice) return refused;
-  const edit = splice?.edit ?? acceptance.edit;
-  const recipe = receipt.recipes.find((recipe2) => recipe2.edit === edit && recipe2.splice === splice);
-  return recipe ? compile(state, receipt, recipe) : refused;
+  return receipt && valid(receipt, state) ? { status: "ready", value: compileNativeRecipe(state, receipt.origin, receipt.recipe) } : refused;
 }
 
 // frontend/sugarprompt/editor/src/saved-segment-actions.ts
@@ -33525,7 +33280,7 @@ function current5(state, result2) {
 function completionIdentity(option) {
   return option.kind === "tag" ? `tag:${option.label}` : option.kind === "trigger" ? `trigger:${option.backendValue}:${option.label}` : option.kind === "wildcard" ? `wildcard:${option.label}` : option.kind === "scene" ? `scene:${option.label}` : `lora:${option.item.model.backendValue}`;
 }
-function followInput(session, transaction, executable) {
+function followInput(session, transaction) {
   const state = transaction.state, freshness = state.field(editorFreshness);
   if (state.readOnly || !state.selection.main.empty || freshness.context !== session.freshness.context || !transaction.docChanged || !transaction.isUserEvent("input.type") && !transaction.isUserEvent("delete") || transaction.isUserEvent("input.type.compose"))
     return null;
@@ -33543,7 +33298,6 @@ function followInput(session, transaction, executable) {
     freshness,
     caret,
     acceptance: null,
-    consumedShift: executable ? (session.consumedShift ?? 0) + transaction.newDoc.length - transaction.startState.doc.length : null,
     query: { ...session.query, to: end }
   };
 }
@@ -33558,27 +33312,6 @@ function publish(session, result2, transaction, selectedExplicitly) {
     const previous2 = requireValue(session.result.options[index], "completion-session");
     return option.kind === previous2.kind && option.label === previous2.label && option.detail === previous2.detail && (option.kind !== "lora" || previous2.kind === "lora" && option.item === previous2.item);
   });
-  const origin = transaction.startState, native = origin.field(semanticStructures).native, target = result2.options[0]?.acceptance.keyboard.edit.target;
-  let continuation = null;
-  if (native && target) {
-    const prepared4 = prepareNativeCompletionContinuation(
-      origin,
-      {
-        context: {
-          values: native.nativeValues,
-          semantics: native.documentSemantics,
-          enabled: true,
-          composing: false
-        },
-        target
-      },
-      result2
-    );
-    if (prepared4.status === "ready") {
-      const followed = followNativeCompletionContinuation(prepared4.value, transaction);
-      if (followed.status === "ready") continuation = followed.value.continuation;
-    }
-  }
   return {
     session: {
       id: compatible ? session.id : `sp-completions-${++nextIdentity}`,
@@ -33589,44 +33322,32 @@ function publish(session, result2, transaction, selectedExplicitly) {
       freshness: state.field(editorFreshness),
       caret: state.selection.main.head,
       acceptance: null,
-      presentation: samePresentation ? session.presentation : Symbol(),
-      consumedShift: 0
+      presentation: samePresentation ? session.presentation : Symbol()
     },
-    continuation,
     selectedExplicitly: !!compatible && selectedExplicitly && selected >= 0
   };
 }
 var completionState = StateField.define({
   /** Baselines begin without an active suggestion session. */
   create() {
-    return { session: null, continuation: null, selectedExplicitly: false };
+    return { session: null, selectedExplicitly: false };
   },
   /** Apply only source-current publication and bounded, same-session selection intent. */
   update(previous, transaction) {
     let session = previous.session;
-    let continuation = previous.continuation;
     let selectedExplicitly = previous.selectedExplicitly;
-    if (continuation) {
-      const followed = followNativeCompletionContinuation(continuation, transaction);
-      continuation = followed.status === "ready" ? followed.value.continuation : null;
-    }
     if (session && (session.freshness !== transaction.state.field(editorFreshness) || session.caret !== transaction.state.selection.main.head || !transaction.state.selection.main.empty || transaction.state.readOnly))
-      session = followInput(session, transaction, continuation !== null);
-    if (!session) {
-      continuation = null;
-      selectedExplicitly = false;
-    }
+      session = followInput(session, transaction);
+    if (!session) selectedExplicitly = false;
     for (const effect of transaction.effects) {
       if (effect.is(installCompletion)) {
         const result2 = effect.value;
         if (!result2) {
           session = null;
-          continuation = null;
           selectedExplicitly = false;
         } else if (current5(transaction.state, result2)) {
           const published = publish(session, result2, transaction, selectedExplicitly);
           session = published.session;
-          continuation = published.continuation;
           selectedExplicitly = published.selectedExplicitly;
         }
       } else if (effect.is(selectCompletion) && session && effect.value.result === session.result) {
@@ -33651,45 +33372,23 @@ var completionState = StateField.define({
         }
       }
     }
-    return session === previous.session && continuation === previous.continuation && selectedExplicitly === previous.selectedExplicitly ? previous : { session, continuation, selectedExplicitly };
+    return session === previous.session && selectedExplicitly === previous.selectedExplicitly ? previous : { session, selectedExplicitly };
   }
 });
 var completionSession = StateField.define({
   /** Observe the initial authoritative session supplied by the same extension provision. */
   create: (state) => state.field(completionState).session,
-  /** Observe the authoritative owner without reproducing publication, selection or continuation rules. */
+  /** Observe the authoritative owner without reproducing publication or selection rules. */
   update: (_previous, transaction) => transaction.state.field(completionState).session,
   /** Include the one authority whenever a consumer mounts the visible session observation. */
   provide: () => completionState
 });
-function completionContinuation(state) {
-  return state.field(completionState, false)?.continuation ?? null;
-}
 function selectedCompletion(state) {
   const session = state.field(completionSession);
   return session?.result.options[session.selected] ?? null;
 }
 
 // frontend/sugarprompt/editor/src/completion-splice.ts
-function prepareCompletionSplice(edit, from, to) {
-  const transaction = edit.transactions[0];
-  if (!transaction) throw new Error("completion-splice-transaction-missing");
-  transaction.changes.iterChangedRanges((changedFrom, changedTo) => {
-    from = Math.min(from, changedFrom);
-    to = Math.max(to, changedTo);
-  });
-  return Object.freeze({
-    edit,
-    from,
-    to,
-    insert: transaction.newDoc.slice(
-      transaction.changes.mapPos(from, -1),
-      transaction.changes.mapPos(to, 1)
-    ),
-    selection: transaction.newSelection,
-    effects: transaction.effects
-  });
-}
 function prepareCompletionScope(state) {
   const semantic = state.field(semanticStructures).native;
   if (!semantic || state.readOnly || !state.selection.main.empty) return null;
@@ -33707,7 +33406,7 @@ function prepareCompletionScope(state) {
 function completionPosition(scope, decoded) {
   return requireValue(scope.target.entry.semanticMapping, "completion-splice").decodedToLogical[decoded] ?? null;
 }
-function prepareScopedCompletionEdit(state, scope, range, text, consumed, normalization = null) {
+function prepareScopedCompletionEdit(state, scope, range, text, normalization = null) {
   const provenance = normalization ? prepareDocumentValuePaste(scope.target, range, text, normalization.lexicon) : null;
   const normal = provenance?.normalization;
   const changed = normal ? minimalChangedSourceRange(scope.target.scope.mapping.text, normal.text) : null;
@@ -33732,29 +33431,16 @@ function prepareScopedCompletionEdit(state, scope, range, text, consumed, normal
       ...provenance ? { normalization: provenance } : {}
     }
   });
-  if (outcome.status === "rejected") return null;
-  const from = consumed ? completionPosition(scope, consumed.from) : null, to = consumed ? completionPosition(scope, consumed.to) : null;
-  return Object.freeze({
-    edit: outcome.edit,
-    splice: scope.context.values.scopes.values.kind === "prompt" && from !== null && to !== null && outcome.edit.transactions.length > 0 ? prepareCompletionSplice(outcome.edit, from, to) : null,
-    right: null
-  });
+  return outcome.status === "rejected" ? null : outcome.edit;
 }
 
 // frontend/sugarprompt/editor/src/lora-completion-options.ts
 function loraCompletionOptions(state, scope, query, caret, catalog) {
   const source = scope.target.scope.mapping.text, rows = catalog.search(query.queryText), from = completionPosition(scope, query.replacementRange.from), contentFrom = completionPosition(scope, query.nameRange.from), to = completionPosition(scope, query.nameFieldRange.to);
   if (!rows.length || from === null || contentFrom === null || to === null) return null;
-  const stablePrefix = stableCompletionContent("lora", query.queryText), options = [];
+  const options = [];
   for (const row of rows) {
-    const replacement = loraReplacement(source, query, row.scheduleName), acceptance = prepareScopedCompletionEdit(
-      state,
-      scope,
-      replacement.range,
-      replacement.text,
-      stablePrefix ? query.replacementRange : null
-    );
-    if (!acceptance) continue;
+    const replacement = loraReplacement(source, query, row.scheduleName);
     options.push(
       Object.freeze({
         label: row.display,
@@ -33764,10 +33450,7 @@ function loraCompletionOptions(state, scope, query, caret, catalog) {
         freshness: state.field(editorFreshness),
         caret,
         ghost: loraCompletionSuffix(query.queryText, row.display, row.scheduleName),
-        acceptance: Object.freeze({
-          keyboard: acceptance,
-          pointer: acceptance
-        })
+        prepareEdit: (current6) => prepareScopedCompletionEdit(current6, scope, replacement.range, replacement.text)
       })
     );
   }
@@ -33796,14 +33479,7 @@ function wildcardCompletionOptions(state, scope, query, caret, catalog) {
   for (const row of result2.suggestions) {
     const style = row.sourceLabel === "TXT wildcard" ? "simple" : "csv";
     if (!isWildcardCompletionBody(row.tag, style)) continue;
-    const replacement = wildcardReplacement(source, query, row.tag, style), acceptance = prepareScopedCompletionEdit(
-      state,
-      scope,
-      replacement.range,
-      replacement.text,
-      query.replacementRange
-    );
-    if (!acceptance) continue;
+    const replacement = wildcardReplacement(source, query, row.tag, style);
     options.push(
       Object.freeze({
         kind: "wildcard",
@@ -33812,10 +33488,7 @@ function wildcardCompletionOptions(state, scope, query, caret, catalog) {
         freshness: state.field(editorFreshness),
         caret,
         ghost: wildcardGhostText(source, query, row.tag),
-        acceptance: Object.freeze({
-          keyboard: acceptance,
-          pointer: acceptance
-        })
+        prepareEdit: (current6) => prepareScopedCompletionEdit(current6, scope, replacement.range, replacement.text)
       })
     );
   }
@@ -33841,11 +33514,7 @@ function sceneCompletionOptions(state, scope, query, caret, catalog) {
   if (!titles.length || from === null) return null;
   const options = [];
   for (const title of titles) {
-    const replacement = sceneReplacement(source, query, title), acceptance = prepareScopedCompletionEdit(state, scope, replacement.range, replacement.text, {
-      from: query.replacementRange.from,
-      to: scope.target.decodedRange.from
-    });
-    if (!acceptance) continue;
+    const replacement = sceneReplacement(source, query, title);
     options.push(
       Object.freeze({
         kind: "scene",
@@ -33854,10 +33523,7 @@ function sceneCompletionOptions(state, scope, query, caret, catalog) {
         freshness: state.field(editorFreshness),
         caret,
         ghost: completionSuffix(title, query.prefix),
-        acceptance: Object.freeze({
-          keyboard: acceptance,
-          pointer: acceptance
-        })
+        prepareEdit: (current6) => prepareScopedCompletionEdit(current6, scope, replacement.range, replacement.text)
       })
     );
   }
@@ -33905,43 +33571,20 @@ function prepareCompletionOptions(state) {
   if (!catalog && !triggers) return null;
   const result2 = findPromptTextCompletions(catalog, triggers, source, routed.query), from = completionPosition(scope, result2.query.replacementRange.from), to = completionPosition(scope, result2.query.activeTagEnd);
   if (!result2.matches.length || from === null || to === null) return null;
-  const stablePrefix = stableTagCompletionPrefix(
-    source.slice(result2.query.replacementRange.from, decodedCaret)
-  ), options = [];
+  const options = [];
   for (const row of result2.matches) {
     const word = row.kind === "tag" ? row.value.tag : row.value.word;
-    const acceptance = (addComma) => {
-      const prepared4 = prepareTagReplacement(source, result2.query, word, addComma), retained = prepareScopedCompletionEdit(
-        state,
+    const prepareEdit = (current6, activation) => {
+      const prepared4 = prepareTagReplacement(source, result2.query, word, activation === "keyboard");
+      const replacement = prepared4.right && prepared4.right.match.consumesVisiblePrefix(result2.query.prefix) ? prepared4.right.replacement : prepared4.retainRight;
+      return prepareScopedCompletionEdit(
+        current6,
         requireValue(scope, "completion-options"),
-        prepared4.retainRight.range,
-        prepared4.retainRight.text,
-        stablePrefix ? { from: result2.query.replacementRange.from, to: decodedCaret } : null,
+        replacement.range,
+        replacement.text,
         { lexicon: catalog?.lexicon }
-      ), consumed = prepared4.right ? prepareScopedCompletionEdit(
-        state,
-        requireValue(scope, "completion-options"),
-        prepared4.right.replacement.range,
-        prepared4.right.replacement.text,
-        stablePrefix ? {
-          from: result2.query.replacementRange.from,
-          to: result2.query.activeTagEnd
-        } : null,
-        { lexicon: catalog?.lexicon }
-      ) : null;
-      if (!retained || prepared4.right && !consumed) return null;
-      const selected = consumed && prepared4.right?.match.consumesVisiblePrefix(result2.query.prefix) ? consumed : retained;
-      return Object.freeze({
-        ...selected,
-        splice: retained.splice,
-        right: stablePrefix && consumed?.splice && prepared4.right ? Object.freeze({
-          match: prepared4.right.match,
-          splice: consumed.splice
-        }) : null
-      });
+      );
     };
-    const keyboard = acceptance(true), pointer = acceptance(false);
-    if (!keyboard || !pointer) continue;
     options.push(
       Object.freeze({
         ...row.kind === "tag" ? { kind: "tag" } : { kind: "trigger", backendValue: row.value.backendValue },
@@ -33950,7 +33593,7 @@ function prepareCompletionOptions(state) {
         freshness: state.field(editorFreshness),
         caret,
         ghost: tagGhostText(source, result2.query, word),
-        acceptance: Object.freeze({ keyboard, pointer })
+        prepareEdit
       })
     );
   }
@@ -33971,12 +33614,9 @@ function prepareCompletionOptions(state) {
 // frontend/sugarprompt/editor/src/prompt-completion-acceptance.ts
 function completionOptionTransaction(state, result2, index, activation) {
   const session = state.field(completionSession), option = Number.isSafeInteger(index) ? result2.options[index] : void 0;
-  if (!session || session.result !== result2 || !option || state.readOnly || session.freshness !== state.field(editorFreshness) || !state.selection.main.empty || session.caret !== state.selection.main.head)
+  if (!session || session.result !== result2 || session.phase !== "ready" || !option || session.freshness !== state.field(editorFreshness) || session.caret !== state.selection.main.head)
     return null;
-  const continuation = completionContinuation(state);
-  if (!continuation) return null;
-  const outcome = completionContinuationTransaction(state, continuation, result2, index, activation);
-  return outcome.status === "ready" ? outcome.value : null;
+  return completionAcceptanceTransaction(state, option, activation);
 }
 function acceptCompletionOption(view, result2, index, activation) {
   if (!view.hasFocus || view.compositionStarted || view.composing) return false;
@@ -33990,6 +33630,25 @@ function acceptCompletionOption(view, result2, index, activation) {
   view.dispatch(transaction);
   void handoff.restore();
   return true;
+}
+function completionAcceptanceTransaction(state, prepared4, activation) {
+  if (state.readOnly || state.field(editorFreshness) !== prepared4.freshness || !state.selection.main.empty || state.selection.main.head !== prepared4.caret)
+    return null;
+  const semantic = state.field(semanticStructures, false)?.native;
+  if (!semantic) return null;
+  const edit = prepared4.prepareEdit(state, activation);
+  const transaction = edit?.transactions[0];
+  if (!edit || edit.transactions.length !== 1 || transaction?.startState !== state) return null;
+  return currentDocumentValueEdit(
+    state,
+    {
+      values: semantic.nativeValues,
+      semantics: semantic.documentSemantics,
+      enabled: true,
+      composing: false
+    },
+    edit
+  ) === null ? transaction : null;
 }
 
 // frontend/sugarprompt/editor/src/completion-ghost.ts

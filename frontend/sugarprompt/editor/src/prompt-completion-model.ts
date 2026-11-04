@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Derived completion metadata belongs to native CodeMirror options, never a parallel selected-row/session owner. */
-import { Facet, type Text, type StateEffect, type EditorSelection } from '@codemirror/state';
+import { Facet, type EditorState } from '@codemirror/state';
 import type {
   TagCompletionCatalog,
   LoraCompletionCatalog,
@@ -22,7 +22,6 @@ import type {
   SceneTitleCatalog,
 } from '../../services/src/index.js';
 import type { PreparedDocumentPromptScope } from '../../core/src/index.js';
-import type { PreparedTagRightMatch } from '../../core/src/completion/text.js';
 import type { NativeDocumentValueContext, NativeDocumentValueTarget } from './document-values.js';
 import type { PreparedDocumentValueEdit } from './document-value-edits.js';
 import type { EditorFreshness } from './freshness.js';
@@ -60,43 +59,29 @@ export const loraCompletionCatalog = Facet.define<
   },
 });
 
-/** Source/context-current prepared output; ghost paint and acceptance consume already resolved metadata. */
+/**
+ * Ranked display metadata for one row. Showing and filtering a list never builds an edit: the
+ * accepted edit is prepared only when the user accepts the row, against the state at that moment.
+ */
 interface CompletionProposal {
   readonly label: string;
   readonly detail: string;
   readonly freshness: EditorFreshness;
   readonly caret: number;
   readonly ghost: string;
-  readonly acceptance: Readonly<Record<CompletionActivation, PreparedCompletionEdit>>;
+  /** Build this row's accepted edit for one activation against the current state; null refuses. */
+  readonly prepareEdit: CompletionEditPreparation;
 }
 
-/** Native activation chooses its already prepared delimiter policy without transforming source in the event callback. */
+/** Native activation chooses its delimiter policy; Tab is keyboard, a row click is pointer. */
 export type CompletionActivation = 'keyboard' | 'pointer';
 
-/** One activation's source-current output and bounded continuation alternatives are prepared together. */
-export interface PreparedCompletionEdit {
-  readonly edit: PreparedDocumentValueEdit;
-  readonly splice: PreparedCompletionSplice | null;
-  readonly right: PreparedCompletionRight | null;
-}
-
-/** A source-independent matcher selects the independently prepared suffix-consuming native output. */
-export interface PreparedCompletionRight {
-  readonly match: PreparedTagRightMatch;
-  readonly splice: PreparedCompletionSplice;
-}
-
-/** A complete logical UTF-16 replacement has identical output while its consumed, syntax-stable content changes. */
-export interface PreparedCompletionSplice {
-  readonly edit: PreparedDocumentValueEdit;
-  readonly from: number;
-  readonly to: number;
-  readonly insert: Text;
-  readonly selection: EditorSelection;
-  readonly effects: readonly StateEffect<unknown>[];
-}
-
-/** One immutable candidate carries its already prepared native edit and literal display input. */
+/** Issue one activation's canonical native edit for the current state, or refuse when it cannot be admitted. */
+export type CompletionEditPreparation = (
+  state: EditorState,
+  activation: CompletionActivation,
+) => PreparedDocumentValueEdit | null;
+/** One immutable candidate carries its literal display input and its deferred edit preparation. */
 export type PreparedCompletion = CompletionProposal &
   (
     | { readonly kind: 'tag' }

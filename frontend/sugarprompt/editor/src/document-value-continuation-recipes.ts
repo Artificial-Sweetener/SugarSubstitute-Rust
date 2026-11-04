@@ -13,9 +13,9 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Bounded original-native recipe evidence delegates authority to the actual canonical issuer. */
+/** Original-native command recipes delegate authority to the actual canonical issuer. */
 import { requireValue } from '../../core/src/required.js';
-import { Transaction, type EditorState, type ChangeDesc, Text } from '@codemirror/state';
+import { Transaction, type EditorState } from '@codemirror/state';
 import { isolateHistory } from '@codemirror/commands';
 import { currentDocumentValueEdit } from './document-value-edit-issuance.js';
 import { selectionContents, selectionMatches } from './native-selection.js';
@@ -23,100 +23,41 @@ import type { PreparedDocumentValueEdit } from './document-value-edits.js';
 import { normalizationJoin } from './input-descriptor.js';
 import { authoredImplicitDepth } from './normalization-events.js';
 import type { NativeDocumentValueContext } from './document-values.js';
-import type { PreparedCompletionSplice } from './prompt-completion-model.js';
 import { lineEndings } from './exact-source.js';
-/** Original transaction authority and its consumed replacement recipe are never reconstructed from DTO output. */
+/** Original transaction authority is never reconstructed from DTO output. */
 export interface Recipe {
   readonly edit: PreparedDocumentValueEdit;
   readonly transaction: Transaction | null;
   readonly context: NativeDocumentValueContext;
-  readonly splice: PreparedCompletionSplice | null;
-  readonly from: number;
-  readonly to: number;
-  readonly insert: Text;
 }
-/** An observed integrity failure permanently retires that admitted splice without mutating native state branches. */
-const retiredSplices = new WeakSet<PreparedCompletionSplice>();
 /** Revalidate original issuance at the actual origin; issuer mutation refusal remains permanent. */
 export function authentic(recipe: Recipe): boolean {
-  const { edit, transaction, context, splice } = recipe;
-  const spliceMatches =
-    !splice ||
-    (!retiredSplices.has(splice) &&
-      !!transaction &&
-      splice.edit === edit &&
-      splice.from === recipe.from &&
-      splice.to === recipe.to &&
-      splice.insert instanceof Text &&
-      splice.insert.eq(recipe.insert) &&
-      splice.selection === transaction.newSelection &&
-      splice.effects === transaction.effects);
-  if (splice && !spliceMatches) retiredSplices.add(splice);
+  const { edit, transaction, context } = recipe;
   return (
     currentDocumentValueEdit(edit.startState, context, edit) === null &&
     edit.transactions.length === (transaction ? 1 : 0) &&
-    (edit.transactions[0] ?? null) === transaction &&
-    spliceMatches
+    (edit.transactions[0] ?? null) === transaction
   );
 }
-/** Consumed bounds include every genuine native change and derive their Text from the actual output. */
+/** Admit one current issued edit with at most one native transaction. */
 export function recipeFor(
   state: EditorState,
   context: NativeDocumentValueContext,
   edit: PreparedDocumentValueEdit,
-  splice: PreparedCompletionSplice | null,
 ): Recipe | null {
   if (currentDocumentValueEdit(state, context, edit) !== null || edit.transactions.length > 1)
     return null;
-  const transaction = edit.transactions[0] ?? null;
-  const from = splice?.from ?? 0,
-    to = splice?.to ?? state.doc.length;
-  if (
-    !Number.isSafeInteger(from) ||
-    !Number.isSafeInteger(to) ||
-    from < 0 ||
-    to < from ||
-    to > state.doc.length
-  )
-    return null;
-  if (splice) {
-    const mapping = edit.target.entry.semanticMapping;
-    if (
-      !mapping ||
-      [from, to].some(
-        (position) =>
-          position < mapping.logicalRange.from ||
-          position > mapping.logicalRange.to ||
-          mapping.logicalToDecoded[position - mapping.logicalRange.from] == null,
-      )
-    )
-      return null;
-  }
-  let contained = true;
-  transaction?.changes.iterChangedRanges((start, end) => {
-    if (start < from || end > to) contained = false;
-  });
-  const insert = transaction
-    ? transaction.newDoc.slice(
-        transaction.changes.mapPos(from, -1),
-        transaction.changes.mapPos(to, 1),
-      )
-    : state.doc;
-  const recipe = { edit, transaction, context, splice, from, to, insert };
-  return contained && authentic(recipe) ? recipe : null;
-}
-/** Compile the original native publication at the exact observed tip and verify its complete actual output. */
+  const recipe = { edit, transaction: edit.transactions[0] ?? null, context };
+  return authentic(recipe) ? recipe : null;
+} /** Compile the original native publication at the exact observed tip and verify its complete actual output. */
 export function compileNativeRecipe(
   state: EditorState,
   origin: EditorState,
-  lineage: ChangeDesc,
-  changed: boolean,
   recipe: Recipe,
 ): Transaction {
   const original = recipe.transaction;
   if (!original) {
     if (
-      changed ||
       !state.doc.eq(origin.doc) ||
       !selectionMatches(state.selection, selectionContents(origin.selection))
     )
@@ -125,13 +66,8 @@ export function compileNativeRecipe(
   }
   if (state === origin) return original;
   const transaction = state.update({
-    changes: changed
-      ? {
-          from: lineage.mapPos(recipe.from, -1),
-          to: lineage.mapPos(recipe.to, 1),
-          insert: recipe.insert,
-        }
-      : original.changes,
+    changes: original.changes,
+
     selection: original.newSelection,
     effects: original.effects,
     annotations: [

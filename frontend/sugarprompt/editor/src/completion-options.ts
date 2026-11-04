@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Actual canonical caret scopes supply decoded completion queries and genuine encoded acceptance outside input. */
+/** Actual canonical caret scopes supply decoded completion queries; accepted edits are built only on acceptance. */
 import { requireValue } from '../../core/src/required.js';
 import type { EditorState } from '@codemirror/state';
 import { tagGhostText } from '../../core/src/index.js';
@@ -30,11 +30,10 @@ import {
   sceneTitleCatalog,
   type PreparedCompletion,
   type PreparedCompletionResult,
-  type PreparedCompletionEdit,
+  type CompletionEditPreparation,
 } from './prompt-completion-model.js';
 import { featureProfile } from './features.js';
 import { loraCompletionOptions } from './lora-completion-options.js';
-import { stableTagCompletionPrefix } from '../../core/src/completion/continuation.js';
 import {
   completionPosition,
   prepareCompletionScope,
@@ -86,58 +85,24 @@ export function prepareCompletionOptions(state: EditorState): PreparedCompletion
     from = completionPosition(scope, result.query.replacementRange.from),
     to = completionPosition(scope, result.query.activeTagEnd);
   if (!result.matches.length || from === null || to === null) return null;
-  const stablePrefix = stableTagCompletionPrefix(
-      source.slice(result.query.replacementRange.from, decodedCaret),
-    ),
-    options: PreparedCompletion[] = [];
+  const options: PreparedCompletion[] = [];
   for (const row of result.matches) {
     const word = row.kind === 'tag' ? row.value.tag : row.value.word;
-    /** Activation-specific delimiter policy delegates decoded transformation and native publication to their owners. */
-    const acceptance = (addComma: boolean): PreparedCompletionEdit | null => {
-      const prepared = prepareTagReplacement(source, result.query, word, addComma),
-        retained = prepareScopedCompletionEdit(
-          state,
-          requireValue(scope, 'completion-options'),
-          prepared.retainRight.range,
-          prepared.retainRight.text,
-          stablePrefix ? { from: result.query.replacementRange.from, to: decodedCaret } : null,
-          { lexicon: catalog?.lexicon },
-        ),
-        consumed = prepared.right
-          ? prepareScopedCompletionEdit(
-              state,
-              requireValue(scope, 'completion-options'),
-              prepared.right.replacement.range,
-              prepared.right.replacement.text,
-              stablePrefix
-                ? {
-                    from: result.query.replacementRange.from,
-                    to: result.query.activeTagEnd,
-                  }
-                : null,
-              { lexicon: catalog?.lexicon },
-            )
-          : null;
-      if (!retained || (prepared.right && !consumed)) return null;
-      const selected =
-        consumed && prepared.right?.match.consumesVisiblePrefix(result.query.prefix)
-          ? consumed
-          : retained;
-      return Object.freeze({
-        ...selected,
-        splice: retained.splice,
-        right:
-          stablePrefix && consumed?.splice && prepared.right
-            ? Object.freeze({
-                match: prepared.right.match,
-                splice: consumed.splice,
-              })
-            : null,
-      });
+    /** Build the accepted edit only on acceptance; right text the typed prefix already spells is replaced too. */
+    const prepareEdit: CompletionEditPreparation = (current, activation) => {
+      const prepared = prepareTagReplacement(source, result.query, word, activation === 'keyboard');
+      const replacement =
+        prepared.right && prepared.right.match.consumesVisiblePrefix(result.query.prefix)
+          ? prepared.right.replacement
+          : prepared.retainRight;
+      return prepareScopedCompletionEdit(
+        current,
+        requireValue(scope, 'completion-options'),
+        replacement.range,
+        replacement.text,
+        { lexicon: catalog?.lexicon },
+      );
     };
-    const keyboard = acceptance(true),
-      pointer = acceptance(false);
-    if (!keyboard || !pointer) continue;
     options.push(
       Object.freeze({
         ...(row.kind === 'tag'
@@ -152,7 +117,7 @@ export function prepareCompletionOptions(state: EditorState): PreparedCompletion
         freshness: state.field(editorFreshness),
         caret,
         ghost: tagGhostText(source, result.query, word),
-        acceptance: Object.freeze({ keyboard, pointer }),
+        prepareEdit,
       }),
     );
   }

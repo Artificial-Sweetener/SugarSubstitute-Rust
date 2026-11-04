@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Native state independently qualifies full-field continuation, exact prepared output reuse and scheduler-boundary retirement. */
+/** Native state qualifies whole-token LoRA acceptance, stale rows after edits and scheduler-boundary retirement. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EditorState, Text } from '@codemirror/state';
@@ -43,7 +43,7 @@ import {
   completionOptionTransaction,
 } from '../../../../../../frontend/sugarprompt/editor/src/prompt-completion-acceptance.ts';
 
-/** Prepare actual model proposals once; subsequent input operates without new query or catalog preparation. */
+/** Prepare actual model proposals for one source and caret. */
 function fixture(
   source: string,
   caret = 12,
@@ -91,12 +91,14 @@ function fixture(
     { searchMetadata: [] },
   );
   const result = loraCompletionOptions(state, scope, query, caret, adapter.completionCatalog!)!;
-  const ready = completionAcceptanceTransaction(state, result.options.at(-1)!, 'keyboard')!;
+  assert.ok(completionAcceptanceTransaction(state, result.options.at(-1)!, 'keyboard'));
+  const edit = result.options.at(-1)!.prepareEdit(state, 'keyboard')!;
+  const ready = edit.transactions[0]!;
   state = state.update({ effects: installCompletion.of(result) }).state;
-  return { state, result, ready };
+  return { state, result, ready, edit };
 }
 
-test('forward deletion consumes ASCII or astral right-name text while reusing actual whole-token output, metadata and undo order', () => {
+test('forward deletion stales the visible rows; fresh rows accept the whole token, metadata and undo order', () => {
   for (const [source, removedLength, refined, accepted] of [
     ['🙂\r\n<lora:reaZ\rtail', 1, '🙂\r\n<lora:rea\rtail', '🙂\r\n<lora:folder/second:1.00>\rtail'],
     [
@@ -107,26 +109,16 @@ test('forward deletion consumes ASCII or astral right-name text while reusing ac
     ],
   ] as const) {
     const original = fixture(source);
-    let state = original.state.update({
+    const deleted = original.state.update({
       changes: { from: 12, to: 12 + removedLength },
       userEvent: 'delete.forward',
     }).state;
-    const retained = state.field(completionSession)!;
-    assert.equal(retained.result, original.result);
-    assert.equal(retained.consumedShift, -removedLength);
-    assert.equal(
-      completionAcceptanceTransaction(state, original.result.options[1]!, 'keyboard'),
-      null,
-    );
-    const transaction = completionOptionTransaction(state, original.result, 1, 'keyboard')!;
+    assert.equal(deleted.field(completionSession)!.result, original.result);
+    assert.equal(completionOptionTransaction(deleted, original.result, 1, 'keyboard'), null);
+    const fresh = fixture(refined);
+    const transaction = completionOptionTransaction(fresh.state, fresh.result, 1, 'keyboard')!;
     assert.ok(transaction);
-    assert.equal(transaction.newDoc.eq(original.ready.newDoc), true);
-    assert.equal(transaction.newSelection.eq(original.ready.newSelection), true);
-    assert.equal(
-      transaction.effects[0],
-      original.result.options[1]!.acceptance.keyboard.splice!.effects[0],
-    );
-    state = transaction.state;
+    let state = transaction.state;
     assert.equal(readExactSource(state) === accepted, true);
     state = state.update({
       changes: { from: state.selection.main.head, insert: 'X' },
@@ -150,7 +142,6 @@ test('forward deletion consumes ASCII or astral right-name text while reusing ac
     assert.equal(state.selection.main.head, 12);
   }
 });
-
 test('name continuation rejects removal of scheduling delimiters, marker text and external source', () => {
   const source = '🙂\r\n<lora:rea: +0.80: +0.60:IN=0.20>\rtail';
   const original = fixture(source);
@@ -177,12 +168,11 @@ test('a real CSV LoRA query retains a literal quoted canonical name and exact sc
   assert.equal(prepared.result.from, 8);
   assert.equal(prepared.result.query.contentFrom, 14);
   assert.equal(prepared.result.query.scope.mapping.text, '<lora:rea: +0.80:IN=0.20>');
-  assert.equal(option.acceptance.keyboard.splice, null);
   assert.equal(
     readExactSource(prepared.ready.state),
     'header\n"<lora:folder/literal""model: +0.80:IN=0.20>",tail',
   );
-  const followup = prepareNativeStructure(prepared.ready.state, option.acceptance.keyboard.edit);
+  const followup = prepareNativeStructure(prepared.ready.state, prepared.edit);
   assert.equal(
     followup.scopes.scopes[0]!.mapping.text,
     '<lora:folder/literal"model: +0.80:IN=0.20>',

@@ -50,15 +50,7 @@ export function wildcardCompletionOptions(
   for (const row of result.suggestions) {
     const style = row.sourceLabel === 'TXT wildcard' ? 'simple' : 'csv';
     if (!isWildcardCompletionBody(row.tag, style)) continue;
-    const replacement = wildcardReplacement(source, query, row.tag, style),
-      acceptance = prepareScopedCompletionEdit(
-        state,
-        scope,
-        replacement.range,
-        replacement.text,
-        query.replacementRange,
-      );
-    if (!acceptance) continue;
+    const replacement = wildcardReplacement(source, query, row.tag, style);
     options.push(
       Object.freeze({
         kind: 'wildcard',
@@ -67,10 +59,8 @@ export function wildcardCompletionOptions(
         freshness: state.field(editorFreshness),
         caret,
         ghost: wildcardGhostText(source, query, row.tag),
-        acceptance: Object.freeze({
-          keyboard: acceptance,
-          pointer: acceptance,
-        }),
+        prepareEdit: (current: EditorState) =>
+          prepareScopedCompletionEdit(current, scope, replacement.range, replacement.text),
       }),
     );
   }
