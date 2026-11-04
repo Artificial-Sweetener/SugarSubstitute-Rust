@@ -7,7 +7,7 @@ import {
 } from "./chunk-ECAVEMES.js";
 import {
   canvasEditIcon
-} from "./chunk-OJAGEWGI.js";
+} from "./chunk-X5ULNSRV.js";
 import {
   h
 } from "./chunk-6PAJ5Y37.js";

@@ -3,43 +3,7 @@ import {
 } from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/canvas_editing/presentation/CanvasEditIcons.ts
-var FLUENT = [
-  "pan-zoom",
-  "move",
-  "brush",
-  "eraser",
-  "select-rectangle",
-  "select-lasso",
-  "transform",
-  "shared-edges",
-  "undo",
-  "redo",
-  "rotate-left",
-  "rotate-right",
-  "flip-horizontal",
-  "flip-vertical"
-];
-var SUBSTITUTE = [
-  "select-ellipse",
-  "mask-rectangle",
-  "mask-ellipse",
-  "mask-lasso",
-  "deselect",
-  "apply",
-  "close",
-  "modify"
-];
-var URLS = new Map([
-  ...FLUENT.map(
-    (name) => [
-      name,
-      new URL(`../../../../icons/canvas-editing/${name}.svg`, import.meta.url).href
-    ]
-  ),
-  ...SUBSTITUTE.map(
-    (name) => [name, new URL(`../../../../canvas-editing/${name}.svg`, import.meta.url).href]
-  )
-]);
+import { canvasEditIconUrl } from "./canvas_editing/presentation/CanvasEditArtwork.js";
 var CANVAS_TOOL_ICONS = Object.freeze({
   "pan-zoom": "pan-zoom",
   move: "move",
@@ -55,7 +19,7 @@ var CANVAS_TOOL_ICONS = Object.freeze({
   "shared-edges": "shared-edges"
 });
 function maskImage(name) {
-  return `url("${URLS.get(name) ?? ""}")`;
+  return `url("${canvasEditIconUrl(name)}")`;
 }
 function canvasEditIcon(name) {
   return h("span", {

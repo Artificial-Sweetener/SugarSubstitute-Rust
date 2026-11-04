@@ -86,6 +86,36 @@ test('rejects bare package specifiers that a browser cannot resolve without an i
   expect(message.match(/overlay\.js -> vue/g)).toHaveLength(2);
 });
 
+test('accepts module-relative asset URLs whose file or template directory is served', () => {
+  mkdirSync(path.join(root, 'icons/editing'), { recursive: true });
+  writeFileSync(path.join(root, 'icons/play.svg'), '<svg/>');
+  writeFileSync(
+    path.join(root, 'ui/infrastructure/art.js'),
+    "export const a = new URL('../../icons/play.svg', import.meta.url).href;\n" +
+      'export const b = (name) => new URL(`../../icons/editing/${name}.svg`, import.meta.url);\n' +
+      "export const c = new URL('https://example.invalid/x.svg');\n",
+  );
+  expect(() => assertDeployedModulesResolve(root)).not.toThrow();
+});
+
+test('rejects an asset URL that a relocated chunk resolves above the served tree', () => {
+  mkdirSync(path.join(root, 'icons/editing'), { recursive: true });
+  // Written for ui/infrastructure/, this path escapes the root from a chunk at ui/.
+  writeFileSync(
+    path.join(root, 'ui/chunk-ICONS.js'),
+    'export const icon = (name) => new URL(`../../icons/editing/${name}.svg`, import.meta.url);\n' +
+      "export const missing = new URL('../icons/absent.svg', import.meta.url);\n",
+  );
+  let message = '';
+  try {
+    assertDeployedModulesResolve(root);
+  } catch (error: unknown) {
+    message = error instanceof Error ? error.message : String(error);
+  }
+  expect(message).toContain('chunk-ICONS.js -> ../../icons/editing/');
+  expect(message).toContain('chunk-ICONS.js -> ../icons/absent.svg');
+});
+
 test('the committed deployment tree loads without unresolved or bare module references', () => {
   expect(() => assertDeployedModulesResolve(path.resolve('web'))).not.toThrow();
 });
