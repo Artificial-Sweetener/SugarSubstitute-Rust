@@ -7,7 +7,7 @@ import {
   selectionPage,
   sessionPage,
   transformPage
-} from "./chunk-OWTPCN3N.js";
+} from "./chunk-BPQUSL77.js";
 import {
   CANVAS_EDIT_TEXT,
   CANVAS_TOOL_LABELS

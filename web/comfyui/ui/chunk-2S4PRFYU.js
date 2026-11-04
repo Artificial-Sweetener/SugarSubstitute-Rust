@@ -10,7 +10,7 @@ import {
 import {
   canvasEditToolAvailable,
   iconButton
-} from "./chunk-OWTPCN3N.js";
+} from "./chunk-BPQUSL77.js";
 import {
   CANVAS_EDIT_TEXT
 } from "./chunk-ECAVEMES.js";
