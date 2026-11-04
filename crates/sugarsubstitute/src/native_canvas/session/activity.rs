@@ -82,6 +82,8 @@ impl Session {
         #[cfg(feature = "native-composition")]
         self.advance_input_retirement()?;
         self.submit_retirement()?;
+        #[cfg(feature = "native-composition")]
+        self.report_input_memory();
         if restoring
             || self.closing
             || self.pending_retirement.is_some()

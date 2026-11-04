@@ -15,6 +15,7 @@ use sugarsubstitute_contracts::canvas_native::{
     CanvasSelectionAction, CanvasToolId,
 };
 use sugarsubstitute_image_ops::FULL_COVERAGE;
+mod budget;
 mod rerun;
 mod sessions;
 

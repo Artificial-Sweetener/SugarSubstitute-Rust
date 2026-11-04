@@ -412,7 +412,8 @@ impl Session {
 
 impl Surface {
     /// Replace a freshly created document's content with this surface's archived layers and
-    /// selection when the new base has the archived extent, keeping the new base layer.
+    /// selection when the new base has the archived extent, keeping the new base layer. Content
+    /// the memory budget cannot hold stays archived for the surface's next document.
     pub(super) fn adopt_restored(
         &mut self,
         scene: &mut Scene,
@@ -439,13 +440,19 @@ impl Surface {
                 })
                 .cloned(),
         );
-        scene.document = sugarsubstitute_canvas::Document::restore(
+        match sugarsubstitute_canvas::Document::restore(
             snapshot.identity(),
             snapshot.extent(),
             &layers,
             archived.selection().cloned(),
             memory,
-        )?;
+        ) {
+            Ok(document) => scene.document = document,
+            Err(cause) => {
+                self.restored = Some(archived);
+                return Err(cause.into());
+            }
+        }
         Ok(())
     }
 }

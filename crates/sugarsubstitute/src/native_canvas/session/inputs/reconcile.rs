@@ -7,6 +7,13 @@ use sugarsubstitute_canvas::{LayerContent, Provision, ToolCancelReason};
 /// The source and original a replaced base held, disposed of on the retirement worker.
 pub(super) type Replaced = (Option<work::Source>, Option<ImageSource>);
 
+/// A rebase that did not complete, with the source and original the document does not keep:
+/// the new ones when the document stayed on its old base, else the replaced ones.
+pub(super) struct RebaseFailure {
+    pub(super) cause: Box<dyn Error>,
+    pub(super) unadopted: Replaced,
+}
+
 /// A base image or blank backing about to replace a document's base layer.
 pub(super) enum NewBase {
     Raster { source: work::Source, original: ImageSource },
@@ -76,25 +83,58 @@ impl Surface {
 
     /// Replace the document's base. At the same extent the masks are kept; at another extent
     /// every mask becomes uncovered, as a mask of the wrong size cannot be kept. Returns the
-    /// replaced source and original for worker disposal.
+    /// replaced source and original for worker disposal. A content change the memory budget
+    /// cannot hold leaves the document on its old base and returns the new one for disposal.
     pub(super) fn rebase(
         &self,
         document: &mut document::DocumentState,
         base: NewBase,
         memory: &MemoryLease,
         now: Duration,
-    ) -> Result<Replaced, Box<dyn Error>> {
-        let scene = document.scene.as_mut().ok_or("Input document is unavailable")?;
-        let snapshot = scene.document.snapshot();
+    ) -> Result<Replaced, Box<RebaseFailure>> {
         let (layer, extent, source, original) = match base {
             NewBase::Raster { source, original } => {
                 let descriptor = source.descriptor();
                 let extent = descriptor.layout().extent();
-                let layer = build::raster_base(descriptor.asset(), extent, &self.label)?;
+                let layer = build::raster_base(descriptor.asset(), extent, &self.label);
                 (layer, extent, Some(source), Some(original))
             }
-            NewBase::Blank(extent) => (build::blank_base(extent, &self.label)?, extent, None, None),
+            NewBase::Blank(extent) => (build::blank_base(extent, &self.label), extent, None, None),
         };
+        let staged = layer
+            .map_err(Box::<dyn Error>::from)
+            .and_then(|layer| self.replace_base(document, layer, extent, memory));
+        let (resized, scene) = match (staged, document.scene.as_mut()) {
+            (Ok(resized), Some(scene)) => (resized, scene),
+            (staged, _) => {
+                let cause = staged.err().unwrap_or_else(|| "Input document is unavailable".into());
+                return Err(Box::new(RebaseFailure { cause, unadopted: (source, original) }));
+            }
+        };
+        let replaced = (
+            std::mem::replace(&mut scene.source, source),
+            std::mem::replace(&mut scene.original, original),
+        );
+        if resized {
+            let content = document.scene.as_ref().map(|scene| &scene.document);
+            if let Err(cause) = document.tools.set_content(Some(extent), content, now) {
+                return Err(Box::new(RebaseFailure { cause: cause.into(), unadopted: replaced }));
+            }
+        }
+        Ok(replaced)
+    }
+
+    /// Put `layer` in place of the base layer of `document`'s content at `extent`, clearing
+    /// every mask when the extent changes. Returns whether it changed.
+    fn replace_base(
+        &self,
+        document: &mut document::DocumentState,
+        layer: Layer,
+        extent: Extent,
+        memory: &MemoryLease,
+    ) -> Result<bool, Box<dyn Error>> {
+        let scene = document.scene.as_mut().ok_or("Input document is unavailable")?;
+        let snapshot = scene.document.snapshot();
         let resized = extent != snapshot.extent();
         if resized {
             let mut layers = vec![layer];
@@ -112,15 +152,7 @@ impl Surface {
                 content: layer.content().clone(),
             }])?;
         }
-        let replaced = (
-            std::mem::replace(&mut scene.source, source),
-            std::mem::replace(&mut scene.original, original),
-        );
-        if resized {
-            let scene = document.scene.as_ref().ok_or("Input document is unavailable")?;
-            document.tools.set_content(Some(extent), Some(&scene.document), now)?;
-        }
-        Ok(replaced)
+        Ok(resized)
     }
 }
 

@@ -26,6 +26,22 @@ impl Error for WorkError {
         Some(self.0.as_ref())
     }
 }
+/// Whether `cause`, or any cause beneath it, is a memory admission or allocation refusal: the
+/// canvas memory budget could not hold the work, which callers answer as a typed refusal
+/// instead of treating it as a failed canvas.
+#[cfg(feature = "native-composition")]
+pub(super) fn memory_refused(cause: &(dyn Error + 'static)) -> bool {
+    let mut current = Some(cause);
+    while let Some(cause) = current {
+        if cause.is::<sugarsubstitute_contracts::execution::MemoryClaimError>()
+            || cause.is::<std::collections::TryReserveError>()
+        {
+            return true;
+        }
+        current = cause.source();
+    }
+    false
+}
 /// A worker panicked; the panic's text stays with its execution owner, never in logs.
 #[derive(Debug)]
 pub(super) struct WorkerPanic {

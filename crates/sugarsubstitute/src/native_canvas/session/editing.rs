@@ -25,8 +25,8 @@ use super::*;
 pub(crate) use commands::EditRejection;
 pub(crate) use state::EditState;
 use sugarsubstitute_canvas::{
-    BrushOptions, CoverageModification, CursorIntent, ModifyTarget, SelectionOutlines, ToolId,
-    ToolInput,
+    BrushOptions, CoverageModification, CursorIntent, ModifyTarget, SelectionOutlines,
+    ToolCancelReason, ToolId, ToolInput,
 };
 use sugarsubstitute_contracts::canvas_native::CanvasToolId;
 
@@ -87,11 +87,26 @@ impl Session {
             return Ok(());
         }
         let document = &mut *self.document;
-        document.tools.input(
+        let routed = document.tools.input(
             input,
             document.scene.as_mut().map(|scene| &mut scene.document),
             now,
-        )?;
+        );
+        if let Err(cause) = routed {
+            if !memory_refused(&cause) {
+                return Err(cause.into());
+            }
+            // The gesture cannot grow within the memory budget: it ends as Esc would end it,
+            // leaving the document as it was, and the canvas keeps running.
+            let scene = document.scene.as_ref().map(|scene| &scene.document);
+            tracing::warn!(
+                operation = "canvas_tool_input",
+                document_id = scene.map(|document| document.snapshot().identity()),
+                cause = %cause,
+                "The canvas memory budget refused a gesture; it was cancelled"
+            );
+            document.tools.cancel(ToolCancelReason::Requested, scene, now)?;
+        }
         self.settle_tools()
     }
 

@@ -135,6 +135,10 @@ pub(super) struct InputDocuments {
     route: Option<route::Pending>,
     captures: capture::Captures,
     persistence: Option<archive::Persistence>,
+    /// What the last input memory report described.
+    reported: Option<memory::ReportedMemory>,
+    /// Whether disposals handed to the retirement worker may still hold input memory.
+    disposing: bool,
     /// The output document shown before the current input document, restored on Output.
     pub(super) parked_output: Option<Box<document::DocumentState>>,
 }
@@ -494,6 +498,7 @@ impl Session {
             return Ok(());
         }
         let retiring = std::mem::take(&mut self.inputs.retiring);
+        self.inputs.disposing = true;
         self.retire(Retired { _inputs: Some(retiring), ..Default::default() })
     }
 

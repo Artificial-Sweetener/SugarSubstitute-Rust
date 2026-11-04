@@ -62,6 +62,7 @@ impl Task {
 type Run = Box<dyn FnOnce(&JobContext) -> Result<Product, WorkError> + Send>;
 
 /// What the running job will change once it completes.
+#[derive(Clone)]
 pub(super) enum Applies {
     Create(Base),
     Rebase(Arc<str>),
@@ -191,7 +192,11 @@ impl Session {
         let resources = self.resources.clone().ok_or("Canvas storage is unavailable")?;
         let (applies, acquirers, run): (Applies, Vec<_>, Run) = match &task.work {
             Work::Base(SurfaceBase::Blank(extent)) if loaded => {
-                self.rebase_input(identity, NewBase::Blank(*extent), Base::Blank(*extent))?;
+                let rebased =
+                    self.rebase_input(identity, NewBase::Blank(*extent), Base::Blank(*extent));
+                self.refuse_input_memory(identity, Applies::Create(Base::Blank(*extent)), rebased)?;
+                // No job completion follows this change, so its request is answered here.
+                self.settle_input_tickets();
                 return Ok(None);
             }
             Work::Base(base) => {
@@ -356,7 +361,9 @@ impl Session {
                 self.record_input_failure(running.surface, running.applies, failure);
             }
             JobOutcome::Success(product) => {
-                self.apply_input_product(running.surface, running.applies, product)?;
+                let applied =
+                    self.apply_input_product(running.surface, running.applies.clone(), product);
+                self.refuse_input_memory(running.surface, running.applies, applied)?;
             }
             _ if dismissed => {}
             outcome => {
@@ -376,4 +383,30 @@ impl Session {
         self.settle_input_tickets();
         Ok(())
     }
+
+    /// Keep a memory refusal of applying `applies` where its request's reply reports it, so
+    /// work the canvas memory budget cannot hold is answered instead of failing the canvas.
+    /// Any other failure is returned unchanged.
+    fn refuse_input_memory(
+        &mut self,
+        identity: InputDocumentId,
+        applies: Applies,
+        applied: Result<(), Box<dyn Error>>,
+    ) -> Result<(), Box<dyn Error>> {
+        let Err(cause) = applied else { return Ok(()) };
+        if !memory_refused(cause.as_ref()) {
+            return Err(cause);
+        }
+        tracing::warn!(
+            operation = "canvas_input_memory",
+            document_id = identity.get(),
+            cause = %cause,
+            "The canvas memory budget refused input document work"
+        );
+        self.record_input_failure(identity, applies, InputFailure::message(MEMORY_REFUSED));
+        Ok(())
+    }
 }
+
+/// The page's answer when the canvas memory budget cannot hold an input document change.
+const MEMORY_REFUSED: &str = "The canvas memory budget cannot hold this input document";

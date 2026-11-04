@@ -53,6 +53,8 @@ mod startup;
 mod tests;
 use self::display::DisplayEvidence;
 use self::runtime::Runtime;
+#[cfg(feature = "native-composition")]
+use super::work_error::memory_refused;
 use super::{
     budget,
     config::{Config, InitialSource},

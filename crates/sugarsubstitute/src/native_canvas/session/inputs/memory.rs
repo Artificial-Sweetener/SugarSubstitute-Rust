@@ -7,7 +7,22 @@
 //! backings, which are rebuilt from the document when it is shown again, are released. Detail
 //! backings go first, then the remaining fallback and navigation backings. The output parked
 //! behind a shown input document follows the same rule.
+//!
+//! Whenever the input documents change, or their disposal settles, the session logs what the
+//! canvas memory budget charges: the claimed bytes of the canvas's resident lease, which every
+//! input document's coverage, history and edits are charged to, and the parked backing bytes
+//! the application memory budget governs.
 use super::*;
+
+/// What the last input memory report described: loaded documents, their combined revision,
+/// workflows, and whether disposal was still pending.
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub(in crate::native_canvas::session) struct ReportedMemory {
+    documents: usize,
+    revisions: u64,
+    workflows: usize,
+    disposing: bool,
+}
 
 impl InputDocuments {
     fn parked(&self) -> impl Iterator<Item = &document::DocumentState> {
@@ -66,6 +81,37 @@ fn release(document: &mut document::DocumentState, complete: bool, retiring: &mu
 }
 
 impl Session {
+    /// Log the canvas memory budget's charge once the input documents changed or their
+    /// disposal settled since the last report.
+    pub(in crate::native_canvas::session) fn report_input_memory(&mut self) {
+        let Some(resources) = self.resources.as_ref() else { return };
+        let retirement_idle = self.retirement.is_none()
+            && self.pending_retirement.is_none()
+            && self.deferred_retirement.is_none();
+        self.inputs.disposing &= !retirement_idle;
+        let revisions = self.input_revisions();
+        let reported = ReportedMemory {
+            documents: revisions.len(),
+            revisions: revisions.iter().fold(0, |sum, (_, revision)| sum.wrapping_add(*revision)),
+            workflows: self.inputs.workflows.len(),
+            disposing: self.inputs.disposing || !self.inputs.retiring.is_empty(),
+        };
+        if self.inputs.reported.replace(reported) == Some(reported) {
+            return;
+        }
+        tracing::info!(
+            operation = "canvas_input_memory",
+            documents = reported.documents,
+            workflows = reported.workflows,
+            disposing = reported.disposing,
+            resident_claimed_bytes = resources.memory.claimed_bytes(),
+            resident_bytes = resources.memory.bytes(),
+            parked_input_backing_bytes = self.inputs.bytes(),
+            retained_output_bytes = self.retained.bytes(),
+            "Input documents changed what the canvas memory budget charges"
+        );
+    }
+
     /// Bring parked input documents' backings within what the retained-document `limit`
     /// leaves after retained outputs.
     pub(in crate::native_canvas::session) fn shed_input_backings(&mut self, limit: u64) {

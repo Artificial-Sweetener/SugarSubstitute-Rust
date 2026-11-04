@@ -67,30 +67,31 @@ impl Session {
     ) -> Result<(), Box<dyn Error>> {
         let memory = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.memory.clone();
         match (applies, product) {
-            (Applies::Create(base), Product::Created(mut scene)) => {
+            (Applies::Create(base), Product::Created(scene)) => {
                 if self.inputs.by_identity(identity).is_none_or(|surface| surface.loaded) {
                     self.inputs.retiring.scenes.push(scene);
                     return Ok(());
                 }
-                if let Some(surface) = self.inputs.by_identity_mut(identity) {
-                    surface.adopt_restored(&mut scene, &memory)?;
-                }
-                let now = self.navigation_time();
                 let viewport =
-                    Viewport::new(self.document.tools.navigation().viewport().surface())?;
+                    match Viewport::new(self.document.tools.navigation().viewport().surface()) {
+                        Ok(viewport) => viewport,
+                        Err(cause) => {
+                            self.inputs.retiring.scenes.push(scene);
+                            return Err(cause.into());
+                        }
+                    };
                 let mut document = Box::new(document::DocumentState::new(viewport));
-                document.tools.set_refresh_rate(self.display_refresh)?;
-                document.tools.set_content(
-                    Some(scene.document.snapshot().extent()),
-                    Some(&scene.document),
-                    now,
-                )?;
                 document.scene = Some(scene);
                 document.input = Some(identity);
                 document.initial_preview = true;
+                // A document that cannot be completed, as when the memory budget cannot hold
+                // its masks, still holds its source and retires on the worker.
+                if let Err(cause) = self.complete_created(identity, &mut document, &memory) {
+                    self.inputs.retiring.documents.push(document);
+                    return Err(cause);
+                }
                 let surface =
                     self.inputs.by_identity_mut(identity).ok_or("Input surface vanished")?;
-                surface.reconcile(&mut document, &memory)?;
                 surface.document = Some(document);
                 surface.loaded = true;
                 surface.loaded_base = Some(base);
@@ -192,6 +193,25 @@ impl Session {
         Ok(())
     }
 
+    /// Give a newly created document its archived content, tools and synced masks.
+    fn complete_created(
+        &mut self,
+        identity: InputDocumentId,
+        document: &mut document::DocumentState,
+        memory: &MemoryLease,
+    ) -> Result<(), Box<dyn Error>> {
+        let now = self.navigation_time();
+        let refresh = self.display_refresh;
+        let surface = self.inputs.by_identity_mut(identity).ok_or("Input surface vanished")?;
+        let scene = document.scene.as_mut().ok_or("Input document vanished")?;
+        surface.adopt_restored(scene, memory)?;
+        document.tools.set_refresh_rate(refresh)?;
+        let scene = document.scene.as_ref().ok_or("Input document vanished")?;
+        let extent = scene.document.snapshot().extent();
+        document.tools.set_content(Some(extent), Some(&scene.document), now)?;
+        surface.reconcile(document, memory)
+    }
+
     /// Replace a loaded document's base, keeping its surface's record of what it holds.
     pub(super) fn rebase_input(
         &mut self,
@@ -209,20 +229,25 @@ impl Session {
         if self.inputs.by_identity(identity).is_none() {
             return Ok(());
         }
-        let replaced = self
+        let (replaced, outcome) = self
             .with_input_document(identity, |surface, document, current| {
                 let rebased = surface.rebase(document, base, &memory, now);
                 if current && let Some(scene) = document.scene.as_mut() {
                     scene.source_revision = selection;
                 }
-                let replaced = rebased?;
-                surface.loaded_base = Some(loaded);
-                surface.failure = None;
-                Ok::<_, Box<dyn Error>>(replaced)
+                // Whichever source the document does not keep retires on the worker.
+                match rebased {
+                    Ok(replaced) => {
+                        surface.loaded_base = Some(loaded);
+                        surface.failure = None;
+                        (replaced, Ok(()))
+                    }
+                    Err(failure) => (failure.unadopted, Err(failure.cause)),
+                }
             })
-            .ok_or("Input document is unavailable")??;
+            .ok_or("Input document is unavailable")?;
         self.inputs.retiring.sources.push(replaced);
-        Ok(())
+        outcome
     }
 
     /// Fence the shown input document's frames before its source changes, under a new
