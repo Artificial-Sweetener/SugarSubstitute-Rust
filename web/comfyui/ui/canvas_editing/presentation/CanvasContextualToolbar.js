@@ -1,6 +1,7 @@
 import {
   CanvasContextualToolbar
-} from "../../chunk-NOFDFIDV.js";
+} from "../../chunk-EFDJIW2E.js";
+import "../../chunk-HDVDWAOE.js";
 import "../../chunk-OWTPCN3N.js";
 import "../../chunk-36SKP3QA.js";
 import "../../chunk-EFQNN4SR.js";

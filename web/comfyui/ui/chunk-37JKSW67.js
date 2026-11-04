@@ -1,14 +1,10 @@
 import {
-  CanvasToolRail
-} from "./chunk-3IZU6ONS.js";
-import {
-  CanvasBrushOptions
-} from "./chunk-NC4KX5LX.js";
+  CanvasEditDock
+} from "./chunk-Z4OXHAHO.js";
 import {
   CanvasContextualToolbar
-} from "./chunk-NOFDFIDV.js";
+} from "./chunk-EFDJIW2E.js";
 import {
-  canvasEditToolAvailable,
   iconButton
 } from "./chunk-OWTPCN3N.js";
 import {
@@ -49,7 +45,13 @@ var CanvasEditOverlay = defineComponent({
     snapshot: { type: Object, default: null },
     controller: { type: Object, required: true },
     viewport: { type: Object, default: null },
-    maskColor: { type: String, default: null }
+    maskColor: { type: String, default: null },
+    /** Host chrome the dock keeps clear, in overlay-local CSS pixels. */
+    obstacles: {
+      type: Function,
+      default: () => []
+    },
+    layoutRevision: { type: Number, default: 0 }
   },
   setup(props) {
     return () => {
@@ -58,57 +60,19 @@ var CanvasEditOverlay = defineComponent({
       const edit = props.controller;
       const surface = snapshot.surface;
       return [
-        canvasEditChromeSuppressed(surface) ? null : dock(snapshot, edit, props.maskColor),
+        canvasEditChromeSuppressed(surface) ? null : h(CanvasEditDock, {
+          snapshot,
+          controller: edit,
+          maskColor: props.maskColor,
+          obstacles: props.obstacles,
+          layoutRevision: props.layoutRevision
+        }),
         props.viewport && surface.kind !== "none" && surface.kind !== "coverage" ? h(CanvasContextualToolbar, { snapshot, controller: edit, viewport: props.viewport }) : null,
         surface.kind === "coverage" ? h(CanvasCoveragePanel, { snapshot, controller: edit, key: "coverage" }) : null
       ];
     };
   }
 });
-function dock(snapshot, edit, maskColor) {
-  const state = snapshot.state;
-  const tool = state.tool === "brush" || state.tool === "eraser" ? state.tool : null;
-  return h("div", { class: "sc-canvas-edit-dock" }, [
-    h("div", { class: "sc-canvas-edit-topbar" }, [
-      h(
-        "div",
-        {
-          class: "sc-canvas-edit-chrome sc-canvas-edit-row",
-          role: "group",
-          "aria-label": CANVAS_EDIT_TEXT.history
-        },
-        [
-          iconButton(
-            "undo",
-            CANVAS_EDIT_TEXT.undo,
-            "undo",
-            () => edit.execute({ type: "history", action: "undo" }),
-            state.history.undo
-          ),
-          iconButton(
-            "redo",
-            CANVAS_EDIT_TEXT.redo,
-            "redo",
-            () => edit.execute({ type: "history", action: "redo" }),
-            state.history.redo
-          )
-        ]
-      ),
-      tool && canvasEditToolAvailable(state, tool) ? h(CanvasBrushOptions, {
-        key: "options",
-        tool,
-        options: state.options[tool],
-        color: maskColor,
-        change: (target, options) => edit.setBrushOptions(target, options)
-      }) : null
-    ]),
-    h(CanvasToolRail, {
-      slots: snapshot.slots,
-      selectSlot: (slot) => edit.selectSlot(slot),
-      selectTool: (tool2) => edit.selectTool(tool2)
-    })
-  ]);
-}
 var CanvasCoveragePanel = defineComponent({
   name: "CanvasCoveragePanel",
   props: {

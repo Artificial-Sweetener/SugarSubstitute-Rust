@@ -59,9 +59,13 @@ export async function flush(): Promise<void> {
 
 /**
  * Build attachment, viewport and chrome layer like the native attachment does, and attach a
- * fake host. Every rendered toolbar measures 200 by 36 CSS pixels.
+ * fake host. Every rendered toolbar measures 200 by 36 CSS pixels. `obstacles` stands in for
+ * the host's route tabs, as client rectangles.
  */
-export async function mountEditing(state: CanvasEditState = editState()) {
+export async function mountEditing(
+  state: CanvasEditState = editState(),
+  obstacles: () => readonly DOMRectReadOnly[] = () => [],
+) {
   const host = new CanvasEditHostFixture(state);
   const scope = document.createElement('section');
   const viewport = document.createElement('div');
@@ -82,6 +86,7 @@ export async function mountEditing(state: CanvasEditState = editState()) {
       viewport: { width: VIEWPORT.width, height: VIEWPORT.height },
       physicalPixelsPerCssPixel: 1,
     }),
+    obstacles,
     maskColor: (layer) => (layer === 'mask-layer-1' ? '#33cc99' : null),
     report: (error) => errors.push(error),
   });

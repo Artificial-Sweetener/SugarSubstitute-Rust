@@ -104,3 +104,26 @@ test('Input is disabled with its reason until the workflow has surfaces', async 
   mounted.dispose();
   route.publish({ route: 'output', inputAvailable: true, reason: '', labels });
 });
+
+test('reports the route tabs as the chrome that shared canvas surfaces keep clear', () => {
+  const absent = mount(null);
+  expect(absent.mounted.routeBounds()).toEqual([]);
+  absent.mounted.dispose();
+  const route = routePort({ route: 'input', inputAvailable: true, reason: '', labels });
+  const { root, mounted } = mount(route.port);
+  const tabs = root.querySelector('.sc-output-route')!;
+  const bounds: DOMRect = {
+    x: 108,
+    y: 58,
+    left: 108,
+    top: 58,
+    width: 140,
+    height: 40,
+    right: 248,
+    bottom: 98,
+    toJSON: () => ({}),
+  };
+  jest.spyOn(tabs, 'getBoundingClientRect').mockReturnValue(bounds);
+  expect(mounted.routeBounds()).toEqual([bounds]);
+  mounted.dispose();
+});

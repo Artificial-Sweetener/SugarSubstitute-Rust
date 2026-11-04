@@ -1,6 +1,6 @@
 import {
   ensureCanvasEditStyles
-} from "../../chunk-HL3YPRVB.js";
+} from "../../chunk-VO4TCHQ3.js";
 import {
   CanvasEditContextMenu
 } from "../../chunk-OBVPEMEF.js";
@@ -10,10 +10,12 @@ import {
 import {
   CanvasEditOverlay,
   canvasEditSurface
-} from "../../chunk-XIRBID2H.js";
+} from "../../chunk-37JKSW67.js";
+import "../../chunk-Z4OXHAHO.js";
 import "../../chunk-3IZU6ONS.js";
 import "../../chunk-NC4KX5LX.js";
-import "../../chunk-NOFDFIDV.js";
+import "../../chunk-EFDJIW2E.js";
+import "../../chunk-HDVDWAOE.js";
 import {
   canvasEditSlotOf,
   canvasEditSlotViews,
@@ -322,6 +324,16 @@ function mountCanvasEditOverlay(options) {
   const snapshot = shallowRef(null);
   const viewport = shallowRef(null);
   const appearance = shallowRef(0);
+  const layoutRevision = shallowRef(0);
+  const obstacles = () => {
+    const bounds = root.getBoundingClientRect();
+    return (options.obstacles?.() ?? []).map((rect) => ({
+      left: rect.left - bounds.left,
+      top: rect.top - bounds.top,
+      width: rect.width,
+      height: rect.height
+    }));
+  };
   let stopSnapshot = null;
   let disposed = false;
   const menu = new CanvasEditContextMenu(options.region, () => controller.value);
@@ -342,7 +354,9 @@ function mountCanvasEditOverlay(options) {
         snapshot: current,
         controller: edit,
         viewport: viewport.value,
-        maskColor: mask ? options.maskColor?.(mask) ?? null : null
+        maskColor: mask ? options.maskColor?.(mask) ?? null : null,
+        obstacles,
+        layoutRevision: layoutRevision.value
       });
     }
   });
@@ -391,7 +405,9 @@ function mountCanvasEditOverlay(options) {
       next.start();
     },
     geometryChanged() {
-      if (!disposed) measure();
+      if (disposed) return;
+      measure();
+      layoutRevision.value++;
     },
     refresh() {
       if (!disposed) appearance.value++;

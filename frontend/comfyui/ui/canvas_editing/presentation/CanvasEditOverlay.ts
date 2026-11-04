@@ -13,24 +13,23 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Compose the rail, tool options, history, contextual toolbar and coverage panel. */
-import { defineComponent, h, onMounted, ref, type PropType, type VNode } from 'vue';
+/** Compose the dock, contextual toolbar and coverage panel. */
+import { defineComponent, h, onMounted, ref, type PropType } from 'vue';
 import type {
   CanvasEditController,
   CanvasEditSnapshot,
 } from '../application/CanvasEditController.js';
 import { canvasEditChromeSuppressed } from '../domain/CanvasEditSurface.js';
-import { canvasEditToolAvailable } from '../domain/CanvasEditTools.js';
-import { CanvasBrushOptions } from './CanvasBrushOptions.js';
+import type { CanvasEditRect } from '../domain/CanvasToolbarPlacement.js';
 import { CanvasContextualToolbar, type CanvasEditViewport } from './CanvasContextualToolbar.js';
 import { CanvasCoverageControls } from './CanvasCoverageControls.js';
+import { CanvasEditDock } from './CanvasEditDock.js';
 import { iconButton } from './CanvasEditPages.js';
 import { CANVAS_EDIT_TEXT } from './CanvasEditText.js';
-import { CanvasToolRail } from './CanvasToolRail.js';
 
 /**
  * Render nothing until the host presents an editable document. While an exclusive editor owns
- * the canvas (coverage panel, selection modification, transform) the rail and options hide.
+ * the canvas (coverage panel, selection modification, transform) the dock hides.
  */
 export const CanvasEditOverlay = defineComponent({
   name: 'CanvasEditOverlay',
@@ -39,6 +38,12 @@ export const CanvasEditOverlay = defineComponent({
     controller: { type: Object as PropType<CanvasEditController>, required: true },
     viewport: { type: Object as PropType<CanvasEditViewport | null>, default: null },
     maskColor: { type: String as PropType<string | null>, default: null },
+    /** Host chrome the dock keeps clear, in overlay-local CSS pixels. */
+    obstacles: {
+      type: Function as PropType<() => readonly CanvasEditRect[]>,
+      default: () => [],
+    },
+    layoutRevision: { type: Number, default: 0 },
   },
   setup(props) {
     return () => {
@@ -47,7 +52,15 @@ export const CanvasEditOverlay = defineComponent({
       const edit = props.controller;
       const surface = snapshot.surface;
       return [
-        canvasEditChromeSuppressed(surface) ? null : dock(snapshot, edit, props.maskColor),
+        canvasEditChromeSuppressed(surface)
+          ? null
+          : h(CanvasEditDock, {
+              snapshot,
+              controller: edit,
+              maskColor: props.maskColor,
+              obstacles: props.obstacles,
+              layoutRevision: props.layoutRevision,
+            }),
         props.viewport && surface.kind !== 'none' && surface.kind !== 'coverage'
           ? h(CanvasContextualToolbar, { snapshot, controller: edit, viewport: props.viewport })
           : null,
@@ -58,61 +71,6 @@ export const CanvasEditOverlay = defineComponent({
     };
   },
 });
-
-/** Top bar (document history, then the active tool's options) above the vertical rail. */
-function dock(
-  snapshot: CanvasEditSnapshot,
-  edit: CanvasEditController,
-  maskColor: string | null,
-): VNode {
-  const state = snapshot.state;
-  const tool = state.tool === 'brush' || state.tool === 'eraser' ? state.tool : null;
-  return h('div', { class: 'sc-canvas-edit-dock' }, [
-    h('div', { class: 'sc-canvas-edit-topbar' }, [
-      h(
-        'div',
-        {
-          class: 'sc-canvas-edit-chrome sc-canvas-edit-row',
-          role: 'group',
-          'aria-label': CANVAS_EDIT_TEXT.history,
-        },
-        [
-          iconButton(
-            'undo',
-            CANVAS_EDIT_TEXT.undo,
-            'undo',
-            () => edit.execute({ type: 'history', action: 'undo' }),
-            state.history.undo,
-          ),
-          iconButton(
-            'redo',
-            CANVAS_EDIT_TEXT.redo,
-            'redo',
-            () => edit.execute({ type: 'history', action: 'redo' }),
-            state.history.redo,
-          ),
-        ],
-      ),
-      tool && canvasEditToolAvailable(state, tool)
-        ? h(CanvasBrushOptions, {
-            key: 'options',
-            tool,
-            options: state.options[tool],
-            color: maskColor,
-            change: (target: 'brush' | 'eraser', options: typeof state.options.brush) =>
-              edit.setBrushOptions(target, options),
-          })
-        : null,
-    ]),
-    h(CanvasToolRail, {
-      slots: snapshot.slots,
-      selectSlot: (slot: Parameters<CanvasEditController['selectSlot']>[0]) =>
-        edit.selectSlot(slot),
-      selectTool: (tool: Parameters<CanvasEditController['selectTool']>[0]) =>
-        edit.selectTool(tool),
-    }),
-  ]);
-}
 
 /**
  * The exclusive "Edit layer coverage" editor centred along the canvas bottom.
