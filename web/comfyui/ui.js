@@ -257,17 +257,6 @@ const importHostCoordinator = new CubeImportHostCoordinator({
     getRuntime: requireCubeRuntime,
     logger,
 });
-const graphConfigurationLifecycle = new CubeGraphConfigurationLifecycle({
-    app: appRef,
-    ui,
-    runtimeLifecycle: cubeRuntimeLifecycle,
-    requireRuntime: requireCubeRuntime,
-    preconfiguration: cubePreconfiguration,
-    affordances: cubeAffordances,
-    overlays: overlayManager,
-    feedback: hostFeedback,
-    logger,
-});
 const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
     api,
     app: appRef,
@@ -329,6 +318,18 @@ const scrollSurfaceInput = new ScrollSurfaceWheelHost(documentRef ?? document);
 const modelCatalog = new ModelCatalogClient((path, options) => api.fetchApi(path, options), () => refreshComfyModelChoices(appRef));
 /** Bind prompt editing to the same catalog used by native model controls. */
 const promptEditors = new CubePromptEditorHost(documentRef ?? document, modelCatalog, modelBackgroundReporter(logger, 'prompt editor'), new OwnedSurfaceAppearance(document, appearance.state));
+const graphConfigurationLifecycle = new CubeGraphConfigurationLifecycle({
+    app: appRef,
+    ui,
+    runtimeLifecycle: cubeRuntimeLifecycle,
+    requireRuntime: requireCubeRuntime,
+    preconfiguration: cubePreconfiguration,
+    affordances: cubeAffordances,
+    overlays: overlayManager,
+    feedback: hostFeedback,
+    promptEditors,
+    logger,
+});
 const modelUpdates = new ModelUpdateClient((path, options) => api.fetchApi(path, options));
 const modelDetectors = new ModelDetectorClient((path, options) => api.fetchApi(path, options));
 /** Route update failures through the established SugarCubes feedback owner. */
@@ -438,7 +439,6 @@ export const sugarCubesExtension = {
     },
     beforeConfigureGraph(graphData) {
         canvasInputs.beforeConfigureGraph();
-        promptEditors.beforeConfigureGraph();
         workflowHistory.setConfiguring(true);
         relations.beforeConfigureGraph();
         workflowWorkspace.masonry.beforeConfigureGraph();

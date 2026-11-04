@@ -58,6 +58,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   readonly #report: (error: unknown) => void;
   readonly #sessions = new Map<ComfyWidget, PromptSession>();
   readonly #retired = new WeakSet<ComfyWidget>();
+  #configuring = false;
   readonly #restoreSurfaces = new Map<PromptEditorSurface, () => void>();
   #release: (() => void) | null = null;
   #regions: PromptRegionLinks | null = null;
@@ -97,8 +98,12 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
 
   /** Acquire a field presentation without duplicating its native editor or serialized value. */
   mount(surface: PromptEditorSurface): (() => void) | null {
-    // Cards of a replaced workflow can re-render during their deferred teardown; keep them native.
-    if (this.#retired.has(surface.widget)) return null;
+    if (this.#retired.has(surface.widget)) {
+      // Cards of a replaced workflow can re-render during their deferred teardown; keep them
+      // native. A widget whose node is still in its graph once configuration ends was retained.
+      if (this.#configuring || !belongsToGraph(surface.node)) return null;
+      this.#retired.delete(surface.widget);
+    }
     const hidden = surface.textarea.hidden;
     const display = surface.textarea.style.getPropertyValue('display');
     const priority = surface.textarea.style.getPropertyPriority('display');
@@ -202,10 +207,16 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
 
   /** Retire native documents before replacing an entire workflow; the model catalog is app-wide. */
   beforeConfigureGraph(): void {
+    this.#configuring = true;
     for (const [widget, session] of [...this.#sessions]) {
       this.#retired.add(widget);
       this.#retire(widget, session);
     }
+  }
+
+  /** End the configuration window; retained prompts can present their editor again. */
+  afterConfigureGraph(): void {
+    this.#configuring = false;
   }
 
   /** Release the document registration and every editor-owned resource. */

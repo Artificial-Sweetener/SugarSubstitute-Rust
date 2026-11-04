@@ -24,6 +24,7 @@ export class CubeGraphConfigurationLifecycle {
     beforeConfigureGraph(graphData) {
         const options = this.options;
         try {
+            options.promptEditors.beforeConfigureGraph();
             options.runtimeLifecycle.reset();
             options.preconfiguration.prepare(graphData);
             options.affordances.attach(options.requireRuntime());
@@ -37,6 +38,8 @@ export class CubeGraphConfigurationLifecycle {
     /** Restore Cube state after Comfy finishes configuring the active graph. */
     afterConfigureGraph(missingNodeTypes, comfyApp) {
         const options = this.options;
+        // Retained prompts may present their editor again once the configuration window closes.
+        options.promptEditors.afterConfigureGraph();
         try {
             const runtime = options.requireRuntime();
             runtime.hostPlacementGuard.completeHydration();

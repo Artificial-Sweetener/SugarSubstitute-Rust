@@ -240,7 +240,11 @@ window.promptBrowserProof = {
     textarea.readOnly = readOnly;
     reconcile();
   },
-  reset: () => host.beforeConfigureGraph(),
+  reset(): void {
+    // Comfy always closes a configuration window it opens, retaining or replacing the graph.
+    host.beforeConfigureGraph();
+    host.afterConfigureGraph();
+  },
   /** Prepare a late graph card detached or already connected beneath an inert presentation. */
   addInactiveProjection(connected): void {
     const projection = document.createElement('section');
