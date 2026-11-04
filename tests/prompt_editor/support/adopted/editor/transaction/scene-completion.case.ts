@@ -120,9 +120,8 @@ test('keyboard and pointer accept only the literal title, retain right whitespac
   }
 });
 
-test('held title refinement reuses the actual prepared splice and consumes the complete current prefix', () => {
+test('title refinement stales the visible row and fresh rows consume the complete current prefix', () => {
   const fixture = prepared(),
-    splice = fixture.result.options[0]!.acceptance.keyboard.splice!,
     caret = fixture.state.selection.main.head;
   const state = fixture.state.update({
     changes: { from: caret, insert: 'f' },
@@ -131,13 +130,10 @@ test('held title refinement reuses the actual prepared splice and consumes the c
   }).state;
   assert.equal(state.field(semanticStructures).native, null);
   assert.equal(state.field(completionSession)!.result === fixture.result, true);
-  assert.equal(
-    state.field(completionSession)!.result.options[0]!.acceptance.keyboard.splice === splice,
-    true,
-  );
-  const accepted = completionOptionTransaction(state, fixture.result, 0, 'keyboard')!;
+  assert.equal(completionOptionTransaction(state, fixture.result, 0, 'keyboard'), null);
+  const fresh = prepared('🙂\r\n \t**Caf \t\rbody', 11);
+  const accepted = completionOptionTransaction(fresh.state, fresh.result, 0, 'keyboard')!;
   assert.ok(accepted);
-  assert.equal(accepted.effects[0] === splice.effects[0], true);
   assert.equal(readExactSource(accepted.state) === '🙂\r\n \t**Cafe_(two:1.20) \t\rbody', true);
 });
 

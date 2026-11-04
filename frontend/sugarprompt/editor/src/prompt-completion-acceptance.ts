@@ -13,11 +13,15 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Native prompt completion consumes an already prepared transaction synchronously, preserving ordering with following input. */
-import { requireValue } from '../../core/src/required.js';
-import { captureFocusHandoff, currentFocusHandoff } from './focus-handoff.js';
+/**
+ * Accepting a suggestion builds its edit at that moment, the standard autocomplete pattern: the
+ * list only ranks labels while the user types, and the accepted row's canonical edit is issued
+ * and validated against the current document in the key or pointer callback, then applied as
+ * one transaction.
+ */
 import type { EditorView } from '@codemirror/view';
 import type { EditorState, Transaction } from '@codemirror/state';
+import { captureFocusHandoff, currentFocusHandoff } from './focus-handoff.js';
 import { editorFreshness } from './freshness.js';
 import type {
   PreparedCompletion,
@@ -26,9 +30,8 @@ import type {
 } from './prompt-completion-model.js';
 import { currentDocumentValueEdit } from './document-value-edit-issuance.js';
 import { semanticStructures } from './structure.js';
-import { completionSession, completionContinuation } from './completion-session.js';
-import { completionContinuationTransaction } from './document-value-continuation.js';
-/** A native session alone can retarget prepared output after fully consumed content edits; arbitrary stale proposals still reject. */
+import { completionSession } from './completion-session.js';
+/** Accept one row of the visible session only while its source, context and caret are still current. */
 export function completionOptionTransaction(
   state: EditorState,
   result: PreparedCompletionResult,
@@ -40,19 +43,15 @@ export function completionOptionTransaction(
   if (
     !session ||
     session.result !== result ||
+    session.phase !== 'ready' ||
     !option ||
-    state.readOnly ||
     session.freshness !== state.field(editorFreshness) ||
-    !state.selection.main.empty ||
     session.caret !== state.selection.main.head
   )
     return null;
-  const continuation = completionContinuation(state);
-  if (!continuation) return null;
-  const outcome = completionContinuationTransaction(state, continuation, result, index, activation);
-  return outcome.status === 'ready' ? outcome.value : null;
+  return completionAcceptanceTransaction(state, option, activation);
 }
-/** Accept a visible native option before following physical input, without parsing or ranking in the key/pointer callback. */
+/** Accept a visible native option before following physical input. */
 export function acceptCompletionOption(
   view: EditorView,
   result: PreparedCompletionResult,
@@ -77,7 +76,7 @@ export function acceptCompletionOption(
   void handoff.restore();
   return true;
 }
-/** Validate prepared source/context/caret against current native state and build one history-isolated transaction without semantic work. */
+/** Issue one option's edit for the current state and admit it only as a current canonical edit. */
 export function completionAcceptanceTransaction(
   state: EditorState,
   prepared: PreparedCompletion,
@@ -90,14 +89,11 @@ export function completionAcceptanceTransaction(
     state.selection.main.head !== prepared.caret
   )
     return null;
-  const session = state.field(completionSession, false);
-  if (session?.phase === 'ready' && completionContinuation(state)) {
-    const index = session.result.options.indexOf(prepared);
-    if (index >= 0) return completionOptionTransaction(state, session.result, index, activation);
-  }
-  const semantic = state.field(semanticStructures).native;
+  const semantic = state.field(semanticStructures, false)?.native;
   if (!semantic) return null;
-  const edit = prepared.acceptance[activation].edit;
+  const edit = prepared.prepareEdit(state, activation);
+  const transaction = edit?.transactions[0];
+  if (!edit || edit.transactions.length !== 1 || transaction?.startState !== state) return null;
   return currentDocumentValueEdit(
     state,
     {
@@ -108,6 +104,6 @@ export function completionAcceptanceTransaction(
     },
     edit,
   ) === null
-    ? requireValue(edit.transactions[0], 'prompt-completion-acceptance')
+    ? transaction
     : null;
 }

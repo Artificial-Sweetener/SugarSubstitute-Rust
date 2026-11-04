@@ -23,7 +23,6 @@ import type {
   PreparedCompletionResult,
   PreparedCompletionScope,
 } from './prompt-completion-model.js';
-import { stableCompletionContent } from '../../core/src/completion/continuation.js';
 import { completionPosition, prepareScopedCompletionEdit } from './completion-splice.js';
 
 /** Retain ranked canonical model identities; every decoded endpoint must have a genuine native map. */
@@ -40,18 +39,9 @@ export function loraCompletionOptions(
     contentFrom = completionPosition(scope, query.nameRange.from),
     to = completionPosition(scope, query.nameFieldRange.to);
   if (!rows.length || from === null || contentFrom === null || to === null) return null;
-  const stablePrefix = stableCompletionContent('lora', query.queryText),
-    options: PreparedCompletion[] = [];
+  const options: PreparedCompletion[] = [];
   for (const row of rows) {
-    const replacement = loraReplacement(source, query, row.scheduleName),
-      acceptance = prepareScopedCompletionEdit(
-        state,
-        scope,
-        replacement.range,
-        replacement.text,
-        stablePrefix ? query.replacementRange : null,
-      );
-    if (!acceptance) continue;
+    const replacement = loraReplacement(source, query, row.scheduleName);
     options.push(
       Object.freeze({
         label: row.display,
@@ -61,10 +51,8 @@ export function loraCompletionOptions(
         freshness: state.field(editorFreshness),
         caret,
         ghost: loraCompletionSuffix(query.queryText, row.display, row.scheduleName),
-        acceptance: Object.freeze({
-          keyboard: acceptance,
-          pointer: acceptance,
-        }),
+        prepareEdit: (current: EditorState) =>
+          prepareScopedCompletionEdit(current, scope, replacement.range, replacement.text),
       }),
     );
   }

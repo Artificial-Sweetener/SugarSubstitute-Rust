@@ -23,12 +23,7 @@ import type {
   PreparedCompletionResult,
   CompletionActivation,
 } from './prompt-completion-model.js';
-import { semanticStructures } from './structure.js';
-import {
-  prepareNativeCompletionContinuation,
-  followNativeCompletionContinuation,
-  type NativeCompletionContinuation,
-} from './document-value-continuation.js';
+
 /** Native session identity binds derived geometry, media and accessible option IDs to immutable prepared candidates. */
 export interface CompletionSession {
   readonly id: string;
@@ -43,13 +38,10 @@ export interface CompletionSession {
     readonly activation: CompletionActivation;
   } | null;
   readonly presentation: symbol;
-  /** Logical UTF-16 size change inside the prepared replacement's consumed content; null requires fresh semantics. */
-  readonly consumedShift: number | null;
 }
-/** One authoritative native owner stores the visible session and its independently advancing executable receipt. */
+/** One authoritative native owner stores the visible session and whether its row was chosen explicitly. */
 interface CompletionState {
   readonly session: CompletionSession | null;
-  readonly continuation: NativeCompletionContinuation | null;
   readonly selectedExplicitly: boolean;
 }
 let nextIdentity = 0;
@@ -93,7 +85,6 @@ export function completionIdentity(option: PreparedCompletion): string {
 function followInput(
   session: CompletionSession,
   transaction: Transaction,
-  executable: boolean,
 ): CompletionSession | null {
   const state = transaction.state,
     freshness = state.field(editorFreshness);
@@ -128,9 +119,6 @@ function followInput(
     freshness,
     caret,
     acceptance: null,
-    consumedShift: executable
-      ? (session.consumedShift ?? 0) + transaction.newDoc.length - transaction.startState.doc.length
-      : null,
     query: { ...session.query, to: end },
   };
 }
@@ -171,29 +159,6 @@ function publish(
         (option.kind !== 'lora' || (previous.kind === 'lora' && option.item === previous.item))
       );
     });
-  const origin = transaction.startState,
-    native = origin.field(semanticStructures).native,
-    target = result.options[0]?.acceptance.keyboard.edit.target;
-  let continuation: NativeCompletionContinuation | null = null;
-  if (native && target) {
-    const prepared = prepareNativeCompletionContinuation(
-      origin,
-      {
-        context: {
-          values: native.nativeValues,
-          semantics: native.documentSemantics,
-          enabled: true,
-          composing: false,
-        },
-        target,
-      },
-      result,
-    );
-    if (prepared.status === 'ready') {
-      const followed = followNativeCompletionContinuation(prepared.value, transaction);
-      if (followed.status === 'ready') continuation = followed.value.continuation;
-    }
-  }
   return {
     session: {
       id: compatible ? session.id : `sp-completions-${++nextIdentity}`,
@@ -205,9 +170,7 @@ function publish(
       caret: state.selection.main.head,
       acceptance: null,
       presentation: samePresentation ? session.presentation : Symbol(),
-      consumedShift: 0,
     },
-    continuation,
     selectedExplicitly: !!compatible && selectedExplicitly && selected >= 0,
   };
 }
@@ -215,17 +178,12 @@ function publish(
 const completionState = StateField.define<CompletionState>({
   /** Baselines begin without an active suggestion session. */
   create() {
-    return { session: null, continuation: null, selectedExplicitly: false };
+    return { session: null, selectedExplicitly: false };
   },
   /** Apply only source-current publication and bounded, same-session selection intent. */
   update(previous, transaction) {
     let session = previous.session;
-    let continuation = previous.continuation;
     let selectedExplicitly = previous.selectedExplicitly;
-    if (continuation) {
-      const followed = followNativeCompletionContinuation(continuation, transaction);
-      continuation = followed.status === 'ready' ? followed.value.continuation : null;
-    }
     if (
       session &&
       (session.freshness !== transaction.state.field(editorFreshness) ||
@@ -233,22 +191,17 @@ const completionState = StateField.define<CompletionState>({
         !transaction.state.selection.main.empty ||
         transaction.state.readOnly)
     )
-      session = followInput(session, transaction, continuation !== null);
-    if (!session) {
-      continuation = null;
-      selectedExplicitly = false;
-    }
+      session = followInput(session, transaction);
+    if (!session) selectedExplicitly = false;
     for (const effect of transaction.effects) {
       if (effect.is(installCompletion)) {
         const result = effect.value;
         if (!result) {
           session = null;
-          continuation = null;
           selectedExplicitly = false;
         } else if (current(transaction.state, result)) {
           const published = publish(session, result, transaction, selectedExplicitly);
           session = published.session;
-          continuation = published.continuation;
           selectedExplicitly = published.selectedExplicitly;
         }
       } else if (effect.is(selectCompletion) && session && effect.value.result === session.result) {
@@ -279,26 +232,20 @@ const completionState = StateField.define<CompletionState>({
         }
       }
     }
-    return session === previous.session &&
-      continuation === previous.continuation &&
-      selectedExplicitly === previous.selectedExplicitly
+    return session === previous.session && selectedExplicitly === previous.selectedExplicitly
       ? previous
-      : { session, continuation, selectedExplicitly };
+      : { session, selectedExplicitly };
   },
 });
 /** The public native session observation preserves the exact visible object while its owner advances private transaction evidence. */
 export const completionSession = StateField.define<CompletionSession | null>({
   /** Observe the initial authoritative session supplied by the same extension provision. */
   create: (state) => state.field(completionState).session,
-  /** Observe the authoritative owner without reproducing publication, selection or continuation rules. */
+  /** Observe the authoritative owner without reproducing publication or selection rules. */
   update: (_previous, transaction) => transaction.state.field(completionState).session,
   /** Include the one authority whenever a consumer mounts the visible session observation. */
   provide: () => completionState,
 });
-/** Acceptance reads only the authoritative current receipt; visible row identity does not confer executable authority. */
-export function completionContinuation(state: EditorState): NativeCompletionContinuation | null {
-  return state.field(completionState, false)?.continuation ?? null;
-}
 /** Read the sole selected native suggestion; painting and acceptance never maintain a parallel selected row. */
 export function selectedCompletion(state: EditorState): PreparedCompletion | null {
   const session = state.field(completionSession);

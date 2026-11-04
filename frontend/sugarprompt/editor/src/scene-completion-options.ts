@@ -41,12 +41,7 @@ export function sceneCompletionOptions(
   if (!titles.length || from === null) return null;
   const options: PreparedCompletion[] = [];
   for (const title of titles) {
-    const replacement = sceneReplacement(source, query, title),
-      acceptance = prepareScopedCompletionEdit(state, scope, replacement.range, replacement.text, {
-        from: query.replacementRange.from,
-        to: scope.target.decodedRange.from,
-      });
-    if (!acceptance) continue;
+    const replacement = sceneReplacement(source, query, title);
     options.push(
       Object.freeze({
         kind: 'scene',
@@ -55,10 +50,8 @@ export function sceneCompletionOptions(
         freshness: state.field(editorFreshness),
         caret,
         ghost: completionSuffix(title, query.prefix),
-        acceptance: Object.freeze({
-          keyboard: acceptance,
-          pointer: acceptance,
-        }),
+        prepareEdit: (current: EditorState) =>
+          prepareScopedCompletionEdit(current, scope, replacement.range, replacement.text),
       }),
     );
   }

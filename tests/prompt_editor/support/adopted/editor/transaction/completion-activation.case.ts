@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Actual prepared activation outputs independently preserve native delimiter and metadata contracts. */
+/** Activation outputs built at acceptance independently preserve native delimiter and metadata contracts. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -24,20 +24,18 @@ import {
   completionOptionTransaction,
   completionAcceptanceTransaction,
 } from '../../../../../../frontend/sugarprompt/editor/src/prompt-completion-acceptance.ts';
-import { preparedTagCompletion } from './tag-completion-fixture.ts';
+import { preparedTagCompletion, refreshedTagCompletion } from './tag-completion-fixture.ts';
 
-test('pointer and keyboard retain independent actual normalized outputs through the same native refinement', () => {
+test('pointer and keyboard build independent normalized outputs at acceptance', () => {
   const { state: initial, result } = preparedTagCompletion();
   const option = result.options[0]!;
-  const pointer = option.acceptance.pointer;
-  const keyboard = option.acceptance.keyboard;
   for (const activation of ['keyboard', 'pointer'] as const) {
     const ready = completionAcceptanceTransaction(initial, option, activation)!;
     assert.ok(ready);
+    assert.equal(ready.startState, initial);
     assert.equal(ready.isUserEvent('input.complete'), true);
     assert.equal(ready.isUserEvent('input.paste'), false);
   }
-  assert.notEqual(pointer, keyboard);
   assert.equal(
     readExactSource(completionAcceptanceTransaction(initial, option, 'pointer')!.state),
     '🙂\r\nhands\rtail',
@@ -51,10 +49,12 @@ test('pointer and keyboard retain independent actual normalized outputs through 
     selection: { anchor: 7 },
     userEvent: 'input.type',
   }).state;
-  const accepted = completionOptionTransaction(refined, result, 0, 'pointer')!;
+  assert.equal(completionOptionTransaction(refined, result, 0, 'pointer'), null);
+  const fresh = refreshedTagCompletion(refined);
+  const index = fresh.result.options.findIndex((candidate) => candidate.label === 'hands');
+  const accepted = completionOptionTransaction(fresh.state, fresh.result, index, 'pointer')!;
   assert.ok(accepted);
   assert.equal(readExactSource(accepted.state), '🙂\r\nhands\rtail');
   assert.equal(accepted.state.selection.main.head, 8);
-  assert.equal(accepted.effects[0], pointer.splice!.effects[0]);
-  assert.equal(accepted.state.field(lineEndings), initial.field(lineEndings));
+  assert.deepEqual(accepted.state.field(lineEndings), initial.field(lineEndings));
 });

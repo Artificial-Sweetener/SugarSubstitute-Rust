@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Fixed query boundaries permit prepared output reuse through word separators and quoted content. */
+/** Fixed query boundaries keep word separators and quoted content in the accepted output. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { preparedTagCompletion } from './tag-completion-fixture.ts';
@@ -41,13 +41,13 @@ import {
   semanticStructures,
 } from '../../../../../../frontend/sugarprompt/editor/src/structure.ts';
 
-test('word separators and fixed quotes reuse actual prepared acceptance without fresh semantics', () => {
-  for (const [source, removed, inserted, expected] of [
-    ['soft l', 0, ' ', 'soft light'],
-    ['soft l', 0, '\t', 'soft light'],
-    ['soft \t', 1, '', 'soft light'],
-    ['"soft l', 0, 'i', '"soft light"'],
-    ["'soft l", 0, 'i', "'soft light'"],
+test('word separators and fixed quotes stale the visible row; accepted output keeps quotes', () => {
+  for (const [source, removed, inserted] of [
+    ['soft l', 0, ' '],
+    ['soft l', 0, '\t'],
+    ['soft \t', 1, ''],
+    ['"soft l', 0, 'i'],
+    ["'soft l", 0, 'i'],
   ] as const) {
     const { state, result } = preparedTagCompletion(source, source.length);
     const changed = state.update({
@@ -60,21 +60,24 @@ test('word separators and fixed quotes reuse actual prepared acceptance without 
       userEvent: removed ? 'delete.backward' : 'input.type',
     }).state;
     assert.equal(changed.field(semanticStructures).native, null);
+    assert.equal(completionOptionTransaction(changed, result, 0, 'keyboard'), null);
+  }
+  for (const [source, expected] of [
+    ['soft l', 'soft light'],
+    ['"soft li', '"soft light"'],
+    ["'soft li", "'soft light'"],
+  ] as const) {
+    const { state, result } = preparedTagCompletion(source, source.length);
     for (const activation of ['keyboard', 'pointer'] as const) {
-      const accepted = completionOptionTransaction(changed, result, 0, activation);
+      const accepted = completionOptionTransaction(state, result, 0, activation);
       assert.ok(accepted);
       assert.equal(
         readExactSource(accepted.state),
         expected + (activation === 'keyboard' ? ', ' : ''),
       );
-      assert.equal(
-        accepted.effects[0],
-        result.options[0]!.acceptance[activation].splice!.effects[0],
-      );
     }
   }
 });
-
 test('leading separator edits and changed query openers require fresh semantics', () => {
   for (const [source, from, to, insert] of [
     ['soft l', 0, 0, ' '],
@@ -93,24 +96,17 @@ test('leading separator edits and changed query openers require fresh semantics'
   }
 });
 
-test('retained complete edits carry authored continuation once and reject separator changes', () => {
+test('accepted complete edits consume the spelled right text once and stale on separator changes', () => {
   const source = 'soft lght,\t next';
   const { state, result } = preparedTagCompletion(source, 6);
-  const changed = state.update({
-    changes: { from: 6, insert: 'i' },
-    selection: { anchor: 7 },
-    userEvent: 'input.type',
-  }).state;
-  assert.equal(changed.field(semanticStructures).native, null);
-  const accepted = completionOptionTransaction(changed, result, 0, 'keyboard');
+  const index = result.options.findIndex((option) => option.label === 'soft light');
+  assert.ok(index >= 0);
+  const accepted = completionOptionTransaction(state, result, index, 'keyboard');
   assert.ok(accepted);
   assert.equal(readExactSource(accepted.state) === 'soft light,\t next', true);
   assert.equal(accepted.newSelection.main.head, 13);
-  assert.equal(
-    accepted.effects[0],
-    result.options[0]!.acceptance.keyboard.right!.splice.effects[0],
-  );
   for (const [from, to, insert] of [
+    [6, 6, 'i'],
     [9, 10, ';'],
     [10, 11, ' '],
   ] as const) {
@@ -121,7 +117,6 @@ test('retained complete edits carry authored continuation once and reject separa
     assert.equal(completionOptionTransaction(altered, result, 0, 'keyboard'), null);
   }
 });
-
 /** Publish the actual canonical preparation for scope-boundary proof; no completion DTO or grammar is reconstructed. */
 function scopedState(source: string, caret: number, kind: PromptDocumentKind): EditorState {
   const state = EditorState.create({
@@ -191,18 +186,11 @@ test('canonical completion admission refuses protected CSV destinations and maps
 test('an actual empty CSV destination encodes a literal quoted multiline completion payload and rejects reconstructed or stale authority', () => {
   const state = scopedState('header\n,""', 7, 'wildcard-csv'),
     scope = prepareCompletionScope(state)!,
-    prepared = prepareScopedCompletionEdit(
-      state,
-      scope,
-      { from: 0, to: 0 },
-      'literal "quote"\n🙂',
-      null,
-    );
+    prepared = prepareScopedCompletionEdit(state, scope, { from: 0, to: 0 }, 'literal "quote"\n🙂');
   assert.ok(prepared);
-  assert.equal(prepared.splice, null);
-  const transaction = prepared.edit.transactions[0]!;
+  const transaction = prepared.transactions[0]!;
   assert.equal(readExactSource(transaction.state), 'header\n"literal ""quote""\n🙂",""');
-  const output = prepareNativeStructure(transaction.state, prepared.edit);
+  const output = prepareNativeStructure(transaction.state, prepared);
   assert.equal(output.scopes.scopes[0]!.mapping.text, 'literal "quote"\n🙂');
   assert.equal(output.scopes.scopes[1]!.mapping.text, '');
   assert.equal(output.nativeValues.entries.length, 3);
@@ -210,17 +198,13 @@ test('an actual empty CSV destination encodes a literal quoted multiline complet
     changes: { from: 7, insert: 'changed' },
     userEvent: 'input.type',
   }).state;
-  assert.equal(
-    prepareScopedCompletionEdit(stale, scope, { from: 0, to: 0 }, 'candidate', null),
-    null,
-  );
+  assert.equal(prepareScopedCompletionEdit(stale, scope, { from: 0, to: 0 }, 'candidate'), null);
   assert.equal(
     prepareScopedCompletionEdit(
       state,
       { context: scope.context, target: { ...scope.target } },
       { from: 0, to: 0 },
       'candidate',
-      null,
     ),
     null,
   );

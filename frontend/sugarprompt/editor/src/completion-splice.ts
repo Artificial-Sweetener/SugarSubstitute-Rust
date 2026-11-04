@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Off-input preparation retains the complete consumed prefix alongside normalized native output, including exact metadata. */
+/** Completion scopes, decoded positions and accepted edits share one canonical native producer. */
 import { requireValue } from '../../core/src/required.js';
 import type { EditorState } from '@codemirror/state';
 import type { SourceRange, TagLexicon } from '../../core/src/index.js';
@@ -22,35 +22,8 @@ import { nativeDocumentValueAt } from './document-values.js';
 import { prepareDocumentValuePaste } from './document-value-ingestion.js';
 import { minimalChangedSourceRange } from './ingestion.js';
 import { semanticStructures } from './structure.js';
-import type {
-  PreparedCompletionEdit,
-  PreparedCompletionScope,
-  PreparedCompletionSplice,
-} from './prompt-completion-model.js';
-/** Logical-document UTF-16 bounds include the whole consumed query, even when the optimized edit shares a prefix with the candidate. */
-export function prepareCompletionSplice(
-  edit: import('./document-value-edits.js').PreparedDocumentValueEdit,
-  from: number,
-  to: number,
-): PreparedCompletionSplice {
-  const transaction = edit.transactions[0];
-  if (!transaction) throw new Error('completion-splice-transaction-missing');
-  transaction.changes.iterChangedRanges((changedFrom, changedTo) => {
-    from = Math.min(from, changedFrom);
-    to = Math.max(to, changedTo);
-  });
-  return Object.freeze({
-    edit,
-    from,
-    to,
-    insert: transaction.newDoc.slice(
-      transaction.changes.mapPos(from, -1),
-      transaction.changes.mapPos(to, 1),
-    ),
-    selection: transaction.newSelection,
-    effects: transaction.effects,
-  });
-}
+import type { PreparedCompletionScope } from './prompt-completion-model.js';
+import type { PreparedDocumentValueEdit } from './document-value-edits.js';
 /** Resolve the actual current empty caret once; structured storage never gains a whole-source fallback. */
 export function prepareCompletionScope(state: EditorState): PreparedCompletionScope | null {
   const semantic = state.field(semanticStructures).native;
@@ -76,17 +49,16 @@ export function completionPosition(scope: PreparedCompletionScope, decoded: numb
     ] ?? null
   );
 }
-/** Encode an actual decoded completion through the single native producer; structured candidates retain no old-storage continuation splice. */
+/** Encode one accepted decoded completion through the single native producer at the current state. */
 export function prepareScopedCompletionEdit(
   state: EditorState,
   scope: PreparedCompletionScope,
   range: SourceRange,
   text: string,
-  consumed: SourceRange | null,
   normalization: {
     readonly lexicon: TagLexicon | undefined;
   } | null = null,
-): PreparedCompletionEdit | null {
+): PreparedDocumentValueEdit | null {
   const provenance = normalization
     ? prepareDocumentValuePaste(scope.target, range, text, normalization.lexicon)
     : null;
@@ -119,18 +91,5 @@ export function prepareScopedCompletionEdit(
       ...(provenance ? { normalization: provenance } : {}),
     },
   });
-  if (outcome.status === 'rejected') return null;
-  const from = consumed ? completionPosition(scope, consumed.from) : null,
-    to = consumed ? completionPosition(scope, consumed.to) : null;
-  return Object.freeze({
-    edit: outcome.edit,
-    splice:
-      scope.context.values.scopes.values.kind === 'prompt' &&
-      from !== null &&
-      to !== null &&
-      outcome.edit.transactions.length > 0
-        ? prepareCompletionSplice(outcome.edit, from, to)
-        : null,
-    right: null,
-  });
+  return outcome.status === 'rejected' ? null : outcome.edit;
 }

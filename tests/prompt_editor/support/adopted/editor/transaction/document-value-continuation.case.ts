@@ -18,14 +18,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { StateEffect, Transaction, EditorSelection } from '@codemirror/state';
 import { undo, redo } from '@codemirror/commands';
-import { continuationFixture, rightVariantFixture } from './document-value-continuation-fixture.ts';
+import { continuationFixture } from './document-value-continuation-fixture.ts';
 import {
   prepareNativeEditContinuation,
   followNativeEditContinuation,
   nativeEditContinuationTransaction,
-  prepareNativeCompletionContinuation,
-  followNativeCompletionContinuation,
-  completionContinuationTransaction,
 } from '../../../../../../frontend/sugarprompt/editor/src/document-value-continuation.ts';
 import {
   installCompletion,
@@ -91,41 +88,24 @@ test('actual completion installation advances metadata and preserves original ef
   assert.equal(current.doc.sliceString(3, 9), 'hands!');
 });
 
-test('native type/delete chain consumes genuine prefix and retains populated original output', () => {
-  const { state, scope, result, edit, effect } = continuationFixture();
-  const prepared = prepareNativeCompletionContinuation(state, scope, result);
-  assert.equal(prepared.status, 'ready');
-  if (prepared.status !== 'ready') return;
-  const first = state.update({
+test('typing inside the query leaves visible rows stale until fresh suggestions are published', () => {
+  const { state, result } = continuationFixture();
+  const installed = state.update({ effects: installCompletion.of(result) }).state;
+  assert.ok(completionOptionTransaction(installed, result, 0, 'pointer'));
+  const typed = installed.update({
     changes: { from: 6, insert: 'd' },
     selection: { anchor: 7 },
     userEvent: 'input.type',
-  });
-  const followed = followNativeCompletionContinuation(prepared.value, first);
-  assert.equal(followed.status, 'ready');
-  if (followed.status !== 'ready') return;
-  const second = first.state.update({
+  }).state;
+  assert.equal(completionOptionTransaction(typed, result, 0, 'pointer'), null);
+  const restored = typed.update({
     changes: { from: 6, to: 7 },
     selection: { anchor: 6 },
     userEvent: 'delete.backward',
-  });
-  const final = followNativeCompletionContinuation(followed.value.continuation, second);
-  assert.equal(final.status, 'ready');
-  if (final.status !== 'ready') return;
-  const accepted = completionContinuationTransaction(
-    second.state,
-    final.value.continuation,
-    result,
-    0,
-    'pointer',
-  );
-  assert.equal(accepted.status, 'ready');
-  if (accepted.status !== 'ready') return;
-  assert.ok(accepted.value.newDoc.eq(edit.transactions[0]!.newDoc));
-  assert.equal(accepted.value.effects.at(-1), effect);
-  assert.equal(readExactSource(accepted.value.state), '🙂\r\nhands\rtail');
+  }).state;
+  assert.equal(completionOptionTransaction(restored, result, 0, 'pointer'), null);
+  assert.equal(completionAcceptanceTransaction(restored, result.options[0]!, 'pointer'), null);
 });
-
 test('menu metadata links are actual persistent native branches with exact publication', () => {
   const { state, context, edit, effect } = continuationFixture();
   const prepared = prepareNativeEditContinuation(state, context, edit);
@@ -174,22 +154,6 @@ test('unrelated source, selection, context, authorship and equal-source restore 
     );
 });
 
-test('syntax boundaries and structured source input retire executable completion', () => {
-  for (const kind of ['prompt', 'wildcard-csv'] as const) {
-    const { state, scope, result } = continuationFixture(kind);
-    const prepared = prepareNativeCompletionContinuation(state, scope, result);
-    assert.equal(prepared.status, 'ready');
-    if (prepared.status !== 'ready') continue;
-    const caret = state.selection.main.head;
-    const transaction = state.update({
-      changes: { from: caret, insert: kind === 'prompt' ? ',' : 'd' },
-      selection: { anchor: caret + 1 },
-      userEvent: 'input.type',
-    });
-    assert.equal(followNativeCompletionContinuation(prepared.value, transaction).status, 'retired');
-  }
-});
-
 test('mutated issued effects permanently refuse while a genuine following command remains usable', () => {
   const { state, context, edit } = continuationFixture();
   const prepared = prepareNativeEditContinuation(state, context, edit);
@@ -207,22 +171,12 @@ test('mutated issued effects permanently refuse while a genuine following comman
   );
 });
 
-test('mutated result membership refuses restored observations and fabricated handles', () => {
-  const { state, scope, result } = continuationFixture();
-  const prepared = prepareNativeCompletionContinuation(state, scope, result);
-  assert.equal(prepared.status, 'ready');
-  if (prepared.status !== 'ready') return;
-  const options = result.options as (typeof result.options)[number][];
-  const original = options.pop()!;
-  assert.equal(
-    completionContinuationTransaction(state, prepared.value, result, 0, 'keyboard').status,
-    'rejected',
-  );
-  options.push(original);
-  assert.equal(
-    completionContinuationTransaction(state, prepared.value, result, 0, 'keyboard').status,
-    'rejected',
-  );
+test('copied results, out-of-range rows and fabricated handles refuse acceptance', () => {
+  const { state, result } = continuationFixture();
+  const installed = state.update({ effects: installCompletion.of(result) }).state;
+  assert.equal(completionOptionTransaction(installed, { ...result }, 0, 'keyboard'), null);
+  for (const index of [-1, NaN, 0.5, 1])
+    assert.equal(completionOptionTransaction(installed, result, index, 'keyboard'), null);
   assert.equal(
     nativeEditContinuationTransaction(
       state,
@@ -231,7 +185,6 @@ test('mutated result membership refuses restored observations and fabricated han
     'rejected',
   );
 });
-
 test('genuine metadata no-op reuses populated native values without source history', () => {
   const { state, result, edit, effect, context } = continuationFixture('prompt', true);
   assert.ok(edit.currentValues === context.values);
@@ -260,75 +213,15 @@ test('genuine metadata no-op reuses populated native values without source histo
   );
 });
 
-test('same-source structured metadata accepts genuine output while unobserved tips refuse', () => {
-  const { state, scope, result, edit } = continuationFixture('wildcard-csv');
-  const prepared = prepareNativeCompletionContinuation(state, scope, result);
-  assert.equal(prepared.status, 'ready');
-  if (prepared.status !== 'ready') return;
-  const installed = state.update({ effects: installCompletion.of(result) });
-  assert.equal(
-    completionContinuationTransaction(installed.state, prepared.value, result, 0, 'keyboard')
-      .status,
-    'rejected',
-  );
-  const followed = followNativeCompletionContinuation(prepared.value, installed);
-  assert.equal(followed.status, 'ready');
-  if (followed.status !== 'ready') return;
-  const accepted = completionContinuationTransaction(
-    installed.state,
-    followed.value.continuation,
-    result,
-    0,
-    'keyboard',
-  );
-  assert.equal(accepted.status, 'ready');
-  if (accepted.status !== 'ready') return;
-  assert.equal(readExactSource(accepted.value.state), readExactSource(edit.transactions[0]!.state));
-  assert.equal(accepted.value.newDoc.sliceString(0, 15), state.doc.sliceString(0, 15));
+test('structured CSV acceptance issues the genuine value edit for the installed state', () => {
+  const { state, result, edit } = continuationFixture('wildcard-csv');
+  const installed = state.update({ effects: installCompletion.of(result) }).state;
+  const accepted = completionOptionTransaction(installed, result, 0, 'keyboard');
+  assert.ok(accepted);
+  assert.equal(accepted.startState, installed);
+  assert.equal(readExactSource(accepted.state), readExactSource(edit.transactions[0]!.state));
+  assert.equal(accepted.newDoc.sliceString(0, 15), state.doc.sliceString(0, 15));
 });
-
-test('consumed right matching chooses its own genuine edit rather than the selected or detached variant', () => {
-  const { state, result, left, right, scope } = rightVariantFixture();
-  assert.ok(!left.transactions[0]!.newDoc.eq(right.transactions[0]!.newDoc));
-  const prepared = prepareNativeCompletionContinuation(state, scope, result);
-  assert.equal(prepared.status, 'ready');
-  if (prepared.status !== 'ready') return;
-  for (const [transaction, expected] of [
-    [
-      state.update({
-        changes: { from: 6, insert: 'd' },
-        selection: { anchor: 7 },
-        userEvent: 'input.type',
-      }),
-      left,
-    ],
-    [
-      state.update({
-        changes: { from: 5, to: 6 },
-        selection: { anchor: 5 },
-        userEvent: 'delete.backward',
-      }),
-      right,
-    ],
-  ] as const) {
-    const followed = followNativeCompletionContinuation(prepared.value, transaction);
-    assert.equal(followed.status, 'ready');
-    if (followed.status !== 'ready') continue;
-    const accepted = completionContinuationTransaction(
-      transaction.state,
-      followed.value.continuation,
-      result,
-      0,
-      'keyboard',
-    );
-    assert.equal(accepted.status, 'ready');
-    if (accepted.status !== 'ready') continue;
-    assert.ok(accepted.value.newDoc.eq(expected.transactions[0]!.newDoc));
-    assert.equal(accepted.value.effects.at(-1), expected.transactions[0]!.effects.at(-1));
-    assert.ok(accepted.value.newSelection.eq(expected.transactions[0]!.newSelection, true));
-  }
-});
-
 test('observed sparse native origin selection retires the exact receipt after restoration', () => {
   const { state, context, edit } = continuationFixture();
   const prepared = prepareNativeEditContinuation(state, context, edit);

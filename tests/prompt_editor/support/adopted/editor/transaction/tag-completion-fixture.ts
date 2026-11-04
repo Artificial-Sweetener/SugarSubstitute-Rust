@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Compose actual immutable native tag candidates for continuation and activation proof. */
+/** Compose actual immutable native tag candidates for acceptance and activation proof. */
 import assert from 'node:assert/strict';
 import { EditorState, Text } from '@codemirror/state';
 import { history } from '@codemirror/commands';
@@ -80,10 +80,17 @@ export function preparedTagCompletion(
     }
     state = state.update({ selection: { anchor: caret } }).state;
   }
-  state = state.update({
+  return refreshedTagCompletion(state);
+}
+/** Publish fresh semantics and suggestions for the current state, as settled native input does. */
+export function refreshedTagCompletion(current: EditorState): {
+  readonly state: EditorState;
+  readonly result: PreparedCompletionResult;
+} {
+  let state = current.update({
     effects: installSemanticStructure.of({
       purpose: 'native',
-      prepared: prepareNativeStructure(state),
+      prepared: prepareNativeStructure(current),
     }),
   }).state;
   const result = prepareCompletionOptions(state)!;

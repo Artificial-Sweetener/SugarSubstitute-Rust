@@ -116,9 +116,8 @@ test('keyboard and pointer accept the complete placeholder without punctuation a
   }
 });
 
-test('retained candidates reuse actual prepared output while bounded content refinement consumes the complete current placeholder', () => {
-  const fixture = prepared(),
-    splice = fixture.result.options[0]!.acceptance.keyboard.splice!;
+test('content refinement stales the visible rows and fresh rows consume the complete current placeholder', () => {
+  const fixture = prepared();
   const state = fixture.state.update({
     changes: { from: 6, insert: 'i' },
     selection: { anchor: 7 },
@@ -126,13 +125,10 @@ test('retained candidates reuse actual prepared output while bounded content ref
   }).state;
   assert.equal(state.field(semanticStructures).native, null);
   assert.equal(state.field(completionSession)!.result, fixture.result);
-  assert.equal(
-    state.field(completionSession)!.result.options[0]!.acceptance.keyboard.splice,
-    splice,
-  );
-  const accepted = completionOptionTransaction(state, fixture.result, 0, 'keyboard')!;
+  assert.equal(completionOptionTransaction(state, fixture.result, 0, 'keyboard'), null);
+  const fresh = prepared('🙂\r\n{ani  }\rtail', 7);
+  const accepted = completionOptionTransaction(fresh.state, fresh.result, 0, 'keyboard')!;
   assert.ok(accepted);
-  assert.equal(accepted.effects[0], splice.effects[0]);
   assert.equal(readExactSource(accepted.state), '🙂\r\n{animals}\rtail');
 });
 
@@ -190,16 +186,15 @@ test("a real CSV wildcard query encodes the catalog's literal quoted identifier 
   const source = 'header\n"{qu}",tail',
     fixture = prepared(source, 11, 'wildcard-csv', ['quoted"identifier']),
     option = fixture.result.options[0]!,
-    start = option.acceptance.pointer.edit.startState,
-    transaction = completionAcceptanceTransaction(start, option, 'pointer');
-  assert.ok(transaction);
+    edit = option.prepareEdit(fixture.state, 'pointer')!,
+    transaction = edit.transactions[0]!;
+  assert.ok(completionAcceptanceTransaction(fixture.state, option, 'pointer'));
   assert.equal(option.label, 'quoted"identifier');
   assert.equal(fixture.result.from, 8);
   assert.equal(fixture.result.query.contentFrom, 9);
   assert.equal(fixture.result.query.scope.mapping.text, '{qu}');
-  assert.equal(option.acceptance.pointer.splice, null);
   assert.equal(readExactSource(transaction.state), 'header\n"{quoted""identifier}",tail');
-  const followup = prepareNativeStructure(transaction.state, option.acceptance.pointer.edit);
+  const followup = prepareNativeStructure(transaction.state, edit);
   assert.equal(followup.scopes.scopes[0]!.mapping.text, '{quoted"identifier}');
   assert.equal(followup.scopes.scopes[1]!.mapping.text, 'tail');
 });

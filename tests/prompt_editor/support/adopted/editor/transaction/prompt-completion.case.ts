@@ -107,7 +107,7 @@ test('prepared completion changes exact source/caret in one native event and his
   assert.equal(readExactSource(state), '🙂\r\nsoft light, ');
 });
 
-test('native model options reuse exact output through name refinement, retain scheduler suffixes and isolate following typing', () => {
+test('native model options accept with scheduler suffixes, stale on name refinement and isolate following typing', () => {
   const source = 'ß\r\n<lora:rea:0.80:0.60:IN=0.2>\rtail';
   let state = EditorState.create({
     doc: Text.of(encodeSource(source).logical.split('\n')),
@@ -149,25 +149,45 @@ test('native model options reuse exact output through name refinement, retain sc
   );
   const result = loraCompletionOptions(state, scope, query, 11, adapter.completionCatalog!)!;
   assert.equal(result.options.length, 2);
-  assert.equal(result.options[0]!.acceptance.keyboard, result.options[0]!.acceptance.pointer);
-  const firstEdit = result.options[0]!.acceptance.keyboard.edit.transactions[0]!;
-  const secondEdit = result.options[1]!.acceptance.keyboard.edit.transactions[0]!;
+  const firstEdit = completionAcceptanceTransaction(state, result.options[0]!, 'keyboard')!;
+  const secondEdit = completionAcceptanceTransaction(state, result.options[1]!, 'keyboard')!;
+  const pointer = completionAcceptanceTransaction(state, result.options[1]!, 'pointer')!;
   assert.ok(Array.isArray(firstEdit.effects) && Array.isArray(secondEdit.effects));
   assert.equal(firstEdit.effects[0]!.value, secondEdit.effects[0]!.value);
-  const ready = completionAcceptanceTransaction(state, result.options[1]!, 'keyboard');
-  assert.ok(ready);
+  // Model names carry no trailing delimiter, so both activations accept the same text.
+  assert.equal(pointer.newDoc.eq(secondEdit.newDoc), true);
   state = state.update({ effects: installCompletion.of(result) }).state;
+  const installed = state;
   state = state.update({
     changes: { from: 11, insert: "l (v2), [draft] {stage} 'quoted'" },
     selection: { anchor: 43 },
     userEvent: 'input.type',
   }).state;
   assert.equal(completionAcceptanceTransaction(state, result.options[1]!, 'keyboard'), null);
+  assert.equal(completionOptionTransaction(state, result, 1, 'keyboard'), null);
+  // No fresh row matches the refined name, so nothing is accepted for it; the installed rows
+  // still accept their own query.
+  state = state.update({
+    effects: installSemanticStructure.of({
+      purpose: 'native',
+      prepared: prepareNativeStructure(state),
+    }),
+  }).state;
+  const refinedScope = prepareCompletionScope(state)!;
+  assert.equal(
+    loraCompletionOptions(
+      state,
+      refinedScope,
+      refinedScope.target.scope.loraQueries.queryAt(refinedScope.target.decodedRange.from, false)!,
+      43,
+      adapter.completionCatalog!,
+    ),
+    null,
+  );
+  state = installed;
   const transaction = completionOptionTransaction(state, result, 1, 'keyboard');
   assert.ok(transaction);
-  assert.equal(transaction.newDoc.eq(ready.newDoc), true);
-  assert.equal(transaction.newSelection.eq(ready.newSelection), true);
-  assert.equal(transaction.effects[0], result.options[1]!.acceptance.keyboard.splice!.effects[0]);
+  assert.equal(transaction.newDoc.eq(secondEdit.newDoc), true);
   state = transaction.state;
   assert.equal(readExactSource(state), 'ß\r\n<lora:folder/second:0.80:0.60:IN=0.2>\rtail');
   state = state.update({
@@ -187,11 +207,8 @@ test('native model options reuse exact output through name refinement, retain sc
       state = value.state;
     },
   });
-  assert.equal(
-    readExactSource(state),
-    source.replace(':rea:', ":real (v2), [draft] {stage} 'quoted':"),
-  );
-  assert.equal(state.selection.main.head, 43);
+  assert.equal(readExactSource(state), source);
+  assert.equal(state.selection.main.head, 11);
 });
 
 test('source restoration, catalog/permission context, changed caret and directional selection cannot revive stale prepared acceptance', () => {
@@ -279,16 +296,21 @@ test('CSV literal candidates encode quotes in actual multiline values and preser
   const result = prepareCompletionOptions(state)!;
   assert.equal(result.options.length, 1);
   assert.equal(result.query.scope.mapping.text, 'so\nnext');
-  assert.equal(result.options[0]!.acceptance.pointer.splice, null);
-  const accepted = completionAcceptanceTransaction(state, result.options[0]!, 'pointer');
+  const edit = result.options[0]!.prepareEdit(state, 'pointer')!;
+  const accepted = edit.transactions[0]!;
   assert.ok(accepted);
-  assert.strictEqual(accepted, result.options[0]!.acceptance.pointer.edit.transactions[0]);
+  assert.equal(
+    completionAcceptanceTransaction(state, result.options[0]!, 'pointer')!.newDoc.eq(
+      accepted.newDoc,
+    ),
+    true,
+  );
   assert.equal(accepted.isUserEvent('input.complete'), true);
   assert.equal(accepted.scrollIntoView, true);
   state = accepted.state;
   assert.equal(readExactSource(state), 'header\n"soft ""quote""\nnext",tail');
   assert.equal(state.selection.main.head, 22);
-  const populated = prepareNativeStructure(state, result.options[0]!.acceptance.pointer.edit);
+  const populated = prepareNativeStructure(state, edit);
   assert.equal(populated.scopes.scopes[0]!.mapping.text, 'soft "quote"\nnext');
   assert.equal(populated.scopes.scopes[1]!.mapping.text, 'tail');
   assert.equal(
@@ -303,7 +325,7 @@ test('CSV literal candidates encode quotes in actual multiline values and preser
   assert.equal(readExactSource(state), source);
   assert.equal(state.selection.main.head, 10);
 });
-test('CSV physical encoding changes retire captured continuation and retain only a deferred actual-choice intent', () => {
+test('CSV physical encoding changes stale the rows and retain only a deferred actual-choice intent', () => {
   const source = 'header\n"so",tail';
   let state = EditorState.create({
     doc: source,
@@ -341,7 +363,6 @@ test('CSV physical encoding changes retire captured continuation and retain only
   }).state;
   assert.equal(readExactSource(state), 'header\n"so""",tail');
   assert.equal(state.field(completionSession)?.phase, 'refreshing');
-  assert.equal(state.field(completionSession)?.consumedShift, null);
   assert.equal(completionOptionTransaction(state, result, 0, 'keyboard'), null);
   state = state.update({
     effects: requestCompletionAcceptance.of({
