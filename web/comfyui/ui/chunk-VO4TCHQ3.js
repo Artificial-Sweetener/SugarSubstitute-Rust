@@ -6,9 +6,11 @@ function ensureCanvasEditStyles(document) {
   style.textContent = `
     .sc-canvas-edit-root { position:absolute; inset:0; pointer-events:none; z-index:3;
       color:var(--fg-color,#ddd); font:13px var(--comfy-font-family,system-ui,sans-serif); }
-    .sc-canvas-edit-dock { position:absolute; left:8px; top:8px; display:flex; flex-direction:column;
-      align-items:flex-start; gap:8px; pointer-events:none; max-height:calc(100% - 16px); }
-    .sc-canvas-edit-topbar { display:flex; align-items:flex-start; gap:8px; pointer-events:none; }
+    .sc-canvas-edit-dock { position:absolute; inset:0; pointer-events:none; }
+    .sc-canvas-edit-topbar { position:absolute; left:0; top:0; display:flex; align-items:flex-start;
+      gap:8px; pointer-events:none; }
+    .sc-canvas-edit-rail-dock { position:absolute; left:0; top:0; display:flex; flex-direction:column;
+      pointer-events:none; max-height:calc(100% - 16px); }
     .sc-canvas-edit-chrome { pointer-events:auto; box-sizing:border-box;
       border:1px solid var(--interface-stroke,#454545); border-radius:8px;
       background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)); box-shadow:0 2px 8px #0003; }

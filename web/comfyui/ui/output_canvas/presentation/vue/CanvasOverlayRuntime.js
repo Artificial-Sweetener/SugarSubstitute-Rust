@@ -143,6 +143,12 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
     throw error;
   }
   return {
+    routeBounds() {
+      return Array.from(
+        element.querySelectorAll(".sc-output-route"),
+        (tabs) => tabs.getBoundingClientRect()
+      );
+    },
     /** Make root teardown idempotent while invalidating pending command feedback. */
     dispose() {
       if (!active) return;

@@ -302,6 +302,7 @@ export class NativeCanvasAttachment {
         scope: element,
         region: this.viewport,
         geometry: () => this.#surface,
+        obstacles: () => this.#overlay.routeBounds(),
         report: (error) => options.report(error, null),
       });
       cleanup.push(() => this.#editing.dispose());

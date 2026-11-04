@@ -23,6 +23,7 @@ import {
 import { CanvasEditContextMenu } from './CanvasEditContextMenu.js';
 import { CanvasEditKeyboard } from './CanvasEditKeyboard.js';
 import { CanvasEditOverlay } from './CanvasEditOverlay.js';
+import type { CanvasEditRect } from '../domain/CanvasToolbarPlacement.js';
 import type { CanvasEditViewport } from './CanvasContextualToolbar.js';
 import { ensureCanvasEditStyles } from './CanvasEditStyles.js';
 
@@ -41,6 +42,8 @@ export interface CanvasEditOverlayOptions {
   /** The canvas region whose secondary-button presses open the canvas menu. */
   readonly region: HTMLElement;
   geometry(): CanvasEditSurfaceGeometry | null;
+  /** Client bounds of host chrome sharing the canvas, such as route tabs, that the dock avoids. */
+  obstacles?(): readonly DOMRectReadOnly[];
   /** Name the CSS colour of a mask layer; absent or null shows the theme accent. */
   maskColor?(layerId: string): string | null;
   report(error: unknown): void;
@@ -73,6 +76,17 @@ export function mountCanvasEditOverlay(
   const snapshot = shallowRef<CanvasEditSnapshot | null>(null);
   const viewport = shallowRef<CanvasEditViewport | null>(null);
   const appearance = shallowRef(0);
+  const layoutRevision = shallowRef(0);
+  /** Express the host's chrome in the overlay's own CSS-pixel space. */
+  const obstacles = (): readonly CanvasEditRect[] => {
+    const bounds = root.getBoundingClientRect();
+    return (options.obstacles?.() ?? []).map((rect) => ({
+      left: rect.left - bounds.left,
+      top: rect.top - bounds.top,
+      width: rect.width,
+      height: rect.height,
+    }));
+  };
   let stopSnapshot: (() => void) | null = null;
   let disposed = false;
   const menu = new CanvasEditContextMenu(options.region, () => controller.value);
@@ -95,6 +109,8 @@ export function mountCanvasEditOverlay(
         controller: edit,
         viewport: viewport.value,
         maskColor: mask ? (options.maskColor?.(mask) ?? null) : null,
+        obstacles,
+        layoutRevision: layoutRevision.value,
       });
     },
   });
@@ -146,7 +162,9 @@ export function mountCanvasEditOverlay(
       next.start();
     },
     geometryChanged() {
-      if (!disposed) measure();
+      if (disposed) return;
+      measure();
+      layoutRevision.value++;
     },
     refresh() {
       if (!disposed) appearance.value++;
