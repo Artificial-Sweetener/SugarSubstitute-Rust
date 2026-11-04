@@ -86,6 +86,28 @@ export function nativeInputEvents(
       queueMicrotask(publish);
       return false;
     },
+    /**
+     * Typing over a selection replaces it through the editor rather than native editing: Chrome
+     * merges the zero-width text of non-editable markers it deletes into the typed text node.
+     */
+    beforeinput(event) {
+      const editor = getView();
+      if (
+        event.inputType !== 'insertText' ||
+        !event.data ||
+        event.isComposing ||
+        editor.composing ||
+        editor.state.readOnly ||
+        editor.state.selection.ranges.every((range) => range.empty)
+      )
+        return false;
+      event.preventDefault();
+      editor.dispatch(editor.state.replaceSelection(event.data), {
+        userEvent: 'input.type',
+        scrollIntoView: true,
+      });
+      return true;
+    },
     /** Reject unsupported external drag formats at the editor boundary. */
     drop(event) {
       const editor = getView();
