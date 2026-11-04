@@ -165,13 +165,13 @@ export class ComfyWorkflowExecutionRuntime {
             throw new Error('Canvas delivery is already bound or disposed.');
         this.#canvasDelivery = new ComfyDocumentCanvasHost(this.canvases, canvas, window, this.options.logger, notify);
     }
-    /** Read the stored state of every open workflow other than the active one. */
-    otherStoredWorkflows() {
-        return this.#adapter?.readOtherStoredWorkflows() ?? [];
+    /** Read the stored state of every open workflow other than the one owning the live graph. */
+    peerWorkflowStates() {
+        return this.#adapter?.readPeerWorkflowStates() ?? [];
     }
-    /** Record the active workflow's current graph in its change tracker. */
-    commitActiveWorkflowState() {
-        this.#adapter?.commitActiveWorkflowState();
+    /** Record the live graph in its owning workflow's change tracker. */
+    commitLoadedWorkflowState() {
+        this.#adapter?.commitLoadedWorkflowState();
     }
     /** Report whether the bound document canvas concluded native output discovery. */
     get canvasSurfaceDiscovered() {

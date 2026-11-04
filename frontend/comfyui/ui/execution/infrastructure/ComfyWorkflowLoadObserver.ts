@@ -30,16 +30,25 @@ export function createComfyWorkflowLoadObserver(
     host: app,
     method: 'loadGraphData',
     logger,
-    enter: (args) => sessions.beginLoad(adapter.loadKind(args)),
+    enter: (args) => {
+      const token = sessions.beginLoad(adapter.loadKind(args));
+      adapter.beginLoad(token.sequence, args);
+      return token;
+    },
     succeeded: (token) => {
+      adapter.endLoad(token.sequence);
       sessions.completeLoad(token, adapter.refresh());
     },
     failed: (token, error) => {
+      adapter.endLoad(token.sequence);
       sessions.completeLoad(token, false);
       logger.error('SugarCubes workflow graph load failed; output association is suspended.', {
         error,
       });
     },
-    cancelled: (token) => sessions.completeLoad(token, false),
+    cancelled: (token) => {
+      adapter.endLoad(token.sequence);
+      sessions.completeLoad(token, false);
+    },
   });
 }

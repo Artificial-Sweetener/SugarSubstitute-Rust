@@ -32,6 +32,8 @@ export class ComfyWorkflowSessionAdapter {
   readonly #workflow: UnknownRecord;
   readonly #identities = new WeakMap<object, WorkflowSessionId>();
   readonly #open = new Map<WorkflowSessionId, UnknownRecord>();
+  readonly #loads = new Map<number, UnknownRecord | null>();
+  readonly #contents = new WeakMap<object, { content: string; state: unknown }>();
   #unsubscribe: (() => void) | null = null;
   #active = false;
 
@@ -155,23 +157,74 @@ export class ComfyWorkflowSessionAdapter {
     return tracker?.activeState;
   }
 
-  /** Read the stored serialized state of every open workflow other than the active one. */
-  readOtherStoredWorkflows(): readonly unknown[] {
-    const active = this.#workflow.activeWorkflow;
-    const activeTracker = isRecord(active) ? active.changeTracker : undefined;
+  /**
+   * Record the workflow a starting graph load configures: the host's target workflow object, or
+   * none when the load creates a new workflow (an opened file) that the host commits only after
+   * configuration. Until the load settles, the live graph belongs to that target, not to the
+   * workflow the store still reports as active.
+   */
+  beginLoad(sequence: number, args: readonly unknown[]): void {
+    const target = args[3];
+    this.#loads.set(sequence, isRecord(target) ? target : null);
+  }
+
+  /** Forget a settled load; the store's committed active workflow owns the graph again. */
+  endLoad(sequence: number): void {
+    this.#loads.delete(sequence);
+  }
+
+  /**
+   * Read the stored serialized state of every open workflow other than the one owning the live
+   * graph, including restored workflows the host has not loaded yet, whose serialized content is
+   * all they hold.
+   */
+  readPeerWorkflowStates(): readonly unknown[] {
+    const owner = this.#graphOwner();
     return [...this.#open.values()].flatMap((workflow) => {
-      const tracker = isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
-      return tracker && tracker !== activeTracker ? [tracker.activeState] : [];
+      if (owner && sameWorkflow(workflow, owner)) return [];
+      const state = this.#storedState(workflow);
+      return state === undefined ? [] : [state];
     });
   }
 
-  /** Ask the active workflow's change tracker to record the graph's current serialized state. */
-  commitActiveWorkflowState(): void {
-    const active = this.#workflow.activeWorkflow;
-    const tracker =
-      isRecord(active) && isRecord(active.changeTracker) ? active.changeTracker : null;
+  /**
+   * Ask the live graph's owning workflow tracker to record the graph's current serialized state.
+   * Nothing is recorded while a load configures a workflow the host has not created yet, so the
+   * previously active workflow never records another workflow's graph.
+   */
+  commitLoadedWorkflowState(): void {
+    const owner = this.#graphOwner();
+    const tracker = owner && isRecord(owner.changeTracker) ? owner.changeTracker : null;
     const check = tracker?.checkState;
     if (typeof check === 'function') check.call(tracker);
+  }
+
+  /** The workflow owning the live graph: the latest pending load's target, else the active one. */
+  #graphOwner(): UnknownRecord | null {
+    if (this.#loads.size > 0) return [...this.#loads.values()].at(-1) ?? null;
+    const active = this.#workflow.activeWorkflow;
+    return isRecord(active) ? active : null;
+  }
+
+  /** A loaded workflow's tracked state, or an unloaded workflow's parsed serialized content. */
+  #storedState(workflow: UnknownRecord): unknown {
+    if (isRecord(workflow.changeTracker)) return workflow.changeTracker.activeState;
+    const content = workflow.content;
+    if (typeof content !== 'string') return undefined;
+    const cached = this.#contents.get(workflow);
+    if (cached?.content === content) return cached.state;
+    let state: unknown;
+    try {
+      state = JSON.parse(content) as unknown;
+    } catch (error: unknown) {
+      this.options.logger.error('SugarCubes could not read an unloaded workflow.', {
+        path: text(workflow.path),
+        error,
+      });
+      state = undefined;
+    }
+    this.#contents.set(workflow, { content, state });
+    return state;
   }
 
   /** Stop this adapter's subscription while leaving session/resource teardown to their owners. */
@@ -181,7 +234,19 @@ export class ComfyWorkflowSessionAdapter {
     this.#unsubscribe?.();
     this.#unsubscribe = null;
     this.#open.clear();
+    this.#loads.clear();
   }
+}
+
+/**
+ * Match one host workflow across Comfy's raw object and the store's reactive proxy: by object,
+ * by its unproxied change tracker, or by its unique open path.
+ */
+function sameWorkflow(open: UnknownRecord, other: UnknownRecord): boolean {
+  if (open === other) return true;
+  if (isRecord(open.changeTracker) && open.changeTracker === other.changeTracker) return true;
+  const path = text(open.path);
+  return path !== '' && path === text(other.path);
 }
 
 /** Normalize display metadata without using it as an identity or association key. */

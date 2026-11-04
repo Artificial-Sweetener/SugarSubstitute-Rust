@@ -23,6 +23,13 @@ export interface WorkflowFixture {
   changeTracker: { activeState: object; nodeOutputs: Record<string, unknown> };
 }
 
+/** A restored tab the host has not loaded yet: no change tracker, only serialized content. */
+export interface UnloadedWorkflowFixture {
+  path: string;
+  filename: string;
+  content: string;
+}
+
 /** Construct distinct host objects with deliberately colliding node and serialized workflow IDs. */
 export function workflowFixture(name: string): WorkflowFixture {
   return {
@@ -40,11 +47,11 @@ export function workflowFixture(name: string): WorkflowFixture {
 /** Expose the public host shape while allowing tests to pause after configuration hooks. */
 export class WorkflowHostFixture {
   readonly #subscribers = new Set<() => void>();
-  readonly graph = { nodes: [] as WorkflowFixture['nodes'] };
+  readonly graph = { nodes: [] as WorkflowFixture['nodes'], extra: {} as Record<string, unknown> };
   readonly extensionManager = {
     workflow: {
       activeWorkflow: null as WorkflowFixture | null,
-      openWorkflows: [] as WorkflowFixture[],
+      openWorkflows: [] as Array<WorkflowFixture | UnloadedWorkflowFixture>,
       $subscribe:
         (_listener: () => void, _options: { detached: boolean; flush: string }): (() => void) =>
         () =>
@@ -71,20 +78,37 @@ export class WorkflowHostFixture {
     return this.#subscribers.size;
   }
 
-  /** Model hooks before active workflow commitment and preserve the same root graph object. */
+  /**
+   * Model hooks before active workflow commitment and preserve the same root graph object. A
+   * file name, as an opened file passes, creates its workflow only after configuration, with the
+   * loaded data as its tracked state.
+   */
   async loadGraphData(
-    _data: unknown,
+    data: unknown,
     _clean = true,
     _restore = true,
-    workflow?: WorkflowFixture,
+    workflow?: WorkflowFixture | string,
   ): Promise<void> {
-    const target = workflow ?? this.extensionManager.workflow.activeWorkflow;
+    const opened = typeof workflow === 'string';
+    const named = opened ? null : workflow;
+    const target = named ?? this.extensionManager.workflow.activeWorkflow;
     if (!target) throw new Error('Fixture workflow is unavailable.');
     this.beforeConfigure();
-    this.graph.nodes = [...target.nodes];
+    this.graph.nodes = opened ? [] : [...target.nodes];
     this.afterConfigure();
     if (this.pauseAfterConfigure) await this.pauseAfterConfigure();
+    if (opened) {
+      const created = workflowFixture(workflow);
+      created.changeTracker.activeState = typeof data === 'object' && data !== null ? data : {};
+      this.#commit(created);
+      return;
+    }
     target.changeTracker.activeState = {};
+    this.#commit(target);
+  }
+
+  /** Make `target` the active open workflow and notify the store's subscribers. */
+  #commit(target: WorkflowFixture): void {
     this.extensionManager.workflow.activeWorkflow = target;
     if (!this.extensionManager.workflow.openWorkflows.includes(target))
       this.extensionManager.workflow.openWorkflows.push(target);
