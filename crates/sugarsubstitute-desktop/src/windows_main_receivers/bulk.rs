@@ -18,7 +18,9 @@ mod response;
 
 use super::*;
 use crate::bulk_channel_diagnostic::{self, Method};
-use crate::main_bulk::{Endpoint, Header, Refusal, Request, Route, Transfers, UploadBuffer};
+use crate::main_bulk::{
+    Context, Endpoint, Header, Refusal, Request, Route, Transfers, UploadBuffer,
+};
 use std::{ffi::c_void, time::Instant};
 use webview2_com::WebResourceRequestedEventHandler;
 use windows::{
@@ -213,7 +215,7 @@ fn serve(
     let headers: ICoreWebView2HttpRequestHeaders = adopt(raw, status, "bulk_request_headers")?;
     let origin = origin_header(&headers)?;
     let request_view = Request {
-        fetch: context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH,
+        context: classify_context(context),
         method: method.as_ref().map(Ascii::as_str),
         uri: uri.as_ref().map(Ascii::as_str),
         origin: match &origin {
@@ -248,6 +250,20 @@ fn serve(
             Err(miss) => refuse(miss),
         },
         Err(miss) => refuse(miss),
+    }
+}
+
+/// Classify WebView2's resource context for the endpoint's script-request check.
+///
+/// WebView2 raises the bridge's own Fetch API calls with
+/// `COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST` (7), not `..._FETCH` (8): a production
+/// host refused every bulk download as a non-script request until both were admitted. Every
+/// other context, such as a document, frame or image load, stays refused.
+fn classify_context(context: COREWEBVIEW2_WEB_RESOURCE_CONTEXT) -> Context {
+    match context {
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH => Context::Fetch,
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST => Context::XmlHttpRequest,
+        _ => Context::Other,
     }
 }
 
@@ -334,4 +350,39 @@ fn ascii(text: &NativeString) -> Option<Ascii> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_context_webview2_reports_for_the_bridge_fetch_is_a_script_request() {
+        // Observed on the production host: the bridge's same-origin Fetch API call arrives as 7.
+        assert_eq!(COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST.0, 7);
+        assert_eq!(classify_context(COREWEBVIEW2_WEB_RESOURCE_CONTEXT(7)), Context::XmlHttpRequest);
+        assert_eq!(classify_context(COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH), Context::Fetch);
+    }
+
+    #[test]
+    fn navigation_and_subresource_contexts_are_never_script_requests() {
+        for context in [
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_STYLESHEET,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FONT,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_SCRIPT,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_EVENT_SOURCE,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_WEBSOCKET,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MANIFEST,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_SIGNED_EXCHANGE,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_PING,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_CSP_VIOLATION_REPORT,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_OTHER,
+        ] {
+            assert_eq!(classify_context(context), Context::Other, "{context:?}");
+        }
+    }
 }

@@ -39,8 +39,12 @@ fn partition() -> MemoryLease {
 /// Store `body` through the same route, grant and bounded reads as the native handler.
 fn upload(transfers: &Transfers, token: Token, body: &[u8], now: Instant) -> Result<(), Refusal> {
     let uri = format!("{}u/{}", transfers.endpoint().prefix(), token.hex());
-    let request =
-        Request { fetch: true, method: Some("POST"), uri: Some(&uri), origin: Header::Text(PAGE) };
+    let request = Request {
+        context: Context::XmlHttpRequest,
+        method: Some("POST"),
+        uri: Some(&uri),
+        origin: Header::Text(PAGE),
+    };
     let Ok(Route::Upload(routed)) = transfers.endpoint().route(request) else {
         return Err(Refusal::Closed);
     };

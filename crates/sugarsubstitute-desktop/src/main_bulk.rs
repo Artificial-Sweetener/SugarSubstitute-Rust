@@ -24,7 +24,7 @@ use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryClaimError, Memory
 
 mod endpoint;
 mod wire;
-pub(crate) use endpoint::{Endpoint, Header, Request};
+pub(crate) use endpoint::{Context, Endpoint, Header, Request};
 pub(crate) use wire::{Envelope, Route, Token};
 
 /// Largest serialized message carried in either direction, in UTF-8 bytes.

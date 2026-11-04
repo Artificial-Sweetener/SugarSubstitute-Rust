@@ -27,8 +27,8 @@ pub enum Miss {
     MalformedCapability,
     /// A present `Origin` header is another origin or could not be read.
     ForeignOrigin,
-    /// The browser did not classify the request as a Fetch API request.
-    NonFetchContext,
+    /// The browser classified the request as neither a Fetch API nor an `XMLHttpRequest` request.
+    NonScriptContext,
     /// No staged download has this capability; it was never issued or already served.
     DownloadUnknown,
     /// The staged download outlived its single-use lifetime.
@@ -60,7 +60,7 @@ impl Miss {
         Self::RouteMismatch,
         Self::MalformedCapability,
         Self::ForeignOrigin,
-        Self::NonFetchContext,
+        Self::NonScriptContext,
         Self::DownloadUnknown,
         Self::DownloadExpired,
         Self::DownloadStale,
@@ -82,7 +82,7 @@ impl Miss {
             Self::RouteMismatch => "route_mismatch",
             Self::MalformedCapability => "malformed_capability",
             Self::ForeignOrigin => "foreign_origin",
-            Self::NonFetchContext => "non_fetch_context",
+            Self::NonScriptContext => "non_script_context",
             Self::DownloadUnknown => "download_unknown",
             Self::DownloadExpired => "download_expired",
             Self::DownloadStale => "download_stale",

@@ -53,8 +53,12 @@ fn run() -> Result<RunKey> {
     })
 }
 
-const REFUSAL: Record =
-    Record { miss: Miss::NonFetchContext, context: 3, method: Method::Get, origin: Origin::Absent };
+const REFUSAL: Record = Record {
+    miss: Miss::NonScriptContext,
+    context: 3,
+    method: Method::Get,
+    origin: Origin::Absent,
+};
 
 #[test]
 fn a_desktop_child_refusal_reaches_the_parent_log_with_its_closed_fields() -> Result {
@@ -72,7 +76,7 @@ fn a_desktop_child_refusal_reaches_the_parent_log_with_its_closed_fields() -> Re
     let parent = String::from_utf8(formatted(|| relay(run, REFUSAL))?)?;
     for field in [
         "operation=\"desktop_child_bulk_channel\"",
-        "reason=non_fetch_context",
+        "reason=non_script_context",
         "context=3",
         "method=GET",
         "origin=absent",

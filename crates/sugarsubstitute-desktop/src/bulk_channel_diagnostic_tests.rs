@@ -3,7 +3,7 @@
 //! Accept only this producer's exact closed fields; any other text is discarded.
 use super::*;
 
-const LINE: &str = "2026-11-03T00:00:00.000000Z  INFO sugarsubstitute_desktop::bulk_channel_diagnostic: operation=\"bulk_channel_refused\" schema=1 reason=non_fetch_context context=7 method=GET origin=absent";
+const LINE: &str = "2026-11-03T00:00:00.000000Z  INFO sugarsubstitute_desktop::bulk_channel_diagnostic: operation=\"bulk_channel_refused\" schema=1 reason=non_script_context context=7 method=GET origin=absent";
 
 fn line(miss: Miss, context: i32, method: Method, origin: Origin) -> String {
     format!(
@@ -16,7 +16,7 @@ fn every_closed_value_round_trips_through_its_wire_name() {
     assert_eq!(
         Record::parse(LINE.as_bytes()),
         Some(Record {
-            miss: Miss::NonFetchContext,
+            miss: Miss::NonScriptContext,
             context: 7,
             method: Method::Get,
             origin: Origin::Absent
@@ -60,8 +60,8 @@ fn methods_reduce_to_their_closed_class_without_recording_text() {
 fn noncanonical_unknown_and_extended_lines_are_rejected() {
     for (from, to) in [
         ("schema=1", "schema=2"),
-        ("reason=non_fetch_context", "reason=other"),
-        ("reason=non_fetch_context", "reason=\"non_fetch_context\""),
+        ("reason=non_script_context", "reason=other"),
+        ("reason=non_script_context", "reason=\"non_script_context\""),
         ("context=7", "context=07"),
         ("context=7", "context=+7"),
         ("context=7", "context=-0"),

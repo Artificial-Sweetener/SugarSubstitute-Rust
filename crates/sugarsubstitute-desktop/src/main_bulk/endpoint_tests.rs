@@ -16,9 +16,10 @@ fn routes(endpoint: &Endpoint) -> (String, String) {
     (format!("{}d/{token}", endpoint.prefix()), format!("{}u/{token}", endpoint.prefix()))
 }
 
-/// A Fetch API request exactly as the native adapter reports it.
+/// The bridge's Fetch API call exactly as the production WebView2 host reports it: resource
+/// context 7, `COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST`.
 fn observed<'a>(method: &'a str, uri: &'a str, origin: Header<'a>) -> Request<'a> {
-    Request { fetch: true, method: Some(method), uri: Some(uri), origin }
+    Request { context: Context::XmlHttpRequest, method: Some(method), uri: Some(uri), origin }
 }
 
 #[test]
@@ -139,8 +140,14 @@ fn routes_require_exact_method_url_and_any_present_page_origin() -> TestResult {
         (observed("GET", endpoint.prefix(), page), Miss::RouteMismatch),
         (observed("GET", &doubled, page), Miss::RouteMismatch),
         (observed("GET", &escaped, page), Miss::PrefixMismatch),
-        (Request { fetch: false, ..observed("GET", &download, page) }, Miss::NonFetchContext),
-        (Request { fetch: false, ..observed("POST", &upload, page) }, Miss::NonFetchContext),
+        (
+            Request { context: Context::Other, ..observed("GET", &download, page) },
+            Miss::NonScriptContext,
+        ),
+        (
+            Request { context: Context::Other, ..observed("POST", &upload, page) },
+            Miss::NonScriptContext,
+        ),
         (Request { method: None, ..observed("GET", &download, page) }, Miss::RouteMismatch),
         (Request { uri: None, ..observed("GET", &download, page) }, Miss::UrlUnreadable),
     ];
@@ -159,7 +166,7 @@ fn a_later_miss_proves_every_earlier_check_passed() -> TestResult {
     let other = Header::Text("http://127.0.0.1:8189");
     let malformed = format!("{}d/{}", endpoint.prefix(), "z".repeat(32));
     fn hidden(request: Request<'_>) -> Request<'_> {
-        Request { fetch: false, ..request }
+        Request { context: Context::Other, ..request }
     }
     // Each request fails several checks; the earliest in route order is reported.
     for (request, miss) in [
@@ -168,9 +175,27 @@ fn a_later_miss_proves_every_earlier_check_passed() -> TestResult {
         (hidden(observed("POST", &download, other)), Miss::RouteMismatch),
         (hidden(observed("GET", &malformed, other)), Miss::MalformedCapability),
         (hidden(observed("GET", &download, other)), Miss::ForeignOrigin),
-        (hidden(observed("GET", &download, Header::Absent)), Miss::NonFetchContext),
+        (hidden(observed("GET", &download, Header::Absent)), Miss::NonScriptContext),
     ] {
         assert_eq!(endpoint.route(request), Err(miss), "{request:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn script_network_requests_match_and_every_other_context_is_refused() -> TestResult {
+    let endpoint = Endpoint::for_root(&format!("{PAGE}/"))?;
+    let (download, upload) = routes(&endpoint);
+    let token = Token::new(TOKEN);
+    for (method, uri, route) in
+        [("GET", &download, Route::Download(token)), ("POST", &upload, Route::Upload(token))]
+    {
+        for context in [Context::XmlHttpRequest, Context::Fetch] {
+            let request = Request { context, ..observed(method, uri, Header::Absent) };
+            assert_eq!(endpoint.route(request), Ok(route), "{request:?}");
+        }
+        let request = Request { context: Context::Other, ..observed(method, uri, Header::Absent) };
+        assert_eq!(endpoint.route(request), Err(Miss::NonScriptContext), "{request:?}");
     }
     Ok(())
 }

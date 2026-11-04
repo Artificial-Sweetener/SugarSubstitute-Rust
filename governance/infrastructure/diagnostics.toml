@@ -157,7 +157,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/bulk_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:29001c9b945c8cf5b3e830df6942f9aba4d94cfc731917f385170c8d236e96bd"
+source_sha256 = "sha256:345ce233f8528fa98a8e5cf89136a7ab8d2c17b0f7929879fd343891de8debb0"
 disposition = "fixture"
 rationale = "Captures the application formatter's output as the child's stderr and the parent's log to prove a desktop bulk channel refusal crosses the relay; runtime construction is unchanged."
 

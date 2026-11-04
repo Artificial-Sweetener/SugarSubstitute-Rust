@@ -21,11 +21,27 @@ use crate::bulk_channel_diagnostic::{Miss, Origin};
 /// request under it is answered in-process, so such a server never sees one.
 pub(crate) const RESERVED_PATH: &str = "__sugarsubstitute/bulk/";
 
+/// How the browser classified an intercepted request's resource context.
+///
+/// Only script network requests can carry a bulk transfer. A navigation, frame, image, style,
+/// script or other subresource load is never one, so the channel refuses it before a single-use
+/// token is spent and the body cannot load as a document or subresource.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Context {
+    /// A Fetch API request.
+    Fetch,
+    /// An `XMLHttpRequest`. WebView2 reports the bridge's own Fetch API calls in this context,
+    /// as observed on the production host, so it is the context the channel serves in practice.
+    XmlHttpRequest,
+    /// A navigation, subresource or any other load.
+    Other,
+}
+
 /// One intercepted request as the native adapter observed it, before any token is consumed.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Request<'a> {
-    /// Whether the browser classified it as a Fetch API request; other contexts never match.
-    pub(crate) fetch: bool,
+    /// The browser's resource context; only script network requests match a route.
+    pub(crate) context: Context,
     /// Method, or `None` when it is not short ASCII text.
     pub(crate) method: Option<&'a str>,
     /// Absolute URL, or `None` when it is longer than [`Endpoint::MAX_ROUTE_BYTES`] or not ASCII.
@@ -121,7 +137,8 @@ impl Endpoint {
 
     /// Match one intercepted request to a live operation without consuming anything.
     ///
-    /// The request must be a Fetch API request with the exact method and URL: there is no query,
+    /// The request must be a script network request ([`Context::Fetch`] or
+    /// [`Context::XmlHttpRequest`]) with the exact method and URL: there is no query,
     /// fragment, alternate spelling or trailing segment. A present `Origin` header must be this
     /// page's origin. An absent one is admitted because browsers omit it from same-origin `GET`
     /// requests; the single-use token remains the capability either way.
@@ -146,8 +163,8 @@ impl Endpoint {
         if !matches!(self.origin(request.origin), Origin::Absent | Origin::Matching) {
             return Err(Miss::ForeignOrigin);
         }
-        if !request.fetch {
-            return Err(Miss::NonFetchContext);
+        if request.context == Context::Other {
+            return Err(Miss::NonScriptContext);
         }
         Ok(route(token))
     }
