@@ -227,14 +227,14 @@ export class ComfyWorkflowExecutionRuntime {
     );
   }
 
-  /** Read the stored state of every open workflow other than the active one. */
-  otherStoredWorkflows(): readonly unknown[] {
-    return this.#adapter?.readOtherStoredWorkflows() ?? [];
+  /** Read the stored state of every open workflow other than the one owning the live graph. */
+  peerWorkflowStates(): readonly unknown[] {
+    return this.#adapter?.readPeerWorkflowStates() ?? [];
   }
 
-  /** Record the active workflow's current graph in its change tracker. */
-  commitActiveWorkflowState(): void {
-    this.#adapter?.commitActiveWorkflowState();
+  /** Record the live graph in its owning workflow's change tracker. */
+  commitLoadedWorkflowState(): void {
+    this.#adapter?.commitLoadedWorkflowState();
   }
 
   /** Report whether the bound document canvas concluded native output discovery. */

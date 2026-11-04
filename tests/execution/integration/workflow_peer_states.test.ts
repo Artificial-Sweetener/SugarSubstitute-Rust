@@ -35,11 +35,11 @@ test('reads every open workflow except the active one and commits only the activ
   const states = { a: { extra: { name: 'a' } }, b: { extra: { name: 'b' } } };
   a.changeTracker.activeState = states.a;
   b.changeTracker.activeState = states.b;
-  expect(adapter.readOtherStoredWorkflows()).toEqual([states.a]);
+  expect(adapter.readPeerWorkflowStates()).toEqual([states.a]);
   const checkState = jest.fn();
   Object.assign(b.changeTracker, { checkState });
   Object.assign(a.changeTracker, { checkState: jest.fn() });
-  adapter.commitActiveWorkflowState();
+  adapter.commitLoadedWorkflowState();
   expect(checkState).toHaveBeenCalledTimes(1);
   adapter.dispose();
 });
