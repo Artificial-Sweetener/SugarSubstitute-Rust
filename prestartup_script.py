@@ -31,6 +31,4 @@ _loader = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_loader)
 _api = _loader.load_model_root_api()
 
-_api.apply_configured_model_root(
-    Path(__file__).resolve().parents[2], importlib.import_module("folder_paths")
-)
+_api.apply_configured_model_root(importlib.import_module("folder_paths"))
