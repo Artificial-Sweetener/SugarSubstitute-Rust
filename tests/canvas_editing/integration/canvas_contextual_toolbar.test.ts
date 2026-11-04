@@ -112,8 +112,8 @@ describe('canvas contextual toolbar', () => {
       { type: 'transform', action: 'flip-horizontal' },
       { type: 'transform', action: 'flip-vertical' },
       { type: 'session', action: 'undo' },
-      { type: 'commit' },
-      { type: 'cancel' },
+      { type: 'session', action: 'apply' },
+      { type: 'session', action: 'cancel' },
     ]);
     await f.push({ selection: null });
     expect(f.query('.sc-canvas-edit-label')?.textContent).toBe('Transform');
@@ -136,15 +136,15 @@ describe('canvas contextual toolbar', () => {
     expect(button('cancel')?.disabled).toBe(false);
     await f.click('[data-canvas-action="cancel"]');
     await f.click('[data-canvas-action="rotate-right"]');
-    // The first turn opens the host's session; Apply then commits it.
+    // The first turn opens the host's session; Apply then applies it and leaves the tool.
     await f.push({ session: { kind: 'transform', undo: true, redo: false } });
     expect(button('session-undo')?.disabled).toBe(false);
     expect(button('apply')?.disabled).toBe(false);
     await f.click('.sc-canvas-edit-toolbar [data-canvas-action="apply"]');
     expect(f.host.sent()).toEqual([
-      { type: 'cancel' },
+      { type: 'session', action: 'cancel' },
       { type: 'transform', action: 'rotate-right' },
-      { type: 'commit' },
+      { type: 'session', action: 'apply' },
     ]);
     await f.push({ tool: 'transform', session: null, selection });
     expect(f.query('.sc-canvas-edit-label')?.textContent).toBe('Transform selection');

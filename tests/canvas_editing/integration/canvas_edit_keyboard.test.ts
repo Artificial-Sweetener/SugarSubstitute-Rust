@@ -57,6 +57,18 @@ describe('canvas editing keyboard', () => {
     ]);
   });
 
+  test('sends Enter and Esc on the Transform page as commit and cancel, not its buttons', async () => {
+    const f = await mountEditing(editState({ tool: 'transform' }));
+    expect(f.query('.sc-canvas-edit-toolbar')?.dataset.canvasSurface).toBe('transform');
+    f.viewport.tabIndex = 0;
+    f.viewport.focus();
+    expect(press(f.viewport, 'Enter')).toBe(true);
+    expect(press(f.viewport, 'Escape')).toBe(true);
+    await flush();
+    // The host resolves these in place; only the toolbar's Apply and Cancel leave Transform.
+    expect(f.host.sent()).toEqual([{ type: 'commit' }, { type: 'cancel' }]);
+  });
+
   test('leaves keys to text fields and to focus owners outside the canvas', async () => {
     const f = await mountEditing();
     const search = document.createElement('input');

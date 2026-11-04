@@ -163,9 +163,11 @@ function transformPage(snapshot, edit, target) {
       () => transform("flip-vertical")
     ),
     ...sessionHistory(snapshot, edit),
+    // Apply and Cancel also leave Transform, Cancel even before a change; Enter and Esc only
+    // resolve the transform in place.
     ...settlement(
-      () => edit.execute({ type: "commit" }),
-      () => edit.execute({ type: "cancel" }),
+      () => edit.execute({ type: "session", action: "apply" }),
+      () => edit.execute({ type: "session", action: "cancel" }),
       snapshot.state.session !== null
     )
   ];

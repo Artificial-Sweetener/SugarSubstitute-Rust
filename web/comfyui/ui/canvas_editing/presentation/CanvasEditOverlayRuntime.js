@@ -10,17 +10,17 @@ import {
 import {
   CanvasEditOverlay,
   canvasEditSurface
-} from "../../chunk-RSU6XRSZ.js";
-import "../../chunk-Z4OXHAHO.js";
+} from "../../chunk-SDUZU4HA.js";
+import "../../chunk-2S4PRFYU.js";
 import "../../chunk-3IZU6ONS.js";
 import "../../chunk-NC4KX5LX.js";
-import "../../chunk-EFDJIW2E.js";
+import "../../chunk-EMIUG2S5.js";
 import "../../chunk-HDVDWAOE.js";
 import {
   canvasEditSlotOf,
   canvasEditSlotViews,
   canvasEditToolAvailable
-} from "../../chunk-OWTPCN3N.js";
+} from "../../chunk-BPQUSL77.js";
 import "../../chunk-36SKP3QA.js";
 import {
   DEFAULT_COVERAGE_MODIFICATION
