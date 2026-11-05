@@ -219,7 +219,7 @@ fn damaged_or_missing_selection_never_becomes_legacy_shortcut_recovery() -> Test
         let temporary = tempfile::tempdir()?;
         let root = Directory::open(temporary.path(), false)?;
         accept_fixture(&root, context)?;
-        let path = root.path().join(".selection-state/.substitute-selection.json");
+        let path = root.path().join("state/selection/.substitute-selection.json");
         std::fs::write(&path, b"damaged selection")?;
         assert!(inspect_installation(root.path(), context).is_err());
         assert_eq!(std::fs::read(&path)?, b"damaged selection");

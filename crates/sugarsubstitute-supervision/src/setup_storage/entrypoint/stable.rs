@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish a stable root launcher independently of subsequent accepted application generations.
+//!
+//! The root's only file is `SugarSubstitute.exe`, a protected copy of an accepted generation's
+//! launcher. Users start it directly; no shell shortcut is published. Earlier installations
+//! kept a `sugarsubstitute-launcher.exe` copy and a `SugarSubstitute.lnk` shortcut in the
+//! root; publication retires both once each is verified to be exactly ours.
 mod payload;
 mod record;
 mod transition;
@@ -11,12 +16,18 @@ use crate::{
 };
 use sugarsubstitute_contracts::application_launch::LauncherContract;
 
-pub(in crate::setup_storage) const EXECUTABLE: &str = "sugarsubstitute-launcher.exe";
+/// Launcher image name inside each application generation.
+pub(in crate::setup_storage) const SOURCE: &str = "sugarsubstitute-launcher.exe";
+/// Stable entry published at the installation root.
+pub(in crate::setup_storage) const ENTRY: &str = sugarsubstitute_configuration::layout::ENTRY;
+/// Root launcher copy of the earlier layout, retired after the entry is published.
+const EARLIER_ENTRY: &str = SOURCE;
 const RECORD: &str = ".launcher-generation.json";
 
 /// Recognize protected stable entry ownership for settings recovery independently of payload health.
-/// Missing owned links are repairable. Unknown formats and edited links remain errors.
-/// The launcher source is not configuration selection or application launch authority.
+/// Returns whether the owned entry is present; a missing entry is repairable and unknown files
+/// at the entry path remain errors. The launcher source is not configuration selection or
+/// application launch authority.
 pub(in crate::setup_storage) fn owned_entry(
     root: &Directory,
     state: &Directory,
@@ -26,7 +37,7 @@ pub(in crate::setup_storage) fn owned_entry(
     if record::read(state, protection, context)?.is_none() {
         return Ok(None);
     }
-    validate_link(root, state, protection, context).map(Some)
+    validate_entry(root, state, protection, context).map(Some)
 }
 
 /// Restore the independently selected launcher under accepted application, setup and writer custody.
@@ -44,7 +55,6 @@ pub(in crate::setup_storage) fn repair(
     if existing.is_none() && !application.payload.compatibility.has_launcher() {
         return Ok(false);
     }
-    validate_link(root, state, protection, context)?;
     let record = match existing {
         Some(record) => record,
         None => initialize(
@@ -62,7 +72,7 @@ pub(in crate::setup_storage) fn repair(
     Ok(true)
 }
 
-/// Publish first-launch entries only for an explicitly authorized prepared installation.
+/// Publish the first-launch entry only for an explicitly authorized prepared installation.
 /// Established ownership uses the same recoverable replacement transaction as signed updates.
 pub(in crate::setup_storage) fn install(
     root: &Directory,
@@ -76,7 +86,6 @@ pub(in crate::setup_storage) fn install(
         return prepare(root, state, candidate, protection, context);
     }
     transition::recover(root, state, protection, context)?;
-    validate_link(root, state, protection, context)?;
     let directory = Directory::open(candidate.directory(), false)?;
     let record = record::Record::from_source(candidate.generation(), &directory, context)?;
     candidate.compatibility().require_launcher(
@@ -94,7 +103,7 @@ fn initialize(
     protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<record::Record> {
-    match files::inspect(root.path().join(EXECUTABLE), context) {
+    match files::inspect(root.path().join(ENTRY), context) {
         Ok(_) => {
             return Err(invalid(
                 "The stable launcher path contains an unowned file; it has been preserved",
@@ -123,10 +132,8 @@ pub(in crate::setup_storage) fn prepare(
     {
         transition::recover(root, state, protection, context)?;
         let Some(record) = record::read(state, protection, context)? else { return Ok(()) };
-        validate_link(root, state, protection, context)?;
         return publish_owned(root, state, &record, protection, context);
     }
-    validate_link(root, state, protection, context)?;
     let directory = Directory::open(candidate.directory(), false)?;
     let next = record::Record::from_source(candidate.generation(), &directory, context)?;
     candidate.compatibility().require_launcher(
@@ -161,7 +168,8 @@ fn recover_publications(
     Ok(())
 }
 
-/// Publish the exact recorded executable and retained shortcut without changing ownership.
+/// Publish the exact recorded executable as the root entry without changing ownership, then
+/// retire the earlier layout's root launcher copy and shortcut when they are verifiably ours.
 fn publish_owned(
     root: &Directory,
     state: &Directory,
@@ -170,17 +178,9 @@ fn publish_owned(
     context: &JobContext,
 ) -> io::Result<()> {
     let _executable = payload::ensure(root, record, protection, context)?;
-    let bytes = retained_link(root, state, protection, context)?;
     check(context)?;
-    let replace = validate_link(root, state, protection, context)?;
-    if replace && files::read_bounded(&mut root.read(NAME)?, 65536)? == bytes {
-        return Ok(());
-    }
-    let mut stage = publication::Stage::create(root, protection, context)?;
-    std::io::Write::write_all(stage.file(), &bytes)?;
-    check(context)?;
-    stage.publish(&root.path().join(NAME), replace, protection, context)?;
-    Ok(())
+    payload::retire_earlier(root, EARLIER_ENTRY, record, protection, context)?;
+    retire_earlier_shortcut(root, state, protection, context)
 }
 
 /// Require the currently installed launcher, independently of any launcher bundled in an offer.
@@ -198,54 +198,70 @@ pub(in crate::setup_storage) fn require_compatible(
     Ok(())
 }
 
-/// Exact retained shell bytes distinguish our stable entry from user customizations.
-fn retained_link(
-    root: &Directory,
-    state: &Directory,
-    protection: &mut Protection,
-    context: &JobContext,
-) -> io::Result<Vec<u8>> {
-    match state.read(NAME) {
-        Ok(mut file) => {
-            protection.verify_file(&file)?;
-            if native::target(&state.path().join(NAME))? != root.path().join(EXECUTABLE) {
-                return Err(invalid("Retained stable shortcut belongs to another target"));
-            }
-            files::read_bounded(&mut file, 65536)
-        }
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-            let bytes = native::encode(&root.path().join(EXECUTABLE))?;
-            check(context)?;
-            publication::write_immutable(state, NAME, &bytes, protection, context)?;
-            Ok(bytes)
-        }
-        Err(cause) => Err(cause),
-    }
-}
-
-/// Validate before mutation and again before replacement; unknown links are never adopted.
-pub(in crate::setup_storage) fn validate_link(
+/// Report whether the owned root entry is present. A file at the entry path without this
+/// installation's ownership or protection is never adopted and remains an error.
+pub(in crate::setup_storage) fn validate_entry(
     root: &Directory,
     state: &Directory,
     protection: &Protection,
     context: &JobContext,
 ) -> io::Result<bool> {
     check(context)?;
-    let mut file = match root.read(NAME) {
+    let file = match root.read(ENTRY) {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(false),
         Err(cause) => return Err(cause),
     };
-    if native::target(&root.path().join(NAME))? == root.path().join(EXECUTABLE) {
-        let mut original = state.read(NAME)?;
-        protection.verify_file(&original)?;
-        if files::read_bounded(&mut file, 65536)? != files::read_bounded(&mut original, 65536)? {
-            return Err(invalid(
-                "The existing stable shortcut was modified; it has been preserved",
-            ));
-        }
-    } else {
-        selected(root, context)?.ok_or_else(|| invalid("Earlier shell entry disappeared"))?;
+    if record::read(state, protection, context)?.is_none() {
+        return Err(invalid(
+            "The stable launcher path contains an unowned file; it has been preserved",
+        ));
     }
+    protection.verify_file(&file)?;
     Ok(true)
+}
+
+/// Retire the earlier root shortcut only while it still has the exact bytes retained when it was
+/// published: beside the stable launcher record for a launcher shortcut, or in its generation for
+/// a historical shortcut that opens the application directly. Edited and foreign files remain.
+fn retire_earlier_shortcut(
+    root: &Directory,
+    state: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    check(context)?;
+    let mut file = match root.read(NAME) {
+        Ok(file) => file,
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(cause) => return Err(cause),
+    };
+    let owned = match native::target(&root.path().join(NAME)) {
+        Ok(target) if target == root.path().join(EARLIER_ENTRY) => {
+            let mut retained = match state.read(NAME) {
+                Ok(file) => file,
+                Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),
+                Err(cause) => return Err(cause),
+            };
+            protection.verify_file(&retained).is_ok()
+                && files::read_bounded(&mut file, 65536)?
+                    == files::read_bounded(&mut retained, 65536)?
+        }
+        // A historical installation's shortcut opens a generation directly; its generation
+        // retains the exact bytes that prove it is ours.
+        Ok(_) => selected(root, context).is_ok_and(|directory| directory.is_some()),
+        Err(_) => false,
+    };
+    if !owned {
+        tracing::warn!(
+            operation = "stable_shortcut_retirement",
+            "The earlier root shortcut is not exactly ours; it has been preserved"
+        );
+        return Ok(());
+    }
+    files::single_link(&file)?;
+    let identity = files::file_identity(&file)?;
+    drop(file);
+    tracing::info!(operation = "stable_shortcut_retirement", "Retiring the earlier root shortcut");
+    crate::durable_storage::retirement::file(root, NAME, identity)
 }

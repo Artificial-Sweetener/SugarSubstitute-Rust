@@ -107,7 +107,7 @@ fn fresh_signed_installation_completes_without_accepting_health_or_executing_pyt
         assert_eq!(std::fs::read(runtime.python)?, b"inert, never executed");
         let transfer = candidate.transfer(|| NOW, context, &mut None)?;
         assert!(transfer.executable().is_file());
-        assert!(!temporary.path().join("native/sugarsubstitute-launcher.exe").exists());
+        assert!(!temporary.path().join("native/SugarSubstitute.exe").exists());
         Ok(())
     })
 }
@@ -127,7 +127,7 @@ fn resume_first_installation(after_configuration: bool) -> TestResult {
     let interrupted_runtime = runtime.clone();
     worker::run_reserved_expiring(SIGNED_INSTALLER_RESERVATION_BYTES, move |context, clock| {
         let prepared = import(&path, context)?.prepare(|| NOW, context)?;
-        let record = path.join("native/.selection-state/.substitute-selection.json");
+        let record = path.join("native/state/selection/.substitute-selection.json");
         let installation = path.join("native");
         clock.observe_checks(move || {
             let Some(bytes) = std::fs::read(&record).ok() else { return false };

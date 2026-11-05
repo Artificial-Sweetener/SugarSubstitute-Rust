@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resolve actual primary-account and pinned installation namespace authority.
+//! Account runtime records are stored below the installation root of the running image.
 mod diagnostic_root;
-pub(crate) mod local_storage;
 pub(crate) mod namespace_directory;
+pub(crate) mod runtime_base;
 use super::{
     native_name::{NativeSid, NativeSidDestination},
     native_phase::NativePhase,
@@ -24,14 +25,14 @@ use windows::Win32::{
     System::Threading::{GetCurrentProcess, OpenProcessToken},
 };
 
-/// Preserve the minimum primary-token rights required by the actual consumer.
+/// Distinguish account queries from protected account-storage enrollment, which only an
+/// ordinary budget may perform. Both open the primary token for query only.
 pub(crate) enum PrimaryAccountAccess {
     Query,
     AccountStorage,
 }
 /// Observe one actual retained token and its bounded account/session facts.
 pub(crate) struct CurrentAccount {
-    pub(crate) token_slot: usize,
     pub(crate) sid: NativeSid,
     pub(crate) session_id: u32,
 }
@@ -59,7 +60,7 @@ pub(crate) fn resolve_current(
     let token_slot = handles.len();
     handles.push(Handle::new(HANDLE::default(), budget));
     let (sid, session_id) = resolve_current_cell(&mut handles[token_slot], access, phase)?;
-    Ok(CurrentAccount { token_slot, sid, session_id })
+    Ok(CurrentAccount { sid, session_id })
 }
 /// Observe the sole primary-token algorithm in an already retained physical cell.
 /// The selected caller supplies its genuine pre-reserved cell; this method creates
@@ -75,10 +76,8 @@ pub(crate) fn resolve_current_cell(
         return Err(cell.budget().rejection("account_storage_access"));
     }
     let destination = phase.sid_destination()?;
-    let rights = match access {
-        PrimaryAccountAccess::Query => TOKEN_QUERY,
-        PrimaryAccountAccess::AccountStorage => TOKEN_QUERY | TOKEN_IMPERSONATE,
-    };
+    // Account storage is installation-local, so no consumer needs to impersonate the token.
+    let rights = TOKEN_QUERY;
     let mut raw = HANDLE::default();
     phase.check()?;
     // SAFETY: Borrowed pseudo-process handle and initialized token output are valid.
@@ -130,7 +129,6 @@ pub(crate) fn resolve_namespace(
     let mut phase = NativePhase::ordinary(&budget)?;
     let account =
         resolve_current(handles, budget.clone(), PrimaryAccountAccess::AccountStorage, &mut phase)?;
-    let token = handles[account.token_slot].raw();
     let installed = paths::open_retained(
         installation,
         true,
@@ -177,7 +175,11 @@ pub(crate) fn resolve_namespace(
     if budget.expected_namespace().is_some_and(|expected| expected != namespace) {
         return Err(ClaimError::invalid("custody_installation_namespace"));
     }
-    let directory = local_storage::resolve(token, handles, budget.clone())?;
+    // Claims live below the installation that owns the running image, never in account folders.
+    let layout = sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+        &installed_path,
+    );
+    let directory = runtime_base::pin(layout.runtime_base(), handles, budget.clone())?;
     let (directory, directory_slot, directory_identity) = namespace_directory::resolve(
         directory,
         namespace_directory::Namespace::Claims,

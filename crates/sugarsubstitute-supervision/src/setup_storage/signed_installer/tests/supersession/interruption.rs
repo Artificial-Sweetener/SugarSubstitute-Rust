@@ -27,7 +27,7 @@ fn interrupted_supersession_reopens_its_reserved_generation_and_preserves_the_pr
     worker::run_reserved_expiring(SIGNED_INSTALLER_RESERVATION_BYTES, move |context, clock| {
         let imported = expiring.import(SignedPackage::new(&expiring.archive, 3)?, context)?;
         let selection =
-            expiring.installation.path().join(".selection-state/.substitute-selection.json");
+            expiring.installation.path().join("state/selection/.substitute-selection.json");
         clock.observe_checks(move || {
             let Ok(bytes) = std::fs::read(&selection) else {
                 return false;

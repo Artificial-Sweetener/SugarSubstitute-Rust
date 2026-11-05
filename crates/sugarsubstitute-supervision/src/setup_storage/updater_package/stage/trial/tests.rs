@@ -71,7 +71,7 @@ fn lost_prepared_journal_cannot_be_reinitialized_during_trial_reservation() -> T
         let root = worker::installation(126, context)?;
         let workspace = tempfile::tempdir()?;
         let prepared = prepare(root.path(), workspace.path(), context)?;
-        let directory = root.path().join(".update-trust");
+        let directory = root.path().join("state/update-trust");
         for name in ["updater-selection-v1", "updater-established-v1"] {
             std::fs::remove_file(directory.join(name))?;
         }
@@ -108,7 +108,7 @@ fn publication_and_withdrawal_are_exact_idempotent_transitions_without_health() 
             matches!(pending.candidate(), Some(Candidate::Trial { attempt }) if attempt == trial.attempt())
         );
         assert_eq!(pending.accepted(), initial.accepted());
-        let directory = Directory::open(&root.path().join(".update-trust"), false)?;
+        let directory = Directory::open(&root.path().join("state/update-trust"), false)?;
         let pin = directory.read("updater-selection-v1")?;
         trial.publish(|| NOW, context)?;
         assert_eq!(trial.prepared.source.trust.updater_selection(context)?, pending);
@@ -163,7 +163,7 @@ fn publication_and_withdrawal_storage_failures_keep_custody_and_support_exact_re
         let root = worker::installation(122, context)?;
         let workspace = tempfile::tempdir()?;
         let mut trial = prepare(root.path(), workspace.path(), context)?.reserve_trial(context)?;
-        let directory = Directory::open(&root.path().join(".update-trust"), false)?;
+        let directory = Directory::open(&root.path().join("state/update-trust"), false)?;
         let pin = directory.read("updater-selection-v1")?;
         let before = trial.prepared.source.trust.updater_selection(context)?;
         assert!(trial.publish(|| NOW, context).is_err());
@@ -217,7 +217,7 @@ fn corrupted_journal_is_preserved_and_cannot_reopen_creation_admission() -> Test
         let workspace = tempfile::tempdir()?;
         let mut trial = prepare(root.path(), workspace.path(), context)?.reserve_trial(context)?;
         trial.publish(|| NOW, context)?;
-        let file = root.path().join(".update-trust/updater-selection-v1");
+        let file = root.path().join("state/update-trust/updater-selection-v1");
         std::fs::write(&file, b"corrupt journal")?;
         assert!(trial.restore(context).is_err());
         assert!(trial.publish(|| NOW, context).is_err());

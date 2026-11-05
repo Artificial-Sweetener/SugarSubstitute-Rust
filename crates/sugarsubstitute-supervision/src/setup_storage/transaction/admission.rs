@@ -11,7 +11,8 @@ pub(in crate::setup_storage) struct Admission {
     _lock: files::FileExclusion,
 }
 impl Admission {
-    /// Adopt only an empty directory when requested; otherwise require verified ownership.
+    /// Adopt only an empty directory, or one holding just the default setup workspace, when
+    /// requested; otherwise require verified ownership.
     /// Original job controls cover empty-folder inspection and exclusion acquisition.
     pub(in crate::setup_storage) fn open(
         path: &Path,
@@ -20,15 +21,14 @@ impl Admission {
     ) -> io::Result<Self> {
         check(context)?;
         let root = Directory::open(path, create)?;
-        let marker_path = root.path().join(ownership::MARKER);
-        if create && !files::exists(&marker_path, context)? {
-            if root.entries(context)?.next().transpose()?.is_some() {
+        if create && !ownership::present(&root)? {
+            if !ownership::adoptable(&root, context)? {
                 return Err(invalid("This folder contains files from an unknown installation"));
             }
-            files::write_new(&marker_path, ownership::CONTENT)?;
+            ownership::establish(&root)?;
         }
         let marker = ownership::read(&root)?;
-        let lock = root.lock(".setup-lock", context)?;
+        let lock = ownership::state(&root)?.lock(super::SETUP_LOCK, context)?;
         check(context)?;
         Ok(Self { root, _marker: marker, _lock: lock })
     }

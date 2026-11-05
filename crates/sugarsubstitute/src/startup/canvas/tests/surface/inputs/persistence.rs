@@ -6,7 +6,7 @@ use super::*;
 
 /// The session directory below a fixture anchor.
 fn session_directory(anchor: &std::path::Path) -> std::path::PathBuf {
-    anchor.join("desktop-data").join("input-canvas")
+    anchor.join("user").join("input-canvas")
 }
 
 impl Inputs {

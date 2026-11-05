@@ -82,7 +82,7 @@ pub(crate) fn evidence_intent(
 > {
     let mut signed = SignedPackage::component(bytes, version, component)?;
     signed.request.intent = intent;
-    let trust = if root.join(".update-trust").exists() {
+    let trust = if root.join("state").join("update-trust").exists() {
         TrustStore::open(root, [92; 32], context)?
     } else {
         TrustStore::initialize(root, [92; 32], &signed.root, context)?
@@ -117,7 +117,7 @@ pub(crate) fn run(body: impl FnOnce(&JobContext) -> TestResult + Send + 'static)
 
 /// Retain a genuine read pin that prevents atomic updater-journal replacement.
 pub(crate) fn pin_journal(root: &Path) -> io::Result<std::fs::File> {
-    crate::durable_storage::files::Directory::open(&root.join(".update-trust"), false)?
+    crate::durable_storage::files::Directory::open(&root.join("state").join("update-trust"), false)?
         .read("updater-selection-v1")
 }
 

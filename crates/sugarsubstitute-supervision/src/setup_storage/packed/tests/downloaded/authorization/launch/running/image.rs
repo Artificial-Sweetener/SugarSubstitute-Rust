@@ -72,7 +72,7 @@ fn expired_image_acquisition_does_not_release_running_ownership_or_publish_state
         let (generation, _) = accept_fixture(&root, context)?;
         let path = root.path().join("releases").join(generation.id.as_str());
         let running = retain_running_generation(&path, None, context)?.ok_or("Run guard absent")?;
-        let record = root.path().join(".selection-state/.substitute-selection.json");
+        let record = root.path().join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&record)?;
         clock.expire();
         let error = match running.pin_preparation(context) {

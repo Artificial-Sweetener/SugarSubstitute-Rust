@@ -203,7 +203,7 @@ impl Fixture {
                             .as_ref()
                             .ok_or("Installation result missing")?
                             .root()
-                            .join("sugarsubstitute-launcher.exe"),
+                            .join(sugarsubstitute_configuration::layout::ENTRY),
                     );
                 }
                 if self.native_installation.is_some() && self.controller.worker.is_some() {

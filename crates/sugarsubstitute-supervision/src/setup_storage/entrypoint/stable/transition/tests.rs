@@ -16,7 +16,7 @@ fn fixture(
     context: &JobContext,
     protection: &mut Protection,
 ) -> io::Result<(Directory, record::Record, record::Record)> {
-    let state = Directory::open(&root.path().join(".selection-state"), true)?;
+    let state = Directory::open(&root.path().join("state/selection"), true)?;
     let mut records = Vec::new();
     for (id, bytes) in [("a", b"old launcher".as_slice()), ("b", b"new launcher".as_slice())] {
         let generation = Generation {
@@ -25,7 +25,7 @@ fn fixture(
         };
         let source =
             Directory::open(&root.path().join("releases").join(generation.id.as_str()), true)?;
-        publication::write_immutable(&source, EXECUTABLE, bytes, protection, context)?;
+        publication::write_immutable(&source, SOURCE, bytes, protection, context)?;
         publication::write_immutable(
             &source,
             "sugarsubstitute-launcher.json",
@@ -50,7 +50,7 @@ fn interrupted(boundary: u8) -> TestResult {
         let (state, previous, next) =
             protection::with(context, |protection| fixture(&root, context, protection))?;
         if boundary < 2 {
-            let pin = if boundary == 0 { root.read(EXECUTABLE)? } else { state.read(RECORD)? };
+            let pin = if boundary == 0 { root.read(ENTRY)? } else { state.read(RECORD)? };
             protection::with(context, |protection| {
                 assert!(
                     begin(&root, &state, previous.clone(), next.clone(), protection, context)
@@ -59,12 +59,12 @@ fn interrupted(boundary: u8) -> TestResult {
                 Ok(())
             })?;
             assert_eq!(
-                std::fs::read(root.path().join(EXECUTABLE))?,
+                std::fs::read(root.path().join(ENTRY))?,
                 if boundary == 0 { b"old launcher" } else { b"new launcher" }
             );
             drop(pin);
         } else {
-            let pin = root.read(EXECUTABLE)?;
+            let pin = root.read(ENTRY)?;
             protection::with(context, |protection| {
                 assert!(
                     begin(&root, &state, previous.clone(), next.clone(), protection, context)
@@ -79,7 +79,7 @@ fn interrupted(boundary: u8) -> TestResult {
                 assert!(record::read(&state, protection, context)?.as_ref() == Some(&next));
                 Ok(())
             })?;
-            assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"new launcher");
+            assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"new launcher");
             drop(journal);
         }
         assert!(state.path().join(JOURNAL).is_file());
@@ -89,11 +89,11 @@ fn interrupted(boundary: u8) -> TestResult {
             assert!(recover(&root, &state, protection, context)?.is_none());
             Ok(())
         })?;
-        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"new launcher");
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"new launcher");
         assert!(!state.path().join(JOURNAL).exists());
         assert_eq!(
             std::fs::read(
-                root.path().join("releases").join(previous.source.id.as_str()).join(EXECUTABLE)
+                root.path().join("releases").join(previous.source.id.as_str()).join(SOURCE)
             )?,
             b"old launcher"
         );
@@ -123,19 +123,19 @@ fn interrupted_replacement_preserves_unknown_root_bytes() -> TestResult {
         let root = Directory::open(temporary.path(), false)?;
         let (state, previous, next) =
             protection::with(context, |protection| fixture(&root, context, protection))?;
-        let pin = root.read(EXECUTABLE)?;
+        let pin = root.read(ENTRY)?;
         protection::with(context, |protection| {
             assert!(begin(&root, &state, previous.clone(), next, protection, context).is_err());
             Ok(())
         })?;
         drop(pin);
-        std::fs::write(root.path().join(EXECUTABLE), b"unknown owner")?;
+        std::fs::write(root.path().join(ENTRY), b"unknown owner")?;
         protection::with(context, |protection| {
             assert!(recover(&root, &state, protection, context).is_err());
             assert!(record::read(&state, protection, context)?.as_ref() == Some(&previous));
             Ok(())
         })?;
-        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"unknown owner");
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"unknown owner");
         assert!(state.path().join(JOURNAL).is_file());
         Ok(())
     })
@@ -148,7 +148,7 @@ fn foreign_or_unsupported_transition_preserves_both_owned_files() -> TestResult 
         let root = Directory::open(temporary.path(), false)?;
         let (state, previous, next) =
             protection::with(context, |protection| fixture(&root, context, protection))?;
-        let pin = root.read(EXECUTABLE)?;
+        let pin = root.read(ENTRY)?;
         protection::with(context, |protection| {
             assert!(begin(&root, &state, previous.clone(), next, protection, context).is_err());
             Ok(())
@@ -169,7 +169,7 @@ fn foreign_or_unsupported_transition_preserves_both_owned_files() -> TestResult 
                 Ok(())
             })?;
             assert_eq!(std::fs::read(state.path().join(JOURNAL))?, bytes);
-            assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"old launcher");
+            assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"old launcher");
         }
         Ok(())
     })

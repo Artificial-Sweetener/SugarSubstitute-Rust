@@ -54,7 +54,7 @@ fn duplicate_trial_reference_permits_health_and_never_retains_run_ownership() ->
         drop(run);
         assert!(InstallationRun::acquire(store, context).is_ok());
         drop(inherited);
-        for entry in std::fs::read_dir(completed.root().join(".selection-state"))? {
+        for entry in std::fs::read_dir(completed.root().join("state/selection"))? {
             assert!(!entry?.file_name().to_string_lossy().starts_with(".selection-forward"));
         }
         Ok(())
@@ -108,7 +108,7 @@ fn malformed_run_rendezvous_is_not_classified_as_an_existing_trial_owner() -> Te
         let (completed, store, run, trial) = running(temporary.path(), context)?;
         drop(trial);
         drop(run);
-        let path = completed.root().join(".selection-state/.installation-run-lock");
+        let path = completed.root().join("state/selection/.installation-run-lock");
         std::fs::write(&path, b"unknown contents")?;
         let before = store.load(context)?;
         assert!(matches!(

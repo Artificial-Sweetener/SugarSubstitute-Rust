@@ -60,7 +60,7 @@ fn repair_under_admission(
             }
             if entrypoint::stable::repair(&admission.root, &store.root, application, protection, context)? {
                 Ok(InstalledApplication {
-                    executable: admission.root.path().join(entrypoint::stable::EXECUTABLE),
+                    executable: admission.root.path().join(entrypoint::stable::ENTRY),
                     directory: admission.root.path().to_path_buf(),
                 })
             } else {

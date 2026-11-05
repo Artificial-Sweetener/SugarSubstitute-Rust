@@ -14,7 +14,7 @@ fn installed_authority_retains_floors_without_distribution_or_checkpoint_rewrite
         let store = TrustStore::initialize(installation.path(), [31; 32], &root, context)?;
         store.refresh(Set::new(&signer, [3; 3], b"current", EXPIRES)?.metadata(), NOW, context)?;
         drop(store);
-        let checkpoint = installation.path().join(DIRECTORY).join(RECORD);
+        let checkpoint = installation.path().join("state").join(DIRECTORY).join(RECORD);
         let before = std::fs::read(&checkpoint)?;
         let reopened = TrustStore::open_installed(installation.path(), context)?;
         assert_eq!(reopened.repository, [31; 32]);
@@ -39,9 +39,9 @@ fn installed_authority_requires_existing_continuity_without_recreating_it() -> T
             &root(&key(32)?, 1, None)?,
             context,
         )?);
-        let marker = installation.path().join(continuity::MARKER);
+        let marker = installation.path().join("state").join(continuity::MARKER);
         std::fs::remove_file(&marker)?;
-        let checkpoint = installation.path().join(DIRECTORY).join(RECORD);
+        let checkpoint = installation.path().join("state").join(DIRECTORY).join(RECORD);
         let before = std::fs::read(&checkpoint)?;
         assert!(TrustStore::open_installed(installation.path(), context).is_err());
         assert!(!marker.exists());
@@ -60,7 +60,7 @@ fn installed_authority_rejects_validly_encoded_foreign_installation_binding() ->
             &root(&key(33)?, 1, None)?,
             context,
         )?;
-        let path = installation.path().join(DIRECTORY).join(RECORD);
+        let path = installation.path().join("state").join(DIRECTORY).join(RECORD);
         let original = std::fs::read(&path)?;
         let (_, payload) =
             envelope::decode_binding(envelope::Kind::Checkpoint, &store.installation, &original)?;
@@ -83,14 +83,14 @@ fn installed_authority_rejects_checkpoint_damage_and_missing_state_without_reset
     worker::run_reserved(TRUST_RESERVATION_BYTES, |context, _| {
         let installation = installation(35, context)?;
         assert!(TrustStore::open_installed(installation.path(), context).is_err());
-        assert!(!installation.path().join(DIRECTORY).exists());
+        assert!(!installation.path().join("state").join(DIRECTORY).exists());
         drop(TrustStore::initialize(
             installation.path(),
             [35; 32],
             &root(&key(35)?, 1, None)?,
             context,
         )?);
-        let path = installation.path().join(DIRECTORY).join(RECORD);
+        let path = installation.path().join("state").join(DIRECTORY).join(RECORD);
         let mut bytes = std::fs::read(&path)?;
         bytes[41] ^= 1;
         std::fs::write(&path, &bytes)?;
@@ -113,9 +113,9 @@ fn inferred_repository_must_agree_with_history_and_original_continuity() -> Test
             )?;
             let identity = store.installation.clone();
             drop(store);
-            let checkpoint = installation.path().join(DIRECTORY).join(RECORD);
-            let history = installation.path().join(DIRECTORY).join(releases::RECORD);
-            let marker = installation.path().join(continuity::MARKER);
+            let checkpoint = installation.path().join("state").join(DIRECTORY).join(RECORD);
+            let history = installation.path().join("state").join(DIRECTORY).join(releases::RECORD);
+            let marker = installation.path().join("state").join(continuity::MARKER);
             let marker_before = std::fs::read(&marker)?;
             for (path, kind) in
                 [(&checkpoint, envelope::Kind::Checkpoint), (&history, envelope::Kind::Releases)]

@@ -220,12 +220,12 @@ fn partial_native_close_retains_custody_and_prevents_acceptance() -> TestResult 
 /// Native sharing failure proves the original exclusion remains held, without opening another trust store.
 fn excluded(fixture: &ProbeFixture) -> Result<(), Failure> {
     let result =
-        std::fs::File::open(fixture.root.path().join(".update-trust/updater-preparation-v1"));
+        std::fs::File::open(fixture.root.path().join("state/update-trust/updater-preparation-v1"));
     assert!(matches!(result, Err(cause) if cause.raw_os_error() == Some(32)));
     Ok(())
 }
 fn journal(fixture: &ProbeFixture) -> std::io::Result<Vec<u8>> {
-    std::fs::read(fixture.root.path().join(".update-trust/updater-selection-v1"))
+    std::fs::read(fixture.root.path().join("state/update-trust/updater-selection-v1"))
 }
 /// Open a new store only after original trial custody and its reservation have actually retired.
 fn recovered(h: &mut Harness, fixture: ProbeFixture) -> Result<ProbeFixture, Box<dyn Error>> {

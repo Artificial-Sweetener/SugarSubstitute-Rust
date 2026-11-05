@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Installer location defaults resolved from the supported account environment input.
+//! Installer location defaults resolved from the setup executable's own location.
+use crate::layout::{self, InstallationLayout};
 use std::{
-    ffi::OsString,
     io,
     path::{Path, PathBuf},
 };
@@ -14,20 +14,15 @@ pub struct InstallerLocations {
     install_root: PathBuf,
 }
 impl InstallerLocations {
-    /// Capture LOCALAPPDATA once. An explicit workspace wins over its default;
-    /// the initial installation suggestion always uses account data.
+    /// Suggest `<setup volume>\SugarSubstitute` and keep the setup workspace in its `setup` folder.
+    /// An explicit workspace wins over that default. Account profile folders are never consulted.
     /// # Errors
-    /// Preserves absence as the existing installer startup failure. Writes no settings.
-    pub fn capture(workspace: Option<PathBuf>) -> io::Result<Self> {
-        Self::resolve(workspace, std::env::var_os("LOCALAPPDATA"))
-    }
-    fn resolve(workspace: Option<PathBuf>, local: Option<OsString>) -> io::Result<Self> {
-        let local = PathBuf::from(
-            local.ok_or_else(|| io::Error::other("Local application data is unavailable"))?,
-        );
+    /// Rejects a relative setup executable path. Writes no settings.
+    pub fn resolve(workspace: Option<PathBuf>, setup_executable: &Path) -> io::Result<Self> {
+        let install_root = layout::default_root(setup_executable)?;
         Ok(Self {
-            workspace: workspace.unwrap_or_else(|| local.join("SugarSubstitute").join("setup")),
-            install_root: local.join("Programs").join("SugarSubstitute"),
+            workspace: workspace.unwrap_or_else(|| InstallationLayout::new(&install_root).setup()),
+            install_root,
         })
     }
     /// Borrow the selected workspace without granting native storage authority.
@@ -44,26 +39,34 @@ impl InstallerLocations {
 mod tests {
     use super::*;
     #[test]
-    fn defaults_and_explicit_workspace_preserve_native_path_spelling() -> io::Result<()> {
-        let root = PathBuf::from(if cfg!(windows) { r"E:\帳戶 café" } else { "/帳戶 café" });
-        let defaults = InstallerLocations::resolve(None, Some(root.clone().into_os_string()))?;
-        assert_eq!(defaults.workspace(), root.join("SugarSubstitute/setup"));
-        assert_eq!(defaults.install_root(), root.join("Programs/SugarSubstitute"));
-        let workspace = root.join("explicit 空間");
-        let explicit =
-            InstallerLocations::resolve(Some(workspace.clone()), Some(root.into_os_string()))?;
+    fn defaults_follow_the_setup_volume_and_preserve_native_path_spelling() -> io::Result<()> {
+        let volume = PathBuf::from(if cfg!(windows) { r"E:\" } else { "/" });
+        let setup = volume.join("下載 café").join("SugarSubstitute-Setup.exe");
+        let defaults = InstallerLocations::resolve(None, &setup)?;
+        assert_eq!(defaults.install_root(), volume.join("SugarSubstitute"));
+        assert_eq!(defaults.workspace(), volume.join("SugarSubstitute").join("setup"));
+        let workspace = volume.join("explicit 空間");
+        let explicit = InstallerLocations::resolve(Some(workspace.clone()), &setup)?;
         assert_eq!(explicit.workspace(), workspace);
         assert_eq!(explicit.install_root(), defaults.install_root());
         Ok(())
     }
     #[test]
-    fn explicit_workspace_does_not_hide_missing_account_location() {
-        assert_eq!(
-            InstallerLocations::resolve(Some(PathBuf::from("explicit")), None)
-                .err()
-                .map(|cause| cause.to_string())
-                .as_deref(),
-            Some("Local application data is unavailable")
-        );
+    fn defaults_never_resolve_into_account_profile_folders() -> io::Result<()> {
+        let volume = PathBuf::from(if cfg!(windows) { r"C:\" } else { "/" });
+        let setup =
+            volume.join("Users").join("someone").join("AppData").join("Local").join("s.exe");
+        let defaults = InstallerLocations::resolve(None, &setup)?;
+        for path in [defaults.install_root(), defaults.workspace()] {
+            assert!(
+                !path.components().any(|part| part.as_os_str().eq_ignore_ascii_case("AppData")),
+                "{path:?}"
+            );
+        }
+        Ok(())
+    }
+    #[test]
+    fn relative_setup_location_is_rejected() {
+        assert!(InstallerLocations::resolve(None, Path::new("setup.exe")).is_err());
     }
 }

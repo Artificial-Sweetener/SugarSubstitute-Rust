@@ -68,8 +68,8 @@ pub fn inspect_installation(
         return Ok(None);
     }
     let root = Directory::open(path, false)?;
-    if !files::exists(root.path().join(".substitute-installation.json"), context)? {
-        return if root.entries(context)?.next().transpose()?.is_none() {
+    if !super::ownership::present(&root)? {
+        return if super::ownership::adoptable(&root, context)? {
             Ok(None)
         } else {
             Err(invalid("This folder contains files from an unknown installation"))

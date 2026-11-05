@@ -40,7 +40,7 @@ fn maintenance_preserves_exact_config_and_external_launch_paths() -> TestResult 
         let root = Directory::open(temporary.path(), false)?;
         let original = fixture(&root, context)?;
         let summary = inspect_installation(root.path(), context)?.ok_or("Missing summary")?;
-        assert!(!root.path().join(".selection-state").exists());
+        assert!(!root.path().join("state/selection").exists());
         assert!(!summary.executable_missing);
         assert_eq!(summary.selection.locale, "ja");
         let existing = ExistingInstallation::read(&root, context)?.ok_or("Missing installation")?;
@@ -105,7 +105,7 @@ fn maintenance_pins_inputs_against_mid_transaction_edit_or_removal() -> TestResu
         let original = fixture(&root, context)?;
         let existing = ExistingInstallation::read(&root, context)?.ok_or("Missing installation")?;
         for path in [
-            root.path().join(ownership::MARKER),
+            root.path().join("state").join(ownership::MARKER),
             original.join("startup.local.toml"),
             original.join("sugarsubstitute-launch.local.json"),
             original.join("installation-ready.json"),
@@ -151,7 +151,7 @@ fn inspection_does_not_adopt_unknown_populated_directories() -> TestResult {
         std::fs::write(temporary.path().join("user-file"), b"preserve")?;
         assert!(inspect_installation(temporary.path(), context).is_err());
         assert_eq!(std::fs::read(temporary.path().join("user-file"))?, b"preserve");
-        assert!(!temporary.path().join(ownership::MARKER).exists());
+        assert!(!temporary.path().join("state").exists());
         Ok(())
     })
 }

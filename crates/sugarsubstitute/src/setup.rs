@@ -31,17 +31,42 @@ pub fn run(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
             )
         )
     });
-    crate::diagnostics::Diagnostics::run(|_health| {
+    // The setup workspace keeps installer records beside its package cache, inside the
+    // installation folder it suggests; setup never writes into account profile folders.
+    let locations = installer_locations()?;
+    let records = crate::diagnostics::RecordsBase::Explicit(locations.workspace().to_path_buf());
+    crate::diagnostics::Diagnostics::run(records, |_health| {
         let mut locale = String::from("en");
-        let result = run_inner(distribution, &mut locale);
+        let result = run_inner(distribution, locations, &mut locale);
         failure::report(result, &locale, interactive, sugarsubstitute_desktop::show_startup_failure)
     })
 }
 
-fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box<dyn Error>> {
+/// Resolve the default installation suggestion and setup workspace from this executable and an
+/// explicit `--workspace` option, without validating the remaining options.
+fn installer_locations()
+-> std::io::Result<sugarsubstitute_configuration::installer::InstallerLocations> {
+    let mut arguments = std::env::args_os().skip(1);
+    let mut workspace = None;
+    while let Some(argument) = arguments.next() {
+        let value = arguments.next();
+        if argument == "--workspace" {
+            workspace = value.map(PathBuf::from);
+        }
+    }
+    sugarsubstitute_configuration::installer::InstallerLocations::resolve(
+        workspace,
+        &std::env::current_exe()?,
+    )
+}
+
+fn run_inner(
+    distribution: &'static [u8],
+    locations: sugarsubstitute_configuration::installer::InstallerLocations,
+    locale: &mut String,
+) -> Result<(), Box<dyn Error>> {
     let mut arguments = std::env::args_os().skip(1);
     let mut bundle = std::env::current_exe()?;
-    let mut workspace = None;
     let mut qualification = None;
     let mut qualify_window = false;
     let mut qualify_managed = None;
@@ -53,7 +78,8 @@ fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box
         let value = arguments.next().ok_or("Installer option requires a value")?;
         match argument.to_str() {
             Some("--bundle") => bundle = PathBuf::from(value),
-            Some("--workspace") => workspace = Some(PathBuf::from(value)),
+            // `installer_locations` already applied the explicit workspace.
+            Some("--workspace") => {}
             Some("--qualify-lifecycle") => qualification = Some(PathBuf::from(value)),
             Some("--qualify-launch") => {
                 qualification = Some(PathBuf::from(value));
@@ -85,8 +111,6 @@ fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box
     {
         return Err("Maintenance qualification requires only a native installation target".into());
     }
-    let locations =
-        sugarsubstitute_configuration::installer::InstallerLocations::capture(workspace)?;
     let workspace = locations.workspace().to_path_buf();
     if !bundle.is_absolute() || !workspace.is_absolute() {
         return Err("Installer paths must be absolute".into());

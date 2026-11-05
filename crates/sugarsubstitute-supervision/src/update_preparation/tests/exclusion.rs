@@ -76,7 +76,7 @@ fn occupied_rendezvous_bytes_are_preserved_and_never_treated_as_a_stale_lock() -
     let mut original = worker(&fixture)?;
     step(&mut pipeline, &mut original)?;
     retire(&mut pipeline, &mut original)?;
-    let path = fixture.installation.path().join(".update-trust").join("preparation-v1");
+    let path = fixture.installation.path().join("state/update-trust").join("preparation-v1");
     let corruption = path.clone();
     pipeline.run(RESERVATION_BYTES, move |_| {
         std::fs::write(corruption, b"unknown owner bytes")?;

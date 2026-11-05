@@ -16,10 +16,7 @@ use std::{
     os::windows::ffi::{OsStrExt, OsStringExt},
     path::{Path, PathBuf},
 };
-use windows::{
-    Win32::Storage::FileSystem::*,
-    core::{PCWSTR, PWSTR},
-};
+use windows::{Win32::Storage::FileSystem::*, core::PCWSTR};
 mod object;
 use object::info;
 pub(crate) use object::{
@@ -119,30 +116,6 @@ fn validate_canonical_local(path: &Path) -> Result<(), &'static str> {
     }
     Ok(())
 }
-/// Read the actual Shell-owned NUL path while its documented allocation is live.
-/// Errors preserve the original caller-owned allocation for checked allocator release.
-/// # Safety
-/// The pointer remains valid for each unit before its first NUL, or for all `maximum`
-/// units when unterminated. The caller retains allocator ownership on every outcome.
-pub(crate) unsafe fn read_native_path(text: PWSTR, maximum: usize) -> Result<PathBuf, ClaimError> {
-    if text.is_null() || maximum == 0 || maximum > 32767 {
-        return Err(ClaimError::invalid("native_path_bound"));
-    }
-    let mut units = Vec::new();
-    units.try_reserve_exact(maximum).map_err(|e| ClaimError::new("native_path_reservation", e))?;
-    for index in 0..maximum {
-        // SAFETY: The caller's valid native allocation stays live and ends at NUL.
-        let unit = unsafe { text.0.add(index).read() };
-        if unit == 0 {
-            let path = PathBuf::from(OsString::from_wide(&units));
-            validate_local_shape(&path).map_err(ClaimError::invalid)?;
-            return Ok(path);
-        }
-        units.push(unit);
-    }
-    Err(ClaimError::invalid("native_path_bound"))
-}
-
 pub(crate) fn file_identity(
     handle: &Handle,
     phase: &mut NativePhase<'_>,

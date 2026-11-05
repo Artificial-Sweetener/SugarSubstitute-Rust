@@ -86,23 +86,8 @@ fn actual_native_path_decoding_enforces_exact_existing_unit_bound() -> TestResul
 }
 
 #[test]
-fn bounded_shell_scan_preserves_raw_local_path_units_and_rejects_missing_terminator() -> TestResult
-{
-    let mut units = vec![69, 58, 92, 0xd800, 97, 0xdc01, 0];
-    // SAFETY: This owned buffer includes the terminator inside its exact advertised bound.
-    let path = unsafe { read_native_path(PWSTR(units.as_mut_ptr()), units.len()) }?;
-    assert!(path.to_str().is_none());
-    assert_eq!(path.as_os_str().encode_wide().collect::<Vec<_>>(), units[..units.len() - 1]);
-    // SAFETY: The scan cannot read beyond the valid owned allocation and rejects this shorter bound.
-    assert!(unsafe { read_native_path(PWSTR(units.as_mut_ptr()), units.len() - 1) }.is_err());
-    // SAFETY: The null pointer rejects before any dereference.
-    assert!(unsafe { read_native_path(PWSTR::null(), units.len()) }.is_err());
-    Ok(())
-}
-
-#[test]
 fn path_phase_parity_preserves_local_case_roots_and_raw_surrogates() -> TestResult {
-    for mut units in [
+    for units in [
         vec![69, 58, 92],
         vec![92, 92, 63, 92, 101, 58, 92],
         vec![69, 58, 92, 0xd800, 97, 0xdc01],
@@ -113,10 +98,6 @@ fn path_phase_parity_preserves_local_case_roots_and_raw_surrogates() -> TestResu
         expected.extend_from_slice(&units);
         expected.push(0);
         assert_eq!(wide(&path)?, expected);
-        units.push(0);
-        // SAFETY: The owned exact NUL buffer stays live throughout the bounded scan.
-        let scanned = unsafe { read_native_path(PWSTR(units.as_mut_ptr()), units.len()) }?;
-        assert_eq!(scanned.as_os_str(), path.as_os_str());
     }
     Ok(())
 }
@@ -139,14 +120,6 @@ fn path_phase_parity_keeps_original_rejection_operations() -> TestResult {
             validate_canonical_local(path).err().ok_or("original canonical rejection absent")?;
         assert_eq!(wide_error.operation(), expected);
         assert_eq!(canonical_error, expected);
-    }
-    for value in [r"relative", r"E:relative", r"\\?\UNC\server\share"] {
-        let mut units = value.encode_utf16().chain(std::iter::once(0)).collect::<Vec<_>>();
-        // SAFETY: The owned exact NUL buffer stays live throughout the bounded scan.
-        let error = unsafe { read_native_path(PWSTR(units.as_mut_ptr()), units.len()) }
-            .err()
-            .ok_or("original bounded Shell rejection absent")?;
-        assert_eq!(error.operation(), "non_local_path");
     }
     Ok(())
 }

@@ -24,7 +24,7 @@ impl SelectionStore {
                 let directory = Directory::open(&path, false)?;
                 if let Some(authorization) = completion::read(&directory, protection)? {
                     authorization.require(&self._installation, &directory, &snapshot)?;
-                    let present = stable::validate_link(
+                    let present = stable::validate_entry(
                         &self._installation,
                         &self.root,
                         protection,

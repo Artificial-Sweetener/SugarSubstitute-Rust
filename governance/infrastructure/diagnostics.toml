@@ -17,14 +17,14 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:496b92d7f8fd9953652fff6a8782e3af151a6a02dce4674eaeb2dd0b9a849058"
+source_sha256 = "sha256:e690f861a0e7956f6ade696e80a72866ffdf505512bc8aa75c1924b1993f7ac5"
 disposition = "routing"
 rationale = "Process-global supported subscriber and original diagnostic failure health."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d58ca889c5d8d591d493825e765f5fb3871d15825bfcf684d714f7c65806648b"
+source_sha256 = "sha256:5fcaaf60aa1a733958fc8ec184a69a668e797459f807bdd09def1de3ef9cc6f7"
 disposition = "storage"
 rationale = "Bounded operational pages and export through shared protected durable storage, separate from preserved incident records. Under exclusive writer custody it retires only verified page stages abandoned by interrupted writers."
 
@@ -87,7 +87,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2035b515aae632c6768bc430bb767c2ecb7c54eda12738b52b7f02da52fc9151"
+source_sha256 = "sha256:028c3078638d6cc9bf6c5b20fce183bd2c079e8caacf9c0e9405e910ca8bfc6b"
 disposition = "routing"
 rationale = "Host lifetime composes the existing execution adapter with the protected operational storage port."
 
@@ -409,7 +409,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3d2686ca3cab1e2c7bd49a486210d27b56305227f21f74d46be9c53dee860857"
+source_sha256 = "sha256:952c2d297db0e3b7eed45cb67cea14304a048927f88185ae885053efaed2fef0"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 

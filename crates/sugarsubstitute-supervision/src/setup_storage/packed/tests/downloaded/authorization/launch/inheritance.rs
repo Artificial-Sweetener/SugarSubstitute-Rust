@@ -100,7 +100,7 @@ fn foreign_inherited_record_cannot_authorize_a_matching_generation_in_another_in
         assert_eq!(foreign.load(context)?, before);
         let _released = std::fs::OpenOptions::new()
             .write(true)
-            .open(directory.path().join(".selection-state/.substitute-selection.json"))?;
+            .open(directory.path().join("state/selection/.substitute-selection.json"))?;
         assert!(matches!(run.select_launch(None, context)?, InstallationLaunch::Application(_)));
         Ok(())
     })

@@ -28,6 +28,9 @@ use std::{
 use sugarsubstitute_contracts::execution::JobContext;
 pub use trial::AdmittedCandidate;
 
+/// Setup mutation exclusion, held in the installation state folder.
+pub(in crate::setup_storage) const SETUP_LOCK: &str = "setup-lock";
+
 /// User choices carry paths and issued selections, never executable URLs or commands.
 #[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

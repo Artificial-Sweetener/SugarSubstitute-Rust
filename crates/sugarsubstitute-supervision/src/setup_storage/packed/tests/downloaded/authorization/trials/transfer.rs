@@ -72,7 +72,7 @@ fn transfer(
 
 /// Inspect only this fixture's transfer snapshots to verify native last-handle cleanup.
 fn snapshots(root: &Path) -> io::Result<Vec<std::path::PathBuf>> {
-    std::fs::read_dir(root.join(".selection-state"))?
+    std::fs::read_dir(root.join("state/selection"))?
         .filter_map(|entry| match entry {
             Ok(entry) if entry.file_name().to_string_lossy().starts_with(".trial-transfer-") => {
                 Some(Ok(entry.path()))
@@ -318,7 +318,7 @@ fn transfer_snapshot_detects_record_tampering_and_is_deleted_after_rejection() -
         let inherited = capture(transfer.handles())?;
         let directory = transfer.directory().to_owned();
         drop(transfer);
-        let record = case.directory.path().join(".selection-state/.substitute-selection.json");
+        let record = case.directory.path().join("state/selection/.substitute-selection.json");
         let original = std::fs::read(&record)?;
         let mut changed: serde_json::Value = serde_json::from_slice(&original)?;
         changed["installation"] = "f".repeat(32).into();

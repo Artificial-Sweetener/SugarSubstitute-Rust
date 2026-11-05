@@ -37,7 +37,7 @@ fn protected_installation_without_deadline_rejects_selection_effects() -> Result
                 )?;
                 let initial = InstallationRecord::empty(InstallationId::new("1".repeat(32))?);
                 assert!(SelectionStore::initialize(root.path(), &initial, &context).is_err());
-                assert!(!root.path().join(".selection-state").exists());
+                assert!(!root.path().join("state/selection").exists());
                 Ok(())
             },
         )?)

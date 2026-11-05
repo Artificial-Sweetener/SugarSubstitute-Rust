@@ -29,7 +29,7 @@ pub(super) fn begin(
     protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<record::Record> {
-    match root.read(EXECUTABLE) {
+    match root.read(ENTRY) {
         Ok(mut file) => {
             protection.verify_file(&file)?;
             payload::verify(&mut file, &previous, context)?;
@@ -61,7 +61,7 @@ pub(super) fn recover(
     let _image = if next_present {
         payload::ensure(root, &transition.next, protection, context)?
     } else {
-        let replacing = files::exists(root.path().join(EXECUTABLE), context)?;
+        let replacing = files::exists(root.path().join(ENTRY), context)?;
         payload::replace(root, &transition.next, replacing, protection, context)?
     };
     if current != transition.next {
@@ -142,7 +142,7 @@ fn pending(
     if current != transition.previous && current != transition.next {
         return Err(invalid("Launcher transition conflicts with established ownership"));
     }
-    let next_present = match root.read(EXECUTABLE) {
+    let next_present = match root.read(ENTRY) {
         Ok(mut file) => {
             protection.verify_file(&file)?;
             let bytes = files::length(&file, context)?;

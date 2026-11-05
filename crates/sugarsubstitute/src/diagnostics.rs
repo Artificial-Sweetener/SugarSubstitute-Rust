@@ -167,6 +167,34 @@ where
 {
     subscriber(DiagnosticHealth::fixture(), make, "trace".into(), None)
 }
+/// Select where a process role keeps its operational history; never an account profile folder.
+pub(crate) enum RecordsBase {
+    /// The installation owning the running image: its root for installed images and the stable
+    /// entry, or the image's own directory for an uninstalled build output.
+    RunningImage,
+    /// An explicit installation-local base: the installer's setup workspace.
+    #[cfg(all(windows, feature = "windows-native-host"))]
+    Explicit(std::path::PathBuf),
+}
+impl RecordsBase {
+    fn resolve(self) -> std::io::Result<std::path::PathBuf> {
+        match self {
+            #[cfg(all(windows, feature = "windows-native-host"))]
+            Self::Explicit(base) => Ok(base),
+            Self::RunningImage => {
+                let image = std::env::current_exe()?;
+                let directory = image
+                    .parent()
+                    .ok_or_else(|| std::io::Error::other("Running image has no directory"))?;
+                Ok(sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                    directory,
+                )
+                .runtime_base()
+                .to_path_buf())
+            }
+        }
+    }
+}
 /// Own health through the actual application lifetime and final error resolution.
 /// The global subscriber retains bounded cause data and a queue whose admission claim retires with the service.
 pub(crate) struct Diagnostics {
@@ -176,21 +204,29 @@ pub(crate) struct Diagnostics {
 }
 impl Diagnostics {
     /// Keep routing and sink health alive through the caller's final error reporting and native teardown.
+    /// Operational history is kept below `records`, the role's installation-local base.
     pub(crate) fn run<T>(
+        records: RecordsBase,
         execute: impl FnOnce(DiagnosticHealth) -> Result<T, Box<dyn Error>>,
     ) -> Result<T, Box<dyn Error>> {
-        let diagnostics = Self::initialize()?;
+        let diagnostics = Self::initialize(records)?;
         let result = execute(diagnostics.health());
         diagnostics.finish(result)
     }
     /// Install the supported process-global subscriber once, retaining two original causes and an omitted count.
-    fn initialize() -> Result<Self, Box<dyn Error>> {
+    fn initialize(records: RecordsBase) -> Result<Self, Box<dyn Error>> {
         use tracing_subscriber::util::SubscriberInitExt as _;
         let health = DiagnosticHealth::new();
         let filter =
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+        let records = records.resolve()?;
         #[cfg(windows)]
-        let service = service::Service::start(health.clone(), Arc::new(service::AccountSink))?;
+        let service = service::Service::start(
+            health.clone(),
+            Arc::new(service::AccountSink { base: records }),
+        )?;
+        #[cfg(not(windows))]
+        drop(records);
         let queue = {
             #[cfg(windows)]
             {

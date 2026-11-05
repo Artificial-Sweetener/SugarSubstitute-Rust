@@ -22,7 +22,8 @@ pub(super) fn write(
         runtime.metadata.clone(),
         cube.to_owned(),
         runtime.directory.join("main.py"),
-        selection.install_root.join("desktop-data").join("profile"),
+        sugarsubstitute_configuration::layout::InstallationLayout::new(&selection.install_root)
+            .webview_profile(),
     ])
     .map_err(io::Error::other)?;
     files::write_immutable(

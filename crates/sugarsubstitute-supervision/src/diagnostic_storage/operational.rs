@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bound operational history separately from authoritative incident records.
 //!
-//! Calls run on finite admitted execution workers. Shared durable storage owns
-//! account discovery, protection, native identity pins, staging and publication.
+//! Calls run on finite admitted execution workers. History lives below the caller's
+//! installation root. Shared durable storage owns account verification, protection,
+//! native identity pins, staging and publication.
 //! Only recognized schema-one pages rotate. A page stage abandoned by an interrupted
 //! writer is retired under writer custody; other unknown entries and incident stores
 //! remain intact. No native handle or storage lease escapes a call.
@@ -58,25 +59,33 @@ impl OperationalDiagnosticExport {
 pub fn writer_busy(cause: &io::Error) -> bool {
     contention::is_busy(cause)
 }
-/// Publish up to three pre-redacted host events under actual account storage.
+/// Publish up to three pre-redacted host events below `<base>\runtime\operational-v1`.
+///
+/// `base` is the installation root (or setup workspace) named by the configuration layout
+/// owner; history never reaches account profile folders. A missing base is created.
 ///
 /// # Errors
 /// Preserves original I/O and native retirement causes. Rejects overload,
 /// unknown schemas/content, foreign protection, writer contention and controls.
-pub fn append(events: &[String], omitted: u64, context: &JobContext) -> io::Result<()> {
+pub fn append(
+    base: &Path,
+    events: &[String],
+    omitted: u64,
+    context: &JobContext,
+) -> io::Result<()> {
     protection::with(context, |protection| {
-        let path = protection.runtime_storage(DIRECTORY, true, context)?;
+        let path = protection.runtime_storage(base, DIRECTORY, true, context)?;
         append_at(&path, events, omitted, protection, context)
     })
 }
-/// Export only recognized operational pages, without dumps, incident content or paths.
+/// Export recognized operational pages below `base`, without dumps, incident content or paths.
 ///
 /// # Errors
 /// Missing history, unknown entries, invalid pages, writer contention, original
 /// native retirement and controls remain observable. This grants no export destination.
-pub fn export(context: &JobContext) -> io::Result<OperationalDiagnosticExport> {
+pub fn export(base: &Path, context: &JobContext) -> io::Result<OperationalDiagnosticExport> {
     protection::with(context, |protection| {
-        let path = protection.runtime_storage(DIRECTORY, false, context)?;
+        let path = protection.runtime_storage(base, DIRECTORY, false, context)?;
         export_at(&path, protection, context)
     })
 }
