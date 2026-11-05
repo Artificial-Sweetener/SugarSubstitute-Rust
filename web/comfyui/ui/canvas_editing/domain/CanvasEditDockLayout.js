@@ -18,12 +18,14 @@ import { CANVAS_EDIT_CHROME_INSET, } from './CanvasToolbarPlacement.js';
 /** Space kept between neighbouring chrome surfaces. */
 export const CANVAS_EDIT_CHROME_GAP = 8;
 /**
- * Place the top bar beside, and the rail below, every host surface they would cover.
+ * Place the top bar beside, and the rail below, the host surfaces they would cover.
  *
  * Both start at the chrome inset. The top bar (history, then the active tool's options) moves
- * right past each intersecting host surface, such as the Input/Output route tabs, so the tabs
- * and the options share the top row. The rail then moves down past each intersecting host
- * surface and the top bar. Empty sizes and obstacles never intersect.
+ * right past each intersecting host surface, so a host surface in the corner and the options
+ * share the top row. The rail then moves down past each intersecting host surface that reaches
+ * its top, including the top bar. A host surface further down the rail's column, such as the
+ * canvas navigation bar, instead bounds the rail's height so the two never overlap. Empty sizes
+ * and obstacles never intersect.
  */
 export function canvasEditDockPlacement(obstacles, topBar, rail) {
     const bar = { left: CANVAS_EDIT_CHROME_INSET, top: CANVAS_EDIT_CHROME_INSET, ...topBar };
@@ -32,9 +34,20 @@ export function canvasEditDockPlacement(obstacles, topBar, rail) {
             bar.left = obstacle.left + obstacle.width + CANVAS_EDIT_CHROME_GAP;
     const column = { left: CANVAS_EDIT_CHROME_INSET, top: CANVAS_EDIT_CHROME_INSET, ...rail };
     for (const obstacle of [...obstacles, bar].sort((a, b) => a.top - b.top))
-        if (intersects(column, obstacle))
+        if (obstacle.top <= column.top && intersects(column, obstacle))
             column.top = obstacle.top + obstacle.height + CANVAS_EDIT_CHROME_GAP;
-    return { topBar: { x: bar.left, y: bar.top }, rail: { x: column.left, y: column.top } };
+    const limits = obstacles
+        .filter((obstacle) => obstacle.width > 0 &&
+        obstacle.height > 0 &&
+        obstacle.top > column.top &&
+        obstacle.left < column.left + column.width &&
+        column.left < obstacle.left + obstacle.width)
+        .map((obstacle) => obstacle.top - CANVAS_EDIT_CHROME_GAP - column.top);
+    return {
+        topBar: { x: bar.left, y: bar.top },
+        rail: { x: column.left, y: column.top },
+        railHeight: limits.length ? Math.max(0, Math.min(...limits)) : null,
+    };
 }
 /** Report whether two rectangles share interior area; an empty rectangle shares none. */
 function intersects(a, b) {

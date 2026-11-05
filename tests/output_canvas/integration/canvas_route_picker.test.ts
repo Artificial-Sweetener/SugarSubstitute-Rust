@@ -154,3 +154,34 @@ test('comparison keeps the canvas selector in the first image bar', () => {
   expect(root.querySelector('.sc-output-compare-second .sc-output-route')).toBeNull();
   mounted.dispose();
 });
+
+test('reports the navigation bar as the chrome that shared canvas surfaces keep clear', () => {
+  const route = routePort({ route: 'input', inputAvailable: true, labels });
+  const { root, mounted } = mount(route.port);
+  const bar = root.querySelector('.sc-output-navigation')!;
+  const bounds: DOMRect = {
+    x: 8,
+    y: 552,
+    left: 8,
+    top: 552,
+    width: 96,
+    height: 38,
+    right: 104,
+    bottom: 590,
+    toJSON: () => ({}),
+  };
+  jest.spyOn(bar, 'getBoundingClientRect').mockReturnValue(bounds);
+  expect(mounted.navigationBounds()).toEqual([bounds]);
+  mounted.dispose();
+  const absent = mount(routePort({ route: 'output', inputAvailable: false, labels }).port, {
+    ...canvasSnapshot('single'),
+    sources: canvasSnapshot('single')
+      .sources.slice(0, 1)
+      .map((source) => ({
+        ...source,
+        batchCount: 1,
+      })),
+  });
+  expect(absent.mounted.navigationBounds()).toEqual([]);
+  absent.mounted.dispose();
+});
