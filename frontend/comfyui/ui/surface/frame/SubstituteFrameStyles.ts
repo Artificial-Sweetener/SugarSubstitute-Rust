@@ -19,6 +19,7 @@ import {
   WORKFLOW_TAB_TOOL_WIDTH,
   WORKFLOW_NEW_BUTTON_GAP,
 } from './WorkflowTabStripLayout.js';
+import { SPACED_MASONRY_ROOT } from '../masonry/MasonryPacking.js';
 /** Keep browser tabs legible on black; let the desktop host supply native frame background and foreground. */
 export const substituteFrameCss = `
   .sc-generation-progress { position:absolute; left:0; right:0; top:calc(100% - 3px); height:6px;
@@ -102,12 +103,13 @@ export const substituteFrameCss = `
   .sc-substitute-frame .sc-orb-stack-icon { position:absolute; left:5px; top:18.5px; }
   .sc-substitute-frame .sc-orb-pin-icon { position:absolute; left:6px; top:17px; }
   .sc-substitute-frame .sc-orb-chevron { position:absolute; left:10px; top:29px; width:3.5px; height:3.5px; border:solid currentColor; border-width:0 1.1px 1.1px 0; transform:rotate(45deg); }
-  :root[data-sc-substitute-frame] .sc-cube-stack-host { left:0; top:6px; bottom:6px; padding:0; border:0; border-radius:0;
+  ${SPACED_MASONRY_ROOT}[data-sc-substitute-frame] .sc-cube-stack-host { top:6px; bottom:6px; }
+  :root[data-sc-substitute-frame] .sc-cube-stack-host { left:0; padding:0; border:0; border-radius:0;
     background:transparent; box-shadow:none; scrollbar-width:none; }
   :root[data-sc-substitute-frame] .splitter-overlay-bottom:has(> .graph-canvas-panel) { margin-left:0; margin-right:0; margin-bottom:0; }
   :root[data-sc-substitute-frame] .sc-cube-stack-host::-webkit-scrollbar { display:none; }
   :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'] .sc-cube-stack__toolbar { display:none; }
-  :root[data-sc-substitute-frame] .sc-cube-stack:not([data-compact]) .sc-cube-stack-row { border-radius:4px; }
+  ${SPACED_MASONRY_ROOT}[data-sc-substitute-frame] .sc-cube-stack-row { border-radius:4px; }
   :root[data-sc-substitute-frame] .sc-cube-stack-row__text { mask-image:linear-gradient(90deg,#000 calc(100% - 10px),transparent); }
   :root[data-sc-substitute-frame] .sc-cube-stack-row__label { text-overflow:clip; }
   :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'] .sc-cube-stack-row:hover { background:rgba(255,255,255,.059); }

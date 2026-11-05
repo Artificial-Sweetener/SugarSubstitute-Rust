@@ -1,7 +1,7 @@
 import {
   CUBE_STACK_ROW_HEIGHT,
   cubeStackRowStride
-} from "./chunk-3BUER5QA.js";
+} from "./chunk-D6BK5OR7.js";
 import {
   defineComponent,
   h
@@ -11,7 +11,7 @@ import {
 var CubeStackSelectionIndicator = defineComponent({
   props: {
     position: { type: Number, default: null },
-    compact: { type: Boolean, default: false }
+    packed: { type: Boolean, default: false }
   },
   setup(props) {
     return () => h("div", {
@@ -20,7 +20,7 @@ var CubeStackSelectionIndicator = defineComponent({
       "data-position": props.position ?? void 0,
       style: {
         opacity: props.position === null ? "0" : "1",
-        transform: `translateY(${String((props.position ?? 0) * cubeStackRowStride(props.compact) + (CUBE_STACK_ROW_HEIGHT - 16) / 2)}px)`
+        transform: `translateY(${String((props.position ?? 0) * cubeStackRowStride(props.packed) + (CUBE_STACK_ROW_HEIGHT - 16) / 2)}px)`
       }
     });
   }

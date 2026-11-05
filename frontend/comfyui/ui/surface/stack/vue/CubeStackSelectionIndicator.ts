@@ -21,7 +21,7 @@ import { CUBE_STACK_ROW_HEIGHT, cubeStackRowStride } from '../CubeStackMetrics.j
 export const CubeStackSelectionIndicator = defineComponent({
   props: {
     position: { type: Number as PropType<number | null>, default: null },
-    compact: { type: Boolean, default: false },
+    packed: { type: Boolean, default: false },
   },
   setup(props) {
     return () =>
@@ -31,7 +31,7 @@ export const CubeStackSelectionIndicator = defineComponent({
         'data-position': props.position ?? undefined,
         style: {
           opacity: props.position === null ? '0' : '1',
-          transform: `translateY(${String((props.position ?? 0) * cubeStackRowStride(props.compact) + (CUBE_STACK_ROW_HEIGHT - 16) / 2)}px)`,
+          transform: `translateY(${String((props.position ?? 0) * cubeStackRowStride(props.packed) + (CUBE_STACK_ROW_HEIGHT - 16) / 2)}px)`,
         },
       });
   },

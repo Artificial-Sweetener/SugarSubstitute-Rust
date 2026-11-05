@@ -22,7 +22,8 @@ import type { CubeIdentitySource } from '../../cube/CubeIdentityPresentation.js'
 import type { WorkflowMasonrySection } from '../masonry/WorkflowMasonryProjection.js';
 import type { AppearanceSource } from '../appearance/AppearanceState.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
-import { cubeStackWidth } from './CubeStackMetrics.js';
+import { cubeStackReservedWidth } from './CubeStackMetrics.js';
+import { readMasonryPacked, subscribeMasonryPacking } from '../masonry/MasonryPacking.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
 import { projectCubeStackRows } from './CubeStackProjection.js';
@@ -154,6 +155,7 @@ export class CubeStackHost {
       subscribePluginMode(this.#options.document, () =>
         this.#preferences.setPluginMode(readPluginMode(this.#options.document)),
       ),
+      subscribeMasonryPacking(this.#options.document, () => this.#reconcile()),
     );
     if (this.#options.frame)
       this.#subscriptions.push(this.#options.frame.subscribe(() => this.#reconcile(false)));
@@ -286,7 +288,7 @@ export class CubeStackHost {
       this.#mounted.setInteractive(false);
     }
     view.setStackWidth(
-      cubeStackWidth(state.compact) + (state.compact || this.#options.frame?.enabled ? 0 : 24),
+      cubeStackReservedWidth(state.compact, state.packed, this.#options.frame?.enabled === true),
     );
     if (this.#surfaceVisible) void this.#present(true, animate).catch(this.#options.reportError);
     this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
@@ -337,6 +339,7 @@ export class CubeStackHost {
         this.#reorder?.available === true,
       ),
       compact: this.#preferences.snapshot.compact,
+      packed: readMasonryPacked(this.#options.document),
       pending: this.#reorder?.pending === true,
       appearance:
         this.#options.appearance.appearance.style !== 'comfy'
