@@ -96,6 +96,7 @@ export class NativeCanvasAttachment {
   readonly #stopTransfer: () => void;
   readonly #stopCamera: () => void;
   readonly #keyboard: CanvasViewportKeyboard;
+  readonly #stopFocusRequests: () => void;
   /** Fixed per attachment; changed host capabilities rebuild the attachment. */
   readonly #comparison: boolean;
   /** Present only for a host that paints overview cells; fixed like the comparison flag. */
@@ -172,6 +173,8 @@ export class NativeCanvasAttachment {
       ...(options.copy ? { copy: options.copy } : {}),
       ...(options.fileAction ? { fileAction: options.fileAction } : {}),
       ...(options.mediaProfile ? { profile: options.mediaProfile } : {}),
+      ...(options.photoshop ? { photoshop: options.photoshop } : {}),
+      entries: () => this.#catalog.entries,
     });
     const sources = new CanvasSourceNavigation({
       resources: { prepareSource: () => null, cancelPreparation: () => {} },
@@ -268,6 +271,7 @@ export class NativeCanvasAttachment {
     });
     this.#keyboard = new CanvasViewportKeyboard(this.viewport, this.port, options.report);
     this.viewport.addEventListener('pointerdown', this.#focusViewport);
+    this.#stopFocusRequests = options.route?.subscribeFocus(this.#takeFocus) ?? (() => {});
     this.#readiness = new NativeCanvasReadiness(options.clock, () => {
       this.#stalled = true;
       this.#stallKey = this.#requestKey();
@@ -278,6 +282,7 @@ export class NativeCanvasAttachment {
       () => this.#keyboard.dispose(),
       () => this.#reveal.drop(),
       () => this.viewport.removeEventListener('pointerdown', this.#focusViewport),
+      this.#stopFocusRequests,
       () => this.#native.dispose(),
       () => this.#inspection.dispose(),
       this.#stopCamera,
@@ -423,6 +428,7 @@ export class NativeCanvasAttachment {
     this.#keyboard.dispose();
     this.#reveal.drop();
     this.viewport.removeEventListener('pointerdown', this.#focusViewport);
+    this.#stopFocusRequests();
     this.#stopView();
     this.#stopTransfer();
     this.#status.dispose();
@@ -451,6 +457,14 @@ export class NativeCanvasAttachment {
   readonly #focusViewport = (event: PointerEvent): void => {
     if (event.button === 0 && event.target === this.viewport && this.options.accepts())
       this.viewport.focus({ preventScroll: true });
+  };
+
+  /**
+   * Take keyboard focus when a card opens Input, as the press on the viewport would, so the
+   * editing keys apply without first clicking the canvas. Only the committed attachment does.
+   */
+  readonly #takeFocus = (): void => {
+    if (!this.#disposed && this.options.accepts()) this.viewport.focus({ preventScroll: true });
   };
 
   /** Measure hidden candidates without granting them committed control-port authority. */

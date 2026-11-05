@@ -168,6 +168,8 @@ export class BrowserCanvasAttachment {
             ...(options.copy ? { copy: options.copy } : {}),
             ...(options.fileAction ? { fileAction: options.fileAction } : {}),
             ...(options.mediaProfile ? { profile: options.mediaProfile } : {}),
+            ...(options.photoshop ? { photoshop: options.photoshop } : {}),
+            entries: () => this.#catalog.entries,
         });
         const actionSurface = new BrowserCanvasActionSurface(this.#camera, this.#browserResources, this.#media, options.open);
         this.port = new CanvasSurfacePort(this.#snapshot(), {

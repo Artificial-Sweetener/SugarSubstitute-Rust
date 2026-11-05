@@ -31,4 +31,6 @@ export interface CanvasRoutePort {
   read(): CanvasRouteState | null;
   subscribe(listener: () => void): () => void;
   choose(route: CanvasRouteId): void;
+  /** Observe requests for the canvas to take keyboard focus, as when a card opens Input. */
+  subscribeFocus(listener: () => void): () => void;
 }

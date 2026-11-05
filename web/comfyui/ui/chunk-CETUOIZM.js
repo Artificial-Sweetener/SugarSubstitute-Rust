@@ -55,6 +55,10 @@ function ensureCanvasEditStyles(document) {
     .sc-canvas-edit-coverage-controls input { width:42px; text-align:center; -moz-appearance:textfield; }
     .sc-canvas-edit-coverage-controls input::-webkit-inner-spin-button { display:none; }
     .sc-canvas-edit-toolbar { position:absolute; left:0; top:0; }
+    .sc-canvas-edit-toolbar-grip { flex:0 0 8px; align-self:stretch; min-height:28px; margin:0 2px;
+      border-radius:4px; background:var(--p-primary-color,var(--ring,#df258e)); cursor:grab;
+      touch-action:none; }
+    .sc-canvas-edit-toolbar-grip:active { cursor:grabbing; }
     .sc-canvas-edit-coverage { position:absolute; left:50%; bottom:8px; transform:translateX(-50%);
       display:flex; align-items:center; gap:8px; padding:3px; max-width:calc(100% - 16px); }
     .sc-canvas-edit-separator { width:1px; align-self:stretch; margin:4px 2px;

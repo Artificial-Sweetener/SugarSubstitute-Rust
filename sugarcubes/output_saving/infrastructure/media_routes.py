@@ -13,7 +13,7 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Expose bounded on-demand image transfers and guarded local desktop reveal requests."""
+"""Expose bounded on-demand image transfers and guarded local desktop file actions."""
 
 import asyncio
 import logging
@@ -40,15 +40,16 @@ def register_media_routes(
     codec = asyncio.Semaphore(1)
 
     async def profile(request: web.Request) -> web.Response:
-        """Publish copy preference and a conservative request-qualified reveal capability."""
-        format, available = service.profile()
+        """Publish copy preference and conservative request-qualified desktop capabilities."""
+        profile = service.profile()
+        local = local_file_request(request, require_origin=False)
         return web.json_response(
             {
                 "success": True,
                 "data": {
-                    "preferred_copy_format": format.value,
-                    "reveal": available
-                    and local_file_request(request, require_origin=False),
+                    "preferred_copy_format": profile.copy_format.value,
+                    "reveal": profile.reveal and local,
+                    "photoshop": profile.photoshop and local,
                 },
             },
             headers={"Cache-Control": "no-store"},
@@ -111,12 +112,34 @@ def register_media_routes(
             _LOGGER.exception(
                 "The file manager could not reveal the requested output image."
             )
-            return _error(OSError("The image could not be revealed in its folder."), 500)
+            return _error(
+                OSError("The image could not be revealed in its folder."), 500
+            )
+
+    async def photoshop(request: web.Request) -> web.Response:
+        """Require a same-origin loopback POST before opening still images in Photoshop."""
+        if not local_file_request(request, require_origin=True):
+            return _error(
+                ValueError(
+                    "Photoshop is only available for a local same-origin connection."
+                ),
+                403,
+            )
+        try:
+            document, layers = _photoshop_request(await request.json())
+            await asyncio.to_thread(service.open_in_photoshop, document, layers)
+            return web.json_response({"success": True})
+        except (ValueError, TypeError) as error:
+            return _error(error, 400)
+        except OSError:
+            _LOGGER.exception("Photoshop could not open the requested output images.")
+            return _error(OSError("The images could not be opened in Photoshop."), 500)
 
     routes.get("/sugarcubes/output-saving/media-profile")(profile)
     routes.get("/sugarcubes/output-saving/image")(image)
     routes.post("/sugarcubes/output-saving/image")(image)
     routes.post("/sugarcubes/output-saving/reveal")(reveal)
+    routes.post("/sugarcubes/output-saving/photoshop")(photoshop)
 
 
 async def _prepare(
@@ -135,6 +158,26 @@ async def _prepare(
         except asyncio.CancelledError:
             await asyncio.shield(worker)
             raise
+
+
+def _photoshop_request(
+    value: object,
+) -> tuple[str, list[tuple[OutputFileReference, str]]]:
+    """Admit a document name and still-image references with their layer names, nothing else."""
+    if not isinstance(value, Mapping):
+        raise ValueError("A Photoshop request is required.")
+    document, layers = value.get("document"), value.get("layers")
+    if not isinstance(document, str) or not isinstance(layers, list):
+        raise ValueError("A Photoshop request names a document and its layers.")
+    entries: list[tuple[OutputFileReference, str]] = []
+    for layer in layers:
+        if not isinstance(layer, Mapping):
+            raise ValueError("Each Photoshop layer names one output image.")
+        name = layer.get("name")
+        if not isinstance(name, str):
+            raise ValueError("Each Photoshop layer names one output image.")
+        entries.append((decode_transfer_reference(layer.get("file")), name))
+    return document, entries
 
 
 def _error(error: Exception, status: int) -> web.Response:

@@ -45,6 +45,7 @@ export interface CanvasAttachmentOptions {
   copy?: CanvasMediaOptions['copy'];
   fileAction?: CanvasMediaOptions['fileAction'];
   mediaProfile?: CanvasMediaOptions['profile'];
+  photoshop?: CanvasMediaOptions['photoshop'];
   /** Prepare one exact completed image for the page's outbound drag. */
   drag?(item: WorkflowOutputItem, signal: AbortSignal): Promise<CanvasOutputDragPayload | null>;
   /** Invalidate prepared transfers after an accepted shared preference change. */

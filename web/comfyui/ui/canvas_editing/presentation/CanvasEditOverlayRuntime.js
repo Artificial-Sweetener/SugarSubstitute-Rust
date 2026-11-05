@@ -1,31 +1,31 @@
 import {
   ensureCanvasEditStyles
-} from "../../chunk-VO4TCHQ3.js";
+} from "../../chunk-CETUOIZM.js";
 import {
   CanvasEditContextMenu
-} from "../../chunk-OBVPEMEF.js";
+} from "../../chunk-ZWY52QO3.js";
 import {
   CanvasEditKeyboard
 } from "../../chunk-BQYNHRW2.js";
 import {
   CanvasEditOverlay,
   canvasEditSurface
-} from "../../chunk-SDUZU4HA.js";
-import "../../chunk-2S4PRFYU.js";
-import "../../chunk-3IZU6ONS.js";
-import "../../chunk-NC4KX5LX.js";
-import "../../chunk-EMIUG2S5.js";
-import "../../chunk-HDVDWAOE.js";
+} from "../../chunk-E5Z6SMVJ.js";
+import "../../chunk-UCIGVQMY.js";
+import "../../chunk-AWHG7O74.js";
+import "../../chunk-CSZBNOIR.js";
+import "../../chunk-A3QVOJMG.js";
+import "../../chunk-3HDL7XRD.js";
 import {
   canvasEditSlotOf,
   canvasEditSlotViews,
   canvasEditToolAvailable
-} from "../../chunk-BPQUSL77.js";
-import "../../chunk-36SKP3QA.js";
+} from "../../chunk-KA4VBPJE.js";
+import "../../chunk-TPZEQNX7.js";
 import {
   DEFAULT_COVERAGE_MODIFICATION
 } from "../../chunk-EFQNN4SR.js";
-import "../../chunk-ECAVEMES.js";
+import "../../chunk-2WJX4EBF.js";
 import "../../chunk-X5ULNSRV.js";
 import {
   createApp,

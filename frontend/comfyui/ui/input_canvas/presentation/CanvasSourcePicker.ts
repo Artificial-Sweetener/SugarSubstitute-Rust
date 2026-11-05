@@ -36,6 +36,8 @@ export interface CanvasSourcePickerPort {
   refresh(): Promise<void>;
   change(source: CanvasInputSource): void | Promise<void>;
   upload(file: File): Promise<string>;
+  /** The user chose and uploaded a new file, which is now the source. */
+  chosen(): void;
   report(error: unknown): void;
 }
 /** Supply source values to native fields without owning their label, combo or popup rendering. */
@@ -202,7 +204,10 @@ export class CanvasSourcePicker {
     if (!file) return;
     void this.#operation(async () => {
       const path = await this.port.upload(file);
-      if (this.#alive) await this.port.change({ kind: 'file', file: path });
+      if (this.#alive) {
+        await this.port.change({ kind: 'file', file: path });
+        this.port.chosen();
+      }
       this.#file.value = '';
     });
   };

@@ -16,6 +16,7 @@
 /** Describe renderer-neutral media actions and pin context commands to exact output identities. */
 import type { OutputSourceId, OutputResultId } from '../../execution/domain/ExecutionIdentity.js';
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
+import type { CanvasCatalogEntry } from './CanvasCatalog.js';
 import type { CanvasViewSnapshot } from './CanvasViewPort.js';
 
 export type CanvasMediaTarget =
@@ -46,4 +47,11 @@ export function canvasMediaItem(
             .find((entry) => entry.source.id === target.sourceId)
             ?.items.find((item) => item.id === target.itemId) ?? null);
   return item?.mediaKind === 'image' ? item : null;
+}
+
+/** List every still image of a result's sources in catalog order, excluding live previews. */
+export function canvasMediaImages(
+  entries: readonly CanvasCatalogEntry[],
+): readonly WorkflowOutputItem[] {
+  return entries.flatMap((entry) => entry.items.filter((item) => item.mediaKind === 'image'));
 }

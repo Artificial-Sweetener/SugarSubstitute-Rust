@@ -18,13 +18,15 @@ export class OutputMediaClient {
                 !isRecord(value.data) ||
                 (value.data.preferred_copy_format !== 'png' &&
                     value.data.preferred_copy_format !== 'jpeg') ||
-                typeof value.data.reveal !== 'boolean')
+                typeof value.data.reveal !== 'boolean' ||
+                typeof value.data.photoshop !== 'boolean')
                 throw new Error('The output image action capabilities are unavailable.');
             const hostname = new URL(this.origin).hostname;
             const local = hostname === 'localhost' || hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(hostname);
             return Object.freeze({
                 preferredCopyFormat: value.data.preferred_copy_format,
                 fileAction: local && value.data.reveal ? 'reveal' : 'download',
+                photoshop: local && value.data.photoshop,
             });
         });
     }
@@ -56,6 +58,19 @@ export class OutputMediaClient {
                     ? value.error.message
                     : 'The image could not be revealed in its folder.');
         }, file, signal);
+    }
+    /**
+     * Ask the local adapter to open validated output images in Photoshop: one document named
+     * `document` holding each image as a layer named by its entry, in order.
+     */
+    async photoshop(document, layers, signal) {
+        return this.#request('/sugarcubes/output-saving/photoshop', async (response) => {
+            const value = await response.json();
+            if (!response.ok || !isRecord(value) || value.success !== true)
+                throw new Error(isRecord(value) && isRecord(value.error) && typeof value.error.message === 'string'
+                    ? value.error.message
+                    : 'The images could not be opened in Photoshop.');
+        }, { document, layers }, signal);
     }
     /** Build a same-origin download URL whose response supplies the selected rendition's filename. */
     downloadUrl(file) {

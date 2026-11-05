@@ -31,6 +31,7 @@ import type {
 import {
   CanvasToolbarPlacement,
   canvasEditSafeArea,
+  type CanvasEditPoint,
   type CanvasEditRect,
 } from '../domain/CanvasToolbarPlacement.js';
 import { modifyPage, selectionPage, sessionPage, transformPage } from './CanvasEditPages.js';
@@ -46,7 +47,8 @@ export interface CanvasEditViewport extends CanvasEditRect {
  *
  * Selection bounds arrive in surface CSS pixels; offsetting them by the viewport origin maps them
  * into the overlay. The placement owner keeps its above/below choice while bounds follow pan and
- * zoom, and starts afresh when the page changes.
+ * zoom, and starts afresh when the page changes. The grip at the toolbar's start drags it; the
+ * dropped place is kept until the page changes.
  */
 export const CanvasContextualToolbar = defineComponent({
   name: 'CanvasContextualToolbar',
@@ -58,10 +60,48 @@ export const CanvasContextualToolbar = defineComponent({
   setup(props) {
     const element = ref<HTMLElement | null>(null);
     const placement = new CanvasToolbarPlacement();
+    let shown: CanvasEditPoint | null = null;
+    let drag: { readonly pointer: number; x: number; y: number } | null = null;
     watch(
       () => props.snapshot.surface.kind,
       () => placement.reset(),
     );
+    /** Show the toolbar at one top-left point in overlay CSS pixels. */
+    function show(toolbar: HTMLElement, point: CanvasEditPoint): void {
+      shown = point;
+      toolbar.style.transform = `translate(${point.x}px, ${point.y}px)`;
+      toolbar.dataset.canvasPlacement = `${point.x},${point.y}`;
+    }
+    /** Begin a primary-button drag on the grip, capturing the pointer for its duration. */
+    function grab(event: PointerEvent): void {
+      if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drag = { pointer: event.pointerId, x: event.clientX, y: event.clientY };
+    }
+    /** Move by the pointer's travel since the last move. */
+    function follow(event: PointerEvent): void {
+      const toolbar = element.value;
+      if (!drag || drag.pointer !== event.pointerId || !toolbar || !shown) return;
+      event.preventDefault();
+      const delta = { x: event.clientX - drag.x, y: event.clientY - drag.y };
+      drag.x = event.clientX;
+      drag.y = event.clientY;
+      show(
+        toolbar,
+        placement.moveBy(
+          shown,
+          delta,
+          { width: toolbar.offsetWidth, height: toolbar.offsetHeight },
+          canvasEditSafeArea(props.viewport),
+        ),
+      );
+    }
+    /** End the drag; the dropped place stays with the placement owner. */
+    function release(event: PointerEvent): void {
+      if (drag?.pointer === event.pointerId) drag = null;
+    }
     /** Position from the measured toolbar size; layout must precede placement. */
     function place(): void {
       const toolbar = element.value;
@@ -76,14 +116,15 @@ export const CanvasContextualToolbar = defineComponent({
             height: bounds.height,
           }
         : null;
-      const point = placement.position(
-        context,
-        { width: toolbar.offsetWidth, height: toolbar.offsetHeight },
-        canvasEditSafeArea(viewport),
-        viewport.density,
+      show(
+        toolbar,
+        placement.position(
+          context,
+          { width: toolbar.offsetWidth, height: toolbar.offsetHeight },
+          canvasEditSafeArea(viewport),
+          viewport.density,
+        ),
       );
-      toolbar.style.transform = `translate(${point.x}px, ${point.y}px)`;
-      toolbar.dataset.canvasPlacement = `${point.x},${point.y}`;
     }
     onMounted(place);
     onUpdated(place);
@@ -99,7 +140,20 @@ export const CanvasContextualToolbar = defineComponent({
           'aria-label': toolbarLabel(props.snapshot),
           'data-canvas-surface': props.snapshot.surface.kind,
         },
-        children,
+        [
+          h('div', {
+            class: 'sc-canvas-edit-toolbar-grip',
+            title: CANVAS_EDIT_TEXT.moveToolbar,
+            'aria-label': CANVAS_EDIT_TEXT.moveToolbar,
+            'data-canvas-toolbar-grip': '',
+            onPointerdown: grab,
+            onPointermove: follow,
+            onPointerup: release,
+            onPointercancel: release,
+            onLostpointercapture: release,
+          }),
+          ...children,
+        ],
       );
     };
   },

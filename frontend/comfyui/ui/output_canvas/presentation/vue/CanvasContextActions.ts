@@ -13,9 +13,10 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Project renderer-independent inspection intents into the shared transient menu. */
+/** Project the original Substitute Output menu over renderer-independent media intents. */
 
 import type { ContextMenuEntry } from '../../../menus/ContextMenu.js';
+import type { WorkflowOutputItem } from '../../../execution/domain/WorkflowOutput.js';
 import { canvasMediaItem, type CanvasMediaTarget } from '../../domain/CanvasMedia.js';
 import type {
   CanvasCapabilities,
@@ -23,16 +24,25 @@ import type {
   CanvasViewSnapshot,
 } from '../../domain/CanvasViewPort.js';
 
-/** Keep optional actions off the image while delegating every transition to its view authority. */
+/**
+ * Offer the Output actions in the original order: Compare outputs, then Copy, Open in Photoshop,
+ * Open All in Photoshop and Reveal in File Manager, delegating every transition to its owner.
+ *
+ * The overview offers no menu away from an image unless outputs are being compared; an image
+ * there offers the actions addressed to it, without Open All. Video offers neither Compare nor
+ * Photoshop. Camera commands belong to the canvas's own controls and keys, not this menu.
+ */
 export function canvasContextActions(
   snapshot: CanvasViewSnapshot,
   capabilities: CanvasCapabilities,
   send: (command: CanvasCommand) => void,
   target: CanvasMediaTarget = 'primary',
 ): ContextMenuEntry[] {
-  const entries: ContextMenuEntry[] = [];
   const state = snapshot.view;
   const comparison = state.comparison;
+  const tile = typeof target === 'object';
+  if (state.mode === 'overview' && !tile && !comparison) return [];
+  const entries: ContextMenuEntry[] = [];
   /** Include only commands supported by this renderer without reproducing their policies. */
   function action(
     label: string,
@@ -48,57 +58,46 @@ export function canvasContextActions(
       select: () => send(command),
     });
   }
-  const unavailable = snapshot.preview || state.mode !== 'image' || !snapshot.zoom?.dimensions;
-  action('Fit image', { type: 'fit' }, unavailable);
-  action('100%', { type: 'native' }, unavailable);
-  action('Zoom in', { type: 'zoom', factor: 1.25 }, unavailable);
-  action('Zoom out', { type: 'zoom', factor: 0.8 }, unavailable);
-  action(
-    'Compare outputs',
-    { type: 'comparison', enabled: !comparison },
-    state.mode === 'overview' ||
-      (!comparison &&
-        (!snapshot.comparisonAvailable ||
-          !snapshot.selected ||
+  const video = targetItem(snapshot, target)?.mediaKind === 'video';
+  if (!video && (comparison || (state.mode !== 'overview' && snapshot.comparisonAvailable)))
+    action(
+      'Compare outputs',
+      { type: 'comparison', enabled: !comparison },
+      !comparison &&
+        (!snapshot.selected ||
           snapshot.preview ||
           snapshot.resource.state !== 'ready' ||
-          snapshot.selected.mediaKind !== 'image')),
-    Boolean(comparison),
-  );
-  if (comparison) {
-    const secondary = comparison.secondary;
-    action('Swap images', { type: 'swap' }, !secondary);
-    action(comparison.orientation === 'vertical' ? 'Horizontal split' : 'Vertical split', {
-      type: 'wipe',
-      split: comparison.split,
-      orientation: comparison.orientation === 'vertical' ? 'horizontal' : 'vertical',
-    });
-  }
+          snapshot.selected.mediaKind !== 'image'),
+      Boolean(comparison),
+    );
   const comparisonCount = entries.length;
-  /** Present the shared preferred format first and the explicit alternate format second. */
-  function copies(itemTarget: CanvasMediaTarget, label: string, alternateLabel: string): void {
-    const disabled = canvasMediaItem(snapshot, itemTarget) === null;
-    action(label, { type: 'copy-media', target: itemTarget, format: 'preferred' }, disabled);
-    if (snapshot.mediaActions) {
-      const format = snapshot.mediaActions.preferredCopyFormat === 'jpeg' ? 'png' : 'jpeg';
-      action(
-        `${alternateLabel} .${format === 'jpeg' ? 'jpg' : 'png'}`,
-        { type: 'copy-media', target: itemTarget, format },
-        disabled,
-      );
-    }
+  const unavailable = canvasMediaItem(snapshot, target) === null;
+  action('Copy', { type: 'copy-media', target, format: 'preferred' }, unavailable);
+  if (!video && snapshot.mediaActions?.photoshop) {
+    action('Open in Photoshop', { type: 'photoshop-media', target }, unavailable);
+    if (!tile) action('Open All in Photoshop', { type: 'photoshop-all-media' });
   }
-  copies(target, 'Copy', 'Copy');
-  if (comparison && target === 'primary')
-    copies('secondary', 'Copy comparison image', 'Copy comparison');
-  const available = canvasMediaItem(snapshot, target) !== null;
   if (snapshot.mediaActions)
     action(
-      snapshot.mediaActions.fileAction === 'reveal' ? 'Reveal in folder' : 'Download',
+      snapshot.mediaActions.fileAction === 'reveal' ? 'Reveal in File Manager' : 'Download',
       { type: 'file-media', target },
-      !available,
+      unavailable,
     );
   if (comparisonCount > 0 && entries.length > comparisonCount)
     entries.splice(comparisonCount, 0, { label: '', separator: true });
   return entries;
+}
+
+/** The addressed output of any media kind, so video can withhold image-only actions. */
+function targetItem(
+  snapshot: CanvasViewSnapshot,
+  target: CanvasMediaTarget,
+): WorkflowOutputItem | null {
+  if (target === 'primary') return snapshot.selected;
+  if (target === 'secondary') return snapshot.secondary;
+  return (
+    snapshot.grid
+      .find((entry) => entry.source.id === target.sourceId)
+      ?.items.find((item) => item.id === target.itemId) ?? null
+  );
 }

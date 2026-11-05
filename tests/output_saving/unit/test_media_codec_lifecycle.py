@@ -16,6 +16,7 @@
 """Retain the codec lease through canceled requests until the background encoder releases its pixels."""
 
 import asyncio
+from collections.abc import Sequence
 from threading import Event
 
 import pytest
@@ -53,6 +54,17 @@ class BlockingCodec:
         return False
 
     def reveal(self, reference: OutputFileReference) -> None:
+        """Reject unrelated desktop requests at the substituted storage boundary."""
+        raise ValueError("No desktop is attached to the test codec.")
+
+    @property
+    def can_open_in_photoshop(self) -> bool:
+        """Keep Photoshop outside this codec-only fixture."""
+        return False
+
+    def open_in_photoshop(
+        self, document: str, layers: Sequence[tuple[OutputFileReference, str]]
+    ) -> None:
         """Reject unrelated desktop requests at the substituted storage boundary."""
         raise ValueError("No desktop is attached to the test codec.")
 

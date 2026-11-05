@@ -7,6 +7,9 @@ const OUTPUT = { route: 'output', surface: null, mask: null };
  * Input is available only while the workflow has surfaces; otherwise the view stays on Output.
  * A remembered surface or mask that disappears is cleared rather than reassigned. Showing Input
  * with no active surface activates the first surface and its first mask.
+ *
+ * A card that opens Input also asks the canvas to take keyboard focus, so its editing keys apply
+ * at once. A newly chosen image opens once provisioning holds its surface.
  */
 export class WorkflowInputRoute {
     surfaces;
@@ -14,6 +17,9 @@ export class WorkflowInputRoute {
     store;
     report;
     #listeners = new Set();
+    #focusListeners = new Set();
+    /** An image endpoint whose newly chosen file opens on Input once its surface is provisioned. */
+    #opening = null;
     #stop;
     #workflow = null;
     #selection = OUTPUT;
@@ -39,6 +45,13 @@ export class WorkflowInputRoute {
             this.#listeners.delete(listener);
         };
     }
+    /** Observe requests for the canvas to take keyboard focus after a card opened Input. */
+    subscribeFocus(listener) {
+        this.#focusListeners.add(listener);
+        return () => {
+            this.#focusListeners.delete(listener);
+        };
+    }
     /** Show Input or Output; Input is refused while the workflow has no surfaces. */
     chooseRoute(route) {
         const state = this.surfaces.state;
@@ -46,13 +59,26 @@ export class WorkflowInputRoute {
             return;
         this.#choose({ ...this.#selection, route });
     }
-    /** Show an image endpoint's surface with its first mask on the Input route. */
+    /** Show an image endpoint's surface with its first mask on the Input route, with focus. */
     activateImage(endpoint) {
         const surface = this.surfaces.state?.surfaces.find((item) => item.image === endpoint);
         if (!surface)
             return false;
         this.#choose({ route: 'input', surface: surface.key, mask: surface.masks[0]?.key ?? null });
+        this.#focus();
         return true;
+    }
+    /**
+     * Open the image the user just chose for an endpoint on the Input route, with focus.
+     *
+     * An endpoint that had no file has no surface until provisioning syncs the new one, so the
+     * request waits for that surface. Another choice or a workflow switch abandons it.
+     */
+    openImage(endpoint) {
+        if (this.activateImage(endpoint))
+            return;
+        const workflow = this.#workflow;
+        this.#opening = workflow ? { workflow, endpoint } : null;
     }
     /** Show a mask's surface, then make that mask active, on the Input route. */
     activateMask(endpoint, entry) {
@@ -62,18 +88,21 @@ export class WorkflowInputRoute {
         if (!surface || !mask)
             return false;
         this.#choose({ route: 'input', surface: surface.key, mask: mask.key });
+        this.#focus();
         return true;
     }
     /** Stop following surfaces. */
     dispose() {
         this.#stop();
         this.#listeners.clear();
+        this.#focusListeners.clear();
     }
     /** Remember a user's choice for this workflow and apply it. */
     #choose(selection) {
         const workflow = this.#workflow;
         if (!workflow)
             return;
+        this.#opening = null;
         this.#selection = selection;
         try {
             this.store.write(workflow, selection);
@@ -103,6 +132,8 @@ export class WorkflowInputRoute {
                 this.#selection = OUTPUT;
             }
         }
+        if (this.#open(state))
+            return;
         const available = state.surfaces.length > 0;
         let surface = state.surfaces.find((item) => item.key === this.#selection.surface) ?? null;
         let mask = surface?.masks.find((item) => item.key === this.#selection.mask)?.key ?? null;
@@ -145,6 +176,29 @@ export class WorkflowInputRoute {
                 this.#activated = null;
             this.report(error);
         });
+    }
+    /** Open a waiting chosen image once its surface exists; reports whether it reconciled. */
+    #open(state) {
+        const opening = this.#opening;
+        if (!opening)
+            return false;
+        if (opening.workflow !== state.workflow) {
+            this.#opening = null;
+            return false;
+        }
+        if (!state.surfaces.some((item) => item.image === opening.endpoint))
+            return false;
+        return this.activateImage(opening.endpoint);
+    }
+    /** Ask the canvas to take keyboard focus. */
+    #focus() {
+        for (const listener of this.#focusListeners)
+            try {
+                listener();
+            }
+            catch (error) {
+                this.report(error);
+            }
     }
     /** Publish a changed view. */
     #publish(view) {

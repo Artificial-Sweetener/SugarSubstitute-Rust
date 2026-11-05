@@ -31,7 +31,10 @@ export class ComfyInputSurfaceCards {
   /** Share the route, appearance, provisioning and regional owners with the canvas tab controls. */
   constructor(
     private readonly associations: ComfyInputAssociations,
-    private readonly route: Pick<WorkflowInputRoute, 'activateImage' | 'activateMask'>,
+    private readonly route: Pick<
+      WorkflowInputRoute,
+      'activateImage' | 'activateMask' | 'openImage'
+    >,
     private readonly appearance: Pick<WorkflowMaskAppearance, 'opacity' | 'changeOpacity'>,
     private readonly provisioning: Pick<WorkflowSurfaceProvisioning, 'subscribe'>,
     private readonly regions: Pick<WorkflowRegionalPrompts, 'region' | 'subscribe'>,
@@ -60,6 +63,10 @@ export class ComfyInputSurfaceCards {
         if (!key) return;
         if (kind() === 'image') this.route.activateImage(key);
         else this.route.activateMask(key, loader.ordered ? entry : null);
+      },
+      openChosen: () => {
+        const key = endpoint();
+        if (key && kind() === 'image') this.route.openImage(key);
       },
       hover: (entry) => {
         const key = regional();

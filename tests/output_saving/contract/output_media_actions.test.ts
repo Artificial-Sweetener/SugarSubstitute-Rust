@@ -36,14 +36,16 @@ function response(value: unknown, type = 'image/jpeg', filename = 'image.jpg'): 
 test.each(['http://127.0.0.1:8189', 'http://localhost:8189', 'http://[::1]:8189'])(
   'offers reveal only with a server-qualified local connection: %s',
   async (origin) => {
-    const fetch = jest
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(
-        response({ success: true, data: { preferred_copy_format: 'png', reveal: true } }),
-      );
+    const fetch = jest.fn<typeof globalThis.fetch>().mockResolvedValue(
+      response({
+        success: true,
+        data: { preferred_copy_format: 'png', reveal: true, photoshop: true },
+      }),
+    );
     expect(await new OutputMediaClient(origin, fetch).profile()).toEqual({
       preferredCopyFormat: 'png',
       fileAction: 'reveal',
+      photoshop: true,
     });
   },
 );
@@ -53,14 +55,16 @@ test.each([
   'http://192.168.1.5:8189',
   'https://localhost.attacker.example',
 ])('refuses a server reveal advertisement for a remote browser origin: %s', async (origin) => {
-  const fetch = jest
-    .fn<typeof globalThis.fetch>()
-    .mockResolvedValue(
-      response({ success: true, data: { preferred_copy_format: 'jpeg', reveal: true } }),
-    );
+  const fetch = jest.fn<typeof globalThis.fetch>().mockResolvedValue(
+    response({
+      success: true,
+      data: { preferred_copy_format: 'jpeg', reveal: true, photoshop: true },
+    }),
+  );
   expect(await new OutputMediaClient(origin, fetch).profile()).toEqual({
     preferredCopyFormat: 'jpeg',
     fileAction: 'download',
+    photoshop: false,
   });
 });
 
@@ -92,7 +96,10 @@ test('refreshes preference metadata and routes reveal without a download fallbac
   const fetch = jest
     .fn<typeof globalThis.fetch>()
     .mockResolvedValueOnce(
-      response({ success: true, data: { preferred_copy_format: 'jpeg', reveal: true } }),
+      response({
+        success: true,
+        data: { preferred_copy_format: 'jpeg', reveal: true, photoshop: false },
+      }),
     )
     .mockResolvedValueOnce(response({ success: true }));
   const start = jest.fn();
@@ -105,7 +112,13 @@ test('refreshes preference metadata and routes reveal without a download fallbac
   const listener = jest.fn();
   transfer.subscribe(listener);
   await transfer.refresh();
-  expect(transfer.profile()).toEqual({ preferredCopyFormat: 'jpeg', fileAction: 'reveal' });
+  expect(transfer.profile()).toEqual({
+    preferredCopyFormat: 'jpeg',
+    fileAction: 'reveal',
+    photoshop: false,
+  });
+  // Photoshop stays refused while the server does not offer it.
+  expect(await transfer.photoshop('image', [{ file, name: 'Save 1' }], () => true)).toBe(false);
   expect(listener).toHaveBeenCalledTimes(1);
   expect(await transfer.fileAction(file, () => true)).toBe(true);
   expect(fetch.mock.calls[1]?.[0]).toBe('/sugarcubes/output-saving/reveal');
@@ -117,13 +130,43 @@ test('refreshes preference metadata and routes reveal without a download fallbac
 
 test.each([
   { success: true, data: { preferred_copy_format: 'gif', reveal: true } },
-  { success: true, data: { preferred_copy_format: 'png', reveal: 'yes' } },
+  { success: true, data: { preferred_copy_format: 'png', reveal: 'yes', photoshop: false } },
+  { success: true, data: { preferred_copy_format: 'png', reveal: true } },
   { success: false },
 ])('rejects malformed media policy: %j', async (value) => {
   const fetch = jest.fn<typeof globalThis.fetch>().mockResolvedValue(response(value));
   await expect(new OutputMediaClient('http://localhost:8189', fetch).profile()).rejects.toThrow(
     'capabilities',
   );
+});
+
+test('opens images in Photoshop through the local route with each layer name', async () => {
+  const fetch = jest
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(
+      response({
+        success: true,
+        data: { preferred_copy_format: 'png', reveal: true, photoshop: true },
+      }),
+    )
+    .mockResolvedValueOnce(response({ success: true }))
+    .mockResolvedValueOnce(response({ success: false, error: { message: 'Photoshop is busy.' } }));
+  const transfer = new BrowserOutputTransfer(
+    'http://127.0.0.1:8189',
+    fetch,
+    { write: async () => undefined },
+    { start: jest.fn() },
+  );
+  await transfer.refresh();
+  const layers = [{ file, name: 'Save 1' }];
+  expect(await transfer.photoshop('image', layers, () => false)).toBe(false);
+  expect(await transfer.photoshop('image', layers, () => true)).toBe(true);
+  expect(fetch.mock.calls[1]?.[0]).toBe('/sugarcubes/output-saving/photoshop');
+  expect(fetch.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ document: 'image', layers }));
+  await expect(transfer.photoshop('image', layers, () => true)).rejects.toThrow(
+    'Photoshop is busy.',
+  );
+  transfer.dispose();
 });
 
 test('rejects unexpected image MIME types and unsafe returned filenames', async () => {
