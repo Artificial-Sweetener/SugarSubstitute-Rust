@@ -31,6 +31,8 @@ import type {
 export interface CanvasSourcePickerPort {
   readonly canvasId: string;
   readonly disabled: boolean;
+  /** Whether the card presents another source workflow, which keeps these fields out of view. */
+  readonly hidden: boolean;
   source(): CanvasInputSource;
   context(): CanvasSourceContext | null;
   refresh(): Promise<void>;
@@ -94,7 +96,8 @@ export class CanvasSourcePicker {
   /** Reconcile capability restrictions and exact saved identities through the mounted native fields. */
   refresh(): void {
     const source = this.port.source(),
-      context = this.port.context();
+      context = this.port.context(),
+      visible = !this.port.hidden;
     const kind = source.kind === 'file' ? 'file' : source.target.kind;
     this.#kind.update(
       kind,
@@ -107,6 +110,7 @@ export class CanvasSourcePicker {
             : ['the connected canvas'],
       })),
       this.#busy || this.port.disabled,
+      visible,
     );
     const explicit =
       source.kind === 'canvas' &&
@@ -116,10 +120,11 @@ export class CanvasSourcePicker {
     this.#fileField.update(
       file?.split('/').at(-1) ?? 'No file selected',
       this.#busy || this.port.disabled,
-      source.kind === 'file',
+      visible && source.kind === 'file',
       file ?? '',
     );
     if (
+      !visible ||
       !explicit ||
       (source.target.kind !== 'layer' && source.target.kind !== 'composition-from-layer')
     ) {

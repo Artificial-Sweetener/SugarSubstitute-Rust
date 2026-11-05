@@ -209,7 +209,15 @@ export class WorkflowSurfaceProvisioning {
     if (this.#disposed) return;
     const surfaces = workflowSyncSurfaces(plan);
     const signature = JSON.stringify([host.canvasId, workflow, surfaces]);
-    if (signature === this.#signature) return;
+    if (signature === this.#signature) {
+      // A dropped initial file leaves the plan unchanged; its loader still returns to its layer.
+      // Rebinding drops the file from the facts, so the next plan drops nothing and stops here.
+      const dropped = planned.surfaces.some((surface) =>
+        surface.masks.some((mask) => mask.initial !== null),
+      );
+      if (dropped && this.#state) this.#bind(this.#state.canvasId, this.#state.surfaces);
+      return;
+    }
     await this.#followAuthoritySizes(host, workflow, plan);
     if (this.#disposed) return;
     const result = await host.execute({ type: 'sync', workflow, surfaces });

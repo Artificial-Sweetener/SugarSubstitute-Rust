@@ -1,5 +1,6 @@
 import { MaskOpacityField, maskOpacityLabel } from './MaskOpacityField.js';
 import { MaskImportCommand } from './MaskImportCommand.js';
+import { MaskFileCommand } from './MaskFileCommand.js';
 import { inputLabel } from '../domain/InputLoader.js';
 import { InputPreviewRows } from './InputPreviewRows.js';
 import { CanvasSourcePicker } from './CanvasSourcePicker.js';
@@ -17,6 +18,9 @@ export class MasonryInputEditor {
     #controls;
     #picker;
     #commands = [];
+    /** Reordering, which the input canvas's regional masks do not offer. */
+    #moves;
+    #browse;
     #stop;
     #entryField;
     #maskFields;
@@ -51,6 +55,9 @@ export class MasonryInputEditor {
             get disabled() {
                 return binding.busy;
             },
+            get hidden() {
+                return MasonryInputEditor.#presentsInputCanvasMask(binding);
+            },
             source: () => binding.state.entries.find((entry) => entry.id === binding.state.selected)?.source ?? {
                 kind: 'file',
                 file: null,
@@ -75,31 +82,39 @@ export class MasonryInputEditor {
             }, 'Entry')
             : null;
         this.#controls.append(this.#picker.element);
+        const command = (label, action) => {
+            const button = new CommandButtonMount(document, label, () => {
+                try {
+                    action();
+                }
+                catch (error) {
+                    report(error);
+                }
+            });
+            this.#commands.push(button);
+            return button.element;
+        };
+        this.#moves = null;
+        this.#browse = null;
         if (binding.loader.ordered) {
             const actions = document.createElement('div');
             actions.className = 'sc-input-editor__actions';
-            for (const [label, action] of [
-                ['Add ' + binding.loader.kind, () => binding.add()],
-                ['Remove ' + binding.loader.kind, () => binding.remove()],
-                ['Move ' + binding.loader.kind + ' up', () => binding.move(-1)],
-                ['Move ' + binding.loader.kind + ' down', () => binding.move(1)],
-            ]) {
-                const button = new CommandButtonMount(document, label, () => {
-                    try {
-                        action();
-                    }
-                    catch (error) {
-                        report(error);
-                    }
-                });
-                this.#commands.push(button);
-                actions.append(button.element);
-            }
+            actions.append(command('Add ' + binding.loader.kind, () => binding.add()));
+            // The input canvas's regional cards order their commands Add, Choose mask, Remove.
             if (surface && binding.loader.kind === 'mask') {
                 this.#import = new MaskImportCommand(document, surface, report);
                 actions.append(this.#import.element);
             }
+            actions.append(command('Remove ' + binding.loader.kind, () => binding.remove()));
+            this.#moves = document.createElement('span');
+            this.#moves.className = 'sc-input-editor__moves';
+            this.#moves.append(command('Move ' + binding.loader.kind + ' up', () => binding.move(-1)), command('Move ' + binding.loader.kind + ' down', () => binding.move(1)));
+            actions.append(this.#moves);
             this.#controls.append(actions);
+        }
+        else if (binding.loader.kind === 'mask') {
+            this.#browse = new MaskFileCommand(document, upload, (file) => binding.loadFile(file), report);
+            this.#controls.append(this.#browse.element);
         }
         this.#rows = new InputPreviewRows(document, binding, previews, report, association, surface);
         this.#opacity = surface
@@ -130,10 +145,13 @@ export class MasonryInputEditor {
     }
     /** Reconcile exact entry identities and reinterpret cached canvas pixels immediately on channel changes. */
     refresh() {
-        const state = this.binding.state, passive = readPluginMode(this.element.ownerDocument);
+        const state = this.binding.state, passive = readPluginMode(this.element.ownerDocument), inputCanvas = MasonryInputEditor.#presentsInputCanvasMask(this.binding);
         this.#controls.disabled = this.binding.busy;
         for (const command of this.#commands)
             command.setDisabled(this.binding.busy);
+        if (this.#moves)
+            this.#moves.hidden = inputCanvas;
+        this.#browse?.update(inputCanvas, this.binding.busy);
         this.#picker.refresh();
         this.#maskFields.refresh();
         this.#entryField?.update(state.selected ?? '', state.entries.map((entry) => ({
@@ -153,11 +171,16 @@ export class MasonryInputEditor {
         this.#maskFields.dispose();
         this.#opacity?.dispose();
         this.#import?.dispose();
+        this.#browse?.dispose();
         this.#entryField?.dispose();
         for (const command of this.#commands)
             command.dispose();
         this.#controls.remove();
         this.#rows.dispose();
         this.element.remove();
+    }
+    /** Whether the card is a mask card of a canvas that provisions its input surfaces. */
+    static #presentsInputCanvasMask(binding) {
+        return binding.loader.kind === 'mask' && binding.provisioned;
     }
 }
