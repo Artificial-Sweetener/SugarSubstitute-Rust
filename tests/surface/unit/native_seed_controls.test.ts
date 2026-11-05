@@ -129,6 +129,28 @@ test('dropdown offers the host modes, tracks selection and supports keyboard/dis
   f.controls.clear();
 });
 
+test('opens the options menu from its own dropdown trigger like every shared dropdown', () => {
+  const f = fixture();
+  const bounds = (left: number, width: number): DOMRect =>
+    ({
+      left,
+      right: left + width,
+      top: 40,
+      bottom: 72,
+      width,
+      height: 32,
+      x: left,
+      y: 40,
+    }) as DOMRect;
+  jest.spyOn(f.field.numeric.spinner, 'getBoundingClientRect').mockReturnValue(bounds(500, 192));
+  jest.spyOn(f.arrow, 'getBoundingClientRect').mockReturnValue(bounds(674, 18));
+  f.arrow.click();
+  const menu = document.querySelector<HTMLElement>('[data-sc-seed-options]');
+  expect(menu?.style.getPropertyValue('left')).toBe('674px');
+  expect(menu?.style.getPropertyValue('top')).toBe('76px');
+  f.controls.clear();
+});
+
 test('seed accessories retain pointer and click interaction from the host numeric editor', () => {
   const f = fixture();
   const hostPointer = jest.fn();
