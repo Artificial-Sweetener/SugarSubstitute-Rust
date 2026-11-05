@@ -33,6 +33,8 @@ export const WORKFLOW_SURFACE_COPY = Object.freeze({
     `Regional prompt is missing an associated mask: ${mask} has ${String(available)} of the ${String(required)} masks its prompt regions need.`,
   chooseMask: 'Choose mask',
   chooseMaskFiles: 'Mask files',
+  browseFiles: 'Browse Files',
+  chooseMaskFile: 'Mask file',
   changeCanvasResolutionMenu: 'Change canvas resolution…',
   changeCanvasResolution: 'Change canvas resolution',
   changeCanvasResolutionDescription:

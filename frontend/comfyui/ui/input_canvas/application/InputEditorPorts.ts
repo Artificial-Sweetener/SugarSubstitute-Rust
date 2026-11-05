@@ -82,11 +82,22 @@ export interface InputEditorBinding {
   readonly maskEditing: MaskEditingPort;
   readonly canvasId: string;
   readonly canEditMask: boolean;
+  /**
+   * Whether the connected canvas provisions this loader's input surfaces. Its cards then present
+   * the input canvas's own mask workflow instead of explicit source bindings.
+   */
+  readonly provisioned: boolean;
   readonly context: CanvasSourceContext | null;
   subscribe(listener: () => void): () => void;
   initialize(): Promise<void>;
   refreshSources(): Promise<void>;
   changeSource(source: CanvasInputSource): void;
+  /**
+   * Load a Comfy input file into the selected entry's provisioned mask. The surface provisioning
+   * imports it when its size matches the mask's image, and reports a mismatch otherwise; either
+   * way provisioning keeps owning the entry's source.
+   */
+  loadFile(file: string): void;
   select(id: string): void;
   add(): void;
   remove(): void;

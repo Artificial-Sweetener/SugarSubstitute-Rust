@@ -94,6 +94,11 @@ export class InputBindingController {
         const id = this.#canvas?.canvasId ?? this.host()?.canvasId;
         return Boolean(id && this.canvases.editable(id));
     }
+    /** Whether the connected canvas provisions this loader's input surfaces. */
+    get provisioned() {
+        const id = this.canvasId;
+        return Boolean(id && this.canvases.provisions(id));
+    }
     /** Supply layer choices without teaching presentation about native APIs. */
     get context() {
         return this.#context;
@@ -196,6 +201,25 @@ export class InputBindingController {
             ? state.entries.map((entry) => (entry.id === selected ? { ...entry, source } : entry))
             : [{ id: selected, label: inputLabel(this.loader.kind) + ' 1', source }];
         this.#save({ ...state, entries, selected, explicit: true });
+    }
+    /**
+     * Seed the selected entry's provisioned mask from a Comfy input file.
+     *
+     * The entry names the file until the next sync imports it, after which provisioning binds the
+     * entry to its mask layer again; any earlier explicit choice is dropped so it does not block that.
+     */
+    loadFile(file) {
+        if (!this.provisioned)
+            throw new Error('Only an input canvas loads files into its masks.');
+        const { explicit: _explicit, ...state } = this.state;
+        const source = { kind: 'file', file };
+        const selected = state.selected ?? state.entries[0]?.id ?? this.nextId();
+        const entries = state.entries.length
+            ? state.entries.map((entry) => (entry.id === selected ? { ...entry, source } : entry))
+            : [{ id: selected, label: inputLabel(this.loader.kind) + ' 1', source }];
+        this.#generation++;
+        this.#error = null;
+        this.#save({ ...state, entries, selected });
     }
     /**
      * Bind canvas sources that workflow provisioning created for this loader's entries.

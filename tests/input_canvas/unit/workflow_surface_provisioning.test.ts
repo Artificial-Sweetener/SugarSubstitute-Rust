@@ -213,8 +213,14 @@ test('a picked mask file seeds only a matching mask; a mismatch on an existing m
     'mask.png': { width: 32, height: 32 },
   });
   await mismatch.service.request();
+  mismatch.fake.provisioned.clear();
   mismatch.fake.change(withInitial(picked));
   await mismatch.service.request();
+  // The rejected file leaves the plan unchanged, yet its loader returns to the mask's layer.
+  expect(mismatch.host.commands).toHaveLength(1);
+  expect(mismatch.fake.provisioned.get('mask')?.get(null)).toMatchObject({
+    target: { kind: 'layer', layerId: 'layer:mask' },
+  });
   expect(mismatch.notice).toHaveBeenCalledTimes(1);
   expect(mismatch.notice).toHaveBeenCalledWith(
     'Mask dimensions do not match',
