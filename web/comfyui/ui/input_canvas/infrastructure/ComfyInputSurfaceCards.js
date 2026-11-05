@@ -38,6 +38,11 @@ export class ComfyInputSurfaceCards {
                 else
                     this.route.activateMask(key, loader.ordered ? entry : null);
             },
+            openChosen: () => {
+                const key = endpoint();
+                if (key && kind() === 'image')
+                    this.route.openImage(key);
+            },
             hover: (entry) => {
                 const key = regional();
                 if (key)

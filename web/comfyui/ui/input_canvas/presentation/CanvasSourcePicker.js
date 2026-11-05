@@ -132,8 +132,10 @@ export class CanvasSourcePicker {
             return;
         void this.#operation(async () => {
             const path = await this.port.upload(file);
-            if (this.#alive)
+            if (this.#alive) {
                 await this.port.change({ kind: 'file', file: path });
+                this.port.chosen();
+            }
             this.#file.value = '';
         });
     };

@@ -54,6 +54,7 @@ export function createWorkflowSurfaces(options) {
             },
             subscribe: (listener) => route.subscribe(listener),
             choose: (value) => route.chooseRoute(value),
+            subscribeFocus: (listener) => route.subscribeFocus(listener),
         },
         cards: new ComfyInputSurfaceCards(associations, route, appearance, provisioning, regionalPrompts, regionalHover, new WorkflowMaskImport(provisioning, new BrowserMaskImport(options.document), options.assets), options.bindings),
         regions: new ComfyRegionalPromptLinks(associations, regionalHover, accent),

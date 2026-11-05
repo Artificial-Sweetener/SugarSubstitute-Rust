@@ -33,6 +33,7 @@ function card(initial: number | null) {
   const listeners = new Set<() => void>();
   const port: InputSurfaceCardPort = {
     activate: jest.fn(),
+    openChosen: jest.fn(),
     hover: jest.fn(),
     hovered: () => null,
     subscribeHover: () => () => {},
