@@ -122,9 +122,30 @@ fn contain(image: Extent, cell: [f64; 4]) -> [f64; 4] {
         fitted_height,
     ]
 }
+/// What every frame composites its uncovered and transparent pixels over, fixed by the presenter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum DisplayMatte {
+    /// The near-black canvas surround, for presenters that require opaque frames.
+    Opaque,
+    /// Transparent black, so the premultiplied main-window composition shows its backdrop.
+    #[cfg(all(windows, feature = "native-composition"))]
+    Transparent,
+}
+impl DisplayMatte {
+    /// The linear-light matte the image graph and display projection composite over.
+    pub(super) fn pixel(self) -> Result<Pixel, ImageError> {
+        match self {
+            Self::Opaque => Pixel::linear(0.018, 0.018, 0.018, 1.0),
+            #[cfg(all(windows, feature = "native-composition"))]
+            Self::Transparent => Ok(Pixel::TRANSPARENT),
+        }
+    }
+}
 /// Original retained admission is shared by cache custody, source data, DAG reuse and UI buffers.
 pub(super) struct Resources {
     pub(super) capture: bool,
+    /// Matte of the attached presenter; opaque until a presenter attaches.
+    pub(super) matte: DisplayMatte,
     verify_native: bool,
     pub(super) memory: MemoryLease,
     /// Storage carved from the same admission for the graphics device and composition
@@ -142,6 +163,7 @@ impl Clone for Resources {
     fn clone(&self) -> Self {
         Self {
             capture: self.capture,
+            matte: self.matte,
             verify_native: self.verify_native,
             memory: self.memory.clone(),
             presentation: self.presentation.clone(),
@@ -285,6 +307,7 @@ pub(super) fn initialize(
             display: Arc::new(Mutex::new(None)),
             _metadata: metadata,
             capture,
+            matte: DisplayMatte::Opaque,
             verify_native,
             budget_device: None,
         },

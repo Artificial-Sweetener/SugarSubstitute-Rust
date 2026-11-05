@@ -306,8 +306,18 @@ fn srgb_channel(linear: f32) -> u32 {
 fn display_pixel(index: u32) -> u32 {
     let value = a[index];
     if !all(abs(value) <= vec4<f32>(bitcast<f32>(0x7f7fffffu))) { atomicOr(&group_flags, 1u); }
-    if value.a != 1.0 { atomicOr(&group_flags, 8u); }
-    return 0xff000000u | (srgb_channel(value.r) << 16u) | (srgb_channel(value.g) << 8u) | srgb_channel(value.b);
+    if value.a < 0.0 || value.a > 1.0 || (value.a == 0.0 && any(value.rgb != vec3<f32>(0.0))) {
+        atomicOr(&group_flags, 8u);
+    }
+    if value.a == 1.0 {
+        return 0xff000000u | (srgb_channel(value.r) << 16u) | (srgb_channel(value.g) << 8u) | srgb_channel(value.b);
+    }
+    if value.a <= 0.0 { return 0u; }
+    // Matches the CPU encoder: straight sRGB scaled by the half-up 8-bit coverage.
+    let coverage = u32(floor(value.a * 255.0 + 0.5));
+    let straight = vec3<u32>(srgb_channel(value.r / value.a), srgb_channel(value.g / value.a), srgb_channel(value.b / value.a));
+    let premultiplied = (straight * coverage + vec3<u32>(127u)) / vec3<u32>(255u);
+    return (coverage << 24u) | (premultiplied.r << 16u) | (premultiplied.g << 8u) | premultiplied.b;
 }
 @compute @workgroup_size(8, 8)
 fn image(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) local: u32) {

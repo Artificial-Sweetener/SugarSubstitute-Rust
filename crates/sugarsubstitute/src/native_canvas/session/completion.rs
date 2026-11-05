@@ -32,7 +32,8 @@ impl Session {
                 _scene: Some(scene),
                 ..Default::default()
             })?,
-            Ok((resources, scene)) => {
+            Ok((mut resources, scene)) => {
+                resources.matte = self.presentation.matte();
                 self.resources = Some(resources);
                 self.document.scene = Some(scene);
                 match std::mem::replace(&mut self.config.initial, InitialSource::AwaitHost) {

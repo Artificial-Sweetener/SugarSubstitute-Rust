@@ -75,10 +75,10 @@ impl Preparation {
                 + (tile.x() - patch.region.x()) as usize;
             if patch.pixels[start..start + tile.width() as usize]
                 .iter()
-                .any(|pixel| pixel >> 24 != 255)
+                .any(|pixel| !is_premultiplied_word(*pixel))
             {
                 return Err(RenderError::Invalid(
-                    "Canvas presentation requires opaque device pixels",
+                    "Canvas presentation requires premultiplied device pixels",
                 ));
             }
         }

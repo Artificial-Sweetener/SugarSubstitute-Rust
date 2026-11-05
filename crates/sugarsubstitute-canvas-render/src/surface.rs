@@ -4,7 +4,7 @@
 use crate::{RenderError, update::UpdatePlan};
 use sugarsubstitute_canvas::{DamagePlan, FrameStamp};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease, SurfaceId};
-use sugarsubstitute_image_ops::{Extent, ImageError, Region};
+use sugarsubstitute_image_ops::{Extent, ImageError, Region, is_premultiplied_word};
 
 #[cfg(test)]
 #[path = "surface/adoption_tests.rs"]
@@ -18,7 +18,7 @@ struct Patch {
     _memory: MemoryClaim,
 }
 
-/// Worker-prepared opaque sRGB device pixels, paired with an exact preceding-frame dependency.
+/// Worker-prepared premultiplied sRGB device pixels, paired with an exact preceding-frame dependency.
 /// Fixed metadata and variable pixel payloads retain execution-backed memory claims.
 pub struct PreparedUpdate {
     patches: [Option<Patch>; 32],
@@ -26,11 +26,13 @@ pub struct PreparedUpdate {
     _memory: MemoryClaim,
 }
 impl PreparedUpdate {
-    /// Prepare only dirty regions on an admitted worker. Pixel words are `0xffRRGGBB`.
+    /// Prepare only dirty regions on an admitted worker. Pixel words are premultiplied
+    /// `0xAARRGGBB`; frames composited over an opaque matte are opaque.
     /// The producer evaluates the image DAG and fills the borrowed row-major device region.
     /// No mutable storage or producer callback reaches presentation.
     /// # Errors
-    /// Rejects invalid frame dependencies, memory pressure, allocator failure, nonopaque pixels,
+    /// Rejects invalid frame dependencies, memory pressure, allocator failure, pixels whose color
+    /// exceeds their coverage,
     /// and the producer's original image errors. No retained surface is modified by preparation.
     pub fn prepare(
         target: FrameStamp,
@@ -49,9 +51,9 @@ impl PreparedUpdate {
         let mut prepared = Self::allocate(update, memory)?;
         for patch in prepared.patches.iter_mut().flatten() {
             produce(patch.region, &mut patch.pixels)?;
-            if patch.pixels.iter().any(|pixel| pixel >> 24 != 255) {
+            if !patch.pixels.iter().all(|pixel| is_premultiplied_word(*pixel)) {
                 return Err(RenderError::Invalid(
-                    "Canvas presentation requires opaque device pixels",
+                    "Canvas presentation requires premultiplied device pixels",
                 ));
             }
         }
@@ -94,7 +96,7 @@ pub struct SurfaceWork {
     pub repaired_pixels: u64,
 }
 
-/// Opaque sRGB CPU backing surface; it performs no I/O, image evaluation or task spawning.
+/// Premultiplied sRGB CPU backing surface; it performs no I/O, image evaluation or task spawning.
 /// A desktop adapter presents these pixels and owns the native peer lifetime separately.
 pub struct CpuSurface {
     pixels: Vec<u32>,
@@ -104,7 +106,7 @@ pub struct CpuSurface {
     _memory: MemoryClaim,
 }
 impl CpuSurface {
-    /// Adopt one complete opaque prepared image without allocating a second viewport buffer.
+    /// Adopt one complete premultiplied prepared image without allocating a second viewport buffer.
     /// The original pixel claim travels with its storage; partial or dependent updates are rejected.
     /// # Errors
     /// Rejects updates without one complete independent physical image or excessive dimensions.
@@ -163,7 +165,7 @@ impl CpuSurface {
     pub const fn current(&self) -> Option<FrameStamp> {
         self.current
     }
-    /// Borrow top-row-first opaque sRGB `0xffRRGGBB` words; the original charge stays retained.
+    /// Borrow top-row-first premultiplied sRGB `0xAARRGGBB` words; the original charge stays retained.
     pub fn pixels(&self) -> &[u32] {
         &self.pixels
     }

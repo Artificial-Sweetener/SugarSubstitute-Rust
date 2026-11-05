@@ -32,7 +32,7 @@ pub(super) fn prepare(
     };
     let underlay_samples =
         underlay.map(|underlay| ProjectionSamples::new(underlay.view, context)).transpose()?;
-    let matte = Pixel::linear(0.018, 0.018, 0.018, 1.0)?;
+    let matte = resources.matte.pixel()?;
     let mut verification = if resources.verify_native && overlay.is_empty() {
         let native = match retry_gpu_readback(
             || frame.image().readback_workspace(context),
@@ -166,7 +166,7 @@ fn verify_gpu(
                 Ok::<_, WorkError>((reference, samples))
             })
             .transpose()?;
-        let rgba = sugarsubstitute_image_ops::SrgbEncoder::encode_constant(matte)?;
+        let rgba = sugarsubstitute_image_ops::SrgbEncoder::encode_matte(matte)?;
         let background = u32::from_be_bytes([255, rgba[0], rgba[1], rgba[2]]);
         for region in samples.view().target().surface().region().tiles() {
             let actual = native.read_region_into(region, &mut workspace.native, context)?;

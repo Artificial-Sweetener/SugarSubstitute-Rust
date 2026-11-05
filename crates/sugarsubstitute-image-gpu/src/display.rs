@@ -10,7 +10,7 @@ use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 use sugarsubstitute_image_ops::{Extent, MAX_RASTER_SAMPLE_BATCH, NodeId, RasterSource, Region};
 
-/// Immutable opaque sRGB8 device pixels, packed as little-endian `0xffRRGGBB` words.
+/// Immutable premultiplied sRGB8 device pixels, packed as little-endian `0xAARRGGBB` words.
 /// Rows have 256-byte alignment for native texture copies; padding is excluded from readback.
 /// Clones retain the selected GPU and the allocation's original execution charge.
 #[derive(Clone)]
@@ -24,7 +24,7 @@ pub struct DisplayRegions {
     _memory: MemoryClaim,
 }
 impl DisplayRegions {
-    /// Opaque device regions ready for presentation without CPU pixel conversion or upload.
+    /// Premultiplied device regions ready for presentation without CPU pixel conversion or upload.
     pub fn tiles(&self) -> &[DisplayTile] {
         &self.tiles
     }
@@ -39,7 +39,7 @@ impl DisplayTile {
     }
     /// Copy completed device pixels to an admitted worker for qualification or export.
     /// # Errors
-    /// Preserves original native/control/admission causes and rejects nonopaque representations.
+    /// Preserves original native/control/admission causes and rejects non-premultiplied representations.
     pub fn read(&self, context: &JobContext) -> Result<DisplayReadback, GpuError> {
         let device = &self.buffer.device;
         let extent = Extent::new(self.region.right(), self.region.bottom())
@@ -51,12 +51,12 @@ impl DisplayTile {
     }
 }
 impl<S: RasterSource> GpuEvaluator<S> {
-    /// Evaluate up to 4096 regions and encode completed opaque sRGB8 pixels on the selected GPU.
+    /// Evaluate up to 4096 regions and encode completed premultiplied sRGB8 pixels on the selected GPU.
     /// Canonical intermediates remain evictable; display rows use four-byte words with native alignment.
     /// Horizontal sparse-source siblings share one bounded source read before ordinary evaluation.
     /// Transfer bytes and nearest-16-bit sampling match the image-ops CPU sRGB encoder.
     /// # Errors
-    /// Rejects excessive inventories and nonopaque output; preserves graph/control/native causes.
+    /// Rejects excessive inventories and non-premultiplied output; preserves graph/control/native causes.
     pub fn display_regions(
         &mut self,
         node: NodeId,

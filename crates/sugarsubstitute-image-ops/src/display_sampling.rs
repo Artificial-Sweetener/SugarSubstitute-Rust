@@ -56,7 +56,10 @@ impl DisplaySample {
     }
 }
 
-/// Interpolate four opaque encoded `0xffRRGGBB` pixels with one rounded Q16 accumulation.
+/// Interpolate four premultiplied encoded `0xAARRGGBB` pixels with one rounded Q16 accumulation.
+///
+/// Every channel, alpha included, interpolates independently, which is exact for premultiplied
+/// pixels: transparent black neighbours contribute coverage, never a darkened fringe.
 ///
 /// Pixels are ordered top-left, top-right, bottom-left, bottom-right. This is disposable display
 /// interpolation; canonical linear-light image reconstruction remains in the operation graph.
@@ -78,15 +81,15 @@ pub fn bilinear_display_pixel(
             .sum::<u64>();
         ((sum + 32_768) >> 16) as u32
     };
-    0xff00_0000 | (channel(16) << 16) | (channel(8) << 8) | channel(0)
+    (channel(24) << 24) | (channel(16) << 16) | (channel(8) << 8) | channel(0)
 }
 
 /// Interpolate one display row from the two encoded source rows addressed by `vertical`.
 ///
 /// Every output pixel equals [`bilinear_display_pixel`] for its column sample, and an exact
 /// source pixel where both axes carry zero weight. Uncovered columns receive `matte`. The red and
-/// blue channels share one 64-bit accumulator: each Q16 lane stays below 2^24, so no carry crosses
-/// lanes and the rounding is identical to the per-channel sum.
+/// blue channels share one 64-bit accumulator, as do alpha and green: each Q16 lane stays below
+/// 2^24, so no carry crosses lanes and the rounding is identical to the per-channel sum.
 /// Callers provide covered `vertical` rows and columns valid for both source rows.
 pub fn bilinear_display_row(
     top: &[u32],
@@ -99,7 +102,7 @@ pub fn bilinear_display_row(
     let lower = vertical.weight;
     let upper = 256 - lower;
     let red_blue = |pixel: u32| u64::from(pixel & 0xff) | (u64::from((pixel >> 16) & 0xff) << 32);
-    let green = |pixel: u32| (pixel >> 8) & 0xff;
+    let alpha_green = |pixel: u32| u64::from((pixel >> 8) & 0xff) | (u64::from(pixel >> 24) << 32);
     for (pixel, &column) in output.iter_mut().zip(columns) {
         if !column.is_covered() {
             *pixel = matte;
@@ -116,13 +119,15 @@ pub fn bilinear_display_row(
         let weights =
             [left_weight * upper, right_weight * upper, left_weight * lower, right_weight * lower];
         let mut packed = 0x0000_8000_0000_8000_u64;
-        let mut middle = 0x8000_u32;
+        let mut middle = 0x0000_8000_0000_8000_u64;
         for (corner, weight) in corners.into_iter().zip(weights) {
             packed += red_blue(corner) * u64::from(weight);
-            middle += green(corner) * weight;
+            middle += alpha_green(corner) * u64::from(weight);
         }
         let red = (packed >> 48) as u32 & 0xff;
         let blue = (packed >> 16) as u32 & 0xff;
-        *pixel = 0xff00_0000 | (red << 16) | ((middle >> 16) << 8) | blue;
+        let alpha = (middle >> 48) as u32 & 0xff;
+        let green = (middle >> 16) as u32 & 0xff;
+        *pixel = (alpha << 24) | (red << 16) | (green << 8) | blue;
     }
 }

@@ -90,6 +90,26 @@ fn exact_settling_and_pixel_inspection_do_not_substitute_cached_coarser_levels()
 }
 
 #[test]
+fn view_mattes_are_opaque_or_transparent_black() -> crate::tests::harness::TestResult {
+    crate::tests::harness::run(2 * 1024 * 1024, |context| {
+        let (document, view) =
+            raster_fixture(context).map_err(|cause| ImageError::Source(Box::new(cause)))?;
+        let snapshot = document.snapshot();
+        let intent = Reconstruction::Finished(Filter::Bilinear);
+        for matte in [Pixel::linear(0.018, 0.018, 0.018, 1.0)?, Pixel::TRANSPARENT] {
+            let compiled = snapshot
+                .compile_view(view, None, matte, intent, context.memory())
+                .map_err(|cause| ImageError::Source(Box::new(cause)))?;
+            let (graph, output) = compiled.into_parts();
+            assert!(graph.extent(output).is_ok());
+        }
+        let partial = Pixel::linear(0.018, 0.018, 0.018, 0.5)?;
+        assert!(snapshot.compile_view(view, None, partial, intent, context.memory()).is_err());
+        Ok(())
+    })
+}
+
+#[test]
 fn navigation_preserves_readiness_boundary_errors() -> crate::tests::harness::TestResult {
     crate::tests::harness::run(2 * 1024 * 1024, |context| {
         let (document, view) =

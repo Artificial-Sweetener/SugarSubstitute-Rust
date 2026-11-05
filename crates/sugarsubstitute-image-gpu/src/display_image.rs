@@ -10,7 +10,7 @@ use crate::{
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{Extent, Region};
+use sugarsubstitute_image_ops::{Extent, Region, is_premultiplied_word};
 
 /// Exact native pixel copy between two immutable display generations.
 #[derive(Clone, Copy, Debug)]
@@ -20,7 +20,7 @@ pub struct DisplayCopy {
     /// Destination top-left physical pixel coordinates in the replacement image.
     pub destination: [u32; 2],
 }
-/// Completed opaque sRGB8 GPU image, independent of native windows and document identities.
+/// Completed premultiplied sRGB8 GPU image, independent of native windows and document identities.
 /// Clones retain the actual selected device and its original allocation admission. No write API
 /// can modify a published image; replacement construction finishes before returning a new value.
 #[derive(Clone)]
@@ -140,9 +140,11 @@ impl DisplayImage {
         crate::adapter::check(context)?;
         Ok(Self(Arc::new(Image { texture, extent, device, _memory: memory })))
     }
-    /// Upload opaque `0xffRRGGBB` words as a completed image for driver-boundary qualification.
+    /// Upload premultiplied `0xAARRGGBB` words as a completed image for driver-boundary
+    /// qualification.
     /// # Errors
-    /// Rejects incomplete or nonopaque pixels; preserves admission, control and native causes.
+    /// Rejects incomplete or non-premultiplied pixels; preserves admission, control and native
+    /// causes.
     #[cfg(feature = "boundary-fixtures")]
     pub fn from_pixels(
         device: Arc<GpuDevice>,
@@ -152,7 +154,7 @@ impl DisplayImage {
     ) -> Result<Self, GpuError> {
         crate::adapter::check(context)?;
         if pixels.len() as u64 != extent.pixels()
-            || pixels.iter().any(|pixel| pixel >> 24 != 255)
+            || !pixels.iter().all(|pixel| is_premultiplied_word(*pixel))
             || extent.width() > 16384
             || extent.height() > 16384
         {

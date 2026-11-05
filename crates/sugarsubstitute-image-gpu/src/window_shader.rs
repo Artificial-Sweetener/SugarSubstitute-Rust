@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Present already-encoded sRGB display bytes through a native unorm swapchain.
+//! Present already-encoded premultiplied sRGB display bytes through a native unorm target.
 use crate::{
     DisplayImage, DisplayMapping, GpuDevice, GpuError, OverlayPixel,
     buffer::Buffer,
@@ -210,7 +210,7 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     }
     let matte = mapping[3];
     return vec4<f32>(f32((matte >> 16u) & 255u), f32((matte >> 8u) & 255u),
-        f32(matte & 255u), 255.0) / 255.0;
+        f32(matte & 255u), f32(matte >> 24u)) / 255.0;
 }
 fn mapped_source(output: vec2<u32>, base: u32) -> MappedSource {
     let x_entry = base + output.x * 3u;

@@ -25,7 +25,7 @@ pub(super) fn prepare(
         comparison: input.comparison,
         view: input.view,
         reconstruction: input.reconstruction,
-        matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
+        matte: input.resources.matte.pixel()?,
         target: input.target,
         base: input.base,
         damage: input.damage,

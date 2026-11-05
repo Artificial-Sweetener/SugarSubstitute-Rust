@@ -12,7 +12,7 @@ mod translucency;
 use sugarsubstitute_canvas::{Document, DocumentEdit, Layer, LayerContent, LayerId, Viewport};
 use sugarsubstitute_image_ops::{
     AssetId, Coverage, FULL_COVERAGE, Filter, Path, Pixel, RasterSource, Reconstruction,
-    SrgbEncoder, VectorRectangle,
+    SrgbEncoder, VectorRectangle, is_premultiplied_word,
 };
 
 struct Gradient {
@@ -330,6 +330,63 @@ fn completely_offscreen_huge_images_do_not_trigger_decode_or_pyramid_work() -> h
         assert!(surface.pixels().iter().all(|pixel| *pixel == 0xff000000));
         assert_eq!(renderer.stats().source_pixels, 0);
         assert_eq!(renderer.stats().computed_tiles, 1);
+        Ok(())
+    })
+}
+
+#[test]
+fn transparent_matte_leaves_uncovered_pixels_for_the_compositor_backdrop() -> harness::TestResult {
+    execute(|context| {
+        let extent = Extent::new(1, 100)?;
+        let document = image_document(extent, context)?;
+        let snapshot = document.snapshot();
+        let mut view = Viewport::new(Extent::new(16, 16)?)?;
+        view.zoom_at(0.1, [0.0; 2])?;
+        let mut renderer = CpuRenderer::new(
+            Gradient { extent, constant: Some(Pixel::linear(1.0, 0.0, 0.0, 1.0)?) },
+            32,
+            context.memory(),
+        )?;
+        let frame = renderer.prepare(
+            RenderRequest {
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
+                document: &snapshot,
+                comparison: None,
+                view,
+                matte: Pixel::TRANSPARENT,
+                target: stamp(1)?,
+                base: None,
+                damage: DamagePlan::full(view.surface()),
+            },
+            context,
+        )?;
+        let mut surface = CpuSurface::new(stamp(1)?.surface, view.surface(), context.memory())?;
+        surface.apply(&frame)?;
+        // The covered column keeps the document's own tenth coverage of pure red, premultiplied.
+        let [alpha, red, green, blue] = surface.pixels()[4 * 16].to_be_bytes();
+        assert!((25..=27).contains(&alpha), "coverage {alpha}");
+        assert_eq!((red, green, blue), (alpha, 0, 0));
+        assert_eq!(surface.pixels()[4 * 16 + 1], 0);
+        assert_eq!(surface.pixels()[11 * 16], 0);
+        assert!(surface.pixels().iter().all(|pixel| is_premultiplied_word(*pixel)));
+        let partial = Pixel::linear(0.5, 0.5, 0.5, 0.5)?;
+        assert!(
+            renderer
+                .prepare(
+                    RenderRequest {
+                        reconstruction: Reconstruction::Finished(Filter::Lanczos3),
+                        document: &snapshot,
+                        comparison: None,
+                        view,
+                        matte: partial,
+                        target: stamp(2)?,
+                        base: None,
+                        damage: DamagePlan::full(view.surface()),
+                    },
+                    context,
+                )
+                .is_err()
+        );
         Ok(())
     })
 }
