@@ -13,7 +13,11 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Combine loader previews with their graph-associated image source without inventing a canvas background. */
+/**
+ * Combine loader previews with their graph-associated image source without inventing a canvas
+ * background. A mask without a usable associated image, such as one on a mask-only surface,
+ * previews its own live coverage in grayscale.
+ */
 import type { InputEditorBinding, InputImageAssociation } from './InputEditorPorts.js';
 import type { CanvasSourcePreviews } from './CanvasSourcePreviews.js';
 import { InputSourcePreview, type InputSourcePreviewValue } from './InputSourcePreview.js';
@@ -51,6 +55,8 @@ export class InputPreviewContent {
   #source: InputSourcePreviewValue | null = null;
   #image: InputSourcePreviewValue | null = null;
   #imageReference = '';
+  /** Whether no usable associated image exists, so the mask previews its coverage alone. */
+  #withoutImage = false;
   #alive = true;
   #sourceSize = -1;
   readonly #edited: InputMaskPreview;
@@ -129,7 +135,7 @@ export class InputPreviewContent {
         !entry ||
         InputSourcePreview.unavailable(image, entry)
       ) {
-        this.#black();
+        this.#coverageAlone();
         return;
       }
       const imageSize = this.maximumSize;
@@ -138,6 +144,7 @@ export class InputPreviewContent {
         InputSourcePreview.reference(image, entry, imageSize),
         this.#captureCohort ? this.binding.preview.captureSize(this.#captureSize()) : null,
       ]);
+      this.#withoutImage = false;
       if (this.#imageReference !== reference) {
         this.#edited.invalidate();
         this.#imageReference = reference;
@@ -164,7 +171,7 @@ export class InputPreviewContent {
       this.#sourceReader?.refresh();
       this.#publishPixels();
     } catch (error: unknown) {
-      this.#black();
+      this.#coverageAlone();
       this.report(error);
     }
   }
@@ -189,16 +196,22 @@ export class InputPreviewContent {
     );
   }
 
-  /** Release unnecessary capture work when no real image is selected and keep the preview solid black. */
-  #black(): void {
+  /** Release the associated image's capture and keep reading the mask's own coverage. */
+  #coverageAlone(): void {
     this.#edited.invalidate();
-    this.#sourceReader?.dispose();
+    this.#stopImageReader();
+    this.#withoutImage = true;
+    if (!this.#sourceReader || this.#sourceSize !== this.#captureSize()) this.#startSource();
+    else this.#sourceReader.refresh();
+    this.#publishPixels();
+  }
+
+  /** Drop the associated image reader and its last value. */
+  #stopImageReader(): void {
     this.#imageReader?.dispose();
-    this.#sourceReader = this.#imageReader = null;
-    this.#source = this.#image = null;
+    this.#imageReader = null;
+    this.#image = null;
     this.#imageReference = '';
-    this.#sourceSize = -1;
-    this.publish({ kind: 'black' });
   }
 
   /** Overlay only the associated image, waiting for matching revisions when both sources share a canvas. */
@@ -217,9 +230,16 @@ export class InputPreviewContent {
       return;
     }
     const image = this.#image;
-    if (image?.kind === 'error') {
+    if (this.#withoutImage || image?.kind === 'error') {
       this.#edited.invalidate();
-      this.publish({ kind: 'black' });
+      if (source?.kind === 'pixels')
+        this.publish({
+          kind: 'pixels',
+          pixels: source.pixels,
+          background: null,
+          frame: source.canvas?.document ?? null,
+        });
+      else this.publish(source ?? { kind: 'loading' });
       return;
     }
     if (image?.kind !== 'pixels') {
