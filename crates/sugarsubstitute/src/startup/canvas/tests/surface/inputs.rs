@@ -407,6 +407,36 @@ fn activation_shows_input_documents_in_the_context_until_the_output_route_return
     inputs.close()
 }
 
+#[test]
+fn picking_a_mask_file_again_after_its_loader_moved_on_reloads_it() -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let mut inputs = Inputs::start(directory.path())?;
+    let result = inputs.workflow(sync(Some("mask.png")))?;
+    let image = synced(&result, "image")?.clone();
+    let painted = layer(&image, "painted")?;
+    inputs.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    inputs.context_until(|document| document["id"] == image["document"]["id"])?;
+    let mask = json!([{"kind":"layer", "layerId":painted}]);
+    let read = |inputs: &mut Inputs| -> Result<Value, Box<dyn Error>> {
+        let command = json!({"type":"capture", "document":image["document"], "targets":mask,
+            "maximumSize":0});
+        Ok(inputs.ask("source.request", Some(command))?["result"]["snapshots"][0]["pixels"].take())
+    };
+    let loaded = read(&mut inputs)?;
+    // Painting changes the mask; a sync without the file leaves the painting in place.
+    let brush = inputs.ask("edit.request", Some(json!({"type":"tool", "tool":"brush"})))?;
+    assert_eq!(brush["result"]["state"]["tool"], "brush", "{brush}");
+    inputs.drag(&[[5.0, 1.0], [7.0, 1.0], [7.0, 4.0]])?;
+    inputs.release()?;
+    inputs.workflow(sync(None))?;
+    let edited = read(&mut inputs)?;
+    assert_ne!(edited, loaded, "the stroke changed the mask");
+    // Picking the same file again loads it again, replacing the painting.
+    inputs.workflow(sync(Some("mask.png")))?;
+    assert_eq!(read(&mut inputs)?, loaded);
+    inputs.close()
+}
+
 /// A sync of many blank surfaces whose key map exceeds the lane credit's inline bound, as
 /// SugarCubes declares them for a large regional workflow.
 fn wide_sync(count: usize) -> Value {

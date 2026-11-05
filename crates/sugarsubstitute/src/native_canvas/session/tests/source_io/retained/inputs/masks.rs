@@ -73,14 +73,25 @@ fn initial_files_load_through_their_channel_and_other_sizes_are_rejected()
             outcome(&loaded, "missing"),
             Some(InitialOutcome::Failed(failure)) if !failure.to_string().is_empty()
         ));
-        // Without a file the masks keep their content; the same file is not loaded again.
+        // A resync that keeps naming the loaded files does not load them again.
         let revision = snapshot.revision();
+        let (again, source) = file("input/pattern.png", &pattern);
+        let resync = |red: ComfyFile| -> Result<SurfaceSpec, Box<dyn Error>> {
+            let mut spec = spec(true)?;
+            spec.masks[0] = MaskSpec { channel: MaskChannel::Red, ..mask("red", Some(red))? };
+            Ok(spec)
+        };
+        let reply = fixture.sync(vec![resync(again)?])?;
+        assert_eq!(source.acquisitions.load(Ordering::SeqCst), 0);
+        assert_eq!(fixture.snapshot(synced(&reply, "image")?.document)?.revision(), revision);
+        // Without a file the masks keep their content.
         let reply = fixture.sync(vec![spec(false)?])?;
         assert_eq!(fixture.snapshot(synced(&reply, "image")?.document)?.revision(), revision);
         let unchanged = coverage(&fixture.snapshot(loaded.document)?, layer(&loaded, "red")?)?;
         assert_eq!(unchanged.value(1, 0), coverage_from_u8(sample(1, 0)[0]));
-        let (again, source) = file("input/pattern.png", &pattern);
-        let mut masks = vec![mask("red", Some(again))?];
+        // Once the loader moved on, naming the same file again is a new pick, which loads it.
+        let (picked, source) = file("input/pattern.png", &pattern);
+        let mut masks = vec![mask("red", Some(picked))?];
         masks.extend(
             ["green", "blue", "alpha", "small", "missing"]
                 .map(|key| mask(key, None))
@@ -92,8 +103,8 @@ fn initial_files_load_through_their_channel_and_other_sizes_are_rejected()
             SurfaceBase::File(file("input/base.png", &base).0),
             masks,
         )])?;
-        assert_eq!(source.acquisitions.load(Ordering::SeqCst), 0);
-        assert_eq!(fixture.snapshot(synced(&reply, "image")?.document)?.revision(), revision);
+        assert_eq!(source.acquisitions.load(Ordering::SeqCst), 1);
+        assert!(matches!(outcome(synced(&reply, "image")?, "red"), Some(InitialOutcome::Loaded)));
         // A different file replaces the mask, and the load is not an undoable step.
         let full = image(&directory, "full.png", extent, |_, _| [255, 255, 255, 255])?;
         let mut masks = vec![mask("red", Some(file("input/full.png", &full).0))?];

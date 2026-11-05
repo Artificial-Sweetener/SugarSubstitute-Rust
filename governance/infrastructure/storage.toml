@@ -4312,7 +4312,7 @@ rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b44993df2553c52bed611d73d0c599491bfd38ed2db8c411f877b08ab5f02a1d"
+source_sha256 = "sha256:3543e0ad3fc1516c533c22fe338693f325e73122e2f21a182395670c2b158f43"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while workflow surfaces sync, capture and restore through the native protocol."
