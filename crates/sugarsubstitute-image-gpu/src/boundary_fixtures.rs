@@ -12,7 +12,7 @@ use crate::{
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
-use sugarsubstitute_image_ops::{DisplaySample, bilinear_display_pixel};
+use sugarsubstitute_image_ops::{DisplaySample, bilinear_display_pixel, is_premultiplied_word};
 
 /// One retained source, its production mapping, and independently encoded CPU reference pixels.
 ///
@@ -28,9 +28,11 @@ pub struct CompositeSource<'a> {
 }
 
 impl<'a> CompositeSource<'a> {
-    /// Bind one immutable display image to its mapping and opaque `0xffRRGGBB` CPU reference.
+    /// Bind one immutable display image to its mapping and premultiplied `0xAARRGGBB` CPU
+    /// reference.
     /// # Errors
-    /// Rejects mismatched extents, incomplete maps, invalid indices and nonopaque reference pixels.
+    /// Rejects mismatched extents, incomplete maps, invalid indices and non-premultiplied
+    /// reference pixels.
     pub fn new(
         image: DisplayImage,
         mapping: DisplayMapping<'a>,
@@ -44,7 +46,7 @@ impl<'a> CompositeSource<'a> {
             || rows.len() != mapping.output().height() as usize
             || columns.iter().any(|sample| !sample.is_valid_for(image.extent().width()))
             || rows.iter().any(|sample| !sample.is_valid_for(image.extent().height()))
-            || pixels.iter().any(|pixel| pixel >> 24 != 255)
+            || !pixels.iter().all(|pixel| is_premultiplied_word(*pixel))
         {
             return Err(GpuError::invalid("Invalid composite qualification source"));
         }
@@ -61,9 +63,10 @@ pub struct CompositeFixture<'a> {
 }
 
 impl<'a> CompositeFixture<'a> {
-    /// Validate one same-device mapping pair and its opaque background before native effects.
+    /// Validate one same-device mapping pair and its background before native effects.
     /// # Errors
-    /// Rejects foreign devices, differing outputs or a transparent matte.
+    /// Rejects foreign devices, differing outputs or a matte that is neither opaque nor
+    /// transparent black.
     pub fn new(
         primary: CompositeSource<'a>,
         fallback: CompositeSource<'a>,
@@ -71,7 +74,7 @@ impl<'a> CompositeFixture<'a> {
     ) -> Result<Self, GpuError> {
         if !Arc::ptr_eq(primary.image.device(), fallback.image.device())
             || primary.mapping.output() != fallback.mapping.output()
-            || matte[3] != 255
+            || !matches!(matte, [_, _, _, 255] | [0, 0, 0, 0])
         {
             return Err(GpuError::invalid("Invalid composite qualification fixture"));
         }

@@ -1019,7 +1019,7 @@ rationale = "Isolated native qualification reports observed GPU display, repair 
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/display.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:7f4c47de69c0f6fa1b784f34bcd69a87328e444ecf1fa9bbc42b102f67274040"
+source_sha256 = "sha256:fc45d119e1834f4b018d48375a0c421435f45d35f7cbb814667ec81437c058e2"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
@@ -1061,6 +1061,6 @@ rationale = "Isolated finite CPU qualification reports physical 4K projection co
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:7e004911ad20be321157388a870a5bfdff69a20dffaa982fa76a0db56b5ef1fc"
+source_sha256 = "sha256:3f7474b69a5e932265bf68f91b1f1b3f680309ab3180ebd55dc0dde3c2ad3b63"
 disposition = "fixture"
 rationale = "The explicit single-device offscreen composite check reports native adapter identity, exact CPU/GPU pixel agreement including overlay pixels and execution retirement; it creates no window or runtime diagnostic sink."

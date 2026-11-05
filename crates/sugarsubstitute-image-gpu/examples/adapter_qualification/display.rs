@@ -130,8 +130,8 @@ pub(super) fn qualify(
         source.read(ASSET, tile.region(), &mut expected, context)?;
         let actual = tile.read(context)?;
         for (actual, expected) in actual.pixels().iter().zip(&expected) {
-            let [r, g, b, _] = encoder.encode(*expected)?;
-            if *actual != u32::from_be_bytes([255, r, g, b]) {
+            let [r, g, b, a] = encoder.encode(*expected)?;
+            if *actual != u32::from_be_bytes([a, r, g, b]) {
                 return Err("GPU sRGB transfer or half-step rounding differs from CPU".into());
             }
         }
@@ -157,18 +157,24 @@ pub(super) fn qualify(
         Samples::fill_samples(&samples, &mut expected)?;
         let actual = tile.read(context)?;
         for (actual, expected) in actual.pixels().iter().zip(&expected) {
-            let [r, g, b, _] = encoder.encode(*expected)?;
-            if *actual != u32::from_be_bytes([255, r, g, b]) {
+            let [r, g, b, a] = encoder.encode(*expected)?;
+            if *actual != u32::from_be_bytes([a, r, g, b]) {
                 return Err("GPU sparse row batch changed canonical display pixels".into());
             }
         }
     }
     drop(prepared);
-    if gpu.display_regions(translucent, &inventory, context).is_ok() {
-        return Err("GPU display accepted a nonopaque composite".into());
+    let half = encoder.encode(Pixel::linear(0.3, 0.2, 0.1, 0.5)?)?;
+    let half = u32::from_be_bytes([half[3], half[0], half[1], half[2]]);
+    let prepared = gpu.display_regions(translucent, &inventory, context)?;
+    for tile in prepared.tiles() {
+        if tile.read(context)?.pixels().iter().any(|actual| *actual != half) {
+            return Err("GPU premultiplied display encoding differs from CPU".into());
+        }
     }
+    drop(prepared);
     println!(
-        "DISPLAY: samples=65536 transfer_bytes_exact=true half_step_rounding_exact=true hdr_clipped=true sparse_scalar_reads=1 sparse_row_batches=2 sparse_requests=4 nonopaque_rejected=true"
+        "DISPLAY: samples=65536 transfer_bytes_exact=true half_step_rounding_exact=true hdr_clipped=true sparse_scalar_reads=1 sparse_row_batches=2 sparse_requests=4 premultiplied_exact=true"
     );
     Ok(())
 }

@@ -103,7 +103,9 @@ pub enum CpuFrameKind {
     Projected,
 }
 
-/// Borrowed opaque top-row-first sRGB words, `0xffRRGGBB`, with explicit pixel semantics.
+/// Borrowed premultiplied top-row-first sRGB words, `0xAARRGGBB`, with explicit pixel semantics.
+/// The main-window composition shows partial coverage over the window backdrop; the standalone
+/// GDI surface ignores coverage, so its producer composites every frame over an opaque matte.
 /// The application keeps the original execution-backed pixels alive for the complete borrow.
 #[derive(Clone, Copy)]
 pub struct CpuFrame<'a> {

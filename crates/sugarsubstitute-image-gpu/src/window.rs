@@ -155,7 +155,7 @@ impl WindowSurface {
     }
     /// Project a retained detail image over a retained fallback image into one physical viewport.
     /// Covered detail pixels take precedence, uncovered detail pixels sample the underlay, and
-    /// pixels uncovered by both mappings use the primary mapping's opaque matte. Both immutable
+    /// pixels uncovered by both mappings use the primary mapping's matte. Both immutable
     /// images and maps are validated before native swapchain acquisition.
     /// `overlay` pixels, such as selection outlines, are drawn opaque over the display.
     /// # Errors

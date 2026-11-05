@@ -180,7 +180,7 @@ impl DrawInput {
                     surface,
                     self.view,
                     underlay.as_ref().map(|underlay| (underlay.surface.as_ref(), underlay.view)),
-                    Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
+                    self.resources.matte.pixel()?,
                     context,
                 )?;
                 if let Some(overlay) = &overlay {

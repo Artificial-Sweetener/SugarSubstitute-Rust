@@ -205,11 +205,15 @@ fn projection_rejects_foreign_or_stale_frames_and_incomplete_matte() -> harness:
                 .project(foreign, &base, map, black, context)
                 .is_err()
         );
+        let partial = Pixel::linear(0.0, 0.0, 0.0, 0.5)?;
         assert!(
             ProjectionBuffer::new(map.target().surface(), context.memory(), context)?
-                .project(stamp(2)?, &base, map, Pixel::TRANSPARENT, context)
+                .project(stamp(2)?, &base, map, partial, context)
                 .is_err()
         );
+        let transparent = ProjectionBuffer::new(map.target().surface(), context.memory(), context)?
+            .project(stamp(2)?, &base, map, Pixel::TRANSPARENT, context)?;
+        assert_eq!(transparent.pixels(), base.pixels());
         let empty = CpuSurface::new(stamp(1)?.surface, base.extent(), context.memory())?;
         assert!(matches!(
             ProjectionBuffer::new(map.target().surface(), context.memory(), context)?.project(

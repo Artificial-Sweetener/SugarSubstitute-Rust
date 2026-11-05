@@ -77,6 +77,9 @@ struct Selected {
 struct Report {
     adapter: AdapterDescriptor,
     qualification: CompositeQualification,
+    /// The same projection over transparent black and without overlay, as the main-window
+    /// composition presents it so the window backdrop shows through uncovered pixels.
+    transparent: CompositeQualification,
     video_memory: Option<sugarsubstitute_image_gpu::VideoMemoryBudget>,
 }
 
@@ -147,11 +150,13 @@ fn main() -> Result {
                     .video_memory
                     .map_or((0, 0), |memory| (memory.budget_bytes, memory.usage_bytes));
                 println!(
-                    "SUCCESS: adapter={} key={} pixels={} pixel_hash=fnv1a64:{:016x} video_budget_bytes={budget} video_usage_bytes={usage}",
+                    "SUCCESS: adapter={} key={} pixels={} pixel_hash=fnv1a64:{:016x} transparent_matte_pixels={} transparent_matte_hash=fnv1a64:{:016x} video_budget_bytes={budget} video_usage_bytes={usage}",
                     report.adapter.name,
                     report.adapter.key(),
                     report.qualification.pixels,
                     report.qualification.pixel_hash,
+                    report.transparent.pixels,
+                    report.transparent.pixel_hash,
                 );
                 Ok(())
             }
@@ -184,12 +189,23 @@ fn main() -> Result {
 
 fn run(device: Arc<GpuDevice>, context: &JobContext) -> Result<Report> {
     let encoder = SrgbEncoder::new(context.memory())?;
-    let primary =
-        build_image(device.clone(), Extent::new(257, 3)?, PRIMARY, 17, &encoder, context)?;
-    let fallback =
-        build_image(device.clone(), Extent::new(4, 3)?, FALLBACK, 93, &encoder, context)?;
+    let qualification = composite(&device, [17, 29, 41, 255], true, &encoder, context)?;
+    let transparent = composite(&device, [0; 4], false, &encoder, context)?;
+    let video_memory = device.video_memory_budget();
+    Ok(Report { adapter: device.descriptor().clone(), qualification, transparent, video_memory })
+}
+
+/// Qualify one primary/fallback projection over `matte`, optionally beneath explicit overlay.
+fn composite(
+    device: &Arc<GpuDevice>,
+    matte: [u8; 4],
+    overlaid: bool,
+    encoder: &SrgbEncoder,
+    context: &JobContext,
+) -> Result<CompositeQualification> {
+    let primary = build_image(device.clone(), Extent::new(257, 3)?, PRIMARY, 17, encoder, context)?;
+    let fallback = build_image(device.clone(), Extent::new(4, 3)?, FALLBACK, 93, encoder, context)?;
     let output = Extent::new(5, 4)?;
-    let matte = [17, 29, 41, 255];
     let primary_columns = [
         DisplaySample::from_corner(201.75, 257, false),
         DisplaySample::from_corner(1.25, 257, true),
@@ -259,11 +275,9 @@ fn run(device: Arc<GpuDevice>, context: &JobContext) -> Result<Report> {
         OverlayPixel { x: 4, y: 3, color: [255, 255, 255] },
         OverlayPixel { x: 2, y: 2, color: [0, 0, 0] },
     ]);
-    let fixture =
-        CompositeFixture::new(primary_source, fallback_source, matte)?.with_overlay(&overlay);
-    let qualification = qualify_composite(fixture, context)?;
-    let video_memory = device.video_memory_budget();
-    Ok(Report { adapter: device.descriptor().clone(), qualification, video_memory })
+    let fixture = CompositeFixture::new(primary_source, fallback_source, matte)?;
+    let fixture = if overlaid { fixture.with_overlay(&overlay) } else { fixture };
+    Ok(qualify_composite(fixture, context)?)
 }
 
 struct ReferenceImage {
@@ -299,8 +313,8 @@ fn build_image(
     pixels.try_reserve_exact(extent.pixels() as usize)?;
     for y in 0..extent.height() {
         for x in 0..extent.width() {
-            let [red, green, blue, _] = encoder.encode(pattern_pixel(seed, x, y)?)?;
-            pixels.push(u32::from_be_bytes([255, red, green, blue]));
+            let [red, green, blue, alpha] = encoder.encode(pattern_pixel(seed, x, y)?)?;
+            pixels.push(u32::from_be_bytes([alpha, red, green, blue]));
         }
     }
     Ok(ReferenceImage { image, pixels, _memory: memory })

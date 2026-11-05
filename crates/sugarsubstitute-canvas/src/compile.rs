@@ -8,7 +8,7 @@ use crate::{
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_ops::{
     AssetId, Coverage, Extent, Filter, Graph, ImageError, NodeId, Operation, Pixel, Reconstruction,
-    Region, Sampling, VectorRectangle,
+    Region, Sampling, SrgbEncoder, VectorRectangle,
 };
 
 type PyramidAvailability<'a> =
@@ -49,7 +49,7 @@ impl CaptureLayers {
 /// What one compilation composes and what it composes over.
 #[derive(Clone, Copy)]
 enum Composed {
-    /// Every visible layer, mask overlays included, over an opaque matte.
+    /// Every visible layer, mask overlays included, over an opaque or transparent black matte.
     View(Pixel),
     /// Selected image layers over transparency.
     Capture(CaptureLayers),
@@ -67,7 +67,8 @@ impl CompiledView {
     pub const fn graph(&self) -> &Graph {
         &self.graph
     }
-    /// Output at the requested physical viewport extent, composited over the selected opaque matte.
+    /// Output at the requested physical viewport extent, composited over the selected matte.
+    /// A transparent matte leaves uncovered and transparent pixels for the compositor backdrop.
     pub const fn output(&self) -> NodeId {
         self.output
     }
@@ -148,8 +149,8 @@ impl DocumentSnapshot {
             Composed::View(matte) => (matte, None),
             Composed::Capture(layers) => (Pixel::TRANSPARENT, Some(layers)),
         };
-        if capture.is_none() && matte.channels()[3] != 1.0 {
-            return Err(CanvasError::Invalid("Canvas matte must be opaque"));
+        if capture.is_none() {
+            SrgbEncoder::encode_matte(matte)?;
         }
         let layers = self.layers();
         let included = |index: usize, layer: &Layer| match capture {

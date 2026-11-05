@@ -252,8 +252,33 @@ fn display_lookup_tracks_srgb_transfer_within_one_output_level() -> TestResult {
             };
             assert!((i32::from(actual) - (reference * 255.0).round() as i32).abs() <= 1);
         }
-        assert!(encoder.encode(Pixel::TRANSPARENT).is_err());
+        assert_eq!(encoder.encode(Pixel::TRANSPARENT)?, [0; 4]);
         assert_eq!(encoder.encode(Pixel::linear(-0.5, 4.0, 1.0, 1.0)?)?, [0, 255, 255, 255]);
+        Ok(())
+    })
+}
+
+#[test]
+fn display_encoding_is_premultiplied_and_mattes_are_opaque_or_transparent_black() -> TestResult {
+    run(MEMORY, |context| {
+        let encoder = SrgbEncoder::new(context.memory())?;
+        let opaque = encoder.encode(Pixel::linear(1.0, 0.2, 0.0, 1.0)?)?;
+        let half = encoder.encode(Pixel::linear(1.0, 0.2, 0.0, 0.5)?)?;
+        assert_eq!(half[3], 128);
+        for (premultiplied, straight) in half[..3].iter().zip(opaque) {
+            assert_eq!(u32::from(*premultiplied), (u32::from(straight) * 128 + 127) / 255);
+        }
+        assert_eq!(SrgbEncoder::encode_constant(Pixel::linear(1.0, 0.2, 0.0, 0.5)?)?, half);
+        let word = u32::from_be_bytes([half[3], half[0], half[1], half[2]]);
+        assert!(
+            is_premultiplied_word(word)
+                && is_premultiplied_word(0)
+                && is_premultiplied_word(0xff12_3456)
+        );
+        assert!(!is_premultiplied_word(0x0001_0000) && !is_premultiplied_word(0x80ff_0000));
+        assert_eq!(SrgbEncoder::encode_matte(Pixel::TRANSPARENT)?, [0; 4]);
+        assert_eq!(SrgbEncoder::encode_matte(Pixel::linear(1.0, 1.0, 1.0, 1.0)?)?, [255; 4]);
+        assert!(SrgbEncoder::encode_matte(Pixel::linear(1.0, 1.0, 1.0, 0.5)?).is_err());
         Ok(())
     })
 }

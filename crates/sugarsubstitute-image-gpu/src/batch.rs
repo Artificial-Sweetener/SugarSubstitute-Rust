@@ -218,22 +218,22 @@ impl Batch {
         let mut mapping = Mapping::new(self.receiving.clone(), self.submission.clone());
         mapping.wait()?;
         let mut invalid = false;
-        let mut nonopaque = false;
+        let mut uncovered_color = false;
         {
             let view = mapping.view()?;
             for (slot, bytes) in self.statuses.iter().zip(view.chunks_exact(4)) {
                 let flags = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
                 slot.store(flags | READY, Ordering::Release);
                 invalid |= flags & 1 != 0;
-                nonopaque |= flags & 8 != 0;
+                uncovered_color |= flags & 8 != 0;
             }
         }
         mapping.finish()?;
         if invalid {
             return Err(GpuError::invalid("Image GPU operation produced invalid canonical pixels"));
         }
-        if nonopaque {
-            return Err(GpuError::invalid("Display encoding requires an opaque composite"));
+        if uncovered_color {
+            return Err(GpuError::invalid("Display encoding requires a premultiplied composite"));
         }
         Ok(self.work)
     }

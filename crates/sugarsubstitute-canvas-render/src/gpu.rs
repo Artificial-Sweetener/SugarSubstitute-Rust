@@ -8,7 +8,7 @@ use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease}
 use sugarsubstitute_image_gpu::{DisplayRegions, DisplayTile, GpuDevice, GpuEvaluator, GpuWork};
 use sugarsubstitute_image_ops::{EvaluationStats, Graph, ImageError, RasterSource, Region};
 
-/// Worker-prepared immutable opaque sRGB8 GPU regions with an exact retained-frame dependency.
+/// Worker-prepared immutable premultiplied sRGB8 GPU regions with an exact retained-frame dependency.
 /// Pixel allocations, inventory and update metadata retain their original execution charges.
 /// Native presentation owns window/surface affinity and consumes these completed results.
 pub struct PreparedGpuUpdate {
@@ -34,7 +34,7 @@ impl PreparedGpuUpdate {
     pub const fn plan(&self) -> &DamagePlan {
         &self.update.damage
     }
-    /// Completed opaque sRGB8 regions in row-major tile order within each damage rectangle.
+    /// Completed premultiplied sRGB8 regions in row-major tile order within each damage rectangle.
     pub fn tiles(&self) -> &[DisplayTile] {
         self.regions.tiles()
     }
