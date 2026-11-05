@@ -44,4 +44,3 @@ export function cubeStackWidth(compact: boolean, packed: boolean): number {
 export function cubeStackReservedWidth(compact: boolean, packed: boolean, framed: boolean): number {
   return cubeStackWidth(compact, packed) + (packed || framed ? 0 : FLOATING_RAIL_MARGIN * 2);
 }
-
