@@ -148,3 +148,31 @@ test('imported regions append as provisioned file entries and select the last on
   expect(f.saved()?.explicit).toBeUndefined();
   expect(() => controller().value.append(['x.png'])).toThrow('one source');
 });
+
+test('a loaded mask file seeds the provisioned entry and hands its source back to provisioning', async () => {
+  const f = controller();
+  await f.value.initialize();
+  expect(f.value.provisioned).toBe(true);
+  f.value.provision(new Map([[null, layer]]));
+  f.value.changeSource({
+    kind: 'canvas',
+    canvasId: 'native',
+    documentId: null,
+    target: { kind: 'selection' },
+  });
+  f.value.loadFile('sugarcubes/sources/picked.png');
+  expect(f.saved()?.entries).toEqual([
+    {
+      id: 'entry-0',
+      label: 'Mask 1',
+      source: { kind: 'file', file: 'sugarcubes/sources/picked.png' },
+    },
+  ]);
+  expect(f.saved()?.explicit).toBeUndefined();
+  f.value.provision(new Map([[null, layer]]));
+  expect(f.saved()?.entries[0]?.source).toEqual(layer);
+  const peer = controller({}, false);
+  await peer.value.initialize();
+  expect(peer.value.provisioned).toBe(false);
+  expect(() => peer.value.loadFile('picked.png')).toThrow('Only an input canvas');
+});
