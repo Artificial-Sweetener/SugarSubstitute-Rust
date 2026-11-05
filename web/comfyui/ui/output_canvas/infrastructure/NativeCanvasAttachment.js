@@ -94,7 +94,6 @@ export class NativeCanvasAttachment {
         const editing = document.createElement('div');
         element.append(this.viewport, overlay, editing);
         const host = options.nativeSurface();
-        this.viewport.classList.toggle('sc-output-native-input', nativeCanvasInput(host));
         this.#overview =
             host && nativeCanvasOverview(host)
                 ? new NativeCanvasOverview(element, {

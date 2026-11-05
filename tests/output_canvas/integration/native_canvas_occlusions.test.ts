@@ -16,6 +16,7 @@
 /** Prove any web content covering a native viewport is published for host-side gesture routing. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasAttachment.js';
+import { ensureBrowserCanvasStyles } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasStyles.js';
 import { NativeCanvasOcclusions } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasOcclusions.js';
 import { CanvasSurfaceGeometryObserver } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasSurfaceGeometryObserver.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
@@ -39,6 +40,15 @@ import {
   finalViewport,
   settleNativePreview as settle,
 } from '../support/NativeCanvasPreviewFixture.js';
+
+/**
+ * The native host chooses every cursor over its canvas from the canvas's interaction state, so
+ * the page sets none on the viewport, even beside a browser-rendered canvas's styles.
+ */
+function expectHostOwnedCursor(viewport: HTMLElement): void {
+  ensureBrowserCanvasStyles(document);
+  expect(getComputedStyle(viewport).cursor).not.toMatch(/grab/);
+}
 
 afterEach(() => {
   jest.restoreAllMocks();
@@ -294,7 +304,7 @@ test('publishes one acknowledged update per popup open, move and close, and none
   try {
     await f.drain();
     expect(f.geometries().at(-1)).toMatchObject({ occlusions: [], modal: false });
-    expect(f.surface.viewport.classList.contains('sc-output-native-input')).toBe(true);
+    expectHostOwnedCursor(f.surface.viewport);
     const popup = f.place(document.body, { left: 300, top: 100, width: 150, height: 80 });
     await f.drain();
     expect(f.geometries().at(-1)).toMatchObject({
@@ -334,7 +344,7 @@ test('a host without input receives no routing members and observes no overlays'
       expect(geometry).not.toHaveProperty('occlusions');
       expect(geometry).not.toHaveProperty('modal');
     }
-    expect(f.surface.viewport.classList.contains('sc-output-native-input')).toBe(false);
+    expectHostOwnedCursor(f.surface.viewport);
     f.place(document.body, { left: 300, top: 100, width: 150, height: 80 });
     await f.drain();
     expect(f.geometries()).toHaveLength(sent.length);
