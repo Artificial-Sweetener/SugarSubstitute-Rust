@@ -96,6 +96,35 @@ test('preserves a native accessor and balances graph history when its callback f
   expect(widget.value).toBe('new');
 });
 
+test('repaints the graph canvas only when the edit resizes the node', () => {
+  const setDirtyCanvas = jest.fn();
+  const widget: ComfyWidget = { name: 'text', value: 'before' };
+  const node: ComfyNode = {
+    widgets: [widget],
+    size: [400, 200],
+    graph: { beforeChange: jest.fn(), afterChange: jest.fn(), setDirtyCanvas },
+  };
+  const binding = new PromptWidgetBinding(node, widget, jest.fn());
+  binding.commit('typed');
+  expect(setDirtyCanvas).not.toHaveBeenCalled();
+  // Native resizes either mutate the size vector in place or replace it.
+  widget.callback = () => {
+    (node.size as [number, number])[1] = 260;
+  };
+  binding.commit('typed with a resize');
+  expect(setDirtyCanvas).toHaveBeenCalledTimes(1);
+  expect(setDirtyCanvas).toHaveBeenLastCalledWith(true, true);
+  widget.callback = () => {
+    node.size = new Float32Array([480, 260]);
+  };
+  binding.commit('typed with a replaced size');
+  expect(setDirtyCanvas).toHaveBeenCalledTimes(2);
+  widget.callback = undefined;
+  binding.commit('typed again');
+  expect(setDirtyCanvas).toHaveBeenCalledTimes(2);
+  binding.dispose();
+});
+
 test('reports a value written in place of the edit by its own callbacks', () => {
   const changed = jest.fn();
   const widget: ComfyWidget = { name: 'value', value: 'before' };

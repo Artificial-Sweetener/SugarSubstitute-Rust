@@ -1,4 +1,5 @@
 import { PromptWidgetBinding } from './PromptWidgetBinding.js';
+import { ComfyCanvasEditorKeyBoundary } from './ComfyCanvasEditorKeyBoundary.js';
 import { preparePromptLoraCatalog } from './PromptLoraCatalog.js';
 import { registerPromptEditorSurfaceOwner } from './PromptEditorSurface.js';
 import { setCubePromptWidgetHeight, clearCubePromptWidgetHeight, } from '../surface/CubePromptWidgetHeightStore.js';
@@ -18,6 +19,7 @@ export class CubePromptEditorHost {
     #catalogSnapshot = null;
     #loraCatalog = null;
     #stopCatalog = null;
+    #canvasKeys = null;
     /** Inject existing model catalog and feedback ownership. */
     constructor(document, catalog, report, appearance) {
         this.appearance = appearance;
@@ -25,9 +27,15 @@ export class CubePromptEditorHost {
         this.#catalog = catalog;
         this.#report = report;
     }
-    /** Enable prompt enhancement and regional links before the host renders Cube fields. */
-    setup(regions = null) {
+    /** Enable prompt enhancement, regional links and the canvas key boundary before Cube fields render. */
+    setup(regions = null, canvas = null) {
         this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
+        if (canvas && !this.#canvasKeys) {
+            this.#canvasKeys = new ComfyCanvasEditorKeyBoundary(canvas.app, this.#document, (error) => canvas.logger.error('[SugarCubes] Prompt editor canvas key boundary unavailable.', {
+                error,
+            }));
+            this.#canvasKeys.install();
+        }
         if (regions && !this.#regions) {
             this.#regions = regions;
             const releaseHover = regions.connectPrompts(this);
@@ -169,6 +177,8 @@ export class CubePromptEditorHost {
     dispose() {
         this.#release?.();
         this.#release = null;
+        this.#canvasKeys?.dispose();
+        this.#canvasKeys = null;
         this.#releaseRegions?.();
         this.#releaseRegions = null;
         this.#regions = null;
