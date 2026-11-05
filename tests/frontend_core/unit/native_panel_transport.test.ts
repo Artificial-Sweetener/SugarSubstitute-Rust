@@ -17,6 +17,7 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { startEmbeddedPanel } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedPresentation } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPresentation.js';
+import { HostAccent } from '../../../frontend/comfyui/ui/core/embedded/HostAccent.js';
 import { panelNavigation } from '../../../frontend/comfyui/ui/core/embedded/BrowserPanelTransport.js';
 import {
   createNativePanelTransport,
@@ -329,4 +330,57 @@ test('negotiates GIMP presentation over native transport and releases its subscr
   expect(presentation.read()).toBeNull();
   expect(stop).toHaveBeenCalledTimes(1);
   expect(jest.getTimerCount()).toBe(0);
+});
+
+test('saved-preference hosts still offer their system accent as the default accent', () => {
+  jest.useFakeTimers();
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  let receive: ((value: unknown) => void) | undefined;
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    preferencePolicy: 'saved',
+    send: jest.fn(),
+    subscribe: (listener: (value: unknown) => void) => {
+      receive = listener;
+      return () => undefined;
+    },
+  });
+  const presentation = new EmbeddedPresentation();
+  const hostAccent = new HostAccent();
+  const owner = startEmbeddedPanel({
+    window,
+    presentation,
+    hostAccent,
+    connected: () => true,
+    report: jest.fn(),
+  });
+  const configure = (accentColor: string | null): void =>
+    receive?.({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session,
+      type: 'configure',
+      presentation: {
+        pluginMode: false,
+        visualStyle: 'comfy',
+        photoProPalette: 'dark-gray',
+        accentColor,
+        resizeCornerSize: 0,
+      },
+    });
+  configure('#0078d4');
+  expect(presentation.read()).toBeNull();
+  expect(hostAccent.read()).toBe('#0078d4');
+  configure('#107c10');
+  expect(hostAccent.read()).toBe('#107c10');
+  configure(null);
+  expect(hostAccent.read()).toBeNull();
+  configure('#0078d4');
+  owner?.dispose();
+  expect(hostAccent.read()).toBeNull();
 });
