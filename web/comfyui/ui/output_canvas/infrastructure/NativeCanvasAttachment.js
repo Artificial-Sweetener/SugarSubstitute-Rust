@@ -196,6 +196,7 @@ export class NativeCanvasAttachment {
                     this.#status.changed(true);
             },
             inspection: (item, compared) => this.#inspection.restore(item, compared),
+            inputShown: () => options.route?.read()?.route === 'input',
             report: (error) => options.report(error, null),
         });
         this.#inspection = new NativeCanvasInspection({

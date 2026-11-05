@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove a card opening Input gives the committed native canvas keyboard focus. */
+/** Prove a card opening Input gives the committed native canvas keyboard focus and its keys. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasAttachment.js';
 import { CanvasSurfaceGeometryObserver } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasSurfaceGeometryObserver.js';
@@ -24,8 +24,14 @@ import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/Canv
 import type { CanvasRoutePort } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasRoute.js';
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
+import { clientRect } from '../../canvas_editing/support/CanvasEditOverlayFixture.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
-import { nativePreviewHost, previewGeometry } from '../support/NativeCanvasPreviewFixture.js';
+import {
+  nativePreviewHost,
+  previewGeometry,
+  settleNativePreview as settle,
+} from '../support/NativeCanvasPreviewFixture.js';
+import type { CanvasRouteState } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasRoute.js';
 
 const retirements: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -35,10 +41,10 @@ afterEach(async () => {
 });
 
 /** Mount a native attachment whose route raises focus requests on demand. */
-function fixture(staged: boolean) {
+function fixture(staged: boolean, options: { route?: CanvasRouteState; empty?: boolean } = {}) {
   // jsdom cannot measure visibility; keep the observed allocation drawable.
   jest.spyOn(CanvasSurfaceGeometryObserver.prototype, 'read').mockReturnValue(previewGeometry);
-  const catalog = canvasCatalogFixture();
+  const catalog = options.empty ? canvasCatalogFixture(1, 0, []) : canvasCatalogFixture();
   let sequence = 0;
   const views = new CanvasViewRegistry(() => String(++sequence));
   const view = views.create(catalog.sessionId).viewId;
@@ -51,7 +57,7 @@ function fixture(staged: boolean) {
   document.body.append(card, root);
   const requests = new Set<() => void>();
   const route: CanvasRoutePort = {
-    read: () => null,
+    read: () => options.route ?? null,
     subscribe: () => () => {},
     choose: () => {},
     subscribeFocus: (listener) => {
@@ -59,7 +65,7 @@ function fixture(staged: boolean) {
       return () => requests.delete(listener);
     },
   };
-  const host = nativePreviewHost(false);
+  const host = nativePreviewHost(options.empty === true);
   const surface = new NativeCanvasAttachment(root, {
     address,
     clock: new WorkflowTestClock(),
@@ -90,6 +96,7 @@ function fixture(staged: boolean) {
   };
   retirements.push(retire);
   return {
+    host,
     surface,
     card,
     retire,
@@ -114,4 +121,50 @@ test('a staged candidate leaves focus alone and a retired attachment stops liste
   expect(document.activeElement).toBe(staged.card);
   await staged.retire();
   expect(staged.requests.size).toBe(0);
+});
+
+const inputRoute: CanvasRouteState = {
+  route: 'input',
+  inputAvailable: true,
+  reason: '',
+  labels: { input: 'Input', output: 'Output', group: 'Canvas route' },
+};
+
+test('zoom and pan keys move the Input document camera while the Output route has no result', async () => {
+  const f = fixture(false, { route: inputRoute, empty: true });
+  f.host.ready('observing');
+  await settle();
+  for (let index = 0; index < 3; index++) {
+    f.host.respond(index, index === 0 ? 'ready' : 'applied');
+    await settle();
+  }
+  expect(f.host.calls.map((call) => call.type)).toEqual([
+    'surface.prepare',
+    'surface.geometry',
+    'surface.commit',
+  ]);
+  f.request();
+  const press = (key: string) =>
+    f.surface.viewport.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  press('+');
+  await settle();
+  expect(f.host.calls[3]).toMatchObject({
+    type: 'surface.viewport.request',
+    command: { type: 'zoom', factor: 1.25 },
+  });
+  f.host.respond(3, 'applied', {
+    mode: 'custom',
+    physicalScale: 1.25,
+    dimensions: { width: 512, height: 512 },
+  });
+  await settle();
+  jest
+    .spyOn(f.surface.viewport, 'getBoundingClientRect')
+    .mockReturnValue(clientRect({ left: 0, top: 0, width: 500, height: 400 }));
+  press('ArrowLeft');
+  await settle();
+  expect(f.host.calls[4]).toMatchObject({
+    type: 'surface.viewport.request',
+    command: { type: 'pan', units: 'viewport' },
+  });
 });
