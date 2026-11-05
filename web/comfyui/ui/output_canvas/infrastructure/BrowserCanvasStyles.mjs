@@ -23,8 +23,8 @@ export function ensureBrowserCanvasStyles(document) {
     const style = document.createElement('style');
     style.id = 'sugarcubes-output-browser-styles';
     style.textContent = `
-    .sc-output-viewport { cursor:grab; }
-    .sc-output-viewport.sc-output-dragging { cursor:grabbing; }
+    .sc-output-viewport.sc-output-browser { cursor:grab; }
+    .sc-output-viewport.sc-output-browser.sc-output-dragging { cursor:grabbing; }
     .sc-output-image-layer { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
     .sc-output-image { position:absolute; left:0; top:0; display:block; pointer-events:auto;
       max-width:none; max-height:none; object-fit:fill; user-select:none; }
