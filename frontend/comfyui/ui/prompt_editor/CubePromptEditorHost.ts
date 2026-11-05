@@ -18,6 +18,7 @@ import type { ComfyNode, ComfyWidget } from '../types/graph.js';
 import type { ModelCatalogClient } from '../model_library/ModelCatalogClient.js';
 import type { ModelCatalogSnapshot } from '../model_library/ModelCatalog.js';
 import { PromptWidgetBinding } from './PromptWidgetBinding.js';
+import { ComfyCanvasEditorKeyBoundary } from './ComfyCanvasEditorKeyBoundary.js';
 import { preparePromptLoraCatalog } from './PromptLoraCatalog.js';
 import { registerPromptEditorSurfaceOwner } from './PromptEditorSurface.js';
 import type { PromptEditorSurface, PromptEditorSurfaceOwner } from './PromptEditorSurface.js';
@@ -37,6 +38,12 @@ export interface PromptRegionLinks {
   connectPrompts(editors: Pick<CubePromptEditorHost, 'highlightRegions'>): () => void;
   /** The theme accent, as `#rrggbb`, that separators rotate from like their mask regions. */
   readonly accent: { current(): string; subscribe(listener: () => void): () => void };
+}
+
+/** The live Comfy app whose graph canvas must not repaint for prompt keystrokes. */
+export interface PromptCanvasHost {
+  readonly app: unknown;
+  readonly logger: Pick<Console, 'error'>;
 }
 
 interface PromptSession {
@@ -66,6 +73,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   #catalogSnapshot: object | null = null;
   #loraCatalog: LoraResourceAdapter | null = null;
   #stopCatalog: (() => void) | null = null;
+  #canvasKeys: ComfyCanvasEditorKeyBoundary | null = null;
 
   /** Inject existing model catalog and feedback ownership. */
   constructor(
@@ -79,9 +87,17 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     this.#report = report;
   }
 
-  /** Enable prompt enhancement and regional links before the host renders Cube fields. */
-  setup(regions: PromptRegionLinks | null = null): void {
+  /** Enable prompt enhancement, regional links and the canvas key boundary before Cube fields render. */
+  setup(regions: PromptRegionLinks | null = null, canvas: PromptCanvasHost | null = null): void {
     this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
+    if (canvas && !this.#canvasKeys) {
+      this.#canvasKeys = new ComfyCanvasEditorKeyBoundary(canvas.app, this.#document, (error) =>
+        canvas.logger.error('[SugarCubes] Prompt editor canvas key boundary unavailable.', {
+          error,
+        }),
+      );
+      this.#canvasKeys.install();
+    }
     if (regions && !this.#regions) {
       this.#regions = regions;
       const releaseHover = regions.connectPrompts(this);
@@ -223,6 +239,8 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   dispose(): void {
     this.#release?.();
     this.#release = null;
+    this.#canvasKeys?.dispose();
+    this.#canvasKeys = null;
     this.#releaseRegions?.();
     this.#releaseRegions = null;
     this.#regions = null;

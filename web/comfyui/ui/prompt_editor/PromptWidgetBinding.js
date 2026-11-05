@@ -46,6 +46,8 @@ export class PromptWidgetBinding {
     /**
      * Commit one source edit through native callbacks and one balanced workflow history bracket.
      * A value those callbacks write in its place is reported like any external update.
+     * The prompt is a DOM widget the graph canvas never draws, so an edit repaints the canvas
+     * only when its callbacks resized the node.
      */
     commit(source) {
         if (this.#writing || source === this.#widget.value)
@@ -57,6 +59,7 @@ export class PromptWidgetBinding {
         const after = root?.afterChange;
         const transactional = typeof before === 'function' && typeof after === 'function';
         const previous = widget.value;
+        const size = nodeSize(node);
         this.#writing = true;
         try {
             if (transactional)
@@ -66,7 +69,8 @@ export class PromptWidgetBinding {
                 widget.callback?.call(widget, source, node, node.graph?.canvas);
                 if (typeof node.onWidgetChanged === 'function')
                     node.onWidgetChanged.call(node, widget.name, source, previous, widget);
-                node.graph?.setDirtyCanvas?.(true, true);
+                if (nodeSize(node) !== size)
+                    node.graph?.setDirtyCanvas?.(true, true);
             }
             finally {
                 if (transactional)
@@ -98,6 +102,13 @@ export class PromptWidgetBinding {
                 this.#widget.value = value;
         }
     }
+}
+/** Compare node geometry by value; LiteGraph resizes either in place or by replacing `size`. */
+function nodeSize(node) {
+    const size = node.size;
+    return Array.isArray(size) || ArrayBuffer.isView(size)
+        ? Array.from(size).join('x')
+        : '';
 }
 /** Locate the host's actual value contract, including accessors implemented on native widget classes. */
 function nativeValueDescriptor(widget) {
