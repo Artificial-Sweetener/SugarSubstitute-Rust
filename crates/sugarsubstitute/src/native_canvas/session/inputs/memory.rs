@@ -92,7 +92,8 @@ impl Session {
         let revisions = self.input_revisions();
         let reported = ReportedMemory {
             documents: revisions.len(),
-            revisions: revisions.iter().fold(0, |sum, (_, revision)| sum.wrapping_add(*revision)),
+            // Published revisions only: a stroke's staged steps change no charge.
+            revisions: revisions.iter().fold(0, |sum, (_, shown)| sum.wrapping_add(shown.revision)),
             workflows: self.inputs.workflows.len(),
             disposing: self.inputs.disposing || !self.inputs.retiring.is_empty(),
         };

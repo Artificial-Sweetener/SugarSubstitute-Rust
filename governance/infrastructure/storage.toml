@@ -4312,7 +4312,7 @@ rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3acde228caf9837c336bffa752d443e782d2749beba4ba683eed67d5b55f410c"
+source_sha256 = "sha256:b44993df2553c52bed611d73d0c599491bfd38ed2db8c411f877b08ab5f02a1d"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while workflow surfaces sync, capture and restore through the native protocol."
@@ -4320,7 +4320,7 @@ rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs/persistence.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e8ed8488f533d34bd1d1af5bbf20ba548e9e839b7968538c4dadd38ef7055daa"
+source_sha256 = "sha256:d5b8be11c854429e47162425743a0da118678eb671d241639e143e804a770bf0"
 capabilities = ["std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::write"]
 disposition = "fixture"
 rationale = "An owned temporary session directory is inspected for saved archives and seeded with a corrupt one to qualify restore and rebuild."

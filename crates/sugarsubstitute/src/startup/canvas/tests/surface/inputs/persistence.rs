@@ -32,30 +32,6 @@ impl Inputs {
         }
         Ok(())
     }
-
-    /// Drag the primary mouse button through document points of the shown input document, as
-    /// the desktop adapter delivers a routed gesture.
-    fn stroke(&mut self, points: &[[f64; 2]]) -> Result<(), Box<dyn Error>> {
-        use sugarsubstitute_canvas::{PointerSample, ToolButton, ToolInput, ToolModifiers};
-        use sugarsubstitute_desktop::canvas::{Input, Lifetime};
-        let session = self.canvas.session.as_mut().ok_or("The canvas has no session")?;
-        let button = |pressed| {
-            Input::Tool(ToolInput::Button {
-                button: ToolButton::Primary,
-                pressed,
-                modifiers: ToolModifiers::NONE,
-            })
-        };
-        for (index, point) in points.iter().enumerate() {
-            let device = session.device_at(*point)?;
-            let sample = PointerSample::mouse(device, ToolModifiers::NONE);
-            session.input(Input::Tool(ToolInput::Pointer(sample)))?;
-            if index == 0 {
-                session.input(button(true))?;
-            }
-        }
-        session.input(button(false))
-    }
 }
 
 #[test]
@@ -75,7 +51,8 @@ fn a_brush_stroke_made_through_editing_is_restored_after_a_restart() -> Result<(
 
     let brush = first.ask("edit.request", Some(json!({"type":"tool", "tool":"brush"})))?;
     assert_eq!(brush["result"]["state"]["tool"], "brush", "{brush}");
-    first.stroke(&[[2.0, 3.0], [6.0, 3.0]])?;
+    first.drag(&[[2.0, 3.0], [6.0, 3.0]])?;
+    first.release()?;
     let state = first.ask("edit.request", Some(json!({"type":"state"})))?;
     assert_eq!(state["result"]["state"]["history"]["undo"], true, "{state}");
     let painted = first.ask("source.request", Some(capture_command(&image["document"], &mask)))?;

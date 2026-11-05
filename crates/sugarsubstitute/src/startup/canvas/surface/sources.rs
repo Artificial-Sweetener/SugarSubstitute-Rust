@@ -4,16 +4,18 @@
 //!
 //! The context describes the input document the Input route shows. Captures read any synced
 //! input document, current or parked, and run as session jobs that encode their reply on the
-//! worker; the reply reaches the page through the bulk channel when it is large. Watching
-//! reports `source.changed` whenever a synced document's content revision changes, one
-//! notification at a time, so a newer change of one document supersedes an undelivered older one.
+//! worker; the reply reaches the page through the bulk channel when it is large. Captures read
+//! what the canvas shows, including a stroke while it is drawn, so card previews stay live.
+//! Watching reports `source.changed` whenever what a synced document shows changes, and when
+//! the Input route shows a document again or stops showing one, one notification at a time, so
+//! a newer change of one document supersedes an undelivered older one.
 use super::input_protocol::{
     canvas_document, document_id, document_of, failure, layer_key, layer_of,
 };
 use super::*;
 use crate::native_canvas::session::inputs::{
     CaptureEncoder, CapturePixels, CaptureRejection, CaptureTarget, CaptureTicket, EncodedCapture,
-    InputCapture, InputDocumentId, InputFailure, capture_extent,
+    InputCapture, InputDocumentId, InputFailure, ShownRevision, capture_extent,
 };
 use std::collections::VecDeque;
 use sugarsubstitute_contracts::canvas_native::{
@@ -53,10 +55,10 @@ struct Held {
 struct Watch {
     identity: MainIdentity,
     /// Last reported revision of every synced document, and the shown document.
-    revisions: Vec<(InputDocumentId, u64)>,
+    revisions: Vec<(InputDocumentId, ShownRevision)>,
     shown: Option<InputDocumentId>,
     /// Changes not yet notified, oldest first; `None` reports that no document is shown.
-    changes: VecDeque<(Option<InputDocumentId>, u64)>,
+    changes: VecDeque<(Option<InputDocumentId>, ShownRevision)>,
 }
 
 /// Held captures and the change subscription.
@@ -86,9 +88,16 @@ impl Sources {
     }
 }
 
-/// The opaque content revision of one document.
-fn revision(document: InputDocumentId, revision: u64) -> Result<CanvasRevision, CanvasNativeError> {
-    CanvasRevision::new(format!("{}@{revision}", document.protocol_id()))
+/// The opaque revision of what one document shows; a staged stroke step adds its own suffix.
+fn revision(
+    document: InputDocumentId,
+    shown: ShownRevision,
+) -> Result<CanvasRevision, CanvasNativeError> {
+    let ShownRevision { revision, staged } = shown;
+    CanvasRevision::new(match staged {
+        0 => format!("{}@{revision}", document.protocol_id()),
+        _ => format!("{}@{revision}+{staged}", document.protocol_id()),
+    })
 }
 
 impl NativeSurface {
@@ -247,18 +256,21 @@ impl NativeSurface {
     fn notify_sources(&mut self, session: &Session) -> Result<(), Box<dyn Error>> {
         let Some(watch) = &mut self.sources.watch else { return Ok(()) };
         let current = session.input_revisions();
+        let shown = session.shown_input().map(|shown| shown.document);
         for (document, value) in &current {
             let known = watch.revisions.iter().find(|(known, _)| known == document);
-            if known.is_none_or(|(_, known)| known != value) {
+            // A document the route shows again changes the context sources resolve against,
+            // so sources that could not resolve without it are read again.
+            let reshown = shown == Some(*document) && watch.shown != shown;
+            if reshown || known.is_none_or(|(_, known)| known != value) {
                 watch.changes.retain(|(change, _)| *change != Some(*document));
                 watch.changes.push_back((Some(*document), *value));
             }
         }
         watch.revisions = current;
-        let shown = session.shown_input().map(|shown| shown.document);
         if shown.is_none() && watch.shown.is_some() {
             watch.changes.retain(|(change, _)| change.is_some());
-            watch.changes.push_back((None, 0));
+            watch.changes.push_back((None, ShownRevision::published(0)));
         }
         watch.shown = shown;
         if self.sources.notification.is_some() {
@@ -337,7 +349,7 @@ fn source_context(session: &Session) -> Result<CanvasSourceContext, Box<dyn Erro
     Ok(CanvasSourceContext {
         supported: true,
         document: Some(canvas_document(shown.document, snapshot.extent())?),
-        revision: revision(shown.document, snapshot.revision())?,
+        revision: revision(shown.document, ShownRevision::published(snapshot.revision()))?,
         targets: TARGETS.to_vec(),
         layers,
         current_layer: shown.target.map(layer_key).transpose()?,
@@ -363,7 +375,7 @@ fn target(target: &CanvasSourceTarget) -> Option<CaptureTarget> {
 fn encoder(request: CanvasSourceRequest, targets: Vec<CanvasSourceTarget>) -> CaptureEncoder {
     Box::new(move |capture: InputCapture| {
         let document = canvas_document(capture.document, capture.extent)?;
-        let revision = revision(capture.document, capture.revision)?;
+        let revision = revision(capture.document, ShownRevision::published(capture.revision))?;
         let snapshots = targets
             .into_iter()
             .zip(capture.rasters)
