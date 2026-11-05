@@ -16,12 +16,14 @@
 /** Present the native actionbar as Substitute's fixed override row beside the orb's pin. */
 export const substituteToolbarCss = `
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-menu] { margin-left:0; padding-top:0; gap:0;
-    background:var(--comfy-menu-bg,#202020); }
+    background:var(--sc-substitute-toolbar-fill,var(--comfy-menu-bg,#202020)); }
   :root[data-sc-substitute-frame] [data-sc-workflow-selector],
   :root[data-sc-substitute-frame] [data-sc-substitute-extensions],
   :root[data-sc-substitute-frame] [data-sc-substitute-workflow-column] { display:none!important; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-line] { display:block; min-width:0; height:44px; min-height:44px;
-    flex-shrink:0; overflow:visible; padding-left:62px; background:var(--comfy-menu-bg,#202020); }
+    flex-shrink:0; overflow:visible; padding-left:62px; background:var(--sc-substitute-toolbar-fill,var(--comfy-menu-bg,#202020)); }
+  /* A translucent fill must cover the row once, so a filled menu owns it for its nested line. */
+  :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-menu] > [data-sc-substitute-toolbar-line] { background:transparent; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-column] { width:100%; margin:0; min-width:0; align-items:stretch; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-column] > div { min-width:0; width:100%; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar] { height:44px; min-height:44px; min-width:0; width:100%;
