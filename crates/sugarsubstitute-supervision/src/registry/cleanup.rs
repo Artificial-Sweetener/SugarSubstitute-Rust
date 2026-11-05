@@ -87,6 +87,9 @@ impl WindowsProcessRegistry {
         match job {
             Ok(job) => {
                 record.cleanup = Some(job);
+                // This step observes every fact retained so far; only a later
+                // watch outcome, failure or recheck makes another step useful.
+                record.cleanup_progress = CleanupProgress::Live;
                 Ok(spec.id)
             }
             Err(cause) => {
@@ -164,8 +167,7 @@ fn cleanup_step(
 ) -> Result<(), RegistryError> {
     let Some(family) = state.family.as_mut() else {
         retire_custody_metadata(state, context)?;
-        state.cleanup =
-            Some(CleanupFacts { retained: 0, root: None, next: None, watched: None, closed: true });
+        state.cleanup = Some(CleanupFacts::CLOSED);
         return Ok(());
     };
     if let Some(exit) = root_exit {
@@ -182,8 +184,7 @@ fn cleanup_step(
             state.family = None;
         }
         retire_custody_metadata(state, context)?;
-        state.cleanup =
-            Some(CleanupFacts { retained: 0, root: None, next: None, watched: None, closed: true });
+        state.cleanup = Some(CleanupFacts::CLOSED);
         return Ok(());
     }
     let now = context.now();
@@ -218,6 +219,7 @@ fn cleanup_step(
     let root = family.root;
     state.forced |= family.forced;
     let next = family.next_member(root_watch_active);
+    let recheck = !closed && next.is_none() && family.all_exited() && !family.incomplete;
     if closed {
         // Empty membership and every retained actual exit are now immutable:
         // subsequent steps retry only outstanding closes after partial success.
@@ -229,7 +231,15 @@ fn cleanup_step(
         }
         retire_custody_metadata(state, context)?;
     }
-    state.cleanup = Some(CleanupFacts { retained: inventory.count, root, next, watched, closed });
+    state.cleanup = Some(CleanupFacts {
+        retained: inventory.count,
+        root,
+        next,
+        watched,
+        closed,
+        empty: inventory.empty,
+        recheck,
+    });
     Ok(())
 }
 fn force_after_failure(

@@ -253,6 +253,7 @@ mod bounds;
 mod claim_identity;
 mod cleanup_failure;
 mod cleanup_scheduling;
+mod cleanup_wakeups;
 mod completions;
 mod construction;
 mod custody_input;

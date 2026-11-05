@@ -239,7 +239,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
 impl<C: EntryActivation> EntryRunner<C> {
     /// Consume the already-issued native wake cutoff once, without treating it as
     /// native retirement. Removing a past wake keeps uncertain custody parked on
-    /// actual completion wakes and the desktop owner's existing closing cadence.
+    /// actual completion wakes instead of an immediately expiring native wait.
     pub(super) fn consume_cleanup_cutoff(&mut self, now: Instant) -> bool {
         if self.closing
             && !self.deadline_reported

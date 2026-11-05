@@ -9,7 +9,7 @@ use std::{
     fmt,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::ExecutionError;
 type TestResult = Result<(), Box<dyn Error>>;
@@ -113,10 +113,10 @@ fn active_wait_uses_only_owned_earliest_deadline_without_periodic_polling() {
     let now = Instant::now();
     let mut lifetime = Lifetime::default();
     let state = HeadlessState::new();
-    assert_eq!(state.control(&lifetime, now), ControlFlow::Wait);
+    assert_eq!(state.control(&lifetime), ControlFlow::Wait);
     for deadline in [now, now + Duration::from_secs(5), now + Duration::from_secs(30)] {
         lifetime.deadline = Some(deadline);
-        assert_eq!(state.control(&lifetime, now), ControlFlow::WaitUntil(deadline));
+        assert_eq!(state.control(&lifetime), ControlFlow::WaitUntil(deadline));
     }
     assert!(lifetime.calls.borrow().is_empty());
 }
@@ -147,21 +147,19 @@ fn shutdown_requests_once_and_keeps_draining_until_actual_settlement() -> TestRe
     state.activity(&mut lifetime);
     state.activity(&mut lifetime);
     assert_eq!(lifetime.requests, 1);
-    assert_eq!(state.control(&lifetime, now), closing_wait(now));
-    lifetime.deadline = Some(now + Duration::from_millis(3));
-    assert_eq!(
-        state.control(&lifetime, now),
-        ControlFlow::WaitUntil(now + Duration::from_millis(3))
-    );
-    lifetime.deadline = Some(now + Duration::from_secs(10));
-    assert_eq!(state.control(&lifetime, now), closing_wait(now));
+    // Closing waits only for actual completion wakes and the owner's own deadlines.
+    assert_eq!(state.control(&lifetime), ControlFlow::Wait);
+    for deadline in [now + Duration::from_millis(3), now + Duration::from_secs(10)] {
+        lifetime.deadline = Some(deadline);
+        assert_eq!(state.control(&lifetime), ControlFlow::WaitUntil(deadline));
+    }
     state.poll_shutdown(&mut lifetime);
     assert!(!state.settled());
     assert_eq!(lifetime.finishes, 0);
     lifetime.settled = true;
     state.poll_shutdown(&mut lifetime);
     assert!(state.settled());
-    assert_eq!(state.control(&lifetime, now), ControlFlow::Exit);
+    assert_eq!(state.control(&lifetime), ControlFlow::Exit);
     let calls = lifetime.calls.clone();
     state.finish(&mut lifetime, || calls.borrow_mut().push("native_teardown"))?;
     assert_eq!(

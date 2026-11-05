@@ -21,6 +21,8 @@ fn snapshot(parent: &Parent) -> Result<RegistrySnapshot> {
         retained_members: 1,
         cleanup_pending: false,
         cleanup_step_pending: false,
+        cleanup_fact_pending: false,
+        inventory_empty: false,
         member_watch_required: false,
         settled: false,
         failed: false,

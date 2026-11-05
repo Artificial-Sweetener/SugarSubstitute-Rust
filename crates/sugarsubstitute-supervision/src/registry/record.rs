@@ -34,6 +34,7 @@ impl Record {
             pending_exit: None,
             cleanup: None,
             stop: None,
+            cleanup_progress: CleanupProgress::Live,
             retained: 0,
             next: None,
             closed_native: false,

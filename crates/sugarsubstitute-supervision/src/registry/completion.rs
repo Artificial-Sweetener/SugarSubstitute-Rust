@@ -172,15 +172,26 @@ fn cleanup(record: &mut Record, completion: JobCompletion<(), RegistryError>) {
         record.member_watch = Some(permit.cancel_unbound());
         record.watched = None;
     }
-    if let Some(facts) = facts {
-        record.retained = facts.retained;
-        record.root = facts.root.or(record.root);
-        record.next = facts.next;
-        record.closed_native = facts.closed;
-        record.pending_exit = None;
-        if let Some(watched) = facts.watched {
-            record.watched = Some(watched);
+    match facts {
+        Some(facts) => {
+            record.retained = facts.retained;
+            record.root = facts.root.or(record.root);
+            record.next = facts.next;
+            record.closed_native = facts.closed;
+            record.cleanup_progress = if facts.recheck {
+                CleanupProgress::Unobserved
+            } else if facts.empty {
+                CleanupProgress::Empty
+            } else {
+                CleanupProgress::Live
+            };
+            record.pending_exit = None;
+            if let Some(watched) = facts.watched {
+                record.watched = Some(watched);
+            }
         }
+        // A step that returned no facts permits one retry of its outstanding effects.
+        None => record.cleanup_progress = CleanupProgress::Unobserved,
     }
     retained_failure(record, failure, completion.outcome, "cleanup_terminal");
 }
@@ -220,6 +231,8 @@ pub(super) fn observe_watch(
     root: bool,
     job: JobId,
 ) {
+    // Any returned watch changes what the next inventory and exit recording observe.
+    record.cleanup_progress = CleanupProgress::Unobserved;
     if root && expected.is_some() && !record.rejected_launch {
         let retirement = match &outcome {
             JobOutcome::Cancelled => Some(RootObservationOutcome::Cancelled),

@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own the headless close/settlement decision independently of native callback delivery.
 use super::{HeadlessLifetime, HeadlessStep};
-use crate::{DesktopError, cadence::closing_wait};
-use std::{num::NonZeroUsize, sync::Arc, time::Instant};
+use crate::DesktopError;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::execution::CompletionWake;
 use tao::event_loop::ControlFlow;
 
@@ -99,21 +99,14 @@ impl HeadlessState {
     pub(super) const fn settled(&self) -> bool {
         self.settled
     }
-    pub(super) fn control(&self, lifetime: &impl HeadlessLifetime, now: Instant) -> ControlFlow {
+    /// Wait for the owner's earliest original deadline or an actual completion wake.
+    /// Closing owners progress on the same wakes as active ones; a periodic re-poll
+    /// would only re-run owners that have nothing new to observe.
+    pub(super) fn control(&self, lifetime: &impl HeadlessLifetime) -> ControlFlow {
         if self.settled {
             return ControlFlow::Exit;
         }
-        let requested = lifetime.next_deadline();
-        if self.closing {
-            match (closing_wait(now), requested) {
-                (ControlFlow::WaitUntil(closing), Some(requested)) => {
-                    ControlFlow::WaitUntil(closing.min(requested))
-                }
-                (closing, _) => closing,
-            }
-        } else {
-            requested.map_or(ControlFlow::Wait, ControlFlow::WaitUntil)
-        }
+        lifetime.next_deadline().map_or(ControlFlow::Wait, ControlFlow::WaitUntil)
     }
     pub(super) fn native_return(&mut self, lifetime: &mut impl HeadlessLifetime, exit_code: i32) {
         if !self.settled || exit_code != 0 {

@@ -7,7 +7,7 @@ use crate::{
     bootstrap::{Bootstrap, WaitOutcome},
     completion_wake::{ProxyWake, WakeLifetime},
 };
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 use tao::{
     event::Event, event_loop::EventLoopBuilder, platform::run_return::EventLoopExtRunReturn,
 };
@@ -22,10 +22,10 @@ enum HeadlessAction {
 ///
 /// A private native event exists before `start`; preparation completes before Tao.
 /// The same wake endpoint then retargets to the actual proxy under synchronization.
-/// Each activity call receives budget 32. Active
-/// waiting uses the owner's earliest deadline or actual completion. Closing uses
-/// the existing bounded native cadence while keeping the loop/proxy alive until
-/// actual settlement. An early native return is an error and re-enters the same
+/// Each activity call receives budget 32. Active and
+/// closing waits use the owner's earliest deadline or actual completion, keeping
+/// the loop/proxy alive until actual settlement without periodic re-polling.
+/// An early native return is an error and re-enters the same
 /// retained Windows event loop to continue shutdown; it never fabricates success.
 /// The wake disconnects and the native loop drops before final owner teardown.
 ///
@@ -74,7 +74,7 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
                 }
                 _ => {}
             }
-            *control = state.control(lifetime, Instant::now());
+            *control = state.control(lifetime);
         });
         state.native_return(lifetime, exit_code);
     }
@@ -99,7 +99,7 @@ fn prepare_before_loop(
         if state.prepared() || state.settled() {
             break;
         }
-        let deadline = match state.control(lifetime, Instant::now()) {
+        let deadline = match state.control(lifetime) {
             tao::event_loop::ControlFlow::WaitUntil(deadline) => Some(deadline),
             _ => None,
         };

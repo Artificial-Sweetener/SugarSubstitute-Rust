@@ -110,6 +110,34 @@ struct CleanupFacts {
     next: Option<(usize, Identity)>,
     watched: Option<Identity>,
     closed: bool,
+    /// The complete inventory listed no live Job member.
+    empty: bool,
+    /// Every retained member exited while the Job still listed one; only another
+    /// inventory can observe the kernel finishing that removal.
+    recheck: bool,
+}
+/// What the next cleanup step could observe, as of the last returned step.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CleanupProgress {
+    /// A fact no step has observed yet: the stop began, a watch returned, a step
+    /// returned no facts, or retained members exited while the Job still listed one.
+    Unobserved,
+    /// The last complete inventory (or none yet) listed live Job members.
+    Live,
+    /// The last complete inventory listed no live Job member.
+    Empty,
+}
+impl CleanupFacts {
+    /// Facts for a family whose native containment is closed.
+    const CLOSED: Self = Self {
+        retained: 0,
+        root: None,
+        next: None,
+        watched: None,
+        closed: true,
+        empty: true,
+        recheck: false,
+    };
 }
 struct Record {
     establishment_job: Option<OwnedJob<custody_establishment::EstablishmentResult, RegistryError>>,
@@ -141,6 +169,7 @@ struct Record {
     pending_exit: Option<Identity>,
     cleanup: Option<OwnedJob<(), RegistryError>>,
     stop: Option<(ShutdownId, ShutdownBudget)>,
+    cleanup_progress: CleanupProgress,
     retained: usize,
     next: Option<(usize, Identity)>,
     closed_native: bool,
@@ -178,6 +207,8 @@ impl Record {
             retained_members: self.retained,
             cleanup_pending: self.cleanup.is_some() || self.member_watch.is_some(),
             cleanup_step_pending: self.cleanup.is_some(),
+            cleanup_fact_pending: self.cleanup_progress == CleanupProgress::Unobserved,
+            inventory_empty: self.cleanup_progress == CleanupProgress::Empty,
             member_watch_required: self.next.is_some() && self.member_watch.is_none(),
             settled: self.settled,
             failed: self.error.is_some() || self.failure_transferred,
@@ -246,6 +277,7 @@ impl WindowsProcessRegistry {
         record.shared.admission.store(CLOSED, Ordering::Release);
         record.stopped_before_exit |= record.root_exit.is_none();
         record.stop = Some((shutdown, budget));
+        record.cleanup_progress = CleanupProgress::Unobserved;
         Ok(())
     }
     /// Transfer one cached actual observation; first failure never overwrites its cause.

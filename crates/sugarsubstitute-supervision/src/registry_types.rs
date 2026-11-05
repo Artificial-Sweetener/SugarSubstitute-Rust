@@ -106,6 +106,12 @@ pub struct RegistrySnapshot {
     pub cleanup_pending: bool,
     /// A finite cleanup job remains owned, independently of secondary exit observation.
     pub cleanup_step_pending: bool,
+    /// No cleanup step has observed the latest fact yet: the stop began, an exit
+    /// watch returned, a step returned no facts, or retained members all exited
+    /// while the Job still listed one.
+    pub cleanup_fact_pending: bool,
+    /// The most recent complete inventory listed no live Job member.
+    pub inventory_empty: bool,
     /// Complete cached inventory requires a new secondary observation reservation.
     pub member_watch_required: bool,
     /// Actual handles/work settled; observations may still require transfer.
@@ -116,9 +122,13 @@ pub struct RegistrySnapshot {
     pub shutdown: Option<(ShutdownId, ShutdownBudget)>,
 }
 impl RegistrySnapshot {
-    /// Select a finite step without waiting for an existing secondary exit watch.
-    /// Before grace, the watch supplies the next wake. At grace, the same original
-    /// transaction may force the family while that watch remains owned. Expiry
+    /// Select a finite step only when it can observe or change something.
+    ///
+    /// A step is due for an unobserved fact, to arm the next member watch, or to force
+    /// a family the last inventory still listed live once `graceful_until` is reached;
+    /// the force may proceed while an earlier member watch remains owned. Otherwise
+    /// the root and member watches and the grace deadline supply the next wake, so
+    /// drivers re-evaluating on every activity turn admit no repeated steps. Expiry
     /// grants no new admission or settlement.
     pub fn cleanup_step_due(self, now: Moment) -> bool {
         !self.settled
@@ -126,7 +136,9 @@ impl RegistrySnapshot {
             && !self.cleanup_step_pending
             && self.shutdown.is_some_and(|(_, budget)| {
                 now < budget.settle_until
-                    && (!self.cleanup_pending || (!self.forced && now >= budget.graceful_until))
+                    && (self.cleanup_fact_pending
+                        || self.member_watch_required
+                        || (!self.forced && !self.inventory_empty && now >= budget.graceful_until))
             })
     }
     /// Report policy expiry without claiming termination or resetting its budget.
