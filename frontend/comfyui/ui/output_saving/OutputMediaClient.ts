@@ -43,7 +43,8 @@ export class OutputMediaClient {
         !isRecord(value.data) ||
         (value.data.preferred_copy_format !== 'png' &&
           value.data.preferred_copy_format !== 'jpeg') ||
-        typeof value.data.reveal !== 'boolean'
+        typeof value.data.reveal !== 'boolean' ||
+        typeof value.data.photoshop !== 'boolean'
       )
         throw new Error('The output image action capabilities are unavailable.');
       const hostname = new URL(this.origin).hostname;
@@ -52,6 +53,7 @@ export class OutputMediaClient {
       return Object.freeze({
         preferredCopyFormat: value.data.preferred_copy_format,
         fileAction: local && value.data.reveal ? 'reveal' : 'download',
+        photoshop: local && value.data.photoshop,
       });
     });
   }
@@ -101,6 +103,31 @@ export class OutputMediaClient {
           );
       },
       file,
+      signal,
+    );
+  }
+
+  /**
+   * Ask the local adapter to open validated output images in Photoshop: one document named
+   * `document` holding each image as a layer named by its entry, in order.
+   */
+  async photoshop(
+    document: string,
+    layers: readonly { readonly file: OutputFileReference; readonly name: string }[],
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.#request(
+      '/sugarcubes/output-saving/photoshop',
+      async (response) => {
+        const value: unknown = await response.json();
+        if (!response.ok || !isRecord(value) || value.success !== true)
+          throw new Error(
+            isRecord(value) && isRecord(value.error) && typeof value.error.message === 'string'
+              ? value.error.message
+              : 'The images could not be opened in Photoshop.',
+          );
+      },
+      { document, layers },
       signal,
     );
   }

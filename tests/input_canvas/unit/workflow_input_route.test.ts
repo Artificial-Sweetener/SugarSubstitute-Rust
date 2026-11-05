@@ -198,3 +198,58 @@ test('opacity applies to every mask of a loader at once and hover names one regi
     { type: 'hover', workflow: 'workflow-a', surface: 'image', mask: null },
   ]);
 });
+
+test('card activations ask the canvas for keyboard focus; route choices do not', () => {
+  const f = fixture();
+  const focus = jest.fn();
+  const stop = f.route.subscribeFocus(focus);
+  f.publish([surface('image', 'image', ['mask-a'])]);
+  f.route.chooseRoute('input');
+  expect(focus).not.toHaveBeenCalled();
+  f.route.activateImage('image');
+  f.route.activateMask('mask-a', null);
+  expect(focus).toHaveBeenCalledTimes(2);
+  expect(f.route.activateImage('missing')).toBe(false);
+  expect(focus).toHaveBeenCalledTimes(2);
+  stop();
+  f.route.activateImage('image');
+  expect(focus).toHaveBeenCalledTimes(2);
+});
+
+test('a newly chosen image opens on Input with focus once provisioning holds its surface', () => {
+  const f = fixture();
+  const focus = jest.fn();
+  f.route.subscribeFocus(focus);
+  f.publish([surface('other', 'other', [])]);
+  f.route.openImage('image');
+  expect(f.route.read()?.route).toBe('output');
+  f.publish([surface('other', 'other', []), surface('image', 'image', ['mask-a'])]);
+  expect(f.route.read()).toMatchObject({ route: 'input', surface: 'image', mask: 'mask-a' });
+  expect(focus).toHaveBeenCalledTimes(1);
+  expect(f.commands.at(-1)).toEqual({
+    type: 'activate',
+    workflow: 'workflow-a',
+    route: 'input',
+    surface: 'image',
+    mask: 'mask-a',
+  });
+  // An image that already has its surface opens at once.
+  f.route.chooseRoute('output');
+  f.route.openImage('other');
+  expect(f.route.read()).toMatchObject({ route: 'input', surface: 'other' });
+  expect(focus).toHaveBeenCalledTimes(2);
+});
+
+test('a waiting chosen image is abandoned by another choice or a workflow switch', () => {
+  const f = fixture();
+  f.publish([surface('other', 'other', [])]);
+  f.route.openImage('image');
+  f.route.chooseRoute('output');
+  f.publish([surface('other', 'other', []), surface('image', 'image', [])]);
+  expect(f.route.read()?.route).toBe('output');
+  f.publish([surface('other', 'other', [])]);
+  f.route.openImage('image');
+  f.publish([surface('image', 'image', [])], 'workflow-b');
+  f.publish([surface('image', 'image', [])], 'workflow-a');
+  expect(f.route.read()?.route).toBe('output');
+});

@@ -4,7 +4,7 @@ import {
 import {
   canvasContextActions,
   canvasMediaItem
-} from "../../../chunk-NKMV6DCZ.js";
+} from "../../../chunk-K34PR526.js";
 import {
   CanvasOverlay
 } from "../../../chunk-BLQJSKWP.js";
@@ -88,7 +88,10 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
     event.preventDefault();
     event.stopPropagation();
     const bounds = interactionSurface.getBoundingClientRect();
-    menuTarget = contextTarget(target);
+    const addressed = contextTarget(target);
+    const entries = canvasContextActions(state.value, port.capabilities, send, addressed);
+    if (!entries.length) return;
+    menuTarget = addressed;
     menu.open({
       label: "Output actions",
       anchor: {
@@ -97,7 +100,7 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
         y: event instanceof MouseEvent ? event.clientY : bounds.bottom - 48
       },
       trigger: target instanceof HTMLElement ? target : interactionSurface,
-      entries: canvasContextActions(state.value, port.capabilities, send, menuTarget)
+      entries
     });
   }
   interactionSurface.addEventListener("contextmenu", openMenu);

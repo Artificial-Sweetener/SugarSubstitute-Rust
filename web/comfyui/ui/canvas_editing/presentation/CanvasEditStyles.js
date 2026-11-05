@@ -1,6 +1,6 @@
 import {
   ensureCanvasEditStyles
-} from "../../chunk-VO4TCHQ3.js";
+} from "../../chunk-CETUOIZM.js";
 export {
   ensureCanvasEditStyles
 };

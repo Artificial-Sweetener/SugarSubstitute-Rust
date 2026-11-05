@@ -40,6 +40,7 @@ function routePort(initial: CanvasRouteState | null) {
       return () => listeners.delete(listener);
     },
     choose,
+    subscribeFocus: () => () => {},
   };
   return {
     port,

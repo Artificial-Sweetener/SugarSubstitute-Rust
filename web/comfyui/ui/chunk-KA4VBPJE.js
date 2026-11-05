@@ -1,10 +1,10 @@
 import {
   CanvasCoverageControls
-} from "./chunk-36SKP3QA.js";
+} from "./chunk-TPZEQNX7.js";
 import {
   CANVAS_EDIT_TEXT,
   CANVAS_TOOL_LABELS
-} from "./chunk-ECAVEMES.js";
+} from "./chunk-2WJX4EBF.js";
 import {
   canvasEditIcon
 } from "./chunk-X5ULNSRV.js";

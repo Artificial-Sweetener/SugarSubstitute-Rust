@@ -21,21 +21,47 @@ export const CANVAS_EDIT_CHROME_INSET = 8;
 /** Bottom overflow, in physical pixels, needed to flip sides; the margin prevents flicker. */
 const EDGE_HYSTERESIS_PHYSICAL_PX = 24;
 /**
- * Retain the chosen side across context changes.
+ * Retain the chosen side across context changes, or the place the user dragged the toolbar to.
  *
  * The toolbar sits centred below its context, moves above once the context's bottom overflows
  * the safe area by the hysteresis margin, and returns below only after the context clears it by
  * the same margin. A context spanning the whole safe height, or no context at all, places the
- * toolbar centred along the bottom. The result is clamped completely inside the safe area.
+ * toolbar centred along the bottom. Once dragged, the toolbar keeps its centre at the same
+ * fraction of the safe area while the context, the viewport and its own width change, until the
+ * context is reset. Every result is clamped completely inside the safe area.
  */
 export class CanvasToolbarPlacement {
     #side = null;
-    /** Forget the retained side so the next context is placed afresh. */
+    /** The dragged centre as fractions of the safe area, or null for automatic placement. */
+    #dragged = null;
+    /** Forget the retained side and any dragged place so the next context is placed afresh. */
     reset() {
         this.#side = null;
+        this.#dragged = null;
+    }
+    /**
+     * Move the toolbar from where it is shown by a pointer delta and keep it there.
+     *
+     * @param from The toolbar's shown top-left point, in the safe area's coordinate space.
+     * @param delta The pointer movement in the same CSS pixels.
+     * @returns The clamped top-left point to show.
+     */
+    moveBy(from, delta, size, safe) {
+        const moved = clamp({ x: from.x + delta.x, y: from.y + delta.y }, size, safe);
+        this.#dragged = {
+            x: (moved.x + size.width / 2 - safe.left) / Math.max(1, safe.width),
+            y: (moved.y + size.height / 2 - safe.top) / Math.max(1, safe.height),
+        };
+        return moved;
     }
     /** Project the toolbar's top-left point for one context, size and safe area. */
     position(context, size, safe, physicalPixelsPerCssPixel) {
+        const dragged = this.#dragged;
+        if (dragged)
+            return clamp({
+                x: safe.left + dragged.x * Math.max(1, safe.width) - size.width / 2,
+                y: safe.top + dragged.y * Math.max(1, safe.height) - size.height / 2,
+            }, size, safe);
         const side = context ? this.#resolve(context, safe, physicalPixelsPerCssPixel) : null;
         this.#side = side;
         const bottom = safe.top + safe.height;

@@ -59,6 +59,7 @@ export class MasonryInputEditor {
             refresh: () => binding.refreshSources(),
             change: (source) => binding.changeSource(source),
             upload,
+            chosen: () => surface?.openChosen(),
             report: (error) => {
                 if (error instanceof CanvasSourceUnavailable) {
                     this.#rows.unavailable(error.message);

@@ -51,6 +51,8 @@ export async function applyCanvasAction(command, owners) {
         }
         case 'copy-media':
         case 'file-media':
+        case 'photoshop-media':
+        case 'photoshop-all-media':
             return await surface.media(command, scope);
         case 'comparison':
             if (command.enabled && (snapshot.preview || snapshot.resource.state !== 'ready'))
