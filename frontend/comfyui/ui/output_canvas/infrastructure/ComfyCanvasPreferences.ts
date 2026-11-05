@@ -13,119 +13,41 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Persist accepted canvas presentation choices through Comfy settings, independently of workflow JSON. */
+/** Register the global output canvas setting through Comfy settings, independently of workflow JSON. */
 
 import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
-import type { CanvasWorkspacePreferences } from '../domain/CanvasWorkspace.js';
 
-/** Identify the host's visibility preference for the output canvas. */
+/** Identify whether workflows without a stored view choice open with the output canvas shown. */
 export const OUTPUT_CANVAS_VISIBLE_SETTING = 'SugarCubes.OutputCanvas.Visible';
-/** Identify the host's accepted CSS width, with zero selecting automatic allocation. */
-export const OUTPUT_CANVAS_WIDTH_SETTING = 'SugarCubes.OutputCanvas.Width';
 
-/** Validate dynamic setting values once before they enter the allocation policy. */
+/** Register the canvas default once extension setup makes Comfy settings available. */
 export class ComfyCanvasPreferences {
-  readonly #listeners = new Set<() => void>();
-  #snapshot: CanvasWorkspacePreferences = Object.freeze({ visible: true, width: 0 });
-  #write: ((id: string, value: boolean | number) => Promise<void>) | null = null;
   #started = false;
-  #disposed = false;
 
   /** Bind the host without reading persistence until extension setup is ready. */
   constructor(private readonly app: unknown) {}
 
-  /** Read immutable accepted choices without storing image or workflow metadata. */
-  get snapshot(): CanvasWorkspacePreferences {
-    return this.#snapshot;
-  }
-
-  /** Subscribe to accepted local or external setting changes with consumer-owned cleanup. */
-  subscribe(listener: () => void): () => void {
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
-  }
-
-  /** Register two public presentation settings and restore only validated initial values. */
+  /**
+   * Register the visibility default that new workflow views read through Comfy settings.
+   *
+   * @throws Error when Comfy's settings registration is unavailable.
+   */
   setup(): void {
-    if (this.#started || this.#disposed) return;
+    if (this.#started) return;
     const app = isRecord(this.app) ? this.app : {};
     const ui = isRecord(app.ui) ? app.ui : {};
     const settings = isRecord(ui.settings) ? ui.settings : {};
-    const { addSetting, getSettingValue, setSettingValueAsync } = settings;
-    if (
-      typeof addSetting !== 'function' ||
-      typeof getSettingValue !== 'function' ||
-      typeof setSettingValueAsync !== 'function'
-    )
+    const { addSetting } = settings;
+    if (typeof addSetting !== 'function')
       throw new Error('Comfy output canvas settings are unavailable.');
     this.#started = true;
-    this.#write = async (id, value) => {
-      await setSettingValueAsync.call(settings, id, value);
-    };
     addSetting.call(settings, {
       id: OUTPUT_CANVAS_VISIBLE_SETTING,
       name: 'Show output canvas',
       ...sugarCubesSettingsSection('canvas', 'Visible'),
       type: 'boolean',
       defaultValue: true,
-      onChange: (value: unknown) => this.#accept('visible', value),
     });
-    addSetting.call(settings, {
-      id: OUTPUT_CANVAS_WIDTH_SETTING,
-      name: 'Output canvas width',
-      ...sugarCubesSettingsSection('canvas', 'Width'),
-      type: 'number',
-      defaultValue: 0,
-      tooltip:
-        'Width in CSS pixels. Use 0 for automatic allocation. The panel keeps space available for workflow controls.',
-      attrs: { min: 0, max: 16384, step: 1 },
-      onChange: (value: unknown) => this.#accept('width', value),
-    });
-    this.#accept('visible', getSettingValue.call(settings, OUTPUT_CANVAS_VISIBLE_SETTING, true));
-    this.#accept('width', getSettingValue.call(settings, OUTPUT_CANVAS_WIDTH_SETTING, 0));
-  }
-
-  /** Await host persistence while the setting's onChange callback owns accepted visibility. */
-  async visible(visible: boolean): Promise<void> {
-    await this.#store(OUTPUT_CANVAS_VISIBLE_SETTING, visible);
-  }
-
-  /** Persist one completed resize without recording pointer movement or graph undo entries. */
-  async width(width: number): Promise<void> {
-    if (!Number.isFinite(width) || width < 0 || width > 16384)
-      throw new RangeError('Output canvas width is invalid.');
-    await this.#store(OUTPUT_CANVAS_WIDTH_SETTING, width);
-  }
-
-  /** Retire host-retained callbacks and ignore persistence completions after teardown. */
-  dispose(): void {
-    this.#disposed = true;
-    this.#write = null;
-    this.#listeners.clear();
-  }
-
-  /** Preserve storage failures for product feedback; Comfy owns its local setting and rollback policy. */
-  async #store(id: string, value: boolean | number): Promise<void> {
-    if (!this.#write || this.#disposed)
-      throw new Error('Output canvas preferences are unavailable.');
-    await this.#write(id, value);
-  }
-
-  /** Narrow untrusted host values and publish only actual accepted changes. */
-  #accept(key: keyof CanvasWorkspacePreferences, value: unknown): void {
-    if (this.#disposed || this.#snapshot[key] === value) return;
-    if (key === 'visible' && typeof value === 'boolean')
-      this.#snapshot = Object.freeze({ ...this.#snapshot, visible: value });
-    else if (
-      key === 'width' &&
-      typeof value === 'number' &&
-      Number.isFinite(value) &&
-      value >= 0 &&
-      value <= 16384
-    )
-      this.#snapshot = Object.freeze({ ...this.#snapshot, width: value });
-    else return;
-    for (const listener of this.#listeners) listener();
   }
 }

@@ -1,10 +1,14 @@
+/** Accept stored or requested editor widths in CSS pixels, with zero selecting the default. */
+function isEditorWidth(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 16384;
+}
 /** Bound persistent history while retaining every live workflow's lightweight choices. */
 export class WorkflowViewPreferences {
     write;
     #live = new Map();
     #stored = new Map();
     #selected = null;
-    #snapshot = Object.freeze({ canvas: true, masonry: false });
+    #snapshot = Object.freeze({ canvas: true, masonry: false, editorWidth: 0 });
     /** Validate the persistence boundary once and keep tab activation entirely in memory. */
     constructor(value, write) {
         this.write = write;
@@ -22,7 +26,12 @@ export class WorkflowViewPreferences {
                 typeof item.canvas !== 'boolean' ||
                 typeof item.masonry !== 'boolean')
                 continue;
-            this.#stored.set(item.path, Object.freeze({ canvas: item.canvas, masonry: item.masonry }));
+            this.#stored.set(item.path, Object.freeze({
+                canvas: item.canvas,
+                masonry: item.masonry,
+                // Entries written before editor widths were stored select the default width.
+                editorWidth: 'editorWidth' in item && isEditorWidth(item.editorWidth) ? item.editorWidth : 0,
+            }));
         }
     }
     /** Read the existing accepted object rather than reconstructing settings during activation. */
@@ -36,7 +45,7 @@ export class WorkflowViewPreferences {
             const stored = binding.path ? this.#stored.get(binding.path) : undefined;
             current = {
                 path: binding.path,
-                view: stored || Object.freeze({ canvas: defaultCanvas(), masonry: false }),
+                view: stored || Object.freeze({ canvas: defaultCanvas(), masonry: false, editorWidth: 0 }),
             };
             this.#live.set(binding.id, current);
             if (!stored)
@@ -51,13 +60,21 @@ export class WorkflowViewPreferences {
         this.#snapshot = current.view;
         return changed;
     }
-    /** Record only actual user choices without changing workflow content or graph history. */
+    /**
+     * Record only actual user choices without changing workflow content or graph history.
+     *
+     * @throws RangeError when an editor width is outside the persisted range.
+     */
     change(value) {
+        if (value.editorWidth !== undefined && !isEditorWidth(value.editorWidth))
+            throw new RangeError('Workflow editor width is invalid.');
         const current = this.#selected ? this.#live.get(this.#selected) : null;
         if (!current)
             return false;
         const next = { ...current.view, ...value };
-        if (next.canvas === current.view.canvas && next.masonry === current.view.masonry)
+        if (next.canvas === current.view.canvas &&
+            next.masonry === current.view.masonry &&
+            next.editorWidth === current.view.editorWidth)
             return false;
         current.view = Object.freeze(next);
         this.#snapshot = current.view;

@@ -24,12 +24,11 @@ import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 export class ComfyCanvasWorkspaceHost {
     app;
     document;
-    preferences;
     frames;
     changed;
     report;
     presentation;
-    #layout = new CanvasWorkspaceLayout();
+    #layout;
     #stops = [];
     #observer = null;
     #workspace = null;
@@ -40,15 +39,19 @@ export class ComfyCanvasWorkspaceHost {
     #started = false;
     #accepted = null;
     #userVisibilityChange = false;
-    /** Inject host lifecycle sources, accepted settings, and finite geometry scheduling. */
-    constructor(app, document, preferences, frames, changed, report, presentation) {
+    /**
+     * Inject host lifecycle sources, workflow view choices, and finite geometry scheduling.
+     *
+     * @param defaultEditorWidth Editor width for workflows without a stored width, in CSS pixels.
+     */
+    constructor(app, document, defaultEditorWidth, frames, changed, report, presentation) {
         this.app = app;
         this.document = document;
-        this.preferences = preferences;
         this.frames = frames;
         this.changed = changed;
         this.report = report;
         this.presentation = presentation;
+        this.#layout = new CanvasWorkspaceLayout(defaultEditorWidth);
     }
     /** Expose the allocated remaining rectangle as the sole masonry mount parent. */
     get content() {
@@ -73,8 +76,6 @@ export class ComfyCanvasWorkspaceHost {
             this.#appMode = active;
             this.#workspace?.suspend(this.#suspension());
             this.changed();
-        }), this.preferences.subscribe(() => {
-            this.#refreshPreferences();
         }), this.presentation.subscribe(() => {
             this.#refreshPreferences();
         }), createComfyRendererModeChangeSource(this.app).subscribe(() => {
@@ -135,11 +136,12 @@ export class ComfyCanvasWorkspaceHost {
         }
         this.changed();
     }
-    /** Combine global sizing with the workflow's authoritative visibility choice. */
+    /** Read the workflow's authoritative visibility and editor width choices. */
     #preferences() {
+        const view = this.presentation.snapshot;
         return {
-            ...this.preferences.snapshot,
-            visible: !readPluginMode(this.document) && this.presentation.snapshot.canvas,
+            visible: !readPluginMode(this.document) && view.canvas,
+            editorWidth: view.editorWidth,
         };
     }
     /** Hide replacement pixels without collapsing allocation; app mode relinquishes the whole frame. */
@@ -149,7 +151,7 @@ export class ComfyCanvasWorkspaceHost {
     /** Avoid layout and resize resets when session readiness changes without a preference change. */
     #refreshPreferences() {
         const next = this.#preferences();
-        if (this.#accepted?.visible === next.visible && this.#accepted.width === next.width)
+        if (this.#accepted?.visible === next.visible && this.#accepted.editorWidth === next.editorWidth)
             return;
         this.#accepted = next;
         this.#workspace?.preferences(next, this.#userVisibilityChange);
@@ -174,9 +176,7 @@ export class ComfyCanvasWorkspaceHost {
             this.#accepted = this.#preferences();
             this.#layout.preferences(this.#accepted);
             this.#workspace = new BrowserCanvasWorkspace(root, panel, this.#layout, this.frames, {
-                width: (width) => {
-                    void this.preferences.width(width).catch(this.report);
-                },
+                editorWidth: (editorWidth) => this.presentation.change({ editorWidth }),
                 close: () => this.#visibility(false),
                 changed: this.changed,
                 report: this.report,

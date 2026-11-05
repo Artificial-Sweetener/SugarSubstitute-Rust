@@ -20,6 +20,10 @@ import { CONTROL_HEIGHT } from './ControlGeometry.js';
 import { nativeNumericCss } from './NativeNumericStyles.js';
 import { scrollbarCss } from './ScrollbarStyles.js';
 import { nativeFieldLayoutCss } from './NativeFieldLayoutStyles.js';
+import {
+  WORKFLOW_MASONRY_COLUMN_WIDTH,
+  WORKFLOW_MASONRY_GAP,
+} from '../masonry/WorkflowMasonryLayout.js';
 
 /** Render the shared appearance without overriding explicit custom inline styling. */
 export interface NativeAppearancePalette {
@@ -82,8 +86,8 @@ export function nativeAppearanceCss(palette: NativeAppearancePalette, dark: bool
       --sugarcubes-cube-card-body:var(--sc-card-fill);
       --sugarcubes-cube-backdrop:var(--sugarcubes-masonry-surface);
       --sugarcubes-masonry-card-surface:var(--sc-card-fill);
-      --sugarcubes-masonry-column-width:400;
-      --sugarcubes-masonry-gap:8;
+      --sugarcubes-masonry-column-width:${String(WORKFLOW_MASONRY_COLUMN_WIDTH)};
+      --sugarcubes-masonry-gap:${String(WORKFLOW_MASONRY_GAP)};
     }
     [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup] {
       color:var(--sc-text);

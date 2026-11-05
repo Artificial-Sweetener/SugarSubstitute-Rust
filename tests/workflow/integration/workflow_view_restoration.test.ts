@@ -38,18 +38,18 @@ test('restores both choices atomically after activation and performs zero reads/
     { warn: jest.fn() },
   );
   views.setup();
-  expect(views.snapshot).toEqual({ canvas: false, masonry: true });
+  expect(views.snapshot).toEqual({ canvas: false, masonry: true, editorWidth: 0 });
   const listener = jest.fn(() => ({ ready: views.ready, ...views.snapshot }));
   views.subscribe(listener);
   const token = sessions.beginLoad();
   sessions.synchronize([a, b], b.sessionId);
   expect(views.ready).toBe(false);
-  expect(views.snapshot).toEqual({ canvas: false, masonry: true });
+  expect(views.snapshot).toEqual({ canvas: false, masonry: true, editorWidth: 0 });
   views.change({ canvas: true });
   expect(storage.setItem).not.toHaveBeenCalled();
   sessions.completeLoad(token, true);
   expect(views.ready).toBe(true);
-  expect(views.snapshot).toEqual({ canvas: true, masonry: false });
+  expect(views.snapshot).toEqual({ canvas: true, masonry: false, editorWidth: 0 });
   expect(listener).toHaveBeenCalledTimes(2);
   views.change({ canvas: false, masonry: true });
   expect(storage.setItem).toHaveBeenCalledWith(WORKFLOW_VIEW_STORAGE_KEY, expect.any(String));
@@ -58,7 +58,7 @@ test('restores both choices atomically after activation and performs zero reads/
     const load = sessions.beginLoad();
     sessions.synchronize([a, b], index % 2 === 0 ? a.sessionId : b.sessionId);
     sessions.completeLoad(load, true);
-    expect(views.snapshot).toEqual({ canvas: false, masonry: true });
+    expect(views.snapshot).toEqual({ canvas: false, masonry: true, editorWidth: 0 });
   }
   expect(storage.getItem).toHaveBeenCalledTimes(1);
   expect(storage.setItem).not.toHaveBeenCalled();
@@ -81,10 +81,10 @@ test('does not let failed loads or unavailable storage discard accepted user cho
   views.setup();
   views.change({ canvas: false, masonry: true });
   expect(logger.warn).toHaveBeenCalledTimes(3);
-  expect(views.snapshot).toEqual({ canvas: false, masonry: true });
+  expect(views.snapshot).toEqual({ canvas: false, masonry: true, editorWidth: 0 });
   const token = sessions.beginLoad();
   sessions.completeLoad(token, false);
   expect(views.ready).toBe(false);
-  expect(views.snapshot).toEqual({ canvas: false, masonry: true });
+  expect(views.snapshot).toEqual({ canvas: false, masonry: true, editorWidth: 0 });
   views.dispose();
 });

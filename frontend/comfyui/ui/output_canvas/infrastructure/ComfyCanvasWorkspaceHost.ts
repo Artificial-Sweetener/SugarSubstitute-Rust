@@ -19,15 +19,15 @@ import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { createComfyAppModeSource } from '../../core/ComfyAppMode.js';
 import { createComfyRendererModeChangeSource } from '../../core/ComfyRendererMode.js';
 import { CanvasWorkspaceLayout } from '../application/CanvasWorkspaceLayout.js';
+import type { CanvasWorkspacePreferences } from '../domain/CanvasWorkspace.js';
 import type { CanvasFrameClock } from '../application/CanvasCameraTransition.js';
 import { BrowserCanvasWorkspace } from './BrowserCanvasWorkspace.js';
-import type { ComfyCanvasPreferences } from './ComfyCanvasPreferences.js';
 import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 
 /** Retain content identity through temporary host suspension while retiring replaced native surfaces. */
 export class ComfyCanvasWorkspaceHost {
-  readonly #layout = new CanvasWorkspaceLayout();
+  readonly #layout: CanvasWorkspaceLayout;
   readonly #stops: (() => void)[] = [];
   #observer: HostSurfaceObserver | null = null;
   #workspace: BrowserCanvasWorkspace | null = null;
@@ -36,19 +36,25 @@ export class ComfyCanvasWorkspaceHost {
   #configuring = false;
   #disposed = false;
   #started = false;
-  #accepted: { visible: boolean; width: number } | null = null;
+  #accepted: CanvasWorkspacePreferences | null = null;
   #userVisibilityChange = false;
 
-  /** Inject host lifecycle sources, accepted settings, and finite geometry scheduling. */
+  /**
+   * Inject host lifecycle sources, workflow view choices, and finite geometry scheduling.
+   *
+   * @param defaultEditorWidth Editor width for workflows without a stored width, in CSS pixels.
+   */
   constructor(
     private readonly app: unknown,
     private readonly document: Document,
-    private readonly preferences: ComfyCanvasPreferences,
+    defaultEditorWidth: number,
     private readonly frames: CanvasFrameClock,
     private readonly changed: () => void,
     private readonly report: (error: unknown) => void,
     private readonly presentation: WorkflowViewSource,
-  ) {}
+  ) {
+    this.#layout = new CanvasWorkspaceLayout(defaultEditorWidth);
+  }
 
   /** Expose the allocated remaining rectangle as the sole masonry mount parent. */
   get content(): HTMLElement | null {
@@ -78,9 +84,7 @@ export class ComfyCanvasWorkspaceHost {
         this.#workspace?.suspend(this.#suspension());
         this.changed();
       }),
-      this.preferences.subscribe(() => {
-        this.#refreshPreferences();
-      }),
+
       this.presentation.subscribe(() => {
         this.#refreshPreferences();
       }),
@@ -149,11 +153,12 @@ export class ComfyCanvasWorkspaceHost {
     this.changed();
   }
 
-  /** Combine global sizing with the workflow's authoritative visibility choice. */
-  #preferences() {
+  /** Read the workflow's authoritative visibility and editor width choices. */
+  #preferences(): CanvasWorkspacePreferences {
+    const view = this.presentation.snapshot;
     return {
-      ...this.preferences.snapshot,
-      visible: !readPluginMode(this.document) && this.presentation.snapshot.canvas,
+      visible: !readPluginMode(this.document) && view.canvas,
+      editorWidth: view.editorWidth,
     };
   }
 
@@ -165,7 +170,8 @@ export class ComfyCanvasWorkspaceHost {
   /** Avoid layout and resize resets when session readiness changes without a preference change. */
   #refreshPreferences(): void {
     const next = this.#preferences();
-    if (this.#accepted?.visible === next.visible && this.#accepted.width === next.width) return;
+    if (this.#accepted?.visible === next.visible && this.#accepted.editorWidth === next.editorWidth)
+      return;
     this.#accepted = next;
     this.#workspace?.preferences(next, this.#userVisibilityChange);
     this.changed();
@@ -187,9 +193,7 @@ export class ComfyCanvasWorkspaceHost {
       this.#accepted = this.#preferences();
       this.#layout.preferences(this.#accepted);
       this.#workspace = new BrowserCanvasWorkspace(root, panel, this.#layout, this.frames, {
-        width: (width) => {
-          void this.preferences.width(width).catch(this.report);
-        },
+        editorWidth: (editorWidth) => this.presentation.change({ editorWidth }),
         close: () => this.#visibility(false),
         changed: this.changed,
         report: this.report,

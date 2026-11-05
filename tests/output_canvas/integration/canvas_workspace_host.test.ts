@@ -17,20 +17,12 @@
 
 import { jest } from '@jest/globals';
 import { ComfyCanvasWorkspaceHost } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasWorkspaceHost.js';
-import { ComfyCanvasPreferences } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasPreferences.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { installCanvasWorkspaceAnimation } from '../support/CanvasWorkspaceMotionFixture.js';
 import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
 
-interface Setting {
-  readonly id: string;
-  readonly onChange: (value: unknown) => void;
-}
-
-/** Compose the actual observer and layout while providing only public Comfy settings/store and DOM geometry. */
+/** Compose the actual observer and layout while providing only the public Comfy workflow store and DOM geometry. */
 function fixture(width = 1400) {
-  const definitions = new Map<string, Setting>();
-  const values = new Map<string, unknown>();
   const listeners = new Set<() => void>();
   const workflow = {
     activeWorkflow: { activeMode: 'graph' },
@@ -39,33 +31,19 @@ function fixture(width = 1400) {
       return () => listeners.delete(listener);
     },
   };
-  const app = {
-    extensionManager: { workflow },
-    ui: {
-      settings: {
-        addSetting: (setting: Setting) => definitions.set(setting.id, setting),
-        getSettingValue: (id: string, fallback: unknown) => values.get(id) ?? fallback,
-        setSettingValueAsync: async (id: string, value: unknown) => {
-          definitions.get(id)!.onChange(value);
-          values.set(id, value);
-        },
-      },
-    },
-  };
-  const preferences = new ComfyCanvasPreferences(app);
-  preferences.setup();
+  const app = { extensionManager: { workflow } };
   const frames = new CanvasFrameFixture();
   const changed = jest.fn();
   const report = jest.fn();
   const viewListeners = new Set<() => void>();
   const presentation = {
     ready: true,
-    snapshot: { canvas: true, masonry: false },
+    snapshot: { canvas: true, masonry: false, editorWidth: 0 },
     subscribe(listener: () => void) {
       viewListeners.add(listener);
       return () => viewListeners.delete(listener);
     },
-    change(value: { canvas?: boolean; masonry?: boolean }) {
+    change(value: { canvas?: boolean; masonry?: boolean; editorWidth?: number }) {
       presentation.snapshot = { ...presentation.snapshot, ...value };
       for (const listener of viewListeners) listener();
     },
@@ -73,7 +51,8 @@ function fixture(width = 1400) {
   const host = new ComfyCanvasWorkspaceHost(
     app,
     document,
-    preferences,
+    // A 1400 px workspace leaves this default editor a 560 px canvas.
+    840,
     frames,
     changed,
     report,
@@ -106,7 +85,6 @@ function fixture(width = 1400) {
   document.body.append(frame);
   return {
     host,
-    preferences,
     presentation,
     frames,
     changed,
@@ -120,7 +98,6 @@ function fixture(width = 1400) {
     },
     dispose: () => {
       host.dispose();
-      preferences.dispose();
       root.remove();
       jest.restoreAllMocks();
     },
@@ -147,7 +124,6 @@ test('mounts identified surfaces and preserves allocated content through app/con
   expect(f.host.canvas).toBeNull();
   await Promise.resolve();
   expect(f.presentation.snapshot.canvas).toBe(false);
-  expect(f.preferences.snapshot.visible).toBe(true);
   f.host.toggle();
   expect(f.host.canvas).not.toBeNull();
   f.dispose();
@@ -217,7 +193,7 @@ test('reverses explicit toggles without detaching exit pixels and skips workflow
   f.dispose();
 });
 
-test('restores workflow visibility while retaining the workspace parent and global width preference', async () => {
+test('restores workflow visibility while retaining the workspace parent', async () => {
   const f = fixture();
   await Promise.resolve();
   const content = f.host.content;
@@ -226,10 +202,29 @@ test('restores workflow visibility while retaining the workspace parent and glob
   f.presentation.change({ canvas: true });
   expect(f.host.canvas).not.toBeNull();
   expect(f.host.content).toBe(content);
-  expect(f.preferences.snapshot.visible).toBe(true);
   f.dispose();
 });
 
+test('applies each workflow editor width and stores divider moves as the workflow editor width', async () => {
+  const f = fixture();
+  await Promise.resolve();
+  const content = f.host.content!;
+  expect(content.style.width).toBe('calc(100% - 560px)');
+  // Activating another workflow publishes its stored editor width.
+  f.presentation.change({ editorWidth: 900 });
+  expect(content.style.width).toBe('calc(100% - 500px)');
+  f.presentation.change({ editorWidth: 0 });
+  expect(content.style.width).toBe('calc(100% - 560px)');
+  const divider = f.root.querySelector<HTMLElement>('[role="separator"]')!;
+  divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+  expect(f.presentation.snapshot.editorWidth).toBe(360);
+  expect(content.style.width).toBe('calc(100% - 1040px)');
+  divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  expect(f.presentation.snapshot.editorWidth).toBe(380);
+  expect(f.host.content).toBe(content);
+  expect(f.report).not.toHaveBeenCalled();
+  f.dispose();
+});
 test('preserves canvas allocation during qualified history restoration while respecting app mode', async () => {
   const f = fixture();
   await Promise.resolve();

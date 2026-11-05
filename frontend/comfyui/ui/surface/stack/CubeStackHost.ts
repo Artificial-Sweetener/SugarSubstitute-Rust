@@ -22,7 +22,7 @@ import type { CubeIdentitySource } from '../../cube/CubeIdentityPresentation.js'
 import type { WorkflowMasonrySection } from '../masonry/WorkflowMasonryProjection.js';
 import type { AppearanceSource } from '../appearance/AppearanceState.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
-import { cubeStackWidth } from './CubeStackMetrics.js';
+import { CUBE_STACK_MASONRY_GUTTER, cubeStackWidth } from './CubeStackMetrics.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
 import { projectCubeStackRows } from './CubeStackProjection.js';
@@ -286,7 +286,8 @@ export class CubeStackHost {
       this.#mounted.setInteractive(false);
     }
     view.setStackWidth(
-      cubeStackWidth(state.compact) + (state.compact || this.#options.frame?.enabled ? 0 : 24),
+      cubeStackWidth(state.compact) +
+        (state.compact || this.#options.frame?.enabled ? 0 : CUBE_STACK_MASONRY_GUTTER),
     );
     if (this.#surfaceVisible) void this.#present(true, animate).catch(this.#options.reportError);
     this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
