@@ -3,13 +3,13 @@ import {
 } from "./chunk-WIEFPHCO.js";
 import {
   CanvasComparisonNavigation
-} from "./chunk-VIB2ZZLX.js";
+} from "./chunk-675HISLK.js";
 import {
   CanvasLoadingIndicator
 } from "./chunk-Z66IIUOP.js";
 import {
   CanvasNavigationBar
-} from "./chunk-ILGWEYZ5.js";
+} from "./chunk-C5JVIQFD.js";
 import {
   canvasNavigationSnapshot
 } from "./chunk-ORLQ3IYI.js";

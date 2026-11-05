@@ -94,7 +94,7 @@ test('one selection indicator covers the selected tab and slides to the next sel
   mounted.dispose();
 });
 
-test('navigation pickers are chevron combo boxes and show the arrow cursor on a glass bar', () => {
+test('navigation selectors are plain segments beside the tabs, with the arrow cursor on a glass bar', () => {
   const root = document.createElement('section');
   document.body.append(root);
   const mounted = mountCanvasOverlay(
@@ -113,9 +113,14 @@ test('navigation pickers are chevron combo boxes and show the arrow cursor on a 
   const batch = root.querySelector('button[aria-label="Output image"]')!;
   expect(getComputedStyle(tab).cursor).toBe('default');
   expect(getComputedStyle(batch).cursor).toBe('default');
-  expect(batch.querySelector('.sc-output-chevron')?.getAttribute('aria-hidden')).toBe('true');
-  expect(rule('.sc-output-overlay .sc-output-segment')?.getPropertyValue('border')).toContain(
-    '1px solid',
-  );
+  // Selectors are segments of the bar like the tabs, not fields: no fill, border or chevron.
+  expect(batch.children).toHaveLength(0);
+  expect(batch.getAttribute('title')).toBe(batch.textContent);
+  const segment = rule('.sc-output-overlay .sc-output-segment');
+  const tabButton = rule('.sc-output-tabs button');
+  expect(segment?.getPropertyValue('background')).toBe('transparent');
+  expect(segment?.getPropertyValue('border')).toBe('1px solid transparent');
+  expect(segment?.getPropertyValue('height')).toBe(tabButton?.getPropertyValue('height'));
+  expect(segment?.getPropertyValue('font-size')).toBe(tabButton?.getPropertyValue('font-size'));
   mounted.dispose();
 });

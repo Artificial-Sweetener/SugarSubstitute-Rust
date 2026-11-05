@@ -31,7 +31,7 @@ from sugarcubes.output_saving.domain.transfer import (
     OutputTransferChoices,
     TransferRepresentation,
 )
-from sugarcubes.output_saving.infrastructure.media_routes import _prepare
+from sugarcubes.output_saving.infrastructure.media_routes import _run
 
 
 class BlockingCodec:
@@ -67,6 +67,12 @@ class BlockingCodec:
                 raise RuntimeError("The test encoder was not released.")
         return ImageTransferPayload(b"jpeg", "image.jpg", "image/jpeg")
 
+    def preview(
+        self, reference: OutputFileReference, longest_side: int
+    ) -> ImageTransferPayload:
+        """Reject previews, which this codec-only fixture does not exercise."""
+        raise ValueError("The test codec does not encode previews.")
+
 
 def test_cancellation_keeps_single_codec_lease_until_worker_finishes() -> None:
     """Prevent cancellation from allowing a second full-resolution decode to overlap the first."""
@@ -78,7 +84,10 @@ def test_cancellation_keeps_single_codec_lease_until_worker_finishes() -> None:
         semaphore = asyncio.Semaphore(1)
         reference = OutputFileReference("image.png", "", "output")
         first = asyncio.create_task(
-            _prepare(semaphore, service, reference, ImageTransferFormat.JPEG)
+            _run(
+                semaphore,
+                lambda: service.prepare(reference, ImageTransferFormat.JPEG),
+            )
         )
         assert await asyncio.to_thread(codec.started.wait, 5)
         first.cancel()
@@ -86,7 +95,10 @@ def test_cancellation_keeps_single_codec_lease_until_worker_finishes() -> None:
         assert semaphore.locked()
         assert not first.done()
         second = asyncio.create_task(
-            _prepare(semaphore, service, reference, ImageTransferFormat.JPEG)
+            _run(
+                semaphore,
+                lambda: service.prepare(reference, ImageTransferFormat.JPEG),
+            )
         )
         await asyncio.sleep(0)
         assert codec.calls == 1

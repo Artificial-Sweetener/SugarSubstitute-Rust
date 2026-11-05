@@ -38,10 +38,13 @@ import { CanvasRoutePicker } from './CanvasRoutePicker.js';
 import { CanvasSourceSlider } from './CanvasSourceSlider.js';
 import { CanvasScenePicker } from './CanvasScenePicker.js';
 
+/** CSS pixels the blurred backdrop extends past the bar, so the blur has no faded edge. */
+const BACKDROP_BLUR_MARGIN = 24;
+
 /**
  * Show only the navigation relevant to the current canvas, in one bar.
  *
- * The canvas, scene and batch choices are combo boxes. The final layer, the output sources of the
+ * The canvas, scene and batch choices are segments opening anchored row pickers. Output sources of the
  * batch being viewed, is a sliding tab list that collapses to a picker when the bar lacks the
  * width for it. Input shows only the canvas choice, and the bar is absent when nothing applies.
  * Over a native surface the bar blurs a copy of the painted image, placed where it lies on screen.
@@ -65,6 +68,9 @@ export const CanvasNavigationBar = defineComponent({
     let observer: ResizeObserver | null = null;
     let observedParent: Element | null = null;
     let observedTabs: Element | null = null;
+    let observedStrip: Element | null = null;
+    let layerElement: Element | null = null;
+    let labels: string | null = null;
 
     /** Read the rendered tab list, which stays laid out while collapsed for measurement. */
     function tabs(): HTMLElement | null {
@@ -85,7 +91,15 @@ export const CanvasNavigationBar = defineComponent({
     /** Observe the bar's container and tab list as they appear, change, or disappear. */
     function observe(): void {
       if (typeof ResizeObserver === 'undefined') return;
-      observer ??= new ResizeObserver(measure);
+      observer ??= new ResizeObserver(() => {
+        measure();
+        locate();
+      });
+      if (strip.value !== observedStrip) {
+        if (observedStrip) observer.unobserve(observedStrip);
+        observedStrip = strip.value;
+        if (observedStrip) observer.observe(observedStrip);
+      }
       const parent = strip.value?.parentElement ?? null;
       if (parent !== observedParent) {
         if (observedParent) observer.unobserve(observedParent);
@@ -99,26 +113,62 @@ export const CanvasNavigationBar = defineComponent({
         if (list) observer.observe(list);
       }
     }
-    /** Lay the backdrop image over the bar exactly where the surface paints it. */
-    function placeBackdrop(): void {
-      const image = backdrop.value?.firstElementChild;
+    // The bar's padding-box origin in client pixels, read only when layout changes, so camera
+    // updates during pan and zoom write style values without forcing a layout.
+    let origin: { left: number; top: number } | null = null;
+    let placed: { url: string; size: string; position: string } | null = null;
+    /** Read the bar's client origin after its own or its container's layout changes. */
+    function locate(): void {
       const bar = strip.value;
-      const source = props.backdrop;
-      if (!(image instanceof HTMLElement) || !bar || !source) return;
+      if (!bar) return;
       const bounds = bar.getBoundingClientRect();
-      image.style.left = `${String(source.rect.left - bounds.left - bar.clientLeft)}px`;
-      image.style.top = `${String(source.rect.top - bounds.top - bar.clientTop)}px`;
-      image.style.width = `${String(source.rect.width)}px`;
-      image.style.height = `${String(source.rect.height)}px`;
+      origin = { left: bounds.left + bar.clientLeft, top: bounds.top + bar.clientTop };
+      placeBackdrop();
+    }
+    /**
+     * Paint the preview as the bar's own background, scaled and positioned where the surface
+     * paints the image, so the blur covers only the bar and its blur margin.
+     */
+    function placeBackdrop(): void {
+      const layer = backdrop.value?.firstElementChild ?? null;
+      const source = props.backdrop;
+      if (layer !== layerElement) {
+        layerElement = layer;
+        placed = null;
+      }
+      if (!(layer instanceof HTMLElement) || !source) return;
+      if (!origin) {
+        locate();
+        return;
+      }
+      const { left, top, width, height } = source.rect;
+      const x = left - origin.left + BACKDROP_BLUR_MARGIN;
+      const y = top - origin.top + BACKDROP_BLUR_MARGIN;
+      const next = {
+        url: source.url,
+        size: `${String(width)}px ${String(height)}px`,
+        position: `${String(x)}px ${String(y)}px`,
+      };
+      if (placed?.url !== next.url)
+        layer.style.backgroundImage = `url(${JSON.stringify(next.url)})`;
+      if (placed?.size !== next.size) layer.style.backgroundSize = next.size;
+      if (placed?.position !== next.position) layer.style.backgroundPosition = next.position;
+      placed = next;
     }
     onMounted(() => {
       observe();
+      labels = strip.value?.textContent ?? null;
       measure();
-      placeBackdrop();
+      locate();
     });
     onUpdated(() => {
       observe();
-      measure();
+      const nextLabels = strip.value?.textContent ?? null;
+      if (nextLabels !== labels) {
+        labels = nextLabels;
+        measure();
+        locate();
+      }
       placeBackdrop();
     });
     onBeforeUnmount(() => observer?.disconnect());
@@ -149,7 +199,7 @@ export const CanvasNavigationBar = defineComponent({
       return h('div', { class: 'sc-output-tabstrip sc-output-navigation', ref: strip }, [
         props.backdrop
           ? h('span', { class: 'sc-output-backdrop', ref: backdrop, 'aria-hidden': 'true' }, [
-              h('img', { src: props.backdrop.url, alt: '', draggable: false }),
+              h('span', { class: 'sc-output-backdrop-image' }),
             ])
           : null,
         route ? h(CanvasRoutePicker, { state: route, choose: props.chooseRoute }) : null,
