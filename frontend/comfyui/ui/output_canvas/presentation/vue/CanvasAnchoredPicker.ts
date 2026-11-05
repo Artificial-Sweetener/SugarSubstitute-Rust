@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Render themed choice rows with the selected row aligned over its canvas control. */
+/** Render a combo-box control whose themed choice rows align the selected row over it. */
 
 import { defineComponent, h, nextTick, onBeforeUnmount, ref, Teleport, type PropType } from 'vue';
 import { FloatingSurface } from '../../../menus/FloatingSurface.js';
@@ -32,6 +32,8 @@ export const CanvasAnchoredPicker = defineComponent({
     text: { type: String, default: '' },
     items: { type: Array as PropType<readonly CanvasPickerChoice[]>, required: true },
     centered: { type: Boolean, default: false },
+    /** Size the control to its longest choice so changing the choice never moves its neighbours. */
+    stable: { type: Boolean, default: false },
     choose: { type: Function as PropType<(value: string) => void>, required: true },
   },
   /** Keep popup work finite and scoped to the control's owning document. */
@@ -89,6 +91,13 @@ export const CanvasAnchoredPicker = defineComponent({
       opened.value = true;
       await nextTick();
       if (!opened.value || !popup.value) return;
+      // Rows are at least the control's width and grow to fit their longest label.
+      const fitted = popup.value.offsetWidth;
+      if (fitted > width)
+        geometry.value = {
+          ...geometry.value,
+          left: Math.max(8, Math.min(geometry.value.left, viewport.innerWidth - fitted - 8)),
+        };
       surface = new FloatingSurface(popup.value);
       surface.open({
         anchor: { kind: 'pointer', x: geometry.value.left, y: geometry.value.top },
@@ -143,7 +152,18 @@ export const CanvasAnchoredPicker = defineComponent({
     return () =>
       h(
         'span',
-        { class: 'sc-output-choice', 'data-centered': props.centered ? 'true' : undefined },
+        {
+          class: 'sc-output-choice',
+          'data-centered': props.centered ? 'true' : undefined,
+          'data-stable': props.stable ? 'true' : undefined,
+          style: props.stable
+            ? {
+                '--sc-choice-label-chars': String(
+                  Math.max(1, ...props.items.map((item) => item.label.length)),
+                ),
+              }
+            : undefined,
+        },
         [
           h(
             'button',
@@ -157,7 +177,16 @@ export const CanvasAnchoredPicker = defineComponent({
               disabled: !props.items.length,
               onClick: open,
             },
-            props.text || props.items.find((item) => item.value === props.value)?.label || 'Output',
+            [
+              h(
+                'span',
+                { class: 'sc-output-choice-label' },
+                props.text ||
+                  props.items.find((item) => item.value === props.value)?.label ||
+                  'Output',
+              ),
+              h('span', { class: 'sc-output-chevron', 'aria-hidden': 'true' }),
+            ],
           ),
           opened.value
             ? h(Teleport, { to: anchor.value?.ownerDocument.body }, [
@@ -172,7 +201,8 @@ export const CanvasAnchoredPicker = defineComponent({
                     style: {
                       left: `${geometry.value.left}px`,
                       top: `${geometry.value.top}px`,
-                      width: `${geometry.value.width}px`,
+                      minWidth: `${geometry.value.width}px`,
+                      maxWidth: `${String(Math.max(geometry.value.width, (anchor.value?.ownerDocument.defaultView?.innerWidth ?? 0) - 16))}px`,
                       maxHeight: `${geometry.value.height}px`,
                     },
                     onKeydown: keydown,

@@ -62,7 +62,7 @@ test('aligns the active source row over its control and commits keyboard navigat
     const popup = document.querySelector<HTMLElement>('[role="listbox"]')!;
     expect(popup.style.left).toBe('192px');
     expect(popup.style.top).toBe('62px');
-    expect(popup.style.width).toBe('136px');
+    expect(popup.style.minWidth).toBe('136px');
     expect(popup.querySelector('[aria-selected="true"]')?.textContent).toBe('<b>B</b>');
     expect(popup.querySelector('b')).toBeNull();
     expect(document.activeElement).toBe(popup.querySelector('[aria-selected="true"]'));
