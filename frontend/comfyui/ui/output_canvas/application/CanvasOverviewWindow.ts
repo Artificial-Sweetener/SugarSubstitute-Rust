@@ -112,7 +112,9 @@ export function canvasOverviewWindow(
   if (!Number.isSafeInteger(count)) throw new RangeError('Canvas overview catalog is too large.');
   const dimensions = reference ??
     catalog.entries[0]?.items[0]?.dimensions ??
-    catalog.entries[0]?.preview?.dimensions ?? { width: 1, height: 1 };
+    // Use the layout policy's 512-pixel reference scale until an adapter knows the aspect.
+    // A 1-pixel square makes the minimum two-image-pixel gutter larger than each cell.
+    catalog.entries[0]?.preview?.dimensions ?? { width: 512, height: 512 };
   const packed =
     count > 0 && count <= 8 && width > 0 && height > 0
       ? canvasBatchLayout(count, { width, height }, dimensions, previousColumns)
