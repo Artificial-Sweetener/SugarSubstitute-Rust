@@ -108,6 +108,11 @@ impl DeferredEdit {
     pub const fn runs(&self) -> u8 {
         self.runs
     }
+    /// The manager-assigned order of this request, which [`ToolManager::deferred_failed`]
+    /// takes when the work ends without a result.
+    pub const fn request(&self) -> u64 {
+        self.request
+    }
     /// Read the document's current revision instead of the one this work was requested
     /// against. Work a tool requested while earlier work of the same document was still running
     /// reads that work's result this way, so successive gestures each land in order. The work

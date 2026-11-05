@@ -91,6 +91,33 @@ impl sugarsubstitute_contracts::execution::MemoryRelease for Unowned {
     fn release(&self, _: u64) {}
 }
 
+/// Pixels of the document the reservation regression filters.
+const RESERVED_EDGE: u32 = 1024;
+/// The canvas's per-job reservation for coverage work: six bytes per document pixel and 1 MiB.
+const RESERVED_JOB: u64 = RESERVED_EDGE as u64 * RESERVED_EDGE as u64 * 6 + (1 << 20);
+
+#[test]
+fn filters_of_coverage_spanning_the_document_fit_a_six_byte_per_pixel_job() -> TestResult {
+    run(RESERVED_JOB, |context| {
+        let document =
+            sugarsubstitute_contracts::execution::MemoryLease::new(64 << 20, Box::new(Unowned));
+        let extent = Extent::new(RESERVED_EDGE, RESERVED_EDGE)?;
+        // A soft mask reaching every edge, as a painted or loaded mask commonly does, so each
+        // filter works over the whole document.
+        let mut mask = Coverage::new(extent, 0, &document)?;
+        mask.update(extent.region(), &document, |x, y, _| ((x * 37 + y * 11) % 65_536) as u16)?;
+        let feathered = mask.feather(12.0, context)?;
+        assert_ne!(feathered, mask);
+        drop(feathered);
+        assert_eq!(context.memory().claimed_bytes(), 0);
+        let expanded = mask.expand(12, context)?;
+        assert_ne!(expanded, mask);
+        drop(expanded);
+        assert_eq!(context.memory().claimed_bytes(), 0);
+        Ok(())
+    })
+}
+
 #[test]
 fn adopted_coverage_moves_its_charge_to_the_keeping_lease_and_keeps_shared_tiles_intact()
 -> TestResult {

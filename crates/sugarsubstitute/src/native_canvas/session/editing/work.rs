@@ -37,7 +37,8 @@ const WAITING_EDITS: usize = 32;
 /// The running and waiting coverage work and the running selection trace.
 #[derive(Default)]
 pub(super) struct EditingWork {
-    running: Option<(u64, OwnedJob<PreparedEdit, WorkError>)>,
+    /// The running edit: its document identity, its request order and its job.
+    running: Option<(u64, u64, OwnedJob<PreparedEdit, WorkError>)>,
     /// Edits waiting to start, oldest first.
     waiting: VecDeque<DeferredEdit>,
     tracing: Option<([u8; 32], OwnedJob<CoverageBoundary, WorkError>)>,
@@ -87,7 +88,7 @@ impl EditingWork {
 
     /// Stop running work for close and drop what has not started.
     pub(super) fn cancel(&mut self) {
-        if let Some((_, job)) = &self.running {
+        if let Some((_, _, job)) = &self.running {
             job.cancel();
         }
         if let Some((_, job)) = &self.tracing {
@@ -163,6 +164,7 @@ impl Session {
                 None,
             )?;
             let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
+            let request = work.request();
             let mut slot = Some(work);
             match runtime.client.submit_blocking_owned_input(
                 &runtime.scope,
@@ -170,7 +172,7 @@ impl Session {
                 &mut slot,
                 |work, context| work.run(&context).map_err(WorkError::from),
             ) {
-                Ok(job) => self.editing.work.running = Some((identity, job)),
+                Ok(job) => self.editing.work.running = Some((identity, request, job)),
                 Err(OwnedInputError::Admission(cause)) if activity::retryable(&cause) => {
                     if let Some(work) = slot {
                         self.editing.work.waiting.push_front(work);
@@ -230,8 +232,8 @@ impl Session {
     ) -> Result<(), Box<dyn Error>> {
         let mut finished = false;
         if let Some(completion) =
-            self.editing.work.running.as_mut().and_then(|(_, job)| job.try_take_completion())
-            && let Some((identity, job)) = self.editing.work.running.take()
+            self.editing.work.running.as_mut().and_then(|(_, _, job)| job.try_take_completion())
+            && let Some((identity, request, job)) = self.editing.work.running.take()
         {
             finished = true;
             Self::observe_terminal(&job, &completion.outcome);
@@ -240,6 +242,7 @@ impl Session {
                 Ok(_) => {}
                 Err(cause) => {
                     tracing::warn!(operation = "canvas_coverage_work", document_id = identity, cause = %cause, "Coverage work did not finish; the document is unchanged");
+                    self.editing_work_failed(identity, request)?;
                 }
             }
         }
@@ -257,23 +260,17 @@ impl Session {
                 }
             }
         }
+        // Finished, failed or abandoned work may have ended the shown document's modification.
+        if self.document.tools.modifying().is_none() {
+            self.editing.modification = None;
+        }
         if finished { self.submit_editing_work() } else { Ok(()) }
     }
 
     /// Apply a finished edit to the document it read, wherever that document is held.
     fn complete_editing(&mut self, identity: u64, prepared: PreparedEdit) {
         let now = self.navigation_time();
-        let document = if self
-            .document
-            .scene
-            .as_ref()
-            .is_some_and(|scene| scene.document.snapshot().identity() == identity)
-        {
-            Some(&mut *self.document)
-        } else {
-            self.inputs.parked_mut(identity)
-        };
-        let Some(document) = document else {
+        let Some(document) = self.editing_document_mut(identity) else {
             return;
         };
         let Some(scene) = document.scene.as_mut() else {
@@ -317,6 +314,35 @@ impl Session {
                 tracing::warn!(operation = "canvas_coverage_work", document_id = identity, cause = %cause, "Finished coverage work could not be applied");
             }
         }
+    }
+
+    /// The document state with snapshot identity `identity`, shown or parked.
+    fn editing_document_mut(&mut self, identity: u64) -> Option<&mut document::DocumentState> {
+        let shown = self
+            .document
+            .scene
+            .as_ref()
+            .is_some_and(|scene| scene.document.snapshot().identity() == identity);
+        if shown { Some(&mut *self.document) } else { self.inputs.parked_mut(identity) }
+    }
+
+    /// Coverage work for `request` of document `identity` ended without a result: an open
+    /// modification waiting on it ends as Cancel would end it, so its document's undo and tools
+    /// are not left blocked.
+    fn editing_work_failed(&mut self, identity: u64, request: u64) -> Result<(), Box<dyn Error>> {
+        let now = self.navigation_time();
+        let Some(document) = self.editing_document_mut(identity) else {
+            return Ok(());
+        };
+        let scene = document.scene.as_ref().map(|scene| &scene.document);
+        if document.tools.deferred_failed(request, scene, now)? {
+            tracing::warn!(
+                operation = "canvas_coverage_modification",
+                document_id = identity,
+                "A coverage modification's work did not finish; the modification was cancelled"
+            );
+        }
+        Ok(())
     }
 
     /// Stop editing work for close and release traced outlines, whose storage the scope's

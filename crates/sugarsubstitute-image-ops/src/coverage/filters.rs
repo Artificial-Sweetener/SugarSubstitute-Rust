@@ -115,16 +115,24 @@ impl Coverage {
         let Some(region) = self.affected(3 * boxed) else {
             return Ok(self.clone());
         };
-        let (mut values, _claim) = self.dense(region, context)?;
-        let mut line = Vec::new();
-        for _ in 0..3 {
-            for vertical in [false, true] {
-                check(context)?;
-                box_pass(&mut values, region, boxed, vertical, &mut line)?;
+        let (rounded, _claim) = {
+            let (mut values, claims) = self.dense(region, context)?;
+            let mut line = Vec::new();
+            for _ in 0..3 {
+                for vertical in [false, true] {
+                    check(context)?;
+                    box_pass(&mut values, region, boxed, vertical, &mut line)?;
+                }
             }
-        }
-        let rounded: Vec<u16> =
-            values.iter().map(|value| value.round().clamp(0.0, 65535.0) as u16).collect();
+            let mut rounded = Vec::new();
+            rounded.try_reserve_exact(values.len())?;
+            rounded.extend(values.iter().map(|value| value.round().clamp(0.0, 65535.0) as u16));
+            drop((values, line));
+            (rounded, claims.keep_values())
+        };
+        // The floating-point scratch is released before the result's tiles are charged, so the
+        // job holds at most the dense copy's charge at once: a feathered result fits the same
+        // reservation as an expanded or contracted one.
         let mut result = self.clone();
         result.write(region, &rounded, context.memory())?;
         Ok(result)
@@ -177,9 +185,12 @@ impl Coverage {
         &self,
         region: Region,
         context: &JobContext,
-    ) -> Result<(Vec<f32>, MemoryClaim), ImageError> {
+    ) -> Result<(Vec<f32>, DenseClaims), ImageError> {
         let count = region.pixels() as usize;
-        let claim = context.memory().claim(region.pixels() * 6 + 64)?;
+        let claims = DenseClaims {
+            values: context.memory().claim(region.pixels() * 2 + 64)?,
+            scratch: context.memory().claim(region.pixels() * 4 + 64)?,
+        };
         let mut values = Vec::new();
         values.try_reserve_exact(count)?;
         values.resize(count, 0);
@@ -187,7 +198,22 @@ impl Coverage {
         let mut dense = Vec::new();
         dense.try_reserve_exact(count)?;
         dense.extend(values.into_iter().map(f32::from));
-        Ok((dense, claim))
+        Ok((dense, claims))
+    }
+}
+
+/// The job's charge for a dense working copy: two bytes per value for the integer values read
+/// from the coverage and later written back, and four for the floating-point scratch.
+struct DenseClaims {
+    values: MemoryClaim,
+    scratch: MemoryClaim,
+}
+
+impl DenseClaims {
+    /// Release the scratch charge, keeping the one that funds the integer values.
+    fn keep_values(self) -> MemoryClaim {
+        drop(self.scratch);
+        self.values
     }
 }
 

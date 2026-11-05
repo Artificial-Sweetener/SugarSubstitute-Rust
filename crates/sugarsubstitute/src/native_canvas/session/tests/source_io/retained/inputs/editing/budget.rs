@@ -4,7 +4,7 @@
 //! work it cannot hold is refused while the canvas keeps running.
 
 use super::*;
-use sugarsubstitute_contracts::execution::MemoryClaim;
+use sugarsubstitute_contracts::{canvas_native::CanvasSessionAction, execution::MemoryClaim};
 
 /// A second workflow, switched to and from like a person changing workflow tabs.
 const OTHER_WORKFLOW: &str = "workflow-9a4e2f61-3b7d-4c58-8e19-5d6a7b8c9d0e";
@@ -193,6 +193,56 @@ fn a_base_change_the_budget_cannot_hold_is_answered_and_the_document_keeps_its_b
         drop(full);
         let resynced = fixture.sync(vec![blank()?])?;
         assert_eq!(synced(&resynced, "image")?.extent, Extent::new(64, 48)?);
+    }
+    fixture.finish().map(drop)
+}
+
+#[test]
+fn a_modification_whose_work_the_budget_refuses_is_cancelled_and_undo_stays_available()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    {
+        let image = show(&mut fixture, Some("first"))?;
+        let first = layer(&image, "first")?;
+        fixture.edit(CanvasEditCommand::Tool(CanvasToolId::MaskRectangle))?;
+        fixture.drag(&[[2.0, 2.0], [40.0, 30.0]])?;
+        fixture.settle_inputs()?;
+        let painted = fixture.snapshot(image.document)?;
+        let feather = |phase| {
+            CanvasEditCommand::Modify(CanvasCoverageModify {
+                target: CanvasModifyTarget::Mask,
+                operation: CanvasModifyOperation::Feather,
+                pixels: 6,
+                phase,
+            })
+        };
+        // The document's lease cannot hold the preview's result, so its work fails.
+        let full = fixture.exhaust(0)?;
+        fixture.edit(feather(CanvasModifyPhase::Preview))?;
+        fixture.settle_inputs()?;
+        assert!(fixture.session.failed.is_none(), "the canvas keeps running");
+        assert!(fixture.session.edit_state()?.session.is_none(), "the modification was cancelled");
+        let refused = fixture.snapshot(image.document)?;
+        assert_eq!(refused.revision(), painted.revision(), "the document is unchanged");
+        assert_eq!(coverage(&refused, first)?, coverage(&painted, first)?);
+        // Nothing is left blocked: Apply has nothing stale to publish, and undo works.
+        assert!(fixture.edit(CanvasEditCommand::Session(CanvasSessionAction::Apply)).is_err());
+        fixture.settle_inputs()?;
+        assert_eq!(fixture.snapshot(image.document)?.revision(), painted.revision());
+        drop(full);
+        fixture.edit(CanvasEditCommand::History(CanvasHistoryAction::Undo))?;
+        fixture.settle_inputs()?;
+        assert_eq!(coverage(&fixture.snapshot(image.document)?, first)?.value(20, 15), 0);
+        // Once memory returns the same modification previews and applies.
+        fixture.edit(CanvasEditCommand::History(CanvasHistoryAction::Redo))?;
+        fixture.settle_inputs()?;
+        let redone = fixture.snapshot(image.document)?.revision();
+        fixture.edit(feather(CanvasModifyPhase::Preview))?;
+        fixture.settle_inputs()?;
+        fixture.edit(feather(CanvasModifyPhase::Apply))?;
+        fixture.settle_inputs()?;
+        assert!(fixture.session.edit_state()?.session.is_none());
+        assert_eq!(fixture.snapshot(image.document)?.revision(), redone + 1);
     }
     fixture.finish().map(drop)
 }

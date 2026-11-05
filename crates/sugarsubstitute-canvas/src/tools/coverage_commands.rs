@@ -219,7 +219,11 @@ impl ToolManager {
             return Ok(DeferredCompletion::Unchanged);
         }
         if !prepared.current(document) {
-            return prepared.rerun(document);
+            let completion = prepared.rerun(document)?;
+            if matches!(completion, DeferredCompletion::Abandoned) {
+                self.end_modification(Some(document), now)?;
+            }
+            return Ok(completion);
         }
         match prepared.disposition() {
             Disposition::Preview => {
@@ -240,6 +244,24 @@ impl ToolManager {
                 })
             }
         }
+    }
+    /// Work for request `request` ended without a result: it failed, was cancelled or was
+    /// refused. When it is the open modification's latest request, the modification ends as
+    /// Cancel would end it, leaving the document unchanged, so undo, transform and other tools
+    /// are not blocked behind work that will never finish. Returns whether it ended one.
+    /// # Errors
+    /// Preserves tool activation failures while restoring the captured tool.
+    pub fn deferred_failed(
+        &mut self,
+        request: u64,
+        document: Option<&Document>,
+        now: Duration,
+    ) -> Result<bool, CanvasError> {
+        if self.modification.as_ref().is_none_or(|open| open.request != request) {
+            return Ok(false);
+        }
+        self.end_modification(document, now)?;
+        Ok(true)
     }
     /// Lifecycle loss during a modification: keep it through focus, geometry and policy
     /// changes; end it for an explicit cancel, a document change or shutdown.

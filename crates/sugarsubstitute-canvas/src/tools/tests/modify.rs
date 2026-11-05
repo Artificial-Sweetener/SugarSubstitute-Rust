@@ -3,7 +3,7 @@
 //! Deselect, clear, and live-previewed coverage modification with its navigation hand-off.
 use super::*;
 use crate::{CoverageShapeTool, MaskAppearance, ShapeKind, ShapeTarget, ToolOverlay};
-use sugarsubstitute_contracts::execution::JobContext;
+use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
 use sugarsubstitute_image_ops::{Coverage, Path, Region};
 
 const MASK: u64 = 7;
@@ -229,6 +229,128 @@ fn applying_an_unfinished_preview_computes_it_and_cancel_restores() -> harness::
         assert!(CoverageModification::new(CoverageOperation::Expand, 0).is_err());
         assert!(CoverageModification::new(CoverageOperation::Expand, 1000).is_err());
         assert_eq!(canvas.tools.overlay(), None::<ToolOverlay<'_>>);
+        Ok(())
+    })
+}
+
+/// A canvas document lease in tests: a fixed reservation whose final release needs no owner.
+struct Unowned;
+impl sugarsubstitute_contracts::execution::MemoryRelease for Unowned {
+    fn release(&self, _: u64) {}
+}
+
+/// Edge of the large document the reservation regression edits.
+const LARGE_EDGE: u32 = 4096;
+/// The canvas's reservation for one coverage job over the large document: six bytes per
+/// document pixel and 1 MiB.
+const LARGE_JOB: u64 = LARGE_EDGE as u64 * LARGE_EDGE as u64 * 6 + (1 << 20);
+
+/// A large document whose soft mask reaches every edge, charged to the document's own lease as
+/// the canvas charges input documents, with the mask targeted.
+fn spanning(memory: &MemoryLease) -> Result<Fixture, CanvasError> {
+    let extent = Extent::new(LARGE_EDGE, LARGE_EDGE)?;
+    let mut tools = ToolManager::new(Navigation::new(crate::Viewport::new(extent)?));
+    let tool = ToolId::new(2)?;
+    tools.register(
+        tool,
+        CoverageShapeTool::new(ShapeTarget::Mask, ShapeKind::Rectangle),
+        memory,
+    )?;
+    let mut document = Document::new(1, extent, memory)?;
+    let mut mask = Coverage::new(extent, 0, memory)?;
+    mask.update(extent.region(), memory, |x, y, _| ((x * 37 + y * 11) % 65_536) as u16)?;
+    let appearance = MaskAppearance::new([0, 128, 255], 0.5)?;
+    let layer =
+        Layer::new(LayerId::new(MASK)?, LayerContent::Coverage { coverage: mask, appearance })?;
+    document.apply(DocumentEdit::Insert { index: 0, layer })?;
+    tools.select(tool, Some(&document), Duration::ZERO)?;
+    tools.set_target(Some(LayerId::new(MASK)?));
+    Ok(Fixture { tools, document, tool })
+}
+
+#[test]
+fn feather_and_expand_of_a_mask_spanning_a_large_document_resolve_within_one_job_reservation()
+-> harness::TestResult {
+    harness::run(LARGE_JOB, |context| {
+        let run = || -> Result<(), CanvasError> {
+            let memory = MemoryLease::new(1 << 30, Box::new(Unowned));
+            let mut canvas = spanning(&memory)?;
+            for operation in [CoverageOperation::Feather, CoverageOperation::Expand] {
+                let revision = canvas.document.snapshot().revision();
+                canvas.modify(ModifyTarget::Mask, operation, 12, ModifyPhase::Preview)?;
+                assert!(canvas.settle(context)?, "{operation:?} preview");
+                canvas.modify(ModifyTarget::Mask, operation, 12, ModifyPhase::Apply)?;
+                assert!(canvas.tools.take_deferred().is_none());
+                assert_eq!(canvas.tools.modifying(), None, "{operation:?} stayed open");
+                assert_eq!(canvas.document.snapshot().revision(), revision + 1);
+                // Nothing of the job's working storage stays charged to it.
+                assert_eq!(context.memory().claimed_bytes(), 0);
+                assert!(canvas.document.undo()?);
+                assert!(canvas.document.redo()?);
+            }
+            Ok(())
+        };
+        run().map_err(|cause| ImageError::Source(Box::new(cause)))
+    })
+}
+
+#[test]
+fn work_that_ends_without_a_result_cancels_its_modification() -> harness::TestResult {
+    run(|context| {
+        let mut canvas = fixture(context)?;
+        let revision = canvas.document.snapshot().revision();
+        canvas.modify(ModifyTarget::Mask, CoverageOperation::Feather, 8, ModifyPhase::Preview)?;
+        let failed = canvas.tools.take_deferred().ok_or(CanvasError::Invalid("No preview"))?;
+        canvas.modify(ModifyTarget::Mask, CoverageOperation::Feather, 9, ModifyPhase::Preview)?;
+        let latest = canvas.tools.take_deferred().ok_or(CanvasError::Invalid("No preview"))?;
+        // Earlier, superseded work failing leaves the open modification alone.
+        assert!(!canvas.tools.deferred_failed(
+            failed.request(),
+            Some(&canvas.document),
+            Duration::ZERO
+        )?);
+        assert_eq!(canvas.tools.modifying(), Some(ModifyTarget::Mask));
+        // The latest request failing ends it as Cancel would, and the document is unchanged.
+        assert!(canvas.tools.deferred_failed(
+            latest.request(),
+            Some(&canvas.document),
+            Duration::ZERO
+        )?);
+        assert_eq!((canvas.tools.modifying(), canvas.tools.effective()), (None, canvas.tool));
+        assert!(canvas.tools.preview_snapshot().is_none());
+        assert_eq!(canvas.document.snapshot().revision(), revision);
+        assert!(canvas.tools.deselect(&mut canvas.document)?);
+        assert!(canvas.document.undo()?);
+
+        // Work the document keeps outdating is abandoned, and so ends its modification too.
+        canvas.modify(ModifyTarget::Mask, CoverageOperation::Expand, 4, ModifyPhase::Preview)?;
+        let mut work = canvas.tools.take_deferred().ok_or(CanvasError::Invalid("No preview"))?;
+        let selections = [
+            Some(
+                Path::rectangle([0.0, 0.0, 10.0, 10.0])?
+                    .rasterize(canvas.document.snapshot().extent(), context)?,
+            ),
+            None,
+        ];
+        for attempt in 0.. {
+            let prepared = work.run(context)?;
+            canvas.document.apply(DocumentEdit::Select(selections[attempt % 2].clone()))?;
+            match canvas.tools.complete_deferred(prepared, &mut canvas.document, Duration::ZERO)? {
+                DeferredCompletion::Rerun(next) => work = next,
+                DeferredCompletion::Abandoned => break,
+                other => {
+                    return Err(CanvasError::Invalid(
+                        if matches!(other, DeferredCompletion::Applied) {
+                            "Stale work applied"
+                        } else {
+                            "Stale work was dropped"
+                        },
+                    ));
+                }
+            }
+        }
+        assert_eq!((canvas.tools.modifying(), canvas.tools.effective()), (None, canvas.tool));
+        assert!(canvas.tools.preview_snapshot().is_none());
         Ok(())
     })
 }
