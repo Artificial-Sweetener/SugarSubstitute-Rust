@@ -28,8 +28,8 @@ import { ensureCanvasWorkspaceStyles } from './CanvasWorkspaceStyles.js';
 import { BrowserCanvasWorkspaceMotion } from './BrowserCanvasWorkspaceMotion.js';
 
 export interface BrowserCanvasWorkspaceActions {
-  /** Persist a completed width through the sole host preferences owner. */
-  width(width: number): void;
+  /** Store a completed divider move as the workflow's editor width, in CSS pixels. */
+  editorWidth(editorWidth: number): void;
   /** Request explicit close through the same action used by the native toolbar toggle. */
   close(): void;
   /** Reconcile canvas attachment availability after settled allocation changes. */
@@ -105,7 +105,7 @@ export class BrowserCanvasWorkspace {
           model.resize(width);
           this.#render();
         },
-        commit: actions.width,
+        commit: () => actions.editorWidth(model.read().editorWidth),
         cancel: () => {
           model.cancelResize();
           this.#render();

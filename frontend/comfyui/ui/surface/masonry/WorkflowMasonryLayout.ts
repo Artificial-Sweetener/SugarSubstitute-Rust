@@ -20,9 +20,27 @@ import {
   type CubeMasonryOptions,
   type CubeMasonryPlacement,
 } from '../CubeMasonryLayout.js';
+import { CUBE_STACK_MASONRY_GUTTER, cubeStackWidth } from '../stack/CubeStackMetrics.js';
 
 /** Align sections and navigation below the panel edge; native toolbars occupy separate flow. */
 export const WORKFLOW_MASONRY_TOP_INSET = 12;
+/** Minimum card column width of the native appearance, in CSS pixels. */
+export const WORKFLOW_MASONRY_COLUMN_WIDTH = 400;
+/** Gap between native-appearance card columns, in CSS pixels. */
+export const WORKFLOW_MASONRY_GAP = 8;
+/** Default padding on each side of the masonry content, in CSS pixels. */
+export const WORKFLOW_MASONRY_INLINE_PADDING = 20;
+/**
+ * Size the editor beside the output canvas to the expanded cube stack plus two card columns.
+ *
+ * This is the editor width of every workflow whose divider the user has not moved.
+ */
+export const WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH =
+  cubeStackWidth(false) +
+  CUBE_STACK_MASONRY_GUTTER +
+  2 * WORKFLOW_MASONRY_INLINE_PADDING +
+  2 * WORKFLOW_MASONRY_COLUMN_WIDTH +
+  WORKFLOW_MASONRY_GAP;
 
 export interface WorkflowMasonryLayoutSection {
   id: string;

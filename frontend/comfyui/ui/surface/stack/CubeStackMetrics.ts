@@ -31,3 +31,6 @@ export function cubeStackRowStride(compact: boolean): number {
 export function cubeStackWidth(compact: boolean): number {
   return compact ? CUBE_STACK_ROW_HEIGHT : 224;
 }
+
+/** Separate the expanded rail from the masonry cards it reserves space beside. */
+export const CUBE_STACK_MASONRY_GUTTER = 24;

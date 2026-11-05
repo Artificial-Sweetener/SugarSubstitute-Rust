@@ -22,8 +22,8 @@ export interface CanvasWorkspaceResizeOwner {
   width(): number;
   /** Preview one requested width without persisting pointer movement. */
   preview(width: number): void;
-  /** Persist a completed, already-clamped width through the host preference adapter. */
-  commit(width: number): void;
+  /** Persist the completed, already-clamped divider position through the workflow view owner. */
+  commit(): void;
   /** Restore accepted allocation after interruption. */
   cancel(): void;
 }
@@ -141,7 +141,7 @@ export class CanvasWorkspaceResizeInput {
     event.stopPropagation();
     this.#release(false);
     this.owner.preview(width);
-    this.owner.commit(this.owner.width());
+    this.owner.commit();
   };
 
   /** Apply only the latest pending request through the allocation owner. */
@@ -165,7 +165,7 @@ export class CanvasWorkspaceResizeInput {
     }
     if (pointer && this.element.hasPointerCapture(pointer.id))
       this.element.releasePointerCapture(pointer.id);
-    if (completed && pointer) this.owner.commit(this.owner.width());
+    if (completed && pointer) this.owner.commit();
     else if (pointer) this.owner.cancel();
   }
 }

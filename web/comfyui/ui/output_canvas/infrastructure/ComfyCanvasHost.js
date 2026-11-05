@@ -113,7 +113,7 @@ export class ComfyCanvasHost {
                 this.#toolbar.update(this.#workspace.visible, this.#workspace.content !== null);
             }
         };
-        this.#workspace = new ComfyCanvasWorkspaceHost(app, document, this.#preferences, frames, changed, report, options.presentation);
+        this.#workspace = new ComfyCanvasWorkspaceHost(app, document, options.defaultEditorWidth, frames, changed, report, options.presentation);
         const presenter = new OutputPresenterSelection({
             prefersNative: () => prefersNativeOutputSurface(window),
             surface: () => execution.canvases.surfaceHost('embedded-document'),
@@ -280,7 +280,6 @@ export class ComfyCanvasHost {
             stop();
         this.#adapter.dispose();
         this.#sources.dispose();
-        this.#preferences.dispose();
         this.#transfers.dispose();
         this.#browser?.dispose();
     }

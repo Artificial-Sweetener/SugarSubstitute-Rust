@@ -61,9 +61,10 @@ function fixture(width = 1400) {
     toJSON: () => ({}),
   }));
   const frames = new CanvasFrameFixture();
-  const model = new CanvasWorkspaceLayout();
+  // A 1400 px workspace leaves this default editor a 560 px canvas.
+  const model = new CanvasWorkspaceLayout(840);
   const actions = {
-    width: jest.fn<(width: number) => void>(),
+    editorWidth: jest.fn<(editorWidth: number) => void>(),
     close: jest.fn(),
     changed: jest.fn(),
     report: jest.fn(),
@@ -103,9 +104,9 @@ test('keeps masonry content identity and restores the native frame through close
   expect(f.workspace.content.contains(borrowed)).toBe(true);
   expect(f.root.style.marginLeft).toBe('');
   f.workspace.suspend(null);
-  f.workspace.preferences({ visible: false, width: 600 });
+  f.workspace.preferences({ visible: false, editorWidth: 800 });
   expect(f.workspace.content.style.left).toBe('0px');
-  f.workspace.preferences({ visible: true, width: 600 });
+  f.workspace.preferences({ visible: true, editorWidth: 800 });
   expect(f.workspace.content.contains(borrowed)).toBe(true);
   expect(f.workspace.content.style.left).toBe('0px');
   expect(f.workspace.content.style.width).toBe('calc(100% - 600px)');
@@ -124,7 +125,8 @@ test('does not generate presentation mutations when accepted allocation is uncha
   const f = fixture();
   const mutations = new MutationObserver(() => undefined);
   mutations.observe(f.workspace.content, { attributes: true });
-  for (let index = 0; index < 100; index++) f.workspace.preferences({ visible: true, width: 0 });
+  for (let index = 0; index < 100; index++)
+    f.workspace.preferences({ visible: true, editorWidth: 0 });
   expect(mutations.takeRecords()).toHaveLength(0);
   mutations.disconnect();
   f.dispose();
@@ -206,12 +208,12 @@ test('keeps native minimap chrome aligned with the remaining graph allocation', 
     'var(--sc-output-workspace-reserved-width,0px)',
   );
   expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('560px');
-  f.workspace.preferences({ visible: false, width: 560 });
+  f.workspace.preferences({ visible: false, editorWidth: 0 });
   expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('');
   f.dispose();
 });
 
-test('coalesces workspace measurements and cancels pending observation on teardown', () => {
+test('coalesces workspace measurements, gives the canvas the new width, and cancels pending observation', () => {
   const f = fixture();
   const changed = f.actions.changed.mock.calls.length;
   for (let width = 1400; width < 1500; width++) f.resize(width);
@@ -219,7 +221,7 @@ test('coalesces workspace measurements and cancels pending observation on teardo
   expect(f.actions.changed).toHaveBeenCalledTimes(changed);
   f.frames.advance(16);
   expect(f.workspace.content.style.left).toBe('0px');
-  expect(f.workspace.content.style.width).toBe('calc(100% - 599.6px)');
+  expect(f.workspace.content.style.width).toBe('calc(100% - 659px)');
   expect(f.chrome.style.width).toBe('1499px');
   expect(f.actions.changed).toHaveBeenCalledTimes(changed + 1);
   f.resize(1600);
@@ -231,7 +233,7 @@ test('keeps exit pixels and their width until settled while accepted visibility 
   const f = fixture();
   const pane = f.root.querySelector<HTMLElement>('.sc-output-workspace-pane')!;
   const animation = installCanvasWorkspaceAnimation(pane);
-  f.workspace.preferences({ visible: false, width: 560 }, true);
+  f.workspace.preferences({ visible: false, editorWidth: 0 }, true);
   expect(f.workspace.visible).toBe(false);
   expect(f.workspace.presented).toBe(true);
   expect(pane.style.width).toBe('560px');
@@ -241,7 +243,7 @@ test('keeps exit pixels and their width until settled while accepted visibility 
   await Promise.resolve();
   expect(f.workspace.presented).toBe(false);
   expect(pane.hidden).toBe(true);
-  f.workspace.preferences({ visible: true, width: 560 }, true);
+  f.workspace.preferences({ visible: true, editorWidth: 0 }, true);
   expect(f.workspace.presented).toBe(true);
   expect(animation.effects[1]?.frames[0]?.transform).toBe('translateX(100%)');
   f.workspace.suspend('configure');
@@ -273,7 +275,7 @@ test('rolls back owned DOM, listeners, and graph geometry when initial allocatio
   expect(
     () =>
       new BrowserCanvasWorkspace(f.root, f.panel, f.model, f.frames, {
-        width: () => undefined,
+        editorWidth: () => undefined,
         close: () => undefined,
         report: () => undefined,
         changed: () => {

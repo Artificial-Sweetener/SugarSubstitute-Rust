@@ -84,12 +84,18 @@ function fixture() {
     .mockImplementation(() => bounds(left, 40, 1460 - left, toolbarBottom - 40));
   const frames = new CanvasFrameFixture();
   const changed = jest.fn();
-  const workspace = new BrowserCanvasWorkspace(root, panel, new CanvasWorkspaceLayout(), frames, {
-    changed,
-    width: () => undefined,
-    close: () => undefined,
-    report: () => undefined,
-  });
+  const workspace = new BrowserCanvasWorkspace(
+    root,
+    panel,
+    new CanvasWorkspaceLayout(840),
+    frames,
+    {
+      changed,
+      editorWidth: () => undefined,
+      close: () => undefined,
+      report: () => undefined,
+    },
+  );
   return {
     root,
     panel,
@@ -169,7 +175,7 @@ test('ignores unrelated popup content and retains content when the canvas is clo
   await Promise.resolve();
   expect(f.frames.pending).toBe(0);
   expect(f.changed).toHaveBeenCalledTimes(count);
-  f.workspace.preferences({ visible: false, width: 560 });
+  f.workspace.preferences({ visible: false, editorWidth: 0 });
   expect(frame.parentElement).toBe(f.root);
   expect(f.workspace.content.parentElement).toBe(frame);
   f.dispose();

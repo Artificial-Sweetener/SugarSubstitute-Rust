@@ -73,9 +73,9 @@ test('observes the outer frame and realigns chrome before publishing the resized
         panel: HTMLElement,
         model: unknown,
         frames: { request(callback: () => void): () => void },
-        actions: { width(): void; close(): void; changed(): void; report(): void },
+        actions: { editorWidth(): void; close(): void; changed(): void; report(): void },
       ) => { dispose(): void };
-      CanvasWorkspaceLayout: new () => unknown;
+      CanvasWorkspaceLayout: new (defaultEditorWidth: number) => unknown;
     };
     const frame = document.querySelector<HTMLElement>('.comfyui-body')!;
     const root = document.querySelector<HTMLElement>('#graph-canvas-container')!;
@@ -84,14 +84,14 @@ test('observes the outer frame and realigns chrome before publishing the resized
     const workspace = new owner.BrowserCanvasWorkspace(
       root,
       panel,
-      new owner.CanvasWorkspaceLayout(),
+      new owner.CanvasWorkspaceLayout(840),
       {
         request(callback) {
           const handle = requestAnimationFrame(callback);
           return () => cancelAnimationFrame(handle);
         },
       },
-      { width() {}, close() {}, changed() {}, report() {} },
+      { editorWidth() {}, close() {}, changed() {}, report() {} },
     );
     const initial = chrome.getBoundingClientRect().width;
     frame.style.width = '1484px';
@@ -229,12 +229,12 @@ test('keeps Comfy graph layers out of a transparent docked strip while chrome sp
         panel: HTMLElement,
         model: unknown,
         frames: { request(callback: () => void): () => void },
-        actions: { width(): void; close(): void; changed(): void; report(): void },
+        actions: { editorWidth(): void; close(): void; changed(): void; report(): void },
       ) => {
         readonly canvas: HTMLElement;
-        preferences(value: { visible: boolean; width: number }): void;
+        preferences(value: { visible: boolean; editorWidth: number }): void;
       };
-      CanvasWorkspaceLayout: new () => unknown;
+      CanvasWorkspaceLayout: new (defaultEditorWidth: number) => unknown;
       ensureCanvasViewportStyles(document: Document): void;
     };
     const root = document.querySelector<HTMLElement>('#graph-canvas-container')!;
@@ -242,16 +242,16 @@ test('keeps Comfy graph layers out of a transparent docked strip while chrome sp
     const workspace = new owner.BrowserCanvasWorkspace(
       root,
       panel,
-      new owner.CanvasWorkspaceLayout(),
+      new owner.CanvasWorkspaceLayout(840),
       {
         request(callback) {
           const handle = requestAnimationFrame(callback);
           return () => cancelAnimationFrame(handle);
         },
       },
-      { width() {}, close() {}, changed() {}, report() {} },
+      { editorWidth() {}, close() {}, changed() {}, report() {} },
     );
-    workspace.preferences({ visible: true, width: 400 });
+    workspace.preferences({ visible: true, editorWidth: 800 });
     // A native host presents beneath the page, which leaves the docked pane transparent.
     owner.ensureCanvasViewportStyles(document);
     const viewport = document.createElement('div');

@@ -17,6 +17,8 @@
 import { ComfyCanvasHost, } from '../output_canvas/infrastructure/ComfyCanvasHost.js';
 import { WorkflowMasonryHostLifecycle, } from '../surface/masonry/WorkflowMasonryHostLifecycle.js';
 import { ComfyWorkflowViewPreferences } from '../workflow/infrastructure/ComfyWorkflowViewPreferences.js';
+import { OUTPUT_CANVAS_VISIBLE_SETTING } from '../output_canvas/infrastructure/ComfyCanvasPreferences.js';
+import { WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH } from './masonry/WorkflowMasonryLayout.js';
 import { isRecord } from '../types/common.js';
 /** Keep presentation lifecycle registration outside the host extension entry point. */
 export class ComfyWorkflowWorkspace {
@@ -33,11 +35,15 @@ export class ComfyWorkflowWorkspace {
             const settings = isRecord(ui.settings) ? ui.settings : {};
             const read = settings.getSettingValue;
             const value = typeof read === 'function'
-                ? read.call(settings, 'SugarCubes.OutputCanvas.Visible', true)
+                ? read.call(settings, OUTPUT_CANVAS_VISIBLE_SETTING, true)
                 : true;
             return typeof value === 'boolean' ? value : true;
         }, logger);
-        this.canvas = new ComfyCanvasHost({ ...options, presentation: this.#presentation });
+        this.canvas = new ComfyCanvasHost({
+            ...options,
+            presentation: this.#presentation,
+            defaultEditorWidth: WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH,
+        });
         this.masonry = new WorkflowMasonryHostLifecycle({
             ...masonry,
             presentation: this.#presentation,
