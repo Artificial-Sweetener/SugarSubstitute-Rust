@@ -54,6 +54,9 @@ pub struct MainCanvasDragOut {
     pub claim: sugarsubstitute_contracts::execution::MemoryClaim,
     /// Absolute path of the pinned staged copy, offered to targets that accept only files.
     pub staged: Option<std::path::PathBuf>,
+    /// The output decoded for the drag image, within [`super::DRAG_PREVIEW_CEILING`]; without
+    /// one the drag shows the system's standard drag cursors.
+    pub preview: Option<super::DragPreview>,
 }
 
 /// Pointer button that may drive native navigation; every other button stays with WebView2.

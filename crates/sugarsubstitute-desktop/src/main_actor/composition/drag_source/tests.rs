@@ -62,6 +62,7 @@ fn drag(
         bytes,
         claim,
         staged: None,
+        preview: None,
     })
 }
 

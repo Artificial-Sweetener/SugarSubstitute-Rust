@@ -92,6 +92,7 @@ impl NativeSurface {
             bytes: copied.bytes,
             claim: copied.claim,
             staged: copied.staged,
+            preview: copied.preview,
         })
     }
 

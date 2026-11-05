@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own one native window's canvas cursors: the shared Windows arrow, size and forbidden cursors,
-//! DPI-sized Qt hands and the rendered editing cursors.
+//! DPI-sized Qt hands and the rendered editing cursors, and create private cursors from
+//! straight RGBA images such as a drag-out's preview cursor.
 //!
 //! The standalone canvas peer and the composed main window each own one cache.
 
@@ -17,6 +18,8 @@ use ::windows::Win32::UI::{
     },
 };
 use resource::load_cursor;
+#[cfg(feature = "native-composition")]
+pub(crate) use resource::rgba_cursor;
 #[cfg(test)]
 use resource::select_frame;
 use std::{cell::RefCell, rc::Rc};
