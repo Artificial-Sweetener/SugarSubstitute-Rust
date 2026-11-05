@@ -26,6 +26,7 @@ import {
   type PropType,
 } from 'vue';
 import type {
+  CanvasBackdrop,
   CanvasCapabilities,
   CanvasCommand,
   CanvasViewSnapshot,
@@ -43,6 +44,7 @@ import { CanvasScenePicker } from './CanvasScenePicker.js';
  * The canvas, scene and batch choices are combo boxes. The final layer, the output sources of the
  * batch being viewed, is a sliding tab list that collapses to a picker when the bar lacks the
  * width for it. Input shows only the canvas choice, and the bar is absent when nothing applies.
+ * Over a native surface the bar blurs a copy of the painted image, placed where it lies on screen.
  */
 export const CanvasNavigationBar = defineComponent({
   name: 'CanvasNavigationBar',
@@ -52,12 +54,14 @@ export const CanvasNavigationBar = defineComponent({
     send: { type: Function as PropType<(command: CanvasCommand) => void>, required: true },
     route: { type: Object as PropType<CanvasRouteState | null>, default: null },
     chooseRoute: { type: Function as PropType<(route: CanvasRouteId) => void>, required: true },
+    backdrop: { type: Object as PropType<CanvasBackdrop | null>, default: null },
   },
   /** Bind source navigation while preserving the selected batch position. */
   setup(props) {
     const strip = ref<HTMLElement | null>(null);
     const slider = ref<ComponentPublicInstance | null>(null);
     const collapsed = ref(false);
+    const backdrop = ref<HTMLElement | null>(null);
     let observer: ResizeObserver | null = null;
     let observedParent: Element | null = null;
     let observedTabs: Element | null = null;
@@ -95,13 +99,27 @@ export const CanvasNavigationBar = defineComponent({
         if (list) observer.observe(list);
       }
     }
+    /** Lay the backdrop image over the bar exactly where the surface paints it. */
+    function placeBackdrop(): void {
+      const image = backdrop.value?.firstElementChild;
+      const bar = strip.value;
+      const source = props.backdrop;
+      if (!(image instanceof HTMLElement) || !bar || !source) return;
+      const bounds = bar.getBoundingClientRect();
+      image.style.left = `${String(source.rect.left - bounds.left - bar.clientLeft)}px`;
+      image.style.top = `${String(source.rect.top - bounds.top - bar.clientTop)}px`;
+      image.style.width = `${String(source.rect.width)}px`;
+      image.style.height = `${String(source.rect.height)}px`;
+    }
     onMounted(() => {
       observe();
       measure();
+      placeBackdrop();
     });
     onUpdated(() => {
       observe();
       measure();
+      placeBackdrop();
     });
     onBeforeUnmount(() => observer?.disconnect());
 
@@ -129,6 +147,11 @@ export const CanvasNavigationBar = defineComponent({
       const selection = snapshot.view.selection;
       const source = snapshot.sources.find((value) => value.id === selection?.sourceId);
       return h('div', { class: 'sc-output-tabstrip sc-output-navigation', ref: strip }, [
+        props.backdrop
+          ? h('span', { class: 'sc-output-backdrop', ref: backdrop, 'aria-hidden': 'true' }, [
+              h('img', { src: props.backdrop.url, alt: '', draggable: false }),
+            ])
+          : null,
         route ? h(CanvasRoutePicker, { state: route, choose: props.chooseRoute }) : null,
         scenes && capabilities.commands.includes('select-scene')
           ? h(CanvasScenePicker, {

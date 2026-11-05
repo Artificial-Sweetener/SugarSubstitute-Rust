@@ -30,10 +30,15 @@ export function ensureCanvasOverlayStyles(document: Document): void {
       box-shadow:0 2px 8px #0003; box-sizing:border-box;
     }
     .sc-output-tabstrip { position:absolute; bottom:8px; left:8px;
-      max-width:calc(100% - 16px); padding:4px; z-index:2;
-      background:color-mix(in srgb,var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)) 60%,transparent);
+      max-width:calc(100% - 16px); padding:4px; z-index:2; isolation:isolate;
+      --sc-output-glass:color-mix(in srgb,var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)) 60%,transparent);
+      background:var(--sc-output-glass);
       -webkit-backdrop-filter:blur(var(--p-toast-blur,10px)); backdrop-filter:blur(var(--p-toast-blur,10px)); }
     .sc-output-choice[data-stable="true"] .sc-output-segment { min-width:calc(var(--sc-choice-label-chars,6) * 1ch + 42px); }
+    .sc-output-backdrop { position:absolute; inset:0; z-index:-1; overflow:hidden; border-radius:inherit;
+      pointer-events:none; }
+    .sc-output-backdrop img { position:absolute; max-width:none; filter:blur(var(--p-toast-blur,10px)); }
+    .sc-output-backdrop::after { content:""; position:absolute; inset:0; background:var(--sc-output-glass); }
     .sc-output-selection-picker { display:flex; gap:4px; min-width:0; }
     .sc-output-tabs.sc-output-tabs-measure { position:absolute; visibility:hidden; pointer-events:none; width:max-content; }
     .sc-output-tabstrip.sc-output-compare-first { max-width:calc(50% - 12px); }

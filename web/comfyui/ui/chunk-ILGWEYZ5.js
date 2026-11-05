@@ -30,13 +30,15 @@ var CanvasNavigationBar = defineComponent({
     capabilities: { type: Object, required: true },
     send: { type: Function, required: true },
     route: { type: Object, default: null },
-    chooseRoute: { type: Function, required: true }
+    chooseRoute: { type: Function, required: true },
+    backdrop: { type: Object, default: null }
   },
   /** Bind source navigation while preserving the selected batch position. */
   setup(props) {
     const strip = ref(null);
     const slider = ref(null);
     const collapsed = ref(false);
+    const backdrop = ref(null);
     let observer = null;
     let observedParent = null;
     let observedTabs = null;
@@ -70,13 +72,26 @@ var CanvasNavigationBar = defineComponent({
         if (list) observer.observe(list);
       }
     }
+    function placeBackdrop() {
+      const image = backdrop.value?.firstElementChild;
+      const bar = strip.value;
+      const source = props.backdrop;
+      if (!(image instanceof HTMLElement) || !bar || !source) return;
+      const bounds = bar.getBoundingClientRect();
+      image.style.left = `${String(source.rect.left - bounds.left - bar.clientLeft)}px`;
+      image.style.top = `${String(source.rect.top - bounds.top - bar.clientTop)}px`;
+      image.style.width = `${String(source.rect.width)}px`;
+      image.style.height = `${String(source.rect.height)}px`;
+    }
     onMounted(() => {
       observe();
       measure();
+      placeBackdrop();
     });
     onUpdated(() => {
       observe();
       measure();
+      placeBackdrop();
     });
     onBeforeUnmount(() => observer?.disconnect());
     function choose(index) {
@@ -98,6 +113,9 @@ var CanvasNavigationBar = defineComponent({
       const selection = snapshot.view.selection;
       const source = snapshot.sources.find((value) => value.id === selection?.sourceId);
       return h("div", { class: "sc-output-tabstrip sc-output-navigation", ref: strip }, [
+        props.backdrop ? h("span", { class: "sc-output-backdrop", ref: backdrop, "aria-hidden": "true" }, [
+          h("img", { src: props.backdrop.url, alt: "", draggable: false })
+        ]) : null,
         route ? h(CanvasRoutePicker, { state: route, choose: props.chooseRoute }) : null,
         scenes && capabilities.commands.includes("select-scene") ? h(CanvasScenePicker, {
           scenes: snapshot.scenes,
