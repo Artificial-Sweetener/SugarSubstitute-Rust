@@ -42,6 +42,7 @@ export class EmbeddedPanelHost {
             send: (message) => this.transport.send(message),
             apply: (presentation) => {
                 this.#layout.apply(presentation.resizeCornerSize);
+                this.options.hostAccent?.set(presentation.accentColor ?? null);
                 if (this.transport.preferencePolicy !== 'saved')
                     this.options.presentation.set(presentation);
                 this.options.canvas?.connect(this.transport, this.options.window, this.options.report);
@@ -97,6 +98,7 @@ export class EmbeddedPanelHost {
         this.#timer = null;
         this.options.window.removeEventListener('pagehide', this.dispose);
         this.options.presentation.set(null);
+        this.options.hostAccent?.set(null);
         this.options.canvas?.dispose();
         this.#layout.dispose();
     };

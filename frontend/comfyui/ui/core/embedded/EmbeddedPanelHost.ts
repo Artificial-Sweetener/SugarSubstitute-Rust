@@ -16,6 +16,7 @@
 /** Bind one browser document to negotiated host presentation and existing Comfy connectivity. */
 import { PanelClientSession } from './PanelRuntime.js';
 import type { EmbeddedPresentation } from './EmbeddedPresentation.js';
+import type { HostAccent } from './HostAccent.js';
 import { createUxpPanelTransport } from './UxpPanelTransport.js';
 import { createNativePanelTransport } from './NativePanelTransport.js';
 import type { BrowserPanelTransport } from './BrowserPanelTransport.js';
@@ -28,6 +29,8 @@ import { MemoryHostLink, type MemoryPreferenceSource } from '../memory/MemoryHos
 export interface EmbeddedPanelOptions {
   readonly window: Window;
   readonly presentation: EmbeddedPresentation;
+  /** Receives the host's offered default accent under every preference policy. */
+  readonly hostAccent?: HostAccent;
   readonly canvas?: EmbeddedCanvasConnection;
   /** The page's cache registry and the stored memory limit it reports to a desktop host. */
   readonly memory?: {
@@ -62,6 +65,7 @@ export class EmbeddedPanelHost {
       send: (message) => this.transport.send(message),
       apply: (presentation) => {
         this.#layout.apply(presentation.resizeCornerSize);
+        this.options.hostAccent?.set(presentation.accentColor ?? null);
         if (this.transport.preferencePolicy !== 'saved')
           this.options.presentation.set(presentation);
         this.options.canvas?.connect(this.transport, this.options.window, this.options.report);
@@ -118,6 +122,7 @@ export class EmbeddedPanelHost {
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);
     this.options.presentation.set(null);
+    this.options.hostAccent?.set(null);
     this.options.canvas?.dispose();
     this.#layout.dispose();
   };
