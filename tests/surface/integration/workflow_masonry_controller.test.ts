@@ -558,6 +558,25 @@ describe('workflow masonry controller', () => {
     expect(setup.mount).toHaveBeenCalledTimes(2);
     setup.controller.leaveImmediately();
   });
+  test('remounts a card whose graph replaced its node under the same identity and title', async () => {
+    const setup = fixture();
+    await setup.controller.toggle();
+    const section = setup.sections[0];
+    const first = section?.cards[0];
+    if (!section || !first) throw new Error('Card missing');
+    expect(setup.mount).toHaveBeenCalledTimes(1);
+    // Loading a workflow into the same tab builds new node objects with the same ids and types.
+    const replacement = { ...setup.node };
+    section.cards[0] = { ...first, node: replacement };
+    await setup.controller.graphChanged();
+    expect(setup.unmount).toHaveBeenCalledTimes(1);
+    expect(setup.mount).toHaveBeenCalledTimes(2);
+    expect(setup.mount.mock.calls[1]?.[1]).toBe(replacement);
+    // The same node again is only a value change.
+    await setup.controller.graphChanged();
+    expect(setup.mount).toHaveBeenCalledTimes(2);
+    setup.controller.leaveImmediately();
+  });
   test('reuses the optional-node menu and activation switch while keeping the live section and scroll surface', async () => {
     const setup = fixture();
     setup.node.mode = 4;
