@@ -152,6 +152,11 @@ impl Session {
     /// `encode` on the capture's worker. `geometry` is the document's geometry revision as its
     /// requester last saw it.
     ///
+    /// A capture reads what the canvas shows: while a gesture stages a preview on the published
+    /// revision, such as a brush stroke being drawn, it reads that preview, so card previews
+    /// follow the stroke as the canvas does. The preview shares its published revision, which
+    /// the capture reports.
+    ///
     /// # Errors
     /// Rejects an unavailable or stale document, an absent layer or current layer, and a full
     /// queue or closing canvas with [`CaptureRejection`], queueing nothing.
@@ -166,15 +171,20 @@ impl Session {
         if self.closing || self.inputs.captures.queue.len() >= MAX_QUEUED {
             return Err(CaptureRejection::Busy);
         }
-        let snapshot = match self.input_snapshot(document, None) {
+        let published = match self.input_snapshot(document, None) {
             InputSnapshot::Current(snapshot) => snapshot,
             InputSnapshot::Stale => return Err(CaptureRejection::Stale),
             InputSnapshot::Unavailable => return Err(CaptureRejection::Unavailable),
         };
-        if document.geometry(snapshot.extent()) != geometry {
+        if document.geometry(published.extent()) != geometry {
             return Err(CaptureRejection::Stale);
         }
         let state = self.input_document(document).ok_or(CaptureRejection::Unavailable)?;
+        let snapshot = state
+            .shown()
+            .map(|(_, shown)| shown)
+            .filter(|shown| shown.extent() == published.extent())
+            .unwrap_or(published);
         let current = state.tools.target();
         let sources =
             state.scene.as_ref().and_then(|scene| scene.source.clone()).into_iter().collect();
