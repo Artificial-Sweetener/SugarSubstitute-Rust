@@ -107,7 +107,7 @@ fn every_tool_is_offered_and_mask_tools_need_an_editable_target() -> Result<(), 
         );
         let chosen = fixture.edit(CanvasEditCommand::Tool(CanvasToolId::MaskEllipse))?;
         assert_eq!(chosen.tool, CanvasToolId::MaskEllipse);
-        assert_eq!(fixture.session.editing_cursor(), Some(CursorIntent::Forbidden));
+        assert_eq!(fixture.session.canvas_cursor(), CursorIntent::Forbidden);
         // Without a target mask, mask tools are unavailable and the chosen one falls back.
         fixture.session.activate_input(WORKFLOW, "image", None)?;
         fixture.settle_inputs()?;
@@ -118,7 +118,11 @@ fn every_tool_is_offered_and_mask_tools_need_an_editable_target() -> Result<(), 
         }
         assert!(availability(&state, CanvasToolId::SelectLasso));
         assert!(rejected(fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Eraser))).is_some());
-        assert_eq!(fixture.session.editing_cursor(), None, "navigation shows its own hands");
+        assert_eq!(
+            fixture.session.canvas_cursor(),
+            fixture.session.document.tools.navigation().cursor(),
+            "navigation chooses its hand only while the content can pan"
+        );
     }
     fixture.finish().map(drop)
 }
@@ -139,7 +143,7 @@ fn brush_options_map_whole_percentages_and_share_their_size() -> Result<(), Box<
         fixture.session.input(Input::Tool(wheel))?;
         let state = fixture.session.edit_state()?;
         assert_eq!([state.brush.size(), state.eraser.size()], [20, 20]);
-        assert!(matches!(fixture.session.editing_cursor(), Some(CursorIntent::BrushOutline(_))));
+        assert!(matches!(fixture.session.canvas_cursor(), CursorIntent::BrushOutline(_)));
         // A newly shown document receives the same tool and options.
         fixture.session.activate_input(WORKFLOW, "canvas", Some("only"))?;
         fixture.settle_inputs()?;
@@ -211,7 +215,7 @@ fn strokes_render_staged_steps_and_commit_one_undoable_step() -> Result<(), Box<
         fixture.drag(&[[10.0, 40.0], [50.0, 40.0]])?;
         fixture.settle_inputs()?;
         assert_eq!(fixture.snapshot(image.document)?.revision(), revision);
-        assert_eq!(fixture.session.editing_cursor(), Some(CursorIntent::Arrow));
+        assert_eq!(fixture.session.canvas_cursor(), CursorIntent::Arrow);
         fixture.edit(CanvasEditCommand::Mode(CanvasEditMode::None))?;
     }
     fixture.finish().map(drop)

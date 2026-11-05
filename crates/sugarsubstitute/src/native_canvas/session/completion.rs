@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish only matching document/source snapshots and retire superseded native source custody.
 use super::*;
-use sugarsubstitute_canvas::NavigationCommandOutcome;
 use sugarsubstitute_image_io::ImportError;
 
 impl Session {
@@ -116,19 +115,13 @@ impl Session {
                     #[cfg(feature = "native-composition")]
                     self.adopt_document_for(loading.retention)?;
                     let now = self.navigation_time();
-                    self.document.tools.set_content(
-                        Some(scene.document.snapshot().extent()),
+                    let frame = self.selection_frame(loading.intent);
+                    selection_camera::start_at_selection_camera(
+                        &mut self.document.tools,
                         Some(&scene.document),
+                        frame,
                         now,
                     )?;
-                    if let Some((_, frame)) =
-                        self.initial_frame.take().filter(|(intent, _)| *intent == loading.intent)
-                    {
-                        let outcome = self.document.tools.navigate(frame, now)?;
-                        if !matches!(outcome, NavigationCommandOutcome::Applied { .. }) {
-                            tracing::debug!(operation="canvas_selection_frame", outcome=?outcome, "Selection camera was not admitted; the image starts at Fit");
-                        }
-                    }
                     if let Some(previous) = self.document.scene.replace(scene) {
                         self.retire(Retired { _scene: Some(previous), ..Default::default() })?;
                     }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Editing tools' cursors over the region and modifier changes during a held gesture.
+//! The canvas's published cursors over the region and modifier changes during a held gesture.
 
 use super::*;
 
@@ -22,7 +22,7 @@ fn drain(routing: &mut Routing) -> Vec<MainCanvasGesture> {
 fn an_editing_tool_cursor_wins_over_the_hands_inside_the_region_and_during_its_gesture()
 -> TestResult {
     let mut routing = Routing::new()?;
-    routing.publish(Some((CLIP, &[], false, Some(CursorIntent::Precise))));
+    routing.publish(Some((CLIP, &[], false, CursorIntent::Precise)));
     assert_eq!(routing.cursor(), None, "the pointer has not entered the region");
     routing.route(Message::Move { sample: sample([50.0, 40.0], ToolModifiers::NONE), held: false });
     assert_eq!(routing.cursor(), Some(CursorIntent::Precise));
@@ -30,7 +30,7 @@ fn an_editing_tool_cursor_wins_over_the_hands_inside_the_region_and_during_its_g
     routing.route(Message::Press { button: Button::Primary, sample: press, rule: RULE });
     routing.route(Message::Move { sample: sample([300.0, 40.0], ToolModifiers::NONE), held: true });
     assert_eq!(routing.cursor(), Some(CursorIntent::Precise), "a held gesture keeps it outside");
-    routing.publish(Some((CLIP, &[], false, None)));
+    routing.publish(Some((CLIP, &[], false, CursorIntent::OpenHand)));
     assert_eq!(routing.cursor(), Some(CursorIntent::ClosedHand), "navigation's hands return");
     routing.publish(None);
     assert_eq!(routing.cursor(), None);
@@ -40,7 +40,7 @@ fn an_editing_tool_cursor_wins_over_the_hands_inside_the_region_and_during_its_g
 #[test]
 fn a_modifier_change_during_a_held_gesture_redelivers_the_latest_sample() -> TestResult {
     let mut routing = Routing::new()?;
-    routing.publish(Some((CLIP, &[], false, None)));
+    routing.publish(Some((CLIP, &[], false, CursorIntent::OpenHand)));
     routing.route(Message::Move { sample: sample([50.0, 40.0], ToolModifiers::NONE), held: false });
     routing.refresh_modifiers(SHIFT);
     assert_eq!(drain(&mut routing).len(), 1, "hover alone re-delivers nothing");
@@ -58,5 +58,28 @@ fn a_modifier_change_during_a_held_gesture_redelivers_the_latest_sample() -> Tes
     drain(&mut routing);
     routing.refresh_modifiers(ToolModifiers::NONE);
     assert_eq!(drain(&mut routing), [], "nothing is held after the release");
+    Ok(())
+}
+
+#[test]
+fn content_that_cannot_pan_never_shows_a_hand_even_during_a_press() -> TestResult {
+    // A locked or fitted output that offers no drag-out: the canvas publishes its arrow.
+    let mut routing = Routing::new()?;
+    routing.publish(Some((CLIP, &[], false, CursorIntent::Arrow)));
+    let at = |point| sample(point, ToolModifiers::NONE);
+    routing.route(Message::Move { sample: at([50.0, 40.0]), held: false });
+    assert_eq!(routing.cursor(), Some(CursorIntent::Arrow));
+    routing.route(Message::Press { button: Button::Primary, sample: at([50.0, 40.0]), rule: RULE });
+    routing.route(Message::Move { sample: at([80.0, 60.0]), held: true });
+    assert_eq!(routing.cursor(), Some(CursorIntent::Arrow), "no grab without a possible pan");
+    routing.route(Message::Release {
+        button: Button::Primary,
+        sample: at([80.0, 60.0]),
+        held: false,
+    });
+    assert_eq!(routing.cursor(), Some(CursorIntent::Arrow));
+    // Zooming in makes the content pannable; only then does the canvas publish its hand.
+    routing.publish(Some((CLIP, &[], false, CursorIntent::OpenHand)));
+    assert_eq!(routing.cursor(), Some(CursorIntent::OpenHand));
     Ok(())
 }

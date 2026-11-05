@@ -16,6 +16,10 @@ pub mod placement;
 pub mod acknowledgement;
 
 #[cfg(feature = "native-composition")]
+pub(crate) mod drag_preview;
+#[cfg(feature = "native-composition")]
+pub use drag_preview::{DRAG_PREVIEW_CEILING, DragPreview};
+#[cfg(feature = "native-composition")]
 mod gesture;
 #[cfg(feature = "native-composition")]
 pub use gesture::{

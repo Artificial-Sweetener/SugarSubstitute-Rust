@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Turn bundled CUR frames and rendered cursor images into private Windows cursors.
+//! Turn bundled CUR frames, rendered cursor images and straight RGBA images into private
+//! Windows cursors.
 //!
 //! Both paths hand Windows the same thing: a hotspot prefix followed by one 32-bit
 //! bottom-up DIB with its AND mask, which `CreateIconFromResourceEx` copies synchronously.
@@ -23,12 +24,25 @@ pub(super) fn load_cursor(bytes: &[u8], size: [i32; 2]) -> Result<OwnedCursor, B
 
 /// Create a private cursor of exactly the rendered image's size and hotspot.
 pub(super) fn rendered_cursor(image: &CursorImage) -> Result<OwnedCursor, Box<dyn Error>> {
-    let extent = [image.width(), image.height()];
+    rgba_cursor([image.width(), image.height()], image.hotspot(), image.rgba())
+}
+
+/// Create a private cursor of exactly `extent` physical pixels from straight-alpha RGBA rows,
+/// top row first, with its hotspot at `hotspot`. Call on the thread that will select it.
+///
+/// # Errors
+/// Rejects unsupported geometry or mismatched pixels; preserves native creation failures.
+pub(crate) fn rgba_cursor(
+    extent: [u32; 2],
+    hotspot: [u32; 2],
+    rgba: &[u8],
+) -> Result<OwnedCursor, Box<dyn Error>> {
     let size = extent.map(|edge| i32::try_from(edge).unwrap_or(i32::MAX));
-    let hotspot = image.hotspot().map(|value| u16::try_from(value).unwrap_or(u16::MAX));
+    let hotspot = hotspot.map(|value| u16::try_from(value).unwrap_or(u16::MAX));
     if extent.iter().any(|edge| *edge == 0 || *edge > u32::from(u16::MAX))
         || hotspot[0] as u32 >= extent[0]
         || hotspot[1] as u32 >= extent[1]
+        || rgba.len() as u64 != u64::from(extent[0]) * u64::from(extent[1]) * 4
     {
         return Err(DesktopError::message(
             "canvas_cursor_render",
@@ -36,7 +50,7 @@ pub(super) fn rendered_cursor(image: &CursorImage) -> Result<OwnedCursor, Box<dy
         )
         .into());
     }
-    create(hotspot, &dib(image)?, size)
+    create(hotspot, &dib(extent, rgba)?, size)
 }
 
 fn create(hotspot: [u16; 2], dib: &[u8], size: [i32; 2]) -> Result<OwnedCursor, Box<dyn Error>> {
@@ -65,8 +79,8 @@ fn create(hotspot: [u16; 2], dib: &[u8], size: [i32; 2]) -> Result<OwnedCursor, 
 
 /// One straight-alpha BGRA bottom-up color plane plus the legacy AND mask, which marks fully
 /// transparent pixels for consumers that ignore alpha.
-fn dib(image: &CursorImage) -> Result<Vec<u8>, DesktopError> {
-    let [width, height] = [image.width() as usize, image.height() as usize];
+fn dib([width, height]: [u32; 2], rgba: &[u8]) -> Result<Vec<u8>, DesktopError> {
+    let [width, height] = [width as usize, height as usize];
     let mask_stride = width.div_ceil(32) * 4;
     let color = width * height * 4;
     let mask = mask_stride * height;
@@ -82,7 +96,6 @@ fn dib(image: &CursorImage) -> Result<Vec<u8>, DesktopError> {
     bytes.extend_from_slice(&0_u32.to_le_bytes());
     bytes.extend_from_slice(&((color + mask) as u32).to_le_bytes());
     bytes.extend_from_slice(&[0; 16]);
-    let rgba = image.rgba();
     for row in (0..height).rev() {
         for pixel in rgba[row * width * 4..(row + 1) * width * 4].chunks_exact(4) {
             bytes.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);

@@ -97,8 +97,9 @@ impl Session {
         }
     }
 
-    /// Present the latest offered source's first frame at rame instead of Fit, or at Fit.
-    /// The camera applies when that exact source intent loads; a newer offer replaces it.
+    /// Present the latest offered source's first frame at `frame` instead of Fit, or at Fit.
+    /// The camera applies when that exact source intent loads or its retained document returns;
+    /// a newer offer replaces it.
     pub(crate) fn frame_selection(&mut self, frame: Option<NavigationCommand>) {
         self.initial_frame = frame.map(|frame| (self.selection, frame));
     }

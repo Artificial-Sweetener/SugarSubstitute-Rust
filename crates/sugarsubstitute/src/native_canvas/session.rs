@@ -42,6 +42,7 @@ mod presentation;
 mod proof;
 #[cfg(feature = "native-composition")]
 mod retention;
+mod selection_camera;
 #[cfg(all(windows, feature = "native-composition"))]
 mod video_memory;
 #[cfg(feature = "native-composition")]
