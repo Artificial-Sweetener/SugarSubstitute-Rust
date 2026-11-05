@@ -1,13 +1,13 @@
 import {
   useCubeStackPointerDrag
-} from "./chunk-57LMGBPA.js";
+} from "./chunk-BB2RTIG4.js";
 import {
   CubeStackSelectionIndicator
-} from "./chunk-EVJ2MGKH.js";
+} from "./chunk-VUBZVLDM.js";
 import {
   cubeStackRowGap,
   cubeStackRowStride
-} from "./chunk-3BUER5QA.js";
+} from "./chunk-D6BK5OR7.js";
 import {
   useCubeStackFocus
 } from "./chunk-FMYVNRZD.js";
@@ -37,7 +37,7 @@ var CubeStackRail = defineComponent({
     const awaiting = ref(false);
     const submittedOrder = ref(null);
     useCubeStackFocus(root);
-    const rowStride = computed(() => cubeStackRowStride(props.state.compact));
+    const rowStride = computed(() => cubeStackRowStride(props.state.packed));
     const gesture = useCubeStackPointerDrag({
       root,
       rows: () => props.state.rows,
@@ -169,13 +169,13 @@ var CubeStackRail = defineComponent({
           {
             class: "sc-cube-stack__rows",
             style: {
-              height: `${String(Math.max(0, rows.value.length * rowStride.value - cubeStackRowGap(props.state.compact)))}px`
+              height: `${String(Math.max(0, rows.value.length * rowStride.value - cubeStackRowGap(props.state.packed)))}px`
             }
           },
           [
             h(CubeStackSelectionIndicator, {
               key: "selection",
-              compact: props.state.compact,
+              packed: props.state.packed,
               position: rows.value.some((row) => row.selected) ? rows.value.findIndex((row) => row.selected) : null
             }),
             ...rows.value.map(

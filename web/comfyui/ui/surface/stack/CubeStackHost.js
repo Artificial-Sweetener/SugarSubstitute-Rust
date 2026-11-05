@@ -17,7 +17,8 @@
 import { readOwnedVisualStyle, subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
-import { CUBE_STACK_MASONRY_GUTTER, cubeStackWidth } from './CubeStackMetrics.js';
+import { cubeStackReservedWidth } from './CubeStackMetrics.js';
+import { readMasonryPacked, subscribeMasonryPacking } from '../masonry/MasonryPacking.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import { projectCubeStackRows } from './CubeStackProjection.js';
 import { ensureCubeStackStyles } from './CubeStackStyles.js';
@@ -94,7 +95,7 @@ export class CubeStackHost {
         this.#preferences.setPluginMode(readPluginMode(this.#options.document));
         this.#started = true;
         ensureCubeStackStyles(this.#options.document);
-        this.#subscriptions.push(this.#preferences.subscribe(() => this.#reconcile()), this.#options.appearance.subscribeAppearance(() => this.#reconcile()), subscribeVisualStyle(this.#options.document, () => this.#reconcile()), subscribePluginMode(this.#options.document, () => this.#preferences.setPluginMode(readPluginMode(this.#options.document))));
+        this.#subscriptions.push(this.#preferences.subscribe(() => this.#reconcile()), this.#options.appearance.subscribeAppearance(() => this.#reconcile()), subscribeVisualStyle(this.#options.document, () => this.#reconcile()), subscribePluginMode(this.#options.document, () => this.#preferences.setPluginMode(readPluginMode(this.#options.document))), subscribeMasonryPacking(this.#options.document, () => this.#reconcile()));
         if (this.#options.frame)
             this.#subscriptions.push(this.#options.frame.subscribe(() => this.#reconcile(false)));
     }
@@ -222,8 +223,7 @@ export class CubeStackHost {
             this.#motion = new CubeStackDrawerMotion(this.#element);
             this.#mounted.setInteractive(false);
         }
-        view.setStackWidth(cubeStackWidth(state.compact) +
-            (state.compact || this.#options.frame?.enabled ? 0 : CUBE_STACK_MASONRY_GUTTER));
+        view.setStackWidth(cubeStackReservedWidth(state.compact, state.packed, this.#options.frame?.enabled === true));
         if (this.#surfaceVisible)
             void this.#present(true, animate).catch(this.#options.reportError);
         this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
@@ -262,6 +262,7 @@ export class CubeStackHost {
         return {
             rows: projectCubeStackRows(this.#view?.sections ?? [], this.#reorder?.analysis ?? null, this.#selectedId, this.#options.resolveSource, this.#reorder?.available === true),
             compact: this.#preferences.snapshot.compact,
+            packed: readMasonryPacked(this.#options.document),
             pending: this.#reorder?.pending === true,
             appearance: this.#options.appearance.appearance.style !== 'comfy'
                 ? this.#options.appearance.appearance.style

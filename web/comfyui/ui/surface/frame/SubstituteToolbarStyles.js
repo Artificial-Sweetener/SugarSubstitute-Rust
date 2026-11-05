@@ -20,7 +20,7 @@ export const substituteToolbarCss = `
   :root[data-sc-substitute-frame] [data-sc-workflow-selector],
   :root[data-sc-substitute-frame] [data-sc-substitute-extensions],
   :root[data-sc-substitute-frame] [data-sc-substitute-workflow-column] { display:none!important; }
-  :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-line] { display:block; min-width:0; height:44px; min-height:44px;
+  :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-line] { position:relative; display:block; min-width:0; height:44px; min-height:44px;
     flex-shrink:0; overflow:visible; padding-left:62px; background:var(--sc-substitute-toolbar-fill,var(--comfy-menu-bg,#202020)); }
   /* A translucent fill must cover the row once, so a filled menu owns it for its nested line. */
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-menu] > [data-sc-substitute-toolbar-line] { background:transparent; }

@@ -20,7 +20,7 @@ import {
   type CubeMasonryOptions,
   type CubeMasonryPlacement,
 } from '../CubeMasonryLayout.js';
-import { CUBE_STACK_MASONRY_GUTTER, cubeStackWidth } from '../stack/CubeStackMetrics.js';
+import { cubeStackReservedWidth } from '../stack/CubeStackMetrics.js';
 
 /** Align sections and navigation below the panel edge; native toolbars occupy separate flow. */
 export const WORKFLOW_MASONRY_TOP_INSET = 12;
@@ -36,8 +36,7 @@ export const WORKFLOW_MASONRY_INLINE_PADDING = 20;
  * This is the editor width of every workflow whose divider the user has not moved.
  */
 export const WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH =
-  cubeStackWidth(false) +
-  CUBE_STACK_MASONRY_GUTTER +
+  cubeStackReservedWidth(false, false, false) +
   2 * WORKFLOW_MASONRY_INLINE_PADDING +
   2 * WORKFLOW_MASONRY_COLUMN_WIDTH +
   WORKFLOW_MASONRY_GAP;

@@ -95,7 +95,7 @@ export class NativeSeedControls {
             const control = binding.field.control;
             menu.open({
                 label: `${binding.field.numeric.label} options`,
-                anchor: { kind: 'below', bounds: spinner.getBoundingClientRect() },
+                anchor: { kind: 'below', bounds: menuButton.getBoundingClientRect() },
                 trigger: menuButton,
                 focusChecked: true,
                 attributes: { 'data-sc-seed-options': '' },
