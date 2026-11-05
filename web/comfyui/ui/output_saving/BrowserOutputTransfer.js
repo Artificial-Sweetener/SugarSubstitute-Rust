@@ -57,6 +57,13 @@ export class BrowserOutputTransfer {
             this.download.start(content === 'image' ? this.#media.downloadUrl(file) : outputFileUrl(this.origin, file));
         return true;
     }
+    /** Open still images in Photoshop through the local backend while their outputs stay current. */
+    async photoshop(document, layers, accepts, signal) {
+        if (this.#disposed || signal?.aborted || !accepts() || !this.#profile.read().photoshop)
+            return false;
+        await this.#media.photoshop(document, layers, signal);
+        return true;
+    }
     /** Retire profile listeners and refuse late clipboard writes after the browser host is torn down. */
     dispose() {
         this.#disposed = true;

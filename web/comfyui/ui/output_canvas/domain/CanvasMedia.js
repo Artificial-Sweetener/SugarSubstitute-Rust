@@ -15,3 +15,7 @@ export function canvasMediaItem(snapshot, target) {
                 ?.items.find((item) => item.id === target.itemId) ?? null);
     return item?.mediaKind === 'image' ? item : null;
 }
+/** List every still image of a result's sources in catalog order, excluding live previews. */
+export function canvasMediaImages(entries) {
+    return entries.flatMap((entry) => entry.items.filter((item) => item.mediaKind === 'image'));
+}

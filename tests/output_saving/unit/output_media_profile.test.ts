@@ -27,15 +27,19 @@ test('keeps the newest accepted profile and refuses late responses after disposa
   source.subscribe(listener);
   const older = source.refresh(),
     newer = source.refresh();
-  pending[1]!({ preferredCopyFormat: 'jpeg', fileAction: 'reveal' });
+  pending[1]!({ preferredCopyFormat: 'jpeg', fileAction: 'reveal', photoshop: false });
   await newer;
-  pending[0]!({ preferredCopyFormat: 'png', fileAction: 'download' });
+  pending[0]!({ preferredCopyFormat: 'png', fileAction: 'download', photoshop: false });
   await older;
-  expect(source.read()).toEqual({ preferredCopyFormat: 'jpeg', fileAction: 'reveal' });
+  expect(source.read()).toEqual({
+    preferredCopyFormat: 'jpeg',
+    fileAction: 'reveal',
+    photoshop: false,
+  });
   expect(listener).toHaveBeenCalledTimes(1);
   const last = source.refresh();
   source.dispose();
-  pending[2]!({ preferredCopyFormat: 'png', fileAction: 'download' });
+  pending[2]!({ preferredCopyFormat: 'png', fileAction: 'download', photoshop: false });
   await last;
   expect(listener).toHaveBeenCalledTimes(1);
 });
@@ -43,7 +47,7 @@ test('keeps the newest accepted profile and refuses late responses after disposa
 test('does not notify or retain an idle timer when metadata is unchanged', async () => {
   const load = jest
     .fn<() => Promise<OutputMediaProfile>>()
-    .mockResolvedValue({ preferredCopyFormat: 'png', fileAction: 'download' });
+    .mockResolvedValue({ preferredCopyFormat: 'png', fileAction: 'download', photoshop: false });
   const source = new OutputMediaProfileSource(load);
   const listener = jest.fn();
   const stop = source.subscribe(listener);

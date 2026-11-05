@@ -97,6 +97,19 @@ export class BrowserOutputTransfer {
     return true;
   }
 
+  /** Open still images in Photoshop through the local backend while their outputs stay current. */
+  async photoshop(
+    document: string,
+    layers: readonly { readonly file: OutputFileReference; readonly name: string }[],
+    accepts: () => boolean,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (this.#disposed || signal?.aborted || !accepts() || !this.#profile.read().photoshop)
+      return false;
+    await this.#media.photoshop(document, layers, signal);
+    return true;
+  }
+
   /** Retire profile listeners and refuse late clipboard writes after the browser host is torn down. */
   dispose(): void {
     this.#disposed = true;
