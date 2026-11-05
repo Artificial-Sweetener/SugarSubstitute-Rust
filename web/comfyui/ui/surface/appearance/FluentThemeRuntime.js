@@ -10381,7 +10381,21 @@ var workflowTablistCss = `
 `;
 
 // frontend/comfyui/ui/surface/appearance/FluentThemeTokens.ts
-function fluentThemeTokens(theme) {
+var fieldFills = {
+  dark: {
+    "field-fill": "rgba(255,255,255,0.0605)",
+    "field-hover-fill": "rgba(255,255,255,0.0837)",
+    "field-focus-fill": "rgba(30,30,30,0.7)",
+    "field-disabled-fill": "rgba(255,255,255,0.0419)"
+  },
+  light: {
+    "field-fill": "rgba(255,255,255,0.7)",
+    "field-hover-fill": "rgba(249,249,249,0.5)",
+    "field-focus-fill": "#ffffff",
+    "field-disabled-fill": "rgba(249,249,249,0.3)"
+  }
+};
+function fluentThemeTokens(theme, dark) {
   return {
     text: String(theme.colorNeutralForeground1 ?? ""),
     "text-secondary": String(theme.colorNeutralForeground2 ?? ""),
@@ -10420,7 +10434,7 @@ function fluentThemeTokens(theme) {
     "control-radius": String(theme.borderRadiusMedium ?? ""),
     "field-radius": "var(--sc-control-radius)",
     "field-border-width": "1px",
-    "field-fill": "var(--sc-surface)",
+    ...fieldFills[dark ? "dark" : "light"],
     "field-stroke": "var(--sc-border)",
     "field-bottom-stroke": "var(--sc-border-accessible)",
     "field-hover-stroke": "var(--sc-border-hover)",
@@ -10628,7 +10642,7 @@ var themes = {
 var appliedThemes = /* @__PURE__ */ new WeakMap();
 function fluentTokenDeclarations(dark) {
   const theme = dark ? themes.dark : themes.light;
-  return Object.entries(theme).map(([name, value]) => `--${name}:${value};`).join("") + themeTokenDeclarations(fluentThemeTokens(theme));
+  return Object.entries(theme).map(([name, value]) => `--${name}:${value};`).join("") + themeTokenDeclarations(fluentThemeTokens(theme, dark));
 }
 function applyOwnedFluentTheme(element, dark) {
   if (element !== element.ownerDocument.documentElement && !element.closest("body")) {
@@ -10638,7 +10652,7 @@ function applyOwnedFluentTheme(element, dark) {
   if (appliedThemes.has(element) && appliedThemes.get(element) === dark) return;
   setTheme(dark === null ? null : dark ? themes.dark : themes.light, element);
   for (const [role, value] of Object.entries(
-    fluentThemeTokens(dark ? themes.dark : themes.light)
+    fluentThemeTokens(dark ? themes.dark : themes.light, dark === true)
   )) {
     if (dark === null) element.style.removeProperty(`--sc-${role}`);
     else element.style.setProperty(`--sc-${role}`, value);

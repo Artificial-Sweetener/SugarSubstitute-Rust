@@ -53,6 +53,9 @@ export interface ThemeTokens {
   readonly 'field-radius': string;
   readonly 'field-border-width': string;
   readonly 'field-fill': string;
+  readonly 'field-hover-fill': string;
+  readonly 'field-focus-fill': string;
+  readonly 'field-disabled-fill': string;
   readonly 'field-stroke': string;
   readonly 'field-bottom-stroke': string;
   readonly 'field-hover-stroke': string;
