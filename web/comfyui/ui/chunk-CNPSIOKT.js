@@ -1,6 +1,6 @@
 import {
   CanvasAnchoredPicker
-} from "./chunk-5NVJVFWB.js";
+} from "./chunk-CIIISKSI.js";
 import {
   defineComponent,
   h
@@ -25,18 +25,14 @@ var CanvasRoutePicker = defineComponent({
       {
         class: "sc-output-route",
         "data-sc-fixed-navigation": "true",
-        "data-route": props.state.route,
-        style: {
-          "--sc-route-label-chars": String(
-            Math.max(...ROUTES.map((route) => props.state.labels[route].length))
-          )
-        }
+        "data-route": props.state.route
       },
       [
         h(CanvasAnchoredPicker, {
           label: props.state.labels.group,
           value: props.state.route,
           items: ROUTES.map((route) => ({ value: route, label: props.state.labels[route] })),
+          stable: true,
           choose
         })
       ]

@@ -17,6 +17,8 @@ var CanvasAnchoredPicker = defineComponent({
     text: { type: String, default: "" },
     items: { type: Array, required: true },
     centered: { type: Boolean, default: false },
+    /** Size the control to its longest choice so changing the choice never moves its neighbours. */
+    stable: { type: Boolean, default: false },
     choose: { type: Function, required: true }
   },
   /** Keep popup work finite and scoped to the control's owning document. */
@@ -68,6 +70,12 @@ var CanvasAnchoredPicker = defineComponent({
       opened.value = true;
       await nextTick();
       if (!opened.value || !popup.value) return;
+      const fitted = popup.value.offsetWidth;
+      if (fitted > width)
+        geometry.value = {
+          ...geometry.value,
+          left: Math.max(8, Math.min(geometry.value.left, viewport.innerWidth - fitted - 8))
+        };
       surface = new FloatingSurface(popup.value);
       surface.open({
         anchor: { kind: "pointer", x: geometry.value.left, y: geometry.value.top },
@@ -107,7 +115,16 @@ var CanvasAnchoredPicker = defineComponent({
     onBeforeUnmount(() => close());
     return () => h(
       "span",
-      { class: "sc-output-choice", "data-centered": props.centered ? "true" : void 0 },
+      {
+        class: "sc-output-choice",
+        "data-centered": props.centered ? "true" : void 0,
+        "data-stable": props.stable ? "true" : void 0,
+        style: props.stable ? {
+          "--sc-choice-label-chars": String(
+            Math.max(1, ...props.items.map((item) => item.label.length))
+          )
+        } : void 0
+      },
       [
         h(
           "button",
@@ -121,7 +138,14 @@ var CanvasAnchoredPicker = defineComponent({
             disabled: !props.items.length,
             onClick: open
           },
-          props.text || props.items.find((item) => item.value === props.value)?.label || "Output"
+          [
+            h(
+              "span",
+              { class: "sc-output-choice-label" },
+              props.text || props.items.find((item) => item.value === props.value)?.label || "Output"
+            ),
+            h("span", { class: "sc-output-chevron", "aria-hidden": "true" })
+          ]
         ),
         opened.value ? h(Teleport, { to: anchor.value?.ownerDocument.body }, [
           h(
@@ -135,7 +159,8 @@ var CanvasAnchoredPicker = defineComponent({
               style: {
                 left: `${geometry.value.left}px`,
                 top: `${geometry.value.top}px`,
-                width: `${geometry.value.width}px`,
+                minWidth: `${geometry.value.width}px`,
+                maxWidth: `${String(Math.max(geometry.value.width, (anchor.value?.ownerDocument.defaultView?.innerWidth ?? 0) - 16))}px`,
                 maxHeight: `${geometry.value.height}px`
               },
               onKeydown: keydown

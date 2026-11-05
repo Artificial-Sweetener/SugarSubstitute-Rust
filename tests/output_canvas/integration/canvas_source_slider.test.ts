@@ -94,7 +94,7 @@ test('one selection indicator covers the selected tab and slides to the next sel
   mounted.dispose();
 });
 
-test('navigation tabs and pickers show the arrow cursor on a blurred glass bar', () => {
+test('navigation pickers are chevron combo boxes and show the arrow cursor on a glass bar', () => {
   const root = document.createElement('section');
   document.body.append(root);
   const mounted = mountCanvasOverlay(
@@ -113,5 +113,9 @@ test('navigation tabs and pickers show the arrow cursor on a blurred glass bar',
   const batch = root.querySelector('button[aria-label="Output image"]')!;
   expect(getComputedStyle(tab).cursor).toBe('default');
   expect(getComputedStyle(batch).cursor).toBe('default');
+  expect(batch.querySelector('.sc-output-chevron')?.getAttribute('aria-hidden')).toBe('true');
+  expect(rule('.sc-output-overlay .sc-output-segment')?.getPropertyValue('border')).toContain(
+    '1px solid',
+  );
   mounted.dispose();
 });
