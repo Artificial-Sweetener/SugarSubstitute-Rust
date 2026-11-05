@@ -107,7 +107,7 @@ test('navigation pickers are chevron combo boxes and show the arrow cursor on a 
   );
   const bar = rule('.sc-output-tabstrip');
   expect(bar?.getPropertyValue('backdrop-filter')).toBe('blur(var(--p-toast-blur,10px))');
-  expect(bar?.getPropertyValue('background')).toContain('transparent');
+  expect(bar?.getPropertyValue('--sc-output-glass')).toContain('transparent');
   expect(rule('.sc-output-tabs.sc-output-tabs-measure')?.position).toBe('absolute');
   const tab = root.querySelector('[role="tab"]')!;
   const batch = root.querySelector('button[aria-label="Output image"]')!;

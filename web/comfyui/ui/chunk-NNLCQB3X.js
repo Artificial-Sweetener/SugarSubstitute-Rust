@@ -9,7 +9,7 @@ import {
 } from "./chunk-Z66IIUOP.js";
 import {
   CanvasNavigationBar
-} from "./chunk-Y32NC4TQ.js";
+} from "./chunk-ILGWEYZ5.js";
 import {
   canvasNavigationSnapshot
 } from "./chunk-ORLQ3IYI.js";
@@ -106,7 +106,8 @@ var CanvasOverlay = defineComponent({
             capabilities: props.capabilities,
             send: props.send,
             route: props.route,
-            chooseRoute
+            chooseRoute,
+            backdrop: snapshot.backdrop ?? null
           })
         ]
       );

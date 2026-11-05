@@ -48,6 +48,23 @@ export interface CanvasSceneSummary {
   readonly available: boolean;
 }
 
+/**
+ * The image a native surface paints beneath the overlay, where it lies on screen.
+ *
+ * Web content cannot sample native pixels, so glass chrome over a native surface blurs this copy
+ * of the image instead of its own backdrop.
+ */
+export interface CanvasBackdrop {
+  readonly url: string;
+  /** The whole image's rectangle, in client CSS pixels. */
+  readonly rect: {
+    readonly left: number;
+    readonly top: number;
+    readonly width: number;
+    readonly height: number;
+  };
+}
+
 export interface CanvasZoomStatus {
   readonly mode: 'fit' | 'native' | 'custom';
   readonly physicalScale: number;
@@ -85,6 +102,8 @@ export interface CanvasViewSnapshot {
   readonly connected: boolean;
   /** Describe shared transfer preference and qualified local file action without platform handles. */
   readonly mediaActions: OutputMediaProfile | null;
+  /** The natively painted image beneath the overlay; absent where the page paints its own. */
+  readonly backdrop?: CanvasBackdrop | null;
 }
 
 export type CanvasCommand =
