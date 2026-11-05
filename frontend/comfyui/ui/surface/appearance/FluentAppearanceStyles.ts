@@ -29,12 +29,13 @@ export function fluentAppearanceCss(dark: boolean): string {
         cardFill: dark ? '#2b2b2b' : '#fbfbfb',
         cardStroke: dark ? 'rgba(0,0,0,.10)' : 'rgba(0,0,0,.06)',
         rowStroke: 'var(--sc-card-stroke)',
-        controlFill: dark ? '#373737' : '#ffffff',
         controlStroke: dark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.07)',
         controlBottomStroke: dark ? 'rgba(255,255,255,.45)' : 'rgba(0,0,0,.45)',
         radius: '4px',
       },
       dark,
-    )
+    ) +
+    // Microsoft's textarea paints its root from this property inside its shadow tree.
+    `[data-sc-editor-field="fluent"] { --background-color:var(--sc-field-surface, var(--sc-field-fill)); }`
   );
 }
