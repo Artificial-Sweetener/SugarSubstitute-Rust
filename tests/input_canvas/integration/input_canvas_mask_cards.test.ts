@@ -58,6 +58,7 @@ async function settled(): Promise<void> {
 function card(provisioned: boolean): InputSurfaceCardPort {
   return {
     activate: jest.fn(),
+    openChosen: jest.fn(),
     hover: jest.fn(),
     hovered: () => null,
     subscribeHover: () => () => {},
