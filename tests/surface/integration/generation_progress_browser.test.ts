@@ -127,14 +127,58 @@ test('Substitute progress uses two independent three-pixel tracks at the menu ed
   expect(geometry.first.width).toBeCloseTo(geometry.frame.width * 0.75, 0);
   expect(geometry.second.width).toBeCloseTo(geometry.frame.width * 0.4, 0);
   expect(geometry.workflow).toBe('rgb(182, 58, 203)');
-  expect(geometry.sampler).toBe('rgb(245, 158, 11)');
+  expect(geometry.sampler).toBe('rgb(182, 58, 203)');
   expect(geometry.background).toBe('rgba(0, 0, 0, 0)');
   await page.evaluate(() => window.progressBrowserProof.update(true, 20, 90, false));
   expect(
     await page
       .locator('.sc-generation-progress__sampler')
       .evaluate((bar) => getComputedStyle(bar).backgroundColor),
-  ).toBe('rgb(197, 106, 0)');
+  ).toBe('rgb(182, 58, 203)');
   await page.evaluate(() => window.progressBrowserProof.update(false, 0, 0, false));
   await page.locator('.sc-generation-progress').waitFor({ state: 'hidden' });
+});
+
+test('Substitute progress straddles the toolbar row edge beneath later surfaces like the Substitute shell', async () => {
+  const page = await pageReady;
+  if (!page) throw new Error('Progress browser page is unavailable.');
+  await page.goto(address);
+  await page.waitForFunction(() => !!window.progressBrowserProof);
+  await page.evaluate(() => {
+    window.progressBrowserProof.toolbar(true);
+    window.progressBrowserProof.update(true, 75, 40, true);
+  });
+  const placed = await page.locator('.sc-generation-progress').evaluate((root) => {
+    const line = document.getElementById('toolbar-line')!;
+    const [first, second] = [...root.children].map((bar) => bar.getBoundingClientRect());
+    return {
+      parent: root.parentElement?.id,
+      lineBottom: line.getBoundingClientRect().bottom,
+      firstBottom: first!.bottom,
+      secondTop: second!.top,
+      zIndex: getComputedStyle(root).zIndex,
+    };
+  });
+  expect(placed.parent).toBe('toolbar-line');
+  expect(placed.firstBottom).toBe(placed.lineBottom);
+  expect(placed.secondTop).toBe(placed.lineBottom);
+  expect(placed.zIndex).toBe('auto');
+  await page.evaluate(() => {
+    const popup = document.getElementById('later-popup')!;
+    popup.style.top = `${String(document.getElementById('toolbar-line')!.offsetTop + 30)}px`;
+  });
+  expect(
+    await page.evaluate(() => {
+      const bar = document
+        .querySelector('.sc-generation-progress__workflow')!
+        .getBoundingClientRect();
+      return document.elementFromPoint(10, bar.top + 1)?.id;
+    }),
+  ).toBe('later-popup');
+  await page.evaluate(() => window.progressBrowserProof.toolbar(false));
+  expect(
+    await page
+      .locator('.sc-generation-progress')
+      .evaluate((root) => root.parentElement?.classList.contains('sc-substitute-frame')),
+  ).toBe(true);
 });

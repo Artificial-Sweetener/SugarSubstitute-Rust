@@ -17,20 +17,31 @@
 export const CUBE_STACK_ROW_HEIGHT = 46;
 /** Retain the reference rail's spacing between adjacent rows. */
 export const CUBE_STACK_ROW_GAP = 4;
-/** Pack compact squares together while retaining expanded row spacing. */
-export function cubeStackRowGap(compact: boolean): number {
-  return compact ? 0 : CUBE_STACK_ROW_GAP;
+/** Inset rows from the rail edges unless masonry packing places them flush. */
+export const CUBE_STACK_ROW_INSET = 6;
+/** Retain the expanded rail width; compact rows only drop their labels. */
+export const CUBE_STACK_EXPANDED_WIDTH = 224;
+/** Separate a floating rail from the masonry edge and the first card column. */
+const FLOATING_RAIL_MARGIN = 12;
+
+/** Touch adjacent rows only while masonry packing is active. */
+export function cubeStackRowGap(packed: boolean): number {
+  return packed ? 0 : CUBE_STACK_ROW_GAP;
 }
 
 /** Advance one settled slot independently of an in-flight visual transform. */
-export function cubeStackRowStride(compact: boolean): number {
-  return CUBE_STACK_ROW_HEIGHT + cubeStackRowGap(compact);
+export function cubeStackRowStride(packed: boolean): number {
+  return CUBE_STACK_ROW_HEIGHT + cubeStackRowGap(packed);
 }
 
-/** Reserve only the tile width for compact navigation and retain expanded labels. */
-export function cubeStackWidth(compact: boolean): number {
-  return compact ? CUBE_STACK_ROW_HEIGHT : 224;
+/** Size the rail: compact keeps one icon tile plus the row insets that packing removes. */
+export function cubeStackWidth(compact: boolean, packed: boolean): number {
+  if (!compact) return CUBE_STACK_EXPANDED_WIDTH;
+  return CUBE_STACK_ROW_HEIGHT + (packed ? 0 : CUBE_STACK_ROW_INSET * 2);
 }
 
-/** Separate the expanded rail from the masonry cards it reserves space beside. */
-export const CUBE_STACK_MASONRY_GUTTER = 24;
+/** Reserve masonry width for the rail and, when it floats, its outer and inner margins. */
+export function cubeStackReservedWidth(compact: boolean, packed: boolean, framed: boolean): number {
+  return cubeStackWidth(compact, packed) + (packed || framed ? 0 : FLOATING_RAIL_MARGIN * 2);
+}
+

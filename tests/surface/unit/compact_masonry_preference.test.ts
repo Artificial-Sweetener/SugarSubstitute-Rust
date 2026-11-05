@@ -69,7 +69,7 @@ test('switches compact packing without touching the selected visual style', () =
 test('packs compact masonry while preserving the native resize corner', () => {
   ensureWorkflowMasonryStyles(document);
   const css = document.getElementById('sugarcubes-workflow-masonry-styles')?.textContent;
-  expect(css).toContain('html[data-sc-compact-masonry] .sugarcubes-workflow-masonry {');
+  expect(css).toContain(':root[data-sc-compact-masonry] .sugarcubes-workflow-masonry, ');
   expect(css).toContain('--sugarcubes-masonry-gap:0;');
   expect(css).toContain(
     'padding:0 0 var(--sc-panel-resize-corner,0px) var(--sc-masonry-stack-width,0px);',
