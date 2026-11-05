@@ -455,6 +455,7 @@ function sceneCatalog() {
     items: output.items.slice(0, 2).map((item) => ({
       ...item,
       id: `${item.id}:${scene}` as typeof item.id,
+      dimensions: null,
       provenance: { ...item.provenance, runOrder: run },
       file: { ...item.file, filename: `${scene}.png` },
     })),
@@ -481,6 +482,8 @@ test('All paints one natively drawn cell per scene, and a cell opens its scene',
   await f.drain();
   const painted = f.overviews().at(-1)?.cells ?? [];
   expect(painted.map((cell) => cell.file?.filename)).toEqual(['morning.png', 'night.png']);
+  expect(painted[0]!.rect.width).toBeGreaterThan(240);
+  expect(painted[1]!.rect.x - painted[0]!.rect.x - painted[0]!.rect.width).toBeLessThan(3);
   const cells = [...f.root.querySelectorAll<HTMLButtonElement>('.sc-output-overview-cell')];
   expect(cells.map((cell) => cell.getAttribute('aria-label'))).toEqual(['Morning', 'Night']);
   cells[1]!.click();

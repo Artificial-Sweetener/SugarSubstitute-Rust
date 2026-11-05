@@ -100,6 +100,27 @@ test('packs a two-image landscape batch horizontally in a wide canvas', () => {
   expect(window.offset).toBeGreaterThan(0);
 });
 
+test('unknown image dimensions pack full square cells with a small gap in native overviews', () => {
+  const catalog = canvasCatalogFixture();
+  const entry = catalog.entries[0]!;
+  const unknown = {
+    ...catalog,
+    entries: [
+      {
+        ...entry,
+        items: entry.items.map((item) => ({ ...item, dimensions: null })),
+        summary: { ...entry.summary, batchCount: 2 },
+      },
+    ],
+  };
+  const window = canvasOverviewWindow(unknown, 800, 722, 0);
+  const cells = canvasOverviewPlacements(window);
+  expect(window.columns).toBe(2);
+  expect(window.gap).toBeLessThan(4);
+  expect(cells[0]!.width).toBeGreaterThan(390);
+  expect(cells[1]!.x - cells[0]!.x - cells[0]!.width).toBeCloseTo(window.gap);
+});
+
 test('retains the previous packed topology near a tie and releases it after a useful area gain', () => {
   const reference = { width: 1920, height: 1080 };
   expect(canvasBatchLayout(2, { width: 1610, height: 900 }, reference, 1).columns).toBe(1);
