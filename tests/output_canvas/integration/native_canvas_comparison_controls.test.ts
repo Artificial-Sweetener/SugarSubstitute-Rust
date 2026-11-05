@@ -140,6 +140,7 @@ test('a host without comparison keeps the exact camera-only command set and no B
     'reveal',
     'select',
     'select-source',
+    'select-scene',
     'batch',
     'follow',
     'fit',

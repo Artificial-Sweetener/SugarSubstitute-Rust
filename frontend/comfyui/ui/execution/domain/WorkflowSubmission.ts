@@ -19,6 +19,7 @@ import type { WorkflowSessionContext } from './WorkflowSession.js';
 import type { WorkflowOutputSource } from './WorkflowOutput.js';
 import type { WorkflowSessionId } from './ExecutionIdentity.js';
 import type { WorkflowCanvasReturn } from './WorkflowPreparation.js';
+import { freezeWorkflowSceneMember, type WorkflowSceneMember } from './WorkflowScene.js';
 
 export interface WorkflowSubmissionOrderSource {
   /** Read reserved queue order even while its transport receipt is outstanding. */
@@ -29,6 +30,8 @@ export interface WorkflowSubmissionContext {
   readonly session: WorkflowSessionContext;
   readonly sources: readonly WorkflowOutputSource[];
   readonly canvasReturns?: readonly WorkflowCanvasReturn[];
+  /** The prompt scene this submission renders, when its request queued one prompt per scene. */
+  readonly scene?: WorkflowSceneMember;
 }
 
 export interface WorkflowOrderedSubmission extends WorkflowSubmissionContext {
@@ -40,6 +43,7 @@ export function freezeWorkflowSubmissionContext(
   context: WorkflowSubmissionContext,
 ): WorkflowSubmissionContext {
   return Object.freeze({
+    ...(context.scene ? { scene: freezeWorkflowSceneMember(context.scene) } : {}),
     ...(context.canvasReturns
       ? {
           canvasReturns: Object.freeze(

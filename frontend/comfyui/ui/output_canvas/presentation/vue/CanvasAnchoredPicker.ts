@@ -21,6 +21,8 @@ import { FloatingSurface } from '../../../menus/FloatingSurface.js';
 export interface CanvasPickerChoice {
   readonly value: string;
   readonly label: string;
+  /** Shown but not choosable, such as a scene with nothing to show yet. */
+  readonly disabled?: boolean;
 }
 
 /** Adapt choice focus and selected-row alignment to the shared floating transport. */
@@ -112,7 +114,7 @@ export const CanvasAnchoredPicker = defineComponent({
     /** Emit only a choice still present in the current snapshot, then restore control focus. */
     function select(index: number): void {
       const item = props.items[index];
-      if (!item) return;
+      if (!item || item.disabled) return;
       close(true);
       props.choose(item.value);
     }
@@ -215,6 +217,7 @@ export const CanvasAnchoredPicker = defineComponent({
                         type: 'button',
                         role: 'option',
                         'aria-selected': index === active.value,
+                        'aria-disabled': item.disabled ? 'true' : undefined,
                         tabIndex: index === active.value ? 0 : -1,
                         onFocus: () => {
                           active.value = index;

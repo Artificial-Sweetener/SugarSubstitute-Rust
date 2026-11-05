@@ -88,7 +88,7 @@ var CanvasAnchoredPicker = defineComponent({
     }
     function select(index) {
       const item = props.items[index];
-      if (!item) return;
+      if (!item || item.disabled) return;
       close(true);
       props.choose(item.value);
     }
@@ -173,6 +173,7 @@ var CanvasAnchoredPicker = defineComponent({
                   type: "button",
                   role: "option",
                   "aria-selected": index === active.value,
+                  "aria-disabled": item.disabled ? "true" : void 0,
                   tabIndex: index === active.value ? 0 : -1,
                   onFocus: () => {
                     active.value = index;

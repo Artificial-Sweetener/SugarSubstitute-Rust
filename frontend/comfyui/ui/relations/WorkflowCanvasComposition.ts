@@ -36,6 +36,8 @@ export function createWorkflowCanvasComposition(
   },
 ): {
   workflowExecution: ReturnType<typeof createComfyWorkflowExecutionRuntime>;
+  /** Prompt-scene queueing for the queue bridge and each prompt editor's "Queue this scene". */
+  scenes: ReturnType<typeof createComfyWorkflowExecutionRuntime>['scenes'];
   workflowFields: ReturnType<typeof createWorkflowFieldHost>;
   canvasInputs: ReturnType<typeof createCanvasInputs>;
   /** Canvas geometry and feature contributions for the width/height field menu. */
@@ -49,6 +51,7 @@ export function createWorkflowCanvasComposition(
     app: options.app,
     api: options.api,
     logger: options.logger,
+    notify: options.notify,
   });
   const workflowFields = createWorkflowFieldHost({
     ...options,
@@ -88,6 +91,7 @@ export function createWorkflowCanvasComposition(
   });
   return {
     workflowExecution,
+    scenes: workflowExecution.scenes,
     workflowFields,
     canvasInputs,
     editorDimensions: {

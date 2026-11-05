@@ -113,6 +113,11 @@ function decodeCommand(value: unknown): CanvasCommand | null {
       return sourceIdentity(value.sourceId)
         ? Object.freeze({ type: 'select-preview', sourceId: value.sourceId })
         : null;
+    case 'select-scene':
+      return value.scene === null ||
+        (typeof value.scene === 'string' && value.scene.length > 0 && value.scene.length <= 1000)
+        ? Object.freeze({ type: 'select-scene', scene: value.scene })
+        : null;
     case 'batch':
       return nonnegativeInteger(value.index)
         ? Object.freeze({ type: 'batch', index: value.index })

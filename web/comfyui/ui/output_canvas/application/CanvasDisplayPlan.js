@@ -40,13 +40,16 @@ export function canvasDisplayPlan(view, catalog, items, preview) {
     const primary = slot(view.selection, items.primary);
     const secondary = slot(view.comparison?.secondary ?? null, items.secondary);
     const availableSources = Object.freeze(catalog.entries.map((entry) => entry.source.id));
-    const grid = view.mode === 'overview'
-        ? canvasBatchGridCatalog(catalog, view.selection, view.follow === 'auto').entries
-        : Object.freeze([]);
+    const grid = view.mode !== 'overview'
+        ? Object.freeze([])
+        : catalog.sceneOverview
+            ? catalog.entries
+            : canvasBatchGridCatalog(catalog, view.selection, view.follow === 'auto').entries;
     const signature = JSON.stringify([
         catalog.generation,
         view.mode,
         grid.map((entry) => [
+            entry.scene ?? null,
             entry.source.id,
             entry.items.map((item) => item.id),
             entry.preview ? canvasPreviewLane(entry.preview) : null,

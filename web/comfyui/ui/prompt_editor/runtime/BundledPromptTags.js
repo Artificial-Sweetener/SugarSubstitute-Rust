@@ -1,7 +1,7 @@
 import {
   bundledPromptTagCatalog
-} from "./chunk-3T2W33S6.js";
-import "./chunk-HM6G4V2F.js";
+} from "./chunk-D7XPJW4K.js";
+import "./chunk-6WIFWSU6.js";
 export {
   bundledPromptTagCatalog
 };

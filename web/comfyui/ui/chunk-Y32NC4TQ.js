@@ -1,15 +1,18 @@
 import {
+  CanvasScenePicker
+} from "./chunk-JDRPL54Q.js";
+import {
   CanvasSourceSlider
 } from "./chunk-HFZ5NECD.js";
 import {
   CanvasRoutePicker
-} from "./chunk-CNPSIOKT.js";
+} from "./chunk-PJ5EUH5P.js";
 import {
   CanvasSelectionPicker
-} from "./chunk-OJSJCXDE.js";
+} from "./chunk-EKZRFHOF.js";
 import {
   CanvasBatchPicker
-} from "./chunk-EPXRBNCY.js";
+} from "./chunk-J75WOXTZ.js";
 import {
   defineComponent,
   h,
@@ -90,11 +93,17 @@ var CanvasNavigationBar = defineComponent({
     return () => {
       const { snapshot, capabilities, route } = props;
       const outputs = route?.route !== "input" && capabilities.commands.includes("select-source") && (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1);
-      if (!route?.inputAvailable && !outputs) return null;
+      const scenes = route?.route !== "input" && snapshot.scenes.length > 1;
+      if (!route?.inputAvailable && !outputs && !scenes) return null;
       const selection = snapshot.view.selection;
       const source = snapshot.sources.find((value) => value.id === selection?.sourceId);
       return h("div", { class: "sc-output-tabstrip sc-output-navigation", ref: strip }, [
         route ? h(CanvasRoutePicker, { state: route, choose: props.chooseRoute }) : null,
+        scenes && capabilities.commands.includes("select-scene") ? h(CanvasScenePicker, {
+          scenes: snapshot.scenes,
+          scene: snapshot.view.scene,
+          send: props.send
+        }) : null,
         outputs && capabilities.commands.includes("batch") ? h("div", { "data-sc-fixed-navigation": "true" }, [
           h(CanvasBatchPicker, {
             count: Math.max(0, ...snapshot.sources.map((value) => value.batchCount)),

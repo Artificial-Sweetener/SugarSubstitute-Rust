@@ -40,6 +40,14 @@ export interface CanvasSourceSummary {
   readonly previousRun: boolean;
 }
 
+/** One prompt scene of the current scene run, as the scene picker offers it. */
+export interface CanvasSceneSummary {
+  readonly key: string;
+  readonly title: string;
+  /** Whether the scene has an image or live preview to show yet. */
+  readonly available: boolean;
+}
+
 export interface CanvasZoomStatus {
   readonly mode: 'fit' | 'native' | 'custom';
   readonly physicalScale: number;
@@ -61,6 +69,8 @@ export interface CanvasViewSnapshot {
   readonly revision: number;
   readonly view: CanvasViewState;
   readonly sources: readonly CanvasSourceSummary[];
+  /** Scenes of the current scene run in authored order; empty unless it has several. */
+  readonly scenes: readonly CanvasSceneSummary[];
   /** Publish resource-free progressive batch descriptors for any renderer. */
   readonly grid: readonly CanvasCatalogEntry[];
   readonly comparisonAvailable: boolean;
@@ -82,6 +92,7 @@ export type CanvasCommand =
   | { readonly type: 'select'; readonly selection: CanvasSelection }
   | { readonly type: 'select-source'; readonly selection: CanvasSelection }
   | { readonly type: 'select-preview'; readonly sourceId: OutputSourceId }
+  | { readonly type: 'select-scene'; readonly scene: string | null }
   | { readonly type: 'batch'; readonly index: number }
   | { readonly type: 'follow'; readonly mode: 'auto' | 'manual' }
   | { readonly type: 'overview'; readonly enabled: boolean }

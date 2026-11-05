@@ -19,6 +19,7 @@ import type { WorkflowSessionContext } from '../domain/WorkflowSession.js';
 import type { WorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
 import { freezeWorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
 import type { WorkflowOutputSource } from '../domain/WorkflowOutput.js';
+import type { WorkflowSceneMember } from '../domain/WorkflowScene.js';
 
 /** Retain lightweight associations weakly so batch reuse requires neither guessing nor a strong cache. */
 export class WorkflowSubmissionContexts {
@@ -31,6 +32,12 @@ export class WorkflowSubmissionContexts {
     sources: readonly WorkflowOutputSource[],
   ): void {
     this.#contexts.set(prompt, freezeWorkflowSubmissionContext({ session, sources }));
+  }
+
+  /** Give one scene's prompt the original prompt's ownership, qualified by its scene. */
+  associateScene(prompt: object, original: object, scene: WorkflowSceneMember): void {
+    const context = this.#contexts.get(original);
+    if (context) this.#contexts.set(prompt, freezeWorkflowSubmissionContext({ ...context, scene }));
   }
 
   /** Resolve only the exact known prompt object, including explicit reuse for multiple batch requests. */

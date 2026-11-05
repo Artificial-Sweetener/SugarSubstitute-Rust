@@ -22,6 +22,12 @@ export class WorkflowSubmissionContexts {
     associate(prompt, session, sources) {
         this.#contexts.set(prompt, freezeWorkflowSubmissionContext({ session, sources }));
     }
+    /** Give one scene's prompt the original prompt's ownership, qualified by its scene. */
+    associateScene(prompt, original, scene) {
+        const context = this.#contexts.get(original);
+        if (context)
+            this.#contexts.set(prompt, freezeWorkflowSubmissionContext({ ...context, scene }));
+    }
     /** Resolve only the exact known prompt object, including explicit reuse for multiple batch requests. */
     read(prompt) {
         return this.#contexts.get(prompt) ?? null;

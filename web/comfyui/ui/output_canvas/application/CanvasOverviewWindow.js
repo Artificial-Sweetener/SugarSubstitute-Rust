@@ -15,6 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Pack small batches and virtualize larger batches without expanding the complete catalog. */
 import { canvasBatchLayout } from './CanvasBatchLayout.js';
+/** Open the scene of an every-scene overview cell; other cells select their own image. */
+export function canvasOverviewSceneCommand(cell) {
+    return cell.scene === undefined ? null : { type: 'select-scene', scene: cell.scene };
+}
 /**
  * Place each window cell exactly as the overview grid lays it out.
  *
@@ -88,11 +92,16 @@ export function canvasOverviewWindow(catalog, width, height, scrollTop, referenc
                     batchIndex: index,
                 });
                 cells.push(Object.freeze({
-                    key: JSON.stringify([selection.sourceId, index]),
+                    key: JSON.stringify(entry.scene === undefined
+                        ? [selection.sourceId, index]
+                        : ['scene', entry.scene, selection.sourceId, index]),
                     selection,
-                    label: `${entry.summary.label} · ${preview ? 'Source preview' : `${item?.mediaKind === 'model' ? '3D model' : item?.mediaKind === 'video' ? 'Video' : item?.mediaKind === 'animated' ? 'Animation' : 'Image'} ${index + 1}`}`,
+                    label: entry.scene === undefined
+                        ? `${entry.summary.label} · ${preview ? 'Source preview' : `${item?.mediaKind === 'model' ? '3D model' : item?.mediaKind === 'video' ? 'Video' : item?.mediaKind === 'animated' ? 'Animation' : 'Image'} ${index + 1}`}`
+                        : entry.summary.label,
                     item,
                     preview,
+                    ...(entry.scene === undefined ? {} : { scene: entry.scene }),
                 }));
             }
         }

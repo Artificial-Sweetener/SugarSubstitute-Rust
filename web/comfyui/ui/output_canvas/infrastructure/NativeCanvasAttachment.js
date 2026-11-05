@@ -32,6 +32,7 @@ import { NativeCanvasOcclusions } from './NativeCanvasOcclusions.js';
 import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
 import { nativeCanvasAddressed } from './NativeCanvasDesired.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
+import { canvasOverviewSceneCommand } from '../application/CanvasOverviewWindow.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
 import { NativeCanvasPresentation } from './NativeCanvasPresentation.js';
 import { mountCanvasEditOverlay, } from '../../canvas_editing/presentation/CanvasEditOverlayRuntime.js';
@@ -104,7 +105,7 @@ export class NativeCanvasAttachment {
                     geometry: () => this.#surface,
                     select: (cell) => {
                         if (!this.#disposed && options.accepts())
-                            options.selection.apply(options.address.viewId, this.#catalog, {
+                            options.selection.apply(options.address.viewId, this.#catalog, canvasOverviewSceneCommand(cell) ?? {
                                 type: 'select',
                                 selection: cell.selection,
                             });
@@ -141,6 +142,7 @@ export class NativeCanvasAttachment {
                     'reveal',
                     'select',
                     'select-source',
+                    'select-scene',
                     'batch',
                     'follow',
                     // Opening uses the shared file action because the desktop host opens no browser windows.

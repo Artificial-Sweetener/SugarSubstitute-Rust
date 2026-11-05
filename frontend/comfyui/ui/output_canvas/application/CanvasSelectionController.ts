@@ -17,6 +17,10 @@
 
 import type { OutputSourceId } from '../../execution/domain/ExecutionIdentity.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
+import type {
+  WorkflowSceneResult,
+  WorkflowSceneResults,
+} from '../../execution/domain/WorkflowResultSession.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import { resolveCanvasReveal } from '../domain/CanvasReveal.js';
 import type { WorkflowSubmissionOrderSource } from '../../execution/domain/WorkflowSubmission.js';
@@ -86,6 +90,34 @@ function autoCandidate(catalog: CanvasCatalogSnapshot): Candidate | null {
   return candidate;
 }
 
+/** Return the current scene run when it has several scenes to choose between. */
+function sceneRun(catalog: CanvasCatalogSnapshot): WorkflowSceneResults | null {
+  const run = catalog.result.scenes;
+  return run && run.scenes.length > 1 ? run : null;
+}
+
+/** Open one scene at its first source's first image, or its batch grid when that has several. */
+function sceneOpening(
+  catalog: CanvasCatalogSnapshot,
+  scene: WorkflowSceneResult,
+  running: boolean,
+): { selection: CanvasSelection; mode: CanvasViewState['mode'] } | null {
+  const outputs = new Map(scene.outputs.map((output) => [output.source.id, output]));
+  for (const source of [...catalog.sources].sort((a, b) => a.order - b.order)) {
+    const output = outputs.get(source.id);
+    const item = output?.items[0];
+    if (output && item)
+      return {
+        selection: { sourceId: source.id, batchIndex: item.batchIndex },
+        mode: output.batchCount > 1 ? 'overview' : 'image',
+      };
+  }
+  const preview = running ? catalog.result.preview : null;
+  return preview
+    ? { selection: { sourceId: preview.sourceId, batchIndex: 0 }, mode: 'image' }
+    : null;
+}
+
 /** Keep per-view selection policy separate from immutable registry storage and result ingestion. */
 export class CanvasSelectionController {
   readonly #cursors = new Map<CanvasViewId, FollowCursor>();
@@ -114,9 +146,13 @@ export class CanvasSelectionController {
           comparison: null,
           follow: 'auto',
           mode: 'image',
+          scene: null,
         }));
       }
     }
+    const scenes = sceneRun(catalog);
+    if (!scenes && state.scene !== null)
+      state = this.views.update(viewId, (current) => ({ ...current, scene: null }));
     const automatic = canvasOutputCatalog(catalog.result, catalog.sources);
     const candidate = autoCandidate(automatic);
     if (candidate && candidate.frontier[0] > cursor.presentedRun) {
@@ -153,6 +189,17 @@ export class CanvasSelectionController {
     // An older run can remain visible, but cannot displace the frontier after a new run begins.
     if (state.selection && candidate.frontier[0] < catalog.result.runOrder) return state;
     cursor.frontier = candidate.frontier;
+    // A scene run opens on every scene together, as Substitute's scene overview did.
+    if (scenes) {
+      if (state.scene === null && state.mode === 'overview') return state;
+      return this.views.update(viewId, (current) => ({
+        ...current,
+        selection: candidate.selection,
+        scene: null,
+        mode: 'overview',
+        sourcePreview: true,
+      }));
+    }
     const batch = canvasBatchGridCatalog(automatic, candidate.selection, true);
     const mode = (batch.entries[0]?.summary.batchCount ?? 0) > 1 ? 'overview' : 'image';
     if (
@@ -192,6 +239,10 @@ export class CanvasSelectionController {
           sourcePreview: false,
           selection: { sourceId: item.provenance.sourceId, batchIndex: item.batchIndex },
           comparison: null,
+          scene:
+            sceneRun(catalog)?.scenes.find((scene) =>
+              scene.outputs.some((output) => output.items.some((entry) => entry.id === item.id)),
+            )?.key ?? null,
         }));
         return true;
       }
@@ -211,6 +262,34 @@ export class CanvasSelectionController {
       case 'select-preview':
         this.#select(viewId, catalog, { sourceId: command.sourceId, batchIndex: 0 }, 'preview');
         return true;
+      case 'select-scene': {
+        const run = sceneRun(catalog);
+        if (!run) return true;
+        if (command.scene === null) {
+          this.views.update(viewId, (current) => ({
+            ...current,
+            follow: 'manual',
+            scene: null,
+            mode: 'overview',
+            sourcePreview: true,
+            comparison: null,
+          }));
+          return true;
+        }
+        const scene = run.scenes.find((entry) => entry.key === command.scene);
+        const opening = scene ? sceneOpening(catalog, scene, run.running === scene.key) : null;
+        if (!scene || !opening) return true;
+        this.views.update(viewId, (current) => ({
+          ...current,
+          follow: 'manual',
+          scene: scene.key,
+          mode: opening.mode,
+          selection: opening.selection,
+          sourcePreview: true,
+          comparison: null,
+        }));
+        return true;
+      }
       case 'batch': {
         if (!state.selection) return true;
         const selection = { ...state.selection, batchIndex: command.index };
