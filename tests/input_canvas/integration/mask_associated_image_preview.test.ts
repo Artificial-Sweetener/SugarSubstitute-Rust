@@ -354,22 +354,30 @@ test('keeps the rendered image while its replacement loads, then adopts the load
   f.dispose();
 });
 
-test('uses solid black for absent, empty and unavailable associated images and recovers without a composition fallback', async () => {
+/** The selection coverage [0, 255, 0, 127, 0, 255] painted alone as opaque gray levels. */
+const coverageAlone = [0, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 255, 127, 127, 127, 255];
+
+test("shows the mask's own coverage in grayscale for absent, empty and unavailable associated images", async () => {
   const f = await fixture();
   f.association.disconnect(1);
   await settled();
   const view = await f.mount(),
     frame = view.element.querySelector<HTMLElement>('.sc-input-editor__frame');
-  expect(frame?.dataset.content).toBe('black');
-  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(0);
+  expect(frame?.dataset.content).toBe('pixels');
+  expect([...f.painted.at(-1)!.slice(0, 16)]).toEqual(coverageAlone);
+  expect(
+    f.execute.mock.calls
+      .filter(([query]) => query.type === 'capture')
+      .map(([query]) => (query.type === 'capture' ? query.targets : null)),
+  ).toEqual([[{ kind: 'selection' }]]);
   f.association.connect(3, f.association.imageNode, 0, f.association.consumer, 0);
   await settled();
   expect(frame?.dataset.content).toBe('pixels');
+  expect([...f.painted.at(-1)!.slice(0, 4)]).toEqual([40, 60, 80, 255]);
   f.association.image.changeSource({ kind: 'file', file: null });
   await settled();
-  const count = f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
-  expect(frame?.dataset.content).toBe('black');
-  expect(frame?.querySelector('canvas')?.hidden).toBe(true);
+  expect(frame?.dataset.content).toBe('pixels');
+  expect([...f.painted.at(-1)!.slice(0, 16)]).toEqual(coverageAlone);
   const execute = f.execute.getMockImplementation();
   if (!execute) throw new Error('Missing source boundary.');
   let selected = false;
@@ -385,12 +393,12 @@ test('uses solid black for absent, empty and unavailable associated images and r
     target: { kind: 'current-layer' },
   });
   await settled();
-  expect(frame?.dataset.content).toBe('black');
-  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(count);
+  expect([...f.painted.at(-1)!.slice(0, 16)]).toEqual(coverageAlone);
   f.files.load.mockRejectedValueOnce(new Error('File cannot be decoded'));
   f.association.image.changeSource({ kind: 'file', file: 'broken.png' });
   await settled();
-  expect(frame?.dataset.content).toBe('black');
+  expect(frame?.dataset.content).toBe('pixels');
+  expect([...f.painted.at(-1)!.slice(0, 16)]).toEqual(coverageAlone);
   expect(f.report).toHaveBeenCalledWith(
     expect.objectContaining({ message: 'File cannot be decoded' }),
   );
@@ -408,20 +416,18 @@ test('uses solid black for absent, empty and unavailable associated images and r
   f.dispose();
 });
 
-test('clears to black for a competing image connection and restores the actual image after disconnect', async () => {
+test('shows coverage alone for a competing image connection and restores the actual image after disconnect', async () => {
   const f = await fixture(),
     view = await f.mount();
   f.association.consumer.inputs!.push({ name: 'secondImage', type: 'IMAGE', link: null });
   f.association.connect(3, f.association.imageNode, 0, f.association.consumer, 2);
   await settled();
   expect(view.element.querySelector<HTMLElement>('.sc-input-editor__frame')?.dataset.content).toBe(
-    'black',
-  );
-  f.association.disconnect(3);
-  await settled();
-  expect(view.element.querySelector<HTMLElement>('.sc-input-editor__frame')?.dataset.content).toBe(
     'pixels',
   );
+  expect([...f.painted.at(-1)!.slice(0, 16)]).toEqual(coverageAlone);
+  f.association.disconnect(3);
+  await settled();
   expect([...f.painted.at(-1)!.slice(0, 4)]).toEqual([40, 60, 80, 255]);
   f.dispose();
 });

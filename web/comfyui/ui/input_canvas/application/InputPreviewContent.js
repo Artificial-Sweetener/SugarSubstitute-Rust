@@ -20,6 +20,8 @@ export class InputPreviewContent {
     #source = null;
     #image = null;
     #imageReference = '';
+    /** Whether no usable associated image exists, so the mask previews its coverage alone. */
+    #withoutImage = false;
     #alive = true;
     #sourceSize = -1;
     #edited;
@@ -93,7 +95,7 @@ export class InputPreviewContent {
                 image.error ||
                 !entry ||
                 InputSourcePreview.unavailable(image, entry)) {
-                this.#black();
+                this.#coverageAlone();
                 return;
             }
             const imageSize = this.maximumSize;
@@ -102,6 +104,7 @@ export class InputPreviewContent {
                 InputSourcePreview.reference(image, entry, imageSize),
                 this.#captureCohort ? this.binding.preview.captureSize(this.#captureSize()) : null,
             ]);
+            this.#withoutImage = false;
             if (this.#imageReference !== reference) {
                 this.#edited.invalidate();
                 this.#imageReference = reference;
@@ -124,7 +127,7 @@ export class InputPreviewContent {
             this.#publishPixels();
         }
         catch (error) {
-            this.#black();
+            this.#coverageAlone();
             this.report(error);
         }
     }
@@ -139,16 +142,23 @@ export class InputPreviewContent {
             this.#publishPixels();
         }, this.report, this.binding.loader.kind === 'mask' ? this.#captureCohort : null);
     }
-    /** Release unnecessary capture work when no real image is selected and keep the preview solid black. */
-    #black() {
+    /** Release the associated image's capture and keep reading the mask's own coverage. */
+    #coverageAlone() {
         this.#edited.invalidate();
-        this.#sourceReader?.dispose();
+        this.#stopImageReader();
+        this.#withoutImage = true;
+        if (!this.#sourceReader || this.#sourceSize !== this.#captureSize())
+            this.#startSource();
+        else
+            this.#sourceReader.refresh();
+        this.#publishPixels();
+    }
+    /** Drop the associated image reader and its last value. */
+    #stopImageReader() {
         this.#imageReader?.dispose();
-        this.#sourceReader = this.#imageReader = null;
-        this.#source = this.#image = null;
+        this.#imageReader = null;
+        this.#image = null;
         this.#imageReference = '';
-        this.#sourceSize = -1;
-        this.publish({ kind: 'black' });
     }
     /** Overlay only the associated image, waiting for matching revisions when both sources share a canvas. */
     #publishPixels() {
@@ -168,9 +178,17 @@ export class InputPreviewContent {
             return;
         }
         const image = this.#image;
-        if (image?.kind === 'error') {
+        if (this.#withoutImage || image?.kind === 'error') {
             this.#edited.invalidate();
-            this.publish({ kind: 'black' });
+            if (source?.kind === 'pixels')
+                this.publish({
+                    kind: 'pixels',
+                    pixels: source.pixels,
+                    background: null,
+                    frame: source.canvas?.document ?? null,
+                });
+            else
+                this.publish(source ?? { kind: 'loading' });
             return;
         }
         if (image?.kind !== 'pixels') {

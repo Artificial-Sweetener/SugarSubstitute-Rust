@@ -300,9 +300,10 @@ test('an unavailable ordered target leaves other previews live and still blocks 
   expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(captures);
   expect(f.report).not.toHaveBeenCalled();
   await f.changeContext({ ...f.context(), document: null, layers: [], currentLayerId: null });
-  expect(
-    f.view.element.querySelector('.sc-input-editor__frame')?.getAttribute('data-content'),
-  ).toBe('black');
+  // A mask without an associated image explains why its own coverage is unavailable.
+  const frame = f.view.element.querySelector<HTMLElement>('.sc-input-editor__frame');
+  expect(frame?.getAttribute('data-content')).toBe('unavailable');
+  expect(frame?.querySelector('.sc-input-editor__message')?.textContent).toBe('Open a document');
   expect(
     f.view.element.querySelector<HTMLElement>('.sc-input-editor__frame')?.style.aspectRatio,
   ).toBe('3 / 2');
