@@ -134,6 +134,12 @@ impl StartupWindowContent for Content {
         }
         step
     }
+    fn system_accent(
+        &mut self,
+        _: Option<sugarsubstitute_contracts::appearance::AccentColor>,
+    ) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
     fn run_key(&self) -> RunKey {
         self.run
     }

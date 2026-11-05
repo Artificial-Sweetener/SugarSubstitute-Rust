@@ -94,6 +94,7 @@ impl Fixture {
             now: Duration::ZERO,
             interaction: Interaction::default(),
             text_revisions: [0; 5],
+            accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
         };
         Ok(Self { owner, wake, driver, flow: SetupFlow::new("E:\\Native".into())?, view })
     }

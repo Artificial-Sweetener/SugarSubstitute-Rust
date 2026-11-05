@@ -33,6 +33,7 @@ pub(in crate::setup) fn run(
                 now: Duration::ZERO,
                 interaction: crate::setup::presentation::Interaction::default(),
                 text_revisions: [0; 5],
+                accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
             },
         )?,
         workspace,

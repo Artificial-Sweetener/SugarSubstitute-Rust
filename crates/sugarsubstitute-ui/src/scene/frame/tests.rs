@@ -51,7 +51,8 @@ fn clipped_layer_preserves_fractional_coverage_and_premultiplied_pixels() -> Res
     let released = Arc::new(AtomicUsize::new(0));
     let lease =
         MemoryLease::new(FramePaint::reservation_bytes(shape), Box::new(Release(released.clone())));
-    let mut paint = FramePaint::new(s, identity()?, vec![layer()], lease.clone())?;
+    let mut paint =
+        FramePaint::new(s, AccentPalette::PRODUCT, identity()?, vec![layer()], lease.clone())?;
     assert!(lease.claim(lease.bytes()).is_err());
     let mut fonts = SceneResources::new("en")?;
     let mut steps = 0;
@@ -92,7 +93,8 @@ fn cancelled_or_rejected_surface_returns_all_admitted_storage() -> Result {
     );
     let mut fonts = SceneResources::new("en")?;
     for steps in [0, 1, 4, 12, 28] {
-        let mut paint = FramePaint::new(s, identity()?, vec![layer()], lease.clone())?;
+        let mut paint =
+            FramePaint::new(s, AccentPalette::PRODUCT, identity()?, vec![layer()], lease.clone())?;
         for _ in 0..steps {
             if paint.step(&mut fonts)? {
                 break;
@@ -101,17 +103,27 @@ fn cancelled_or_rejected_surface_returns_all_admitted_storage() -> Result {
         drop(paint);
         assert!(lease.claim(lease.bytes()).is_ok());
     }
-    assert!(FramePaint::new(s, identity()?, vec![layer()], lease.clone())?.finish().is_err());
+    assert!(
+        FramePaint::new(s, AccentPalette::PRODUCT, identity()?, vec![layer()], lease.clone())?
+            .finish()
+            .is_err()
+    );
     assert!(lease.claim(lease.bytes()).is_ok());
     let mut bad = layer();
     bad.viewport.x = f32::NAN;
-    assert!(FramePaint::new(s, identity()?, vec![layer(), bad], lease.clone()).is_err());
+    assert!(
+        FramePaint::new(s, AccentPalette::PRODUCT, identity()?, vec![layer(), bad], lease.clone())
+            .is_err()
+    );
     assert!(lease.claim(lease.bytes()).is_ok());
     let tiny = MemoryLease::new(
         METADATA_BYTES + shape.byte_len() as u64,
         Box::new(Release(Arc::new(AtomicUsize::new(0)))),
     );
-    assert!(FramePaint::new(s, identity()?, vec![layer()], tiny.clone()).is_err());
+    assert!(
+        FramePaint::new(s, AccentPalette::PRODUCT, identity()?, vec![layer()], tiny.clone())
+            .is_err()
+    );
     assert!(tiny.claim(tiny.bytes()).is_ok());
     Ok(())
 }
@@ -136,13 +148,14 @@ fn consecutive_layers_match_shared_source_over_and_clear_previous_pixels() -> Re
         viewport: Bounds { x: 80.0, y: 55.0, width: 10.0, height: 5.0 },
         elements: vec![],
     });
-    let mut paint = FramePaint::new(s, identity()?, layers, lease)?;
+    let mut paint = FramePaint::new(s, AccentPalette::PRODUCT, identity()?, layers, lease)?;
     let mut fonts = SceneResources::new("en")?;
     while !paint.step(&mut fonts)? {}
     let frame = paint.finish()?;
     let mut expected = Bitmap::new(s.width, s.height).ok_or("Target absent")?;
     let mut base = SceneCursor::new(
         s,
+        AccentPalette::PRODUCT,
         vec![Element::Decoration { bounds: viewport, appearance: Decoration::Body }],
         None,
     )?;

@@ -33,6 +33,7 @@ enum Stage {
 /// or executes one bounded font/vector operation. Dropping the painter cancels unpublished work.
 pub struct FramePaint {
     surface: PaintSpec,
+    accent: AccentPalette,
     shape: FrameShape,
     identity: FrameIdentity,
     layers: std::vec::IntoIter<Layer>,
@@ -56,11 +57,13 @@ impl FramePaint {
     }
 
     /// Adopt admitted command storage and validate every layer before any raster work.
+    /// Every layer paints its accent roles from the surface's single `accent` palette.
     /// The caller must retain its original command admission until this owner acquires custody.
     /// # Errors
     /// Rejects excessive metadata, invalid layers/commands or insufficient aggregate memory credit.
     pub fn new(
         surface: PaintSpec,
+        accent: AccentPalette,
         identity: FrameIdentity,
         mut layers: Vec<Layer>,
         lease: MemoryLease,
@@ -108,6 +111,7 @@ impl FramePaint {
         let layer = Image::new(shape, &lease)?;
         Ok(Self {
             surface,
+            accent,
             shape,
             identity,
             layers: layers.into_iter(),
@@ -140,6 +144,7 @@ impl FramePaint {
                         .map(|value| value * self.surface.scale);
                     self.cursor = Some(SceneCursor::new(
                         self.surface,
+                        self.accent,
                         layer.elements,
                         Some(self.lease.clone()),
                     )?);

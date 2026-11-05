@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve observed coverage and reject invalid progress inputs.
 use super::*;
+use sugarsubstitute_contracts::appearance::AccentColor;
+const PRODUCT: AccentPalette = AccentPalette::PRODUCT;
 
 /// A widget can move and resize without retaining any splash-specific coordinates.
 #[test]
@@ -19,7 +21,7 @@ fn progress_geometry_translates_exactly_at_multiple_scales()
             let mut left = Bitmap::new(128, 128).ok_or("Missing test raster")?;
             let mut right = left.clone();
             for (geometry, target) in [(bar, &mut left), (shifted, &mut right)] {
-                let mut cursor = ProgressCursor::new(128, 128, geometry, frame, scale)?;
+                let mut cursor = ProgressCursor::new(128, 128, geometry, frame, PRODUCT, scale)?;
                 while !cursor.step(target)? {}
             }
             let offset = (8.0 * scale) as u32;
@@ -46,14 +48,15 @@ fn invalid_progress_and_destination_are_rejected_atomically()
     };
     let frame = ProgressFrame { completed: 0.5, activity: None };
     for scale in [0.0, -1.0, f32::NAN, f32::INFINITY, 4.1] {
-        assert!(ProgressCursor::new(64, 32, bar, frame, scale).is_err());
+        assert!(ProgressCursor::new(64, 32, bar, frame, PRODUCT, scale).is_err());
     }
     for completed in [-0.1, 1.1, f32::NAN] {
         assert!(
-            ProgressCursor::new(64, 32, bar, ProgressFrame { completed, ..frame }, 1.0).is_err()
+            ProgressCursor::new(64, 32, bar, ProgressFrame { completed, ..frame }, PRODUCT, 1.0)
+                .is_err()
         );
     }
-    let mut cursor = ProgressCursor::new(64, 32, bar, frame, 1.0)?;
+    let mut cursor = ProgressCursor::new(64, 32, bar, frame, PRODUCT, 1.0)?;
     let mut target = Bitmap::new(32, 16).ok_or("Missing test raster")?;
     let before = target.clone();
     assert!(cursor.step(&mut target).is_err());
@@ -61,23 +64,40 @@ fn invalid_progress_and_destination_are_rejected_atomically()
     Ok(())
 }
 
-/// Keep installer accent and track colors under the same widget owner.
-#[test]
-fn wizard_progress_uses_its_existing_accent_and_track() -> Result<(), Box<dyn std::error::Error>> {
+fn completion_pixel(
+    appearance: ProgressAppearance,
+    accent: AccentPalette,
+) -> Result<(u8, u8, u8, u8), Box<dyn std::error::Error>> {
     let mut target = Bitmap::new(64, 32).ok_or("Missing test raster")?;
-    let bar = ProgressBar {
-        x: 4.0,
-        y: 8.0,
-        width: 48.0,
-        height: 4.0,
-        appearance: ProgressAppearance::Wizard,
-    };
-    let mut cursor =
-        ProgressCursor::new(64, 32, bar, ProgressFrame { completed: 0.5, activity: None }, 1.0)?;
+    let bar = ProgressBar { x: 4.0, y: 8.0, width: 48.0, height: 4.0, appearance };
+    let frame = ProgressFrame { completed: 0.5, activity: None };
+    let mut cursor = ProgressCursor::new(64, 32, bar, frame, accent, 1.0)?;
     while !cursor.step(&mut target)? {}
     let fill = target.pixel(10, 9).ok_or("Missing fill")?;
-    assert_eq!((fill.red(), fill.green(), fill.blue(), fill.alpha()), (255, 64, 137, 255));
-    assert_eq!(target.pixel(42, 9).map(|p| p.alpha()), Some(56));
+    if matches!(appearance, ProgressAppearance::Wizard) {
+        assert_eq!(target.pixel(42, 9).map(|p| p.alpha()), Some(56));
+    }
+    Ok((fill.red(), fill.green(), fill.blue(), fill.alpha()))
+}
+
+/// Keep installer accent and track colors under the same widget owner.
+#[test]
+fn wizard_progress_uses_the_product_fallback_and_track() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(completion_pixel(ProgressAppearance::Wizard, PRODUCT)?, (255, 64, 137, 255));
+    Ok(())
+}
+
+/// Every treatment paints completion with the supplied system accent in either theme.
+#[test]
+fn completion_uses_the_supplied_system_accent() -> Result<(), Box<dyn std::error::Error>> {
+    let accent = AccentPalette::system(AccentColor::new(0, 120, 212));
+    for appearance in [
+        ProgressAppearance::Wizard,
+        ProgressAppearance::Panel { dark: true },
+        ProgressAppearance::Panel { dark: false },
+    ] {
+        assert_eq!(completion_pixel(appearance, accent)?, (0, 120, 212, 255));
+    }
     Ok(())
 }
 /// Reject invalid producer fractions without converting them into artificial progress.

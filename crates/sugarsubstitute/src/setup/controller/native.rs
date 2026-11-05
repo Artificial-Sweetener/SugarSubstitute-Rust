@@ -37,6 +37,8 @@ impl Native {
                         scale: 1.0,
                         theme: sugarsubstitute_contracts::configuration::Theme::Dark,
                     },
+                    // The native adapter delivers the system accent before the first page.
+                    accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
                     now: Duration::ZERO,
                     scroll: 0.0,
                     interaction: Interaction::default(),

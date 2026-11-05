@@ -29,6 +29,7 @@ struct Platform {
     finished: bool,
     effects: Vec<&'static str>,
     revealed: Vec<MainIdentity>,
+    accents: Vec<Option<sugarsubstitute_contracts::appearance::AccentColor>>,
 }
 impl StartupBackend for Platform {
     type Prepared = Prepared;
@@ -71,6 +72,13 @@ impl StartupBackend for Platform {
             }
             self.retired = true;
         }
+        Ok(())
+    }
+    fn system_accent(
+        &mut self,
+        accent: Option<sugarsubstitute_contracts::appearance::AccentColor>,
+    ) -> BackendResult<()> {
+        self.accents.push(accent);
         Ok(())
     }
     #[cfg(feature = "native-composition")]
@@ -149,6 +157,26 @@ impl StartupBackend for Platform {
     fn accept_preview_observation(&mut self, _: &mut Option<DesktopStartupObservation>) -> bool {
         false
     }
+}
+
+/// The reported accent reaches SugarCubes' owner and the splash view created afterwards.
+#[test]
+fn host_forwards_system_accent_and_applies_it_to_a_later_view() -> BackendResult<()> {
+    use sugarsubstitute_contracts::appearance::AccentColor;
+    use sugarsubstitute_ui::accent::AccentPalette;
+    let mut host = host()?;
+    let blue = Some(AccentColor::new(0, 120, 212));
+    host.system_accent(blue)?;
+    host.system_accent(None)?;
+    host.system_accent(blue)?;
+    assert_eq!(host.child.accents, vec![blue, None, blue]);
+    let view =
+        view::StartupView::new(Presentation::new("en", Theme::Dark, true)?, host.accent.palette());
+    assert_eq!(view.appearance.accent, AccentPalette::system(AccentColor::new(0, 120, 212)));
+    host.view = Some(view);
+    host.system_accent(None)?;
+    assert_eq!(host.view.as_ref().map(|view| view.appearance.accent), Some(AccentPalette::PRODUCT));
+    Ok(())
 }
 
 #[test]

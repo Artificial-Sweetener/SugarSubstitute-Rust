@@ -3,6 +3,7 @@
 //! Fluent form decoration shared by native surfaces. Surface owners supply placement
 //! and observed interaction state; this owner supplies every color and border rule.
 
+use crate::accent::AccentPalette;
 use crate::bitmap::{Bitmap, CoverageMask};
 use crate::shapes::{AllocationError, CoverageRaster, blend_pixel, rounded};
 
@@ -55,7 +56,8 @@ pub enum ControlState {
     Disabled,
 }
 
-/// Supported native form treatments. Colors remain owned by this module.
+/// Supported native form treatments. Colors remain owned by this module; accent roles come
+/// from the surface's [`AccentPalette`].
 #[derive(Clone, Copy, Debug)]
 pub enum Decoration {
     /// Ordinary or emphasized pushbutton.
@@ -181,6 +183,7 @@ pub struct DecorationCursor {
 
 impl DecorationCursor {
     /// Capture validated form geometry without initializing the coverage planes.
+    /// The surface's accent supplies every emphasized role of the decoration.
     /// # Errors
     /// Rejects unsupported geometry and preserves allocation failures.
     pub fn new(
@@ -188,13 +191,14 @@ impl DecorationCursor {
         height: u32,
         bounds: Bounds,
         decoration: Decoration,
+        accent: AccentPalette,
         scale: f32,
     ) -> Result<Self, AllocationError> {
         bounds.validate(scale)?;
         if width == 0 || height == 0 || width > 4096 || height > 4096 {
             return Err(AllocationError::InvalidDimensions);
         }
-        let palette = decoration.palette();
+        let palette = decoration.palette(accent);
         let path = rounded(bounds.x, bounds.y, bounds.width, bounds.height, palette.radius, scale)
             .ok_or(AllocationError::InvalidDimensions)?;
         Ok(Self {

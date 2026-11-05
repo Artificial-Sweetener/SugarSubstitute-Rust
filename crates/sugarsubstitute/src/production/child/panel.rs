@@ -5,8 +5,9 @@
 use super::*;
 use std::time::Duration;
 use sugarsubstitute_application::panel::{PanelEffects, PanelHostSession, PanelState};
-use sugarsubstitute_contracts::panel::{
-    PanelMessage, PanelPalette, PanelPresentation, PanelSession, PanelStyle,
+use sugarsubstitute_contracts::{
+    appearance::AccentColor,
+    panel::{PanelMessage, PanelPalette, PanelPresentation, PanelSession, PanelStyle},
 };
 use sugarsubstitute_desktop::PanelCommand;
 
@@ -27,6 +28,8 @@ pub(super) struct PanelOwner {
     configuration: Option<PanelCommand>,
     ping: Option<PanelCommand>,
     pending_applied: bool,
+    /// A changed presentation awaiting command admission before the policy adopts it.
+    pending_presentation: Option<PanelPresentation>,
     deadline: Option<Moment>,
     admission_warned: bool,
     _claim: MemoryClaim,
@@ -45,15 +48,19 @@ impl PanelOwner {
     }
 
     /// Claim the persistent state before constructing the navigation-bound panel policy.
-    fn new(identity: MainIdentity, lease: MemoryLease, now: Moment) -> Result<Option<Self>> {
+    /// The page is configured with the current operating-system `accent`, when reported.
+    fn new(
+        identity: MainIdentity,
+        lease: MemoryLease,
+        now: Moment,
+        accent: Option<AccentColor>,
+    ) -> Result<Option<Self>> {
         let claim = match lease.claim(OWNER_BYTES) {
             Ok(claim) => claim,
             Err(_) => return Ok(None),
         };
         let session = PanelSession::for_main(identity)?;
-        let presentation =
-            PanelPresentation::new(false, PanelStyle::Comfy, PanelPalette::DarkGray, None, 0)?;
-        let policy = PanelHostSession::new(session, presentation, now)?;
+        let policy = PanelHostSession::new(session, presentation(accent)?, now)?;
         let deadline = policy.next_deadline()?;
         Ok(Some(Self {
             identity,
@@ -62,6 +69,7 @@ impl PanelOwner {
             configuration: None,
             ping: None,
             pending_applied: false,
+            pending_presentation: None,
             deadline,
             admission_warned: false,
             _claim: claim,
@@ -103,11 +111,46 @@ impl PanelOwner {
         Ok(())
     }
 
+    /// Reconfigure the live page with a changed operating-system accent.
+    /// Without command capacity the newest presentation waits for a bounded retry.
+    fn update_accent(&mut self, accent: Option<AccentColor>, now: Moment) -> Result<()> {
+        self.pending_presentation = Some(presentation(accent)?);
+        self.adopt_pending_presentation()?;
+        if self.pending_presentation.is_some() {
+            self.schedule_pending(now)?;
+        }
+        Ok(())
+    }
+
+    /// Hand the waiting presentation to the policy only once its command can be admitted.
+    fn adopt_pending_presentation(&mut self) -> Result<()> {
+        let Some(presentation) = self.pending_presentation.take() else { return Ok(()) };
+        if self.policy.state() == PanelState::Failed {
+            return Ok(());
+        }
+        let Some(claim) = self.command_claim() else {
+            self.pending_presentation = Some(presentation);
+            return Ok(());
+        };
+        let effects = self.policy.update_presentation(presentation);
+        self.adopt(effects, Some(claim))
+    }
+
     /// Advance only an actual due deadline without manufacturing a timer or task.
     fn tick(&mut self, now: Moment) -> Result<()> {
         if self.deadline.is_none_or(|deadline| now < deadline) {
             return Ok(());
         }
+        self.adopt_pending_presentation()?;
+        self.tick_policy(now)?;
+        if self.pending_presentation.is_some() {
+            self.schedule_pending(now)?;
+        }
+        Ok(())
+    }
+
+    /// Advance the handshake and heartbeat policy at a due deadline.
+    fn tick_policy(&mut self, now: Moment) -> Result<()> {
         let Some(claim) = self.command_claim() else {
             let effects = self.policy.expire(now)?;
             if self.policy.state() == PanelState::Failed {
@@ -202,6 +245,17 @@ impl PanelOwner {
     pub(super) const fn deadline(&self) -> Option<Moment> {
         self.deadline
     }
+}
+
+/// Host presentation for the SugarCubes page; the accent is the operating-system accent.
+fn presentation(accent: Option<AccentColor>) -> Result<PanelPresentation> {
+    Ok(PanelPresentation::new(
+        false,
+        PanelStyle::Comfy,
+        PanelPalette::DarkGray,
+        accent.map(AccentColor::css_hex),
+        0,
+    )?)
 }
 
 #[cfg(test)]

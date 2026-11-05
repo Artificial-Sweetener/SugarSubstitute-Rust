@@ -86,6 +86,7 @@ impl Fixture {
                 scroll: 0.0,
                 interaction: Interaction::default(),
                 text_revisions: [0; 5],
+                accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
             },
         )?;
         session.start(&controller)?;

@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:bf948fcc1c141969fb1b09b1ee61a0479b69b016f0cd63d32513aa781e8b3110"
+source_sha256 = "sha256:16a6e8a0a092c7ef9650991cb2efa8ccab1e0d1dd26edcc7b54211a20b9b6d23"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -4384,7 +4384,7 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b20c25369edbce3fae0c09020283af1faadcad160e1f6276fe8594767b2539cb"
+source_sha256 = "sha256:096d9835db749377a570d91c90410546cfe1f1df39676552059b905120e5b289"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."

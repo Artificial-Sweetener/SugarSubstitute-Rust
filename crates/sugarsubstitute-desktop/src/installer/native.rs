@@ -65,6 +65,9 @@ pub enum Event {
     Scroll(f32),
     /// Result of the exact originally requested modal picker; cancellation preserves the old value.
     Picked(Picker, Result<Option<String>, String>),
+    /// The operating-system accent, delivered before start and after each change.
+    /// `None` means the platform reports no accent and the product palette applies.
+    SystemAccent(Option<sugarsubstitute_contracts::appearance::AccentColor>),
 }
 /// Application lifetime polled on the native UI thread; no method waits for background work.
 pub trait Lifetime {

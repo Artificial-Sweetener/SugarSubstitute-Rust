@@ -5,7 +5,10 @@ use super::*;
 use std::error::Error;
 
 fn view(reduced: bool) -> Result<StartupView, Box<dyn Error>> {
-    Ok(StartupView::new(Presentation::new("en", RequestedTheme::Dark, reduced)?))
+    Ok(StartupView::new(
+        Presentation::new("en", RequestedTheme::Dark, reduced)?,
+        sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
+    ))
 }
 
 #[test]

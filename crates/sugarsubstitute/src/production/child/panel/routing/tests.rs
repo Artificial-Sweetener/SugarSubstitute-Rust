@@ -39,7 +39,7 @@ fn current_unready_and_failed_policies_both_return_correlated_ordinary_refusals(
         let identity = child.identity;
         let lease = MemoryLease::new(OWNER_BYTES + SurfaceReply::STORAGE_BYTES, Box::new(Release));
         if failed {
-            let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0))?
+            let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
                 .ok_or("Panel owner was not admitted")?;
             panel.tick(Moment::from_nanos(30_000_000_000))?;
             assert_eq!(panel.policy.state(), PanelState::Failed);

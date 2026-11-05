@@ -29,7 +29,7 @@ impl MemoryRelease for Release {
 fn cancelled_scene_releases_its_masks_without_publishing_a_frame() -> Result<(), Box<dyn Error>> {
     let released = Arc::new(AtomicUsize::new(0));
     let lease = MemoryLease::new(160 * 80 * 2, Box::new(Release(released.clone())));
-    let cursor = SceneCursor::new(surface(), vec![], Some(lease.clone()))?;
+    let cursor = SceneCursor::new(surface(), AccentPalette::PRODUCT, vec![], Some(lease.clone()))?;
     assert!(lease.claim(1).is_err());
     drop(cursor);
     assert!(lease.claim(160 * 80 * 2).is_ok());
@@ -51,7 +51,9 @@ fn scene_checks_late_commands_before_admitting_scratch() -> Result<(), Box<dyn E
             icon: FluentIcon::Home,
         },
     ];
-    assert!(SceneCursor::new(surface(), elements, Some(lease.clone())).is_err());
+    assert!(
+        SceneCursor::new(surface(), AccentPalette::PRODUCT, elements, Some(lease.clone())).is_err()
+    );
     assert!(lease.claim(160 * 80 * 2).is_ok());
     Ok(())
 }
@@ -94,7 +96,7 @@ fn scene_composes_real_widgets_labels_and_icons_in_order() -> Result<(), Box<dyn
             frame: ProgressFrame { completed: 0.5, activity: None },
         },
     ];
-    let mut cursor = SceneCursor::new(surface(), elements, None)?;
+    let mut cursor = SceneCursor::new(surface(), AccentPalette::PRODUCT, elements, None)?;
     let mut target = Bitmap::new(160, 80).ok_or("Scene absent")?;
     let mut fonts = SceneResources::new("en")?;
     while !cursor.step(&mut target, &mut fonts)? {}
@@ -108,5 +110,37 @@ fn scene_composes_real_widgets_labels_and_icons_in_order() -> Result<(), Box<dyn
     assert_eq!(target.pixel(12, 62).ok_or("Progress absent")?.alpha(), 255);
     assert!(target.pixel(120, 62).ok_or("Track absent")?.alpha() < 255);
     assert_eq!(target.pixel(0, 0).ok_or("Outside absent")?.alpha(), 0);
+    Ok(())
+}
+
+/// One scene accent reaches both its decorations and its progress elements.
+#[test]
+fn scene_accent_reaches_decorations_and_progress() -> Result<(), Box<dyn Error>> {
+    let accent =
+        AccentPalette::system(sugarsubstitute_contracts::appearance::AccentColor::new(0, 120, 212));
+    let elements = vec![
+        Element::Decoration {
+            bounds: Bounds { x: 8.0, y: 8.0, width: 120.0, height: 32.0 },
+            appearance: Decoration::Button { primary: true, state: ControlState::Rest },
+        },
+        Element::Progress {
+            bar: ProgressBar {
+                x: 8.0,
+                y: 60.0,
+                width: 120.0,
+                height: 6.0,
+                appearance: ProgressAppearance::Wizard,
+            },
+            frame: ProgressFrame { completed: 0.5, activity: None },
+        },
+    ];
+    let mut cursor = SceneCursor::new(surface(), accent, elements, None)?;
+    let mut target = Bitmap::new(160, 80).ok_or("Scene absent")?;
+    let mut fonts = SceneResources::new("en")?;
+    while !cursor.step(&mut target, &mut fonts)? {}
+    for (x, y) in [(40, 20), (12, 62)] {
+        let pixel = target.pixel(x, y).ok_or("Accent pixel absent")?;
+        assert_eq!([pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()], [0, 120, 212, 255]);
+    }
     Ok(())
 }

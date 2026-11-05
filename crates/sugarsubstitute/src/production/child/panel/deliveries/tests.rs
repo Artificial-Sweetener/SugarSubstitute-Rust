@@ -58,7 +58,7 @@ fn handshake_failure_preserves_an_already_queued_surface_refusal() -> Result<()>
         &lease,
         lease.claim(SurfaceReply::STORAGE_BYTES)?,
     )?;
-    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0))?
+    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
         .ok_or("Panel owner was not admitted")?;
     panel.tick(Moment::from_nanos(30_000_000_000))?;
     assert_eq!(panel.policy.state(), PanelState::Failed);

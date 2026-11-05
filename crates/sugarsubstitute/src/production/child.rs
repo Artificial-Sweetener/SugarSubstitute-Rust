@@ -108,6 +108,8 @@ pub(crate) struct ProductionChild {
     panel: Option<panel::PanelOwner>,
     panel_deliveries: panel::Deliveries,
     panel_owner_admission_warned: bool,
+    /// Latest operating-system accent, presented to every new SugarCubes page.
+    system_accent: Option<sugarsubstitute_contracts::appearance::AccentColor>,
     running_backend: Option<backend::RunningBackendBinding>,
     #[cfg(feature = "native-composition")]
     canvas_backend: Option<crate::startup::CanvasBackend>,
@@ -178,6 +180,7 @@ impl ProductionChild {
             panel: None,
             panel_deliveries: panel::Deliveries::new(),
             panel_owner_admission_warned: false,
+            system_accent: None,
             running_backend: None,
             #[cfg(feature = "native-composition")]
             canvas_backend: None,

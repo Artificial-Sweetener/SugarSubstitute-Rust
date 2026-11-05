@@ -157,6 +157,8 @@ fn export_admitted(
             status: sugarsubstitute_splash::StartupStatus::Loading,
             operation: Default::default(),
             theme,
+            // Parity scenarios compare against the reference's product accent.
+            accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
             expanded: scenario.expanded,
             reveal: f64::from(scenario.expanded),
             hovered: control(scenario.hovered.as_deref())?,

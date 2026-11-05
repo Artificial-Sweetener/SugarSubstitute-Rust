@@ -3,6 +3,7 @@
 //! Shared native widget rendering. Callers own layout and submit bounded preparation
 //! through the execution adapter; this crate does not create windows or schedule work.
 
+pub mod accent;
 pub mod availability;
 /// Data-only pixel storage for shared painting and retained frame publication.
 pub mod bitmap;

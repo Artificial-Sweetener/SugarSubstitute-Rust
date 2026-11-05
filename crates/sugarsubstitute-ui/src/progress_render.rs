@@ -4,6 +4,7 @@
 //! Advance the progress owner's physical masks and gradient through bounded slices.
 
 use super::{ProgressAppearance, ProgressBar, ProgressFrame, standalone_track};
+use crate::accent::AccentPalette;
 use crate::bitmap::{Bitmap, CoverageMask};
 use crate::shapes::{AllocationError, CoverageRaster, PaintCursor, byte_product};
 use tiny_skia::{PathBuilder, Rect};
@@ -25,6 +26,7 @@ pub struct ProgressCursor {
     sweep: Option<CoverageMask>,
     bar: ProgressBar,
     frame: ProgressFrame,
+    accent: AccentPalette,
     scale: f32,
     width: u32,
     height: u32,
@@ -34,11 +36,15 @@ pub struct ProgressCursor {
 }
 impl ProgressCursor {
     /// Capture the exact rounded child-widget clip without initializing its full plane.
+    /// Completion is painted with the surface's accent palette.
+    /// # Errors
+    /// Rejects invalid geometry or completion and preserves allocation failures.
     pub fn new(
         width: u32,
         height: u32,
         bar: ProgressBar,
         frame: ProgressFrame,
+        accent: AccentPalette,
         scale: f32,
     ) -> Result<Self, AllocationError> {
         if !bar.valid(scale)
@@ -71,6 +77,7 @@ impl ProgressCursor {
             sweep: None,
             bar,
             frame,
+            accent,
             scale,
             width,
             height,
@@ -100,7 +107,7 @@ impl ProgressCursor {
             }
             Stage::Track => {
                 self.stage = Stage::Fill;
-                let (_, track) = self.bar.colors();
+                let (_, track) = self.bar.colors(self.accent);
                 if let ProgressAppearance::Hairline { dark } = self.bar.appearance {
                     standalone_track(target, self.bar, if dark { 255 } else { 0 }, self.scale);
                 } else if let Some(path) = self.bar.clip(self.bar.width, self.scale) {
@@ -113,7 +120,7 @@ impl ProgressCursor {
             Stage::Fill => {
                 self.stage = Stage::Done;
                 if let Some(path) = self.bar.clip(self.filled, self.scale) {
-                    let (color, _) = self.bar.colors();
+                    let (color, _) = self.bar.colors(self.accent);
                     self.stage = Stage::Paint(
                         PaintCursor::new(&path, self.width, self.height, color, None, true)?,
                         false,

@@ -5,6 +5,7 @@
 
 use crate::bitmap::Bitmap;
 use crate::{
+    accent::AccentPalette,
     icons::FluentIcon,
     progress::{ProgressBar, ProgressCursor, ProgressFrame},
     text::{FontOwner, GlyphPaint, LabelLayout, LabelPaintSpec, PaintSpec},
@@ -129,6 +130,7 @@ enum Active {
 /// output. Callers additionally admit their scene metadata and destination bytes.
 pub struct SceneCursor {
     surface: PaintSpec,
+    accent: AccentPalette,
     elements: std::vec::IntoIter<Element>,
     active: Option<Active>,
     lease: Option<MemoryLease>,
@@ -137,11 +139,13 @@ pub struct SceneCursor {
 
 impl SceneCursor {
     /// Validate scene admission and command geometry before modifying the target.
+    /// Every decoration and progress element paints its accent roles from `accent`.
     /// A missing lease is reserved for synchronous off-screen qualification.
     /// # Errors
     /// Rejects excessive scenes, malformed labels and invalid widget geometry.
     pub fn new(
         surface: PaintSpec,
+        accent: AccentPalette,
         elements: Vec<Element>,
         lease: Option<MemoryLease>,
     ) -> io::Result<Self> {
@@ -154,7 +158,14 @@ impl SceneCursor {
                     .map_err(io::Error::other)
             })
             .transpose()?;
-        Ok(Self { surface, elements: elements.into_iter(), active: None, lease, _scratch: scratch })
+        Ok(Self {
+            surface,
+            accent,
+            elements: elements.into_iter(),
+            active: None,
+            lease,
+            _scratch: scratch,
+        })
     }
 
     /// Validate all commands before an owning multi-layer surface admits any raster work.
@@ -244,7 +255,7 @@ impl SceneCursor {
         let s = self.surface;
         self.active = Some(match element {
             Element::Decoration { bounds, appearance } => Active::Decoration(
-                DecorationCursor::new(s.width, s.height, bounds, appearance, s.scale)
+                DecorationCursor::new(s.width, s.height, bounds, appearance, self.accent, s.scale)
                     .map_err(io::Error::other)?,
             ),
             Element::Label { text, layout } => {
@@ -255,7 +266,7 @@ impl SceneCursor {
                 })
             }
             Element::Progress { bar, frame } => Active::Progress(
-                ProgressCursor::new(s.width, s.height, bar, frame, s.scale)
+                ProgressCursor::new(s.width, s.height, bar, frame, self.accent, s.scale)
                     .map_err(io::Error::other)?,
             ),
             Element::Icon { bounds, icon } => self.vector(bounds, icon.source())?,

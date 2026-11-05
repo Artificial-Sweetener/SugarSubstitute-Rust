@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Shared progress widget; completion and activity are supplied by the application.
 
+use crate::accent::AccentPalette;
 use crate::bitmap::Bitmap;
 use crate::shapes::{intersect, rounded};
 use tiny_skia::{Paint, Rect, Transform};
@@ -89,17 +90,14 @@ impl ProgressBar {
         }
     }
 
-    /// Resolve supported treatments here rather than in each surface's draw code.
-    fn colors(self) -> ([u8; 4], [u8; 4]) {
+    /// Resolve completion and track colors here rather than in each surface's draw code.
+    /// Completion always uses the surface's accent; the neutral track depends only on theme.
+    fn colors(self, accent: AccentPalette) -> ([u8; 4], [u8; 4]) {
         match self.appearance {
             ProgressAppearance::Hairline { dark } | ProgressAppearance::Panel { dark } => {
-                if dark {
-                    ([255, 68, 132, 255], [255, 255, 255, 18])
-                } else {
-                    ([233, 30, 99, 255], [0, 0, 0, 12])
-                }
+                (accent.progress(dark), if dark { [255, 255, 255, 18] } else { [0, 0, 0, 12] })
             }
-            ProgressAppearance::Wizard => ([255, 64, 137, 255], [255, 255, 255, 56]),
+            ProgressAppearance::Wizard => (accent.fill(), [255, 255, 255, 56]),
         }
     }
 }

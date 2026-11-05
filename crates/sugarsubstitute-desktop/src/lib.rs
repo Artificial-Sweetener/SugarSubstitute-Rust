@@ -157,6 +157,8 @@ mod windows_scroll;
 #[allow(unsafe_code)]
 mod windows_subclass;
 #[cfg(target_os = "windows")]
+mod windows_system_accent;
+#[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod windows_text;
 

@@ -38,6 +38,12 @@ impl StartupBackend for ProductionChild {
     ) -> BackendResult<()> {
         ProductionChild::observe(self, observation, prepared)
     }
+    fn system_accent(
+        &mut self,
+        accent: Option<sugarsubstitute_contracts::appearance::AccentColor>,
+    ) -> BackendResult<()> {
+        self.adopt_system_accent(accent)
+    }
     #[cfg(feature = "native-composition")]
     fn admits_canvas(&self, identity: MainIdentity, lease: &MemoryLease) -> bool {
         !self.shutdown.closing()

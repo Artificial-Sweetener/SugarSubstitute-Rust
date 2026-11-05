@@ -31,7 +31,7 @@ fn current_panel_coalesces_pending_messages_and_keeps_memory_until_the_command_r
     let lease = MemoryLease::new(reserved, Box::new(Release(released.clone())));
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0))?
+    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
         .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(2))?;
@@ -59,7 +59,7 @@ fn insufficient_command_admission_does_not_advance_panel_policy() -> Result<()> 
         Box::new(Release(Arc::default())),
     );
     let identity = identity()?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0))?
+    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
         .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(PanelSession::for_main(identity)?), Moment::from_nanos(1))?;
     assert!(panel.take_command().is_none());
@@ -70,7 +70,7 @@ fn insufficient_command_admission_does_not_advance_panel_policy() -> Result<()> 
 #[test]
 fn unavailable_owner_admission_is_a_recoverable_rejection() -> Result<()> {
     let lease = MemoryLease::new(OWNER_BYTES - 1, Box::new(Release(Arc::default())));
-    assert!(PanelOwner::new(identity()?, lease, Moment::from_nanos(0))?.is_none());
+    assert!(PanelOwner::new(identity()?, lease, Moment::from_nanos(0), None)?.is_none());
     Ok(())
 }
 
@@ -82,7 +82,7 @@ fn delayed_applied_message_retries_without_requiring_the_page_to_repeat_it() -> 
     );
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0))?
+    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
         .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     let held = panel.take_command().ok_or("Configuration missing")?;
@@ -104,7 +104,7 @@ fn pong_needs_no_command_capacity_and_overloaded_timers_keep_the_original_cutoff
     let lease = MemoryLease::new(reserved, Box::new(Release(Arc::default())));
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0))?
+    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
         .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     drop(panel.take_command().ok_or("Configuration missing")?);
@@ -113,7 +113,7 @@ fn pong_needs_no_command_capacity_and_overloaded_timers_keep_the_original_cutoff
     assert_eq!(panel.policy.state(), PanelState::Connected);
     drop(panel);
 
-    let mut waiting = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0))?
+    let mut waiting = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
         .ok_or("Panel owner was not admitted")?;
     let session = PanelSession::for_main(identity)?;
     waiting.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
@@ -136,7 +136,7 @@ fn reply_expiration_is_observed_even_when_heartbeat_admission_remains_full() -> 
     );
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0))?
+    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
         .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     drop(panel.take_command().ok_or("Configuration missing")?);
@@ -166,7 +166,7 @@ fn handshake_expiration_retires_its_undelivered_configuration() -> Result<()> {
         Box::new(Release(Arc::default())),
     );
     let identity = identity()?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0))?
+    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
         .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(PanelSession::for_main(identity)?), Moment::from_nanos(1))?;
     assert!(panel.configuration.is_some());
@@ -174,5 +174,65 @@ fn handshake_expiration_retires_its_undelivered_configuration() -> Result<()> {
     assert_eq!(panel.policy.state(), PanelState::Failed);
     assert!(panel.take_command().is_none());
     assert_eq!(panel.deadline(), None);
+    Ok(())
+}
+
+fn configured_accent(command: &PanelCommand) -> Result<Option<String>> {
+    let PanelMessage::Configure { presentation, .. } = command.message() else {
+        return Err("Expected a configuration".into());
+    };
+    Ok(presentation.accent_color().map(str::to_owned))
+}
+
+/// A new page is configured with the system accent, and a change reconfigures the live page.
+#[test]
+fn system_accent_configures_the_page_and_reconfigures_it_on_change() -> Result<()> {
+    let lease = MemoryLease::new(
+        OWNER_BYTES + 2 * PanelCommand::STORAGE_BYTES,
+        Box::new(Release(Arc::default())),
+    );
+    let identity = identity()?;
+    let session = PanelSession::for_main(identity)?;
+    let blue = AccentColor::new(0, 120, 212);
+    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), Some(blue))?
+        .ok_or("Panel owner was not admitted")?;
+    panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
+    let first = panel.take_command().ok_or("Configuration missing")?;
+    assert_eq!(configured_accent(&first)?.as_deref(), Some("#0078d4"));
+    drop(first);
+    panel.receive(PanelMessage::Applied(session), Moment::from_nanos(2))?;
+    drop(panel.take_command().ok_or("Ping missing")?);
+    panel.update_accent(Some(AccentColor::new(16, 124, 16)), Moment::from_nanos(3))?;
+    let changed = panel.take_command().ok_or("Reconfiguration missing")?;
+    assert_eq!(configured_accent(&changed)?.as_deref(), Some("#107c10"));
+    drop(changed);
+    panel.update_accent(None, Moment::from_nanos(4))?;
+    let withdrawn = panel.take_command().ok_or("Withdrawal missing")?;
+    assert_eq!(configured_accent(&withdrawn)?, None);
+    Ok(())
+}
+
+/// Without command capacity a changed accent waits and is delivered by the bounded retry.
+#[test]
+fn system_accent_change_waits_for_command_admission() -> Result<()> {
+    let lease = MemoryLease::new(
+        OWNER_BYTES + PanelCommand::STORAGE_BYTES,
+        Box::new(Release(Arc::default())),
+    );
+    let identity = identity()?;
+    let session = PanelSession::for_main(identity)?;
+    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
+        .ok_or("Panel owner was not admitted")?;
+    panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
+    drop(panel.take_command().ok_or("Configuration missing")?);
+    panel.receive(PanelMessage::Applied(session), Moment::from_nanos(2))?;
+    let held = panel.take_command().ok_or("Ping missing")?;
+    panel.update_accent(Some(AccentColor::new(0, 120, 212)), Moment::from_nanos(3))?;
+    assert!(panel.take_command().is_none());
+    assert_eq!(panel.deadline(), Some(Moment::from_nanos(100_000_003)));
+    drop(held);
+    panel.tick(Moment::from_nanos(100_000_003))?;
+    let delivered = panel.take_command().ok_or("Retried configuration missing")?;
+    assert_eq!(configured_accent(&delivered)?.as_deref(), Some("#0078d4"));
     Ok(())
 }
