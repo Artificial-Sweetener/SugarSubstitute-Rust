@@ -41,6 +41,39 @@ describe('canvas contextual toolbar', () => {
     expect(f.query('.sc-canvas-edit-toolbar')?.dataset.canvasPlacement).toBe('100,472');
   });
 
+  test('drags by its grip and keeps the dropped place while the selection moves', async () => {
+    const f = await mountEditing();
+    await f.push({ selection });
+    const grip = f.query('.sc-canvas-edit-toolbar [data-canvas-toolbar-grip]')!;
+    expect(grip.getAttribute('aria-label')).toBe('Move Contextual Toolbar');
+    const capture = jest.fn();
+    Object.defineProperty(grip, 'setPointerCapture', { value: capture });
+    const pointer = (type: string, x: number, y: number): void => {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      Object.defineProperty(event, 'pointerId', { value: 4 });
+      grip.dispatchEvent(event);
+    };
+    pointer('pointerdown', 400, 230);
+    pointer('pointermove', 300, 300);
+    pointer('pointermove', 200, 380);
+    pointer('pointerup', 200, 380);
+    expect(capture).toHaveBeenCalledWith(4);
+    expect(f.query('.sc-canvas-edit-toolbar')?.dataset.canvasPlacement).toBe('100,362');
+    // Moves after release do not drag.
+    pointer('pointermove', 600, 100);
+    expect(f.query('.sc-canvas-edit-toolbar')?.dataset.canvasPlacement).toBe('100,362');
+    await f.push({ selection: { bounds: { ...selection.bounds, left: 100, top: 520 } } });
+    expect(f.query('.sc-canvas-edit-toolbar')?.dataset.canvasPlacement).toBe('100,362');
+    // A new page places itself afresh.
+    await f.push({ selection, session: { kind: 'transform', undo: false, redo: false } });
+    expect(f.query('.sc-canvas-edit-toolbar')?.dataset.canvasPlacement).not.toBe('100,362');
+  });
+
   test('offers Modify selection, Transform, Clear and Deselect', async () => {
     const f = await mountEditing(editState({ selection }));
     const actions = [

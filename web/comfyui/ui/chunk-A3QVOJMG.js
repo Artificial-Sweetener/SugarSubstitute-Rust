@@ -1,17 +1,17 @@
 import {
   CanvasToolbarPlacement,
   canvasEditSafeArea
-} from "./chunk-HDVDWAOE.js";
+} from "./chunk-3HDL7XRD.js";
 import {
   modifyPage,
   selectionPage,
   sessionPage,
   transformPage
-} from "./chunk-BPQUSL77.js";
+} from "./chunk-KA4VBPJE.js";
 import {
   CANVAS_EDIT_TEXT,
   CANVAS_TOOL_LABELS
-} from "./chunk-ECAVEMES.js";
+} from "./chunk-2WJX4EBF.js";
 import {
   defineComponent,
   h,
@@ -32,10 +32,44 @@ var CanvasContextualToolbar = defineComponent({
   setup(props) {
     const element = ref(null);
     const placement = new CanvasToolbarPlacement();
+    let shown = null;
+    let drag = null;
     watch(
       () => props.snapshot.surface.kind,
       () => placement.reset()
     );
+    function show(toolbar, point) {
+      shown = point;
+      toolbar.style.transform = `translate(${point.x}px, ${point.y}px)`;
+      toolbar.dataset.canvasPlacement = `${point.x},${point.y}`;
+    }
+    function grab(event) {
+      if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drag = { pointer: event.pointerId, x: event.clientX, y: event.clientY };
+    }
+    function follow(event) {
+      const toolbar = element.value;
+      if (!drag || drag.pointer !== event.pointerId || !toolbar || !shown) return;
+      event.preventDefault();
+      const delta = { x: event.clientX - drag.x, y: event.clientY - drag.y };
+      drag.x = event.clientX;
+      drag.y = event.clientY;
+      show(
+        toolbar,
+        placement.moveBy(
+          shown,
+          delta,
+          { width: toolbar.offsetWidth, height: toolbar.offsetHeight },
+          canvasEditSafeArea(props.viewport)
+        )
+      );
+    }
+    function release(event) {
+      if (drag?.pointer === event.pointerId) drag = null;
+    }
     function place() {
       const toolbar = element.value;
       if (!toolbar) return;
@@ -47,14 +81,15 @@ var CanvasContextualToolbar = defineComponent({
         width: bounds.width,
         height: bounds.height
       } : null;
-      const point = placement.position(
-        context,
-        { width: toolbar.offsetWidth, height: toolbar.offsetHeight },
-        canvasEditSafeArea(viewport),
-        viewport.density
+      show(
+        toolbar,
+        placement.position(
+          context,
+          { width: toolbar.offsetWidth, height: toolbar.offsetHeight },
+          canvasEditSafeArea(viewport),
+          viewport.density
+        )
       );
-      toolbar.style.transform = `translate(${point.x}px, ${point.y}px)`;
-      toolbar.dataset.canvasPlacement = `${point.x},${point.y}`;
     }
     onMounted(place);
     onUpdated(place);
@@ -70,7 +105,20 @@ var CanvasContextualToolbar = defineComponent({
           "aria-label": toolbarLabel(props.snapshot),
           "data-canvas-surface": props.snapshot.surface.kind
         },
-        children
+        [
+          h("div", {
+            class: "sc-canvas-edit-toolbar-grip",
+            title: CANVAS_EDIT_TEXT.moveToolbar,
+            "aria-label": CANVAS_EDIT_TEXT.moveToolbar,
+            "data-canvas-toolbar-grip": "",
+            onPointerdown: grab,
+            onPointermove: follow,
+            onPointerup: release,
+            onPointercancel: release,
+            onLostpointercapture: release
+          }),
+          ...children
+        ]
       );
     };
   }

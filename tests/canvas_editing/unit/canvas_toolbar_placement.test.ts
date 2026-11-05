@@ -62,6 +62,31 @@ describe('contextual toolbar placement', () => {
     expect(placement.position(null, size, safe, 1)).toEqual({ x: 300, y: 556 });
   });
 
+  test('keeps a dragged toolbar where it was dropped until the context resets', () => {
+    const placement = new CanvasToolbarPlacement();
+    const context = { left: 300, top: 100, width: 200, height: 100 };
+    const shown = placement.position(context, size, safe, 1);
+    expect(placement.moveBy(shown, { x: -200, y: 150 }, size, safe)).toEqual({ x: 100, y: 362 });
+    // The selection following pan and zoom no longer moves the toolbar.
+    expect(
+      placement.position({ left: 500, top: 20, width: 100, height: 50 }, size, safe, 1),
+    ).toEqual({ x: 100, y: 362 });
+    // A wider page keeps the same centre; a resized viewport keeps the same fraction of it.
+    expect(placement.position(context, { width: 300, height: 36 }, safe, 1)).toEqual({
+      x: 50,
+      y: 362,
+    });
+    const half = canvasEditSafeArea({ left: 0, top: 0, width: 400, height: 300 });
+    expect(placement.position(context, size, half, 1)).toEqual({ x: 8, y: 171 });
+    // Dragging past an edge stays inside the safe area.
+    expect(placement.moveBy({ x: 100, y: 362 }, { x: 0, y: 900 }, size, safe)).toEqual({
+      x: 100,
+      y: 556,
+    });
+    placement.reset();
+    expect(placement.position(context, size, safe, 1)).toEqual({ x: 300, y: 212 });
+  });
+
   test('clamps the whole toolbar inside the safe area', () => {
     const placement = new CanvasToolbarPlacement();
     expect(
