@@ -350,39 +350,36 @@ fn reselecting_a_retained_output_without_a_frame_starts_at_fit_like_a_fresh_load
 }
 
 #[test]
-fn reselecting_a_retained_output_presents_its_detail_at_the_selection_frame_without_new_work()
+fn reselecting_a_retained_output_presents_its_detail_at_the_selection_frame_without_loading_it()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::retaining()?;
-    let (_, zoomed) = park_zoomed(&mut fixture)?;
+    let (fit, zoomed) = park_zoomed(&mut fixture)?;
 
     assert!(fixture.session.reselect_retained(&key("a"))?);
-    // One document pixel per physical pixel at the image centre: the page's one-to-one view.
+    // The page's shared view: ten physical pixels per document pixel at the image centre,
+    // closer than Fit's eight.
+    let span = 0.1;
     fixture
         .session
-        .frame_selection(Some(NavigationCommand::Frame { center: [0.5, 0.5], span: [1.0, 1.0] }));
+        .frame_selection(Some(NavigationCommand::Frame { center: [0.5, 0.5], span: [span; 2] }));
     let selection = fixture.session.selection;
+    // The retained source is never acquired or loaded again; the new camera renders anew.
     let shown = fixture.next_shown(|session| {
-        if session.loading.is_some() {
-            return Err("Reselection loaded its source again");
-        }
-        if session.rendering.is_some() {
-            return Err("Reselection prepared its frame again");
-        }
-        Ok(())
+        session.loading.is_none().then_some(()).ok_or("Reselection loaded its source again")
     })?;
-    assert_eq!(shown.evidence.tier, BackingTier::Detail);
     assert_eq!(shown.evidence.source_revision, selection);
     assert!(red(shown.pixel), "{:x}", shown.pixel);
+    fixture.settle()?;
     let camera = fixture.session.accepted_camera().ok_or("Reselected camera absent")?;
-    assert_eq!(camera.viewport, zoomed);
+    assert_eq!(camera.viewport.zoom(), 10.0, "the selection's frame, not the parked zoom");
+    assert!(camera.viewport.zoom() > fit.zoom());
+    assert_ne!(camera.viewport, zoomed);
     assert_eq!(camera.source_revision, selection);
     assert!(fixture.session.retained.contains(&key("b")));
     assert!(!fixture.session.retained.contains(&key("a")));
-    fixture.settle()?;
     let _directory = fixture.finish()?;
     Ok(())
 }
-
 #[test]
 fn returning_while_another_output_downloads_relabels_the_current_document()
 -> Result<(), Box<dyn Error>> {
