@@ -16,6 +16,7 @@ var CANVAS_TOOL_LABELS = Object.freeze({
 var CANVAS_COVERAGE_OPERATION_LABELS = Object.freeze({ expand: "Expand", contract: "Contract", feather: "Feather" });
 var CANVAS_EDIT_TEXT = Object.freeze({
   tools: "Canvas tools",
+  moveToolbar: "Move Contextual Toolbar",
   toolGroup: (label) => `${label} tools`,
   brushSettings: "Brush settings",
   size: "Size",

@@ -40,6 +40,7 @@ export const CANVAS_COVERAGE_OPERATION_LABELS: Readonly<Record<CanvasCoverageOpe
 /** Every other phrase of the editing chrome. */
 export const CANVAS_EDIT_TEXT = Object.freeze({
   tools: 'Canvas tools',
+  moveToolbar: 'Move Contextual Toolbar',
   toolGroup: (label: string) => `${label} tools`,
   brushSettings: 'Brush settings',
   size: 'Size',

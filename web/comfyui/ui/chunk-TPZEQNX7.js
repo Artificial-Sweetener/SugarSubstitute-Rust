@@ -8,7 +8,7 @@ import {
 import {
   CANVAS_COVERAGE_OPERATION_LABELS,
   CANVAS_EDIT_TEXT
-} from "./chunk-ECAVEMES.js";
+} from "./chunk-2WJX4EBF.js";
 import {
   defineComponent,
   h

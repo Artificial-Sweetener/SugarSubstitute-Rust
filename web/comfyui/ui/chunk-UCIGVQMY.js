@@ -1,19 +1,19 @@
 import {
   CanvasToolRail
-} from "./chunk-3IZU6ONS.js";
+} from "./chunk-AWHG7O74.js";
 import {
   CanvasBrushOptions
-} from "./chunk-NC4KX5LX.js";
+} from "./chunk-CSZBNOIR.js";
 import {
   CANVAS_EDIT_CHROME_INSET
-} from "./chunk-HDVDWAOE.js";
+} from "./chunk-3HDL7XRD.js";
 import {
   canvasEditToolAvailable,
   iconButton
-} from "./chunk-BPQUSL77.js";
+} from "./chunk-KA4VBPJE.js";
 import {
   CANVAS_EDIT_TEXT
-} from "./chunk-ECAVEMES.js";
+} from "./chunk-2WJX4EBF.js";
 import {
   defineComponent,
   h,

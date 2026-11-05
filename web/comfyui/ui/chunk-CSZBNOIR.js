@@ -4,7 +4,7 @@ import {
 } from "./chunk-EFQNN4SR.js";
 import {
   CANVAS_EDIT_TEXT
-} from "./chunk-ECAVEMES.js";
+} from "./chunk-2WJX4EBF.js";
 import {
   canvasEditIcon
 } from "./chunk-X5ULNSRV.js";
