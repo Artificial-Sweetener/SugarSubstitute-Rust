@@ -1,21 +1,22 @@
 import {
+  CanvasOverlay
+} from "../../../chunk-LA4PPLYX.js";
+import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-HS2FI4KU.js";
+} from "../../../chunk-2KJTU62U.js";
+import "../../../chunk-WIEFPHCO.js";
+import "../../../chunk-NHCXFNIG.js";
 import {
   canvasContextActions,
   canvasMediaItem
 } from "../../../chunk-NKMV6DCZ.js";
-import {
-  CanvasOverlay
-} from "../../../chunk-BLQJSKWP.js";
-import "../../../chunk-ZAF7C7KA.js";
-import "../../../chunk-T26L5BHO.js";
-import "../../../chunk-WIEFPHCO.js";
-import "../../../chunk-CIRP6VLK.js";
+import "../../../chunk-Z66IIUOP.js";
+import "../../../chunk-HR7CZA7V.js";
+import "../../../chunk-HFZ5NECD.js";
+import "../../../chunk-CJ4ERMLU.js";
 import "../../../chunk-UEULIHLJ.js";
 import "../../../chunk-SVNSOY77.js";
 import "../../../chunk-5NVJVFWB.js";
-import "../../../chunk-Z66IIUOP.js";
 import {
   canvasNavigationSnapshot
 } from "../../../chunk-HDLA7PWP.js";
@@ -143,12 +144,6 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
     throw error;
   }
   return {
-    routeBounds() {
-      return Array.from(
-        element.querySelectorAll(".sc-output-route"),
-        (tabs) => tabs.getBoundingClientRect()
-      );
-    },
     /** Make root teardown idempotent while invalidating pending command feedback. */
     dispose() {
       if (!active) return;

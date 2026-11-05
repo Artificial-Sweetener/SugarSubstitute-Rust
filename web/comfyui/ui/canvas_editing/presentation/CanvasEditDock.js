@@ -1,11 +1,11 @@
 import {
   CanvasEditDock
-} from "../../chunk-2S4PRFYU.js";
+} from "../../chunk-MADF66HT.js";
 import "../../chunk-3IZU6ONS.js";
-import "../../chunk-NC4KX5LX.js";
 import "../../chunk-HDVDWAOE.js";
 import "../../chunk-BPQUSL77.js";
 import "../../chunk-36SKP3QA.js";
+import "../../chunk-NC4KX5LX.js";
 import "../../chunk-EFQNN4SR.js";
 import "../../chunk-ECAVEMES.js";
 import "../../chunk-X5ULNSRV.js";

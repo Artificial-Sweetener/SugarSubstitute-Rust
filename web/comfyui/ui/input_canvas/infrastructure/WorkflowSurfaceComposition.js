@@ -43,7 +43,6 @@ export function createWorkflowSurfaces(options) {
                     ? {
                         route: view.route,
                         inputAvailable: view.available,
-                        reason: view.reason,
                         labels: {
                             input: WORKFLOW_SURFACE_COPY.inputRoute,
                             output: WORKFLOW_SURFACE_COPY.outputRoute,

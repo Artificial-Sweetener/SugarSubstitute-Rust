@@ -2,15 +2,15 @@ import {
   CanvasToolRail
 } from "./chunk-3IZU6ONS.js";
 import {
-  CanvasBrushOptions
-} from "./chunk-NC4KX5LX.js";
-import {
   CANVAS_EDIT_CHROME_INSET
 } from "./chunk-HDVDWAOE.js";
 import {
   canvasEditToolAvailable,
   iconButton
 } from "./chunk-BPQUSL77.js";
+import {
+  CanvasBrushOptions
+} from "./chunk-NC4KX5LX.js";
 import {
   CANVAS_EDIT_TEXT
 } from "./chunk-ECAVEMES.js";

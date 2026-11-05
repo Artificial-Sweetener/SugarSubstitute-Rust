@@ -16,7 +16,6 @@
 /** Own the Input/Output route and the active input surface and mask of each workflow. */
 import type { CanvasWorkflowHost } from '../../../../../integrations/contracts/CanvasWorkflowSurfaces.js';
 import { workflowMaskKey } from '../domain/WorkflowSurfacePlan.js';
-import { WORKFLOW_SURFACE_COPY } from './WorkflowSurfaceCopy.js';
 import type { WorkflowSurfaceState } from './WorkflowSurfaceProvisioning.js';
 
 export type InputCanvasRoute = 'input' | 'output';
@@ -34,8 +33,6 @@ export interface WorkflowInputSelectionStore {
 /** The route control's view of the active workflow. */
 export interface WorkflowInputRouteView extends WorkflowInputSelection {
   readonly available: boolean;
-  /** Why Input is disabled, or an empty string. */
-  readonly reason: string;
 }
 /** Synced surfaces and their change notifications. */
 export interface WorkflowSurfaceSource {
@@ -43,12 +40,14 @@ export interface WorkflowSurfaceSource {
   subscribe(listener: () => void): () => void;
 }
 
-const OUTPUT: WorkflowInputSelection = { route: 'output', surface: null, mask: null };
+/** A workflow that remembers no selection opens on its input images, as it did in Substitute. */
+const STARTING: WorkflowInputSelection = { route: 'input', surface: null, mask: null };
 
 /**
  * Keep the canvas's visible route and input document in step with the remembered selection.
  *
  * Input is available only while the workflow has surfaces; otherwise the view stays on Output.
+ * A workflow without a remembered selection starts on Input when it has surfaces.
  * A remembered surface or mask that disappears is cleared rather than reassigned. Showing Input
  * with no active surface activates the first surface and its first mask.
  */
@@ -56,7 +55,7 @@ export class WorkflowInputRoute {
   readonly #listeners = new Set<() => void>();
   readonly #stop: () => void;
   #workflow: string | null = null;
-  #selection: WorkflowInputSelection = OUTPUT;
+  #selection: WorkflowInputSelection = STARTING;
   #view: WorkflowInputRouteView | null = null;
   #activated: string | null = null;
 
@@ -145,10 +144,10 @@ export class WorkflowInputRoute {
       this.#workflow = state.workflow;
       this.#activated = null;
       try {
-        this.#selection = this.store.read(state.workflow) ?? OUTPUT;
+        this.#selection = this.store.read(state.workflow) ?? STARTING;
       } catch (error: unknown) {
         this.report(error);
-        this.#selection = OUTPUT;
+        this.#selection = STARTING;
       }
     }
     const available = state.surfaces.length > 0;
@@ -165,7 +164,6 @@ export class WorkflowInputRoute {
       surface: surface?.key ?? null,
       mask,
       available,
-      reason: available ? '' : WORKFLOW_SURFACE_COPY.noInputSurfaces,
     });
     const command = {
       type: 'activate',

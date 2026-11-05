@@ -44,7 +44,8 @@ export class ComfyWorkflowInputState {
     }
     /**
      * Read the workflow's identity. A workflow with nothing to provision is not modified and shares
-     * one empty identity; `create` persists a new identity when it has surfaces.
+     * one empty identity; `create` persists a new identity when it has surfaces. A new identity
+     * opens on Input, because it is created for a workflow whose input images exist.
      */
     workflow(create) {
         const root = this.root();
@@ -62,7 +63,7 @@ export class ComfyWorkflowInputState {
         if (!create)
             return EMPTY_WORKFLOW;
         const id = 'workflow-' + this.nextId();
-        this.#write(root, { version: 1, id, route: 'output', surface: null, mask: null });
+        this.#write(root, { version: 1, id, route: 'input', surface: null, mask: null });
         return id;
     }
     /**
