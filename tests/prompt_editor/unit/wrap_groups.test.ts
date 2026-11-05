@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Preserve Substitute's tag threshold, decoration attachments and full-width fallback policy. */
+import { ChangeSet, Text } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
 import {
   SourceToken,
@@ -22,6 +23,7 @@ import {
 import {
   preparePromptWrapGroups,
   fittingPromptWrapGroups,
+  mapPromptWrapRange,
 } from '../../../frontend/sugarprompt/editor/src/prompt-wrap-groups.js';
 
 test('protect one to three word comma tags, include the comma, and respect hard lines', () => {
@@ -156,4 +158,49 @@ test('exclude words covered by nested concealed ranges without losing later visi
     'visible',
     'omega',
   ]);
+});
+
+test('carry a kept tag through a weight step that rewrites its whole emphasis', () => {
+  const text = 'hand on headwear, (oversized brim:-1.05),';
+  const tag = { from: text.indexOf('('), to: text.length };
+  const emphasis = { from: tag.from, to: text.indexOf(')') + 1 };
+  const changes = ChangeSet.of(
+    [{ from: emphasis.from, to: emphasis.to, insert: '(oversized brim:-1.00)' }],
+    text.length,
+  );
+  const mapped = mapPromptWrapRange(tag, changes);
+  const after = changes.apply(Text.of([text])).toString();
+  expect(mapped && after.slice(mapped.from, mapped.to)).toBe('(oversized brim:-1.00),');
+  const interior = ChangeSet.of(
+    [{ from: text.indexOf('05'), to: text.indexOf('05') + 2, insert: '1' }],
+    text.length,
+  );
+  const narrowed = mapPromptWrapRange(tag, interior);
+  expect(narrowed && interior.apply(Text.of([text])).sliceString(narrowed.from, narrowed.to)).toBe(
+    '(oversized brim:-1.1),',
+  );
+});
+
+test('leave edge insertions outside a kept group and drop groups an edit crosses or splits', () => {
+  const text = 'alpha, best quality, tail';
+  const group = { from: text.indexOf('best'), to: text.indexOf(' tail') };
+  const length = text.length;
+  expect(
+    mapPromptWrapRange(group, ChangeSet.of([{ from: group.from, insert: 'x' }], length)),
+  ).toEqual({
+    from: group.from + 1,
+    to: group.to + 1,
+  });
+  expect(
+    mapPromptWrapRange(group, ChangeSet.of([{ from: group.to, insert: 'x' }], length)),
+  ).toEqual(group);
+  expect(
+    mapPromptWrapRange(group, ChangeSet.of([{ from: group.from - 2, to: group.from + 2 }], length)),
+  ).toBeNull();
+  expect(
+    mapPromptWrapRange(group, ChangeSet.of([{ from: group.from + 4, insert: '\n' }], length)),
+  ).toBeNull();
+  expect(
+    mapPromptWrapRange(group, ChangeSet.of([{ from: group.from, to: group.to }], length)),
+  ).toBeNull();
 });

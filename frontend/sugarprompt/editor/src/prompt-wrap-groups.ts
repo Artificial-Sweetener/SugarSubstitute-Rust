@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Derive line-placement units from exact native text and already prepared decoration boundaries. */
+import type { ChangeSet } from '@codemirror/state';
 import type { DecorationSet } from '@codemirror/view';
 import type { SourceRange } from '../../core/src/index.js';
 import { strip, whitespace } from '../../core/src/prompt/text.js';
@@ -113,6 +114,30 @@ export function preparePromptWrapGroups(
   return [...tags, ...edges, ...words].filter(
     (group) => !text.slice(group.from, group.to).includes('\n'),
   );
+}
+
+/**
+ * Carry an admitted group through an edit confined to it, until layout re-measures the group.
+ * Returns null when an edit crosses the group's edges, adds a line break or empties the group.
+ * Insertions exactly at an edge stay outside; a replacement that starts or ends at an edge is
+ * part of the group, as when a weight step rewrites a whole emphasis.
+ */
+export function mapPromptWrapRange(range: SourceRange, changes: ChangeSet): SourceRange | null {
+  let startSide: -1 | 1 = 1,
+    endSide: -1 | 1 = -1,
+    confined = true;
+  changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    const touches =
+      fromA === toA ? fromA > range.from && fromA < range.to : fromA < range.to && toA > range.from;
+    if (!touches) return;
+    if (fromA < range.from || toA > range.to || inserted.lines > 1) confined = false;
+    if (fromA === range.from) startSide = -1;
+    if (toA === range.to) endSide = 1;
+  });
+  if (!confined) return null;
+  const from = changes.mapPos(range.from, startSide),
+    to = changes.mapPos(range.to, endSide);
+  return to > from ? { from, to } : null;
 }
 
 /** Prefer a fitting whole tag; otherwise independently admit non-overlapping decoration attachments. */
