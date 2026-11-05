@@ -16,6 +16,7 @@
 /** Own masonry layout rules and workspace stacking independently of renderer appearance. */
 import { MASONRY_SURFACE_Z_INDEX } from '../../core/OverlayStacking.js';
 import { WORKFLOW_MASONRY_TOP_INSET } from './WorkflowMasonryLayout.js';
+import { packedMasonryRule } from './MasonryPacking.js';
 /** Install layout structure independently of native node theme tokens. */
 export function ensureWorkflowMasonryStyles(documentRef) {
     if (documentRef.getElementById('sugarcubes-workflow-masonry-styles'))
@@ -44,13 +45,11 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       background:transparent;
       color:var(--fg-color,#ddd); outline:none;
     }
-    :has(> .sc-cube-stack-host .sc-cube-stack[data-compact]) > .sugarcubes-workflow-masonry,
-    html[data-sc-compact-masonry] .sugarcubes-workflow-masonry {
+    ${packedMasonryRule('.sugarcubes-workflow-masonry')} {
       --sugarcubes-masonry-gap:0;
       --sc-masonry-inline-padding:0px;
       padding:0 0 var(--sc-panel-resize-corner,0px) var(--sc-masonry-stack-width,0px);
     }
-    html[data-sc-compact-masonry] .sugarcubes-workflow-masonry__section { height:36px; }
     .sugarcubes-workflow-masonry__backdrop {
       position:absolute; inset:0; z-index:${MASONRY_SURFACE_Z_INDEX}; pointer-events:none;
       background:var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020));

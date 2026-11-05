@@ -34,7 +34,7 @@ import { MasonryStackInsetMotion } from './MasonryStackInsetMotion.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import { prepareNativePresentation } from '../NativePresentationReady.js';
 import { whenPromptEditorsPresented } from '../../prompt_editor/PromptEditorSurface.js';
-import { COMPACT_MASONRY_CHANGE } from './CompactMasonryPreference.js';
+import { subscribeMasonryPacking } from './MasonryPacking.js';
 import {
   measureNativeCardPresentationSources,
   restoreNativeCardPresentations,
@@ -66,6 +66,7 @@ export class WorkflowMasonryView {
   readonly #remounts: WorkflowMasonryRemountQueue;
   readonly #motion = new SurfaceMotion();
   readonly #stackInset = new MasonryStackInsetMotion();
+  readonly #stopPacking: () => void;
   readonly #presentation: SurfacePresentationBoundary;
   #sections: readonly WorkflowMasonrySection[];
   #generation = 0;
@@ -98,7 +99,7 @@ export class WorkflowMasonryView {
     this.element.addEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
     options.document.addEventListener('pointerdown', this.#onInteraction, true);
     options.document.addEventListener('keydown', this.#onInteraction, true);
-    options.document.addEventListener(COMPACT_MASONRY_CHANGE, this.#onCompactChange);
+    this.#stopPacking = subscribeMasonryPacking(options.document, () => this.#requestLayout());
     this.#content = options.document.createElement('div');
     this.#content.className = 'sugarcubes-workflow-masonry__content';
     this.#overrideSlot = options.document.createElement('div');
@@ -470,16 +471,13 @@ export class WorkflowMasonryView {
       this.#motion.settle();
   };
 
-  /** Repack mounted cards when the shared density preference changes. */
-  readonly #onCompactChange = (): void => this.#requestLayout();
-
   /** Release observers and native mounts before restoring singleton custom widgets. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#options.document.removeEventListener('pointerdown', this.#onInteraction, true);
     this.#options.document.removeEventListener('keydown', this.#onInteraction, true);
-    this.#options.document.removeEventListener(COMPACT_MASONRY_CHANGE, this.#onCompactChange);
+    this.#stopPacking();
     this.element.removeEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
     this.element.removeEventListener('wheel', this.#onWheel);
     this.#generation += 1;

@@ -41,7 +41,7 @@ export const CubeStackRail = defineComponent({
     const awaiting = ref(false);
     const submittedOrder = ref<readonly string[] | null>(null);
     useCubeStackFocus(root);
-    const rowStride = computed(() => cubeStackRowStride(props.state.compact));
+    const rowStride = computed(() => cubeStackRowStride(props.state.packed));
     const gesture = useCubeStackPointerDrag({
       root,
       rows: () => props.state.rows,
@@ -180,13 +180,13 @@ export const CubeStackRail = defineComponent({
             {
               class: 'sc-cube-stack__rows',
               style: {
-                height: `${String(Math.max(0, rows.value.length * rowStride.value - cubeStackRowGap(props.state.compact)))}px`,
+                height: `${String(Math.max(0, rows.value.length * rowStride.value - cubeStackRowGap(props.state.packed)))}px`,
               },
             },
             [
               h(CubeStackSelectionIndicator, {
                 key: 'selection',
-                compact: props.state.compact,
+                packed: props.state.packed,
                 position: rows.value.some((row) => row.selected)
                   ? rows.value.findIndex((row) => row.selected)
                   : null,

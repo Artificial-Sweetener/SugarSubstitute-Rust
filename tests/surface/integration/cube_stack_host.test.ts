@@ -35,6 +35,7 @@ import { CubeStackDrawerMotion } from '../../../frontend/comfyui/ui/surface/stac
 import { SubstituteFrameMode } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameMode.js';
 import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
 import { pluginFrameCss } from '../../../frontend/comfyui/ui/surface/frame/PluginFrameStyles.js';
+import { COMPACT_MASONRY_CHANGE } from '../../../frontend/comfyui/ui/surface/masonry/CompactMasonryPreference.js';
 
 test('Plugin Mode compacts the existing rail and removes extra space before the cards', async () => {
   const frame = new SubstituteFrameMode();
@@ -80,10 +81,38 @@ test('frame mode changes allocation without replacing the existing rail or accen
   expect(rail?.querySelector('.sc-cube-stack__selection')).toBe(indicator);
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(58);
   frame.setEnabled(false);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+});
+
+test('compact Cube stack keeps masonry spacing while Compact masonry packs the rail flush', async () => {
+  const fixture = setup();
+  fixture.surface.element.className = 'sugarcubes-workflow-masonry';
+  ensureWorkflowMasonryStyles(document);
+  fixture.host.setup();
+  fixture.host.ready(fixture.surface, false);
+  await nextTick();
+  fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
+  await nextTick();
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+  const gap = (): string =>
+    getComputedStyle(fixture.surface.element).getPropertyValue('--sugarcubes-masonry-gap');
+  expect(gap()).not.toBe('0');
+  document.documentElement.setAttribute('data-sc-compact-masonry', '');
+  document.dispatchEvent(new Event(COMPACT_MASONRY_CHANGE));
+  await nextTick();
+  try {
+    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+    expect(gap()).toBe('0');
+    expect(document.querySelector('.sc-cube-stack')?.hasAttribute('data-compact')).toBe(true);
+    fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(false);
+    await nextTick();
+    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224);
+  } finally {
+    document.documentElement.removeAttribute('data-sc-compact-masonry');
+  }
 });
 
 const owned: CubeStackHost[] = [];
@@ -316,14 +345,14 @@ test('retains one mounted rail, follows official appearance and recovers a hidde
   expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(248);
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(false);
   expect(document.querySelector('.sc-cube-stack')).toBeNull();
   expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0);
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(true);
   await nextTick();
   expect(document.querySelector('.sc-cube-stack')).not.toBeNull();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
 });
 
 test('routes navigation through search and waits for accepted masonry state after keyboard reorder', async () => {

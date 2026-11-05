@@ -16,7 +16,8 @@
 /** Match SugarSubstitute stack metrics while inheriting official Fluent or native Comfy colors. */
 import { MASONRY_STACK_Z_INDEX } from '../../core/OverlayStacking.js';
 import { WORKFLOW_MASONRY_TOP_INSET } from '../masonry/WorkflowMasonryLayout.js';
-import { CUBE_STACK_ROW_GAP, CUBE_STACK_ROW_HEIGHT, cubeStackWidth } from './CubeStackMetrics.js';
+import { CUBE_STACK_ROW_GAP, CUBE_STACK_ROW_HEIGHT, CUBE_STACK_ROW_INSET, cubeStackWidth, } from './CubeStackMetrics.js';
+import { packedMasonryRule } from '../masonry/MasonryPacking.js';
 import { CUBE_MODEL_PILL_BACKGROUND, CUBE_MODEL_PILL_FOREGROUND, } from '../CubeModelPillAppearance.js';
 /** Install trusted static rules once without styling host nodes or discovering graph inventory. */
 export function ensureCubeStackStyles(documentRef) {
@@ -53,16 +54,12 @@ export function ensureCubeStackStyles(documentRef) {
       --sc-text:var(--fg-color,#eee) !important;
       --sc-border:var(--interface-stroke,#555) !important;
     }
-    .sc-cube-stack[data-compact] { width:${String(cubeStackWidth(true))}px; }
+    .sc-cube-stack[data-compact] { width:${String(cubeStackWidth(true, false))}px; }
     .sc-cube-stack[data-kind="rail"] { transition:width 220ms var(--sc-stack-curve); }
-    .sc-cube-stack__rows { position:relative; list-style:none; padding:0 6px; margin:0; display:flex; flex-direction:column; gap:${String(CUBE_STACK_ROW_GAP)}px; }
+    .sc-cube-stack__rows { position:relative; list-style:none; padding:0 ${String(CUBE_STACK_ROW_INSET)}px; margin:0; display:flex; flex-direction:column; gap:${String(CUBE_STACK_ROW_GAP)}px; }
     .sc-cube-stack[data-kind="rail"] .sc-cube-stack__rows > .sc-cube-stack-row {
       position:absolute; left:6px; right:6px; top:0; transition:transform 220ms var(--sc-stack-curve);
     }
-    .sc-cube-stack[data-compact] .sc-cube-stack__rows { gap:0; padding:0; }
-    .sc-cube-stack[data-compact] .sc-cube-stack__rows > .sc-cube-stack-row { left:0; right:0; }
-    .sc-cube-stack[data-compact] .sc-cube-stack__selection { left:1px; }
-    .sc-cube-stack[data-compact] .sc-cube-stack__add { margin:0; width:100%; border-radius:0; }
     .sc-cube-stack-move { transition:transform 220ms var(--sc-stack-curve); }
     .sc-cube-stack-enter-active,.sc-cube-stack-leave-active { transition:opacity 160ms ease,transform 220ms var(--sc-stack-curve); }
     .sc-cube-stack-enter-from,.sc-cube-stack-leave-to { opacity:0; transform:translateY(8px); }
@@ -72,7 +69,6 @@ export function ensureCubeStackStyles(documentRef) {
       border:1px solid var(--sc-stack-border); border-radius:5px;
       background:var(--sc-stack-row); color:var(--sc-stack-text); list-style:none;
     }
-    .sc-cube-stack[data-compact] .sc-cube-stack-row { border-radius:0; }
     .sc-cube-stack-row:hover { background:var(--sc-stack-hover); }
     .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row { background:transparent; border-color:transparent; }
     .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row:hover { background:var(--sc-stack-hover); }
@@ -142,7 +138,15 @@ export function ensureCubeStackStyles(documentRef) {
     .sc-cube-stack__status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     .sc-cube-stack-host { position:absolute; z-index:${MASONRY_STACK_Z_INDEX}; pointer-events:auto; left:12px; top:${WORKFLOW_MASONRY_TOP_INSET}px; bottom:12px; overflow-y:auto; overflow-x:hidden; padding:6px 0; border-radius:8px; background:var(--comfy-menu-bg,#202020); }
     .sc-cube-stack-host[data-appearance]:not([data-appearance="comfy"]) { background:var(--sc-surface-secondary,#202020); border:1px solid var(--sc-border-subtle,transparent); box-shadow:var(--sc-shadow-small,0 2px 4px #0002); }
-    .sc-cube-stack-host:has(.sc-cube-stack[data-kind="rail"][data-compact]) { left:0; top:0; bottom:0; padding:0; border:0; border-radius:0; }
+    /* Compact masonry and Plugin Mode pack the rail flush; the Cube stack's compact preference never does. */
+    ${packedMasonryRule('.sc-cube-stack[data-kind="rail"][data-compact]')} { width:${String(cubeStackWidth(true, true))}px; }
+    ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack__rows')} { gap:0; padding:0; }
+    ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack__rows > .sc-cube-stack-row')} { left:0; right:0; }
+    ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack-leave-active')} { left:0; right:0; }
+    ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack__selection')} { left:1px; }
+    ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack__add')} { margin:0; width:100%; border-radius:0; }
+    ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack-row')} { border-radius:0; }
+    ${packedMasonryRule('.sc-cube-stack-host')} { left:0; top:0; bottom:0; padding:0; border:0; border-radius:0; }
     @media (hover:none) { .sc-cube-stack-row__remove { opacity:1; } }
     @media (prefers-reduced-motion:reduce) {
       .sc-cube-stack-move,.sc-cube-stack-enter-active,.sc-cube-stack-leave-active,

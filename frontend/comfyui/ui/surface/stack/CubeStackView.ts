@@ -38,7 +38,10 @@ export interface CubeStackNavigationRow extends CubeStackRowModel {
 /** Keep visual preference, graph facts and mutation lifetime explicit at the presentation seam. */
 export interface CubeStackViewState {
   readonly rows: readonly CubeStackNavigationRow[];
+  /** Show icon-only rows; spacing is unaffected. */
   readonly compact: boolean;
+  /** Touch rows edge to edge because Compact masonry or Plugin Mode packs the presentation. */
+  readonly packed: boolean;
   readonly pending: boolean;
   readonly appearance: VisualStyle;
 }
