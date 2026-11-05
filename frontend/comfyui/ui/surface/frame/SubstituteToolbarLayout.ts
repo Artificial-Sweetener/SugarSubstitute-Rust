@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt identified native toolbar wrappers to the Substitute row without moving Vue-owned controls. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+import { relocateControl } from '../../core/ControlPlacement.js';
 import { substituteToolbarCss } from './SubstituteToolbarStyles.js';
 
 const EXTENSIONS_ICON = '[class~="icon-[comfy--extensions-blocks]"]';
@@ -25,8 +26,17 @@ export class SubstituteToolbarLayout {
   readonly #style: HTMLStyleElement;
   readonly #marked = new Map<HTMLElement, string>();
 
-  /** Observe native toolbar controls, including the manager's independently mounted button. */
-  constructor(private readonly document: Document) {
+  /**
+   * Observe native toolbar controls, including the manager's independently mounted button.
+   *
+   * The frame's generation progress tracks sit on the toolbar row's bottom edge, matching the
+   * Substitute shell; they return to the frame whenever no toolbar row is identified.
+   */
+  constructor(
+    private readonly document: Document,
+    private readonly frame: HTMLElement,
+    private readonly progress: HTMLElement,
+  ) {
     this.#style = document.createElement('style');
     this.#style.textContent = substituteToolbarCss;
     document.head.append(this.#style);
@@ -41,6 +51,7 @@ export class SubstituteToolbarLayout {
   /** Restore every native wrapper when Substitute mode or its frame mount is retired. */
   dispose(): void {
     this.#presence.disconnect();
+    if (this.progress.parentElement !== this.frame) relocateControl(this.progress, this.frame);
     for (const [element, attribute] of this.#marked) element.removeAttribute(attribute);
     this.#marked.clear();
     this.#style.remove();
@@ -73,6 +84,10 @@ export class SubstituteToolbarLayout {
         next.set(column, 'data-sc-substitute-toolbar-column');
       }
     }
+    const line = [...next].find(([, attribute]) => attribute === 'data-sc-substitute-toolbar-line');
+    const progressParent = line?.[0] ?? this.frame;
+    if (this.progress.parentElement !== progressParent)
+      relocateControl(this.progress, progressParent);
     for (const [element, attribute] of this.#marked)
       if (next.get(element) !== attribute) element.removeAttribute(attribute);
     this.#marked.clear();

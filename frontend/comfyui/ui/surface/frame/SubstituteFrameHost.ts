@@ -243,7 +243,11 @@ export class SubstituteFrameHost {
       this.options.app,
       this.options.report,
     );
-    this.#toolbarLayout = new SubstituteToolbarLayout(this.options.document);
+    this.#toolbarLayout = new SubstituteToolbarLayout(
+      this.options.document,
+      this.#view.element,
+      this.#view.progressElement,
+    );
   }
 
   /** Refresh only the retained progress tracks for the currently presented workflow. */

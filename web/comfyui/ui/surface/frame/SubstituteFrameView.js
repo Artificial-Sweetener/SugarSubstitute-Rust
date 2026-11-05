@@ -145,6 +145,10 @@ export class SubstituteFrameView {
     updateProgress(snapshot) {
         this.#progress.update(snapshot);
     }
+    /** Expose the progress tracks for reversible placement on the toolbar row's bottom edge. */
+    get progressElement() {
+        return this.#progress.element;
+    }
     /** Expose the application menu for reversible placement in the Plugin Mode toolbar. */
     get applicationMenu() {
         return this.#orb.element;
