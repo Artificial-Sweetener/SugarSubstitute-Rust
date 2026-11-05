@@ -40,6 +40,7 @@ export function ensureInputEditorStyles(document: Document): void {
   .sc-input-editor__placeholder {position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px;text-align:center;}
   .sc-input-editor__placeholder-icon {font-size:22px;opacity:.7;}
   .sc-input-editor__actions {display:flex;flex-wrap:wrap;gap:4px;}
+  .sc-input-editor__moves {display:contents;}
   .sc-input-editor__row:disabled {opacity:.45;cursor:default;}
   .sc-input-editor__row:focus-visible {outline:1px solid currentColor;outline-offset:1px;}
   .sc-input-editor__status {font-size:11px;opacity:.8;min-height:1em;}

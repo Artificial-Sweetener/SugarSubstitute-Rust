@@ -32,7 +32,7 @@ export class CanvasSourcePicker {
     }
     /** Reconcile capability restrictions and exact saved identities through the mounted native fields. */
     refresh() {
-        const source = this.port.source(), context = this.port.context();
+        const source = this.port.source(), context = this.port.context(), visible = !this.port.hidden;
         const kind = source.kind === 'file' ? 'file' : source.target.kind;
         this.#kind.update(kind, CANVAS_INPUT_CHOICES.map((choice) => ({
             value: choice.kind,
@@ -40,13 +40,14 @@ export class CanvasSourcePicker {
             blockers: choice.kind === 'file' || context?.targets.includes(choice.kind)
                 ? []
                 : ['the connected canvas'],
-        })), this.#busy || this.port.disabled);
+        })), this.#busy || this.port.disabled, visible);
         const explicit = source.kind === 'canvas' &&
             (source.target.kind === 'layer' || source.target.kind === 'composition-from-layer');
         this.#file.disabled = this.#busy || this.port.disabled;
         const file = source.kind === 'file' ? source.file : null;
-        this.#fileField.update(file?.split('/').at(-1) ?? 'No file selected', this.#busy || this.port.disabled, source.kind === 'file', file ?? '');
-        if (!explicit ||
+        this.#fileField.update(file?.split('/').at(-1) ?? 'No file selected', this.#busy || this.port.disabled, visible && source.kind === 'file', file ?? '');
+        if (!visible ||
+            !explicit ||
             (source.target.kind !== 'layer' && source.target.kind !== 'composition-from-layer')) {
             this.#layer.update('', [], this.#busy || this.port.disabled, false);
             return;

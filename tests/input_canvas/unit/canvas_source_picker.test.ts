@@ -62,6 +62,7 @@ function fixture(sourceContext: CanvasSourceContext = context) {
     {
       canvasId: 'editor',
       disabled: false,
+      hidden: false,
       source: () => source,
       context: () => sourceContext,
       refresh: async () => {},
