@@ -19,6 +19,7 @@ import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/a
 import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
 import { canvasSceneCatalog } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOutputCatalog.js';
 import { canvasDisplayPlan } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasDisplayPlan.js';
+import { canvasBatchGridCatalog } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasContentSelection.js';
 import {
   canvasOverviewSceneCommand,
   canvasOverviewWindow,
@@ -129,4 +130,13 @@ test('a scene with nothing to show cannot be chosen', () => {
   f.selection.reconcile(f.view, f.catalog());
   f.selection.apply(f.view, f.catalog(), { type: 'select-scene', scene: 'dusk' });
   expect(f.views.read(f.view).scene).toBeNull();
+});
+
+test('the every-scene overview is the grid itself, for every renderer that projects a batch grid', () => {
+  const catalog = canvasSceneCatalog(sceneResult(), canvasSources(), null, null);
+  const selection = { sourceId: canvasSources()[0]!.id, batchIndex: 0 };
+  for (const automatic of [true, false])
+    expect(
+      canvasBatchGridCatalog(catalog, selection, automatic).entries.map((entry) => entry.scene),
+    ).toEqual(['morning', 'night', 'dusk']);
 });
