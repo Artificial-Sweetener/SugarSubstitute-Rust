@@ -15,6 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Negotiate document-local desktop frame presentation without granting native privileges. */
 import { isRecord } from '../../types/common.js';
+import {
+  DESKTOP_BODY_WASH_PROPERTY,
+  DESKTOP_CHROME_WASH_PROPERTY,
+  desktopMaterialWash,
+} from './DesktopMaterialWash.js';
 
 /** Version-one geometry uses logical CSS pixels and the reference native caption metrics. */
 export interface DesktopFrameConfiguration {
@@ -93,7 +98,7 @@ export class DesktopFramePresentation {
       : null;
   }
 
-  /** Mark only the real frame's ancestor chain; selected tabs and graph surfaces keep their fills. */
+  /** Mark only the real frame's ancestor chain and publish the Mica washes on the document root. */
   attach(mount: HTMLElement): void {
     this.detach();
     this.#mount = mount;
@@ -105,6 +110,10 @@ export class DesktopFramePresentation {
     this.#style(mount, '--sc-native-frame-background', 'transparent');
     this.#style(mount, '--sc-native-frame-foreground', configuration.darkTheme ? '#fff' : '#000');
     this.#style(mount, '--sc-native-caption-width', `${String(configuration.captionWidth)}px`);
+    const wash = desktopMaterialWash(configuration.darkTheme);
+    const root = mount.ownerDocument.documentElement;
+    this.#style(root, DESKTOP_BODY_WASH_PROPERTY, wash.body);
+    this.#style(root, DESKTOP_CHROME_WASH_PROPERTY, wash.chrome);
   }
 
   /** Restore only values still owned by this presentation, preserving later host mutations. */

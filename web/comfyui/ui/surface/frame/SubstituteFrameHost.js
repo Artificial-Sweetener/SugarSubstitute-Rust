@@ -25,6 +25,7 @@ import { GenerationStripHost } from './GenerationStripHost.js';
 import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
 import { DesktopFramePresentation } from './DesktopFramePresentation.js';
 import { desktopFrameCss } from './DesktopFrameStyles.js';
+import { DesktopGraphBackdrop, browserGridTileDeriver } from './DesktopGraphBackdrop.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 import { PluginToolbarPlacement } from './PluginToolbarPlacement.js';
 import { pluginFrameCss } from './PluginFrameStyles.js';
@@ -35,6 +36,7 @@ export class SubstituteFrameHost {
     #stops = [];
     #style;
     #desktop = new DesktopFramePresentation();
+    #graphBackdrop;
     #presence = null;
     #mount = null;
     #native = null;
@@ -55,6 +57,10 @@ export class SubstituteFrameHost {
                 getDocument: () => options.document,
                 getWindow: () => options.document.defaultView,
             },
+        });
+        this.#graphBackdrop = new DesktopGraphBackdrop({
+            deriveGrid: browserGridTileDeriver(options.document),
+            report: options.report,
         });
         this.#style = options.document.createElement('style');
         this.#style.id = 'sugarcubes-substitute-frame';
@@ -153,6 +159,10 @@ export class SubstituteFrameHost {
             this.#view?.update(this.#adapter?.read(this.options.sessions.read().open) ?? [], (id) => this.options.activity.unread(id));
             this.#palette();
             this.#refreshProgress();
+            if (this.#desktop.read()?.mounted)
+                this.#graphBackdrop.attach(this.options.app);
+            else
+                this.#graphBackdrop.detach();
         }
         catch (error) {
             this.options.report(error);
@@ -211,6 +221,7 @@ export class SubstituteFrameHost {
     /** Retire the view while preserving host controls, workflow state and saved preferences. */
     #unmount() {
         this.#renamePrompt.close(null);
+        this.#graphBackdrop.detach();
         this.#desktop.detach();
         this.#pluginToolbar?.dispose();
         this.#pluginToolbar = null;
