@@ -88,7 +88,8 @@ export class BrowserCanvasAttachment {
         const document = element.ownerDocument;
         ensureBrowserCanvasStyles(document);
         this.viewport = document.createElement('div');
-        this.viewport.className = 'sc-output-viewport';
+        // The browser canvas pans its own pixels, so only its viewport shows the grab cursor.
+        this.viewport.className = 'sc-output-viewport sc-output-browser';
         this.viewport.setAttribute('data-sc-canvas-geometry', '');
         const overlay = document.createElement('div');
         overlay.className = 'sc-output-overlay-root';
