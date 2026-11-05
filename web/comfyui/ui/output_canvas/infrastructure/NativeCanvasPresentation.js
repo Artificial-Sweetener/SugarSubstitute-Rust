@@ -140,7 +140,8 @@ export class NativeCanvasPresentation {
     viewport(command, scope) {
         const binding = this.#binding;
         if (!binding ||
-            !nativeCanvasNavigable(this.#desired, this.#preview, binding.selectionRevision) ||
+            !(this.options.inputShown?.() ||
+                nativeCanvasNavigable(this.#desired, this.#preview, binding.selectionRevision)) ||
             !binding.host.capabilities.viewportState ||
             !scope.current() ||
             command.type === 'read' ||
