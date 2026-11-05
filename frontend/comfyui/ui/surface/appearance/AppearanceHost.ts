@@ -43,6 +43,7 @@ import { publishVisualStyle, releaseVisualStyle } from './VisualStyleBoundary.js
 import { registerCompactMasonryPreference } from '../masonry/CompactMasonryPreference.js';
 import { registerPhotoProPalettePreference } from './PhotoProPalettePreference.js';
 import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
+import type { HostAccentSource } from '../../core/embedded/HostAccent.js';
 
 const surfaceSelector =
   '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggle, .sc-overrides-toolbar, .sugarcubes-native-widget';
@@ -51,6 +52,8 @@ export interface AppearanceHostOptions {
   document: Document;
   app: unknown;
   embedded?: EmbeddedPresentationSource;
+  /** The host's offered default accent, beneath any accent the user saved. */
+  hostAccent?: HostAccentSource;
   seedReuse?: NativeSeedReuseResolver;
   getSlotLayoutSync?(): Promise<() => void>;
   reportError(error: unknown): void;
@@ -100,6 +103,7 @@ export class AppearanceHost {
       options.app,
       options.reportError,
       options.embedded,
+      options.hostAccent,
     );
     this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
     this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);

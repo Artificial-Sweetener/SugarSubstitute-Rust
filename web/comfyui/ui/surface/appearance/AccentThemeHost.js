@@ -22,9 +22,18 @@ import { createAccentColorSetting } from './AccentColorSetting.js';
 import { accentThemeCss } from './AccentThemeStyles.js';
 /** Persist the user's accent independently of every workflow document. */
 export const ACCENT_COLOR_SETTING = 'SugarCubes.Appearance.AccentColor';
-/** Project one accepted accent into mounted and future surfaces without rebuilding graph inventories. */
+/**
+ * Project one accepted accent into mounted and future surfaces without rebuilding graph inventories.
+ *
+ * Precedence, highest first: a host presentation override (hosts using the host preference
+ * policy), the --sugarcubes-accent root CSS property, the accent the user explicitly saved,
+ * the host's offered default accent (SugarSubstitute's operating-system accent), and finally
+ * {@link DEFAULT_ACCENT_COLOR}. A saved value counts as explicit once the user stores one; the
+ * registered default alone never hides the host accent.
+ */
 export class AccentThemeHost {
     embedded;
+    hostAccent;
     #listeners = new Set();
     #theme = Object.freeze({
         color: DEFAULT_ACCENT_COLOR,
@@ -36,7 +45,10 @@ export class AccentThemeHost {
     #style;
     #observer;
     #styleTexts = new WeakMap();
-    #configured = DEFAULT_ACCENT_COLOR;
+    /** The user's explicitly saved accent, or null when none is stored. */
+    #configured = null;
+    #registering = false;
+    #releaseHostAccent = null;
     #signature = '';
     #queued = false;
     #disposed = false;
@@ -52,8 +64,9 @@ export class AccentThemeHost {
         return () => this.#listeners.delete(listener);
     }
     /** Bind the host-facing settings and CSS boundary without claiming external variables. */
-    constructor(documentRef, app, reportError, embedded) {
+    constructor(documentRef, app, reportError, embedded, hostAccent) {
         this.embedded = embedded;
+        this.hostAccent = hostAccent;
         this.#document = documentRef;
         this.#app = app;
         this.#report = reportError;
@@ -70,39 +83,47 @@ export class AccentThemeHost {
             return;
         this.#setup = true;
         const settings = this.#settings();
+        // Before registration Comfy reports only a stored value; its default is not yet known.
         if (typeof settings.getSettingValue === 'function')
-            this.#configured =
-                normalizeAccentColor(settings.getSettingValue.call(settings, ACCENT_COLOR_SETTING)) ??
-                    DEFAULT_ACCENT_COLOR;
-        if (typeof settings.addSetting === 'function')
-            settings.addSetting.call(settings, {
-                id: ACCENT_COLOR_SETTING,
-                name: 'Accent color',
-                ...sugarCubesSettingsSection('appearance', 'AccentColor'),
-                defaultValue: DEFAULT_ACCENT_COLOR,
-                tooltip: 'Choose the shared SugarCubes accent. Hosts can override it with --sugarcubes-accent on the document root.',
-                type: () => createAccentColorSetting(this.#document, this.#configured, (color) => {
-                    if (typeof settings.setSettingValue !== 'function') {
-                        this.#report(new Error('Comfy accent setting persistence is unavailable.'));
-                        return;
-                    }
-                    try {
-                        void Promise.resolve(settings.setSettingValue.call(settings, ACCENT_COLOR_SETTING, color)).catch(this.#report);
-                    }
-                    catch (error) {
-                        this.#report(error);
-                    }
-                }),
-                onChange: (value) => {
-                    const color = normalizeAccentColor(value);
-                    if (!color) {
-                        this.#report(new TypeError('SugarCubes accent must be a hexadecimal color such as #b58cff.'));
-                        return;
-                    }
-                    this.#configured = color;
-                    this.refresh();
-                },
-            });
+            this.#configured = normalizeAccentColor(settings.getSettingValue.call(settings, ACCENT_COLOR_SETTING));
+        // Comfy announces the registered value synchronously; that announcement is not a user choice.
+        this.#registering = true;
+        try {
+            if (typeof settings.addSetting === 'function')
+                settings.addSetting.call(settings, {
+                    id: ACCENT_COLOR_SETTING,
+                    name: 'Accent color',
+                    ...sugarCubesSettingsSection('appearance', 'AccentColor'),
+                    defaultValue: DEFAULT_ACCENT_COLOR,
+                    tooltip: 'Choose the shared SugarCubes accent. Hosts can override it with --sugarcubes-accent on the document root.',
+                    type: () => createAccentColorSetting(this.#document, this.#preferred(), (color) => {
+                        if (typeof settings.setSettingValue !== 'function') {
+                            this.#report(new Error('Comfy accent setting persistence is unavailable.'));
+                            return;
+                        }
+                        try {
+                            void Promise.resolve(settings.setSettingValue.call(settings, ACCENT_COLOR_SETTING, color)).catch(this.#report);
+                        }
+                        catch (error) {
+                            this.#report(error);
+                        }
+                    }),
+                    onChange: (value) => {
+                        if (this.#registering)
+                            return;
+                        const color = normalizeAccentColor(value);
+                        if (!color) {
+                            this.#report(new TypeError('SugarCubes accent must be a hexadecimal color such as #b58cff.'));
+                            return;
+                        }
+                        this.#configured = color;
+                        this.refresh();
+                    },
+                });
+        }
+        finally {
+            this.#registering = false;
+        }
         this.#document.head.append(this.#style);
         for (const style of this.#document.head.querySelectorAll('style'))
             this.#styleTexts.set(style, style.textContent);
@@ -120,16 +141,21 @@ export class AccentThemeHost {
             attributeFilter: ['href', 'media', 'disabled'],
         });
         this.#releaseEmbedded = this.embedded?.subscribe(() => this.refresh()) ?? null;
+        this.#releaseHostAccent = this.hostAccent?.subscribe(() => this.refresh()) ?? null;
         this.refresh();
     }
-    /** Resolve the negotiated host accent before external CSS before the saved preference and publish only an actual palette change. */
+    /** The accent a user's saved choice or the host default supplies beneath any override. */
+    #preferred() {
+        return (this.#configured ?? normalizeAccentColor(this.hostAccent?.read()) ?? DEFAULT_ACCENT_COLOR);
+    }
+    /** Resolve the accent by the documented precedence and publish only an actual palette change. */
     refresh() {
         if (this.#disposed || !this.#setup)
             return;
         const style = this.#document.defaultView?.getComputedStyle(this.#document.documentElement);
         const color = normalizeAccentColor(this.embedded?.read()?.accentColor) ??
             normalizeAccentColor(style?.getPropertyValue('--sugarcubes-accent')) ??
-            this.#configured;
+            this.#preferred();
         const dark = readOwnedDarkTheme(this.#document);
         const signature = `${color}:${dark}`;
         if (signature === this.#signature)
@@ -189,6 +215,7 @@ export class AccentThemeHost {
         this.#disposed = true;
         this.#listeners.clear();
         this.#releaseEmbedded?.();
+        this.#releaseHostAccent?.();
         this.#observer.disconnect();
         this.#document.head.removeEventListener('load', this.#onStylesheetLoad, true);
         this.#style.remove();

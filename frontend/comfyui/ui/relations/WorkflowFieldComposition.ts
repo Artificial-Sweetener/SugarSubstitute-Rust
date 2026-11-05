@@ -24,6 +24,7 @@ import type { WorkflowProgressStore } from '../execution/application/WorkflowPro
 import type { CubeStackFrameControls } from '../surface/stack/CubeStackHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
+import { HostAccent } from '../core/embedded/HostAccent.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 import type { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
@@ -51,6 +52,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   setupPresentation(): void;
 } {
   const embedded = new EmbeddedPresentation();
+  const hostAccent = new HostAccent();
   const canvas = new EmbeddedCanvasConnection();
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
@@ -63,6 +65,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     seedReuse: (node, name) => relations.seedReuse.field(node, name),
     reportError: options.reportPresentationError,
     embedded,
+    hostAccent,
   });
   const ownedAppearance = new OwnedSurfaceAppearance(options.document, appearance.state);
   const frame = new SubstituteFrameHost({
@@ -103,6 +106,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
       startEmbeddedPanel({
         window: windowRef,
         presentation: embedded,
+        hostAccent,
         canvas,
         memory: {
           registry: options.memory,
