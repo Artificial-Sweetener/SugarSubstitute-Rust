@@ -76,11 +76,9 @@ export function canvasDisplayPlan(
   const secondary = slot(view.comparison?.secondary ?? null, items.secondary);
   const availableSources = Object.freeze(catalog.entries.map((entry) => entry.source.id));
   const grid =
-    view.mode !== 'overview'
-      ? Object.freeze([])
-      : catalog.sceneOverview
-        ? catalog.entries
-        : canvasBatchGridCatalog(catalog, view.selection, view.follow === 'auto').entries;
+    view.mode === 'overview'
+      ? canvasBatchGridCatalog(catalog, view.selection, view.follow === 'auto').entries
+      : Object.freeze([]);
   const signature = JSON.stringify([
     catalog.generation,
     view.mode,
