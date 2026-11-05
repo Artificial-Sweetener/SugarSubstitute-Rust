@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own masonry layout rules and workspace stacking independently of renderer appearance. */
 import { MASONRY_SURFACE_Z_INDEX } from '../../core/OverlayStacking.js';
-import { WORKFLOW_MASONRY_TOP_INSET } from './WorkflowMasonryLayout.js';
+import { WORKFLOW_MASONRY_INLINE_PADDING, WORKFLOW_MASONRY_TOP_INSET, } from './WorkflowMasonryLayout.js';
 /** Install layout structure independently of native node theme tokens. */
 export function ensureWorkflowMasonryStyles(documentRef) {
     if (documentRef.getElementById('sugarcubes-workflow-masonry-styles'))
@@ -40,7 +40,7 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       position:absolute; inset:0; z-index:${MASONRY_SURFACE_Z_INDEX}; box-sizing:border-box; pointer-events:auto;
       overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
       scroll-padding-bottom:var(--sc-panel-resize-corner,0px);
-      padding:${WORKFLOW_MASONRY_TOP_INSET}px var(--sc-masonry-inline-padding,20px) 96px calc(var(--sc-masonry-inline-padding,20px) + var(--sc-masonry-stack-width,0px));
+      padding:${WORKFLOW_MASONRY_TOP_INSET}px var(--sc-masonry-inline-padding,${WORKFLOW_MASONRY_INLINE_PADDING}px) 96px calc(var(--sc-masonry-inline-padding,${WORKFLOW_MASONRY_INLINE_PADDING}px) + var(--sc-masonry-stack-width,0px));
       background:transparent;
       color:var(--fg-color,#ddd); outline:none;
     }

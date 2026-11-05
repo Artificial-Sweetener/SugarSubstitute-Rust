@@ -15,10 +15,17 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe the browser workspace allocation independently of host DOM and workflow documents. */
 
+/** Keep the output canvas usable however wide the user makes the editor. */
+export const CANVAS_WORKSPACE_MINIMUM_CANVAS_WIDTH = 320;
+/** Keep workflow controls usable however wide the user makes the canvas. */
+export const CANVAS_WORKSPACE_MINIMUM_EDITOR_WIDTH = 360;
+/** Below this workspace width the canvas becomes an explicitly opened drawer. */
+export const CANVAS_WORKSPACE_DRAWER_BREAKPOINT = 960;
+
 export interface CanvasWorkspacePreferences {
   readonly visible: boolean;
-  /** Use zero for the automatic forty-percent allocation; store accepted user widths in CSS pixels. */
-  readonly width: number;
+  /** The workflow's editor width in CSS pixels; zero selects the default editor width. */
+  readonly editorWidth: number;
 }
 
 export interface CanvasWorkspaceRectangle {
@@ -31,35 +38,60 @@ export interface CanvasWorkspaceRectangle {
 export interface CanvasWorkspaceAllocation {
   readonly mode: 'docked' | 'drawer';
   readonly visible: boolean;
+  /** The editor width the divider expresses: everything left of the canvas, in both modes. */
+  readonly editorWidth: number;
+  /** Canvas width bounds for the divider, in CSS pixels. */
   readonly minimumWidth: number;
   readonly maximumWidth: number;
   readonly canvas: CanvasWorkspaceRectangle;
   readonly content: CanvasWorkspaceRectangle;
 }
 
-/** Keep useful docked content and require explicit drawer activation below the workspace breakpoint. */
+/**
+ * Give the editor its stored width and the canvas everything else, so window growth widens the canvas.
+ *
+ * The editor width is clamped only for this allocation; the stored width returns once the workspace
+ * widens again. Narrow workspaces overlay the canvas as a drawer that opens only on explicit request.
+ *
+ * @param defaultEditorWidth Docked editor width while the workflow has no stored width, in CSS pixels.
+ * @throws RangeError when a dimension or width is negative or not finite.
+ */
 export function allocateCanvasWorkspace(
   width: number,
   height: number,
   preferences: CanvasWorkspacePreferences,
   drawerOpen: boolean,
+  defaultEditorWidth: number,
 ): CanvasWorkspaceAllocation {
-  if (![width, height, preferences.width].every((value) => Number.isFinite(value) && value >= 0))
+  if (
+    ![width, height, preferences.editorWidth, defaultEditorWidth].every(
+      (value) => Number.isFinite(value) && value >= 0,
+    )
+  )
     throw new RangeError('Canvas workspace dimensions are invalid.');
-  const mode = width < 960 ? 'drawer' : 'docked';
+  const mode = width < CANVAS_WORKSPACE_DRAWER_BREAKPOINT ? 'drawer' : 'docked';
   const visible =
     preferences.visible && width > 0 && height > 0 && (mode === 'docked' || drawerOpen);
-  const maximum = Math.max(0, Math.min(width, mode === 'docked' ? width - 360 : width - 24));
-  const minimum = Math.min(320, maximum);
-  const requested = preferences.width || width * (mode === 'docked' ? 0.4 : 0.8);
-  const paneWidth = visible ? Math.min(width, maximum, Math.max(320, requested)) : 0;
+  const maximum = Math.max(
+    0,
+    Math.min(width, width - (mode === 'docked' ? CANVAS_WORKSPACE_MINIMUM_EDITOR_WIDTH : 24)),
+  );
+  const minimum = Math.min(CANVAS_WORKSPACE_MINIMUM_CANVAS_WIDTH, maximum);
+  const requested =
+    preferences.editorWidth > 0
+      ? width - preferences.editorWidth
+      : mode === 'docked'
+        ? width - defaultEditorWidth
+        : width * 0.8;
+  const paneWidth = visible ? Math.min(maximum, Math.max(minimum, requested)) : 0;
   const inset = mode === 'docked' ? paneWidth : 0;
   return Object.freeze({
     mode,
     visible,
+    editorWidth: width - paneWidth,
     minimumWidth: minimum,
     maximumWidth: maximum,
-    canvas: Object.freeze({ x: Math.max(0, width - paneWidth), y: 0, width: paneWidth, height }),
-    content: Object.freeze({ x: 0, y: 0, width: Math.max(0, width - inset), height }),
+    canvas: Object.freeze({ x: width - paneWidth, y: 0, width: paneWidth, height }),
+    content: Object.freeze({ x: 0, y: 0, width: width - inset, height }),
   });
 }

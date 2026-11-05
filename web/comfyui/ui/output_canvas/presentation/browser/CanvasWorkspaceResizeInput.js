@@ -121,7 +121,7 @@ export class CanvasWorkspaceResizeInput {
         event.stopPropagation();
         this.#release(false);
         this.owner.preview(width);
-        this.owner.commit(this.owner.width());
+        this.owner.commit();
     };
     /** Apply only the latest pending request through the allocation owner. */
     #flush() {
@@ -146,7 +146,7 @@ export class CanvasWorkspaceResizeInput {
         if (pointer && this.element.hasPointerCapture(pointer.id))
             this.element.releasePointerCapture(pointer.id);
         if (completed && pointer)
-            this.owner.commit(this.owner.width());
+            this.owner.commit();
         else if (pointer)
             this.owner.cancel();
     }

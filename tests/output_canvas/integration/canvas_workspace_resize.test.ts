@@ -22,7 +22,8 @@ import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 
 /** Compose the real allocation owner while supplying only missing platform pointer-capture methods. */
 function fixture() {
-  const model = new CanvasWorkspaceLayout();
+  // A 1400 px workspace leaves this default editor a 560 px canvas.
+  const model = new CanvasWorkspaceLayout(840);
   model.bounds(1400, 800);
   const frames = new CanvasFrameFixture();
   const divider = document.createElement('div');
@@ -32,7 +33,10 @@ function fixture() {
     hasPointerCapture: (id: number) => captures.has(id),
     releasePointerCapture: (id: number) => captures.delete(id),
   });
-  const commit = jest.fn<(width: number) => void>();
+  const committed: number[] = [];
+  const commit = jest.fn(() => {
+    committed.push(model.read().editorWidth);
+  });
   const preview = jest.fn((width: number) => {
     model.resize(width);
   });
@@ -43,7 +47,7 @@ function fixture() {
     commit,
     cancel,
   });
-  return { model, frames, divider, captures, input, preview, commit, cancel };
+  return { model, frames, divider, captures, input, preview, commit, committed, cancel };
 }
 
 /** Send browser-shaped pointer coordinates without replacing application or gesture policy. */
@@ -53,7 +57,7 @@ function pointer(element: HTMLElement, type: string, x: number, id = 1): void {
   element.dispatchEvent(event);
 }
 
-test('coalesces a captured resize and commits its final release coordinate exactly once', () => {
+test('coalesces a captured resize and commits its final editor width exactly once', () => {
   const f = fixture();
   pointer(f.divider, 'pointerdown', 840);
   for (let step = 0; step < 100; step++) pointer(f.divider, 'pointermove', 840 - step);
@@ -64,7 +68,7 @@ test('coalesces a captured resize and commits its final release coordinate exact
   expect(f.model.read().canvas.width).toBe(659);
   pointer(f.divider, 'pointerup', 680);
   expect(f.model.read().canvas.width).toBe(720);
-  expect(f.commit.mock.calls).toEqual([[720]]);
+  expect(f.committed).toEqual([680]);
   expect(f.captures.size).toBe(0);
   expect(f.frames.pending).toBe(0);
   f.input.dispose();
@@ -104,11 +108,12 @@ test('clamps keyboard resizing through the model and preserves modified host sho
   expect(key('ArrowRight', { ctrlKey: true }).defaultPrevented).toBe(false);
   expect(f.commit).not.toHaveBeenCalled();
   key('Home');
-  expect(f.commit).toHaveBeenLastCalledWith(320);
+  expect(f.model.read().canvas.width).toBe(320);
   key('End');
-  expect(f.commit).toHaveBeenLastCalledWith(1040);
+  expect(f.model.read().canvas.width).toBe(1040);
   key('ArrowRight');
-  expect(f.commit).toHaveBeenLastCalledWith(1020);
+  expect(f.model.read().canvas.width).toBe(1020);
+  expect(f.committed).toEqual([1080, 360, 380]);
   pointer(f.divider, 'pointerdown', 380);
   pointer(f.divider, 'pointermove', 100);
   key('Escape');

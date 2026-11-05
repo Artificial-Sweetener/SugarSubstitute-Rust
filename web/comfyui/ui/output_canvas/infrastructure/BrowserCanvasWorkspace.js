@@ -84,7 +84,7 @@ export class BrowserCanvasWorkspace {
                     model.resize(width);
                     this.#render();
                 },
-                commit: actions.width,
+                commit: () => actions.editorWidth(model.read().editorWidth),
                 cancel: () => {
                     model.cancelResize();
                     this.#render();

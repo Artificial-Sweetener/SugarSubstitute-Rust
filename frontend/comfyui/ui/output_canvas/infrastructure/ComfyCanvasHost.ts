@@ -52,6 +52,8 @@ import type { CanvasRoutePort } from '../domain/CanvasRoute.js';
 export interface ComfyCanvasHostOptions {
   readonly saving: OutputSavingFeature | null;
   readonly presentation: WorkflowViewSource;
+  /** Editor width beside the canvas for workflows without a stored width, in CSS pixels. */
+  readonly defaultEditorWidth: number;
   readonly app: unknown;
   readonly document: Document;
   readonly execution: ComfyWorkflowExecutionRuntime;
@@ -163,7 +165,7 @@ export class ComfyCanvasHost {
     this.#workspace = new ComfyCanvasWorkspaceHost(
       app,
       document,
-      this.#preferences,
+      options.defaultEditorWidth,
       frames,
       changed,
       report,
@@ -357,7 +359,6 @@ export class ComfyCanvasHost {
     for (const stop of this.#stops.splice(0)) stop();
     this.#adapter.dispose();
     this.#sources.dispose();
-    this.#preferences.dispose();
     this.#transfers.dispose();
     this.#browser?.dispose();
   }
