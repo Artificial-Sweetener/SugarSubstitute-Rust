@@ -54,7 +54,7 @@ impl NativeSurface {
         status: CanvasSurfaceReplyStatus,
     ) -> Result<(), Box<dyn Error>> {
         let pending = self.pending.take().ok_or("Pending canvas request disappeared")?;
-        if let PendingKind::Viewport { intent, commanded: true } = pending.kind {
+        if let PendingKind::Viewport { intent, commanded: true, .. } = pending.kind {
             session.cancel_camera(intent)?;
         }
         if matches!(pending.kind, PendingKind::Select)

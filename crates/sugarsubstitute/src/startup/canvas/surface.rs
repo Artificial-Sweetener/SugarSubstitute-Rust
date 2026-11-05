@@ -109,7 +109,13 @@ enum PendingKind {
     Hide,
     Commit,
     EmptyCommit,
-    Viewport { intent: crate::native_canvas::session::CameraIntent, commanded: bool },
+    /// A shared viewport command or read, answered once its camera settles; dmitted is the
+    /// execution clock reading that starts its settle budget.
+    Viewport {
+        intent: crate::native_canvas::session::CameraIntent,
+        commanded: bool,
+        admitted: sugarsubstitute_contracts::execution::Moment,
+    },
 }
 
 struct Pending {
@@ -117,7 +123,8 @@ struct Pending {
     request: Box<CanvasSurfaceRequest>,
     claim: MemoryClaim,
     kind: PendingKind,
-    /// The last recorded reason a pending selection's reply condition was unmet.
+    /// The last recorded reason a pending selection's or viewport request's reply condition
+    /// was unmet.
     wait: crate::canvas_surface_diagnostic::Wait,
 }
 

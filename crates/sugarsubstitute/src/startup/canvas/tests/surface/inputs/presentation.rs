@@ -405,6 +405,23 @@ fn shared_viewport_commands_after_a_rebased_input_document_are_answered()
     fixture.finish()
 }
 
+/// The page reads the camera after each geometry change. When the Input route's display still
+/// describes the document it replaced, as a document swap leaves it until the incoming
+/// document's frame lands, the read draws that frame and settles instead of waiting forever.
+#[test]
+fn a_camera_read_on_the_input_route_settles_after_its_display_described_another_document()
+-> Result<(), Box<dyn Error>> {
+    let (mut fixture, memory) = committed_empty()?;
+    assert_eq!(workflow(&mut fixture, &memory, 100, image_surface())?["kind"], "synced");
+    let activated = workflow(&mut fixture, &memory, 101, activate(Some("image"), None, "input"))?;
+    assert_eq!(activated, json!({"kind":"activated"}));
+    present(&mut fixture, "image")?;
+    fixture.canvas.session.as_mut().ok_or("The canvas session is absent")?.adopt_foreign_display();
+    assert_eq!(camera(&mut fixture, 102, json!({"type":"read"}))?, "applied");
+    assert_eq!(camera(&mut fixture, 103, json!({"type":"zoom","factor":1.25}))?, "applied");
+    fixture.finish()
+}
+
 /// The page reports focus through geometry when the viewport takes the keys, just before the
 /// first key's camera command: the command is still answered.
 #[test]

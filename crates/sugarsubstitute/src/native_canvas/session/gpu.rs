@@ -112,16 +112,12 @@ impl Session {
         let Some(evidence) = self.document.display_evidence else {
             return Ok(true);
         };
-        let (Some(scene), Some((key, snapshot))) = (&self.document.scene, self.document.shown())
-        else {
+        let Some((_, snapshot)) = self.document.shown() else {
             return Ok(false);
         };
-        Ok(evidence.document == key
-            && evidence.source_revision == scene.source_revision
+        Ok(self.display_shows_current_source()
             && self.document.display_source == Some(evidence.source)
             && self.document.display_view == Some(evidence.view)
-            && (!self.presentation.attached()
-                || self.document.native_presented == Some(evidence.target))
             && evidence.proves_complete(snapshot.extent())?)
     }
 }

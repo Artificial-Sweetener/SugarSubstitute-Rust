@@ -65,6 +65,21 @@ pub(crate) enum CameraSettlement {
     Failed,
 }
 
+/// Why a pending camera intent has not settled yet, in the order its conditions resolve.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CameraWait {
+    /// Navigation is still moving toward its destination, or a gesture holds it.
+    Moving,
+    /// The canvas is not drawable, so no frame at the destination can be presented.
+    Hidden,
+    /// A load, backing render or display for the destination is still running.
+    Preparing,
+    /// A prepared frame awaits its native presentation acknowledgement.
+    Presenting,
+    /// No canvas work is in flight, yet the accepted camera is not the destination's.
+    Accepting,
+}
+
 impl Session {
     /// Admit semantic navigation on the event-loop thread through the existing tool owner.
     /// This never synthesizes device input or releases pending pixels/workers. Cancellation of
@@ -198,6 +213,45 @@ impl Session {
         match self.accepted_camera() {
             Some(camera) if camera.viewport == intent.target => CameraSettlement::Settled(camera),
             _ => CameraSettlement::Pending,
+        }
+    }
+
+    /// Classify the first unmet condition of a pending camera intent, for diagnostics.
+    /// `Accepting` names a stall: no work is running that could settle the intent.
+    pub(crate) fn camera_wait(&self) -> CameraWait {
+        let navigation = self.document.tools.navigation();
+        if navigation.interacting() || navigation.viewport() != navigation.target_viewport() {
+            CameraWait::Moving
+        } else if !self.drawable {
+            CameraWait::Hidden
+        } else if self.document.cpu_pending.is_some() || self.gpu_presentation_pending() {
+            CameraWait::Presenting
+        } else if self.displaying.is_some()
+            || self.rendering.is_some()
+            || self.loading.is_some()
+            || self.pending_open.is_some()
+        {
+            CameraWait::Preparing
+        } else {
+            CameraWait::Accepting
+        }
+    }
+}
+
+/// Fault injection for settlement tests: put the shown display into states that earlier
+/// display paths could leave behind when the frame forced to replace them was dropped.
+#[cfg(test)]
+impl Session {
+    /// Forget the native acknowledgement of the shown frame while its evidence stays.
+    pub(crate) fn lose_native_acknowledgement(&mut self) {
+        self.document.native_presented = None;
+    }
+
+    /// Describe the screen with another document's evidence, as a display adopted from an
+    /// outgoing document does until a frame of the incoming one is acknowledged.
+    pub(crate) fn adopt_foreign_display(&mut self) {
+        if let Some(evidence) = &mut self.document.display_evidence {
+            evidence.document.0 = evidence.document.0.wrapping_add(1);
         }
     }
 }

@@ -50,6 +50,8 @@ tokens! {
         Waiting,
         /// The pending selection now waits on the session's rebuild of its corrupt cached source.
         Rebound,
+        /// The pending viewport request outlived its settle budget; its reply follows.
+        Expired,
         /// The request's terminal reply was queued for native delivery.
         Replied,
         /// The request's navigation retired first, so no page remains to receive a reply.
@@ -92,20 +94,24 @@ tokens! {
 }
 
 tokens! {
-    /// Why a pending selection's reply condition is currently unmet.
+    /// Why a pending selection's or viewport request's reply condition is currently unmet.
     Wait {
         None,
+        /// The viewport's navigation is still moving toward its destination.
+        Moving,
         /// The selected source is still being acquired or decoded.
         Acquiring,
-        /// The selected source loaded but its frame is not yet prepared.
+        /// The selected source loaded but its frame is not yet prepared, or the viewport's
+        /// load, backing render or display is still running.
         Preparing,
         /// The frame is prepared but host graphics are not yet available.
         Graphics,
         /// The committed attachment's frame awaits its native presentation acknowledgement.
         Presenting,
-        /// A frame was presented but its accepted camera is not this selection's.
+        /// A frame was presented but its accepted camera is not this selection's, or no work
+        /// is running and the accepted camera is not the viewport's destination.
         Accepting,
-        /// The committed attachment is hidden, so no frame can be presented.
+        /// The committed attachment or the canvas is hidden, so no frame can be presented.
         Hidden,
         /// The session's source intent no longer matches the one this selection offered.
         Superseded,

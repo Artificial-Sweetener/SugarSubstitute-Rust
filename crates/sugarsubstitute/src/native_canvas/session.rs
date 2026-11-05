@@ -11,7 +11,7 @@ mod camera;
 #[cfg(all(feature = "native-composition", test))]
 pub(crate) use camera::AcceptedCamera;
 #[cfg(feature = "native-composition")]
-pub(crate) use camera::{CameraCommandResult, CameraIntent, CameraSettlement};
+pub(crate) use camera::{CameraCommandResult, CameraIntent, CameraSettlement, CameraWait};
 mod closing;
 mod comparison;
 mod completion;

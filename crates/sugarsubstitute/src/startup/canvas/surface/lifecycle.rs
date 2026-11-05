@@ -4,13 +4,14 @@
 //!
 //! Every admitted request ends in exactly one terminal reply; these records show where a
 //! request is between admission and that reply. Records are emitted per lifecycle step, and a
-//! pending selection records its unmet reply condition only when the reason changes, so frame
-//! cadence never multiplies them.
+//! pending selection or viewport request records its unmet reply condition only when the reason
+//! changes, so frame cadence never multiplies them.
 
 use super::*;
 use crate::canvas_surface_diagnostic::{
     Attachment, Operation, Pending as Waiting, Record, Stage, Status, Wait,
 };
+use crate::native_canvas::session::CameraWait;
 
 impl NativeSurface {
     /// Hold `request` until a later native or worker effect resolves it with its terminal reply.
@@ -45,6 +46,29 @@ impl NativeSurface {
         }
         .emit();
     }
+
+    /// Record why the pending viewport request's camera has not settled, once per change of
+    /// reason, and return that reason.
+    pub(super) fn trace_viewport_wait(&mut self, session: &Session) -> Wait {
+        let wait = camera_wait(session.camera_wait());
+        let Some(pending) = &mut self.pending else { return wait };
+        if wait != pending.wait {
+            pending.wait = wait;
+            Record {
+                pending: Waiting::Viewport,
+                wait,
+                current: session.source_intent_revision(),
+                ..record(Stage::Waiting, &pending.request)
+            }
+            .emit();
+        }
+        wait
+    }
+}
+
+/// Record a viewport request that outlived its settle budget while waiting for `wait`.
+pub(super) fn expired(request: &CanvasSurfaceRequest, wait: Wait) {
+    Record { pending: Waiting::Viewport, wait, ..record(Stage::Expired, request) }.emit();
 }
 
 /// Record admission past attachment, ordering and availability checks.
@@ -115,6 +139,16 @@ fn selection_wait(binding: &Binding, session: &Session) -> Wait {
         Some(_) if session.host_graphics().is_none() => Wait::Graphics,
         Some((content, _)) if content.pending() => Wait::Presenting,
         Some(_) => Wait::Accepting,
+    }
+}
+
+const fn camera_wait(wait: CameraWait) -> Wait {
+    match wait {
+        CameraWait::Moving => Wait::Moving,
+        CameraWait::Hidden => Wait::Hidden,
+        CameraWait::Preparing => Wait::Preparing,
+        CameraWait::Presenting => Wait::Presenting,
+        CameraWait::Accepting => Wait::Accepting,
     }
 }
 
