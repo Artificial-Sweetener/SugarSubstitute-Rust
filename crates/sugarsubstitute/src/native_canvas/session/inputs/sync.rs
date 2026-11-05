@@ -232,6 +232,10 @@ impl Surface {
                     plan.unused.push(file.acquirer);
                     plan.withdrawn.push(Target::Mask(mask.layer));
                 }
+            } else {
+                // The loader moved on from its file, so picking that file again loads it anew.
+                mask.desired_initial = None;
+                mask.loaded_initial = None;
             }
             masks.push(mask);
         }

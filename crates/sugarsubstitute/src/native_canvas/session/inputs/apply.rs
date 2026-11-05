@@ -139,7 +139,10 @@ impl Session {
                     .by_identity_mut(identity)
                     .and_then(|surface| surface.masks.iter_mut().find(|mask| mask.layer == layer))
                 {
-                    if !matches!(outcome, InitialOutcome::Failed(_)) {
+                    // An import the loader no longer asks for loads nothing a later pick must skip.
+                    if !matches!(outcome, InitialOutcome::Failed(_))
+                        && mask.desired_initial.as_ref() == Some(&reference)
+                    {
                         mask.loaded_initial = Some(reference);
                     }
                     mask.outcome = Some(outcome);
