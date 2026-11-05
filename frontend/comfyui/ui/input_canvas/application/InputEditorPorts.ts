@@ -52,6 +52,8 @@ export interface InputCanvasCapabilities {
 export interface InputSurfaceCardPort {
   /** Show the loader's surface on the Input route; entry names a region of an ordered mask. */
   activate(entry: string | null): void;
+  /** Show an image loader's newly chosen file on the Input route once its surface exists. */
+  openChosen(): void;
   /** Hover a region of an ordered mask loader in every linked view, or clear the hover. */
   hover(entry: string | null): void;
   /** The region entry another linked view currently shows as hovered, or null. */

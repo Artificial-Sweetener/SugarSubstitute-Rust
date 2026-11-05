@@ -50,6 +50,7 @@ function fixture(sourceContext: CanvasSourceContext = context) {
     target: { kind: 'selection' },
   };
   const report = jest.fn();
+  const chosen = jest.fn();
   const change = jest.fn((value: CanvasInputSource) => {
     source = value;
   });
@@ -67,6 +68,7 @@ function fixture(sourceContext: CanvasSourceContext = context) {
       refresh: async () => {},
       change,
       upload: async () => 'uploads/chosen.png',
+      chosen,
       report,
     },
     fields,
@@ -74,7 +76,7 @@ function fixture(sourceContext: CanvasSourceContext = context) {
     null,
   );
   document.body.append(picker.element);
-  return { picker, change, report, node, source: () => source };
+  return { picker, change, chosen, report, node, source: () => source };
 }
 
 /** Wait for the consumer's asynchronous state transition without observing a different operation. */
@@ -117,6 +119,8 @@ test('file source reveals a real upload picker and hides the canvas layer combo'
   await settled();
   chooseNativeSource(f.node, 'file');
   await settled();
+  // Switching the source kind to File chooses no new file.
+  expect(f.chosen).not.toHaveBeenCalled();
   const file = f.picker.element.querySelector<HTMLInputElement>('[aria-label="Source file"]');
   expect(file?.type).toBe('file');
   expect(file?.parentElement?.hidden).toBe(false);
@@ -128,6 +132,11 @@ test('file source reveals a real upload picker and hides the canvas layer combo'
   file.dispatchEvent(new Event('change'));
   await settled();
   expect(f.source()).toEqual({ kind: 'file', file: 'uploads/chosen.png' });
+  // The chosen file opens only after it became the source.
+  expect(f.chosen).toHaveBeenCalledTimes(1);
+  expect(f.change.mock.invocationCallOrder.at(-1)).toBeLessThan(
+    f.chosen.mock.invocationCallOrder[0]!,
+  );
   expect(f.report).not.toHaveBeenCalled();
   f.picker.dispose();
 });
