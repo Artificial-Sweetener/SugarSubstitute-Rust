@@ -92,51 +92,23 @@ test('leaves unsupported, modified and editable-focus keys with their original o
   expect(f.key('0').defaultPrevented).toBe(false);
 });
 
-test('projects the same capability-gated menu commands for both native and browser surfaces', () => {
+test('keeps camera commands on the keys and out of the context menu for every surface', () => {
   const f = fixture();
-  const sent: unknown[] = [];
   const snapshot = {
     ...f.port.read(),
     resource: { state: 'ready' as const, message: '', canRetry: false, canAdmitLargeImage: false },
   };
-  const entries = canvasContextActions(snapshot, f.port.capabilities, (command) =>
-    sent.push(command),
-  );
-  expect(entries.map((entry) => entry.label)).toEqual(['Fit image', '100%', 'Zoom in', 'Zoom out']);
-  for (const entry of entries) entry.select?.();
-  expect(sent).toEqual([
-    { type: 'fit' },
-    { type: 'native' },
-    { type: 'zoom', factor: 1.25 },
-    { type: 'zoom', factor: 0.8 },
-  ]);
-  const limited = canvasContextActions(snapshot, { schema: 1, commands: ['fit'] }, () => {});
-  expect(limited.map((entry) => entry.label)).toEqual(['Fit image']);
-  const retained = canvasContextActions(
-    { ...snapshot, resource: { ...snapshot.resource, state: 'loading' } },
-    f.port.capabilities,
-    () => {},
-  );
-  expect(retained.every((entry) => !entry.disabled)).toBe(true);
-  for (const unavailable of [
-    { ...snapshot, zoom: null },
-    { ...snapshot, zoom: { ...snapshot.zoom!, dimensions: null } },
-    { ...snapshot, view: { ...snapshot.view, mode: 'overview' as const } },
-  ])
-    expect(
-      canvasContextActions(unavailable, f.port.capabilities, () => {}).every(
-        (entry) => entry.disabled,
-      ),
-    ).toBe(true);
-  const preview = canvasContextActions(
+  expect(f.port.capabilities.commands).toEqual(expect.arrayContaining(['fit', 'native', 'zoom']));
+  for (const current of [
+    snapshot,
     { ...snapshot, preview: true },
-    f.port.capabilities,
-    () => {},
-  );
-  expect(preview.every((entry) => entry.disabled)).toBe(true);
+    { ...snapshot, resource: { ...snapshot.resource, state: 'loading' as const } },
+  ])
+    expect(canvasContextActions(current, f.port.capabilities, () => {})).toEqual([]);
+  expect(f.key('0').defaultPrevented).toBe(true);
+  expect(f.port.requests.at(-1)?.command).toEqual({ type: 'fit' });
   f.keyboard.dispose();
 });
-
 test('consumes navigation keys without mutation while preview pixels are displayed, independently of running inference', () => {
   const f = fixture();
   f.port.publish({ ...f.port.read(), preview: true, runStatus: 'running' });

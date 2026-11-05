@@ -5,6 +5,7 @@ export class OutputMediaProfileSource {
     #profile = Object.freeze({
         preferredCopyFormat: 'png',
         fileAction: 'download',
+        photoshop: false,
     });
     #revision = 0;
     #disposed = false;
@@ -32,7 +33,8 @@ export class OutputMediaProfileSource {
         if (this.#disposed || revision !== this.#revision)
             return;
         if (profile.preferredCopyFormat === this.#profile.preferredCopyFormat &&
-            profile.fileAction === this.#profile.fileAction)
+            profile.fileAction === this.#profile.fileAction &&
+            profile.photoshop === this.#profile.photoshop)
             return;
         this.#profile = profile;
         for (const listener of [...this.#listeners])

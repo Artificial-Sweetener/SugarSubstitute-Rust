@@ -27,7 +27,10 @@ import type { CanvasSelectionController } from './CanvasSelectionController.js';
 import type { CanvasSourceNavigation } from './CanvasSourceNavigation.js';
 
 type SurfaceResult = boolean | Promise<boolean>;
-type MediaCommand = Extract<CanvasCommand, { readonly type: 'copy-media' | 'file-media' }>;
+type MediaCommand = Extract<
+  CanvasCommand,
+  { readonly type: 'copy-media' | 'file-media' | 'photoshop-media' | 'photoshop-all-media' }
+>;
 
 /** Operations whose camera, media and resource custody belongs to the active surface. */
 export interface CanvasActionSurface {
@@ -45,7 +48,7 @@ export interface CanvasActionSurface {
   admitLargeImage(scope: CanvasCommandScope): SurfaceResult;
   /** Open the exact selected output through the host's open action for this surface. */
   open(item: WorkflowOutputItem, scope: CanvasCommandScope): SurfaceResult;
-  /** Apply a supported copy or file action to the selected output. */
+  /** Apply a supported copy, file or Photoshop action to the addressed outputs. */
   media(command: MediaCommand, scope: CanvasCommandScope): SurfaceResult;
 }
 
@@ -98,6 +101,8 @@ export async function applyCanvasAction(
     }
     case 'copy-media':
     case 'file-media':
+    case 'photoshop-media':
+    case 'photoshop-all-media':
       return await surface.media(command, scope);
     case 'comparison':
       if (command.enabled && (snapshot.preview || snapshot.resource.state !== 'ready'))

@@ -206,6 +206,13 @@ export class ComfyCanvasHost {
               item.mediaKind === 'image' ? 'image' : 'media',
             ),
           mediaProfile: () => transfers.profile(),
+          photoshop: (document, layers, accepts, signal) =>
+            transfers.photoshop(
+              document,
+              layers.map((layer) => ({ file: layer.item.file, name: layer.name })),
+              accepts,
+              signal,
+            ),
           drag: (item, signal) => transfers.drag(item.file, signal),
           transferChanged: (listener: () => void) => {
             const profile = transfers.subscribe(listener);

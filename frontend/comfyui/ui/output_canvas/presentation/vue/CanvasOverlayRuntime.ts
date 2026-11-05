@@ -96,7 +96,11 @@ export function mountCanvasOverlay(
     event.preventDefault();
     event.stopPropagation();
     const bounds = interactionSurface.getBoundingClientRect();
-    menuTarget = contextTarget(target);
+    const addressed = contextTarget(target);
+    const entries = canvasContextActions(state.value, port.capabilities, send, addressed);
+    // The overview away from an image has no Output actions, so it opens no menu at all.
+    if (!entries.length) return;
+    menuTarget = addressed;
     menu.open({
       label: 'Output actions',
       anchor: {
@@ -105,7 +109,7 @@ export function mountCanvasOverlay(
         y: event instanceof MouseEvent ? event.clientY : bounds.bottom - 48,
       },
       trigger: target instanceof HTMLElement ? target : interactionSurface,
-      entries: canvasContextActions(state.value, port.capabilities, send, menuTarget),
+      entries,
     });
   }
   interactionSurface.addEventListener('contextmenu', openMenu);

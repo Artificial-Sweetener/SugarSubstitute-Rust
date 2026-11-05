@@ -172,6 +172,8 @@ export class NativeCanvasAttachment {
       ...(options.copy ? { copy: options.copy } : {}),
       ...(options.fileAction ? { fileAction: options.fileAction } : {}),
       ...(options.mediaProfile ? { profile: options.mediaProfile } : {}),
+      ...(options.photoshop ? { photoshop: options.photoshop } : {}),
+      entries: () => this.#catalog.entries,
     });
     const sources = new CanvasSourceNavigation({
       resources: { prepareSource: () => null, cancelPreparation: () => {} },

@@ -19,4 +19,6 @@ export type OutputCopyFormat = 'preferred' | 'png' | 'jpeg';
 export interface OutputMediaProfile {
   readonly preferredCopyFormat: 'png' | 'jpeg';
   readonly fileAction: 'reveal' | 'download';
+  /** Whether the local backend can open still images in Photoshop on this machine. */
+  readonly photoshop: boolean;
 }

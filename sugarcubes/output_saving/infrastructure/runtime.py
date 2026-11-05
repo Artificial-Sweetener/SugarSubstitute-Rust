@@ -25,6 +25,7 @@ from ..application.transfer_service import OutputTransferService
 from ..application.media_service import OutputMediaService
 from .media_files import HostOutputImageFiles
 from .file_revealer import WindowsImageFileRevealer
+from .photoshop_opener import WindowsPhotoshopOpener
 from .artifact_registry import ManagedArtifactRegistry
 from .comfy_node_capabilities import ComfySavingNodeCapabilities
 from .managed_image_writer import ManagedImageWriter
@@ -65,7 +66,12 @@ class OutputSavingRuntime:
             roots["input"] = input_root
         self.media = OutputMediaService(
             self.settings.load,
-            HostOutputImageFiles(self.artifacts, roots, WindowsImageFileRevealer()),
+            HostOutputImageFiles(
+                self.artifacts,
+                roots,
+                WindowsImageFileRevealer(),
+                WindowsPhotoshopOpener(),
+            ),
         )
         self.mask_uploads = NativeManagedMaskBridge(self.artifacts, temporary_root)
         self.capabilities = capabilities = ComfySavingNodeCapabilities()

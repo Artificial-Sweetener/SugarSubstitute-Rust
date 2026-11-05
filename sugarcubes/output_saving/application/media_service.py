@@ -13,10 +13,10 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Sequence validated image renditions and file reveal through explicit platform ports."""
+"""Sequence validated image renditions, file reveal and Photoshop through explicit platform ports."""
 
-from collections.abc import Callable
-from typing import Protocol
+from collections.abc import Callable, Sequence
+from typing import NamedTuple, Protocol
 
 from ..domain.media import (
     ImageTransferFormat,
@@ -45,6 +45,23 @@ class OutputImageFiles(Protocol):
     def can_reveal(self) -> bool:
         """Report installed desktop support independently of request locality."""
 
+    def open_in_photoshop(
+        self, document: str, layers: Sequence[tuple[OutputFileReference, str]]
+    ) -> None:
+        """Open validated still images as named layers of one new Photoshop document."""
+
+    @property
+    def can_open_in_photoshop(self) -> bool:
+        """Report an installed Photoshop independently of request locality."""
+
+
+class OutputMediaProfile(NamedTuple):
+    """Publish copy preference and installed desktop actions without opening files."""
+
+    copy_format: ImageTransferFormat
+    reveal: bool
+    photoshop: bool
+
 
 class OutputMediaService:
     """Keep explicit and preferred format selection shared by web and native canvases."""
@@ -58,9 +75,13 @@ class OutputMediaService:
         self._preferences = preferences
         self._files = files
 
-    def profile(self) -> tuple[ImageTransferFormat, bool]:
+    def profile(self) -> OutputMediaProfile:
         """Publish current primary copy preference and desktop availability without opening files."""
-        return preferred_copy_format(self._preferences()), self._files.can_reveal
+        return OutputMediaProfile(
+            preferred_copy_format(self._preferences()),
+            self._files.can_reveal,
+            self._files.can_open_in_photoshop,
+        )
 
     def prepare(
         self, reference: OutputFileReference, format: ImageTransferFormat
@@ -83,3 +104,9 @@ class OutputMediaService:
     def reveal(self, reference: OutputFileReference) -> None:
         """Delegate a qualified local request without granting callers arbitrary path access."""
         self._files.reveal(reference)
+
+    def open_in_photoshop(
+        self, document: str, layers: Sequence[tuple[OutputFileReference, str]]
+    ) -> None:
+        """Delegate a qualified local request; callers name outputs, never file paths."""
+        self._files.open_in_photoshop(document, layers)

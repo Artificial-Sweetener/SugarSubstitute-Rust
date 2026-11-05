@@ -83,11 +83,12 @@ test('shows numbered sets and source tabs without adding a canvas mode', () => {
   mounted.dispose();
 });
 
-test('offers shared viewport commands and comparison outside comparison mode', () => {
+test('offers comparison but no camera commands, which stay on the canvas controls and keys', () => {
   const port = new CanvasPortFixture(canvasSnapshot('reference-menu'));
+  expect(port.capabilities.commands).toEqual(expect.arrayContaining(['fit', 'native', 'zoom']));
   expect(
     canvasContextActions(port.read(), port.capabilities, jest.fn()).map((entry) => entry.label),
-  ).toEqual(['Fit image', '100%', 'Zoom in', 'Zoom out', 'Compare outputs']);
+  ).toEqual(['Compare outputs']);
 });
 
 test('describes a reactivated preview-only source before its next frame arrives', () => {

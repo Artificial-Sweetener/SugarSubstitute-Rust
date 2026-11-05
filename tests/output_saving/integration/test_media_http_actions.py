@@ -16,6 +16,7 @@
 """Exercise guarded file actions and transient image responses over real local HTTP."""
 
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -31,6 +32,7 @@ from sugarcubes.output_saving.infrastructure.artifact_registry import (
 )
 from sugarcubes.output_saving.infrastructure.media_files import HostOutputImageFiles
 from sugarcubes.output_saving.infrastructure.media_routes import register_media_routes
+from sugarcubes.output_saving.infrastructure.photoshop_opener import PhotoshopLayer
 
 
 @dataclass
@@ -78,7 +80,11 @@ def test_local_reveal_remote_refusal_and_on_demand_jpeg(tmp_path: Path) -> None:
             profile = await (
                 await client.get("/sugarcubes/output-saving/media-profile")
             ).json()
-            assert profile["data"] == {"preferred_copy_format": "png", "reveal": True}
+            assert profile["data"] == {
+                "preferred_copy_format": "png",
+                "reveal": True,
+                "photoshop": False,
+            }
             remote = await (
                 await client.get(
                     "/sugarcubes/output-saving/media-profile",
@@ -162,5 +168,113 @@ def test_local_reveal_remote_refusal_and_on_demand_jpeg(tmp_path: Path) -> None:
                 )
                 assert response.status == 400
             assert not list(output.glob("*.jpg"))
+
+    asyncio.run(exercise())
+
+
+@dataclass
+class Photoshop:
+    """Capture only the Photoshop handoff while HTTP and output containment remain real."""
+
+    opened: list[tuple[str, list[PhotoshopLayer]]]
+
+    @property
+    def available(self) -> bool:
+        """Expose an installed Photoshop without starting it during isolated HTTP tests."""
+        return True
+
+    def open(self, document: str, layers: Sequence[PhotoshopLayer]) -> None:
+        """Record the validated document request."""
+        self.opened.append((document, list(layers)))
+
+
+def test_photoshop_opens_contained_still_images_only_for_local_same_origin(
+    tmp_path: Path,
+) -> None:
+    """Publish the capability locally, refuse remote callers, and resolve only contained images."""
+
+    async def exercise() -> None:
+        """Use a real request boundary and substitute only the Photoshop process."""
+        output = tmp_path / "output"
+        output.mkdir()
+        images = [output / "first.png", output / "second.png"]
+        for path in images:
+            with Image.new("RGB", (4, 4)) as image:
+                image.save(path)
+        (output / "clip.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42")
+        opened: list[tuple[str, list[PhotoshopLayer]]] = []
+        service = OutputMediaService(
+            OutputSavingPreferences,
+            HostOutputImageFiles(
+                ManagedArtifactRegistry(tmp_path / "state.sqlite"),
+                {"output": output},
+                Revealer([]),
+                Photoshop(opened),
+            ),
+        )
+        routes = web.RouteTableDef()
+        register_media_routes(routes, service)
+        app = web.Application()
+        app.add_routes(routes)
+        async with TestClient(TestServer(app)) as client:
+            origin = str(client.make_url("/")).rstrip("/")
+            profile = await (
+                await client.get("/sugarcubes/output-saving/media-profile")
+            ).json()
+            assert profile["data"]["photoshop"] is True
+            remote = await (
+                await client.get(
+                    "/sugarcubes/output-saving/media-profile",
+                    headers={"Host": "remote.example"},
+                )
+            ).json()
+            assert remote["data"]["photoshop"] is False
+
+            def layer(filename: str, name: str) -> dict[str, object]:
+                """Address one output by its Comfy reference."""
+                return {
+                    "file": {"filename": filename, "subfolder": "", "type": "output"},
+                    "name": name,
+                }
+
+            request = {
+                "document": "first",
+                "layers": [layer("first.png", "Save 1"), layer("second.png", "Save 2")],
+            }
+            for headers in [{}, {"Origin": "https://attacker.example"}]:
+                response = await client.post(
+                    "/sugarcubes/output-saving/photoshop", json=request, headers=headers
+                )
+                assert response.status == 403
+            response = await client.post(
+                "/sugarcubes/output-saving/photoshop",
+                json=request,
+                headers={"Origin": origin},
+            )
+            assert response.status == 200
+            assert opened == [
+                (
+                    "first",
+                    [
+                        PhotoshopLayer(images[0].resolve(), "Save 1"),
+                        PhotoshopLayer(images[1].resolve(), "Save 2"),
+                    ],
+                )
+            ]
+            (tmp_path / "outside.png").write_bytes(b"outside")
+            for invalid in [
+                {"document": "clip", "layers": [layer("clip.mp4", "Video")]},
+                {"document": "gone", "layers": [layer("missing.png", "Gone")]},
+                {"document": "out", "layers": [layer("..\\outside.png", "Out")]},
+                {"document": "named", "layers": [{"file": request["layers"]}]},
+                {"layers": []},
+            ]:
+                response = await client.post(
+                    "/sugarcubes/output-saving/photoshop",
+                    json=invalid,
+                    headers={"Origin": origin},
+                )
+                assert response.status == 400
+            assert len(opened) == 1
 
     asyncio.run(exercise())

@@ -17,7 +17,10 @@
 import { jest } from '@jest/globals';
 import { canvasContextActions } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasContextActions.js';
 import { mountCanvasOverlay } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.js';
-import { CanvasMediaActions } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasMediaActions.js';
+import {
+  CanvasMediaActions,
+  type CanvasPhotoshopLayer,
+} from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasMediaActions.js';
 import type {
   CanvasCommand,
   CanvasViewSnapshot,
@@ -42,7 +45,7 @@ function snapshot(): CanvasViewSnapshot {
     selected: item,
     view: { ...base.view, selection: { sourceId: item.provenance.sourceId, batchIndex: 0 } },
     resource: { ...base.resource, state: 'ready' },
-    mediaActions: { preferredCopyFormat: 'png', fileAction: 'reveal' },
+    mediaActions: { preferredCopyFormat: 'png', fileAction: 'reveal', photoshop: true },
   };
 }
 
@@ -51,55 +54,149 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-test('presents preferred Copy and the explicit alternate format with local reveal or remote download', () => {
-  const source = snapshot();
-  const send = jest.fn<(command: CanvasCommand) => void>();
-  const caps = { schema: 1 as const, commands: ['copy-media', 'file-media'] as const };
-  const local = canvasContextActions(source, caps, send);
-  expect(local.map((entry) => entry.label)).toEqual(['Copy', 'Copy .jpg', 'Reveal in folder']);
-  local[1]!.select?.();
-  expect(send).toHaveBeenCalledWith({ type: 'copy-media', target: 'primary', format: 'jpeg' });
+const allCommands = [
+  'comparison',
+  'copy-media',
+  'file-media',
+  'photoshop-media',
+  'photoshop-all-media',
+] as const;
+
+/** Name each entry, writing separators as such. */
+function labels(entries: readonly { label: string; separator?: boolean }[]): string[] {
+  return entries.map((entry) => (entry.separator ? 'separator' : entry.label));
+}
+
+test('presents the Substitute Output menu in its order with local reveal or remote download', () => {
+  const caps = { schema: 1 as const, commands: allCommands };
+  expect(labels(canvasContextActions(snapshot(), caps, jest.fn()))).toEqual([
+    'Compare outputs',
+    'separator',
+    'Copy',
+    'Open in Photoshop',
+    'Open All in Photoshop',
+    'Reveal in File Manager',
+  ]);
   const remote = canvasContextActions(
-    { ...source, mediaActions: { preferredCopyFormat: 'jpeg', fileAction: 'download' } },
+    {
+      ...snapshot(),
+      mediaActions: { preferredCopyFormat: 'jpeg', fileAction: 'download', photoshop: false },
+    },
     caps,
-    send,
+    jest.fn(),
   );
-  expect(remote.map((entry) => entry.label)).toEqual(['Copy', 'Copy .png', 'Download']);
-  remote[0]!.select?.();
-  expect(send).toHaveBeenLastCalledWith({
-    type: 'copy-media',
-    target: 'primary',
-    format: 'preferred',
-  });
+  expect(labels(remote)).toEqual(['Compare outputs', 'separator', 'Copy', 'Download']);
+  const compareOnly = canvasContextActions(
+    snapshot(),
+    { schema: 1, commands: ['comparison'] },
+    jest.fn(),
+  );
+  expect(labels(compareOnly)).toEqual(['Compare outputs']);
 });
 
-test('orders comparison before a separator and image actions in the Substitute order', () => {
-  const caps = {
-    schema: 1 as const,
-    commands: ['comparison', 'copy-media', 'file-media'] as const,
+test('sends Copy in the preferred format and the Photoshop actions for their outputs', () => {
+  const send = jest.fn<(command: CanvasCommand) => void>();
+  const entries = canvasContextActions(snapshot(), { schema: 1, commands: allCommands }, send);
+  for (const label of [
+    'Copy',
+    'Open in Photoshop',
+    'Open All in Photoshop',
+    'Reveal in File Manager',
+  ])
+    entries.find((entry) => entry.label === label)?.select?.();
+  expect(send.mock.calls.map(([command]) => command)).toEqual([
+    { type: 'copy-media', target: 'primary', format: 'preferred' },
+    { type: 'photoshop-media', target: 'primary' },
+    { type: 'photoshop-all-media' },
+    { type: 'file-media', target: 'primary' },
+  ]);
+});
+
+test('the overview offers a menu only on an image or while comparing, and never Open All', () => {
+  const caps = { schema: 1 as const, commands: allCommands };
+  const source = snapshot();
+  const overview = { ...source, view: { ...source.view, mode: 'overview' as const } };
+  expect(canvasContextActions(overview, caps, jest.fn())).toEqual([]);
+  const item = source.grid[1]!.items[0]!;
+  const tile = { sourceId: item.provenance.sourceId, itemId: item.id };
+  const onTile = canvasContextActions(overview, caps, jest.fn(), tile);
+  expect(labels(onTile)).toEqual(['Copy', 'Open in Photoshop', 'Reveal in File Manager']);
+  expect(onTile.every((entry) => !entry.disabled)).toBe(true);
+  const comparing = {
+    ...overview,
+    view: {
+      ...overview.view,
+      comparison: { secondary: null, orientation: 'vertical' as const, split: 0.5 },
+    },
   };
-  for (const profile of [
-    { preferredCopyFormat: 'png' as const, fileAction: 'reveal' as const },
-    { preferredCopyFormat: 'jpeg' as const, fileAction: 'download' as const },
-  ]) {
-    const actions = canvasContextActions({ ...snapshot(), mediaActions: profile }, caps, jest.fn());
-    expect(actions.map((entry) => (entry.separator ? 'separator' : entry.label))).toEqual([
-      'Compare outputs',
-      'separator',
-      'Copy',
-      profile.preferredCopyFormat === 'png' ? 'Copy .jpg' : 'Copy .png',
-      profile.fileAction === 'reveal' ? 'Reveal in folder' : 'Download',
-    ]);
-    const compareOnly = canvasContextActions(
-      snapshot(),
-      { schema: 1, commands: ['comparison'] },
-      jest.fn(),
-    );
-    expect(compareOnly).toHaveLength(1);
-    expect(compareOnly[0]?.separator).toBeUndefined();
-  }
+  const compared = canvasContextActions(comparing, caps, jest.fn());
+  expect(labels(compared)[0]).toBe('Compare outputs');
+  expect(compared[0]?.checked).toBe(true);
 });
 
+test('video offers neither comparison nor Photoshop', () => {
+  const source = snapshot();
+  const video = { ...source.selected!, mediaKind: 'video' as const };
+  const entries = canvasContextActions(
+    { ...source, selected: video },
+    { schema: 1, commands: allCommands },
+    jest.fn(),
+  );
+  expect(labels(entries)).toEqual(['Copy', 'Reveal in File Manager']);
+});
+
+test('opens no menu at all in the overview away from an image', () => {
+  const source = snapshot();
+  const port = new CanvasPortFixture({ ...source, view: { ...source.view, mode: 'overview' } }, [
+    ...allCommands,
+  ]);
+  const root = document.createElement('div');
+  document.body.append(root);
+  const mounted = mountCanvasOverlay(document.createElement('div'), port, jest.fn(), root);
+  const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+  root.dispatchEvent(event);
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  mounted.dispose();
+});
+
+test('Open All pins the exact image set and names each layer by source and position', async () => {
+  let current = snapshot();
+  const photoshop = jest
+    .fn<
+      (
+        document: string,
+        layers: readonly CanvasPhotoshopLayer[],
+        accepts: () => boolean,
+      ) => Promise<boolean>
+    >()
+    .mockResolvedValue(true);
+  const owner = new CanvasMediaActions({
+    // Image detail publishes no grid; Open All still reaches every image of the result.
+    read: () => ({ ...current, grid: [] }),
+    entries: () => current.grid,
+    accepts: () => true,
+    photoshop,
+  });
+  expect(owner.commands()).toEqual(['photoshop-media', 'photoshop-all-media']);
+  expect(await owner.run({ type: 'photoshop-all-media' }, canvasOperationScope())).toBe(true);
+  const [name, layers, accepts] = photoshop.mock.calls[0]!;
+  const items = current.grid.flatMap((entry) => entry.items);
+  expect(layers.map((layer) => layer.item)).toEqual(items);
+  expect(layers.map((layer) => layer.name)).toEqual(
+    items.map(
+      (item) =>
+        `${current.grid.find((entry) => entry.source.id === item.provenance.sourceId)!.source.label} ${item.batchIndex + 1}`,
+    ),
+  );
+  expect(name).toBe(items[0]!.file.filename.replace(/\.[^.]*$/, ''));
+  expect(accepts()).toBe(true);
+  current = { ...current, grid: current.grid.slice(1) };
+  expect(accepts()).toBe(false);
+  current = { ...current, grid: [] };
+  expect(await owner.run({ type: 'photoshop-all-media' }, canvasOperationScope())).toBe(false);
+  expect(photoshop).toHaveBeenCalledTimes(1);
+  owner.dispose();
+});
 test('pins a batch context command to the clicked image without changing the displayed selection', async () => {
   const source = snapshot();
   const item = source.grid[1]!.items[0]!;
@@ -121,11 +218,11 @@ test('pins a batch context command to the clicked image without changing the dis
   );
   tile.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
   const copy = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-    (entry) => entry.textContent === 'Copy .jpg',
+    (entry) => entry.textContent === 'Copy',
   )!;
   copy.click();
   await Promise.resolve();
-  expect(port.requests[0]?.command).toEqual({ type: 'copy-media', target, format: 'jpeg' });
+  expect(port.requests[0]?.command).toEqual({ type: 'copy-media', target, format: 'preferred' });
   expect(port.read().view.selection).toEqual(source.view.selection);
   mounted.dispose();
 });

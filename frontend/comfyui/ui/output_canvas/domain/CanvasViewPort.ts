@@ -106,7 +106,11 @@ export type CanvasCommand =
       readonly target: CanvasMediaTarget;
       readonly format: OutputCopyFormat;
     }
-  | { readonly type: 'file-media'; readonly target: CanvasMediaTarget };
+  | { readonly type: 'file-media'; readonly target: CanvasMediaTarget }
+  /** Open one still image in Photoshop as a document holding it as a named layer. */
+  | { readonly type: 'photoshop-media'; readonly target: CanvasMediaTarget }
+  /** Open every still image of the current result in one Photoshop document, one layer each. */
+  | { readonly type: 'photoshop-all-media' };
 
 export interface CanvasCommandRequest {
   readonly schema: 1;

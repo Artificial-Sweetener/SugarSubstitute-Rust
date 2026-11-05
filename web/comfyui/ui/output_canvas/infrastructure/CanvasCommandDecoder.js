@@ -136,6 +136,12 @@ function decodeCommand(value) {
             const target = decodeMediaTarget(value.target);
             return target ? Object.freeze({ type: 'file-media', target }) : null;
         }
+        case 'photoshop-media': {
+            const target = decodeMediaTarget(value.target);
+            return target ? Object.freeze({ type: 'photoshop-media', target }) : null;
+        }
+        case 'photoshop-all-media':
+            return Object.freeze({ type: value.type });
         default:
             return null;
     }

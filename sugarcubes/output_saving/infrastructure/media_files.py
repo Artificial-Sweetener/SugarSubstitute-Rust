@@ -15,7 +15,7 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Resolve managed and native images through containment-checked host namespaces."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from io import BytesIO
 from pathlib import Path
 
@@ -27,6 +27,7 @@ from ..domain.transfer import OutputFileReference, OutputTransferChoices
 from .artifact_registry import MANAGED_SUBFOLDER_PREFIX, ManagedArtifactRegistry
 from .file_revealer import ImageFileRevealer
 from .jpeg_encoder import JpegCompanionEncoder
+from .photoshop_opener import PhotoshopImageOpener, PhotoshopLayer
 from .transfer_references import ManagedTransferResolver
 
 
@@ -38,18 +39,25 @@ class HostOutputImageFiles:
         registry: ManagedArtifactRegistry,
         roots: Mapping[str, Path],
         revealer: ImageFileRevealer,
+        photoshop: PhotoshopImageOpener | None = None,
     ) -> None:
-        """Bind explicit Comfy namespaces, managed references and the platform reveal boundary."""
+        """Bind explicit Comfy namespaces, managed references and the desktop action boundaries."""
         self._registry = registry
         self._roots = {kind: root.resolve() for kind, root in roots.items()}
         self._choices = ManagedTransferResolver(registry)
         self._revealer = revealer
+        self._photoshop = photoshop
         self._jpeg = JpegCompanionEncoder()
 
     @property
     def can_reveal(self) -> bool:
         """Report desktop support without assuming the browser runs on this machine."""
         return self._revealer.available
+
+    @property
+    def can_open_in_photoshop(self) -> bool:
+        """Report an installed Photoshop without assuming the browser runs on this machine."""
+        return self._photoshop is not None and self._photoshop.available
 
     def choices(self, reference: OutputFileReference) -> OutputTransferChoices:
         """Validate the requested file before resolving its canonical and optional companion identities."""
@@ -118,3 +126,17 @@ class HostOutputImageFiles:
     def reveal(self, reference: OutputFileReference) -> None:
         """Select a currently contained output of any media kind, never a client-supplied absolute path."""
         self._revealer.reveal(self._contained(reference))
+
+    def open_in_photoshop(
+        self, document: str, layers: Sequence[tuple[OutputFileReference, str]]
+    ) -> None:
+        """Open currently contained still images, never client-supplied absolute paths."""
+        if self._photoshop is None:
+            raise ValueError("Photoshop is unavailable on this computer.")
+        self._photoshop.open(
+            document,
+            [
+                PhotoshopLayer(self.resolve(reference), name)
+                for reference, name in layers
+            ],
+        )
