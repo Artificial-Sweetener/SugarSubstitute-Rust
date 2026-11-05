@@ -1,18 +1,18 @@
 import {
   CanvasScenePicker
-} from "./chunk-JDRPL54Q.js";
+} from "./chunk-6MZ5BAVS.js";
 import {
   CanvasSourceSlider
 } from "./chunk-HFZ5NECD.js";
 import {
   CanvasRoutePicker
-} from "./chunk-PJ5EUH5P.js";
+} from "./chunk-P7TVKFNT.js";
 import {
   CanvasSelectionPicker
-} from "./chunk-EKZRFHOF.js";
+} from "./chunk-KKVBN3OP.js";
 import {
   CanvasBatchPicker
-} from "./chunk-J75WOXTZ.js";
+} from "./chunk-KQOAPFCP.js";
 import {
   defineComponent,
   h,
@@ -23,6 +23,7 @@ import {
 } from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasNavigationBar.ts
+var BACKDROP_BLUR_MARGIN = 24;
 var CanvasNavigationBar = defineComponent({
   name: "CanvasNavigationBar",
   props: {
@@ -42,6 +43,9 @@ var CanvasNavigationBar = defineComponent({
     let observer = null;
     let observedParent = null;
     let observedTabs = null;
+    let observedStrip = null;
+    let layerElement = null;
+    let labels = null;
     function tabs() {
       const element = slider.value?.$el;
       return element instanceof HTMLElement ? element : null;
@@ -58,7 +62,15 @@ var CanvasNavigationBar = defineComponent({
     }
     function observe() {
       if (typeof ResizeObserver === "undefined") return;
-      observer ??= new ResizeObserver(measure);
+      observer ??= new ResizeObserver(() => {
+        measure();
+        locate();
+      });
+      if (strip.value !== observedStrip) {
+        if (observedStrip) observer.unobserve(observedStrip);
+        observedStrip = strip.value;
+        if (observedStrip) observer.observe(observedStrip);
+      }
       const parent = strip.value?.parentElement ?? null;
       if (parent !== observedParent) {
         if (observedParent) observer.unobserve(observedParent);
@@ -72,25 +84,55 @@ var CanvasNavigationBar = defineComponent({
         if (list) observer.observe(list);
       }
     }
-    function placeBackdrop() {
-      const image = backdrop.value?.firstElementChild;
+    let origin = null;
+    let placed = null;
+    function locate() {
       const bar = strip.value;
-      const source = props.backdrop;
-      if (!(image instanceof HTMLElement) || !bar || !source) return;
+      if (!bar) return;
       const bounds = bar.getBoundingClientRect();
-      image.style.left = `${String(source.rect.left - bounds.left - bar.clientLeft)}px`;
-      image.style.top = `${String(source.rect.top - bounds.top - bar.clientTop)}px`;
-      image.style.width = `${String(source.rect.width)}px`;
-      image.style.height = `${String(source.rect.height)}px`;
+      origin = { left: bounds.left + bar.clientLeft, top: bounds.top + bar.clientTop };
+      placeBackdrop();
+    }
+    function placeBackdrop() {
+      const layer = backdrop.value?.firstElementChild ?? null;
+      const source = props.backdrop;
+      if (layer !== layerElement) {
+        layerElement = layer;
+        placed = null;
+      }
+      if (!(layer instanceof HTMLElement) || !source) return;
+      if (!origin) {
+        locate();
+        return;
+      }
+      const { left, top, width, height } = source.rect;
+      const x = left - origin.left + BACKDROP_BLUR_MARGIN;
+      const y = top - origin.top + BACKDROP_BLUR_MARGIN;
+      const next = {
+        url: source.url,
+        size: `${String(width)}px ${String(height)}px`,
+        position: `${String(x)}px ${String(y)}px`
+      };
+      if (placed?.url !== next.url)
+        layer.style.backgroundImage = `url(${JSON.stringify(next.url)})`;
+      if (placed?.size !== next.size) layer.style.backgroundSize = next.size;
+      if (placed?.position !== next.position) layer.style.backgroundPosition = next.position;
+      placed = next;
     }
     onMounted(() => {
       observe();
+      labels = strip.value?.textContent ?? null;
       measure();
-      placeBackdrop();
+      locate();
     });
     onUpdated(() => {
       observe();
-      measure();
+      const nextLabels = strip.value?.textContent ?? null;
+      if (nextLabels !== labels) {
+        labels = nextLabels;
+        measure();
+        locate();
+      }
       placeBackdrop();
     });
     onBeforeUnmount(() => observer?.disconnect());
@@ -114,7 +156,7 @@ var CanvasNavigationBar = defineComponent({
       const source = snapshot.sources.find((value) => value.id === selection?.sourceId);
       return h("div", { class: "sc-output-tabstrip sc-output-navigation", ref: strip }, [
         props.backdrop ? h("span", { class: "sc-output-backdrop", ref: backdrop, "aria-hidden": "true" }, [
-          h("img", { src: props.backdrop.url, alt: "", draggable: false })
+          h("span", { class: "sc-output-backdrop-image" })
         ]) : null,
         route ? h(CanvasRoutePicker, { state: route, choose: props.chooseRoute }) : null,
         scenes && capabilities.commands.includes("select-scene") ? h(CanvasScenePicker, {

@@ -16,7 +16,10 @@
 /** Prove local capability gating, explicit copy formats and portable remote downloads. */
 import { jest } from '@jest/globals';
 import { BrowserOutputTransfer } from '../../../frontend/comfyui/ui/output_saving/BrowserOutputTransfer.js';
-import { OutputMediaClient } from '../../../frontend/comfyui/ui/output_saving/OutputMediaClient.js';
+import {
+  OutputMediaClient,
+  outputPreviewUrl,
+} from '../../../frontend/comfyui/ui/output_saving/OutputMediaClient.js';
 
 const file = { filename: 'image.png', subfolder: 'outputs', type: 'output' as const };
 
@@ -143,4 +146,16 @@ test('rejects unexpected image MIME types and unsafe returned filenames', async 
       ),
     ).rejects.toThrow('invalid');
   }
+});
+
+test('output previews are small, revision-keyed same-origin URLs', () => {
+  const url = new URL(outputPreviewUrl('http://127.0.0.1:8188', file, 'result:1'));
+  expect(url.origin).toBe('http://127.0.0.1:8188');
+  expect(url.pathname).toBe('/sugarcubes/output-saving/preview');
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    ...file,
+    revision: 'result:1',
+    size: '320',
+  });
+  expect(() => outputPreviewUrl('file:///', file, 'result:1')).toThrow();
 });

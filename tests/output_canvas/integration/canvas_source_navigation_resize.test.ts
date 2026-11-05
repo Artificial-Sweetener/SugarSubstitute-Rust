@@ -141,7 +141,8 @@ test('collapses late source tabs into a usable chooser and restores tabs after w
     snapshot.value = initial;
     await nextTick();
     const observer = NavigationResizeObserver.instances[0]!;
-    expect(observer.targets.size).toBe(2);
+    expect(observer.targets.size).toBe(3);
+    expect(observer.targets.has(host.querySelector('.sc-output-tabstrip')!)).toBe(true);
     width = 200;
     observer.notify();
     await nextTick();

@@ -1,6 +1,6 @@
 import {
   CanvasAnchoredPicker
-} from "./chunk-MMIFSN3Z.js";
+} from "./chunk-QXRZ6IZZ.js";
 import {
   defineComponent,
   h
@@ -32,8 +32,8 @@ var CanvasBatchPicker = defineComponent({
         items: props.includeGrid ? [
           { value: "grid", label: "0" },
           ...Array.from({ length: count }, (_, index) => ({
-            value: String(index),
-            label: String(index + 1)
+            value: String(count - index - 1),
+            label: String(count - index)
           }))
         ] : Array.from({ length: count }, (_, index) => ({
           value: String(count - index - 1),

@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove the scene combo box layer of the canvas navigation bar. */
+/** Prove the scene segment of the canvas navigation bar and its anchored picker. */
 import { jest } from '@jest/globals';
 import { nextTick } from 'vue';
 import { mountCanvasOverlay } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.js';
@@ -45,7 +45,8 @@ test('the scene picker offers All first and disables scenes without images', asy
   expect(root.querySelectorAll('[role="tab"]')).toHaveLength(0);
   const picker = root.querySelector<HTMLButtonElement>('button[aria-label="Output scene"]')!;
   expect(picker.textContent).toBe('All');
-  expect(picker.querySelector('.sc-output-chevron')).not.toBeNull();
+  expect(picker.classList.contains('sc-output-segment')).toBe(true);
+  expect(picker.children).toHaveLength(0);
   picker.click();
   await nextTick();
   await nextTick();

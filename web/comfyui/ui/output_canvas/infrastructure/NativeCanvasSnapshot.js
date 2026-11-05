@@ -31,7 +31,7 @@ function nativeBackdrop(state, item, image) {
         return null;
     const center = viewport.center ?? { x: 0.5, y: 0.5 };
     return Object.freeze({
-        url: state.mediaUrl(item),
+        url: state.backdropUrl(item),
         rect: Object.freeze({
             left: geometry.origin.x + geometry.viewport.width / 2 - center.x * width,
             top: geometry.origin.y + geometry.viewport.height / 2 - center.y * height,

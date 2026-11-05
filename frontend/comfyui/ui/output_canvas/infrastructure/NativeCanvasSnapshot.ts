@@ -55,8 +55,8 @@ export interface NativeCanvasSnapshotState {
   readonly overview: boolean;
   /** The surface's published client geometry, or null before the first measurement. */
   readonly geometry: CanvasSurfaceGeometry | null;
-  /** Resolve an output's full-fidelity media URL for chrome that mirrors the painted image. */
-  mediaUrl(item: WorkflowOutputItem): string;
+  /** Resolve a small preview of an output for chrome that mirrors the painted image's colours. */
+  backdropUrl(item: WorkflowOutputItem): string;
 }
 
 /**
@@ -76,7 +76,7 @@ function nativeBackdrop(
   if (!(width > 0 && height > 0)) return null;
   const center = viewport.center ?? { x: 0.5, y: 0.5 };
   return Object.freeze({
-    url: state.mediaUrl(item),
+    url: state.backdropUrl(item),
     rect: Object.freeze({
       left: geometry.origin.x + geometry.viewport.width / 2 - center.x * width,
       top: geometry.origin.y + geometry.viewport.height / 2 - center.y * height,

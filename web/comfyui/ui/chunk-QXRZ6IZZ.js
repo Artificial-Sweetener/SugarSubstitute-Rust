@@ -27,7 +27,7 @@ var CanvasAnchoredPicker = defineComponent({
     const popup = ref(null);
     const opened = ref(false);
     const active = ref(0);
-    const geometry = ref({ left: 0, top: 0, width: 0, height: 0 });
+    const geometry = ref({ left: 0, top: 0, width: 0, height: 0, row: 30, anchorWidth: 0 });
     let surface = null;
     function close(restoreFocus = false) {
       surface?.close();
@@ -53,7 +53,7 @@ var CanvasAnchoredPicker = defineComponent({
       const stride = rowHeight + 2;
       active.value = Math.max(
         0,
-        props.items.findIndex((item) => item.value === props.value)
+        props.items.findIndex((item) => item.value === props.value && !item.disabled) < 0 ? props.items.findIndex((item) => !item.disabled) : props.items.findIndex((item) => item.value === props.value)
       );
       const above = Math.max(0, Math.floor((rect.top - 8) / stride));
       const below = Math.max(0, Math.floor((viewport.innerHeight - rect.bottom - 8) / stride));
@@ -61,11 +61,15 @@ var CanvasAnchoredPicker = defineComponent({
       const slot = Math.min(active.value, above, visible - 1);
       const width = Math.min(Math.max(rect.width, 34) + 16, viewport.innerWidth - 16);
       const height = visible * stride - 2 + 16;
+      const aligned = rect.top - 8 - slot * stride;
+      const top = aligned >= 0 && aligned + height <= viewport.innerHeight ? aligned : Math.max(0, rect.top - 8 - (visible - 1) * stride);
       geometry.value = {
         left: Math.max(8, Math.min(rect.left - 8, viewport.innerWidth - width - 8)),
-        top: Math.max(0, Math.min(rect.top - 8 - slot * stride, viewport.innerHeight - height)),
+        top,
         width,
-        height
+        height,
+        row: rowHeight,
+        anchorWidth: rect.width
       };
       opened.value = true;
       await nextTick();
@@ -105,88 +109,91 @@ var CanvasAnchoredPicker = defineComponent({
         close(true);
         return;
       }
-      const index = event.key === "ArrowDown" ? Math.min(props.items.length - 1, active.value + 1) : event.key === "ArrowUp" ? Math.max(0, active.value - 1) : event.key === "Home" ? 0 : event.key === "End" ? props.items.length - 1 : null;
+      const enabled = props.items.flatMap((item, index2) => item.disabled ? [] : [index2]);
+      const position = enabled.indexOf(active.value);
+      const index = event.key === "ArrowDown" ? enabled[Math.min(enabled.length - 1, position + 1)] : event.key === "ArrowUp" ? enabled[Math.max(0, position - 1)] : event.key === "Home" ? enabled[0] : event.key === "End" ? enabled.at(-1) : null;
       if (index === null) return;
       event.preventDefault();
       event.stopPropagation();
+      if (index === void 0) return;
       active.value = index;
       focusRow();
     }
     onBeforeUnmount(() => close());
-    return () => h(
-      "span",
-      {
-        class: "sc-output-choice",
-        "data-centered": props.centered ? "true" : void 0,
-        "data-stable": props.stable ? "true" : void 0,
-        style: props.stable ? {
-          "--sc-choice-label-chars": String(
-            Math.max(1, ...props.items.map((item) => item.label.length))
-          )
-        } : void 0
-      },
-      [
-        h(
-          "button",
-          {
-            ref: anchor,
-            type: "button",
-            class: "sc-output-segment",
-            "aria-label": props.label,
-            "aria-haspopup": "listbox",
-            "aria-expanded": opened.value,
-            disabled: !props.items.length,
-            onClick: open
-          },
-          [
-            h(
-              "span",
-              { class: "sc-output-choice-label" },
-              props.text || props.items.find((item) => item.value === props.value)?.label || "Output"
-            ),
-            h("span", { class: "sc-output-chevron", "aria-hidden": "true" })
-          ]
-        ),
-        opened.value ? h(Teleport, { to: anchor.value?.ownerDocument.body }, [
+    return () => {
+      const shown = props.text || props.items.find((item) => item.value === props.value)?.label || "Output";
+      return h(
+        "span",
+        {
+          class: "sc-output-choice",
+          "data-centered": props.centered ? "true" : void 0,
+          "data-stable": props.stable ? "true" : void 0,
+          style: props.stable ? {
+            "--sc-choice-label-chars": String(
+              Math.max(1, ...props.items.map((item) => item.label.length))
+            )
+          } : void 0
+        },
+        [
           h(
-            "div",
+            "button",
             {
-              ref: popup,
-              class: "sc-output-picker-popup",
-              role: "listbox",
-              "aria-label": `${props.label} choices`,
-              "data-centered": props.centered ? "true" : void 0,
-              style: {
-                left: `${geometry.value.left}px`,
-                top: `${geometry.value.top}px`,
-                minWidth: `${geometry.value.width}px`,
-                maxWidth: `${String(Math.max(geometry.value.width, (anchor.value?.ownerDocument.defaultView?.innerWidth ?? 0) - 16))}px`,
-                maxHeight: `${geometry.value.height}px`
-              },
-              onKeydown: keydown
+              ref: anchor,
+              type: "button",
+              class: "sc-output-segment",
+              "aria-label": props.label,
+              "aria-haspopup": "listbox",
+              "aria-expanded": opened.value,
+              title: shown,
+              disabled: !props.items.length,
+              onClick: open
             },
-            props.items.map(
-              (item, index) => h(
-                "button",
-                {
-                  key: item.value,
-                  type: "button",
-                  role: "option",
-                  "aria-selected": index === active.value,
-                  "aria-disabled": item.disabled ? "true" : void 0,
-                  tabIndex: index === active.value ? 0 : -1,
-                  onFocus: () => {
-                    active.value = index;
-                  },
-                  onClick: () => select(index)
+            shown
+          ),
+          opened.value ? h(Teleport, { to: anchor.value?.ownerDocument.body }, [
+            h(
+              "div",
+              {
+                ref: popup,
+                class: "sc-output-picker-popup",
+                role: "listbox",
+                "aria-label": `${props.label} choices`,
+                "data-centered": props.centered ? "true" : void 0,
+                style: {
+                  left: `${geometry.value.left}px`,
+                  top: `${geometry.value.top}px`,
+                  minWidth: `${geometry.value.width}px`,
+                  maxWidth: `${String(Math.max(geometry.value.width, (anchor.value?.ownerDocument.defaultView?.innerWidth ?? 0) - 16))}px`,
+                  maxHeight: `${geometry.value.height}px`,
+                  "--sc-picker-row": `${String(geometry.value.row)}px`,
+                  "--sc-picker-anchor-width": `${String(geometry.value.anchorWidth)}px`
                 },
-                item.label
+                onKeydown: keydown
+              },
+              props.items.map(
+                (item, index) => h(
+                  "button",
+                  {
+                    key: item.value,
+                    type: "button",
+                    role: "option",
+                    "aria-selected": index === active.value,
+                    "aria-disabled": item.disabled ? "true" : void 0,
+                    disabled: item.disabled === true,
+                    tabIndex: index === active.value ? 0 : -1,
+                    onFocus: () => {
+                      active.value = index;
+                    },
+                    onClick: () => select(index)
+                  },
+                  h("span", { class: "sc-output-picker-text", title: item.label }, item.label)
+                )
               )
             )
-          )
-        ]) : null
-      ]
-    );
+          ]) : null
+        ]
+      );
+    };
   }
 });
 

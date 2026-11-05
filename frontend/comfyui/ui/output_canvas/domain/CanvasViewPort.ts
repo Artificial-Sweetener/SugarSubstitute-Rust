@@ -55,6 +55,7 @@ export interface CanvasSceneSummary {
  * of the image instead of its own backdrop.
  */
 export interface CanvasBackdrop {
+  /** A small preview of the image: the blur shows only its colours, never its detail. */
   readonly url: string;
   /** The whole image's rectangle, in client CSS pixels. */
   readonly rect: {

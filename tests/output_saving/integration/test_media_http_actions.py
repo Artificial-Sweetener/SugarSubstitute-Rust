@@ -164,3 +164,85 @@ def test_local_reveal_remote_refusal_and_on_demand_jpeg(tmp_path: Path) -> None:
             assert not list(output.glob("*.jpg"))
 
     asyncio.run(exercise())
+
+
+def test_previews_are_small_cacheable_webp_without_touching_the_output(
+    tmp_path: Path,
+) -> None:
+    """Serve a downscaled preview so chrome mirroring an output never decodes it in full."""
+
+    async def exercise() -> None:
+        """Encode a large PNG and JPEG through the real route and file containment."""
+        output = tmp_path / "output"
+        output.mkdir()
+        with Image.new("RGB", (4096, 2048), (200, 120, 40)) as image:
+            image.save(output / "wide.png")
+            image.save(output / "wide.jpg", quality=90)
+        original = (output / "wide.png").read_bytes()
+        service = OutputMediaService(
+            OutputSavingPreferences,
+            HostOutputImageFiles(
+                ManagedArtifactRegistry(tmp_path / "state.sqlite"),
+                {"output": output},
+                Revealer([]),
+            ),
+        )
+        routes = web.RouteTableDef()
+        register_media_routes(routes, service)
+        app = web.Application()
+        app.add_routes(routes)
+        async with TestClient(TestServer(app)) as client:
+            for name in ["wide.png", "wide.jpg"]:
+                response = await client.get(
+                    "/sugarcubes/output-saving/preview",
+                    params={
+                        "filename": name,
+                        "subfolder": "",
+                        "type": "output",
+                        "revision": "result:1",
+                        "size": "320",
+                    },
+                )
+                assert response.status == 200
+                assert response.content_type == "image/webp"
+                assert response.headers["Cache-Control"] == "private, max-age=86400"
+                with Image.open(BytesIO(await response.read())) as preview:
+                    assert preview.size == (320, 160)
+                    pixel = preview.convert("RGB").getpixel((160, 80))
+                    assert isinstance(pixel, tuple)
+                    red, green, blue = pixel[:3]
+                    assert abs(red - 200) < 8 and abs(green - 120) < 8
+                    assert abs(blue - 40) < 8
+            reference = {"filename": "wide.png", "subfolder": "", "type": "output"}
+            for size in ["", "32", "4096", "-5", "big"]:
+                response = await client.get(
+                    "/sugarcubes/output-saving/preview",
+                    params={**reference, "size": size},
+                )
+                assert response.status == 400
+            response = await client.get(
+                "/sugarcubes/output-saving/preview",
+                params={**reference, "subfolder": "..", "size": "320"},
+            )
+            assert response.status == 400
+            for invalid in [
+                {"filename": "../wide.png"},
+                {"filename": "C:\\wide.png"},
+                {"filename": "wide.gif"},
+                {"filename": "missing.png"},
+                {"subfolder": "C:\\outside"},
+                {"subfolder": "nested/../../outside"},
+                {"type": "outside"},
+            ]:
+                response = await client.get(
+                    "/sugarcubes/output-saving/preview",
+                    params={**reference, **invalid, "size": "320"},
+                )
+                assert response.status == 400
+        assert (output / "wide.png").read_bytes() == original
+        assert sorted(path.name for path in output.iterdir()) == [
+            "wide.jpg",
+            "wide.png",
+        ]
+
+    asyncio.run(exercise())

@@ -24,6 +24,36 @@ export interface OutputMediaImage {
   readonly mimeType: 'image/png' | 'image/jpeg';
 }
 
+/**
+ * Longest side, in image pixels, of the preview chrome uses to mirror an output's colours. A
+ * ten-pixel blur hides any detail beyond this, so a larger preview only costs memory.
+ */
+export const OUTPUT_PREVIEW_LONGEST_SIDE = 320;
+
+/**
+ * Build the same-origin URL of an output's small, cacheable still preview.
+ *
+ * The revision names one immutable output, so the browser may reuse the response for it.
+ */
+export function outputPreviewUrl(
+  origin: string,
+  file: OutputFileReference,
+  revision: string,
+  longestSide = OUTPUT_PREVIEW_LONGEST_SIDE,
+): string {
+  const url = new URL('/sugarcubes/output-saving/preview', origin);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:')
+    throw new Error('The image host is unavailable.');
+  url.search = new URLSearchParams({
+    filename: file.filename,
+    subfolder: file.subfolder,
+    type: file.type,
+    revision,
+    size: String(longestSide),
+  }).toString();
+  return url.href;
+}
+
 /** Keep bounded HTTP media operations reusable across canvas renderers. */
 export class OutputMediaClient {
   /** Bind one same-origin transport and the actual browser connection address. */

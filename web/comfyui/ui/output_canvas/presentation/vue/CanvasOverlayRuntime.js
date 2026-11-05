@@ -1,23 +1,23 @@
 import {
   CanvasOverlay
-} from "../../../chunk-NNLCQB3X.js";
+} from "../../../chunk-BEK435G7.js";
 import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-QNYHC3BS.js";
+} from "../../../chunk-VFAQPXVU.js";
 import "../../../chunk-WIEFPHCO.js";
-import "../../../chunk-VIB2ZZLX.js";
+import "../../../chunk-675HISLK.js";
 import {
   canvasContextActions,
   canvasMediaItem
 } from "../../../chunk-NKMV6DCZ.js";
 import "../../../chunk-Z66IIUOP.js";
-import "../../../chunk-ILGWEYZ5.js";
-import "../../../chunk-JDRPL54Q.js";
+import "../../../chunk-C5JVIQFD.js";
+import "../../../chunk-6MZ5BAVS.js";
 import "../../../chunk-HFZ5NECD.js";
-import "../../../chunk-PJ5EUH5P.js";
-import "../../../chunk-EKZRFHOF.js";
-import "../../../chunk-J75WOXTZ.js";
-import "../../../chunk-MMIFSN3Z.js";
+import "../../../chunk-P7TVKFNT.js";
+import "../../../chunk-KKVBN3OP.js";
+import "../../../chunk-KQOAPFCP.js";
+import "../../../chunk-QXRZ6IZZ.js";
 import {
   canvasNavigationSnapshot
 } from "../../../chunk-ORLQ3IYI.js";

@@ -20,7 +20,7 @@ import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
 import { CanvasViewProjection } from '../application/CanvasViewProjection.js';
 import { mountCanvasOverlay, } from '../presentation/vue/CanvasOverlayRuntime.js';
 import { CanvasMediaActions } from './CanvasMediaActions.js';
-import { comfyCanvasMediaUrl } from './ComfyCanvasMedia.js';
+import { outputPreviewUrl } from '../../output_saving/OutputMediaClient.js';
 import { NativeCanvasReadiness } from './NativeCanvasReadiness.js';
 import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.js';
@@ -463,7 +463,7 @@ export class NativeCanvasAttachment {
             comparison: this.#comparison,
             overview: this.#overview !== null,
             geometry: this.#surface,
-            mediaUrl: (item) => comfyCanvasMediaUrl(this.viewport.ownerDocument.location.origin, item),
+            backdropUrl: (item) => outputPreviewUrl(this.viewport.ownerDocument.location.origin, item.file, item.id),
         });
     }
 }
