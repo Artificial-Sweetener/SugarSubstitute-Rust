@@ -35,10 +35,15 @@ pub(super) struct Retirement {
     pipe_closed: bool,
     pub(super) settled: bool,
     grace_observed: bool,
-    finish_grace: Option<Moment>,
+    dependents_settled: Option<Moment>,
+    helper_budget: Option<ShutdownBudget>,
     finish_grace_observed: bool,
     total_observed: bool,
 }
+/// Final Finish exchange measured from the observed desktop/profile/backend settlement.
+const FINISH_EXCHANGE: std::time::Duration = std::time::Duration::from_secs(2);
+/// Part of the original total kept after any helper force for observing its exit.
+const HELPER_REAP_RESERVE: std::time::Duration = std::time::Duration::from_secs(1);
 impl Retirement {
     /// Adopt the existing pipe's actual terminal independently of fresh admission.
     /// Its original guard remains here until full family and transport retirement.
@@ -57,21 +62,36 @@ impl Retirement {
     }
     /// Freeze one unchanged original transaction, including pre-parent attachment cleanup.
     fn freeze(&mut self, budget: ShutdownBudget) -> Result<ShutdownBudget> {
-        if self.original.is_none() {
-            // Backend force starts at grace. Reserve a final exchange after that
-            // boundary while leaving three seconds of the original total for reaping.
-            self.finish_grace = Some(
-                budget
-                    .graceful_until
-                    .checked_add(std::time::Duration::from_secs(2))?
-                    .min(budget.settle_until),
-            );
-        }
         let original = *self.original.get_or_insert(budget);
         if original != budget {
             return Err("Custody original cleanup changed".into());
         }
         Ok(original)
+    }
+    /// Select when an unfinished helper is forced, within the unchanged original total.
+    ///
+    /// Desktop, profile and backend owners can only settle after their own force at
+    /// `graceful_until`, and the Finish exchange starts only once they have. The exchange
+    /// therefore gets [`FINISH_EXCHANGE`] after the later of grace and the observed
+    /// settlement, never past `settle_until` minus [`HELPER_REAP_RESERVE`]. Dependents
+    /// that never settle cannot veto the helper force at that same final bound. Once a
+    /// helper retirement budget is issued it stays fixed for the rest of the transaction.
+    fn finish_grace(&self, original: ShutdownBudget) -> Result<Moment> {
+        if let Some(issued) = self.helper_budget {
+            return Ok(issued.graceful_until);
+        }
+        let reap_from = original
+            .settle_until
+            .as_nanos()
+            .checked_sub(HELPER_REAP_RESERVE.as_nanos().try_into()?)
+            .ok_or("Custody total leaves no helper reaping reserve")?;
+        let bound = Moment::from_nanos(reap_from).max(original.graceful_until);
+        Ok(match self.dependents_settled {
+            Some(settled) => {
+                settled.max(original.graceful_until).checked_add(FINISH_EXCHANGE)?.min(bound)
+            }
+            None => bound,
+        })
     }
     /// Advance the complete retirement policy through the actual external effect boundary.
     fn advance(
@@ -93,7 +113,10 @@ impl Retirement {
             return self.terminal_result(ready, key);
         }
         self.grace_observed |= now >= original.graceful_until;
-        let finish_grace = self.finish_grace.ok_or("Custody finish grace absent")?;
+        if dependents_retired && self.dependents_settled.is_none() {
+            self.dependents_settled = Some(now);
+        }
+        let finish_grace = self.finish_grace(original)?;
         self.finish_grace_observed |= now >= finish_grace;
         self.total_observed |= now >= original.settle_until;
         let mut failure = self.terminal.as_ref().and_then(|terminal| match &terminal.outcome {
@@ -129,7 +152,9 @@ impl Retirement {
             return Ok(());
         }
         let cleanup = (|| -> Result<()> {
-            let helper_budget = ShutdownBudget { graceful_until: finish_grace, ..original };
+            let helper_budget = *self
+                .helper_budget
+                .get_or_insert(ShutdownBudget { graceful_until: finish_grace, ..original });
             if port.retire_family(helper_budget)? {
                 if !self.pipe_closed {
                     port.close_pipe()?;
@@ -179,7 +204,7 @@ impl Retirement {
         match self.original.filter(|_| !self.settled && !self.total_observed) {
             Some(budget) => [
                 (!self.grace_observed).then_some(budget.graceful_until),
-                self.finish_grace.filter(|_| !self.finish_grace_observed),
+                self.finish_grace(budget).ok().filter(|_| !self.finish_grace_observed),
                 Some(budget.settle_until),
             ],
             None => [None, None, None],

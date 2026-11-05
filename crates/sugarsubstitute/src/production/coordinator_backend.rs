@@ -349,8 +349,9 @@ impl CoordinatorBackend {
             && self.custody.as_ref().is_none_or(|custody| custody.settled())
     }
     /// Progress final witness retirement after local writers and families close.
-    /// Graceful retirement waits for original release receipts. The original grace
-    /// cutoff permits native helper retirement independently of an unresponsive peer.
+    /// Graceful retirement waits for original release receipts. The Finish exchange is
+    /// measured from observed dependent settlement and stays within the original total,
+    /// so native helper retirement still proceeds independently of an unresponsive peer.
     pub(crate) fn close_custody(
         &mut self,
         budget: ShutdownBudget,

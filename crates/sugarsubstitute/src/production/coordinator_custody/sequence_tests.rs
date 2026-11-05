@@ -7,24 +7,94 @@ mod boundary;
 use boundary::{Event, Fixture};
 #[path = "sequence/profile.rs"]
 mod profile;
+/// Dependents that never settle cannot hold the helper past the final exchange bound,
+/// one second before the original fifteen-second total.
 #[test]
-fn missing_profile_receipt_cannot_veto_helper_force_at_fixed_helper_grace() -> TestResult {
+fn missing_profile_receipt_cannot_veto_helper_force_at_the_final_exchange_bound() -> TestResult {
     let mut fixture = Fixture::new(None)?;
     let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
     let mut owner = Retirement::default();
     owner.advance(budget, true, false, budget.started, key()?, &mut fixture.port)?;
     assert_eq!(fixture.port.events, vec![Event::Observe]);
-    fixture.clock.set(Moment::from_nanos(12_000_000_000));
+    fixture.clock.set(Moment::from_nanos(13_999_000_000));
+    owner.advance(budget, true, false, fixture.client.now()?, key()?, &mut fixture.port)?;
+    assert_eq!(fixture.port.events, vec![Event::Observe, Event::Observe]);
+    assert_eq!(
+        owner.deadlines().into_iter().flatten().min(),
+        Some(Moment::from_nanos(14_000_000_000))
+    );
+    fixture.clock.set(Moment::from_nanos(14_000_000_000));
     owner.advance(budget, true, false, fixture.client.now()?, key()?, &mut fixture.port)?;
     assert_eq!(
         fixture.port.events,
-        vec![Event::Observe, Event::Observe, Event::Stop, Event::Force]
+        vec![Event::Observe, Event::Observe, Event::Observe, Event::Stop, Event::Force]
     );
     assert_eq!(
         fixture.port.original,
-        Some(ShutdownBudget { graceful_until: Moment::from_nanos(12_000_000_000), ..budget })
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(14_000_000_000), ..budget })
     );
     assert!(!owner.finish_received && !owner.settled && !owner.pipe_closed);
+    Ok(())
+}
+/// A desktop family forced at grace that settles late still gets its Finish exchange,
+/// where the former fixed twelve-second bound would already have forced the helper.
+#[test]
+fn slow_dependent_settlement_still_receives_finish_before_the_bound() -> TestResult {
+    let mut fixture = Fixture::new(None)?;
+    let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
+    let mut owner = Retirement::default();
+    for now in [budget.graceful_until, Moment::from_nanos(12_000_000_000)] {
+        fixture.clock.set(now);
+        owner.advance(budget, true, false, fixture.client.now()?, key()?, &mut fixture.port)?;
+    }
+    fixture.clock.set(Moment::from_nanos(12_500_000_000));
+    owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+    fixture.clock.set(Moment::from_nanos(13_200_000_000));
+    fixture.port.finished = true;
+    owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+    assert_eq!(
+        fixture.port.events,
+        vec![Event::Observe, Event::Observe, Event::FinishPending, Event::Finished, Event::Stop]
+    );
+    assert!(owner.finish_received);
+    assert_eq!(
+        fixture.port.original,
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(14_000_000_000), ..budget })
+    );
+    Ok(())
+}
+/// After settlement a helper that never answers Finish is forced at the exchange bound.
+#[test]
+fn unanswered_finish_is_forced_at_the_exchange_bound_after_settlement() -> TestResult {
+    let mut fixture = Fixture::new(None)?;
+    let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
+    let mut owner = Retirement::default();
+    fixture.clock.set(Moment::from_nanos(11_000_000_000));
+    owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+    assert_eq!(
+        owner.deadlines().into_iter().flatten().min(),
+        Some(Moment::from_nanos(13_000_000_000))
+    );
+    fixture.clock.set(Moment::from_nanos(12_999_000_000));
+    owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+    assert_eq!(fixture.port.events, vec![Event::FinishPending, Event::FinishPending]);
+    fixture.clock.set(Moment::from_nanos(13_000_000_000));
+    owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+    assert_eq!(
+        fixture.port.events,
+        vec![
+            Event::FinishPending,
+            Event::FinishPending,
+            Event::FinishPending,
+            Event::Stop,
+            Event::Force
+        ]
+    );
+    assert_eq!(
+        fixture.port.original,
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(13_000_000_000), ..budget })
+    );
+    assert!(!owner.finish_received && !owner.settled);
     Ok(())
 }
 #[test]
@@ -71,7 +141,7 @@ fn backend_force_waits_for_release_before_the_first_finish_exchange() -> TestRes
     assert_eq!(fixture.port.events, vec![Event::Observe]);
     assert_eq!(
         owner.deadlines().into_iter().flatten().min(),
-        Some(Moment::from_nanos(12_000_000_000))
+        Some(Moment::from_nanos(14_000_000_000))
     );
     fixture.clock.set(Moment::from_nanos(10_100_000_000));
     fixture.port.finished = true;
@@ -80,7 +150,7 @@ fn backend_force_waits_for_release_before_the_first_finish_exchange() -> TestRes
     assert!(owner.finish_received);
     assert_eq!(
         fixture.port.original,
-        Some(ShutdownBudget { graceful_until: Moment::from_nanos(12_000_000_000), ..budget })
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(12_100_000_000), ..budget })
     );
     Ok(())
 }
@@ -90,6 +160,7 @@ fn late_finished_is_observed_after_helper_force_without_renewing_cleanup() -> Te
     let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
     let key = fixture.port.key()?;
     let mut owner = Retirement::default();
+    owner.advance(budget, true, true, fixture.client.now()?, key, &mut fixture.port)?;
     fixture.clock.set(Moment::from_nanos(12_000_000_000));
     owner.advance(budget, true, true, fixture.client.now()?, key, &mut fixture.port)?;
     fixture.clock.set(Moment::from_nanos(13_000_000_000));
@@ -97,7 +168,14 @@ fn late_finished_is_observed_after_helper_force_without_renewing_cleanup() -> Te
     owner.advance(budget, true, true, fixture.client.now()?, key, &mut fixture.port)?;
     assert_eq!(
         fixture.port.events,
-        vec![Event::FinishPending, Event::Stop, Event::Force, Event::Finished, Event::Force]
+        vec![
+            Event::FinishPending,
+            Event::FinishPending,
+            Event::Stop,
+            Event::Force,
+            Event::Finished,
+            Event::Force
+        ]
     );
     assert!(!owner.settled && !owner.pipe_closed);
     fixture.port.family_retired = true;
