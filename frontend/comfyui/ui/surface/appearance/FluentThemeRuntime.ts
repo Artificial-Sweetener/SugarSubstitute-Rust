@@ -266,7 +266,7 @@ export function fluentTokenDeclarations(dark: boolean): string {
   return (
     Object.entries(theme)
       .map(([name, value]) => `--${name}:${value};`)
-      .join('') + themeTokenDeclarations(fluentThemeTokens(theme))
+      .join('') + themeTokenDeclarations(fluentThemeTokens(theme, dark))
   );
 }
 
@@ -279,7 +279,7 @@ export function applyOwnedFluentTheme(element: HTMLElement, dark: boolean | null
   if (appliedThemes.has(element) && appliedThemes.get(element) === dark) return;
   setTheme(dark === null ? null : dark ? themes.dark : themes.light, element);
   for (const [role, value] of Object.entries(
-    fluentThemeTokens(dark ? themes.dark : themes.light),
+    fluentThemeTokens(dark ? themes.dark : themes.light, dark === true),
   )) {
     if (dark === null) element.style.removeProperty(`--sc-${role}`);
     else element.style.setProperty(`--sc-${role}`, value);

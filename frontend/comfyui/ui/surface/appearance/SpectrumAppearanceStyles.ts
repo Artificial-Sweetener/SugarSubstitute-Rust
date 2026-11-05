@@ -30,7 +30,6 @@ export function spectrumAppearanceCss(dark: boolean): string {
         cardFill: 'var(--sc-photoshop-panel)',
         cardStroke: 'var(--system-card-border-color)',
         rowStroke: 'transparent',
-        controlFill: 'var(--sc-field-fill)',
         controlStroke: 'var(--sc-field-stroke)',
         controlBottomStroke: 'var(--sc-field-bottom-stroke)',
         radius: 'var(--spectrum-corner-radius-large-default)',
@@ -45,7 +44,7 @@ export function spectrumAppearanceCss(dark: boolean): string {
     }
     ${scope} ${field}:hover {
       --sc-control-stroke:var(--sc-field-hover-stroke); --sc-control-bottom-stroke:var(--sc-field-hover-bottom-stroke);
-      border-color:var(--sc-field-hover-stroke); background:var(--sc-field-fill);
+      border-color:var(--sc-field-hover-stroke);
     }
     ${scope} ${field}:focus-within {
       --sc-control-stroke:var(--sc-field-focus-stroke); --sc-control-bottom-stroke:var(--sc-field-focus-bottom-stroke);

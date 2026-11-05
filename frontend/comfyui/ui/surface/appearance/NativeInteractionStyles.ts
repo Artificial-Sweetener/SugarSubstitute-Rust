@@ -102,16 +102,10 @@ export function nativeInteractionCss(): string {
       transition:transform var(--sc-motion-duration) var(--sc-motion-decelerate);
     }
     [data-sc-style-edit-frame]:has(input:focus,textarea:focus,[role="combobox"]:focus-visible,[role="combobox"][aria-expanded="true"])::after { transform:scaleX(1); }
-    [data-sc-style-edit-frame]:has(input:focus,textarea:focus) {
-      background-color:var(--sc-surface);
-    }
     [data-sc-style-edit-frame] input, [data-sc-style-edit-frame] textarea {
       caret-color:var(--sc-brand-border);
-      transition:background-color var(--sc-motion-fast) var(--sc-motion-ease), border-color var(--sc-motion-fast) var(--sc-motion-ease);
     }
-    [data-sc-style-edit-frame] textarea:focus {
-      background:var(--sc-surface); outline:none;
-    }
+    [data-sc-style-edit-frame] textarea:focus { outline:none; }
     [data-sc-style-edit-frame]:has([data-sc-editor-field="fluent"], [data-sc-editor-field="spectrum"], [data-sc-editor-field="gimp"]) {
       --tw-ring-shadow:0 0 transparent; --tw-ring-color:transparent;
       background:none; border:none; outline:none; box-shadow:none;
@@ -125,7 +119,7 @@ export function nativeInteractionCss(): string {
       [data-sc-boolean-segments]::after,
       [data-sc-toggle-row], [data-sc-style-node] [data-testid="advanced-inputs-button"],
       [data-sc-titlebar-action], [data-sc-titlebar-action] [data-testid="node-collapse-button"] i,
-      [data-sc-style-edit-frame]::after, [data-sc-style-edit-frame] input, [data-sc-style-edit-frame] textarea {
+      [data-sc-style-edit-frame]::after {
         transition:none;
       }
     }

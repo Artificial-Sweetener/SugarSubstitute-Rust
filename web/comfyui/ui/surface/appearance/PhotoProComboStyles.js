@@ -18,6 +18,7 @@
 export function photoProComboCss() {
     return `
     html[data-sc-visual-style="photopro"] [data-sc-style-combo-frame] { align-self:center; border-radius:3px; }
+    html[data-sc-visual-style="photopro"] [data-sc-style-combo-frame]:hover { --sc-field-surface:var(--sc-surface-hover); }
     html[data-sc-visual-style="photopro"] [data-sc-model-appearance="photopro"] .sc-model-field input:focus-visible { outline:0; }
     html[data-sc-visual-style="photopro"] [data-sc-model-appearance="photopro"] .sc-model-field:has(input:focus-visible) { outline:1px solid var(--sc-focus-ring); outline-offset:1px; }
     html[data-sc-visual-style="photopro"] [data-sc-style-combo-frame]:not(.sc-model-field) > button {

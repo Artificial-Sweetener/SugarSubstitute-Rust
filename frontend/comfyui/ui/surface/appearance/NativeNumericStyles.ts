@@ -18,7 +18,7 @@ import { CONTROL_HEIGHT, SPINNER_WIDTH } from './ControlGeometry.js';
 
 /** Share numeric frame geometry and materials across adapted and host-provided number controls. */
 const numberFrame = `height:${CONTROL_HEIGHT}; border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
-      border-radius:var(--sc-field-radius); background:var(--sc-control-fill);`;
+      border-radius:var(--sc-field-radius);`;
 
 /** Keep number geometry scoped to positively identified native components in both views. */
 export function nativeNumericCss(): string {

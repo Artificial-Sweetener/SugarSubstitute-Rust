@@ -20,6 +20,7 @@ import { nativeNumericCss } from './NativeNumericStyles.js';
 import { scrollbarCss } from './ScrollbarStyles.js';
 import { nativeFieldLayoutCss } from './NativeFieldLayoutStyles.js';
 import { WORKFLOW_MASONRY_COLUMN_WIDTH, WORKFLOW_MASONRY_GAP, } from '../masonry/WorkflowMasonryLayout.js';
+import { fieldSurfaceCss } from './FieldSurfaceStyles.js';
 /** Share host geometry and native value presentation independently of the selected design system. */
 export function nativeAppearanceCss(palette, dark) {
     return `
@@ -33,7 +34,6 @@ export function nativeAppearanceCss(palette, dark) {
     :where([data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) {
       --sc-card-fill:${palette.cardFill};
       --sc-node-card-radius:${palette.radius};
-      --sc-control-fill:${palette.controlFill};
       --sc-card-stroke:${palette.cardStroke};
       --sc-row-stroke:${palette.rowStroke};
       --sc-control-stroke:${palette.controlStroke};
@@ -46,7 +46,7 @@ export function nativeAppearanceCss(palette, dark) {
       --node-component-widget-input:var(--sc-text);
       --node-component-widget-input-surface:var(--sc-surface);
       --node-component-surface-hovered:var(--sc-surface-hover);
-      --component-node-widget-background:var(--sc-control-fill);
+      --component-node-widget-background:var(--sc-field-fill);
       --component-node-widget-background-hovered:var(--sc-surface-hover);
       --component-node-widget-background-highlighted:var(--sc-brand-border);
       --component-node-widget-background-disabled:var(--sc-surface-disabled);
@@ -162,10 +162,7 @@ export function nativeAppearanceCss(palette, dark) {
     html [data-sc-style-combo-frame] {
       box-sizing:border-box; height:${CONTROL_HEIGHT}; min-height:${CONTROL_HEIGHT};
       border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
-      border-radius:var(--sc-field-radius); background:var(--sc-control-fill);
-    }
-    html [data-sc-style-combo-frame]:hover {
-      background:var(--sc-surface-hover);
+      border-radius:var(--sc-field-radius);
     }
     :where([data-sc-style-node], [data-sc-style-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)) .sc-model-field-arrow {
       color:var(--sc-text-muted);
@@ -182,7 +179,7 @@ export function nativeAppearanceCss(palette, dark) {
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-kind="multiline"] > :first-child { display:none; }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-kind="multiline"] [data-sc-style-control] textarea {
       border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
-      border-radius:var(--sc-field-radius); background:var(--sc-control-fill);
+      border-radius:var(--sc-field-radius);
       min-height:33px; padding:6px 8px; line-height:19px;
     }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-kind="multiline"] [data-sc-style-control] > :first-child {
@@ -215,10 +212,11 @@ export function nativeAppearanceCss(palette, dark) {
       width:var(--sc-search-width); height:var(--sc-search-height);
       box-sizing:border-box; padding:0 8px;
       font-family:var(--sc-font-family); font-size:var(--sc-search-font);
-      background:var(--sc-control-fill); color:var(--sc-text);
+      color:var(--sc-text);
       border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom:2px solid var(--sc-brand-border);
       border-radius:4px; outline:none; z-index:1;
     }
     ${nativeNumericCss()}
+    ${fieldSurfaceCss()}
   `;
 }

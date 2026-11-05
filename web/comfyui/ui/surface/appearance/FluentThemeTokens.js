@@ -1,5 +1,27 @@
-/** Require every presentation role to be supplied by Microsoft's trusted theme. */
-export function fluentThemeTokens(theme) {
+/**
+ * Supply Fluent's input fill ramp, which Microsoft's web token set does not publish.
+ *
+ * WinUI's ControlFillColor Default/Secondary/InputActive/Disabled values, also used by the
+ * qfluentwidgets LineEdit, SpinBox and ComboBox styles: a focused field darkens in the dark theme
+ * and becomes solid white in the light theme. The fills are translucent so they compose over any
+ * card material.
+ */
+const fieldFills = {
+    dark: {
+        'field-fill': 'rgba(255,255,255,0.0605)',
+        'field-hover-fill': 'rgba(255,255,255,0.0837)',
+        'field-focus-fill': 'rgba(30,30,30,0.7)',
+        'field-disabled-fill': 'rgba(255,255,255,0.0419)',
+    },
+    light: {
+        'field-fill': 'rgba(255,255,255,0.7)',
+        'field-hover-fill': 'rgba(249,249,249,0.5)',
+        'field-focus-fill': '#ffffff',
+        'field-disabled-fill': 'rgba(249,249,249,0.3)',
+    },
+};
+/** Require every presentation role to be supplied by Microsoft's trusted theme for one scheme. */
+export function fluentThemeTokens(theme, dark) {
     return {
         text: String(theme.colorNeutralForeground1 ?? ''),
         'text-secondary': String(theme.colorNeutralForeground2 ?? ''),
@@ -38,7 +60,7 @@ export function fluentThemeTokens(theme) {
         'control-radius': String(theme.borderRadiusMedium ?? ''),
         'field-radius': 'var(--sc-control-radius)',
         'field-border-width': '1px',
-        'field-fill': 'var(--sc-surface)',
+        ...fieldFills[dark ? 'dark' : 'light'],
         'field-stroke': 'var(--sc-border)',
         'field-bottom-stroke': 'var(--sc-border-accessible)',
         'field-hover-stroke': 'var(--sc-border-hover)',
