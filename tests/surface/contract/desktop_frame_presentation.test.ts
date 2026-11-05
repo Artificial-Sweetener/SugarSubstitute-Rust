@@ -84,6 +84,25 @@ test('desktop marks only frame ancestors and restores exact host attributes and 
   expect(owner.read()).toBeNull();
 });
 
+test('desktop publishes the original Substitute Mica washes for the native theme and retracts them', () => {
+  const root = document.documentElement;
+  const mount = document.createElement('div');
+  document.body.append(mount);
+  const owner = new DesktopFramePresentation();
+  owner.configure(configuration);
+  owner.attach(mount);
+  expect(root.style.getPropertyValue('--sc-desktop-body-wash')).toBe('rgba(32, 32, 32, 0.5882)');
+  expect(root.style.getPropertyValue('--sc-desktop-chrome-wash')).toBe('rgba(44, 44, 44, 0.5882)');
+  owner.configure({ ...configuration, darkTheme: false });
+  expect(root.style.getPropertyValue('--sc-desktop-body-wash')).toBe('rgba(251, 251, 251, 0.7373)');
+  expect(root.style.getPropertyValue('--sc-desktop-chrome-wash')).toBe(
+    'rgba(252, 252, 252, 0.7686)',
+  );
+  owner.dispose();
+  expect(root.style.getPropertyValue('--sc-desktop-body-wash')).toBe('');
+  expect(root.style.getPropertyValue('--sc-desktop-chrome-wash')).toBe('');
+});
+
 test('remounts retain accepted configuration and later host mutations are not overwritten', () => {
   const first = document.createElement('div');
   const second = document.createElement('div');
@@ -138,6 +157,43 @@ test('native dragging belongs to frame gaps and leaves existing controls and tab
     expect(property(browserFrame, 'app-region')).toBe('');
     expect(property(frame, '--comfy-menu-bg')).toBe('');
   } finally {
+    style.remove();
+  }
+});
+
+test('washes reach the selected tab, toolbar, graph and masonry only inside the desktop frame', () => {
+  const style = document.createElement('style');
+  style.textContent = desktopFrameCss;
+  document.head.append(style);
+  const root = document.documentElement;
+  try {
+    const graph = document.createElement('canvas');
+    graph.id = 'graph-canvas';
+    const backdrop = document.createElement('div');
+    backdrop.className = 'sugarcubes-workflow-masonry__backdrop';
+    const frame = document.createElement('header');
+    frame.className = 'sc-substitute-frame';
+    document.body.append(graph, backdrop, frame);
+    const property = (element: HTMLElement, name: string): string =>
+      [...(style.sheet?.cssRules ?? [])]
+        .filter((rule): rule is CSSStyleRule => rule instanceof CSSStyleRule)
+        .filter((rule) => element.matches(rule.selectorText))
+        .reduce((value, rule) => rule.style.getPropertyValue(name) || value, '');
+    for (const element of [root, graph, backdrop, frame])
+      for (const name of [
+        '--sc-workflow-tab-selected-fill',
+        '--sc-substitute-toolbar-fill',
+        'background',
+      ])
+        expect(property(element, name)).toBe('');
+    root.setAttribute('data-sc-desktop-frame-surface', '');
+    expect(property(root, '--sc-workflow-tab-selected-fill')).toBe('var(--sc-desktop-chrome-wash)');
+    expect(property(root, '--sc-substitute-toolbar-fill')).toBe('var(--sc-desktop-chrome-wash)');
+    expect(property(graph, 'background')).toBe('var(--sc-desktop-body-wash)');
+    expect(property(backdrop, 'background')).toBe('var(--sc-desktop-body-wash)');
+    expect(property(frame, 'background')).toBe('');
+  } finally {
+    root.removeAttribute('data-sc-desktop-frame-surface');
     style.remove();
   }
 });

@@ -74,12 +74,17 @@ test('frame paint stays independent of view mode and queue overflow cannot expan
   const toolbarRules = [...toolbarStyle.sheet.cssRules].filter(
     (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule,
   );
-  for (const surface of [menu, line]) {
-    const paint = toolbarRules.find(
-      (rule) => surface.matches(rule.selectorText) && rule.style.getPropertyValue('background'),
-    );
-    expect(paint?.style.getPropertyValue('background')).toBe('var(--comfy-menu-bg,#202020)');
-  }
+  const paints = (surface: HTMLElement): string[] =>
+    toolbarRules
+      .filter((rule) => surface.matches(rule.selectorText))
+      .map((rule) => rule.style.getPropertyValue('background'))
+      .filter(Boolean);
+  // A translucent desktop wash must cover the row once: the menu owns it for its nested line.
+  expect(paints(menu)).toEqual(['var(--sc-substitute-toolbar-fill,var(--comfy-menu-bg,#202020))']);
+  expect(paints(line).at(-1)).toBe('transparent');
+  menu.removeAttribute('data-sc-substitute-toolbar-menu');
+  expect(paints(line)).toEqual(['var(--sc-substitute-toolbar-fill,var(--comfy-menu-bg,#202020))']);
+  menu.setAttribute('data-sc-substitute-toolbar-menu', '');
   expect(getComputedStyle(line).height).toBe('44px');
   expect(getComputedStyle(menu).paddingTop).toBe('0px');
   expect(getComputedStyle(menu).gap).toBe('0');
@@ -95,7 +100,7 @@ test('frame paint stays independent of view mode and queue overflow cannot expan
   layout.dispose();
 });
 
-test('selected tabs share the opaque toolbar surface in either palette and while held', () => {
+test('selected tabs share the toolbar surface, which the desktop frame replaces with its wash', () => {
   const style = document.createElement('style');
   style.textContent = workflowTabCss;
   document.head.append(style);
@@ -111,7 +116,7 @@ test('selected tabs share the opaque toolbar surface in either palette and while
   );
   expect(selectedPaint).toHaveLength(1);
   expect(selectedPaint[0]?.style.getPropertyValue('background')).toBe(
-    'var(--comfy-menu-bg,#202020)',
+    'var(--sc-workflow-tab-selected-fill,var(--comfy-menu-bg,#202020))',
   );
 });
 

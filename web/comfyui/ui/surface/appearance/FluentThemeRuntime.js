@@ -10359,7 +10359,7 @@ var workflowTabCss = `
     color:var(--sc-frame-muted); background:transparent; box-shadow:none; }
   :host .tab-content { min-width:0; flex:1; overflow:hidden; padding:0; }
   :host .tab-content::after { display:none; }
-  :host([aria-selected='true']) { background:var(--comfy-menu-bg,#202020); color:var(--sc-text); font-weight:600; }
+  :host([aria-selected='true']) { background:var(--sc-workflow-tab-selected-fill,var(--comfy-menu-bg,#202020)); color:var(--sc-text); font-weight:600; }
   :host(:not([aria-selected='true']):hover) { background:var(--sc-frame-hover); }
   :host(:not([aria-selected='true'])) { clip-path:inset(1px 1px 0 round 7px 7px 0 0); }
   :host(:not([aria-selected='true']):active) { background:var(--sc-frame-pressed); }
