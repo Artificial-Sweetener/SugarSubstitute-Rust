@@ -43,7 +43,7 @@ afterEach(async () => {
 });
 
 /** Compose real presentation state with only the native host, clock and encoded reads controlled. */
-function fixture(supported = true) {
+function fixture(supported = true, inputShown?: () => boolean) {
   const host = nativePreviewHost(supported);
   const catalog = canvasCatalogFixture();
   const clock = new WorkflowTestClock();
@@ -66,6 +66,7 @@ function fixture(supported = true) {
     viewport: (value) => viewports.push(value),
     status: (value) => statuses.push(value),
     report: (error) => errors.push(error),
+    ...(inputShown ? { inputShown } : {}),
   });
   retirements.push(async () => {
     const retired = presentation.dispose();
@@ -996,4 +997,33 @@ test('retirement rejects an observation acknowledgement that arrives after its s
   f.presentation.receive(f.preview(), new NativePreviewBlob());
   expect(f.calls).toHaveLength(0);
   expect(f.stop).toHaveBeenCalledTimes(1);
+});
+
+test('moves the shown Input document camera while the Output route has no result', async () => {
+  let input = true;
+  const f = fixture(true, () => input);
+  await commit(f, null);
+  const offset = f.calls.length;
+  const zoom = f.presentation.viewport({ type: 'zoom', factor: 1.25 }, f.scope());
+  await settle();
+  expect(f.calls[offset]).toMatchObject({
+    type: 'surface.viewport.request',
+    command: { type: 'zoom', factor: 1.25 },
+  });
+  f.respond(offset, 'applied', finalViewport);
+  expect(await zoom).toBe(true);
+  await settle();
+  expect(f.viewports.at(-1)).toEqual(finalViewport);
+  const pan = f.presentation.viewport({ type: 'pan', x: 0.1, y: 0, units: 'viewport' }, f.scope());
+  await settle();
+  expect(f.calls[offset + 1]).toMatchObject({
+    type: 'surface.viewport.request',
+    command: { type: 'pan', x: 0.1, y: 0 },
+  });
+  f.respond(offset + 1, 'applied', finalViewport);
+  expect(await pan).toBe(true);
+  input = false;
+  expect(await f.presentation.viewport({ type: 'zoom', factor: 1.25 }, f.scope())).toBe(false);
+  expect(f.calls).toHaveLength(offset + 2);
+  expect(f.errors).toEqual([]);
 });
