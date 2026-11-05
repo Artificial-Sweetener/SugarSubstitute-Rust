@@ -33,6 +33,8 @@ import { ensureCanvasOverlayStyles } from './CanvasOverlayStyles.js';
 import type { CanvasRouteId, CanvasRoutePort } from '../../domain/CanvasRoute.js';
 
 export interface MountedCanvasOverlay {
+  /** Client bounds of the navigation bars, which other chrome sharing the canvas must keep clear. */
+  navigationBounds(): readonly DOMRectReadOnly[];
   /** Release this root's subscription and controls without releasing its surface. */
   dispose(): void;
 }
@@ -164,6 +166,11 @@ export function mountCanvasOverlay(
     throw error;
   }
   return {
+    navigationBounds() {
+      return Array.from(element.querySelectorAll('.sc-output-tabstrip'), (bar) =>
+        bar.getBoundingClientRect(),
+      );
+    },
     /** Make root teardown idempotent while invalidating pending command feedback. */
     dispose() {
       if (!active) return;

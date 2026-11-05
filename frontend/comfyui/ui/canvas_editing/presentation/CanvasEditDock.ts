@@ -67,7 +67,9 @@ export const CanvasEditDock = defineComponent({
       );
       move(bar, placement.topBar);
       move(column, placement.rail);
-      column.style.maxHeight = `calc(100% - ${placement.rail.y + CANVAS_EDIT_CHROME_INSET}px)`;
+      const fill = `calc(100% - ${String(placement.rail.y + CANVAS_EDIT_CHROME_INSET)}px)`;
+      column.style.maxHeight =
+        placement.railHeight === null ? fill : `min(${fill}, ${String(placement.railHeight)}px)`;
     }
     onMounted(() => {
       place();

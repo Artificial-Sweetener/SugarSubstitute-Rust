@@ -42,7 +42,7 @@ export interface CanvasEditOverlayOptions {
   /** The canvas region whose secondary-button presses open the canvas menu. */
   readonly region: HTMLElement;
   geometry(): CanvasEditSurfaceGeometry | null;
-  /** Client bounds of host chrome sharing the canvas, such as route tabs, that the dock avoids. */
+  /** Client bounds of host chrome sharing the canvas, such as the navigation bar, that the dock avoids. */
   obstacles?(): readonly DOMRectReadOnly[];
   /** Name the CSS colour of a mask layer; absent or null shows the theme accent. */
   maskColor?(layerId: string): string | null;
