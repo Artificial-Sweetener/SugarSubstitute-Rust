@@ -62,6 +62,8 @@ export interface ComfyPromptQueueBridgeOptions {
     prepared: (preparation: WorkflowPromptPreparation) => void,
   ): Promise<unknown>;
   shouldExecuteDirect?(payload: unknown): boolean;
+  /** Return the prompts to queue in place of one, such as one per prompt scene, or null. */
+  expand?(payload: unknown): readonly unknown[] | null;
   observer?: PromptQueueObserver;
 }
 
@@ -81,6 +83,7 @@ export class ComfyPromptQueueBridge {
   readonly #executeDirect: NonNullable<ComfyPromptQueueBridgeOptions['executeDirect']> | null;
   readonly #shouldExecuteDirect: (payload: unknown) => boolean;
   readonly #observer: PromptQueueObserver | undefined;
+  readonly #expand: (payload: unknown) => readonly unknown[] | null;
   #installation: QueueInstallation | null = null;
 
   /** Bind one stable host API and one application-level prompt pipeline. */
@@ -92,6 +95,7 @@ export class ComfyPromptQueueBridge {
     this.#executeDirect = options.executeDirect ?? null;
     this.#shouldExecuteDirect = options.shouldExecuteDirect ?? (() => true);
     this.#observer = options.observer;
+    this.#expand = options.expand ?? (() => null);
   }
 
   /** Install the bridge exactly once. */
@@ -105,6 +109,14 @@ export class ComfyPromptQueueBridge {
       pending: new Set(),
       wrapper: async (position, payload, options) => {
         if (!installation.active) return await original.call(this.#api, position, payload, options);
+        const expanded = this.#expand(payload);
+        if (expanded) {
+          // Comfy's position -1 queues at the front, so front prompts go in reverse to keep order.
+          let result: unknown = undefined;
+          for (const prompt of position === -1 ? [...expanded].reverse() : expanded)
+            result = await installation.wrapper(position, prompt, options);
+          return result;
+        }
         let observation = this.#capture(payload);
         if (observation) installation.pending.add(observation);
         try {

@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the shared execution lifetime while keeping host registration and cube queue policy thin. */
 
+import { ComfyWorkflowScenePrompts, type ComfySceneApp } from './ComfyWorkflowScenePrompts.js';
 import { WorkflowSessionStore } from '../application/WorkflowSessionStore.js';
 import { WorkflowResultStore } from '../application/WorkflowResultStore.js';
 import { WorkflowSeedHistory } from '../application/WorkflowSeedHistory.js';
@@ -58,6 +59,8 @@ export interface ComfyWorkflowExecutionRuntimeOptions {
   readonly canvasTargets?: () => readonly string[];
   readonly previewUrls: CubePreviewUrlPort;
   readonly previewVisibility: CubePreviewVisibilityPort;
+  /** Tell the user why a run was not queued, through the product's notification owner. */
+  readonly notify?: (severity: 'error', title: string, message: string) => void;
 }
 
 /** Supply one result/session authority to all views and one observer to the existing queue bridge. */
@@ -70,6 +73,8 @@ export class ComfyWorkflowExecutionRuntime {
   readonly previews: ComfyWorkflowPreviewDelivery;
   readonly outputs: ComfyWorkflowOutputProjection;
   readonly submissionObserver: ComfyPromptSubmissionObserver;
+  /** Split constructed prompts into one prompt per authored prompt scene. */
+  readonly scenes: ComfyWorkflowScenePrompts;
   readonly canvases: WorkflowCanvasCoordinator<Blob>;
   readonly #generation: WorkflowGenerationEvents;
   readonly #cubePreviews: ComfyCubeLivePreview;
@@ -127,6 +132,11 @@ export class ComfyWorkflowExecutionRuntime {
         this.progress.refresh();
       },
     });
+    this.scenes = new ComfyWorkflowScenePrompts(
+      () => options.app as ComfySceneApp | null | undefined,
+      this.#contexts,
+      { pushToast: (severity, title, message) => options.notify?.(severity, title, message) },
+    );
     this.previews = new ComfyWorkflowPreviewDelivery(this.results, options.logger, (frame) =>
       this.canvases.preview(frame),
     );
@@ -310,7 +320,7 @@ export class ComfyWorkflowExecutionRuntime {
 
 /** Supply browser identity and timer capabilities at the infrastructure composition boundary. */
 export function createComfyWorkflowExecutionRuntime(
-  options: Pick<ComfyWorkflowExecutionRuntimeOptions, 'app' | 'api' | 'logger'>,
+  options: Pick<ComfyWorkflowExecutionRuntimeOptions, 'app' | 'api' | 'logger' | 'notify'>,
 ): ComfyWorkflowExecutionRuntime {
   return new ComfyWorkflowExecutionRuntime({
     ...options,

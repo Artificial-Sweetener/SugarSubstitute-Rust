@@ -35,11 +35,12 @@ import { CanvasSelectionPicker } from './CanvasSelectionPicker.js';
 import { CanvasBatchPicker } from './CanvasBatchPicker.js';
 import { CanvasRoutePicker } from './CanvasRoutePicker.js';
 import { CanvasSourceSlider } from './CanvasSourceSlider.js';
+import { CanvasScenePicker } from './CanvasScenePicker.js';
 
 /**
  * Show only the navigation relevant to the current canvas, in one bar.
  *
- * The canvas and batch choices are anchored pickers. The final layer, the output sources of the
+ * The canvas, scene and batch choices are combo boxes. The final layer, the output sources of the
  * batch being viewed, is a sliding tab list that collapses to a picker when the bar lacks the
  * width for it. Input shows only the canvas choice, and the bar is absent when nothing applies.
  */
@@ -123,11 +124,19 @@ export const CanvasNavigationBar = defineComponent({
         route?.route !== 'input' &&
         capabilities.commands.includes('select-source') &&
         (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1);
-      if (!route?.inputAvailable && !outputs) return null;
+      const scenes = route?.route !== 'input' && snapshot.scenes.length > 1;
+      if (!route?.inputAvailable && !outputs && !scenes) return null;
       const selection = snapshot.view.selection;
       const source = snapshot.sources.find((value) => value.id === selection?.sourceId);
       return h('div', { class: 'sc-output-tabstrip sc-output-navigation', ref: strip }, [
         route ? h(CanvasRoutePicker, { state: route, choose: props.chooseRoute }) : null,
+        scenes && capabilities.commands.includes('select-scene')
+          ? h(CanvasScenePicker, {
+              scenes: snapshot.scenes,
+              scene: snapshot.view.scene,
+              send: props.send,
+            })
+          : null,
         outputs && capabilities.commands.includes('batch')
           ? h('div', { 'data-sc-fixed-navigation': 'true' }, [
               h(CanvasBatchPicker, {

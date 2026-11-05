@@ -1,6 +1,6 @@
 import {
   CanvasAnchoredPicker
-} from "../../../chunk-CIIISKSI.js";
+} from "../../../chunk-MMIFSN3Z.js";
 import "../../../chunk-6PAJ5Y37.js";
 export {
   CanvasAnchoredPicker

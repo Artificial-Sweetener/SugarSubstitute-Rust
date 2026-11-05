@@ -5,6 +5,7 @@ import { CubeOutputPromptAdapter } from './CubeOutputPromptAdapter.js';
 import { createCubeDirectExecution } from './CubeDirectExecutionService.js';
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
 export function createCubeHostExecution(options) {
+    const scenes = options.execution.scenes;
     const outputAdapter = new CubeOutputPromptAdapter({
         getCubes: options.getCubes,
         boundaryResolver: options.boundaryResolver,
@@ -19,12 +20,14 @@ export function createCubeHostExecution(options) {
         getGraph: options.getGraph,
         getProximityMatches: options.getProximityMatches,
         ...(options.prepareCanvasInputs ? { prepareInputs: options.prepareCanvasInputs } : {}),
+        sceneWorkflow: (payload, workflow) => scenes.workflow(payload, workflow),
     });
     const transport = new ComfyDirectPromptTransport({ api: options.api });
     const queue = new ComfyPromptQueueBridge({
         api: options.api,
-        observer: options.observer,
+        observer: options.execution.submissionObserver,
         preflight: options.preflight,
+        expand: (payload) => scenes.expand(payload),
         prepare: options.prepareRelations,
         transform: async (payload) => {
             const candidate = await pipeline.transform(payload);

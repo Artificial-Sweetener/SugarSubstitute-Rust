@@ -1,6 +1,6 @@
 import {
   CanvasAnchoredPicker
-} from "./chunk-CIIISKSI.js";
+} from "./chunk-MMIFSN3Z.js";
 import {
   defineComponent,
   h

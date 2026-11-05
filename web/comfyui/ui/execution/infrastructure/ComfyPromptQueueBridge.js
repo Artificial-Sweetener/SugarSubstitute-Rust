@@ -7,6 +7,7 @@ export class ComfyPromptQueueBridge {
     #executeDirect;
     #shouldExecuteDirect;
     #observer;
+    #expand;
     #installation = null;
     /** Bind one stable host API and one application-level prompt pipeline. */
     constructor(options) {
@@ -17,6 +18,7 @@ export class ComfyPromptQueueBridge {
         this.#executeDirect = options.executeDirect ?? null;
         this.#shouldExecuteDirect = options.shouldExecuteDirect ?? (() => true);
         this.#observer = options.observer;
+        this.#expand = options.expand ?? (() => null);
     }
     /** Install the bridge exactly once. */
     install() {
@@ -32,6 +34,14 @@ export class ComfyPromptQueueBridge {
             wrapper: async (position, payload, options) => {
                 if (!installation.active)
                     return await original.call(this.#api, position, payload, options);
+                const expanded = this.#expand(payload);
+                if (expanded) {
+                    // Comfy's position -1 queues at the front, so front prompts go in reverse to keep order.
+                    let result = undefined;
+                    for (const prompt of position === -1 ? [...expanded].reverse() : expanded)
+                        result = await installation.wrapper(position, prompt, options);
+                    return result;
+                }
                 let observation = this.#capture(payload);
                 if (observation)
                     installation.pending.add(observation);

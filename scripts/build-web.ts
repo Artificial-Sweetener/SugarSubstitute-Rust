@@ -234,6 +234,19 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
+  // Scene queueing splits prompts through SugarPrompt's scene parser, bundled privately.
+  await build({
+    ...browserDependencyResolution,
+    entryPoints: [
+      path.join(repositoryRoot, 'frontend/comfyui/ui/execution/application/WorkflowScenePlan.ts'),
+    ],
+    outfile: path.join(generatedRoot, 'comfyui/ui/execution/application/WorkflowScenePlan.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   // Regional prompts read, name and colour regions through SugarPrompt, bundled privately with
   // one shared chunk so its parser loads once.
   const inputCanvasRoot = path.join(repositoryRoot, 'frontend/comfyui/ui/input_canvas');

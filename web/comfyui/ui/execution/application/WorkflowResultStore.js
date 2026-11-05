@@ -40,10 +40,12 @@ export class WorkflowResultStore {
             }
             const session = {
                 outputs: new Map(),
+                scenes: null,
                 snapshot: Object.freeze({
                     context: Object.freeze({ ...context }),
                     revision: (previous?.snapshot.revision ?? 0) + 1,
                     outputs: Object.freeze([]),
+                    scenes: null,
                     runOrder: 0,
                     presentedRunOrder: 0,
                     runStatus: 'idle',
@@ -79,12 +81,15 @@ export class WorkflowResultStore {
             return;
         const terminal = run.status === 'complete' || run.status === 'cancelled' || run.status === 'error';
         const preview = terminal || run.order > previous.runOrder ? null : previous.preview;
+        const scenes = this.#followScene(session, run);
         if (previous.runOrder === run.order &&
             previous.runStatus === run.status &&
-            previous.preview === preview)
+            previous.preview === preview &&
+            previous.scenes === scenes)
             return;
         this.#publish(session, {
             ...previous,
+            scenes,
             runOrder: run.order,
             runStatus: run.status,
             preview,
@@ -139,7 +144,7 @@ export class WorkflowResultStore {
             inputPreview
             ? previous.output.items.filter((item) => item.batchIndex < previous.payload.images.length)
             : [];
-        this.#retain(session, update.source, provenance, payload, delivery, carried);
+        this.#retain(session, update.source, provenance, payload, delivery, carried, update.run);
         return true;
     }
     /** Restore only an explicitly named host workflow snapshot and never fabricate a prompt ID. */
@@ -208,7 +213,7 @@ export class WorkflowResultStore {
         return session?.snapshot.context.generation === context.generation ? session : null;
     }
     /** Preserve carried input identities while constructing attributable new media and unavailable positions. */
-    #retain(session, source, provenance, payload, delivery, carried = []) {
+    #retain(session, source, provenance, payload, delivery, carried = [], run = null) {
         const media = [...payload.images, ...payload.videos, ...payload.models];
         const items = [];
         const preserved = new Map(carried.map((item) => [item.batchIndex, item]));
@@ -236,6 +241,16 @@ export class WorkflowResultStore {
             ? Math.max(latest, item.provenance.runOrder)
             : latest, session.outputs.get(source.id)?.completedPreviewRunOrder ?? -1);
         session.outputs.set(source.id, { output, payload, delivery, completedPreviewRunOrder });
+        if (run?.scene) {
+            this.#followScene(session, run);
+            if (session.scenes?.run.id === run.scene.run.id) {
+                const outputs = session.scenes.outputs.get(run.scene.key) ?? new Map();
+                outputs.set(source.id, output);
+                session.scenes.outputs.set(run.scene.key, outputs);
+            }
+        }
+        else if (run && session.scenes && run.order > session.scenes.order)
+            session.scenes = null;
         const outputs = Object.freeze([...session.outputs.values()]
             .map((retained) => retained.output)
             .sort((a, b) => a.source.order - b.source.order));
@@ -243,11 +258,58 @@ export class WorkflowResultStore {
         this.#publish(session, {
             ...session.snapshot,
             outputs,
+            scenes: this.#sceneResults(session),
             presentedRunOrder: items.reduce((latest, item) => item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder), session.snapshot.presentedRunOrder),
             preview: preview?.sourceId === source.id && completedPreviewRunOrder >= preview.runOrder
                 ? null
                 : preview,
         }, provenance.kind === 'execution' ? 'output' : 'restore');
+    }
+    /**
+     * Adopt the scene run of the latest run, keeping each scene's outputs while that run lasts.
+     *
+     * A newer run of another scene run starts an empty scene set; a run without scenes leaves the
+     * current scene set until its outputs replace it. Returns the scene results to publish.
+     */
+    #followScene(session, run) {
+        const member = run.scene;
+        if (member && run.order >= session.snapshot.runOrder) {
+            if (session.scenes?.run.id !== member.run.id)
+                session.scenes = {
+                    run: member.run,
+                    outputs: new Map(),
+                    running: member.key,
+                    order: run.order,
+                };
+            else {
+                session.scenes.running = member.key;
+                session.scenes.order = Math.max(session.scenes.order, run.order);
+            }
+        }
+        return session.scenes ? this.#sceneResults(session) : null;
+    }
+    /** Publish the current scene run in authored order, reusing an unchanged publication. */
+    #sceneResults(session) {
+        const scenes = session.scenes;
+        if (!scenes)
+            return null;
+        const previous = session.snapshot.scenes;
+        const next = scenes.run.scenes.map((scene) => Object.freeze({
+            ...scene,
+            outputs: Object.freeze([...(scenes.outputs.get(scene.key)?.values() ?? [])].sort((a, b) => a.source.order - b.source.order)),
+        }));
+        if (previous?.id === scenes.run.id &&
+            previous.running === scenes.running &&
+            previous.scenes.length === next.length &&
+            previous.scenes.every((scene, index) => scene.key === next[index]?.key &&
+                scene.outputs.length === next[index].outputs.length &&
+                scene.outputs.every((output, at) => output === next[index]?.outputs[at])))
+            return previous;
+        return Object.freeze({
+            id: scenes.run.id,
+            running: scenes.running,
+            scenes: Object.freeze(next),
+        });
     }
     /** Increment one coherent session snapshot revision before notifying its subscribers. */
     #publish(session, snapshot, reason = 'state') {

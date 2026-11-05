@@ -3,7 +3,7 @@ import {
 } from "./chunk-EMIUG2S5.js";
 import {
   CanvasEditDock
-} from "./chunk-5W6CHMIG.js";
+} from "./chunk-7PRJ7KEF.js";
 import {
   iconButton
 } from "./chunk-BPQUSL77.js";

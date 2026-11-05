@@ -1,6 +1,6 @@
 import {
   bundledPromptTagCatalog
-} from "./chunk-3T2W33S6.js";
+} from "./chunk-D7XPJW4K.js";
 import {
   markComfyPromptInput
 } from "./chunk-74D7X3OT.js";
@@ -68,6 +68,7 @@ import {
   prepareLoraMetadataMenu,
   prepareLoraPage,
   prepareSceneHeadings,
+  prepareSceneQueue,
   prepareSpellingCandidates,
   prepareTagReplacement,
   prepareTriggerInsertionSlot,
@@ -111,7 +112,7 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-HM6G4V2F.js";
+} from "./chunk-6WIFWSU6.js";
 import {
   SugarPromptMenu
 } from "./chunk-QTBJ64DI.js";
@@ -48046,6 +48047,7 @@ var SugarPromptEditor = class {
   #resourceSnapshot = null;
   #resourceRevision = -1;
   #inspectionRevision = -1;
+  #sceneQueueRevision = -1;
   #publishing = false;
   #pendingRefresh = null;
   #refreshQueued = false;
@@ -48220,8 +48222,10 @@ var SugarPromptEditor = class {
     queueMicrotask(() => {
       this.#scheduled = false;
       const snapshot = this.#snapshot;
-      if (this.#disposed || !this.#resources || !snapshot || snapshot.composing || snapshot.semantics !== "ready")
+      if (this.#disposed || !snapshot || snapshot.composing || snapshot.semantics !== "ready")
         return;
+      this.#publishSceneQueue(snapshot);
+      if (!this.#resources) return;
       this.#resourceChanged(this.#resources.snapshot());
       if (this.#inspectionRevision === snapshot.revision) return;
       const inspected = this.#api.inspectStructure();
@@ -48231,6 +48235,34 @@ var SugarPromptEditor = class {
       if (key2 === this.#resourceKey) return;
       this.#resourceKey = key2;
       void this.#resources.warmupNames(inspected.loraResourceNames).catch(this.#options.report);
+    });
+  }
+  /**
+   * Offer "Queue scene" for each scene this prompt authors, against its current source revision.
+   *
+   * Edits retire the published queue, so a prompt with scenes republishes once per settled
+   * revision; a prompt without scenes publishes nothing.
+   */
+  #publishSceneQueue(snapshot) {
+    const queue = this.#options.sceneQueue;
+    if (!queue || snapshot.revision === this.#sceneQueueRevision) return;
+    this.#sceneQueueRevision = snapshot.revision;
+    const keys = [
+      ...new Set(
+        parseScenes(snapshot.source).scenes.filter((scene) => !scene.marker.duplicate).map((scene) => scene.marker.normalizedKey)
+      )
+    ];
+    if (!keys.length) return;
+    const capability = prepareSceneQueue({
+      revision: "workflow",
+      sourceRevision: snapshot.revision,
+      queueableKeys: keys,
+      queue: async (request) => ({ status: await queue(request.sceneKey) })
+    });
+    this.#api.setSceneQueueHost({
+      capability,
+      observe: () => void 0,
+      report: this.#options.report
     });
   }
   /** Publish resource snapshots only against the current committed native source revision. */

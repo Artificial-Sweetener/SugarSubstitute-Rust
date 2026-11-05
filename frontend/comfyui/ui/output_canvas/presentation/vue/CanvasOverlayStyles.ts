@@ -97,6 +97,7 @@ export function ensureCanvasOverlayStyles(document: Document): void {
     .sc-output-picker-popup button[aria-selected="true"] {
       background:color-mix(in srgb,var(--fg-color,#fff) 12%,transparent); box-shadow:none; text-align:center; }
     .sc-output-picker-popup[data-centered="true"] button { text-align:center; }
+    .sc-output-picker-popup button[aria-disabled="true"] { opacity:.45; }
     .sc-output-choice[data-centered="true"] .sc-output-segment { text-overflow:clip; }
     .sc-output-choice[data-centered="true"] .sc-output-choice-label { text-align:center; overflow:visible; text-overflow:clip; }
     .sc-output-picker-popup[data-centered="true"] button { padding:0 8px; overflow:visible; text-overflow:clip; }

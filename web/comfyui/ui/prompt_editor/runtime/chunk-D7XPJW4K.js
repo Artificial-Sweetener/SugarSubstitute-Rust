@@ -1,6 +1,6 @@
 import {
   preparePromptTagCatalog
-} from "./chunk-HM6G4V2F.js";
+} from "./chunk-6WIFWSU6.js";
 
 // frontend/comfyui/ui/prompt_editor/assets/danbooru-tags.txt
 var danbooru_tags_default = `1girl,5889398 (danbooru:General)

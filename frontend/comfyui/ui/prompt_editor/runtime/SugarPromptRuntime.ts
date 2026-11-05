@@ -24,7 +24,9 @@ import {
   LoraResourceSession,
   resolveFeatureProfile,
   defaultPreferences,
+  prepareSceneQueue,
 } from '../../../../sugarprompt/services/src/index.js';
+import { parseScenes } from '../../../../sugarprompt/core/src/index.js';
 import type {
   LoraResourceAdapter,
   LoraResourceSnapshot,
@@ -56,7 +58,12 @@ export interface SugarPromptMountOptions {
   readonly regionHover: (ordinal: number | null) => void;
   /** The theme accent separators rotate from, or null for SugarPrompt's pinned palette. */
   readonly regionAccent: string | null;
+  /** Queue one prompt scene of the workflow, or null when the host cannot queue scenes. */
+  readonly sceneQueue: PromptSceneQueue | null;
 }
+
+/** Queue one scene by its normalized key and report how the host admitted it. */
+export type PromptSceneQueue = (scene: string) => Promise<'queued' | 'cancelled' | 'unavailable'>;
 
 /** One field retains its native document across renderer presentations. */
 export class SugarPromptEditor {
@@ -78,6 +85,7 @@ export class SugarPromptEditor {
   #resourceSnapshot: LoraResourceSnapshot | null = null;
   #resourceRevision = -1;
   #inspectionRevision = -1;
+  #sceneQueueRevision = -1;
   #publishing = false;
   #pendingRefresh: { source: string; readOnly: boolean } | null = null;
   #refreshQueued = false;
@@ -274,14 +282,10 @@ export class SugarPromptEditor {
     queueMicrotask(() => {
       this.#scheduled = false;
       const snapshot = this.#snapshot;
-      if (
-        this.#disposed ||
-        !this.#resources ||
-        !snapshot ||
-        snapshot.composing ||
-        snapshot.semantics !== 'ready'
-      )
+      if (this.#disposed || !snapshot || snapshot.composing || snapshot.semantics !== 'ready')
         return;
+      this.#publishSceneQueue(snapshot);
+      if (!this.#resources) return;
       this.#resourceChanged(this.#resources.snapshot());
       if (this.#inspectionRevision === snapshot.revision) return;
       const inspected = this.#api.inspectStructure();
@@ -291,6 +295,37 @@ export class SugarPromptEditor {
       if (key === this.#resourceKey) return;
       this.#resourceKey = key;
       void this.#resources.warmupNames(inspected.loraResourceNames).catch(this.#options.report);
+    });
+  }
+
+  /**
+   * Offer "Queue scene" for each scene this prompt authors, against its current source revision.
+   *
+   * Edits retire the published queue, so a prompt with scenes republishes once per settled
+   * revision; a prompt without scenes publishes nothing.
+   */
+  #publishSceneQueue(snapshot: EditorSnapshot): void {
+    const queue = this.#options.sceneQueue;
+    if (!queue || snapshot.revision === this.#sceneQueueRevision) return;
+    this.#sceneQueueRevision = snapshot.revision;
+    const keys = [
+      ...new Set(
+        parseScenes(snapshot.source)
+          .scenes.filter((scene) => !scene.marker.duplicate)
+          .map((scene) => scene.marker.normalizedKey),
+      ),
+    ];
+    if (!keys.length) return;
+    const capability = prepareSceneQueue({
+      revision: 'workflow',
+      sourceRevision: snapshot.revision,
+      queueableKeys: keys,
+      queue: async (request) => ({ status: await queue(request.sceneKey) }),
+    });
+    this.#api.setSceneQueueHost({
+      capability,
+      observe: () => undefined,
+      report: this.#options.report,
     });
   }
 
