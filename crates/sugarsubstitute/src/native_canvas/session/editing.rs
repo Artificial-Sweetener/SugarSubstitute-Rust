@@ -110,19 +110,18 @@ impl Session {
         self.settle_tools()
     }
 
-    /// The effective editing tool's cursor over the shown input document, or `None` while
-    /// navigation is effective and the host shows its own hands. The coverage panel blocks the
-    /// canvas, which then shows the arrow.
-    pub(crate) fn editing_cursor(&self) -> Option<CursorIntent> {
+    /// The cursor the shown document asks for over the canvas: the effective editing tool's
+    /// over the shown input document, and otherwise navigation's, whose hands appear only while
+    /// the content can actually pan. The coverage panel blocks the canvas, which then shows the
+    /// arrow.
+    pub(crate) fn canvas_cursor(&self) -> CursorIntent {
         if !self.input_shown() {
-            return None;
+            return self.document.tools.navigation().cursor();
         }
         if self.editing.coverage_mode {
-            return Some(CursorIntent::Arrow);
+            return CursorIntent::Arrow;
         }
-        (self.document.tools.effective() != ToolId::PAN_ZOOM).then(|| {
-            self.document.tools.cursor(self.document.scene.as_ref().map(|scene| &scene.document))
-        })
+        self.document.tools.cursor(self.document.scene.as_ref().map(|scene| &scene.document))
     }
 
     /// Prepare the shown document's editing for the next frame: apply preferences, fall back
