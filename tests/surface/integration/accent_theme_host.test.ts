@@ -32,6 +32,7 @@ import {
   EmbeddedPresentation,
   type EmbeddedPresentationSource,
 } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPresentation.js';
+import { HostAccent } from '../../../frontend/comfyui/ui/core/embedded/HostAccent.js';
 
 const hosts: AccentThemeHost[] = [];
 afterEach(() => {
@@ -44,7 +45,11 @@ afterEach(() => {
 });
 
 /** Bind a real observer and stylesheet to a narrow Comfy settings boundary. */
-function createHost(saved: unknown = '#b58cff', embedded?: EmbeddedPresentationSource) {
+function createHost(
+  saved: unknown = '#b58cff',
+  embedded?: EmbeddedPresentationSource,
+  hostAccent?: HostAccent,
+) {
   let setting: ColorSetting | undefined;
   const setDirty = jest.fn();
   const report = jest.fn();
@@ -67,6 +72,7 @@ function createHost(saved: unknown = '#b58cff', embedded?: EmbeddedPresentationS
     },
     report,
     embedded,
+    hostAccent,
   );
   hosts.push(host);
   host.setup();
@@ -232,4 +238,53 @@ test('PhotoPro brightness follows accepted palette changes independently of Comf
   await settle();
   expect(changed).toHaveBeenCalledTimes(2);
   expect(setSettingValue).not.toHaveBeenCalled();
+});
+
+test('uses the host system accent until the user saves an explicit accent', () => {
+  const hostAccent = new HostAccent();
+  hostAccent.set('#0078d4');
+  const f = createHost(null, undefined, hostAccent);
+  expect(f.host.theme.color).toBe('#0078d4');
+  hostAccent.set('#107c10');
+  expect(f.host.theme.color).toBe('#107c10');
+  hostAccent.set(null);
+  expect(f.host.theme.color).toBe(DEFAULT_ACCENT_COLOR);
+  hostAccent.set('#0078d4');
+  f.setting.onChange('#123456');
+  expect(f.host.theme.color).toBe('#123456');
+  hostAccent.set('#107c10');
+  expect(f.host.theme.color).toBe('#123456');
+  expect(f.setSettingValue).not.toHaveBeenCalled();
+});
+
+test('a previously saved accent outranks the host system accent and registration is not a choice', () => {
+  const hostAccent = new HostAccent();
+  hostAccent.set('#0078d4');
+  let setting: ColorSetting | undefined;
+  const host = new AccentThemeHost(
+    document,
+    {
+      ui: {
+        settings: {
+          getSettingValue: () => undefined,
+          addSetting: (value: ColorSetting) => {
+            setting = value;
+            // Comfy announces the registered default synchronously during registration.
+            value.onChange(DEFAULT_ACCENT_COLOR);
+          },
+          setSettingValue: jest.fn(),
+        },
+      },
+    },
+    jest.fn(),
+    undefined,
+    hostAccent,
+  );
+  hosts.push(host);
+  host.setup();
+  expect(host.theme.color).toBe('#0078d4');
+  setting!.onChange(DEFAULT_ACCENT_COLOR);
+  expect(host.theme.color).toBe(DEFAULT_ACCENT_COLOR);
+  const saved = createHost('#b58cff', undefined, hostAccent);
+  expect(saved.host.theme.color).toBe('#b58cff');
 });

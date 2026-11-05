@@ -74,7 +74,7 @@ export class AppearanceHost {
     /** Prepare observers without altering styles until the user opts in. */
     constructor(options) {
         this.#options = options;
-        this.#accent = new AccentThemeHost(options.document, options.app, options.reportError, options.embedded);
+        this.#accent = new AccentThemeHost(options.document, options.app, options.reportError, options.embedded, options.hostAccent);
         this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
         this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);
         this.#nodes = new NativeFieldAppearance(options.app, 'card', options.seedReuse);
