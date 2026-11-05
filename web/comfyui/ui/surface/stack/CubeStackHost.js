@@ -17,7 +17,7 @@
 import { readOwnedVisualStyle, subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
-import { cubeStackWidth } from './CubeStackMetrics.js';
+import { CUBE_STACK_MASONRY_GUTTER, cubeStackWidth } from './CubeStackMetrics.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import { projectCubeStackRows } from './CubeStackProjection.js';
 import { ensureCubeStackStyles } from './CubeStackStyles.js';
@@ -222,7 +222,8 @@ export class CubeStackHost {
             this.#motion = new CubeStackDrawerMotion(this.#element);
             this.#mounted.setInteractive(false);
         }
-        view.setStackWidth(cubeStackWidth(state.compact) + (state.compact || this.#options.frame?.enabled ? 0 : 24));
+        view.setStackWidth(cubeStackWidth(state.compact) +
+            (state.compact || this.#options.frame?.enabled ? 0 : CUBE_STACK_MASONRY_GUTTER));
         if (this.#surfaceVisible)
             void this.#present(true, animate).catch(this.#options.reportError);
         this.#scrollSelection?.refresh(state.rows.map((row) => row.id));

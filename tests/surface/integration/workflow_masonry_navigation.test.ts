@@ -424,7 +424,7 @@ function fixture(rootCount = 1) {
       propertiesOpen = normalized;
     },
   };
-  let viewChoice = { canvas: true, masonry: false };
+  let viewChoice = { canvas: true, masonry: false, editorWidth: 0 };
   const host = new WorkflowMasonryHostLifecycle({
     presentation: {
       ready: true,

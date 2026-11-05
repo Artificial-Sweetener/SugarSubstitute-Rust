@@ -17,6 +17,8 @@
 export interface WorkflowViewSnapshot {
   readonly canvas: boolean;
   readonly masonry: boolean;
+  /** The editor's width beside the output canvas in CSS pixels; zero selects the default width. */
+  readonly editorWidth: number;
 }
 
 /** Expose accepted workflow view choices independently of rendered surfaces. */
