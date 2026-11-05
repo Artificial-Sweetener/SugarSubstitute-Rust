@@ -82,6 +82,11 @@ export interface NativeCanvasPresentationOptions {
   viewport(value: CanvasSurfaceViewportState | null): void;
   /** Lock preview controls only for pixels acknowledged by the presentation observation. */
   preview(value: boolean): void;
+  /**
+   * Report whether the host shows the Input route's document on this surface. Its camera takes
+   * the viewport commands then, whether or not an output is selected.
+   */
+  inputShown?(): boolean;
   /** Choose the camera an image selection restores when sent; without one it starts at Fit. */
   readonly inspection?: Parameters<typeof nativeCanvasSelection>[1];
   report(error: unknown): void;
@@ -232,7 +237,10 @@ export class NativeCanvasPresentation {
     const binding = this.#binding;
     if (
       !binding ||
-      !nativeCanvasNavigable(this.#desired, this.#preview, binding.selectionRevision) ||
+      !(
+        this.options.inputShown?.() ||
+        nativeCanvasNavigable(this.#desired, this.#preview, binding.selectionRevision)
+      ) ||
       !binding.host.capabilities.viewportState ||
       !scope.current() ||
       command.type === 'read' ||
