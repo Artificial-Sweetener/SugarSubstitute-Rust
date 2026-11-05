@@ -16,6 +16,7 @@
 /** Exercise the real progress view and native visibility rules in an isolated browser. */
 import { GenerationProgressView } from '../../../frontend/comfyui/ui/surface/frame/GenerationProgressView.js';
 import { substituteFrameCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.js';
+import { SubstituteToolbarLayout } from '../../../frontend/comfyui/ui/surface/frame/SubstituteToolbarLayout.js';
 
 declare global {
   interface Window {
@@ -23,6 +24,7 @@ declare global {
       update(visible: boolean, workflow: number, sampler: number, dark: boolean): void;
       mode(enabled: boolean): void;
       queueExpanded(expanded: boolean): void;
+      toolbar(present: boolean): void;
     };
   }
 }
@@ -51,7 +53,45 @@ overlay.dataset.testid = 'queue-progress-overlay';
 document.body.append(queue, overlay);
 document.documentElement.setAttribute('data-sc-substitute-frame', '');
 
+// Mirror Comfy's top menu row: the workflow selector and actionbar share one toolbar line.
+const line = document.createElement('div');
+line.id = 'toolbar-line';
+Object.assign(line.style, { width: '720px' });
+const workflowColumn = document.createElement('div');
+const workflowActions = document.createElement('button');
+workflowActions.setAttribute('aria-label', 'Workflow actions');
+workflowColumn.append(workflowActions);
+const actionColumn = document.createElement('div');
+const actionbar = document.createElement('div');
+actionbar.className = 'actionbar-container';
+actionColumn.append(actionbar);
+line.append(workflowColumn, actionColumn);
+const popup = document.createElement('div');
+popup.id = 'later-popup';
+Object.assign(popup.style, {
+  position: 'absolute',
+  left: '0',
+  top: '60px',
+  width: '200px',
+  height: '40px',
+  zIndex: '1',
+});
+let toolbar: SubstituteToolbarLayout | null = null;
+
 window.progressBrowserProof = {
+  /** Mount or retire the toolbar row that owns the tracks' placement. */
+  toolbar(present): void {
+    if (present) {
+      frame.after(line);
+      line.after(popup);
+      toolbar = new SubstituteToolbarLayout(document, frame, bars.element);
+    } else {
+      toolbar?.dispose();
+      toolbar = null;
+      line.remove();
+      popup.remove();
+    }
+  },
   /** Keep the native expanded queue available independently of compact generation feedback. */
   queueExpanded(expanded): void {
     queue.setAttribute('aria-pressed', String(expanded));

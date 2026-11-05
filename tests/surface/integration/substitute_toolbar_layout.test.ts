@@ -27,6 +27,15 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+/** Provide the frame and its progress tracks that the toolbar layout places on the row edge. */
+function frameProgress(): [HTMLElement, HTMLElement] {
+  const frame = document.createElement('header');
+  const progress = document.createElement('div');
+  frame.append(progress);
+  document.body.append(frame);
+  return [frame, progress];
+}
+
 test('frame paint stays independent of view mode and queue overflow cannot expand the opaque row', () => {
   const style = document.createElement('style');
   style.textContent = substituteFrameCss;
@@ -67,7 +76,7 @@ test('frame paint stays independent of view mode and queue overflow cannot expan
   menu.append(line, progress);
   document.body.append(menu);
   document.documentElement.setAttribute('data-sc-substitute-frame', '');
-  const layout = new SubstituteToolbarLayout(document);
+  const layout = new SubstituteToolbarLayout(document, ...frameProgress());
   const toolbarStyle = document.head.lastElementChild;
   if (!(toolbarStyle instanceof HTMLStyleElement) || !toolbarStyle.sheet)
     throw new Error('Substitute toolbar stylesheet is missing');
@@ -155,7 +164,7 @@ test('workflow and native toolbar wrappers receive reversible marks without movi
   column.append(bar);
   line.append(workflowColumn, column);
   document.body.append(line);
-  const layout = new SubstituteToolbarLayout(document);
+  const layout = new SubstituteToolbarLayout(document, ...frameProgress());
   expect(workflow.parentElement).toBe(workflowGroup);
   expect(bar.parentElement).toBe(column);
   expect(line.hasAttribute('data-sc-substitute-toolbar-line')).toBe(true);
@@ -181,7 +190,7 @@ test('Extensions stays off the override row through late mounts and restores on 
   row.append(bar);
   document.body.append(row);
   document.documentElement.setAttribute('data-sc-substitute-frame', '');
-  const layout = new SubstituteToolbarLayout(document);
+  const layout = new SubstituteToolbarLayout(document, ...frameProgress());
   const wrapper = document.createElement('div');
   const extensions = document.createElement('button');
   extensions.setAttribute('aria-label', 'Extensions traduites');

@@ -20,7 +20,7 @@ export const substituteToolbarCss = `
   :root[data-sc-substitute-frame] [data-sc-workflow-selector],
   :root[data-sc-substitute-frame] [data-sc-substitute-extensions],
   :root[data-sc-substitute-frame] [data-sc-substitute-workflow-column] { display:none!important; }
-  :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-line] { display:block; min-width:0; height:44px; min-height:44px;
+  :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-line] { position:relative; display:block; min-width:0; height:44px; min-height:44px;
     flex-shrink:0; overflow:visible; padding-left:62px; background:var(--comfy-menu-bg,#202020); }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-column] { width:100%; margin:0; min-width:0; align-items:stretch; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-column] > div { min-width:0; width:100%; }
