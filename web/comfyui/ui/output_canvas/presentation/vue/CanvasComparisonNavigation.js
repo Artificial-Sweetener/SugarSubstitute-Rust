@@ -1,6 +1,7 @@
 import {
   CanvasComparisonNavigation
-} from "../../../chunk-CIRP6VLK.js";
+} from "../../../chunk-NHCXFNIG.js";
+import "../../../chunk-CJ4ERMLU.js";
 import "../../../chunk-UEULIHLJ.js";
 import "../../../chunk-SVNSOY77.js";
 import "../../../chunk-5NVJVFWB.js";

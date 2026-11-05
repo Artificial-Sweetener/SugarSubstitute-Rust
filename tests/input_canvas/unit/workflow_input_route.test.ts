@@ -98,7 +98,7 @@ function fixture(stored: Record<string, WorkflowInputSelection> = {}) {
   };
 }
 
-test('Input is disabled with a reason and the view stays on Output without surfaces', () => {
+test('Input is unavailable and the view stays on Output without surfaces', () => {
   const f = fixture({ 'workflow-a': { route: 'input', surface: null, mask: null } });
   expect(f.route.read()).toBeNull();
   f.publish([]);
@@ -107,7 +107,6 @@ test('Input is disabled with a reason and the view stays on Output without surfa
     surface: null,
     mask: null,
     available: false,
-    reason: 'No input canvas nodes',
   });
   f.route.chooseRoute('input');
   expect(f.route.read()?.route).toBe('output');
@@ -116,9 +115,31 @@ test('Input is disabled with a reason and the view stays on Output without surfa
   ]);
 });
 
+test('a workflow that remembers no selection opens on Input with its first surface', () => {
+  const f = fixture();
+  f.publish([surface('image', 'image', ['mask-a']), surface('other', 'other', [])]);
+  expect(f.route.read()).toEqual({
+    route: 'input',
+    surface: 'image',
+    mask: 'mask-a',
+    available: true,
+  });
+  expect(f.commands.at(-1)).toEqual({
+    type: 'activate',
+    workflow: 'workflow-a',
+    route: 'input',
+    surface: 'image',
+    mask: 'mask-a',
+  });
+  const remembered = fixture({ 'workflow-a': { route: 'output', surface: null, mask: null } });
+  remembered.publish([surface('image', 'image', [])]);
+  expect(remembered.route.read()?.route).toBe('output');
+});
+
 test('thumbnail and mask clicks activate their surface and mask on Input and are remembered', () => {
   const f = fixture();
   f.publish([surface('image', 'image', ['mask-a', 'mask-b']), surface('other', 'other', [])]);
+  f.route.chooseRoute('output');
   expect(f.route.read()?.route).toBe('output');
   expect(f.route.activateImage('image')).toBe(true);
   expect(f.route.read()).toMatchObject({ route: 'input', surface: 'image', mask: 'mask-a' });
@@ -149,7 +170,8 @@ test('each workflow restores its own selection and missing surfaces are cleared,
   f.publish([surface('image-b', 'image-b', ['mask-b'])], 'workflow-b');
   expect(f.route.read()).toMatchObject({ route: 'input', surface: 'image-b', mask: null });
   f.publish([surface('image-a', 'image-a', ['mask-a'])], 'workflow-a');
-  expect(f.route.read()).toMatchObject({ route: 'output', surface: null });
+  f.route.chooseRoute('output');
+  expect(f.route.read()).toMatchObject({ route: 'output', surface: 'image-a' });
   f.route.chooseRoute('input');
   expect(f.route.read()).toMatchObject({ route: 'input', surface: 'image-a', mask: 'mask-a' });
   f.publish([surface('image-b', 'image-b', ['mask-b'])], 'workflow-b');

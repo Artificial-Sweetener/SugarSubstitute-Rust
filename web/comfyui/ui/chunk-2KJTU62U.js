@@ -13,13 +13,15 @@ function ensureCanvasOverlayStyles(document) {
       box-shadow:0 2px 8px #0003; box-sizing:border-box;
     }
     .sc-output-tabstrip { position:absolute; bottom:8px; left:8px;
-      max-width:calc(100% - 16px); padding:4px; z-index:2; }
-    .sc-output-tabstrip.sc-output-route { top:8px; bottom:auto; }
+      max-width:calc(100% - 16px); padding:4px; z-index:2;
+      background:color-mix(in srgb,var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)) 60%,transparent);
+      -webkit-backdrop-filter:blur(var(--p-toast-blur,10px)); backdrop-filter:blur(var(--p-toast-blur,10px)); }
+    .sc-output-route .sc-output-segment { min-width:calc(var(--sc-route-label-chars,6) * 1ch + 28px); }
     .sc-output-selection-picker { display:flex; gap:4px; min-width:0; }
-    .sc-output-tabs-measure { position:absolute; visibility:hidden; pointer-events:none; width:max-content; }
+    .sc-output-tabs.sc-output-tabs-measure { position:absolute; visibility:hidden; pointer-events:none; width:max-content; }
     .sc-output-tabstrip.sc-output-compare-first { max-width:calc(50% - 12px); }
     .sc-output-tabstrip.sc-output-compare-second { left:auto; right:8px; max-width:calc(50% - 12px); }
-    .sc-output-tabs { display:flex; align-items:center; gap:0; margin:0; padding:0; overflow-x:auto; min-width:0;
+    .sc-output-tabs { position:relative; display:flex; align-items:center; gap:0; margin:0; padding:0; overflow-x:auto; min-width:0;
       white-space:nowrap; overscroll-behavior:contain; scrollbar-width:thin; }
     .sc-output-status { position:absolute; bottom:60px; left:12px; right:12px; padding:6px;
       flex-wrap:wrap; font-size:12px; z-index:2; }
@@ -46,11 +48,16 @@ function ensureCanvasOverlayStyles(document) {
       padding:0 12px; height:30px; min-height:30px; box-shadow:none; font-size:14px; line-height:28px; }
     .sc-output-tabs button:hover:not(:disabled) { background:color-mix(in srgb,var(--fg-color,#fff) 3.5%,transparent); }
     .sc-output-tabs button:active:not(:disabled) { background:color-mix(in srgb,var(--fg-color,#fff) 2.5%,transparent); }
-    .sc-output-tabs button[aria-selected="true"] { box-shadow:none;
-      border-color:color-mix(in srgb,var(--fg-color,#fff) 5.5%,transparent);
+    .sc-output-tabs button[aria-selected="true"] { box-shadow:none; border-color:transparent; background:transparent; }
+    .sc-output-slider-indicator { position:absolute; left:0; top:0; height:30px; box-sizing:border-box; pointer-events:none;
+      border:1px solid color-mix(in srgb,var(--fg-color,#fff) 5.5%,transparent); border-radius:5px;
       background:color-mix(in srgb,var(--fg-color,#fff) 6%,transparent); }
-    .sc-output-tabs button[aria-selected="true"]::after { content:""; position:absolute; bottom:0;
+    .sc-output-slider-indicator[hidden] { display:none; }
+    .sc-output-slider-indicator::after { content:""; position:absolute; bottom:0;
       left:calc(50% - 8px); width:16px; height:3px; border-radius:1.5px; background:var(--p-primary-color,var(--ring,#df258e)); }
+    .sc-output-slider-indicator[data-placed] { transition:transform 200ms var(--sc-motion-ease,cubic-bezier(0,0,0,1)),
+      width 200ms var(--sc-motion-ease,cubic-bezier(0,0,0,1)); }
+    .sc-output-tabs button,.sc-output-overlay .sc-output-segment { cursor:default; }
     .sc-output-choice { display:inline-flex; min-width:0; }
     .sc-output-overlay .sc-output-segment { background:transparent; border:0; box-shadow:none;
       height:28px; min-width:36px; max-width:260px; padding:0 14px; font-size:14px;
@@ -75,7 +82,7 @@ function ensureCanvasOverlayStyles(document) {
       border:3px solid color-mix(in srgb,var(--fg-color,#ddd) 25%,transparent);
       border-top-color:var(--p-primary-color,var(--ring,#df258e)); animation:sc-output-spin .9s linear infinite; }
     @keyframes sc-output-spin { to { transform:rotate(360deg); } }
-    @media (prefers-reduced-motion:reduce) { .sc-output-spinner { animation:none; } }
+    @media (prefers-reduced-motion:reduce) { .sc-output-spinner { animation:none; } .sc-output-slider-indicator[data-placed] { transition:none; } }
 
     .sc-output-announcement { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
       overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }

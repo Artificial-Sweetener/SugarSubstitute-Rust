@@ -17,7 +17,7 @@
 
 import { jest } from '@jest/globals';
 import { createApp, h, nextTick, shallowRef } from 'vue';
-import { CanvasSourceTabs } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasSourceTabs.js';
+import { CanvasNavigationBar } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasNavigationBar.js';
 import type {
   CanvasCommand,
   CanvasViewSnapshot,
@@ -73,10 +73,11 @@ test('keeps tab geometry and identity across grid/detail selection with browser 
   ensureBrowserCanvasStyles(document);
   const app = createApp({
     setup: () => () =>
-      h(CanvasSourceTabs, {
+      h(CanvasNavigationBar, {
         snapshot: snapshot.value,
         capabilities: port.capabilities,
         send: () => {},
+        chooseRoute: () => {},
       }),
   });
   try {
@@ -127,7 +128,12 @@ test('collapses late source tabs into a usable chooser and restores tabs after w
   document.body.append(host);
   const app = createApp({
     setup: () => () =>
-      h(CanvasSourceTabs, { snapshot: snapshot.value, capabilities: port.capabilities, send }),
+      h(CanvasNavigationBar, {
+        snapshot: snapshot.value,
+        capabilities: port.capabilities,
+        send,
+        chooseRoute: () => {},
+      }),
   });
   try {
     app.mount(host);

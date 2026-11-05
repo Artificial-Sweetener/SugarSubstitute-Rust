@@ -17,12 +17,10 @@
 
 export type CanvasRouteId = 'input' | 'output';
 
-/** One route control's state with its literal labels. */
+/** One canvas route selector's state with its literal labels; it is shown only while Input is available. */
 export interface CanvasRouteState {
   readonly route: CanvasRouteId;
   readonly inputAvailable: boolean;
-  /** Why Input is disabled, or an empty string. */
-  readonly reason: string;
   readonly labels: { readonly input: string; readonly output: string; readonly group: string };
 }
 
