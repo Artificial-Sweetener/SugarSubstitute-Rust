@@ -30391,6 +30391,19 @@ function preparePromptWrapGroups(text, decorations2) {
     (group) => !text.slice(group.from, group.to).includes("\n")
   );
 }
+function mapPromptWrapRange(range, changes) {
+  let startSide = 1, endSide = -1, confined = true;
+  changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    const touches = fromA === toA ? fromA > range.from && fromA < range.to : fromA < range.to && toA > range.from;
+    if (!touches) return;
+    if (fromA < range.from || toA > range.to || inserted.lines > 1) confined = false;
+    if (fromA === range.from) startSide = -1;
+    if (toA === range.to) endSide = 1;
+  });
+  if (!confined) return null;
+  const from = changes.mapPos(range.from, startSide), to = changes.mapPos(range.to, endSide);
+  return to > from ? { from, to } : null;
+}
 function fittingPromptWrapGroups(groups, widths, contentWidth) {
   const selected = [];
   for (const group of groups) {
@@ -30411,20 +30424,28 @@ function fittingPromptWrapGroups(groups, widths, contentWidth) {
 
 // frontend/sugarprompt/editor/src/prompt-wrap-layout.ts
 var publishWrap = StateEffect.define();
+function retainWrapMarks(marks2, changes) {
+  const retained = [];
+  changes.iterChangedRanges((from, to) => {
+    marks2 = marks2.update({
+      filterFrom: from,
+      filterTo: to,
+      filter: (start, end, mark) => {
+        if (end < from || start > to) return true;
+        const range = mapPromptWrapRange({ from: start, to: end }, changes);
+        if (range) retained.push(mark.range(range.from, range.to));
+        return false;
+      }
+    });
+  });
+  marks2 = marks2.map(changes);
+  return retained.length ? marks2.update({ add: retained, sort: true }) : marks2;
+}
 var wrapMarks = StateField.define({
   create: () => Decoration.none,
   update(value, transaction) {
     if (!transaction.state.facet(richRendering)) return Decoration.none;
-    if (transaction.docChanged) {
-      transaction.changes.iterChangedRanges((from, to) => {
-        value = value.update({
-          filterFrom: from,
-          filterTo: to,
-          filter: (start, end) => end < from || start > to
-        });
-      });
-      value = value.map(transaction.changes);
-    }
+    if (transaction.docChanged) value = retainWrapMarks(value, transaction.changes);
     for (const effect of transaction.effects)
       if (effect.is(publishWrap) && effect.value.document === transaction.state.doc)
         value = effect.value.decorations;

@@ -14,7 +14,15 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Measure optional nowrap units through CodeMirror's layout lifecycle without changing prompt source. */
-import { RangeSet, StateEffect, StateField, type Extension, type Text } from '@codemirror/state';
+import {
+  RangeSet,
+  StateEffect,
+  StateField,
+  type ChangeSet,
+  type Extension,
+  type Range as DecorationRange,
+  type Text,
+} from '@codemirror/state';
 import {
   Decoration,
   EditorView,
@@ -29,6 +37,7 @@ import { snapshotPresentation } from './native-snapshot-policy.js';
 import { measurePromptWrapGroup } from './prompt-wrap-measurement.js';
 import {
   fittingPromptWrapGroups,
+  mapPromptWrapRange,
   preparePromptWrapGroups,
   type PromptWrapGroup,
 } from './prompt-wrap-groups.js';
@@ -38,21 +47,34 @@ interface WrapPublication {
   readonly decorations: DecorationSet;
 }
 const publishWrap = StateEffect.define<WrapPublication>();
+/**
+ * Keep each mark an edit stays inside, so its group never re-wraps in the frames before layout
+ * re-measures it; marks an edit crosses are dropped until that measurement admits them again.
+ */
+function retainWrapMarks(marks: DecorationSet, changes: ChangeSet): DecorationSet {
+  const retained: DecorationRange<Decoration>[] = [];
+  changes.iterChangedRanges((from, to) => {
+    marks = marks.update({
+      filterFrom: from,
+      filterTo: to,
+      filter: (start, end, mark) => {
+        if (end < from || start > to) return true;
+        const range = mapPromptWrapRange({ from: start, to: end }, changes);
+        if (range) retained.push(mark.range(range.from, range.to));
+        return false;
+      },
+    });
+  });
+  marks = marks.map(changes);
+  return retained.length ? marks.update({ add: retained, sort: true }) : marks;
+}
+
 /** Retain only native marks; the layout owner alone chooses their ranges and measured widths. */
 const wrapMarks = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(value, transaction) {
     if (!transaction.state.facet(richRendering)) return Decoration.none;
-    if (transaction.docChanged) {
-      transaction.changes.iterChangedRanges((from, to) => {
-        value = value.update({
-          filterFrom: from,
-          filterTo: to,
-          filter: (start, end) => end < from || start > to,
-        });
-      });
-      value = value.map(transaction.changes);
-    }
+    if (transaction.docChanged) value = retainWrapMarks(value, transaction.changes);
     for (const effect of transaction.effects)
       if (effect.is(publishWrap) && effect.value.document === transaction.state.doc)
         value = effect.value.decorations;
