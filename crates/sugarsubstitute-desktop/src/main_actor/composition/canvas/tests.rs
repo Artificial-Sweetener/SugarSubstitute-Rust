@@ -53,6 +53,93 @@ impl Drop for Apartment {
     }
 }
 
+/// Each premultiplied frame replaces the reused surface: transparent and partially covered
+/// pixels show the window backdrop, never the pixels an earlier frame drew there.
+#[test]
+fn reused_surface_frames_replace_earlier_pixels_instead_of_blending_over_them()
+-> Result<(), Box<dyn std::error::Error>> {
+    let _apartment = Apartment::enter()?;
+    let ((memory, graphics), mut execution) = harness::run_blocking(16 * 1024 * 1024, |context| {
+        let memory = context.memory().clone();
+        let graphics = crate::canvas::CanvasGraphics::prepare(&memory, &context, None)?;
+        Ok::<_, crate::canvas::CanvasGraphicsError>((memory, graphics))
+    })
+    .map_err(|cause| cause as Box<dyn std::error::Error>)?;
+    let mut raw = std::ptr::null_mut();
+    // SAFETY: The requested device IID and writable output slot belong to this test apartment.
+    let status = unsafe {
+        super::super::DCompositionCreateDevice2(
+            std::ptr::null_mut(),
+            &IDCompositionDevice::IID,
+            &mut raw,
+        )
+    };
+    let mut composition: Option<IDCompositionDevice> = None;
+    // SAFETY: This adopts the exact transferred device reference, including partial failure.
+    unsafe { adopt(&mut composition, raw, status, "test_canvas_device")? };
+    let composition = composition.ok_or("Composition device missing")?;
+    // SAFETY: This test retains the device and its unbound root on the creating thread.
+    let root = unsafe { composition.CreateVisual()? };
+    let mut canvas = Canvas::new(composition.clone(), root, memory, graphics)?;
+    let extent = Extent::new(16, 8)?;
+    let damage = DamagePlan::full(extent);
+    let viewport = PhysicalRect { x: 0, y: 0, width: 16, height: 8 };
+    let placement = CanvasPlacement { viewport, clip: viewport };
+    let opaque = vec![0xffc0_4020; extent.pixels() as usize];
+    // A fitted document leaves transparent matte columns and one half-covered edge column.
+    let fitted: Vec<u32> = (0..extent.pixels() as u32)
+        .map(|index| match index % 16 {
+            0..=3 | 12..=15 => 0,
+            4 => 0x8040_2010,
+            _ => 0xff10_2030,
+        })
+        .collect();
+    let mut present =
+        |generation: u64, pixels: &[u32]| -> Result<Vec<u32>, Box<dyn std::error::Error>> {
+            let frame = CpuFrame {
+                kind: CpuFrameKind::Prepared,
+                pending: true,
+                target: FrameStamp {
+                    surface: SurfaceId::new(1)?,
+                    generation: Generation::new(generation)?,
+                },
+                base: None,
+                damage: &damage,
+                pixels,
+            };
+            canvas.capture_next = true;
+            if let Some(active) = canvas.active.as_mut() {
+                active.capture.leave_stale(0xffff_00ff);
+            }
+            canvas.present(&CanvasContent::Cpu(frame), placement)?;
+            let captured = canvas
+                .active
+                .as_mut()
+                .and_then(|allocation| allocation.capture.take())
+                .ok_or("Composition capture absent")?;
+            Ok(captured)
+        };
+    // Composition surfaces hand back buffers with undefined contents, here stale magenta, so
+    // an update must not depend on what its buffer last showed.
+    let other = vec![0xff20_c040; extent.pixels() as usize];
+    for generation in 0..4 {
+        let earlier = if generation % 2 == 0 { &opaque } else { &other };
+        assert_eq!(present(2 * generation + 1, earlier)?, *earlier);
+        assert_eq!(present(2 * generation + 2, &fitted)?, fitted, "frame {}", 2 * generation + 2);
+    }
+    assert!(!canvas.hide()?);
+    execution
+        .wait_composition(canvas.next_wait().ok_or("Hide wait absent")?)
+        .map_err(|cause| cause as Box<dyn std::error::Error>)?;
+    canvas.reap_retirements()?;
+    canvas.end_draws()?;
+    // This root was never bound to a target, so no native window can retain the visual tree.
+    canvas.release_after_detach()?;
+    drop(canvas);
+    execution.finish().map_err(|cause| cause as Box<dyn std::error::Error>)?;
+    Ok(())
+}
+
 #[test]
 fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rejection()
 -> Result<(), Box<dyn std::error::Error>> {

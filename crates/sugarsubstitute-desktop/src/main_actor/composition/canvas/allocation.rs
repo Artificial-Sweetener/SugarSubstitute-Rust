@@ -13,9 +13,10 @@ use windows::{
         Graphics::{
             Direct2D::{
                 Common::{
-                    D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_PIXEL_FORMAT,
+                    D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F,
+                    D2D1_PIXEL_FORMAT,
                 },
-                D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1,
+                D2D1_ANTIALIAS_MODE_ALIASED, D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1,
                 D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR, ID2D1Bitmap1, ID2D1DeviceContext,
             },
             DirectComposition::{IDCompositionSurface, IDCompositionSurfaceFactory},
@@ -184,8 +185,17 @@ impl Allocation {
             right: (offset.x as f32) + (self.extent.width() as f32),
             bottom: (offset.y as f32) + (self.extent.height() as f32),
         };
-        // SAFETY: The live context and bitmap belong to this active surface drawing operation.
+        #[cfg(test)]
+        self.capture.prefill(context, &rectangle);
+        // DirectComposition leaves the update rectangle's prior contents undefined, often an
+        // earlier frame. Premultiplied frames carry transparent pixels, so source-over drawing
+        // would let those contents show; clearing first makes every frame replace the surface.
+        // SAFETY: The live context and bitmap belong to this active surface drawing operation;
+        // the aliased clip is the exact update rectangle and is popped before drawing.
         unsafe {
+            context.PushAxisAlignedClip(&rectangle, D2D1_ANTIALIAS_MODE_ALIASED);
+            context.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            context.PopAxisAlignedClip();
             context.DrawBitmap(
                 bitmap,
                 Some(&rectangle),
