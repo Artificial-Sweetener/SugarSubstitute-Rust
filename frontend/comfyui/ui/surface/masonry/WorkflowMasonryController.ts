@@ -50,6 +50,8 @@ export interface WorkflowMasonryControllerOptions {
   onSurfaceTransition?(entering: boolean): Promise<void>;
 }
 
+type MasonryCardNode = WorkflowMasonrySection['cards'][number]['node'];
+
 /** Keep layout choice transient and restore graph presentation on every failure path. */
 export class WorkflowMasonryController {
   readonly #options: WorkflowMasonryControllerOptions;
@@ -64,6 +66,8 @@ export class WorkflowMasonryController {
   #generation = 0;
   #mounting: Promise<void> | null = null;
   #topology = '';
+  /** The exact nodes the mounted cards present; a replaced graph reuses ids, not objects. */
+  #nodes: readonly MasonryCardNode[] = [];
   #renderer: NativeNodeCardRenderer | null = null;
   #links: WorkflowMasonryLinkMotion | null = null;
   readonly #graphVisibility: WorkflowMasonryGraphVisibility;
@@ -168,6 +172,7 @@ export class WorkflowMasonryController {
         const sections = this.#options.getSections();
         this.#renderer = renderer;
         this.#topology = topologySignature(sections);
+        this.#nodes = cardNodes(sections);
         this.#view = new WorkflowMasonryView({
           document: this.#options.document,
           sections,
@@ -247,11 +252,17 @@ export class WorkflowMasonryController {
     const sections = this.#options.getSections();
     if (this.#container) this.#reveal?.reconcile(this.#container, sections);
     const topology = topologySignature(sections);
-    if (this.#topology === topology) {
+    const nodes = cardNodes(sections);
+    if (
+      this.#topology === topology &&
+      nodes.length === this.#nodes.length &&
+      nodes.every((node, index) => node === this.#nodes[index])
+    ) {
       this.#options.onSurfaceValuesChanged?.();
       return;
     }
     this.#topology = topology;
+    this.#nodes = nodes;
     try {
       this.#mounting = this.#view.refresh(sections, this.#renderer);
       await this.#mounting;
@@ -345,6 +356,11 @@ export class WorkflowMasonryController {
       !this.#suspensions.has('subgraph')
     );
   }
+}
+
+/** List the node objects behind every card, in presentation order. */
+function cardNodes(sections: readonly WorkflowMasonrySection[]): readonly MasonryCardNode[] {
+  return sections.flatMap((section) => section.cards.map((card) => card.node));
 }
 
 /** Fingerprint presentation membership without treating widget edits as remount requests. */
