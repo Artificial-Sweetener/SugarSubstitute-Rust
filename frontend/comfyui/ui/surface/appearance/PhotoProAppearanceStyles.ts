@@ -35,7 +35,6 @@ export function photoProAppearanceCss(): string {
         cardFill: 'var(--sc-surface)',
         cardStroke: 'var(--sc-border)',
         rowStroke: 'var(--sc-border-subtle)',
-        controlFill: 'var(--sc-field-fill)',
         controlStroke: 'var(--sc-field-stroke)',
         controlBottomStroke: 'var(--sc-field-bottom-stroke)',
         radius: '4px',
@@ -76,6 +75,7 @@ export function photoProControlCss(): string {
       border-radius:var(--sc-field-radius); font:inherit;
     }
     ${standaloneField}:hover { border-color:var(--sc-field-hover-stroke); }
+    html[data-sc-visual-style="photopro"] [data-sc-number-spinner]:focus-within { --sc-field-surface:var(--sc-surface); }
     html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(input,textarea,button,[role="tab"],[role="menuitem"]):focus-visible { outline:1px solid var(--sc-focus-ring); outline-offset:1px; }
     html[data-sc-visual-style="photopro"] :is([data-sc-boolean-checkbox], .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu) { width:14px; height:14px; }
     html[data-sc-visual-style="photopro"] [data-sc-boolean-checkbox] { appearance:none; position:relative; box-sizing:border-box; margin:0; border:1px solid var(--sc-text-secondary); border-radius:3px; background:var(--sc-field-fill); flex:none; }

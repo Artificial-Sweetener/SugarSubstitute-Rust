@@ -29,7 +29,6 @@ export function gimpAppearanceCss(dark) {
         cardFill: 'var(--sc-gimp-background)',
         cardStroke: 'var(--sc-gimp-border)',
         rowStroke: 'transparent',
-        controlFill: 'var(--sc-gimp-widget)',
         controlStroke: 'var(--sc-gimp-strongerBorder)',
         controlBottomStroke: 'var(--sc-gimp-strongerBorder)',
         radius: '3px',
