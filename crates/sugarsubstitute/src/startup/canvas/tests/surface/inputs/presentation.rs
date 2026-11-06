@@ -338,6 +338,8 @@ fn shared_viewport_commands_beside_a_selection_on_the_input_route_are_answered()
 -> Result<(), Box<dyn Error>> {
     use sugarsubstitute_canvas::{PointerSample, ToolModifiers};
     use sugarsubstitute_desktop::canvas::MainCanvasButton;
+    let diagnostics = DiagnosticLines::default();
+    let _capture = diagnostics.observe();
     let (mut fixture, memory) = committed_empty()?;
     assert_eq!(workflow(&mut fixture, &memory, 100, image_surface())?["kind"], "synced");
     let activated = workflow(&mut fixture, &memory, 101, activate(Some("image"), None, "input"))?;
@@ -375,7 +377,17 @@ fn shared_viewport_commands_beside_a_selection_on_the_input_route_are_answered()
     }
     let state = ask(&mut fixture, &memory, 103, "edit.request", json!({"type":"state"}))?;
     assert!(!state["state"]["selection"].is_null(), "a selection was drawn: {state}");
-    assert_eq!(camera(&mut fixture, 104, json!({"type":"zoom","factor":1.25}))?, "applied");
+    assert_eq!(
+        camera(&mut fixture, 104, json!({"type":"zoom","factor":1.25}))?,
+        "applied",
+        "{:?}; intent {:?}; accepted {:?}; wait {:?}; jobs {}; evidence {:?}",
+        diagnostics.requests(104)?,
+        fixture.canvas.session.as_ref().map(Session::camera_intent),
+        fixture.canvas.session.as_ref().and_then(Session::accepted_camera),
+        fixture.canvas.session.as_ref().map(Session::camera_wait),
+        fixture.scope_jobs(ScopeId::new(1)?)?,
+        fixture.canvas.session.as_ref().map(Session::camera_diagnostic)
+    );
     assert_eq!(camera(&mut fixture, 105, json!({"type":"fit"}))?, "applied");
     fixture.finish()
 }

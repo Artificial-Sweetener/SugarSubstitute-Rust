@@ -41,6 +41,7 @@ mod reattachment;
 mod rebuild;
 mod replacement;
 mod reselection;
+mod temporary;
 mod viewport;
 
 use capture::DiagnosticLines;

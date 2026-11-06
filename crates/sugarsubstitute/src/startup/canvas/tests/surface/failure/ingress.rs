@@ -37,7 +37,7 @@ fn foreign_navigations_unadmitted_files_and_unplaced_geometry_change_nothing()
         let unadmitted = [
             json!({"filename":"green.gif", "subfolder":"", "type":"output"}),
             json!({"filename":"green.png", "subfolder":"", "type":"input"}),
-            json!({"filename":"green.png", "subfolder":"", "type":"temp"}),
+            json!({"filename":"../green.png", "subfolder":"", "type":"temp"}),
             json!({"filename":"../green.png", "subfolder":"", "type":"output"}),
         ];
         for (id, file) in (6..).zip(unadmitted) {
