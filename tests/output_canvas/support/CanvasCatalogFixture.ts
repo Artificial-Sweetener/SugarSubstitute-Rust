@@ -73,6 +73,7 @@ export function canvasCatalogFixture(
     context,
     revision,
     outputs,
+    scenes: null,
     runOrder: run,
     presentedRunOrder: run,
     runStatus: 'complete',

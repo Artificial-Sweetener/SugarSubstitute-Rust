@@ -44,7 +44,7 @@ const geometry: CanvasSurfaceGeometry = {
   focused: false,
 };
 const comparing: CanvasSurfaceCapabilities = {
-  schema: 1,
+  schema: 2,
   imageFormats: ['png'],
   viewportCommands: ['fit', 'native', 'zoom', 'pan', 'wipe'],
   viewportState: true,

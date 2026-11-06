@@ -50,6 +50,7 @@ test('without host chrome the top bar holds the corner and the rail sits beneath
   expect(canvasEditDockPlacement([], HISTORY, RAIL)).toEqual({
     topBar: { x: 8, y: 8 },
     rail: { x: 8, y: 52 },
+    railHeight: null,
   });
   expect(canvasEditDockPlacement([], OPEN_BRUSH_OPTIONS, RAIL).rail).toEqual({ x: 8, y: 166 });
 });
@@ -58,6 +59,7 @@ test('the top bar follows the route tabs along the top row and the rail drops be
   expect(canvasEditDockPlacement([ROUTE_TABS], HISTORY, RAIL)).toEqual({
     topBar: { x: 156, y: 8 },
     rail: { x: 8, y: 56 },
+    railHeight: null,
   });
 });
 
@@ -65,6 +67,7 @@ test('open tool options stay beside the route tabs and leave the rail where it w
   expect(canvasEditDockPlacement([ROUTE_TABS], OPEN_BRUSH_OPTIONS, RAIL)).toEqual({
     topBar: { x: 156, y: 8 },
     rail: { x: 8, y: 56 },
+    railHeight: null,
   });
 });
 
@@ -84,5 +87,17 @@ test('unmeasured surfaces and empty obstacles are never treated as covering anyt
       { width: 0, height: 0 },
       RAIL,
     ),
-  ).toEqual({ topBar: { x: 8, y: 8 }, rail: { x: 8, y: 8 } });
+  ).toEqual({ topBar: { x: 8, y: 8 }, rail: { x: 8, y: 8 }, railHeight: null });
+});
+
+test('a navigation bar below the rail bounds its height on a short canvas instead of pushing it', () => {
+  const bar: Box = { left: 8, top: 250, width: 120, height: 38 };
+  const placed = canvasEditDockPlacement([bar], HISTORY, RAIL);
+  expect(placed.rail).toEqual({ x: 8, y: 52 });
+  expect(placed.railHeight).toBe(190);
+  expect(overlaps({ left: 8, top: 52, width: RAIL.width, height: placed.railHeight! }, bar)).toBe(
+    false,
+  );
+  const beside: Box = { left: 200, top: 250, width: 120, height: 38 };
+  expect(canvasEditDockPlacement([beside], HISTORY, RAIL).railHeight).toBeNull();
 });

@@ -1,6 +1,6 @@
 import {
   CanvasEditDock
-} from "../../chunk-UCIGVQMY.js";
+} from "../../chunk-GJM3NOUL.js";
 import "../../chunk-AWHG7O74.js";
 import "../../chunk-CSZBNOIR.js";
 import "../../chunk-3HDL7XRD.js";

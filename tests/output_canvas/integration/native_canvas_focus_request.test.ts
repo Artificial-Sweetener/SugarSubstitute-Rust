@@ -126,7 +126,6 @@ test('a staged candidate leaves focus alone and a retired attachment stops liste
 const inputRoute: CanvasRouteState = {
   route: 'input',
   inputAvailable: true,
-  reason: '',
   labels: { input: 'Input', output: 'Output', group: 'Canvas route' },
 };
 

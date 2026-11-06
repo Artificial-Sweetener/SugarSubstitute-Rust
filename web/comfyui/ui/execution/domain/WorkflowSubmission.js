@@ -14,9 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe captured workflow ownership independently of host prompt object lifetimes. */
+import { freezeWorkflowSceneMember } from './WorkflowScene.js';
 /** Copy ownership metadata so neither callers nor host mutations can change accepted routing. */
 export function freezeWorkflowSubmissionContext(context) {
     return Object.freeze({
+        ...(context.scene ? { scene: freezeWorkflowSceneMember(context.scene) } : {}),
         ...(context.canvasReturns
             ? {
                 canvasReturns: Object.freeze(context.canvasReturns.map((value) => value.kind === 'unavailable'

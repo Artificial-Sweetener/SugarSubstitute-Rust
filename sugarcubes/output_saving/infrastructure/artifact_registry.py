@@ -23,6 +23,9 @@ from pathlib import Path
 import sqlite3
 import uuid
 
+from .contained_files import contained_file
+from .settings_paths import resolve_output_root
+
 MANAGED_SUBFOLDER_PREFIX = "__sugarcubes_managed__/"
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,7 +105,11 @@ class ManagedArtifactRegistry:
         """Register only committed contained image files without exposing server paths to the client."""
         if not root.is_absolute():
             raise ValueError("Saved image root must be an absolute server path.")
-        root = root.resolve()
+        approved = root
+        root = resolve_output_root(root)
+        png = root / png.relative_to(approved) if png.is_relative_to(approved) else png
+        if jpeg is not None and jpeg.is_relative_to(approved):
+            jpeg = root / jpeg.relative_to(approved)
         png = self._contained(root, png, ".png")
         if jpeg is not None:
             jpeg = self._contained(root, jpeg, ".jpg")
@@ -156,7 +163,7 @@ class ManagedArtifactRegistry:
         configured_root = Path(raw_root)
         if not configured_root.is_absolute():
             return None
-        root = configured_root.resolve()
+        root = resolve_output_root(configured_root)
         for raw_path in row[1:3]:
             if not isinstance(raw_path, str):
                 continue
@@ -216,18 +223,9 @@ class ManagedArtifactRegistry:
     @staticmethod
     def _contained(root: Path, path: Path, suffix: str) -> Path:
         """Reject path traversal, symlink escapes, missing files and unexpected media suffixes."""
-        resolved = path.resolve()
-        if (
-            not root.is_absolute()
-            or not resolved.is_relative_to(root)
-            or not resolved.is_file()
-            or suffix not in {".png", ".jpg"}
-            or resolved.suffix != suffix
-        ):
-            raise ValueError(
-                "Saved image file is missing or outside its registered output root."
-            )
-        return resolved
+        if suffix not in {".png", ".jpg"} or path.suffix != suffix:
+            raise ValueError("The saved image has an unsupported suffix.")
+        return contained_file(root, path)
 
 
 def _is_uuid(value: str) -> bool:

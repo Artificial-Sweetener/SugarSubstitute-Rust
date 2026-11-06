@@ -25,7 +25,9 @@ from ..domain.media import ImageTransferFormat, ImageTransferPayload
 from ..domain.preferences import JpegPreferences
 from ..domain.transfer import OutputFileReference, OutputTransferChoices
 from .artifact_registry import MANAGED_SUBFOLDER_PREFIX, ManagedArtifactRegistry
+from .settings_paths import resolve_output_root
 from .file_revealer import ImageFileRevealer
+from .contained_files import contained_file
 from .jpeg_encoder import JpegCompanionEncoder
 from .photoshop_opener import PhotoshopImageOpener, PhotoshopLayer
 from .transfer_references import ManagedTransferResolver
@@ -43,7 +45,7 @@ class HostOutputImageFiles:
     ) -> None:
         """Bind explicit Comfy namespaces, managed references and the desktop action boundaries."""
         self._registry = registry
-        self._roots = {kind: root.resolve() for kind, root in roots.items()}
+        self._roots = {kind: resolve_output_root(root) for kind, root in roots.items()}
         self._choices = ManagedTransferResolver(registry)
         self._revealer = revealer
         self._photoshop = photoshop
@@ -90,12 +92,12 @@ class HostOutputImageFiles:
         root = self._roots.get(reference.type)
         if root is None:
             raise ValueError("This host image namespace is unavailable.")
-        path = (root / reference.subfolder / reference.filename).resolve()
-        if not path.is_relative_to(root) or not path.is_file():
+        try:
+            return contained_file(root, root / reference.subfolder / reference.filename)
+        except OSError as error:
             raise ValueError(
                 "This output image is unavailable or outside its host folder."
-            )
-        return path
+            ) from error
 
     def rendition(
         self, reference: OutputFileReference, format: ImageTransferFormat, quality: int
@@ -122,6 +124,27 @@ class HostOutputImageFiles:
             return ImageTransferPayload(
                 buffer.getvalue(), path.with_suffix(".png").name, "image/png"
             )
+
+    def preview(
+        self, reference: OutputFileReference, longest_side: int
+    ) -> ImageTransferPayload:
+        """Decode at reduced scale where the codec allows and encode a small WebP in request memory."""
+        path = self.resolve(reference)
+        with Image.open(path) as original:
+            # JPEG decodes directly at a power-of-two reduction, avoiding a full-size bitmap.
+            original.draft("RGB", (longest_side, longest_side))
+            with ImageOps.exif_transpose(original) as oriented:
+                image = oriented.convert(
+                    "RGBA" if "A" in oriented.getbands() else "RGB"
+                )
+        image.thumbnail(
+            (longest_side, longest_side), Image.Resampling.BILINEAR, reducing_gap=2.0
+        )
+        buffer = BytesIO()
+        image.save(buffer, format="WEBP", quality=70, method=0)
+        return ImageTransferPayload(
+            buffer.getvalue(), f"{path.stem}.preview.webp", "image/webp"
+        )
 
     def reveal(self, reference: OutputFileReference) -> None:
         """Select a currently contained output of any media kind, never a client-supplied absolute path."""

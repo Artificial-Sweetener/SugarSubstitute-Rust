@@ -140,10 +140,17 @@ async function main(): Promise<void> {
   }
   rmSync(path.join(generatedRoot, 'frontend'), { recursive: true, force: true });
   rmSync(path.join(generatedRoot, 'integrations'), { recursive: true, force: true });
-  for (const runtime of ['PanelRuntime', 'CanvasRuntime'])
+  const embeddedRoot = path.join(repositoryRoot, 'frontend/comfyui/ui/core/embedded');
+  for (const runtime of walkArtifactFiles(embeddedRoot).filter((file) =>
+    file.endsWith('Runtime.ts'),
+  ))
     await build({
-      entryPoints: [path.join(repositoryRoot, `frontend/comfyui/ui/core/embedded/${runtime}.ts`)],
-      outfile: path.join(generatedRoot, `comfyui/ui/core/embedded/${runtime}.js`),
+      entryPoints: [runtime],
+      outfile: path.join(
+        generatedRoot,
+        'comfyui/ui/core/embedded',
+        path.basename(runtime, '.ts') + '.js',
+      ),
       bundle: true,
       format: 'esm',
       platform: 'browser',
@@ -234,6 +241,19 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
+  // Scene queueing splits prompts through SugarPrompt's scene parser, bundled privately.
+  await build({
+    ...browserDependencyResolution,
+    entryPoints: [
+      path.join(repositoryRoot, 'frontend/comfyui/ui/execution/application/WorkflowScenePlan.ts'),
+    ],
+    outfile: path.join(generatedRoot, 'comfyui/ui/execution/application/WorkflowScenePlan.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   // Regional prompts read, name and colour regions through SugarPrompt, bundled privately with
   // one shared chunk so its parser loads once.
   const inputCanvasRoot = path.join(repositoryRoot, 'frontend/comfyui/ui/input_canvas');
@@ -270,6 +290,23 @@ async function main(): Promise<void> {
       'canvas_editing/presentation/CanvasEditArtwork.js',
     ],
   );
+  // Output transfers consume the canonical host contracts and image policy as private browser chunks.
+  await build({
+    entryPoints: [
+      'OutputArtifactClient.ts',
+      'BrowserRetainedOutputTransfer.ts',
+      'BrowserImageRendition.ts',
+      'OutputImageDimensions.ts',
+    ].map((entry) => path.join(repositoryRoot, 'frontend/comfyui/ui/output_saving', entry)),
+    outbase: path.join(repositoryRoot, 'frontend/comfyui/ui/output_saving'),
+    outdir: path.join(generatedRoot, 'comfyui/ui/output_saving'),
+    bundle: true,
+    splitting: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   deferBrowserCanvasModules(generatedRoot);
   stageStaticAssets();
   assertDeployedModulesResolve(generatedRoot);

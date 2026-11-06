@@ -352,6 +352,23 @@ beforeEach(() => {
   } as unknown as LiteGraphHost;
 });
 
+type SaveBehavior = () => Promise<void>;
+
+/** Construct an isolated UI fixture before the case's five-second save-behavior boundary. */
+function saveWorkflowCase(name: string, arrange: () => Promise<SaveBehavior>): void {
+  describe(name, () => {
+    let behavior: SaveBehavior | null = null;
+    beforeEach(async () => {
+      behavior = null;
+      behavior = await arrange();
+    }, 30_000);
+    test(name, async () => {
+      if (!behavior) throw new Error('Save fixture did not reach its prepared boundary');
+      await behavior();
+    });
+  });
+}
+
 describe('save workflow payload', () => {
   const configureGraphToPrompt = ({ withWorkflow }: { withWorkflow: boolean }): void => {
     app.graphToPrompt = async () => {
@@ -370,7 +387,7 @@ describe('save workflow payload', () => {
     };
   };
 
-  test('save includes workflow payload', async () => {
+  saveWorkflowCase('save includes workflow payload', async () => {
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody: SavePayload | null = null;
@@ -397,54 +414,56 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    const inputMarker = makeMarker({
-      id: 101,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.0',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const outputMarker = makeMarker({
-      id: 102,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.0',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const graph = app.graph;
-    if (!graph) throw new Error('Test graph is unavailable');
-    graph._nodes = [inputMarker, outputMarker];
-    graph._groups = [
-      makeCubeGroup({
+      const ui = getLoadedUi();
+      const inputMarker = makeMarker({
+        id: 101,
+        type: 'SugarCubes.CubeInput',
         cubeId: CANONICAL_DEMO_ID,
         defaultAlias: 'Demo',
         version: '1.0.0',
         revisionRef: CURRENT_REVISION_REF,
-        markerIds: [101, 102],
-        instanceId: 'workflow-payload-instance',
-      }),
-    ];
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [];
-    const pickerRequestsBeforeSave = pickerCatalogRequests;
-    const browserRequestsBeforeSave = browserCatalogRequests;
+      });
+      const outputMarker = makeMarker({
+        id: 102,
+        type: 'SugarCubes.CubeOutput',
+        cubeId: CANONICAL_DEMO_ID,
+        defaultAlias: 'Demo',
+        version: '1.0.0',
+        revisionRef: CURRENT_REVISION_REF,
+      });
+      const graph = app.graph;
+      if (!graph) throw new Error('Test graph is unavailable');
+      graph._nodes = [inputMarker, outputMarker];
+      graph._groups = [
+        makeCubeGroup({
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.0',
+          revisionRef: CURRENT_REVISION_REF,
+          markerIds: [101, 102],
+          instanceId: 'workflow-payload-instance',
+        }),
+      ];
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+      ui.libraryCatalog.getCubes = () => [];
+      const pickerRequestsBeforeSave = pickerCatalogRequests;
+      const browserRequestsBeforeSave = browserCatalogRequests;
 
-    await ui.cubeSave.save();
-    await flushPromises();
+      await ui.cubeSave.save();
+      await flushPromises();
 
-    expect(saveBody).not.toBeNull();
-    expect(Array.isArray(requireSavedWorkflow(saveBody).nodes)).toBe(true);
-    expect(requireSavePayload(saveBody).workflow_version).toBe(1);
-    expect(pickerCatalogRequests).toBeGreaterThan(pickerRequestsBeforeSave);
-    expect(browserCatalogRequests).toBeGreaterThan(browserRequestsBeforeSave);
+      expect(saveBody).not.toBeNull();
+      expect(Array.isArray(requireSavedWorkflow(saveBody).nodes)).toBe(true);
+      expect(requireSavePayload(saveBody).workflow_version).toBe(1);
+      expect(pickerCatalogRequests).toBeGreaterThan(pickerRequestsBeforeSave);
+      expect(browserCatalogRequests).toBeGreaterThan(browserRequestsBeforeSave);
+    };
   });
 
-  test('save includes target metadata from browser catalog entries', async () => {
+  saveWorkflowCase('save includes target metadata from browser catalog entries', async () => {
     const targetCubeId = 'artificial-sweetener/base-cubes/SDXL/demo.cube';
     configureGraphToPrompt({ withWorkflow: true });
 
@@ -458,30 +477,32 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([targetCubeId]);
-    ui.libraryCatalog.getCubes = () => [
-      {
-        cube_id: targetCubeId,
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([targetCubeId]);
+      ui.libraryCatalog.getCubes = () => [
+        {
+          cube_id: targetCubeId,
+          target_model: 'SDXL',
+          supported_models: ['SD 1.5'],
+          is_writable: true,
+        },
+      ];
+
+      await ui.cubeSave.save();
+      await flushPromises();
+
+      expect(requireSavedCube(saveBody).metadata).toEqual({
+        default_alias: 'SDXL/demo',
         target_model: 'SDXL',
-        supported_models: ['SD 1.5'],
-        is_writable: true,
-      },
-    ];
-
-    await ui.cubeSave.save();
-    await flushPromises();
-
-    expect(requireSavedCube(saveBody).metadata).toEqual({
-      default_alias: 'SDXL/demo',
-      target_model: 'SDXL',
-      supported_models: ['SDXL', 'SD 1.5'],
-    });
+        supported_models: ['SDXL', 'SD 1.5'],
+      });
+    };
   });
 
-  test('save enriches workflow subgraphs from live graph state', async () => {
+  saveWorkflowCase('save enriches workflow subgraphs from live graph state', async () => {
     const subgraphId = '94f725d5-39bf-4060-be68-f573214a2055';
     app.graph!._subgraphs = new Map([
       [
@@ -558,35 +579,37 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [];
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+      ui.libraryCatalog.getCubes = () => [];
 
-    await ui.cubeSave.save();
-    await flushPromises();
+      await ui.cubeSave.save();
+      await flushPromises();
 
-    const subgraphs = requireSavedSubgraphs(saveBody);
-    expect(Array.isArray(subgraphs)).toBe(true);
-    const subgraph = subgraphs[0];
-    if (!subgraph) throw new Error('Missing serialized subgraph');
-    expect(subgraph.id).toBe(subgraphId);
-    expect(subgraph.name).toBe('Schedule & Encode Prompts');
-    expect(subgraph.inputNode).toEqual({ id: -10, bounding: [0, 0, 75, 100], pinned: false });
-    expect(subgraph.outputNode).toEqual({
-      id: -20,
-      bounding: [240, 0, 75, 100],
-      pinned: false,
-    });
-    expect(subgraph.inputs?.[0]).toEqual(
-      expect.objectContaining({ name: 'value', label: 'Prompt Text' }),
-    );
-    expect(Array.isArray(subgraph.nodes)).toBe(true);
-    expect(subgraph.nodes?.length).toBe(1);
+      const subgraphs = requireSavedSubgraphs(saveBody);
+      expect(Array.isArray(subgraphs)).toBe(true);
+      const subgraph = subgraphs[0];
+      if (!subgraph) throw new Error('Missing serialized subgraph');
+      expect(subgraph.id).toBe(subgraphId);
+      expect(subgraph.name).toBe('Schedule & Encode Prompts');
+      expect(subgraph.inputNode).toEqual({ id: -10, bounding: [0, 0, 75, 100], pinned: false });
+      expect(subgraph.outputNode).toEqual({
+        id: -20,
+        bounding: [240, 0, 75, 100],
+        pinned: false,
+      });
+      expect(subgraph.inputs?.[0]).toEqual(
+        expect.objectContaining({ name: 'value', label: 'Prompt Text' }),
+      );
+      expect(Array.isArray(subgraph.nodes)).toBe(true);
+      expect(subgraph.nodes?.length).toBe(1);
+    };
   });
 
-  test('save drops subgraphs with empty ids during normalization', async () => {
+  saveWorkflowCase('save drops subgraphs with empty ids during normalization', async () => {
     const validSubgraphId = '94f725d5-39bf-4060-be68-f573214a2055';
     app.graph!._subgraphs = new Map([
       [
@@ -639,23 +662,25 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [];
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+      ui.libraryCatalog.getCubes = () => [];
 
-    await ui.cubeSave.save();
-    await flushPromises();
+      await ui.cubeSave.save();
+      await flushPromises();
 
-    const subgraphIds = (requireSavePayload(saveBody).workflow?.definitions?.subgraphs || []).map(
-      (entry) => entry.id,
-    );
-    expect(subgraphIds).toContain(validSubgraphId);
-    expect(subgraphIds).not.toContain('');
+      const subgraphIds = (requireSavePayload(saveBody).workflow?.definitions?.subgraphs || []).map(
+        (entry) => entry.id,
+      );
+      expect(subgraphIds).toContain(validSubgraphId);
+      expect(subgraphIds).not.toContain('');
+    };
   });
 
-  test('save assigns cube_id for unsaved cubes', async () => {
+  saveWorkflowCase('save assigns cube_id for unsaved cubes', async () => {
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody: SavePayload | null = null;
@@ -725,20 +750,22 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set();
-    ui.libraryCatalog.getCubes = () => [];
-    await ui.cubeSave.save();
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set();
+      ui.libraryCatalog.getCubes = () => [];
+      await ui.cubeSave.save();
 
-    const cubeIdWidget = inputMarker.widgets.find((widget) => widget.name === 'cube_id');
-    const assignedCubeId = cubeIdWidget?.value || '';
-    expect(assignedCubeId).toBe(PERSONAL_DEMO_ID);
-    expect(requireSavedCube(saveBody).cube_id).toBe(PERSONAL_DEMO_ID);
+      const cubeIdWidget = inputMarker.widgets.find((widget) => widget.name === 'cube_id');
+      const assignedCubeId = cubeIdWidget?.value || '';
+      expect(assignedCubeId).toBe(PERSONAL_DEMO_ID);
+      expect(requireSavedCube(saveBody).cube_id).toBe(PERSONAL_DEMO_ID);
+    };
   });
 
-  test('save assigns cube_id when markers are disconnected', async () => {
+  saveWorkflowCase('save assigns cube_id when markers are disconnected', async () => {
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody: SavePayload | null = null;
@@ -782,44 +809,48 @@ describe('save workflow payload', () => {
     app.graph.links = {};
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set();
-    ui.libraryCatalog.getCubes = () => [];
-    await ui.cubeSave.save();
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set();
+      ui.libraryCatalog.getCubes = () => [];
+      await ui.cubeSave.save();
 
-    const assignedCubeId =
-      inputMarker.widgets.find((widget) => widget.name === 'cube_id')?.value || '';
-    expect(assignedCubeId).toBe(PERSONAL_LOOSE_ID);
-    expect(requireSavedCube(saveBody).cube_id).toBe(PERSONAL_LOOSE_ID);
+      const assignedCubeId =
+        inputMarker.widgets.find((widget) => widget.name === 'cube_id')?.value || '';
+      expect(assignedCubeId).toBe(PERSONAL_LOOSE_ID);
+      expect(requireSavedCube(saveBody).cube_id).toBe(PERSONAL_LOOSE_ID);
+    };
   });
 
-  test('save reports missing workflow payload', async () => {
+  saveWorkflowCase('save reports missing workflow payload', async () => {
     configureGraphToPrompt({ withWorkflow: false });
 
     api.fetchApi = async () => ({ ok: true, json: async () => ({ saved: [] }) });
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [];
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+      ui.libraryCatalog.getCubes = () => [];
 
-    await ui.cubeSave.save();
-    await flushPromises();
+      await ui.cubeSave.save();
+      await flushPromises();
 
-    expect(errorSpy).toHaveBeenCalled();
-    const messages = errorSpy.mock.calls.map((call) => String(call[0]));
-    expect(messages).toEqual(
-      expect.arrayContaining([expect.stringContaining('Workflow payload unavailable')]),
-    );
-    errorSpy.mockRestore();
+      expect(errorSpy).toHaveBeenCalled();
+      const messages = errorSpy.mock.calls.map((call) => String(call[0]));
+      expect(messages).toEqual(
+        expect.arrayContaining([expect.stringContaining('Workflow payload unavailable')]),
+      );
+      errorSpy.mockRestore();
+    };
   });
 
-  test('save delegates finalized graph state to the save reconciler', async () => {
+  saveWorkflowCase('save delegates finalized graph state to the save reconciler', async () => {
     configureGraphToPrompt({ withWorkflow: true });
 
     api.fetchApi = async (url, options = {}) => {
@@ -841,28 +872,30 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [];
-    const reconcileSpy = jest
-      .spyOn(ui.saveReconciler, 'reconcile')
-      .mockResolvedValue({ cubeIds: [], entries: [] });
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+      ui.libraryCatalog.getCubes = () => [];
+      const reconcileSpy = jest
+        .spyOn(ui.saveReconciler, 'reconcile')
+        .mockResolvedValue({ cubeIds: [], entries: [] });
 
-    await ui.cubeSave.save();
-    await flushPromises();
+      await ui.cubeSave.save();
+      await flushPromises();
 
-    expect(reconcileSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        graph: app.graph,
-        fallbackCubeIds: [CANONICAL_DEMO_ID],
-        reason: 'save',
-      }),
-    );
+      expect(reconcileSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          graph: app.graph,
+          fallbackCubeIds: [CANONICAL_DEMO_ID],
+          reason: 'save',
+        }),
+      );
+    };
   });
 
-  test('save toast reports committed entries distinctly', async () => {
+  saveWorkflowCase('save toast reports committed entries distinctly', async () => {
     const toastAdd = jest.fn();
     window.comfyAPI = { vueApp: { config: { globalProperties: { $toast: { add: toastAdd } } } } };
     configureGraphToPrompt({ withWorkflow: true });
@@ -891,146 +924,153 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [];
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+      ui.libraryCatalog.getCubes = () => [];
 
-    await ui.cubeSave.save();
-    await flushPromises();
+      await ui.cubeSave.save();
+      await flushPromises();
 
-    expect(toastAdd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        severity: 'success',
-        summary: 'SugarCubes exported',
-        detail: expect.stringContaining('saved and committed: demo.cube'),
-      }),
-    );
-    expect(toastAdd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        detail: expect.stringContaining('abcdef1: update demo.cube v1.0.1'),
-      }),
-    );
-  });
-
-  test('version-bumped save updates only the saved instance chrome metadata', async () => {
-    app.extensionManager.registerSidebarTab = () => {};
-    configureGraphToPrompt({ withWorkflow: true });
-
-    api.fetchApi = async (url) => {
-      if (url === '/sugarcubes/save_implementation') {
-        return {
-          ok: true,
-          json: async () => ({
-            saved: [
-              {
-                cube_id: CANONICAL_DEMO_ID,
-                default_alias: 'Demo',
-                path: 'demo.cube',
-                forked: false,
-                committed: true,
-                commit_message: 'update demo.cube v1.1.1',
-                version: '1.1.1',
-                definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.1.1'),
-              },
-            ],
-          }),
-        };
-      }
-      return { ok: true, json: async () => ({ cubes: [] }) };
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'success',
+          summary: 'SugarCubes exported',
+          detail: expect.stringContaining('saved and committed: demo.cube'),
+        }),
+      );
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          detail: expect.stringContaining('abcdef1: update demo.cube v1.0.1'),
+        }),
+      );
     };
-
-    await loadUi();
-    await setupRegisteredExtension();
-
-    const ui = getLoadedUi();
-    app.graph = { _nodes: [], _groups: [], links: {} };
-    const savedInput = makeMarker({
-      id: 101,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const savedOutput = makeMarker({
-      id: 102,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const untouchedInput = makeMarker({
-      id: 201,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const untouchedOutput = makeMarker({
-      id: 202,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const savedGroup = makeCubeGroup({
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-      markerIds: [101, 102],
-      instanceId: 'saved-instance',
-    });
-    const untouchedGroup = makeCubeGroup({
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-      markerIds: [201, 202],
-      instanceId: 'untouched-instance',
-    });
-    app.graph._nodes = [savedInput, savedOutput, untouchedInput, untouchedOutput];
-    app.graph._groups = [savedGroup, untouchedGroup];
-
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [
-      { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.1.0', is_writable: true },
-    ];
-    ui.instanceManager.scheduleRefresh = jest.fn();
-
-    await ui.cubeSave.save();
-
-    expect(savedGroup.properties.sugarcubes).toEqual(
-      expect.objectContaining({
-        cube_version: '1.1.1',
-        cube_revision_ref: CURRENT_REVISION_REF,
-        cube_definition_key: `${CANONICAL_DEMO_ID}@1.1.1`,
-      }),
-    );
-    expect(savedInput.properties.sugarcubes_cube_version).toBe('1.1.1');
-    expect(savedInput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(savedOutput.properties.sugarcubes_cube_version).toBe('1.1.1');
-    expect(savedOutput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(untouchedGroup.properties.sugarcubes).toEqual(
-      expect.objectContaining({
-        cube_version: '1.1.0',
-        cube_revision_ref: CURRENT_REVISION_REF,
-        cube_definition_key: `${CANONICAL_DEMO_ID}@1.1.0`,
-      }),
-    );
-    expect(untouchedInput.properties.sugarcubes_cube_version).toBe('1.1.0');
-    expect(untouchedInput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(untouchedOutput.properties.sugarcubes_cube_version).toBe('1.1.0');
-    expect(untouchedOutput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(ui.instanceManager.scheduleRefresh).not.toHaveBeenCalled();
   });
 
-  test('versionless save response leaves chrome metadata unchanged', async () => {
+  saveWorkflowCase(
+    'version-bumped save updates only the saved instance chrome metadata',
+    async () => {
+      app.extensionManager.registerSidebarTab = () => {};
+      configureGraphToPrompt({ withWorkflow: true });
+
+      api.fetchApi = async (url) => {
+        if (url === '/sugarcubes/save_implementation') {
+          return {
+            ok: true,
+            json: async () => ({
+              saved: [
+                {
+                  cube_id: CANONICAL_DEMO_ID,
+                  default_alias: 'Demo',
+                  path: 'demo.cube',
+                  forked: false,
+                  committed: true,
+                  commit_message: 'update demo.cube v1.1.1',
+                  version: '1.1.1',
+                  definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.1.1'),
+                },
+              ],
+            }),
+          };
+        }
+        return { ok: true, json: async () => ({ cubes: [] }) };
+      };
+
+      await loadUi();
+      return async () => {
+        await setupRegisteredExtension();
+
+        const ui = getLoadedUi();
+        app.graph = { _nodes: [], _groups: [], links: {} };
+        const savedInput = makeMarker({
+          id: 101,
+          type: 'SugarCubes.CubeInput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.1.0',
+          revisionRef: CURRENT_REVISION_REF,
+        });
+        const savedOutput = makeMarker({
+          id: 102,
+          type: 'SugarCubes.CubeOutput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.1.0',
+          revisionRef: CURRENT_REVISION_REF,
+        });
+        const untouchedInput = makeMarker({
+          id: 201,
+          type: 'SugarCubes.CubeInput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.1.0',
+          revisionRef: CURRENT_REVISION_REF,
+        });
+        const untouchedOutput = makeMarker({
+          id: 202,
+          type: 'SugarCubes.CubeOutput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.1.0',
+          revisionRef: CURRENT_REVISION_REF,
+        });
+        const savedGroup = makeCubeGroup({
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.1.0',
+          revisionRef: CURRENT_REVISION_REF,
+          markerIds: [101, 102],
+          instanceId: 'saved-instance',
+        });
+        const untouchedGroup = makeCubeGroup({
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.1.0',
+          revisionRef: CURRENT_REVISION_REF,
+          markerIds: [201, 202],
+          instanceId: 'untouched-instance',
+        });
+        app.graph._nodes = [savedInput, savedOutput, untouchedInput, untouchedOutput];
+        app.graph._groups = [savedGroup, untouchedGroup];
+
+        ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+        ui.libraryCatalog.getCubes = () => [
+          { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.1.0', is_writable: true },
+        ];
+        ui.instanceManager.scheduleRefresh = jest.fn();
+
+        await ui.cubeSave.save();
+
+        expect(savedGroup.properties.sugarcubes).toEqual(
+          expect.objectContaining({
+            cube_version: '1.1.1',
+            cube_revision_ref: CURRENT_REVISION_REF,
+            cube_definition_key: `${CANONICAL_DEMO_ID}@1.1.1`,
+          }),
+        );
+        expect(savedInput.properties.sugarcubes_cube_version).toBe('1.1.1');
+        expect(savedInput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+        expect(savedOutput.properties.sugarcubes_cube_version).toBe('1.1.1');
+        expect(savedOutput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+        expect(untouchedGroup.properties.sugarcubes).toEqual(
+          expect.objectContaining({
+            cube_version: '1.1.0',
+            cube_revision_ref: CURRENT_REVISION_REF,
+            cube_definition_key: `${CANONICAL_DEMO_ID}@1.1.0`,
+          }),
+        );
+        expect(untouchedInput.properties.sugarcubes_cube_version).toBe('1.1.0');
+        expect(untouchedInput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+        expect(untouchedOutput.properties.sugarcubes_cube_version).toBe('1.1.0');
+        expect(untouchedOutput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+        expect(ui.instanceManager.scheduleRefresh).not.toHaveBeenCalled();
+      };
+    },
+  );
+
+  saveWorkflowCase('versionless save response leaves chrome metadata unchanged', async () => {
     app.extensionManager.registerSidebarTab = () => {};
     configureGraphToPrompt({ withWorkflow: true });
 
@@ -1056,130 +1096,138 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    app.graph = { _nodes: [], _groups: [], links: {} };
-    const inputMarker = makeMarker({
-      id: 101,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const outputMarker = makeMarker({
-      id: 102,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const group = makeCubeGroup({
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.1.0',
-      revisionRef: CURRENT_REVISION_REF,
-      markerIds: [101, 102],
-      instanceId: 'saved-instance',
-    });
-    app.graph._nodes = [inputMarker, outputMarker];
-    app.graph._groups = [group];
+      const ui = getLoadedUi();
+      app.graph = { _nodes: [], _groups: [], links: {} };
+      const inputMarker = makeMarker({
+        id: 101,
+        type: 'SugarCubes.CubeInput',
+        cubeId: CANONICAL_DEMO_ID,
+        defaultAlias: 'Demo',
+        version: '1.1.0',
+        revisionRef: CURRENT_REVISION_REF,
+      });
+      const outputMarker = makeMarker({
+        id: 102,
+        type: 'SugarCubes.CubeOutput',
+        cubeId: CANONICAL_DEMO_ID,
+        defaultAlias: 'Demo',
+        version: '1.1.0',
+        revisionRef: CURRENT_REVISION_REF,
+      });
+      const group = makeCubeGroup({
+        cubeId: CANONICAL_DEMO_ID,
+        defaultAlias: 'Demo',
+        version: '1.1.0',
+        revisionRef: CURRENT_REVISION_REF,
+        markerIds: [101, 102],
+        instanceId: 'saved-instance',
+      });
+      app.graph._nodes = [inputMarker, outputMarker];
+      app.graph._groups = [group];
 
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [
-      { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.1.0', is_writable: true },
-    ];
-    ui.instanceManager.scheduleRefresh = jest.fn();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+      ui.libraryCatalog.getCubes = () => [
+        { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.1.0', is_writable: true },
+      ];
+      ui.instanceManager.scheduleRefresh = jest.fn();
 
-    await ui.cubeSave.save();
+      await ui.cubeSave.save();
 
-    expect(group.properties.sugarcubes).toEqual(
-      expect.objectContaining({
-        cube_version: '1.1.0',
-        cube_revision_ref: CURRENT_REVISION_REF,
-        cube_definition_key: `${CANONICAL_DEMO_ID}@1.1.0`,
-      }),
-    );
-    expect(inputMarker.properties.sugarcubes_cube_version).toBe('1.1.0');
-    expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(outputMarker.properties.sugarcubes_cube_version).toBe('1.1.0');
-    expect(outputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(ui.instanceManager.scheduleRefresh).not.toHaveBeenCalledWith({
-      graph: app.graph,
-      reason: 'save-version-metadata',
-    });
+      expect(group.properties.sugarcubes).toEqual(
+        expect.objectContaining({
+          cube_version: '1.1.0',
+          cube_revision_ref: CURRENT_REVISION_REF,
+          cube_definition_key: `${CANONICAL_DEMO_ID}@1.1.0`,
+        }),
+      );
+      expect(inputMarker.properties.sugarcubes_cube_version).toBe('1.1.0');
+      expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+      expect(outputMarker.properties.sugarcubes_cube_version).toBe('1.1.0');
+      expect(outputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+      expect(ui.instanceManager.scheduleRefresh).not.toHaveBeenCalledWith({
+        graph: app.graph,
+        reason: 'save-version-metadata',
+      });
+    };
   });
 
-  test('save forks read-only tracked cubes even when author metadata matches', async () => {
-    configureGraphToPrompt({ withWorkflow: true });
+  saveWorkflowCase(
+    'save forks read-only tracked cubes even when author metadata matches',
+    async () => {
+      configureGraphToPrompt({ withWorkflow: true });
 
-    let saveBody: SavePayload | null = null;
-    api.fetchApi = async (url, options = {}) => {
-      if (url === '/sugarcubes/save_implementation') {
-        saveBody = parseSavePayload(options.body);
-        return { ok: true, json: async () => ({ saved: [] }) };
-      }
-      return { ok: true, json: async () => ({ cubes: [] }) };
-    };
+      let saveBody: SavePayload | null = null;
+      api.fetchApi = async (url, options = {}) => {
+        if (url === '/sugarcubes/save_implementation') {
+          saveBody = parseSavePayload(options.body);
+          return { ok: true, json: async () => ({ saved: [] }) };
+        }
+        return { ok: true, json: async () => ({ cubes: [] }) };
+      };
 
-    await loadUi();
-    await setupRegisteredExtension();
+      await loadUi();
+      return async () => {
+        await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    app.graph = { _nodes: [], _groups: [], links: {} };
-    const inputMarker = {
-      id: 2,
-      type: 'SugarCubes.CubeInput',
-      pos: [0, 0],
-      size: [140, 46],
-      inputs: [{ name: 'value', link: null }],
-      outputs: [{ type: 'IMAGE', links: [] }],
-      widgets: [
-        { name: 'cube_id', value: CANONICAL_DEMO_ID },
-        { name: 'default_alias', value: 'Demo' },
-      ],
-      graph: app.graph,
-    };
-    const outputMarker = {
-      id: 3,
-      type: 'SugarCubes.CubeOutput',
-      pos: [0, 0],
-      size: [140, 46],
-      inputs: [{ type: 'IMAGE', link: null }],
-      outputs: [{ type: 'IMAGE', links: [] }],
-      widgets: [
-        { name: 'cube_id', value: CANONICAL_DEMO_ID },
-        { name: 'default_alias', value: 'Demo' },
-      ],
-      graph: app.graph,
-    };
-    app.graph._nodes = [inputMarker, outputMarker];
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [
-      {
-        cube_id: CANONICAL_DEMO_ID,
-        name: 'Demo',
-        author: 'Tester',
-        author_url: '',
-        is_writable: false,
-        write_block_reason: 'Tracked GitHub repos are read-only until you claim one GitHub owner.',
-      },
-    ];
-    await ui.cubeSave.save();
-    await flushPromises();
+        const ui = getLoadedUi();
+        app.graph = { _nodes: [], _groups: [], links: {} };
+        const inputMarker = {
+          id: 2,
+          type: 'SugarCubes.CubeInput',
+          pos: [0, 0],
+          size: [140, 46],
+          inputs: [{ name: 'value', link: null }],
+          outputs: [{ type: 'IMAGE', links: [] }],
+          widgets: [
+            { name: 'cube_id', value: CANONICAL_DEMO_ID },
+            { name: 'default_alias', value: 'Demo' },
+          ],
+          graph: app.graph,
+        };
+        const outputMarker = {
+          id: 3,
+          type: 'SugarCubes.CubeOutput',
+          pos: [0, 0],
+          size: [140, 46],
+          inputs: [{ type: 'IMAGE', link: null }],
+          outputs: [{ type: 'IMAGE', links: [] }],
+          widgets: [
+            { name: 'cube_id', value: CANONICAL_DEMO_ID },
+            { name: 'default_alias', value: 'Demo' },
+          ],
+          graph: app.graph,
+        };
+        app.graph._nodes = [inputMarker, outputMarker];
+        ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+        ui.libraryCatalog.getCubes = () => [
+          {
+            cube_id: CANONICAL_DEMO_ID,
+            name: 'Demo',
+            author: 'Tester',
+            author_url: '',
+            is_writable: false,
+            write_block_reason:
+              'Tracked GitHub repos are read-only until you claim one GitHub owner.',
+          },
+        ];
+        await ui.cubeSave.save();
+        await flushPromises();
 
-    expect(requireSavePayload(saveBody).cubes).toEqual([
-      expect.objectContaining({
-        cube_id: PERSONAL_DEMO_FORK_ID,
-        forked: true,
-        previous_cube_id: CANONICAL_DEMO_ID,
-      }),
-    ]);
-  });
+        expect(requireSavePayload(saveBody).cubes).toEqual([
+          expect.objectContaining({
+            cube_id: PERSONAL_DEMO_FORK_ID,
+            forked: true,
+            previous_cube_id: CANONICAL_DEMO_ID,
+          }),
+        ]);
+      };
+    },
+  );
 
-  test('current save does not show historical save modal', async () => {
+  saveWorkflowCase('current save does not show historical save modal', async () => {
     app.extensionManager.registerSidebarTab = () => {};
     configureGraphToPrompt({ withWorkflow: true });
 
@@ -1203,390 +1251,412 @@ describe('save workflow payload', () => {
     };
 
     await loadUi();
-    await setupRegisteredExtension();
+    return async () => {
+      await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [
-      { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
-    ];
-    ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
+      const ui = getLoadedUi();
+      ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+      ui.libraryCatalog.getCubes = () => [
+        { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
+      ];
+      ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
 
-    await ui.cubeSave.save();
+      await ui.cubeSave.save();
 
-    expect(ui.dialogs.chooseHistoricalVersionSaveAction).not.toHaveBeenCalled();
+      expect(ui.dialogs.chooseHistoricalVersionSaveAction).not.toHaveBeenCalled();
+    };
   });
 
-  test('stale historical save as latest sends source metadata and refreshes graph identity', async () => {
-    app.extensionManager.registerSidebarTab = () => {};
-    configureGraphToPrompt({ withWorkflow: true });
+  saveWorkflowCase(
+    'stale historical save as latest sends source metadata and refreshes graph identity',
+    async () => {
+      app.extensionManager.registerSidebarTab = () => {};
+      configureGraphToPrompt({ withWorkflow: true });
 
-    let saveBody: SavePayload | null = null;
-    api.fetchApi = async (url, options = {}) => {
-      if (url === '/sugarcubes/save_implementation') {
-        saveBody = parseSavePayload(options.body);
-        return {
-          ok: true,
-          json: async () => ({
-            saved: [
-              {
-                cube_id: CANONICAL_DEMO_ID,
-                default_alias: 'Demo',
-                path: 'demo.cube',
-                forked: false,
-                commit_message: 'update demo.cube v1.2.2',
-                version: '1.2.2',
-                definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.2.2'),
-              },
-            ],
-          }),
-        };
-      }
-      return { ok: true, json: async () => ({ cubes: [] }) };
-    };
+      let saveBody: SavePayload | null = null;
+      api.fetchApi = async (url, options = {}) => {
+        if (url === '/sugarcubes/save_implementation') {
+          saveBody = parseSavePayload(options.body);
+          return {
+            ok: true,
+            json: async () => ({
+              saved: [
+                {
+                  cube_id: CANONICAL_DEMO_ID,
+                  default_alias: 'Demo',
+                  path: 'demo.cube',
+                  forked: false,
+                  commit_message: 'update demo.cube v1.2.2',
+                  version: '1.2.2',
+                  definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.2.2'),
+                },
+              ],
+            }),
+          };
+        }
+        return { ok: true, json: async () => ({ cubes: [] }) };
+      };
 
-    await loadUi();
-    await setupRegisteredExtension();
+      await loadUi();
+      return async () => {
+        await setupRegisteredExtension();
 
-    const ui = getLoadedUi();
-    app.graph = { _nodes: [], _groups: [], links: {} };
-    const inputMarker = makeMarker({
-      id: 2,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-    });
-    const outputMarker = makeMarker({
-      id: 3,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-    });
-    const group = makeCubeGroup({
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-      markerIds: [2, 3],
-      instanceId: 'inst-old',
-    });
-    app.graph._nodes = [inputMarker, outputMarker];
-    app.graph._groups = [group];
-
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [
-      { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
-    ];
-    ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
-
-    await ui.cubeSave.save();
-
-    expect(ui.dialogs.chooseHistoricalVersionSaveAction).toHaveBeenCalledWith({
-      entries: [
-        expect.objectContaining({
+        const ui = getLoadedUi();
+        app.graph = { _nodes: [], _groups: [], links: {} };
+        const inputMarker = makeMarker({
+          id: 2,
+          type: 'SugarCubes.CubeInput',
           cubeId: CANONICAL_DEMO_ID,
           defaultAlias: 'Demo',
-          sourceVersion: '1.0.1',
-          sourceRevisionRef: HISTORICAL_REVISION_REF,
-        }),
-      ],
-    });
-    expect(requireSavedCube(saveBody)).toEqual(
-      expect.objectContaining({
-        cube_id: CANONICAL_DEMO_ID,
-        source_revision_ref: HISTORICAL_REVISION_REF,
-        source_version: '1.0.1',
-        source_definition_key: `${CANONICAL_DEMO_ID}@1.0.1`,
-        stale_save_mode: 'latest',
-      }),
-    );
-    expect(group.properties.sugarcubes).toEqual(
-      expect.objectContaining({
-        cube_id: CANONICAL_DEMO_ID,
-        cube_version: '1.2.2',
-        cube_revision_ref: CURRENT_REVISION_REF,
-        cube_definition_key: `${CANONICAL_DEMO_ID}@1.2.2`,
-      }),
-    );
-    expect(inputMarker.properties.sugarcubes_cube_version).toBe('1.2.2');
-    expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(outputMarker.properties.sugarcubes_cube_version).toBe('1.2.2');
-    expect(outputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-  });
-
-  test('stale historical save cancel skips backend save and graph mutation', async () => {
-    app.extensionManager.registerSidebarTab = () => {};
-    configureGraphToPrompt({ withWorkflow: true });
-
-    let saveCalls = 0;
-    api.fetchApi = async (url) => {
-      if (url === '/sugarcubes/save_implementation') {
-        saveCalls += 1;
-        return { ok: true, json: async () => ({ saved: [] }) };
-      }
-      return { ok: true, json: async () => ({ cubes: [] }) };
-    };
-
-    await loadUi();
-    await setupRegisteredExtension();
-
-    const ui = getLoadedUi();
-    app.graph = { _nodes: [], _groups: [], links: {} };
-    const inputMarker = makeMarker({
-      id: 2,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-    });
-    const outputMarker = makeMarker({
-      id: 3,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-    });
-    const group = makeCubeGroup({
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-      markerIds: [2, 3],
-      instanceId: 'inst-old',
-    });
-    app.graph._nodes = [inputMarker, outputMarker];
-    app.graph._groups = [group];
-
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [
-      { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
-    ];
-    ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => null);
-    ui.dirtyManager.markClean = jest.fn();
-
-    await ui.cubeSave.save();
-
-    expect(saveCalls).toBe(0);
-    expect(ui.dirtyManager.markClean).not.toHaveBeenCalled();
-    expect(group.properties.sugarcubes.cube_version).toBe('1.0.1');
-    expect(group.properties.sugarcubes.cube_revision_ref).toBe(HISTORICAL_REVISION_REF);
-    expect(inputMarker.properties.sugarcubes_cube_version).toBe('1.0.1');
-    expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(HISTORICAL_REVISION_REF);
-  });
-
-  test('stale historical save as latest uses the finalized persisted version', async () => {
-    app.extensionManager.registerSidebarTab = () => {};
-    configureGraphToPrompt({ withWorkflow: true });
-
-    api.fetchApi = async (url) => {
-      if (url === '/sugarcubes/save_implementation') {
-        return {
-          ok: true,
-          json: async () => ({
-            saved: [
-              {
-                cube_id: CANONICAL_DEMO_ID,
-                default_alias: 'Demo',
-                path: 'demo.cube',
-                forked: false,
-                committed: false,
-                commit_message: '',
-                version: '1.2.1',
-                definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.2.1'),
-              },
-            ],
-          }),
-        };
-      }
-      return { ok: true, json: async () => ({ cubes: [] }) };
-    };
-
-    await loadUi();
-    await setupRegisteredExtension();
-
-    const ui = getLoadedUi();
-    app.graph = { _nodes: [], _groups: [], links: {} };
-    const inputMarker = makeMarker({
-      id: 2,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-    });
-    const outputMarker = makeMarker({
-      id: 3,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-    });
-    const group = makeCubeGroup({
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-      markerIds: [2, 3],
-      instanceId: 'inst-old',
-    });
-    app.graph._nodes = [inputMarker, outputMarker];
-    app.graph._groups = [group];
-
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [
-      { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
-    ];
-    ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
-
-    await ui.cubeSave.save();
-
-    expect(group.properties.sugarcubes).toEqual(
-      expect.objectContaining({
-        cube_version: '1.2.1',
-        cube_revision_ref: CURRENT_REVISION_REF,
-        cube_definition_key: `${CANONICAL_DEMO_ID}@1.2.1`,
-      }),
-    );
-    expect(inputMarker.properties.sugarcubes_cube_version).toBe('1.2.1');
-    expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(outputMarker.properties.sugarcubes_cube_version).toBe('1.2.1');
-    expect(outputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-  });
-
-  test('stale historical fork updates only stale instance markers and preserves revision lineage', async () => {
-    app.extensionManager.registerSidebarTab = () => {};
-    configureGraphToPrompt({ withWorkflow: true });
-
-    let saveBody: SavePayload | null = null;
-    api.fetchApi = async (url, options = {}) => {
-      if (url === '/sugarcubes/save_implementation') {
-        saveBody = parseSavePayload(options.body);
-        return { ok: true, json: async () => ({ saved: [] }) };
-      }
-      return { ok: true, json: async () => ({ cubes: [] }) };
-    };
-
-    await loadUi();
-    await setupRegisteredExtension();
-
-    const ui = getLoadedUi();
-    app.graph = { _nodes: [], _groups: [], links: {} };
-    const staleInput = makeMarker({
-      id: 2,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-    });
-    const staleOutput = makeMarker({
-      id: 3,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-    });
-    const currentInput = makeMarker({
-      id: 4,
-      type: 'SugarCubes.CubeInput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.2.1',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const currentOutput = makeMarker({
-      id: 5,
-      type: 'SugarCubes.CubeOutput',
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.2.1',
-      revisionRef: CURRENT_REVISION_REF,
-    });
-    const staleGroup = makeCubeGroup({
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.0.1',
-      revisionRef: HISTORICAL_REVISION_REF,
-      markerIds: [2, 3],
-      instanceId: 'inst-old',
-    });
-    const currentGroup = makeCubeGroup({
-      cubeId: CANONICAL_DEMO_ID,
-      defaultAlias: 'Demo',
-      version: '1.2.1',
-      revisionRef: CURRENT_REVISION_REF,
-      markerIds: [4, 5],
-      instanceId: 'inst-current',
-    });
-    app.graph._nodes = [staleInput, staleOutput, currentInput, currentOutput];
-    app.graph._groups = [staleGroup, currentGroup];
-
-    ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.libraryCatalog.getCubes = () => [
-      {
-        cube_id: CANONICAL_DEMO_ID,
-        name: 'Demo',
-        version: '1.2.1',
-        author: 'Tester',
-        author_url: 'https://example.test/tester',
-        is_writable: true,
-      },
-    ];
-    ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'fork');
-    await ui.cubeSave.save();
-
-    expect(requireSavedCube(saveBody)).toEqual(
-      expect.objectContaining({
-        cube_id: PERSONAL_DEMO_FORK_ID,
-        forked: true,
-        previous_cube_id: CANONICAL_DEMO_ID,
-        lineage: expect.objectContaining({
-          id: CANONICAL_DEMO_ID,
-          name: 'Demo',
           version: '1.0.1',
-          revision_ref: HISTORICAL_REVISION_REF,
-          author: 'Tester',
-          author_url: 'https://example.test/tester',
-        }),
-      }),
-    );
-    expect(staleInput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
-      PERSONAL_DEMO_FORK_ID,
-    );
-    expect(staleOutput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
-      PERSONAL_DEMO_FORK_ID,
-    );
-    expect(staleGroup.properties.sugarcubes).toEqual(
-      expect.objectContaining({
-        cube_id: PERSONAL_DEMO_FORK_ID,
-        default_alias: 'Demo (fork)',
-        cube_version: '',
-        cube_revision_ref: CURRENT_REVISION_REF,
-        cube_definition_key: PERSONAL_DEMO_FORK_ID,
-      }),
-    );
-    expect(staleInput.properties.sugarcubes_cube_version).toBe('');
-    expect(staleInput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(currentInput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
-      CANONICAL_DEMO_ID,
-    );
-    expect(currentOutput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
-      CANONICAL_DEMO_ID,
-    );
-    expect(currentGroup.properties.sugarcubes).toEqual(
-      expect.objectContaining({
-        cube_id: CANONICAL_DEMO_ID,
-        cube_version: '1.2.1',
-        cube_revision_ref: CURRENT_REVISION_REF,
-      }),
-    );
-  });
+          revisionRef: HISTORICAL_REVISION_REF,
+        });
+        const outputMarker = makeMarker({
+          id: 3,
+          type: 'SugarCubes.CubeOutput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+        });
+        const group = makeCubeGroup({
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+          markerIds: [2, 3],
+          instanceId: 'inst-old',
+        });
+        app.graph._nodes = [inputMarker, outputMarker];
+        app.graph._groups = [group];
+
+        ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+        ui.libraryCatalog.getCubes = () => [
+          { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
+        ];
+        ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
+
+        await ui.cubeSave.save();
+
+        expect(ui.dialogs.chooseHistoricalVersionSaveAction).toHaveBeenCalledWith({
+          entries: [
+            expect.objectContaining({
+              cubeId: CANONICAL_DEMO_ID,
+              defaultAlias: 'Demo',
+              sourceVersion: '1.0.1',
+              sourceRevisionRef: HISTORICAL_REVISION_REF,
+            }),
+          ],
+        });
+        expect(requireSavedCube(saveBody)).toEqual(
+          expect.objectContaining({
+            cube_id: CANONICAL_DEMO_ID,
+            source_revision_ref: HISTORICAL_REVISION_REF,
+            source_version: '1.0.1',
+            source_definition_key: `${CANONICAL_DEMO_ID}@1.0.1`,
+            stale_save_mode: 'latest',
+          }),
+        );
+        expect(group.properties.sugarcubes).toEqual(
+          expect.objectContaining({
+            cube_id: CANONICAL_DEMO_ID,
+            cube_version: '1.2.2',
+            cube_revision_ref: CURRENT_REVISION_REF,
+            cube_definition_key: `${CANONICAL_DEMO_ID}@1.2.2`,
+          }),
+        );
+        expect(inputMarker.properties.sugarcubes_cube_version).toBe('1.2.2');
+        expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+        expect(outputMarker.properties.sugarcubes_cube_version).toBe('1.2.2');
+        expect(outputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+      };
+    },
+  );
+
+  saveWorkflowCase(
+    'stale historical save cancel skips backend save and graph mutation',
+    async () => {
+      app.extensionManager.registerSidebarTab = () => {};
+      configureGraphToPrompt({ withWorkflow: true });
+
+      let saveCalls = 0;
+      api.fetchApi = async (url) => {
+        if (url === '/sugarcubes/save_implementation') {
+          saveCalls += 1;
+          return { ok: true, json: async () => ({ saved: [] }) };
+        }
+        return { ok: true, json: async () => ({ cubes: [] }) };
+      };
+
+      await loadUi();
+      return async () => {
+        await setupRegisteredExtension();
+
+        const ui = getLoadedUi();
+        app.graph = { _nodes: [], _groups: [], links: {} };
+        const inputMarker = makeMarker({
+          id: 2,
+          type: 'SugarCubes.CubeInput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+        });
+        const outputMarker = makeMarker({
+          id: 3,
+          type: 'SugarCubes.CubeOutput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+        });
+        const group = makeCubeGroup({
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+          markerIds: [2, 3],
+          instanceId: 'inst-old',
+        });
+        app.graph._nodes = [inputMarker, outputMarker];
+        app.graph._groups = [group];
+
+        ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+        ui.libraryCatalog.getCubes = () => [
+          { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
+        ];
+        ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => null);
+        ui.dirtyManager.markClean = jest.fn();
+
+        await ui.cubeSave.save();
+
+        expect(saveCalls).toBe(0);
+        expect(ui.dirtyManager.markClean).not.toHaveBeenCalled();
+        expect(group.properties.sugarcubes.cube_version).toBe('1.0.1');
+        expect(group.properties.sugarcubes.cube_revision_ref).toBe(HISTORICAL_REVISION_REF);
+        expect(inputMarker.properties.sugarcubes_cube_version).toBe('1.0.1');
+        expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(HISTORICAL_REVISION_REF);
+      };
+    },
+  );
+
+  saveWorkflowCase(
+    'stale historical save as latest uses the finalized persisted version',
+    async () => {
+      app.extensionManager.registerSidebarTab = () => {};
+      configureGraphToPrompt({ withWorkflow: true });
+
+      api.fetchApi = async (url) => {
+        if (url === '/sugarcubes/save_implementation') {
+          return {
+            ok: true,
+            json: async () => ({
+              saved: [
+                {
+                  cube_id: CANONICAL_DEMO_ID,
+                  default_alias: 'Demo',
+                  path: 'demo.cube',
+                  forked: false,
+                  committed: false,
+                  commit_message: '',
+                  version: '1.2.1',
+                  definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.2.1'),
+                },
+              ],
+            }),
+          };
+        }
+        return { ok: true, json: async () => ({ cubes: [] }) };
+      };
+
+      await loadUi();
+      return async () => {
+        await setupRegisteredExtension();
+
+        const ui = getLoadedUi();
+        app.graph = { _nodes: [], _groups: [], links: {} };
+        const inputMarker = makeMarker({
+          id: 2,
+          type: 'SugarCubes.CubeInput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+        });
+        const outputMarker = makeMarker({
+          id: 3,
+          type: 'SugarCubes.CubeOutput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+        });
+        const group = makeCubeGroup({
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+          markerIds: [2, 3],
+          instanceId: 'inst-old',
+        });
+        app.graph._nodes = [inputMarker, outputMarker];
+        app.graph._groups = [group];
+
+        ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+        ui.libraryCatalog.getCubes = () => [
+          { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
+        ];
+        ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
+
+        await ui.cubeSave.save();
+
+        expect(group.properties.sugarcubes).toEqual(
+          expect.objectContaining({
+            cube_version: '1.2.1',
+            cube_revision_ref: CURRENT_REVISION_REF,
+            cube_definition_key: `${CANONICAL_DEMO_ID}@1.2.1`,
+          }),
+        );
+        expect(inputMarker.properties.sugarcubes_cube_version).toBe('1.2.1');
+        expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+        expect(outputMarker.properties.sugarcubes_cube_version).toBe('1.2.1');
+        expect(outputMarker.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+      };
+    },
+  );
+
+  saveWorkflowCase(
+    'stale historical fork updates only stale instance markers and preserves revision lineage',
+    async () => {
+      app.extensionManager.registerSidebarTab = () => {};
+      configureGraphToPrompt({ withWorkflow: true });
+
+      let saveBody: SavePayload | null = null;
+      api.fetchApi = async (url, options = {}) => {
+        if (url === '/sugarcubes/save_implementation') {
+          saveBody = parseSavePayload(options.body);
+          return { ok: true, json: async () => ({ saved: [] }) };
+        }
+        return { ok: true, json: async () => ({ cubes: [] }) };
+      };
+
+      await loadUi();
+      return async () => {
+        await setupRegisteredExtension();
+
+        const ui = getLoadedUi();
+        app.graph = { _nodes: [], _groups: [], links: {} };
+        const staleInput = makeMarker({
+          id: 2,
+          type: 'SugarCubes.CubeInput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+        });
+        const staleOutput = makeMarker({
+          id: 3,
+          type: 'SugarCubes.CubeOutput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+        });
+        const currentInput = makeMarker({
+          id: 4,
+          type: 'SugarCubes.CubeInput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.2.1',
+          revisionRef: CURRENT_REVISION_REF,
+        });
+        const currentOutput = makeMarker({
+          id: 5,
+          type: 'SugarCubes.CubeOutput',
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.2.1',
+          revisionRef: CURRENT_REVISION_REF,
+        });
+        const staleGroup = makeCubeGroup({
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.0.1',
+          revisionRef: HISTORICAL_REVISION_REF,
+          markerIds: [2, 3],
+          instanceId: 'inst-old',
+        });
+        const currentGroup = makeCubeGroup({
+          cubeId: CANONICAL_DEMO_ID,
+          defaultAlias: 'Demo',
+          version: '1.2.1',
+          revisionRef: CURRENT_REVISION_REF,
+          markerIds: [4, 5],
+          instanceId: 'inst-current',
+        });
+        app.graph._nodes = [staleInput, staleOutput, currentInput, currentOutput];
+        app.graph._groups = [staleGroup, currentGroup];
+
+        ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
+        ui.libraryCatalog.getCubes = () => [
+          {
+            cube_id: CANONICAL_DEMO_ID,
+            name: 'Demo',
+            version: '1.2.1',
+            author: 'Tester',
+            author_url: 'https://example.test/tester',
+            is_writable: true,
+          },
+        ];
+        ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'fork');
+        await ui.cubeSave.save();
+
+        expect(requireSavedCube(saveBody)).toEqual(
+          expect.objectContaining({
+            cube_id: PERSONAL_DEMO_FORK_ID,
+            forked: true,
+            previous_cube_id: CANONICAL_DEMO_ID,
+            lineage: expect.objectContaining({
+              id: CANONICAL_DEMO_ID,
+              name: 'Demo',
+              version: '1.0.1',
+              revision_ref: HISTORICAL_REVISION_REF,
+              author: 'Tester',
+              author_url: 'https://example.test/tester',
+            }),
+          }),
+        );
+        expect(staleInput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
+          PERSONAL_DEMO_FORK_ID,
+        );
+        expect(staleOutput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
+          PERSONAL_DEMO_FORK_ID,
+        );
+        expect(staleGroup.properties.sugarcubes).toEqual(
+          expect.objectContaining({
+            cube_id: PERSONAL_DEMO_FORK_ID,
+            default_alias: 'Demo (fork)',
+            cube_version: '',
+            cube_revision_ref: CURRENT_REVISION_REF,
+            cube_definition_key: PERSONAL_DEMO_FORK_ID,
+          }),
+        );
+        expect(staleInput.properties.sugarcubes_cube_version).toBe('');
+        expect(staleInput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
+        expect(currentInput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
+          CANONICAL_DEMO_ID,
+        );
+        expect(currentOutput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
+          CANONICAL_DEMO_ID,
+        );
+        expect(currentGroup.properties.sugarcubes).toEqual(
+          expect.objectContaining({
+            cube_id: CANONICAL_DEMO_ID,
+            cube_version: '1.2.1',
+            cube_revision_ref: CURRENT_REVISION_REF,
+          }),
+        );
+      };
+    },
+  );
 });

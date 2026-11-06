@@ -47,7 +47,11 @@ export function supportsCanvasSurfaceViewport(
 export function negotiatesCanvasSurfaceInspection(
   capabilities: CanvasSurfaceCapabilities,
 ): boolean {
-  return capabilities.viewportState && capabilities.viewportCommands.includes('inspect');
+  return (
+    capabilities.schema === 2 &&
+    capabilities.viewportState &&
+    capabilities.viewportCommands.includes('inspect')
+  );
 }
 
 /** Retain one image-relative inspection as a frozen value. */

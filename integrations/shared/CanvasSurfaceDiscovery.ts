@@ -39,7 +39,7 @@ import { isCanvasPreviewCommand, supportsCanvasSurfacePreview } from './CanvasSu
 
 /** Represent an explicit refusal without suggesting any executable operation. */
 export const EMPTY_CANVAS_SURFACE_CAPABILITIES: CanvasSurfaceCapabilities = Object.freeze({
-  schema: 1,
+  schema: 2,
   imageFormats: Object.freeze([]),
   viewportCommands: Object.freeze([]),
   viewportState: false,
@@ -74,7 +74,7 @@ export function snapshotCanvasSurfaceCapabilities(
   });
 }
 
-/** Describe only a currently available surface while preserving the session's cancellation owner. */
+/** Refuse incompatible feature schemas before native reads and expose implemented current support. */
 export async function dispatchCanvasSurfaceDiscovery(
   request: CanvasSurfaceCapabilitiesRequest,
   cancellation: CanvasCancellationSource,
@@ -92,6 +92,14 @@ export async function dispatchCanvasSurfaceDiscovery(
     type: 'surface.capabilities.reply',
   } as const;
   const empty = EMPTY_CANVAS_SURFACE_CAPABILITIES;
+  if (request.schema !== 2)
+    return {
+      ...envelope,
+      status: 'unsupported',
+      capabilities: { ...empty, schema: 1 },
+      message:
+        'Native surface schema 2 is required. Update SugarCubes and its native host together.',
+    };
   try {
     if (!port.surface)
       return {
@@ -99,6 +107,17 @@ export async function dispatchCanvasSurfaceDiscovery(
         status: 'unsupported',
         capabilities: empty,
         message: 'This canvas does not provide an output surface.',
+      };
+    const capabilities = port.surface.capabilities;
+    if (!isCanvasSurfaceCapabilities(capabilities))
+      throw new Error('Canvas surface declared invalid capabilities.');
+    if (capabilities.schema !== 2)
+      return {
+        ...envelope,
+        status: 'unsupported',
+        capabilities: empty,
+        message:
+          'Native surface schema 2 is required. Update SugarCubes and its native host together.',
       };
     const context = await port.context();
     if (cancellation.cancelled() || !context.canvas.capabilities.displayOutput)
@@ -108,9 +127,6 @@ export async function dispatchCanvasSurfaceDiscovery(
         capabilities: empty,
         message: 'The canvas surface is unavailable.',
       };
-    const capabilities = port.surface.capabilities;
-    if (!isCanvasSurfaceCapabilities(capabilities))
-      throw new Error('Canvas surface declared invalid capabilities.');
     return {
       ...envelope,
       status: 'available',
@@ -147,6 +163,10 @@ export async function discoverCanvasSurface(port: {
     if (!port.current()) return null;
     if (reply.type !== 'surface.capabilities.reply')
       throw new Error('Invalid canvas surface capability reply.');
+    if (reply.capabilities.schema !== 2)
+      throw new Error(
+        'Native surface schema 2 is required. Update SugarCubes and its native host together.',
+      );
     if (reply.status !== 'available') {
       if (!emptyCanvasSurfaceCapabilities(reply.capabilities))
         throw new Error('Unavailable canvas surface declared capabilities.');

@@ -79,7 +79,7 @@ function fixture(
   const visible: boolean[] = [];
   const host: CanvasSurfaceHost = {
     capabilities: {
-      schema: 1,
+      schema: 2,
       imageFormats: ['png'],
       viewportCommands: commands,
       viewportState: true,
