@@ -697,3 +697,25 @@ test('frame compact control follows visible masonry without changing preferences
   fixture.host.release();
   expect(changed).not.toHaveBeenCalled();
 });
+
+test('density preferences fade only the material aperture and release it with the rail', async () => {
+  const fixture = setup();
+  fixture.host.setup();
+  fixture.host.ready(fixture.surface, false);
+  await nextTick();
+  const workspace = fixture.surface.element.parentElement!;
+  const control = workspace.querySelector('.sc-cube-stack-row__activate');
+  expect(workspace.style.getPropertyValue('--sc-stack-wash-opacity')).toBe('1');
+  fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
+  await nextTick();
+  expect(workspace.style.getPropertyValue('--sc-stack-wash-opacity')).toBe('0');
+  expect(workspace.style.getPropertyValue('--sc-stack-material-width')).toBe('58px');
+  expect(workspace.querySelector('.sc-cube-stack-row__activate')).toBe(control);
+  fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(false);
+  await nextTick();
+  expect(workspace.style.getPropertyValue('--sc-stack-wash-opacity')).toBe('1');
+  expect(workspace.style.getPropertyValue('--sc-stack-material-width')).toBe('224px');
+  fixture.host.release();
+  expect(workspace.style.getPropertyValue('--sc-stack-wash-opacity')).toBe('');
+  expect(workspace.style.getPropertyValue('--sc-stack-material-width')).toBe('');
+});

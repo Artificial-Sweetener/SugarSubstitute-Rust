@@ -25,6 +25,7 @@ import { ensureCubeStackStyles } from './CubeStackStyles.js';
 import { mountCubeStackView } from './vue/CubeStackVueRuntime.js';
 import { CubeStackScrollSelection } from './CubeStackScrollSelection.js';
 import { CubeStackDrawerMotion } from './CubeStackDrawerMotion.js';
+import { CubeStackMaterialMotion } from './CubeStackMaterialMotion.js';
 import { CubeStackWheelRouting } from './CubeStackWheelRouting.js';
 /** Retain one presentation application for a mounted surface and release it before native teardown. */
 export class CubeStackHost {
@@ -37,6 +38,7 @@ export class CubeStackHost {
     #element = null;
     #mounted = null;
     #motion = null;
+    #material = null;
     #wheel = null;
     #surfaceVisible = true;
     #reorder = null;
@@ -210,6 +212,7 @@ export class CubeStackHost {
             this.#element = this.#options.document.createElement('aside');
             this.#element.className = 'sc-cube-stack-host';
             container.append(this.#element);
+            this.#material = new CubeStackMaterialMotion(container, this.#options.reportError);
             this.#wheel = new CubeStackWheelRouting(this.#element, view.element);
         }
         const appearance = this.#options.appearance.appearance;
@@ -224,6 +227,7 @@ export class CubeStackHost {
             this.#mounted.setInteractive(false);
         }
         view.setStackWidth(cubeStackReservedWidth(state.compact, state.packed, this.#options.frame?.enabled === true));
+        this.#material?.set(state.compact, cubeStackReservedWidth(state.compact, state.packed, true), animate);
         if (this.#surfaceVisible)
             void this.#present(true, animate).catch(this.#options.reportError);
         this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
@@ -316,6 +320,8 @@ export class CubeStackHost {
     }
     /** Remove owned presentation while retaining preferences for the next eligible masonry surface. */
     #unmount() {
+        this.#material?.dispose();
+        this.#material = null;
         this.#wheel?.dispose();
         this.#wheel = null;
         this.#motion?.dispose();
