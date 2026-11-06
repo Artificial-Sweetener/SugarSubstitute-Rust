@@ -18,6 +18,36 @@ import { nextTick } from 'vue';
 import { jest } from '@jest/globals';
 import { ModelDiscoveryDialog } from '../../../frontend/comfyui/ui/model_library/ModelDiscoveryDialog.js';
 import { discoveryPlan, discoveryPorts } from '../support/model_discovery.js';
+import { modelDiscoveryCss } from '../../../frontend/comfyui/ui/model_library/ModelDiscoveryStyles.js';
+import { accentThemeCss } from '../../../frontend/comfyui/ui/surface/appearance/AccentThemeStyles.js';
+
+test.each([true, false])(
+  'selected discovery markers use the mode foreground for dark=%s',
+  (dark) => {
+    const accent = document.createElement('style');
+    const discovery = document.createElement('style');
+    accent.textContent = accentThemeCss('#0078d4', dark);
+    discovery.textContent = modelDiscoveryCss;
+    document.head.append(accent, discovery);
+    try {
+      const marker = Array.from(discovery.sheet?.cssRules ?? []).find(
+        (rule): rule is CSSStyleRule =>
+          rule instanceof CSSStyleRule &&
+          rule.selectorText ===
+            '.sc-model-discovery-portrait.is-selected .sc-model-discovery-check',
+      );
+      expect(marker?.style.color).toBe('var(--sc-text-on-accent)');
+      const root = accent.sheet?.cssRules[0];
+      if (!(root instanceof CSSStyleRule)) throw new Error('Missing accent root rule');
+      expect(root.style.getPropertyValue('--sc-accent-foreground')).toBe(
+        dark ? '#000000' : '#ffffff',
+      );
+    } finally {
+      accent.remove();
+      discovery.remove();
+    }
+  },
+);
 
 /** Settle asynchronous service and Vue updates before inspecting user-visible state. */
 async function settle(): Promise<void> {

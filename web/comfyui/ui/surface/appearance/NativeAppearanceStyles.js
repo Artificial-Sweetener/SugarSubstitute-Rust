@@ -63,7 +63,7 @@ export function nativeAppearanceCss(palette, dark) {
       --p-select-color:var(--sc-text);
       --p-select-border-color:var(--sc-border-subtle);
       --p-toggleswitch-checked-background:var(--sc-brand-indicator);
-      --p-toggleswitch-checked-hover-background:var(--sc-brand-indicator-hover);
+      --p-toggleswitch-checked-hover-background:var(--sc-accent-toggle-hover);
       --sugarcubes-cube-card-header:var(--sc-card-fill);
       --sugarcubes-cube-card-body:var(--sc-card-fill);
       --sugarcubes-cube-backdrop:var(--sugarcubes-masonry-surface);

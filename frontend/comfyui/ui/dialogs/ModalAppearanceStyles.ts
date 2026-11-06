@@ -86,7 +86,7 @@ ${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary
   background:var(--sc-brand-fill); color:var(--sc-text-on-accent); border-color:transparent;
 }
 ${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):hover { background:var(--sc-brand-fill-hover); }
-${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):active { background:var(--sc-brand-fill-pressed); }
+${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):active { background:var(--sc-brand-fill-pressed); color:var(--sc-accent-foreground-pressed); }
 ${scope} .p-button:disabled { color:var(--sc-text-disabled); background:var(--sc-surface-disabled); border-color:var(--sc-border-disabled); cursor:default; opacity:1; }
 ${scope} .sugarcubes-modal__close { position:relative; flex:none; width:32px; height:32px; padding:0; border-color:transparent; background:transparent; }
 ${scope} .sugarcubes-modal__close::before,${scope} .sugarcubes-modal__close::after { content:''; position:absolute; width:14px; height:1px; background:currentColor; transform:rotate(45deg); }

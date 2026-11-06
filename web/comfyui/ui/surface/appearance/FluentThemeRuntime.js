@@ -5410,68 +5410,92 @@ function normalizeAccentColor(value) {
     return `#${Array.from(color.slice(1), (character) => character + character).join("")}`;
   return null;
 }
-function createAccentBrandPalette(color) {
-  return {
-    10: mixAccentColor(color, "#000000", 0.94),
-    20: mixAccentColor(color, "#000000", 0.86),
-    30: mixAccentColor(color, "#000000", 0.75),
-    40: mixAccentColor(color, "#000000", 0.62),
-    50: mixAccentColor(color, "#000000", 0.48),
-    60: mixAccentColor(color, "#000000", 0.32),
-    70: mixAccentColor(color, "#000000", 0.16),
-    80: color,
-    90: mixAccentColor(color, "#ffffff", 0.1),
-    100: mixAccentColor(color, "#ffffff", 0.2),
-    110: mixAccentColor(color, "#ffffff", 0.32),
-    120: mixAccentColor(color, "#ffffff", 0.44),
-    130: mixAccentColor(color, "#ffffff", 0.56),
-    140: mixAccentColor(color, "#ffffff", 0.68),
-    150: mixAccentColor(color, "#ffffff", 0.8),
-    160: mixAccentColor(color, "#ffffff", 0.92)
-  };
-}
-function accentForeground(color) {
-  const luminance = relativeLuminance(color);
-  return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? "#000000" : "#ffffff";
-}
-function accentIndicatorColor(color, dark) {
-  const surface = relativeLuminance(dark ? "#2b2b2b" : "#ffffff");
-  for (let step = 0; step <= 20; step += 1) {
-    const candidate = mixAccentColor(color, dark ? "#ffffff" : "#000000", step / 20);
-    const luminance = relativeLuminance(candidate);
-    if ((Math.max(surface, luminance) + 0.05) / (Math.min(surface, luminance) + 0.05) >= 4.5)
-      return candidate;
-  }
-  return dark ? "#ffffff" : "#000000";
-}
-function mixAccentColor(color, destination, weight) {
-  const [red2, green2, blue2] = readChannels(color);
-  const [targetRed, targetGreen, targetBlue] = readChannels(destination);
-  const pairs = [
-    [red2, targetRed],
-    [green2, targetGreen],
-    [blue2, targetBlue]
-  ];
-  return `#${pairs.map(
-    ([channel, target]) => Math.round(channel * (1 - weight) + target * weight).toString(16).padStart(2, "0")
-  ).join("")}`;
-}
-function linearChannel(channel) {
-  const normalized = channel / 255;
-  return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-}
-function relativeLuminance(color) {
-  const [red2, green2, blue2] = readChannels(color);
-  return linearChannel(red2) * 0.2126 + linearChannel(green2) * 0.7152 + linearChannel(blue2) * 0.0722;
-}
-function readChannels(color) {
+function accentVariants(color, dark) {
   const normalized = normalizeAccentColor(color);
   if (!normalized) throw new TypeError("Accent colors must be opaque hexadecimal colors.");
+  const channel = (offset) => Number.parseInt(normalized.slice(offset, offset + 2), 16);
+  const [h, saturation, value] = rgbToHsv(channel(1), channel(3), channel(5));
+  const s = dark ? saturation * 0.84 : saturation;
+  const v = dark ? 1 : value;
+  const shade = (saturationScale, valueScale) => hsvToHex(h, s * saturationScale, v * valueScale);
+  return {
+    primary: shade(1, 1),
+    dark1: shade(1, dark ? 0.9 : 0.75),
+    dark2: shade(dark ? 0.977 : 1.05, dark ? 0.82 : 0.5),
+    dark3: shade(dark ? 0.95 : 1.1, dark ? 0.7 : 0.4),
+    light1: shade(dark ? 0.92 : 1, dark ? 1 : 1.05),
+    light2: shade(dark ? 0.78 : 0.75, dark ? 1 : 1.05),
+    light3: shade(0.65, dark ? 1 : 1.05)
+  };
+}
+function createAccentPalette(color, dark) {
+  const variants = accentVariants(color, dark);
+  const { primary, dark1, dark2, light1, light2, light3 } = variants;
+  return {
+    variants,
+    button: { rest: primary, hover: dark ? dark1 : light1, pressed: dark ? dark2 : light3 },
+    checkbox: { rest: primary, hover: dark ? dark1 : light1, pressed: dark ? dark2 : light2 },
+    toggle: { rest: primary, hover: light1, pressed: light2 },
+    link: { rest: primary, hover: primary, pressed: dark ? dark1 : primary },
+    indicator: primary,
+    selection: dark ? primary : light1,
+    foreground: dark ? "#000000" : "#ffffff",
+    pressedForeground: dark ? "rgba(0,0,0,0.63)" : "rgba(255,255,255,0.63)",
+    buttonBorder: light1,
+    buttonBottomBorder: dark ? light2 : dark1,
+    buttonHoverBorder: dark ? light1 : light2
+  };
+}
+function rgbToHsv(red2, green2, blue2) {
+  const f = Math.fround;
+  const r = f(red2 / 255), g = f(green2 / 255), b = f(blue2 / 255);
+  const maximum = Math.max(r, g, b), minimum = Math.min(r, g, b);
+  const delta = f(maximum - minimum);
+  if (delta === 0) return [-1, 0, maximum];
+  let sector = r === maximum ? f(f(g - b) / delta) : g === maximum ? f(2 + f(f(b - r) / delta)) : f(4 + f(f(r - g) / delta));
+  sector = f(sector * 60);
+  if (sector < 0) sector = f(sector + 360);
   return [
-    Number.parseInt(normalized.slice(1, 3), 16),
-    Number.parseInt(normalized.slice(3, 5), 16),
-    Number.parseInt(normalized.slice(5, 7), 16)
+    Math.round(f(sector * 100)),
+    f(Math.round(f(f(delta / maximum) * 65535)) / 65535),
+    maximum
   ];
+}
+function hsvToHex(hue, saturation, value) {
+  const f = Math.fround;
+  const s = f(Math.round(f(f(Math.min(saturation, 1)) * 65535)) / 65535);
+  const v = f(Math.round(f(f(Math.min(value, 1)) * 65535)) / 65535);
+  let channels;
+  if (hue < 0 || s === 0) channels = [v, v, v];
+  else {
+    const h = hue === 36e3 ? 0 : f(hue / 6e3);
+    const sector = Math.floor(h), fraction = f(h - sector);
+    const p = f(v * f(1 - s));
+    const q = f(v * f(1 - f(s * fraction)));
+    const t = f(v * f(1 - f(s * f(1 - fraction))));
+    switch (sector) {
+      case 0:
+        channels = [v, t, p];
+        break;
+      case 1:
+        channels = [q, v, p];
+        break;
+      case 2:
+        channels = [p, v, t];
+        break;
+      case 3:
+        channels = [p, q, v];
+        break;
+      case 4:
+        channels = [t, p, v];
+        break;
+      default:
+        channels = [v, p, q];
+    }
+  }
+  return "#" + channels.map(
+    (channel) => Math.floor((Math.round(f(channel * 65535)) + 128) / 257).toString(16).padStart(2, "0")
+  ).join("");
 }
 
 // node_modules/tslib/tslib.es6.mjs
@@ -10660,28 +10684,15 @@ function applyOwnedFluentTheme(element, dark) {
   appliedThemes.set(element, dark);
 }
 function fluentAccentColorTokens(color, dark) {
-  const theme = (dark ? createDarkTheme : createLightTheme)(createAccentBrandPalette(color));
-  const indicator = accentIndicatorColor(color, dark);
-  const tokens = Object.fromEntries(
-    Object.entries(theme).flatMap(
-      ([name, value]) => /Brand|colorStrokeFocus2/.test(name) && typeof value === "string" ? [[name, value]] : []
-    )
-  );
-  for (const name of ["colorBrandBackground"]) tokens[name] = color;
-  for (const name of [
-    "colorBrandForeground1",
-    "colorCompoundBrandForeground1",
-    "colorCompoundBrandBackground",
-    "colorBrandStroke1",
-    "colorCompoundBrandStroke",
-    "colorStrokeFocus2"
-  ])
-    tokens[name] = indicator;
-  tokens.colorBrandBackgroundHover = mixAccentColor(color, "#000000", 0.08);
-  tokens.colorBrandBackgroundPressed = mixAccentColor(color, "#000000", 0.16);
-  tokens.colorCompoundBrandBackgroundHover = mixAccentColor(indicator, "#000000", 0.08);
-  tokens.colorCompoundBrandBackgroundPressed = mixAccentColor(indicator, "#000000", 0.16);
-  tokens.colorNeutralForegroundOnBrand = accentForeground(color);
+  const p = createAccentPalette(color, dark);
+  const tokens = {};
+  for (const name of Object.keys(dark ? webDarkTheme : webLightTheme)) {
+    if (!/Brand|colorStrokeFocus2/.test(name)) continue;
+    const states = name.includes("Compound") ? p.checkbox : p.button;
+    const foreground = name.includes("Foreground");
+    tokens[name] = name.includes("Hover") ? foreground ? p.link.hover : states.hover : name.includes("Pressed") ? foreground ? p.link.pressed : states.pressed : p.indicator;
+  }
+  tokens.colorNeutralForegroundOnBrand = p.foreground;
   return tokens;
 }
 export {

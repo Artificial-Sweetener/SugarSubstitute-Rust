@@ -55,8 +55,11 @@ export function ensureCubeFaceActivationStyles(documentRef: Document): void {
       transform:translateX(20px);
       background:var(--sc-text-on-accent, var(--p-primary-contrast-color, #111));
     }
-    [data-cube-card-activation] input:checked:hover + .p-toggleswitch-slider {
-      background:var(--sc-brand-indicator-hover, var(--p-primary-hover-color, #3b82f6));
+    [data-cube-card-activation] input:checked:hover:not(:disabled) + .p-toggleswitch-slider {
+      background:var(--sc-accent-toggle-hover, var(--p-toggleswitch-checked-hover-background, #3b82f6));
+    }
+    [data-cube-card-activation] input:checked:active:not(:disabled) + .p-toggleswitch-slider {
+      background:var(--sc-accent-toggle-pressed, var(--p-primary-active-color, #3b82f6));
     }
     [data-cube-card-activation] input:focus-visible + .p-toggleswitch-slider {
       outline:2px solid var(--sc-focus-ring, var(--p-primary-color, #60a5fa)); outline-offset:2px;
