@@ -45,7 +45,10 @@ export function isCanvasSurfaceCapabilities(
     isRecord(value) &&
     Object.keys(value).length === 8 &&
     Object.hasOwn(value, 'schema') &&
-    value['schema'] === 1 &&
+    typeof value['schema'] === 'number' &&
+    Number.isSafeInteger(value['schema']) &&
+    value['schema'] >= 1 &&
+    value['schema'] <= 2 &&
     Object.hasOwn(value, 'imageFormats') &&
     Array.isArray(value['imageFormats']) &&
     value['imageFormats'].length <= 3 &&
@@ -101,7 +104,10 @@ export function isCanvasSurfaceCapabilitiesRequest(
     Object.hasOwn(value, 'type') &&
     value['type'] === 'surface.capabilities.request' &&
     Object.hasOwn(value, 'schema') &&
-    value['schema'] === 1
+    typeof value['schema'] === 'number' &&
+    Number.isSafeInteger(value['schema']) &&
+    value['schema'] >= 1 &&
+    value['schema'] <= 2
   );
 }
 /** Validate a bounded CanvasSurfaceCapabilitiesReply payload before dispatch. */

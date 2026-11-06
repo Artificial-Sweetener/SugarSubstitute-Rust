@@ -16,7 +16,7 @@
 /** Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts. */
 /** Describe the schema-defined CanvasSurfaceCapabilities wire value. */
 export type CanvasSurfaceCapabilities = {
-  readonly schema: 1;
+  readonly schema: number;
   readonly imageFormats: readonly ('png' | 'jpeg' | 'webp')[];
   readonly viewportCommands: readonly ('fit' | 'native' | 'zoom' | 'pan' | 'wipe' | 'inspect')[];
   readonly viewportState: boolean;
@@ -32,7 +32,7 @@ export type CanvasSurfaceCapabilitiesRequest = {
   readonly session: string;
   readonly requestId: number;
   readonly type: 'surface.capabilities.request';
-  readonly schema: 1;
+  readonly schema: number;
 };
 /** Describe the schema-defined CanvasSurfaceCapabilitiesReply wire value. */
 export type CanvasSurfaceCapabilitiesReply = {
@@ -240,7 +240,7 @@ export type CanvasSurfaceCameraChanged = {
   readonly session: string;
   readonly requestId: 0;
   readonly type: 'surface.camera.changed';
-  readonly schema: 1;
+  readonly schema: 2;
   readonly change: CanvasSurfaceCameraChange;
 };
 /** Describe the schema-defined CanvasSurfaceViewportRequest wire value. */

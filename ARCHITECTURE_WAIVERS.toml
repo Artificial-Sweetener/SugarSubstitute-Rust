@@ -147,7 +147,7 @@ kind = "structural"
 rule = "STRUCT003"
 path = "integrations/contracts/CanvasSurfaceProtocol.generated.rs"
 owner = "SugarCubes portable canvas contract compiler"
-justification = "This compiler-owned closed version 3 wire-value module contains only schema-derived serde types and shape/bound validation sharing address, geometry, viewport, inspection, settled-camera, comparison, overview and occlusion vocabulary. Session state, transfer custody, scheduling and presentation policy remain in authored owners. Keeping this mechanically expanded schema output together preserves one generated consumer module; regeneration, shared vectors and exact Rust synchronization verify parity. Reviewed LF SHA-256: aed4b3904f90bb368182e9e5e18d624c69685791448531884415b4ed407b23f6."
+justification = "This compiler-owned closed version 3 wire-value module contains only schema-derived serde types and shape/bound validation sharing address, geometry, viewport, inspection, settled-camera, comparison, overview and occlusion vocabulary. Session state, transfer custody, scheduling and presentation policy remain in authored owners. Keeping this mechanically expanded schema output together preserves one generated consumer module; regeneration, shared vectors and exact Rust synchronization verify parity. Reviewed LF SHA-256: 07994e45b7f4a912c8d06054cd6fb4e7a9fb69387478d71626e07fee8d084cb9."
 review_by = 2026-11-30
 max_lines = 855
 

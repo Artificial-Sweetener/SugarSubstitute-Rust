@@ -107,13 +107,13 @@ export function isCanvasSurfaceViewportCenter(
     Object.hasOwn(value, 'x') &&
     typeof value['x'] === 'number' &&
     Number.isFinite(value['x']) &&
-    value['x'] >= 0 &&
-    value['x'] <= 1 &&
+    value['x'] >= -1.7976931348623157e308 &&
+    value['x'] <= 1.7976931348623157e308 &&
     Object.hasOwn(value, 'y') &&
     typeof value['y'] === 'number' &&
     Number.isFinite(value['y']) &&
-    value['y'] >= 0 &&
-    value['y'] <= 1
+    value['y'] >= -1.7976931348623157e308 &&
+    value['y'] <= 1.7976931348623157e308
   );
 }
 /** Validate a bounded CanvasSurfaceInspectionSpan payload before dispatch. */
@@ -215,7 +215,7 @@ export function isCanvasSurfaceCameraChanged(
     Object.hasOwn(value, 'type') &&
     value['type'] === 'surface.camera.changed' &&
     Object.hasOwn(value, 'schema') &&
-    value['schema'] === 1 &&
+    value['schema'] === 2 &&
     Object.hasOwn(value, 'change') &&
     isCanvasSurfaceCameraChange(value['change'])
   );

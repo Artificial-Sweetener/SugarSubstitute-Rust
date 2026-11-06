@@ -98,7 +98,7 @@ type Request =
   | Pick<CanvasGeometryRequest, 'type' | 'command'>
   | Pick<CanvasEditRequest, 'type' | 'command'>
   | Pick<CanvasWorkflowRequest, 'type' | 'command'>
-  | { readonly type: 'surface.capabilities.request'; readonly schema: 1 }
+  | { readonly type: 'surface.capabilities.request'; readonly schema: 2 }
   | { readonly type: 'surface.presentation.request'; readonly schema: 1; readonly enabled: boolean }
   | CanvasSurfaceCommand;
 /** Retain one correlated client for a validated host session; never replay mutations after reconnect. */
@@ -198,7 +198,7 @@ export class CanvasClient implements CanvasLayerHost {
         const surface = await discoverCanvasSurface({
           read: () =>
             this.#request(
-              { type: 'surface.capabilities.request', schema: 1 },
+              { type: 'surface.capabilities.request', schema: 2 },
               'surface.capabilities.reply',
             ),
           current: () => !this.#disposed && revision === this.#contextRevision,
@@ -373,7 +373,13 @@ export class CanvasClient implements CanvasLayerHost {
         this.#pending.delete(requestId);
         stop();
         if (request.type !== 'source.request') cancel();
-        reject(new Error('Canvas request timed out; it was not retried.'));
+        reject(
+          new Error(
+            request.type === 'surface.capabilities.request'
+              ? 'Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together.'
+              : 'Canvas request timed out; it was not retried.',
+          ),
+        );
       });
       stopCancellation =
         cancellation?.subscribe(() => {
