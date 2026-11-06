@@ -37,7 +37,7 @@ export function scrollbarPresentationCss(): string {
       position:absolute; inset:0; z-index:1; overflow:visible; pointer-events:none;
     }
     .sc-style-scrollbar {
-      position:absolute; box-sizing:border-box; pointer-events:auto; touch-action:none;
+      position:absolute; inset:auto; margin:0; box-sizing:border-box; pointer-events:auto; touch-action:none;
       background:transparent; outline:none;
     }
     .sc-style-scrollbar[hidden] { display:none!important; }

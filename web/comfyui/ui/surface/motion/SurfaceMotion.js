@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own interruptible presentation motion without changing graph geometry or native controls. */
+import { setSurfaceGeometryMoving } from './SurfaceGeometryMotion.js';
 import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 /** Animate stable surface items with one lifecycle for entry, placement, resize, and retirement. */
 export class SurfaceMotion {
@@ -68,6 +69,7 @@ export class SurfaceMotion {
         if (this.#animations.has(element)) {
             this.#moving.add(element);
             element.dataset.scSurfaceMoving = '';
+            setSurfaceGeometryMoving(element, true);
         }
     }
     /** Resize the scroll extent continuously so closing cards cannot clamp scrolling in one jump. */
@@ -105,8 +107,10 @@ export class SurfaceMotion {
         const animation = this.#animations.get(element);
         this.#animations.delete(element);
         animation?.cancel();
-        if (this.#moving.delete(element))
+        if (this.#moving.delete(element)) {
             delete element.dataset.scSurfaceMoving;
+            setSurfaceGeometryMoving(element, false);
+        }
     }
     /** Release one item before its native mount or section is disposed. */
     forget(element) {

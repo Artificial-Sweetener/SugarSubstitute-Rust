@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt native editor breadcrumbs without inventing a second navigation stack. */
+import { resolveCubeModelTitle } from '../cube/CubeModelTitlePresentation.js';
 import type { ComfyApplication } from '../types/graph.js';
 import { workflowEditorNavigationCss } from './WorkflowEditorNavigationStyles.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
@@ -112,21 +113,37 @@ export class WorkflowEditorNavigationHost {
     const entries = [
       ...native.querySelectorAll<HTMLElement>('[data-testid^="subgraph-breadcrumb-item-"]'),
     ];
-    const items: EditorBreadcrumb[] = entries.map((entry, index) => ({
-      label:
-        entry.querySelector('.p-breadcrumb-item-label')?.textContent ?? entry.textContent ?? '',
-      current: index === entries.length - 1,
-      select: () =>
-        this.#run(() => {
-          if (!entry.isConnected) throw new Error('Comfy editor path changed; retry navigation.');
-          const MouseEventType = document.defaultView?.MouseEvent;
-          if (!MouseEventType) throw new Error('Comfy breadcrumb input is unavailable.');
-          // Comfy distinguishes single clicks (detail 1) from double-click rename and synthetic detail 0.
-          entry.dispatchEvent(
-            new MouseEventType('click', { bubbles: true, cancelable: true, detail: 1 }),
-          );
-        }),
-    }));
+    const items: EditorBreadcrumb[] = entries.map((entry, index) => {
+      const nativeLabel = entry.querySelector('.p-breadcrumb-item-label');
+      const modelTitle = nativeLabel?.querySelector('.sugarcubes-model-title');
+      const label =
+        modelTitle?.getAttribute('aria-label') ??
+        nativeLabel?.textContent ??
+        entry.textContent ??
+        '';
+      return {
+        label,
+        ...(modelTitle
+          ? {
+              modelTitle: resolveCubeModelTitle({
+                targetModel: modelTitle.querySelector('[data-sugarcubes-model-pill]')?.textContent,
+                title: label,
+              }),
+            }
+          : {}),
+        current: index === entries.length - 1,
+        select: () =>
+          this.#run(() => {
+            if (!entry.isConnected) throw new Error('Comfy editor path changed; retry navigation.');
+            const MouseEventType = document.defaultView?.MouseEvent;
+            if (!MouseEventType) throw new Error('Comfy breadcrumb input is unavailable.');
+            // Comfy distinguishes single clicks (detail 1) from double-click rename and synthetic detail 0.
+            entry.dispatchEvent(
+              new MouseEventType('click', { bubbles: true, cancelable: true, detail: 1 }),
+            );
+          }),
+      };
+    });
     this.#view.update(items, this.options.appearance.appearance.dark);
     if (this.#view.element.parentElement !== bar) bar.prepend(this.#view.element);
     const marked = new Set<HTMLElement>([back]);

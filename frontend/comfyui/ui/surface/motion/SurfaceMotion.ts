@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own interruptible presentation motion without changing graph geometry or native controls. */
+import { setSurfaceGeometryMoving } from './SurfaceGeometryMotion.js';
 import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 
 export interface SurfaceRectangle {
@@ -97,6 +98,7 @@ export class SurfaceMotion {
     if (this.#animations.has(element)) {
       this.#moving.add(element);
       element.dataset.scSurfaceMoving = '';
+      setSurfaceGeometryMoving(element, true);
     }
   }
 
@@ -143,7 +145,10 @@ export class SurfaceMotion {
     const animation = this.#animations.get(element);
     this.#animations.delete(element);
     animation?.cancel();
-    if (this.#moving.delete(element)) delete element.dataset.scSurfaceMoving;
+    if (this.#moving.delete(element)) {
+      delete element.dataset.scSurfaceMoving;
+      setSurfaceGeometryMoving(element, false);
+    }
   }
 
   /** Release one item before its native mount or section is disposed. */

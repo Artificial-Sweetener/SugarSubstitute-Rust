@@ -108,7 +108,7 @@ export class ScrollbarView {
             : 0;
         this.#geometry = scrollbarGeometry(size, viewport, content, position);
         const geometry = this.#geometry;
-        if (!track || !geometry) {
+        if (!track || !geometry || (vertical && track.verticalEdge === null)) {
             return () => {
                 this.element.hidden = true;
                 this.#trackElement.hidden = true;
@@ -116,9 +116,7 @@ export class ScrollbarView {
         }
         const offset = !vertical && this.#rtl ? geometry.travel - geometry.offset : geometry.offset;
         const left = vertical
-            ? this.#rtl
-                ? track.left
-                : track.left + track.width - crossSize
+            ? (track.verticalEdge ?? track.left) - (this.#rtl ? 0 : crossSize)
             : track.left + edgeInset + arrowSpace / 2 + offset;
         const top = vertical
             ? track.top + edgeInset + arrowSpace / 2 + offset

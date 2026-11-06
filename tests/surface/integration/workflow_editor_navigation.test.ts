@@ -20,6 +20,8 @@ import { WorkflowEditorNavigationHost } from '../../../frontend/comfyui/ui/surfa
 import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 import type { StyledVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyle.js';
+import { createCubeModelTitleElement } from '../../../frontend/comfyui/ui/surface/CubeModelPillDomRenderer.js';
+import { resolveCubeModelTitle } from '../../../frontend/comfyui/ui/cube/CubeModelTitlePresentation.js';
 import { createButton } from '../../../frontend/comfyui/ui/surface/appearance/ControlFactory.js';
 
 const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'attachInternals');
@@ -273,4 +275,26 @@ test('restores the pin state when it is replaced or navigation is disposed', asy
   f.host.dispose();
   expect(replacement.hasAttribute('disabled')).toBe(false);
   expect(f.cluster.firstElementChild).toBe(replacement);
+});
+
+test('retains the shared Cube model chip when projecting native ancestry', async () => {
+  const f = fixture();
+  f.render(1);
+  const nativeLabel = f.native.querySelectorAll('.p-breadcrumb-item-label')[1]!;
+  nativeLabel.replaceChildren(
+    createCubeModelTitleElement(
+      document,
+      resolveCubeModelTitle({ targetModel: 'Anima', title: 'Anima/Text to Image' }),
+    ),
+  );
+  await settle();
+  const current = f.bar.querySelector('[aria-current="page"]')!;
+  expect(current.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('Anima');
+  expect(current.querySelector('.sugarcubes-model-title__name')?.textContent).toBe('Text to Image');
+  expect(current.getAttribute('title')).toBe('Anima/Text to Image');
+  const pill = current.querySelector('[data-sugarcubes-model-pill]');
+  f.appearance.update('fluent', false);
+  await settle();
+  expect(f.bar.querySelector('[data-sugarcubes-model-pill]')).toBe(pill);
+  f.host.dispose();
 });

@@ -187,7 +187,15 @@ test('maps viewport geometry through a zoomed and scrolled native layer while pr
   });
   const view = new ScrollbarView(owner, 'vertical', 'owner', jest.fn());
   const commit = view.prepare(
-    { left: 110, top: 20, width: 150, height: 100, horizontalBottom: 120, rtl: false },
+    {
+      left: 110,
+      top: 20,
+      width: 150,
+      height: 100,
+      horizontalBottom: 120,
+      verticalEdge: 260,
+      rtl: false,
+    },
     space,
   );
   expect(view.element.style.left).toBe('');
