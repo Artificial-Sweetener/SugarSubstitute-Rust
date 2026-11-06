@@ -28,6 +28,7 @@ from typing import Protocol
 
 from .comfy_prompt_value_encoding import encode_atomic_list_widget_values
 from .models import ComfyQueueReceipt, PreparedCubeExecution
+from .node_resolvers import ExecutionNodeResolution, ExecutionNodeResolutionError
 from .ports import QueuedPromptPolicy
 from .queue_observers import (
     QueueObserverPublisher,
@@ -100,6 +101,7 @@ class DirectComfyExecutionPort:
         uuid_factory: Callable[[], uuid.UUID] = uuid.uuid4,
         time_source: Callable[[], float] = time.time,
         prompt_policy: QueuedPromptPolicy | None = None,
+        node_resolvers: ExecutionNodeResolution | None = None,
     ) -> None:
         """Bind the active Comfy server and validation module."""
 
@@ -109,9 +111,10 @@ class DirectComfyExecutionPort:
         self._uuid_factory = uuid_factory
         self._time_source = time_source
         self._prompt_policy = prompt_policy
+        self._node_resolvers = node_resolvers
 
     async def queue(self, prepared: PreparedCubeExecution) -> ComfyQueueReceipt:
-        """Apply replacements, validate once, and queue atomically when accepted."""
+        """Resolve detached host implementations before saving policy and native validation."""
 
         prompt = deepcopy(prepared.prompt)
         encode_atomic_list_widget_values(prompt, prepared.node_definitions)
@@ -119,6 +122,22 @@ class DirectComfyExecutionPort:
         prompt_id = str(self._uuid_factory())
         queued = False
         try:
+            if self._node_resolvers is not None:
+                try:
+                    prompt = self._node_resolvers.resolve(prompt)
+                except ExecutionNodeResolutionError:
+                    return ComfyQueueReceipt(
+                        accepted=False,
+                        prompt_id=prompt_id,
+                        number=None,
+                        error={
+                            "type": "sugarcubes_execution_node_resolution_failed",
+                            "message": (
+                                "A host integration could not resolve an execution node."
+                            ),
+                        },
+                        execution_prompt=deepcopy(prompt),
+                    )
             if self._prompt_policy is not None:
                 try:
                     prompt = self._prompt_policy.prepare(

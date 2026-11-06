@@ -21,6 +21,9 @@ import sys
 
 from .backend.composition import BackendServices
 from .runtime import (
+    EXECUTION_NODE_RESOLVER_API_VERSION,
+    register_execution_node_resolver,
+    unregister_execution_node_resolver,
     QUEUE_OBSERVER_API_VERSION,
     register_cube_output_observer,
     register_validated_queue_observer,
@@ -64,6 +67,9 @@ def _publish_canonical_module_identity() -> None:
 _publish_canonical_module_identity()
 
 __all__ = [
+    "EXECUTION_NODE_RESOLVER_API_VERSION",
+    "register_execution_node_resolver",
+    "unregister_execution_node_resolver",
     "HOST_API_MODULE_NAME",
     "HOST_API_VERSION",
     "HOST_API_VERSIONS",

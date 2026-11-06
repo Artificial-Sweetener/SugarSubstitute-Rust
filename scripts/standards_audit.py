@@ -155,10 +155,10 @@ def _handler_has_backend_mapping(node: ast.ExceptHandler) -> bool:
         if isinstance(child, ast.Raise):
             if child.exc is None:
                 return True
-            if (
-                isinstance(child.exc, ast.Call)
-                and _call_name(child.exc) == "BackendError"
-            ):
+            if isinstance(child.exc, ast.Call) and _call_name(child.exc) in {
+                "BackendError",
+                "ExecutionNodeResolutionError",
+            }:
                 return True
         if isinstance(child, ast.Return):
             value = child.value
