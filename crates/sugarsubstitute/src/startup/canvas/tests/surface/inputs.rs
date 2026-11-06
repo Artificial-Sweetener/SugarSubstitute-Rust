@@ -165,6 +165,31 @@ impl Inputs {
         );
     }
 
+    /// Press the primary mouse button at the first of `points` of the shown input document and
+    /// drag it through the rest, as the desktop adapter delivers a routed gesture; the button
+    /// stays pressed until [`Self::release`].
+    fn drag(&mut self, points: &[[f64; 2]]) -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_canvas::{PointerSample, ToolInput, ToolModifiers};
+        use sugarsubstitute_desktop::canvas::{Input, Lifetime};
+        let session = self.canvas.session.as_mut().ok_or("The canvas has no session")?;
+        for (index, point) in points.iter().enumerate() {
+            let device = session.device_at(*point)?;
+            let sample = PointerSample::mouse(device, ToolModifiers::NONE);
+            session.input(Input::Tool(ToolInput::Pointer(sample)))?;
+            if index == 0 {
+                session.input(primary_button(true))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Release the primary mouse button a [`Self::drag`] pressed, ending its gesture.
+    fn release(&mut self) -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_desktop::canvas::Lifetime;
+        let session = self.canvas.session.as_mut().ok_or("The canvas has no session")?;
+        session.input(primary_button(false))
+    }
+
     /// Close the canvas and its execution owner after every job settled.
     fn close(mut self) -> Result<(), Box<dyn Error>> {
         let cutoff = Moment::from_nanos(self.clock.0.load(Ordering::SeqCst) + 10_000_000_000);
@@ -193,6 +218,16 @@ impl Inputs {
         self.owner.finish_shutdown()?;
         Ok(())
     }
+}
+
+/// The primary mouse button changing to `pressed`, as routed tool input.
+fn primary_button(pressed: bool) -> sugarsubstitute_desktop::canvas::Input {
+    use sugarsubstitute_canvas::{ToolButton, ToolInput, ToolModifiers};
+    sugarsubstitute_desktop::canvas::Input::Tool(ToolInput::Button {
+        button: ToolButton::Primary,
+        pressed,
+        modifiers: ToolModifiers::NONE,
+    })
 }
 
 /// Write an RGBA fixture image whose pixels `pixel` chooses.
@@ -369,6 +404,36 @@ fn activation_shows_input_documents_in_the_context_until_the_output_route_return
     assert_eq!(document["id"], latent["document"]["id"]);
     assert_ne!(document["geometryRevision"], latent["document"]["geometryRevision"]);
     assert_eq!(inputs.workflow(resize("image"))?["status"], "error");
+    inputs.close()
+}
+
+#[test]
+fn picking_a_mask_file_again_after_its_loader_moved_on_reloads_it() -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let mut inputs = Inputs::start(directory.path())?;
+    let result = inputs.workflow(sync(Some("mask.png")))?;
+    let image = synced(&result, "image")?.clone();
+    let painted = layer(&image, "painted")?;
+    inputs.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    inputs.context_until(|document| document["id"] == image["document"]["id"])?;
+    let mask = json!([{"kind":"layer", "layerId":painted}]);
+    let read = |inputs: &mut Inputs| -> Result<Value, Box<dyn Error>> {
+        let command = json!({"type":"capture", "document":image["document"], "targets":mask,
+            "maximumSize":0});
+        Ok(inputs.ask("source.request", Some(command))?["result"]["snapshots"][0]["pixels"].take())
+    };
+    let loaded = read(&mut inputs)?;
+    // Painting changes the mask; a sync without the file leaves the painting in place.
+    let brush = inputs.ask("edit.request", Some(json!({"type":"tool", "tool":"brush"})))?;
+    assert_eq!(brush["result"]["state"]["tool"], "brush", "{brush}");
+    inputs.drag(&[[5.0, 1.0], [7.0, 1.0], [7.0, 4.0]])?;
+    inputs.release()?;
+    inputs.workflow(sync(None))?;
+    let edited = read(&mut inputs)?;
+    assert_ne!(edited, loaded, "the stroke changed the mask");
+    // Picking the same file again loads it again, replacing the painting.
+    inputs.workflow(sync(Some("mask.png")))?;
+    assert_eq!(read(&mut inputs)?, loaded);
     inputs.close()
 }
 

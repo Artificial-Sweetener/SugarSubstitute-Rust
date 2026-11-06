@@ -69,8 +69,8 @@ impl Completed {
             Self::Locale => flow::Completed::Locale,
             Self::Location { root, existing } => flow::Completed::Location(flow::Location {
                 comfy_root: path_text(root.join("ComfyUI"))?,
-                models: path_text(root.join("models"))?,
-                outputs: path_text(root.join("outputs"))?,
+                models: path_text(root.join("user/models"))?,
+                outputs: path_text(root.join("user/outputs"))?,
                 existing: existing
                     .map(|existing| {
                         Ok::<_, Box<dyn Error>>(flow::ExistingInstallation {
@@ -119,5 +119,24 @@ impl Controller {
     /// Retain original developer evidence independently of localized product feedback.
     pub(super) fn diagnostic(&mut self, message: String) -> Result<()> {
         self.emit(None, Kind::Diagnostic(Diagnostic::project(&json!({"message":message}))?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fresh_location_keeps_authored_data_under_user() -> Result<()> {
+        let root = PathBuf::from(r"E:\SugarSubstitute");
+        let flow::Completed::Location(location) =
+            (Completed::Location { root: root.clone(), existing: None }).into_flow()?
+        else {
+            return Err("Location result changed kind".into());
+        };
+        assert_eq!(PathBuf::from(location.comfy_root), root.join("ComfyUI"));
+        assert_eq!(PathBuf::from(location.models), root.join("user/models"));
+        assert_eq!(PathBuf::from(location.outputs), root.join("user/outputs"));
+        Ok(())
     }
 }

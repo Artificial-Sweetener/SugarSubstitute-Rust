@@ -66,7 +66,7 @@ impl ProjectionSamples {
         self.columns.get(x as usize).is_some_and(|sample| sample.is_covered())
             && self.rows.get(y as usize).is_some_and(|sample| sample.is_covered())
     }
-    /// Sample one projected opaque encoded pixel from the retained canonical source.
+    /// Sample one projected premultiplied encoded pixel from the retained canonical source.
     /// Projection construction already validated extents; callers provide in-range target pixels.
     pub fn sample_pixel(&self, source: &CpuSurface, x: u32, y: u32, matte: u32) -> u32 {
         let horizontal = self.columns[x as usize];
@@ -93,7 +93,8 @@ impl ProjectionSamples {
     }
     /// Borrow the same exact index arrays for native GPU presentation; no display pixel readback.
     /// # Errors
-    /// Rejects nonopaque matte and preserves original color/graphics validation errors.
+    /// Rejects a matte that is neither opaque nor transparent black, and preserves original
+    /// color/graphics validation errors.
     pub fn gpu_mapping(
         &self,
         matte: Pixel,
@@ -103,7 +104,7 @@ impl ProjectionSamples {
             self.view.target().surface(),
             &self.columns,
             &self.rows,
-            SrgbEncoder::encode_constant(matte)?,
+            SrgbEncoder::encode_matte(matte)?,
         )?)
     }
 }
@@ -168,7 +169,7 @@ impl ProjectionBuffer {
     /// Uses physical pixel centers, safe matte gaps, contiguous copies for integer pans, and
     /// row reuse while magnifying. No DAG evaluation, display-table allocation or native call runs.
     /// # Errors
-    /// Rejects mismatched extents/identities, stale targets and nonopaque matte; preserves
+    /// Rejects mismatched extents/identities, stale targets and a partially covered matte; preserves
     /// original allocation/admission/cancellation/deadline failures without changing the source.
     pub fn project(
         self,
@@ -235,7 +236,7 @@ impl CpuProjection {
     pub const fn view(&self) -> ViewProjection {
         self.view
     }
-    /// Opaque top-row-first sRGB `0xffRRGGBB` words with output-viewport dimensions.
+    /// Premultiplied top-row-first sRGB `0xAARRGGBB` words with output-viewport dimensions.
     pub fn pixels(&self) -> &[u32] {
         &self.buffer.pixels
     }

@@ -315,6 +315,7 @@ impl RenderStages {
             frame.height,
             crate::progress::bar(frame.appearance),
             frame.feedback,
+            frame.appearance.accent,
             frame.scale as f32,
         )?);
         self.stage = Stage::Progress;

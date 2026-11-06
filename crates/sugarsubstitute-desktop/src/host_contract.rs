@@ -595,6 +595,19 @@ pub trait StartupWindowContent: WindowContent {
         maximum: std::num::NonZeroUsize,
     ) -> Result<StartupPreparationStep, Box<dyn Error>>;
 
+    /// Adopt the operating-system accent for the splash, main window and SugarCubes.
+    ///
+    /// Called on the native thread once before the splash initializes and again whenever the
+    /// reported accent changes. `None` means the platform reports no accent; surfaces then use
+    /// the product palette. The call must not wait for preparation or page delivery.
+    ///
+    /// # Errors
+    /// Preserves application failures to retain or forward the new presentation.
+    fn system_accent(
+        &mut self,
+        accent: Option<sugarsubstitute_contracts::appearance::AccentColor>,
+    ) -> Result<(), Box<dyn Error>>;
+
     /// Return the immutable coordinator-bound run for this desktop's entire native lifetime.
     /// A retry may change launch/navigation identities while retaining this exact run.
     fn run_key(&self) -> RunKey;

@@ -44,6 +44,8 @@ pub enum StartupStatus {
 pub struct Appearance {
     /// Current presentation theme.
     pub theme: Theme,
+    /// Accent roles resolved from the operating-system accent, or the product fallback.
+    pub accent: sugarsubstitute_ui::accent::AccentPalette,
     /// Localized application recovery presentation; this grants no cleanup authority.
     pub status: StartupStatus,
     /// Latest observed startup operation, localized independently of elapsed time.
@@ -59,10 +61,11 @@ pub struct Appearance {
 }
 
 impl Appearance {
-    /// Open the requested blank-console proof with the source dark theme.
+    /// Open the requested blank-console proof with the source dark theme and product accent.
     pub const fn demo() -> Self {
         Self {
             theme: Theme::Dark,
+            accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
             status: StartupStatus::Loading,
             operation: sugarsubstitute_contracts::startup::StartupOperation::Preparing,
             expanded: true,

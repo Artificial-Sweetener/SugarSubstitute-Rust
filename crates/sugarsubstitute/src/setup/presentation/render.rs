@@ -29,6 +29,7 @@ impl Scene {
         let s = self.surface;
         let paint = FramePaint::new(
             s,
+            self.accent,
             identity,
             vec![
                 Layer {

@@ -61,7 +61,7 @@ impl NativeSurface {
             allocation: presented.allocation,
             occlusions: &binding.occlusions,
             drag_out: binding.drag_name.is_some() && session.allows_drag_out(),
-            cursor: session.editing_cursor(),
+            cursor: session.canvas_cursor(),
         })
     }
 
@@ -92,6 +92,7 @@ impl NativeSurface {
             bytes: copied.bytes,
             claim: copied.claim,
             staged: copied.staged,
+            preview: copied.preview,
         })
     }
 

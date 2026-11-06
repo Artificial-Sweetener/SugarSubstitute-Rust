@@ -13,25 +13,57 @@ use std::{io, path::Path, sync::Arc};
 use sugarsubstitute_contracts::execution::JobContext;
 
 /// Retained installation ownership for the elected coordinator, through its full teardown.
-pub enum RunningApplication {
-    /// Previously health-accepted generation.
+pub struct RunningApplication {
+    application: Application,
+    backend: super::backend_data::BackendDataAuthority,
+}
+enum Application {
     Accepted(Box<AcceptedApplication>),
-    /// Live transferred attempt awaiting authenticated application readiness.
     Trial(Box<TrialApplication>),
 }
 impl RunningApplication {
     /// Exact verified generation retained by this coordinator.
     pub fn generation(&self) -> &sugarsubstitute_contracts::installation::Generation {
-        match self {
-            Self::Accepted(application) => application.generation(),
-            Self::Trial(application) => &application.attempt().generation,
+        match &self.application {
+            Application::Accepted(application) => application.generation(),
+            Application::Trial(application) => &application.attempt().generation,
         }
     }
     /// Verified running directory whose payload remains protected by this owner.
     pub fn directory(&self) -> &Path {
-        match self {
-            Self::Accepted(application) => application.directory(),
-            Self::Trial(application) => application.directory(),
+        match &self.application {
+            Application::Accepted(application) => application.directory(),
+            Application::Trial(application) => application.directory(),
+        }
+    }
+    /// Borrow live trial authority only while this running generation is a trial.
+    pub fn trial(&self) -> Option<&TrialApplication> {
+        match &self.application {
+            Application::Trial(application) => Some(application),
+            Application::Accepted(_) => None,
+        }
+    }
+    /// Select storage from actual installed/provisioned identity on an admitted finite worker.
+    /// Explicit other backends retain external storage settings. No borrowed path grants ownership.
+    /// # Errors
+    /// Preserves native/control causes and rejects redirected or changing requested directories.
+    pub fn backend_storage(
+        &self,
+        directory: &Path,
+        context: &JobContext,
+    ) -> io::Result<super::BackendStorage<'_>> {
+        self.backend.select(directory, context)
+    }
+    /// Repair launch access under the same accepted/trial owner without exposing its enum state.
+    /// # Errors
+    /// Preserves the authoritative publication owner's native/selection failures.
+    pub fn repair_launch_entry(
+        &self,
+        context: &JobContext,
+    ) -> Result<super::InstalledApplication, super::SelectionFailure> {
+        match &self.application {
+            Application::Accepted(application) => application.repair_launch_entry(context),
+            Application::Trial(application) => application.repair_launch_entry(context),
         }
     }
 }
@@ -96,7 +128,17 @@ pub fn retain_running_generation(
         Some(InheritedLaunch::Trial(trial)) => {
             let application = InstallationRun::receive_trial(store, trial, generation, context)
                 .map_err(io::Error::other)?;
-            return Ok(Some(RunningApplication::Trial(Box::new(application))));
+            let generation = Directory::open(application.directory(), false)?;
+            let backend = super::backend_data::BackendDataAuthority::read(
+                &directory,
+                &generation,
+                &application.attempt().generation,
+                context,
+            )?;
+            return Ok(Some(RunningApplication {
+                application: Application::Trial(Box::new(application)),
+                backend,
+            }));
         }
         Some(InheritedLaunch::Selection(selection)) => Some(selection),
         None => None,
@@ -121,5 +163,11 @@ pub fn retain_running_generation(
         generation = application.generation().id.as_str(),
         "Elected coordinator retained its accepted installation generation"
     );
-    Ok(Some(RunningApplication::Accepted(application)))
+    let backend = super::backend_data::BackendDataAuthority::read(
+        &directory,
+        &selected,
+        application.generation(),
+        context,
+    )?;
+    Ok(Some(RunningApplication { application: Application::Accepted(application), backend }))
 }

@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve WebView2 download UI while retaining admitted operations through checked teardown.
 
+pub(super) mod destination;
+
 #[cfg(feature = "k1-native-qualification")]
 pub(super) mod qualification;
 use super::*;

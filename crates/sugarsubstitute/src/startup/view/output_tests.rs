@@ -18,7 +18,10 @@ fn output_revisions_advance_one_overall_bar_without_replaying_activity()
         generation: ResourceGeneration::new(1)?,
     };
     let mut store = TranscriptStore::new(resource);
-    let mut view = StartupView::new(Presentation::new("en", RequestedTheme::Dark, false)?);
+    let mut view = StartupView::new(
+        Presentation::new("en", RequestedTheme::Dark, false)?,
+        sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
+    );
     let origin = Instant::now();
     view.sample(StartupPhase::PreparingConnection, Duration::ZERO, origin);
     for (sequence, line, expected) in [

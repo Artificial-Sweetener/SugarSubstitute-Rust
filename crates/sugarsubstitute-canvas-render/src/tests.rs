@@ -151,7 +151,8 @@ fn incomplete_initial_frames_and_invalid_pixels_never_publish() -> harness::Test
                 DamagePlan::full(extent),
                 context.memory(),
                 |_, output| {
-                    output.fill(0);
+                    // Color without coverage is not premultiplied presentation storage.
+                    output.fill(0x00ff_0000);
                     Ok(())
                 }
             )

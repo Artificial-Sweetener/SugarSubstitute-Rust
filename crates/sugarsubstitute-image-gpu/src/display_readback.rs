@@ -11,7 +11,7 @@ use crate::{
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{Extent, Region, TILE_EDGE};
+use sugarsubstitute_image_ops::{Extent, Region, TILE_EDGE, is_premultiplied_word};
 
 const WORKSPACE_PIXELS: usize = TILE_EDGE as usize * TILE_EDGE as usize;
 const WORKSPACE_BYTES: u64 = WORKSPACE_PIXELS as u64 * size_of::<u32>() as u64;
@@ -29,7 +29,7 @@ impl DisplayReadback {
         self.region
     }
 
-    /// Opaque sRGB words in `0xffRRGGBB` channel order, independent of host byte order.
+    /// Premultiplied sRGB words in `0xAARRGGBB` channel order, independent of host byte order.
     pub fn pixels(&self) -> &[u32] {
         &self.words
     }
@@ -215,8 +215,8 @@ fn decode_workspace<'a>(
         for row in view.chunks_exact(stride).take(region.height() as usize) {
             for bytes in row[..region.width() as usize * 4].chunks_exact(4) {
                 let value = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                if value >> 24 != 255 {
-                    return Err(GpuError::invalid("GPU display result is not opaque"));
+                if !is_premultiplied_word(value) {
+                    return Err(GpuError::invalid("GPU display result is not premultiplied"));
                 }
                 let word = output.next().ok_or_else(|| {
                     GpuError::invalid("GPU display readback exceeded its admitted word inventory")

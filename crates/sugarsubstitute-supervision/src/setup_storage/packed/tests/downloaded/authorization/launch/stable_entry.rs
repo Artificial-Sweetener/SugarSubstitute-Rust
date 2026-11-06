@@ -35,7 +35,7 @@ fn prepare(
 }
 
 #[test]
-fn accepted_launcher_publishes_the_root_entry_and_retires_the_owned_historical_shortcut()
+fn accepted_launcher_preserves_locked_root_then_publishes_the_entry_after_capture_retires()
 -> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
@@ -45,7 +45,7 @@ fn accepted_launcher_publishes_the_root_entry_and_retires_the_owned_historical_s
         use windows::Win32::Storage::FileSystem::{
             FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ,
         };
-        let _capture_parent = std::fs::OpenOptions::new()
+        let capture_parent = std::fs::OpenOptions::new()
             .read(true)
             .share_mode(FILE_SHARE_READ.0)
             .custom_flags((FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).0)
@@ -53,6 +53,14 @@ fn accepted_launcher_publishes_the_root_entry_and_retires_the_owned_historical_s
         let selection = root.path().join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&selection)?;
         let old_link = std::fs::read(root.path().join(LINK))?;
+        assert!(application.repair_launch_entry(context).is_err());
+        assert!(!root.path().join(ENTRY).exists());
+        assert_eq!(std::fs::read(&selection)?, before);
+        assert_eq!(std::fs::read(root.path().join(LINK))?, old_link);
+        for entry in std::fs::read_dir(root.path())? {
+            assert!(!entry?.file_name().to_string_lossy().starts_with(".substitute-publication-"));
+        }
+        drop(capture_parent);
         let installed = application.repair_launch_entry(context)?;
         assert_eq!(installed.executable, root.path().join(ENTRY));
         assert_eq!(installed.directory, root.path());

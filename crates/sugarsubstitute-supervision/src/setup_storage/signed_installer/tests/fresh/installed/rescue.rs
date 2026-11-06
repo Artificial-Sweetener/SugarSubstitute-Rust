@@ -56,7 +56,7 @@ fn quarantined_first_installation_repairs_explicitly_without_resetting_saved_inp
         let directory = completed.directory();
         let startup = std::fs::read(directory.join("startup.local.toml"))?;
         let original_python = std::fs::read(path.join("python.exe"))?;
-        let authored = root.join("desktop-data/user-workflow.json");
+        let authored = root.join("user/desktop-data/user-workflow.json");
         std::fs::write(&authored, b"authored content")?;
         std::fs::remove_file(directory.join("sugarsubstitute.exe"))?;
         let store = SelectionStore::open(root, context)?;

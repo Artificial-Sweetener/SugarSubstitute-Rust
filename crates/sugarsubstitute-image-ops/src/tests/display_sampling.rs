@@ -24,7 +24,7 @@ fn display_samples_distinguish_coverage_nearest_and_centered_bilinear_positions(
 }
 
 #[test]
-fn bilinear_encoded_pixels_use_one_q16_rounding_step_and_remain_opaque() {
+fn bilinear_encoded_pixels_use_one_q16_rounding_step_and_keep_opaque_pixels_opaque() {
     let half = DisplaySample::from_corner(1.0, 3, true);
     let pixel =
         bilinear_display_pixel([0xff00_0000, 0xff40_4040, 0xff80_8080, 0xffff_ffff], half, half);
@@ -35,9 +35,33 @@ fn bilinear_encoded_pixels_use_one_q16_rounding_step_and_remain_opaque() {
 }
 
 #[test]
+fn premultiplied_edges_interpolate_coverage_without_darkening_color() {
+    let half = DisplaySample::from_corner(1.0, 3, true);
+    // Opaque white beside transparent black blends to half-covered white, not opaque grey.
+    let edge = bilinear_display_pixel(
+        [0xffff_ffff, 0, 0xffff_ffff, 0],
+        half,
+        DisplaySample::from_corner(0.5, 3, true),
+    );
+    assert_eq!(edge, 0x8080_8080);
+    assert!(is_premultiplied_word(edge));
+    let mut row = [0; 1];
+    bilinear_display_row(
+        &[0xffff_ffff, 0],
+        &[0xffff_ffff, 0],
+        DisplaySample::from_corner(0.5, 1, false),
+        &[half],
+        0xff05_0505,
+        &mut row,
+    );
+    assert_eq!(row, [edge]);
+}
+
+#[test]
 fn display_rows_match_per_pixel_interpolation_exactly() {
     let width = 37_u32;
-    let pixel = |seed: u32| 0xff00_0000 | (seed.wrapping_mul(2_654_435_761) >> 8);
+    // Full-width words exercise the alpha lane alongside every color channel.
+    let pixel = |seed: u32| seed.wrapping_mul(2_654_435_761) ^ (seed << 27);
     let top: Vec<u32> = (0..width).map(|x| pixel(x + 1)).collect();
     let bottom: Vec<u32> = (0..width).map(|x| pixel(x + 101)).collect();
     let matte = 0xff05_0505;

@@ -63,6 +63,24 @@ pub(crate) struct ShownInput {
     pub(crate) target: Option<LayerId>,
 }
 
+/// What one synced document shows: its published content revision and, while a gesture stages
+/// a preview on that revision, the preview's step. Watching reports both, so previews follow a
+/// stroke while it is drawn.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ShownRevision {
+    /// The published content revision.
+    pub(crate) revision: u64,
+    /// The staged preview step shown on it, or 0 when none is staged.
+    pub(crate) staged: u64,
+}
+
+impl ShownRevision {
+    /// A published `revision` with no staged step.
+    pub(crate) const fn published(revision: u64) -> Self {
+        Self { revision, staged: 0 }
+    }
+}
+
 /// A ComfyUI file, named by its host reference text, and the inert one-use adapter that
 /// acquires it. The canvas compares references only; the adapter is used at most once.
 #[derive(Clone)]

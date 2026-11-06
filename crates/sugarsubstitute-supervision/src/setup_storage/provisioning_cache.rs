@@ -38,6 +38,16 @@ pub(crate) struct ProvisioningCaches {
     runtime: CacheLease,
 }
 impl ProvisioningCaches {
+    /// Confine delegated tools to this family's disposable runtime grant. Package caches are
+    /// disabled because their opaque writers cannot participate in native download admission.
+    /// The unchanged snapshot still supplies proxy, certificate and executable search settings.
+    pub(crate) fn environment(
+        &self,
+        environment: &crate::LaunchEnvironment,
+    ) -> io::Result<crate::LaunchEnvironment> {
+        crate::LaunchEnvironment::for_local_storage(environment.as_utf16(), &self.runtime.path())
+            .map_err(io::Error::other)
+    }
     /// Keep upstream semantic keys and byte verification in the authenticated provisioning worker.
     /// Download sidecars retain their own schema across releases; catalogue parsing is isolated by
     /// the authenticated worker distribution, which includes its pinned upstream source identity.

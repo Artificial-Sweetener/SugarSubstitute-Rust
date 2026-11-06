@@ -25,6 +25,7 @@ fn view(width: u32, height: u32, scale: f32) -> View {
         now: Duration::ZERO,
         interaction: Interaction::default(),
         text_revisions: [0; 5],
+        accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
     }
 }
 fn primary(flow: &mut SetupFlow) -> Result<Request> {
@@ -88,7 +89,7 @@ fn check(flow: &SetupFlow, resources: &mut SceneResources) -> Result {
                         (before.bounds.y - after.bounds.y - scrolled.layout.scroll).abs() < 0.001
                     );
                 }
-                SceneCursor::new(view.surface, scrolled.page, None)?;
+                SceneCursor::new(view.surface, view.accent, scrolled.page, None)?;
             } else {
                 assert_eq!(scene.layout.page_width, scene.layout.viewport.width);
             }
@@ -105,8 +106,8 @@ fn check(flow: &SetupFlow, resources: &mut SceneResources) -> Result {
                     assert!(!control.availability.actionable());
                 }
             }
-            SceneCursor::new(view.surface, scene.shell, None)?;
-            SceneCursor::new(view.surface, scene.page, None)?;
+            SceneCursor::new(view.surface, view.accent, scene.shell, None)?;
+            SceneCursor::new(view.surface, view.accent, scene.page, None)?;
         }
     }
     Ok(())

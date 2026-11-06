@@ -34,6 +34,7 @@ fn paint(
         target.height(),
         bar(appearance),
         frame,
+        appearance.accent,
         scale,
     )?;
     while !cursor.step(target)? {}

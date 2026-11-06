@@ -56,6 +56,17 @@ files = [
 ]
 
 [[components]]
+id = "qt-native-drag-cursors"
+source_url = "https://github.com/qt/qtbase/tree/v6.10.2/src/plugins/platforms/windows/images"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/qt-hand-cursors.GPL-3.0-only.txt"
+files = [
+  "crates/sugarsubstitute-desktop/assets/cursors/dragcopycursor_32.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/dragcopycursor_48.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/dragcopycursor_64.png",
+]
+
+[[components]]
 id = "fluent-canvas-cursors"
 source_url = "https://github.com/Artificial-Sweetener/SugarSubstitute/tree/e6a5a990a91f7e9a2701e48d5af5ace821508c43/substitute/presentation/resources/cursors"
 license = "MIT AND GPL-3.0-or-later"

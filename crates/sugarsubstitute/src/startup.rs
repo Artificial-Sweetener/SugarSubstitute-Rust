@@ -37,8 +37,11 @@ mod shutdown;
 #[path = "startup/view.rs"]
 pub(crate) mod view;
 
+mod appearance;
 mod backend;
 pub(crate) mod budget_trace;
+#[cfg(windows)]
+mod native_admission;
 mod shutdown_origin;
 use crate::{job_sequence::JobSequence, preparation::PreparationDriver};
 #[cfg(all(windows, feature = "native-composition"))]
@@ -55,6 +58,7 @@ use std::{
     time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::{
+    appearance::AccentColor,
     execution::{CompletionWake, Scope},
     lifecycle::RunKey,
     presentation::{FrameShape, PreparedFrame},
@@ -90,6 +94,7 @@ pub struct StartupHost<B: StartupBackend> {
     render_scope: Option<Scope>,
     child_scope: Option<Scope>,
     view: Option<StartupView>,
+    accent: appearance::SystemAccent,
     visible: bool,
     frame_dirty: bool,
     started: bool,
@@ -159,6 +164,7 @@ impl<B: StartupBackend> StartupHost<B> {
             render_scope: None,
             child_scope: None,
             view: None,
+            accent: appearance::SystemAccent::default(),
             visible: false,
             frame_dirty: false,
             started: false,
@@ -176,68 +182,6 @@ impl<B: StartupBackend> StartupHost<B> {
             render.invalidate();
         }
         changed
-    }
-
-    /// Retain one empty application canvas before the native startup lifetime begins.
-    /// `anchor` is the installation root supplied by the parent; the runtime cache owner opens
-    /// its schema-qualified scope below it and validates it on a worker.
-    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
-    pub(crate) fn configure_canvas(
-        &mut self,
-        anchor: std::path::PathBuf,
-        health: crate::diagnostics::DiagnosticHealth,
-        scope: sugarsubstitute_contracts::execution::ScopeSpec,
-    ) -> Result<(), Box<dyn Error>> {
-        if self.started
-            || self.canvas.is_some()
-            || scope.deadline.is_some()
-            || scope.id <= self.scopes.child.id
-            || scope.id <= self.scopes.render.id
-        {
-            return Err("Application canvas has an invalid or already active scope".into());
-        }
-        #[cfg(feature = "native-composition")]
-        if self.composition.as_ref().is_some_and(|composition| scope.id <= composition.scope_id()) {
-            return Err("Application canvas scope precedes composition execution".into());
-        }
-        if !anchor.is_absolute() {
-            return Err("Application canvas cache anchor must be absolute".into());
-        }
-        let maximum = crate::native_canvas::budget::largest_canvas_extent()?;
-        let (governor, retained) = memory::MemoryGovernor::open()?;
-        // The renderer policy is chosen when the canvas starts, so fund a GPU session.
-        self.execution.reserve_canvas_capacity(crate::native_canvas::budget::reservation_bytes(
-            maximum, true, retained,
-        ))?;
-        self.canvas = Some(canvas::EmbeddedCanvas::new(
-            anchor,
-            health,
-            self.clock.clone(),
-            self.jobs.clone(),
-            scope,
-            canvas::CanvasFunding { maximum_extent: maximum, retained_document_bytes: retained },
-        ));
-        let _first = self.memory.replace(governor);
-        Ok(())
-    }
-
-    /// Reserve the composition-wait scope before native window construction begins.
-    #[cfg(all(windows, feature = "native-composition"))]
-    pub(crate) fn configure_composition(
-        &mut self,
-        scope: sugarsubstitute_contracts::execution::ScopeSpec,
-    ) -> Result<(), Box<dyn Error>> {
-        if self.started
-            || self.composition.is_some()
-            || self.canvas.is_some()
-            || scope.deadline.is_some()
-            || scope.id <= self.scopes.child.id
-            || scope.id <= self.scopes.render.id
-        {
-            return Err("Composition wait scope is invalid or already active".into());
-        }
-        self.composition = Some(composition::CompositionWork::new(scope, self.jobs.clone()));
-        Ok(())
     }
 }
 impl<B: StartupBackend> WindowContent for StartupHost<B> {
@@ -457,6 +401,9 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     }
     fn main_construction_pending(&self) -> bool {
         self.child.main_construction_pending()
+    }
+    fn system_accent(&mut self, accent: Option<AccentColor>) -> Result<(), Box<dyn Error>> {
+        self.adopt_system_accent(accent)
     }
     fn observe(&mut self, observation: DesktopStartupObservation) -> Result<(), Box<dyn Error>> {
         #[cfg(feature = "k1-native-qualification")]

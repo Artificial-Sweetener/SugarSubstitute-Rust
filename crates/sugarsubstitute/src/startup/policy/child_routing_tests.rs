@@ -85,8 +85,10 @@ fn native_activity_preserves_completed_splash_publication() -> TestResult {
     content.preparation = Some(render);
     content.prepared = true;
     content.visible = true;
-    content.view =
-        Some(crate::startup::view::StartupView::new(Presentation::new("en", Theme::Dark, true)?));
+    content.view = Some(crate::startup::view::StartupView::new(
+        Presentation::new("en", Theme::Dark, true)?,
+        sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
+    ));
     assert!(!sugarsubstitute_desktop::WindowContent::animating(&content));
     content.observe(DesktopStartupObservation::NativeActivity {
         run,

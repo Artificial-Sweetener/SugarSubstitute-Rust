@@ -177,7 +177,7 @@ fn publish_owned(
     protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<()> {
-    let _executable = payload::ensure(root, record, protection, context)?;
+    let _executable = payload::ensure(root, state, record, protection, context)?;
     check(context)?;
     payload::retire_earlier(root, EARLIER_ENTRY, record, protection, context)?;
     retire_earlier_shortcut(root, state, protection, context)

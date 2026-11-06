@@ -2,6 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve detailed overlap and complete current-source evidence in composite displays.
 use super::*;
+use sugarsubstitute_contracts::execution::{MemoryLease, MemoryRelease};
+
+struct Released;
+impl MemoryRelease for Released {
+    fn release(&self, _: u64) {}
+}
 
 #[test]
 fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box<dyn Error>> {
@@ -9,6 +15,20 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
         Ok(FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(value)? })
     };
     let (mut session, _, _directory) = session()?;
+    // The display describes the shown document's current source, so only backing identities
+    // decide whether it is reused.
+    let memory = MemoryLease::new(64 * 1024 * 1024, Box::new(Released));
+    let document = Document::new(1, Extent::new(640, 480)?, &memory)?;
+    let key = (document.snapshot().identity(), document.snapshot().revision(), 0);
+    session.document.scene = Some(Scene {
+        document,
+        source: None,
+        source_revision: 1,
+        original: None,
+        compared: None,
+        placed: Vec::new(),
+    });
+    session.selection = 1;
     let view = session.document.tools.navigation().viewport();
     let coverage = BackingCoverage::new(view, [0; 2])?;
     let projection = ViewProjection::new(view, view)?;
@@ -22,7 +42,7 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
         view,
         sampling_scale: view.zoom(),
         reconstruction: Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3),
-        document: (1, 1, 0),
+        document: key,
         source_revision: 1,
     };
     let layer = |source| backing::SelectedLayer { shown, source, projection };
@@ -44,7 +64,7 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
         view,
         coverage,
         projection,
-        document: (1, 1, 0),
+        document: key,
         source_revision: 1,
         overlay: 0,
     });

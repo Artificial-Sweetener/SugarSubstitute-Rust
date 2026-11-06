@@ -76,7 +76,7 @@ fn move_lands_fractional_and_snapped_drags_and_floats_selections_in_a_session()
         let state = fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Move))?;
         assert_eq!(state.tool, CanvasToolId::Move);
         fixture.point([20.0, 20.0], NONE)?;
-        assert_eq!(fixture.session.editing_cursor(), Some(CursorIntent::Move));
+        assert_eq!(fixture.session.canvas_cursor(), CursorIntent::Move);
         let revision = fixture.snapshot(image.document)?.revision();
 
         // Without a selection the mask follows the pointer by fractions of a pixel.
@@ -164,7 +164,7 @@ fn transform_sessions_resolve_in_place_by_key_and_back_to_the_previous_tool_by_t
         assert!(matches!(overlay.guides, Some(sugarsubstitute_canvas::OverlayGuides::Frame(_))));
         // A corner handle shows a turned resize arrow; outside the box, a rotation cursor.
         fixture.point([40.0, 20.0], NONE)?;
-        assert!(matches!(fixture.session.editing_cursor(), Some(CursorIntent::Affine(_))));
+        assert!(matches!(fixture.session.canvas_cursor(), CursorIntent::Affine(_)));
         let revision = fixture.snapshot(image.document)?.revision();
 
         let turn = |action| CanvasEditCommand::Transform(action);
@@ -242,7 +242,7 @@ fn shared_edges_reshape_adjacent_masks_in_a_session_and_escape_leaves_the_tool()
         assert!(matches!(overlay.guides, Some(sugarsubstitute_canvas::OverlayGuides::Seams(_))));
         fixture.point([30.0, 20.0], NONE)?;
         let resize = CursorIntent::Resize(ResizeDirection::Horizontal);
-        assert_eq!(fixture.session.editing_cursor(), Some(resize));
+        assert_eq!(fixture.session.canvas_cursor(), resize);
         let revision = fixture.snapshot(image.document)?.revision();
 
         fixture.drag_held(&[[30.0, 20.0], [36.0, 20.0]], CTRL)?;

@@ -29,6 +29,7 @@ use tao::{event_loop::ControlFlow, platform::run_return::EventLoopExtRunReturn};
 
 struct Session {
     activity: native_activity::NativeActivity,
+    accent: crate::windows_system_accent::SystemAccent,
     observers: windows_activity::Observers,
     splash: surface::Splash,
     main: Option<MainActor>,
@@ -176,6 +177,10 @@ pub fn run_startup(
     let splash = surface::Splash::new(&options, &content, started, timings.clone());
     let mut session = Session {
         activity: native_activity::NativeActivity::new(content.run_key()),
+        accent: crate::windows_system_accent::SystemAccent::observe(
+            event_loop.create_proxy(),
+            wake_lifetime.clone(),
+        ),
         observers: windows_activity::Observers::new(event_loop.create_proxy()),
         splash,
         main: None,
@@ -192,6 +197,10 @@ pub fn run_startup(
         navigations: 0,
         main_material: None,
     };
+    // The first splash frame and the main window are prepared with the current accent.
+    if let Err(cause) = events::system_accent(&mut session, &mut content) {
+        session.fail(&mut content, cause);
+    }
     if let Err(cause) = session.splash.initialize(&options, &event_loop, &content, timings.clone())
     {
         session.fail(&mut content, cause);
@@ -246,6 +255,7 @@ pub fn run_startup(
             }
             drop(animation_period);
             bootstrap.retain_close_failure(&mut session.failure);
+            session.accent.retire();
             wake_lifetime.disconnect();
             if let Some(main) = session.main.take() {
                 session.navigations += main.navigations();

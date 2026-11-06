@@ -8,7 +8,7 @@ use sugarsubstitute_contracts::execution::{JobContext, SurfaceId};
 use sugarsubstitute_image_gpu::{DisplayCopy, DisplayImage, GpuDevice};
 use sugarsubstitute_image_ops::{Extent, ImageError};
 
-/// One completed opaque sRGB8 GPU viewport with its actual application-assigned identity.
+/// One completed premultiplied sRGB8 GPU viewport with its actual application-assigned identity.
 /// Clones share immutable pixels and their original admission through presentation or disposal.
 #[derive(Clone)]
 pub struct GpuFrame {

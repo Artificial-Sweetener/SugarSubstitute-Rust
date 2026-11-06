@@ -85,6 +85,15 @@ pub(super) fn run(
     let mut close_started = false;
     let mut revealed = false;
     let started = Instant::now();
+    let mut accent =
+        crate::windows_system_accent::SystemAccent::observe(proxy.clone(), wake_lifetime.clone());
+    // The first installer page is prepared with the current accent.
+    if let Some(current) = accent.take_change()
+        && let Err(cause) = lifetime.input(Event::SystemAccent(current))
+        && failure.is_none()
+    {
+        failure = Some(cause);
+    }
     if let Err(cause) = lifetime.start(Arc::new(ProxyWake::new(
         proxy.clone(),
         wake_lifetime.clone(),
@@ -110,6 +119,9 @@ pub(super) fn run(
                     if let Some(owner) = &controls { owner.focus_next(backward)?; }
                 }
                 NativeEvent::UserEvent(NativeAction::ScrollPage(key)) if !closing => scroll.key(key)?,
+                NativeEvent::UserEvent(NativeAction::SystemAccent) if !closing => {
+                    if let Some(current) = accent.take_change() { lifetime.input(Event::SystemAccent(current))?; }
+                }
                 NativeEvent::UserEvent(NativeAction::FocusChanged) if !closing => {
                     lifetime.input(Event::Interaction { hovered, pressed, focused: controls.as_ref().and_then(Controls::focused) })?;
                 }
@@ -256,6 +268,7 @@ pub(super) fn run(
             closing = true;
         }
     });
+    accent.retire();
     picker.retire()?;
     drop(picker);
     wake_lifetime.disconnect();

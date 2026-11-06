@@ -2,10 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain recently shown output documents so reselecting one presents its finished frame at once.
 //!
-//! A retained document keeps its scene (authored document, pinned source reader and original),
-//! its camera and its full-quality detail and whole-document fallback backings, whose memory
-//! claims stay funded by the session's retained-document allowance. Display custody (the
-//! projection, its buffers and acknowledged evidence) always stays with the current document.
+//! A retained document keeps its scene (authored document, pinned source reader and original)
+//! and its full-quality detail and whole-document fallback backings, whose memory claims stay
+//! funded by the session's retained-document allowance. It keeps no camera across selections:
+//! the page's inspection owner holds the one view shared by every output, so a reselected
+//! document starts at the selection's camera exactly as a freshly loaded one does. Display
+//! custody (the projection, its buffers and acknowledged evidence) always stays with the
+//! current document.
 //!
 //! The application memory budget narrows the funded allowance as system pressure rises.
 //! Retention then gives memory back cheapest-to-rebuild first: it demotes the least recently
@@ -542,13 +545,13 @@ impl Session {
     }
 
     /// Swap the retained document for `key` in as selection `intent`, parking the outgoing one,
-    /// or relabel the current document when it already shows `key`. The restored camera is kept,
-    /// fitted to the current physical extent, and one fresh display of the retained backings
+    /// or relabel the current document when it already shows `key`. It starts at the selection's
+    /// camera on the current physical extent, and one fresh display of the retained backings
     /// proves the selection.
     fn restore_retained(&mut self, key: RetentionKey, intent: u64) -> Result<bool, Box<dyn Error>> {
         if self.input_shown() {
             // The Input route stays; the reselected output waits behind the input document.
-            self.park_retained_output(&key, intent);
+            self.park_retained_output(&key, intent)?;
             return Ok(false);
         }
         let now = self.navigation_time();
@@ -562,20 +565,14 @@ impl Session {
             self.document.adopt_display(&mut outgoing);
             self.park(outgoing);
         }
+        let frame = self.selection_frame(intent);
         let document = &mut *self.document;
         document.rebind(intent);
         document.tools.set_refresh_rate(self.display_refresh)?;
-        document.tools.resize(extent, document.scene.as_ref().map(|scene| &scene.document), now)?;
+        let scene = document.scene.as_ref().map(|scene| &scene.document);
+        document.tools.resize(extent, scene, now)?;
         document.tools.advance(now)?;
-        if let Some((_, frame)) =
-            self.initial_frame.take().filter(|(offered, _)| *offered == intent)
-        {
-            let outcome = self.document.tools.navigate(frame, now)?;
-            if !matches!(outcome, sugarsubstitute_canvas::NavigationCommandOutcome::Applied { .. })
-            {
-                tracing::debug!(operation="canvas_selection_frame", outcome=?outcome, "Selection camera was not admitted; the retained camera remains");
-            }
-        }
+        selection_camera::return_to_selection_camera(&mut document.tools, scene, frame, now)?;
         if self.pacing.period() != self.document.tools.navigation().frame_period() {
             self.pacing.set_frame_period(self.document.tools.navigation().frame_period(), now)?;
         }

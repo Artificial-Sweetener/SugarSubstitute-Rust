@@ -9,12 +9,25 @@ pub(super) fn write(
     cube: &Path,
 ) -> io::Result<()> {
     let configuration = root.join("startup.local.toml");
-    let startup = sugarsubstitute_configuration::initial::managed(
-        &runtime.directory,
-        &runtime.python,
-        &selection.outputs,
-        &selection.locale,
-    )?;
+    let startup = match selection.mode.as_str() {
+        "managed" => sugarsubstitute_configuration::initial::installation_owned(
+            &runtime.directory,
+            &runtime.python,
+            &sugarsubstitute_configuration::layout::InstallationLayout::new(
+                &selection.install_root,
+            )
+            .comfy_data(),
+            &selection.outputs,
+            &selection.locale,
+        ),
+        "attached" => sugarsubstitute_configuration::initial::external(
+            &runtime.directory,
+            &runtime.python,
+            &selection.outputs,
+            &selection.locale,
+        ),
+        _ => return Err(super::invalid("Unsupported installer backend selection")),
+    }?;
     files::write_immutable(&configuration, startup.as_bytes(), files::create_new)?;
     let paths = sugarsubstitute_configuration::paths::StartupPaths::new([
         configuration,

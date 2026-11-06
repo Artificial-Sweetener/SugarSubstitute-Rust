@@ -22,6 +22,7 @@ use sugarsubstitute_contracts::{
     localization::installer::{self, InstallerText as Text},
 };
 use sugarsubstitute_ui::{
+    accent::AccentPalette,
     form::{Control, ControlId},
     scene::{Element, SceneResources},
     text::PaintSpec,
@@ -109,6 +110,8 @@ pub struct Interaction {
 pub struct View {
     /// Physical client dimensions and logical-to-device scale.
     pub surface: PaintSpec,
+    /// Accent roles from the operating-system accent, or the product fallback.
+    pub accent: AccentPalette,
     /// Requested logical page scroll position, clamped against measured content.
     pub scroll: f32,
     /// Monotonic application time, used only for long-wait feedback.
@@ -128,6 +131,7 @@ pub struct Scene {
     /// Retained peer geometry and scroll facts for the same application revision.
     pub layout: Layout,
     surface: PaintSpec,
+    accent: AccentPalette,
 }
 
 /// Native peer geometry retained after scene commands have become validated pixels.
@@ -215,6 +219,7 @@ pub fn compose(
         shell,
         page: builder.elements,
         surface: s,
+        accent: view.accent,
         layout: Layout {
             drag_bounds: bounds_for_caption(width),
             viewport,

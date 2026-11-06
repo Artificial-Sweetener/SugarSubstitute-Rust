@@ -9,10 +9,12 @@ const BAND_ROWS: usize = 32;
 
 impl ProjectionBuffer {
     /// Project a primary canonical surface and fill only its uncovered output pixels from an
-    /// optional canonical underlay. Pixels uncovered by both sources receive the opaque matte.
+    /// optional canonical underlay. Pixels uncovered by both sources receive the matte, which is
+    /// opaque or transparent black.
     /// The primary contiguous-copy and repeated-row fast paths remain authoritative in overlap.
     /// # Errors
-    /// Rejects mismatched target cameras, extents, surfaces, stale generations or nonopaque matte;
+    /// Rejects mismatched target cameras, extents, surfaces, stale generations or a partially
+    /// covered matte;
     /// preserves admission, cancellation and deadline failures without changing either source.
     pub fn project_over(
         mut self,
@@ -33,7 +35,7 @@ impl ProjectionBuffer {
                 validate_source(target, self.extent, surface, mapping)
             })
             .transpose()?;
-        let [red, green, blue, alpha] = SrgbEncoder::encode_constant(matte)?;
+        let [red, green, blue, alpha] = SrgbEncoder::encode_matte(matte)?;
         let background = u32::from_be_bytes([alpha, red, green, blue]);
         let samples = ProjectionSamples::new(view, context)?;
         let fallback_samples =

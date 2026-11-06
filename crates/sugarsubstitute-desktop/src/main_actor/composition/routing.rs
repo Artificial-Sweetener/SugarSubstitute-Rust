@@ -88,15 +88,16 @@ pub(super) enum Message {
 }
 
 /// One published input region: its clip, its occlusions, whether a primary drag exports the
-/// output, and the effective editing tool's cursor, `None` while navigation chooses its hands.
-pub(super) type Published<'a> = (PhysicalRect, &'a [PhysicalRect], bool, Option<CursorIntent>);
+/// output, and the cursor the canvas's effective tool asks for over it.
+pub(super) type Published<'a> = (PhysicalRect, &'a [PhysicalRect], bool, CursorIntent);
 
 /// Route state confined to the composed window's UI thread.
 pub(super) struct Routing {
     clip: Option<PhysicalRect>,
     occlusions: Vec<PhysicalRect>,
     drag_out: bool,
-    tool_cursor: Option<CursorIntent>,
+    /// The canvas's published cursor over the region; meaningful only while a region is set.
+    canvas_cursor: CursorIntent,
     /// The latest sample routed to the canvas, re-delivered when only its modifiers change.
     sample: Option<PointerSample>,
     /// Primary press point and drag threshold of a gesture that may become a drag-out.
@@ -125,7 +126,7 @@ impl Routing {
             clip: None,
             occlusions,
             drag_out: false,
-            tool_cursor: None,
+            canvas_cursor: CursorIntent::Arrow,
             sample: None,
             origin: None,
             native: None,
@@ -139,18 +140,18 @@ impl Routing {
         })
     }
 
-    /// Install the current region, whether it offers drag-out and the editing tool's cursor, or
+    /// Install the current region, whether it offers drag-out and the canvas's cursor, or
     /// withdraw it with `None`.
     ///
     /// A replaced region keeps a captured native gesture; withdrawal cancels it. A region with
     /// more than [`MAX_INPUT_OCCLUSIONS`] occlusions is invalid and withdraws routing.
     pub(super) fn publish(&mut self, region: Option<Published<'_>>) {
         match region {
-            Some((clip, occlusions, drag_out, tool_cursor))
+            Some((clip, occlusions, drag_out, canvas_cursor))
                 if occlusions.len() <= MAX_INPUT_OCCLUSIONS =>
             {
                 self.drag_out = drag_out;
-                self.tool_cursor = tool_cursor;
+                self.canvas_cursor = canvas_cursor;
                 if !drag_out {
                     self.origin = None;
                 }
@@ -165,7 +166,7 @@ impl Routing {
                     self.occlusions.clear();
                 }
                 self.drag_out = false;
-                self.tool_cursor = None;
+                self.canvas_cursor = CursorIntent::Arrow;
                 self.cancel();
             }
         }
@@ -302,22 +303,17 @@ impl Routing {
         }
     }
 
-    /// Native cursor that wins over the browser's: the arrow over or during a gesture in a
-    /// region that offers drag-out, the editing tool's cursor over the region or during its
-    /// gesture, closed hand while a navigation gesture holds capture, open hand over the region,
-    /// otherwise none so WebView2's cursor applies.
+    /// Native cursor that wins over the browser's: the canvas's published cursor over the
+    /// region or during a captured gesture, otherwise none so WebView2's cursor applies.
+    ///
+    /// Only the canvas decides whether panning is possible; routing anticipates nothing but the
+    /// grab itself: a held press turns the published open hand into the closed hand before the
+    /// canvas republishes its cursor from the drained press.
     pub(super) const fn cursor(&self) -> Option<CursorIntent> {
-        let engaged = self.native.is_some() || self.hover;
-        if self.drag_out && engaged {
-            Some(CursorIntent::Arrow)
-        } else if self.tool_cursor.is_some() && engaged {
-            self.tool_cursor
-        } else if self.native.is_some() {
-            Some(CursorIntent::ClosedHand)
-        } else if self.hover {
-            Some(CursorIntent::OpenHand)
-        } else {
-            None
+        match (self.native, self.hover, self.canvas_cursor) {
+            (Some(_), _, CursorIntent::OpenHand) => Some(CursorIntent::ClosedHand),
+            (Some(_), _, cursor) | (None, true, cursor) => Some(cursor),
+            (None, false, _) => None,
         }
     }
 

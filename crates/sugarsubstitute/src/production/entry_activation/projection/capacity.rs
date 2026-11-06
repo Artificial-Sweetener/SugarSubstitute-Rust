@@ -34,6 +34,8 @@ pub(super) fn preflight(
     available: u64,
 ) -> Result<(), LifecycleRejection> {
     let mut bytes = count(capture.capacity())?;
+    // Desktop storage overrides can fill a native block even for an empty captured snapshot.
+    bytes = add(bytes, 256 * 1024)?;
     bytes = add(bytes, path_peak(view.profile_directory())?)?;
     bytes = add(bytes, mul(count(view.profile_directory().unit_len())?, 2)?)?;
     bytes = add(bytes, count(view.profile().len())?)?;
@@ -51,7 +53,8 @@ pub(super) fn preflight(
         // script-path preparation. The one actual owner remains comfy::launch.
         bytes = add(bytes, mul(path_peak(root)?, 6)?)?;
         bytes = add(bytes, mul(path_peak(interpreter)?, 5)?)?;
-        bytes = add(bytes, 8192)?; // Bounded managed environment names, values and controls.
+        // Local storage preparation can fill a native environment even from an empty snapshot.
+        bytes = add(bytes, 256 * 1024)?;
         let mut argument_bytes = 0;
         for argument in arguments.iter() {
             argument_bytes = add(argument_bytes, count(argument.len())?)?;

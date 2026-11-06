@@ -18,6 +18,7 @@ fn snapshot_keeps_original_display_state_until_its_claim_is_released() -> io::Re
         now: Duration::ZERO,
         interaction: Interaction::default(),
         text_revisions: [0; 5],
+        accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
     };
     let lease = MemoryLease::new(SNAPSHOT_BYTES, Box::new(Release));
     let old = Snapshot::capture(&flow, view, &lease)?;

@@ -59,10 +59,10 @@ pub(super) fn recover(
     let Some(pending) = pending(root, state, protection, context)? else { return Ok(None) };
     let Pending { transition, identity, current, next_present } = pending;
     let _image = if next_present {
-        payload::ensure(root, &transition.next, protection, context)?
+        payload::ensure(root, state, &transition.next, protection, context)?
     } else {
         let replacing = files::exists(root.path().join(ENTRY), context)?;
-        payload::replace(root, &transition.next, replacing, protection, context)?
+        payload::replace(root, state, &transition.next, replacing, protection, context)?
     };
     if current != transition.next {
         record::replace(state, &current, &transition.next, protection, context)?;

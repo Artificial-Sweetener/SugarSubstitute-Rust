@@ -2,9 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Product form colors and state precedence, kept outside surface layout code.
 use super::{ControlState, Decoration, Palette};
+use crate::accent::AccentPalette;
 
 impl Decoration {
-    pub(super) fn palette(self) -> Palette {
+    /// Resolve this treatment against the surface's accent; every accent role comes from it.
+    pub(super) fn palette(self, accent: AccentPalette) -> Palette {
         let white = |alpha| [255, 255, 255, alpha];
         let uniform = |radius, fill, border| Palette {
             radius,
@@ -19,8 +21,8 @@ impl Decoration {
                 let fill = if primary {
                     match state {
                         ControlState::Disabled => [52, 52, 52, 255],
-                        ControlState::Hover | ControlState::Pressed => [243, 58, 128, 255],
-                        _ => [255, 64, 137, 255],
+                        ControlState::Hover | ControlState::Pressed => accent.hover(),
+                        _ => accent.fill(),
                     }
                 } else {
                     white(match state {
@@ -45,7 +47,7 @@ impl Decoration {
                 let mut palette = uniform(5.0, fill, white(if selection { 14 } else { 20 }));
                 palette.top = white(20);
                 if !selection {
-                    palette.bottom = if focused { [255, 64, 137, 255] } else { white(139) };
+                    palette.bottom = if focused { accent.fill() } else { white(139) };
                     if focused {
                         palette.insets[3] = 2.0;
                     }
@@ -54,7 +56,7 @@ impl Decoration {
             }
             Self::Section => uniform(22.0, white(10), white(19)),
             Self::ProgressSection => uniform(18.0, white(10), white(19)),
-            Self::IconBadge => uniform(14.0, [255, 64, 137, 31], [255, 64, 137, 61]),
+            Self::IconBadge => uniform(14.0, accent.tint(31), accent.tint(61)),
             Self::Choice { state } => {
                 uniform(18.0, white(if state == ControlState::Hover { 6 } else { 0 }), white(0))
             }
@@ -62,7 +64,7 @@ impl Decoration {
             Self::Output => uniform(5.0, [16, 16, 16, 255], white(37)),
             Self::Radio { checked } => {
                 let mut palette =
-                    uniform(10.0, white(0), if checked { [255, 64, 137, 255] } else { white(153) });
+                    uniform(10.0, white(0), if checked { accent.fill() } else { white(153) });
                 if checked {
                     palette.insets = [5.0; 4];
                 }
@@ -70,8 +72,8 @@ impl Decoration {
             }
             Self::Check { checked } => uniform(
                 2.0,
-                if checked { [255, 64, 137, 255] } else { [59, 59, 59, 255] },
-                if checked { [255, 64, 137, 255] } else { [133, 133, 133, 255] },
+                if checked { accent.fill() } else { [59, 59, 59, 255] },
+                if checked { accent.fill() } else { [133, 133, 133, 255] },
             ),
             Self::Close { state } => uniform(
                 0.0,

@@ -12,7 +12,7 @@ use sugarsubstitute_desktop::{
     AccessibleControl, ControlBounds, HitTarget, KeyAction, Pointer, PointerAction,
 };
 use sugarsubstitute_splash::{Appearance, Control, PaperFlip, Theme};
-use sugarsubstitute_ui::progress::ProgressFrame;
+use sugarsubstitute_ui::{accent::AccentPalette, progress::ProgressFrame};
 #[path = "view/disclosure.rs"]
 mod disclosure;
 
@@ -36,7 +36,8 @@ pub(crate) struct StartupView {
 }
 impl StartupView {
     /// Resolve owned text through the sole locale registry; allocate no raster resources.
-    pub(crate) fn new(presentation: Presentation) -> Self {
+    /// `accent` is the palette resolved from the current operating-system accent.
+    pub(crate) fn new(presentation: Presentation, accent: AccentPalette) -> Self {
         let messages =
             sugarsubstitute_contracts::localization::messages(presentation.locale().as_str());
         let mut animation = PaperFlip::new(0x0053_5547_4152);
@@ -49,6 +50,7 @@ impl StartupView {
                     RequestedTheme::Dark => Theme::Dark,
                     RequestedTheme::Light => Theme::Light,
                 },
+                accent,
                 expanded: false,
                 reveal: 0.0,
                 hovered: None,
@@ -94,6 +96,12 @@ impl StartupView {
                 },
             ],
         }
+    }
+    /// Repaint with a changed operating-system accent; returns whether the palette changed.
+    pub(crate) fn set_accent(&mut self, accent: AccentPalette) -> bool {
+        let changed = self.appearance.accent != accent;
+        self.appearance.accent = accent;
+        changed
     }
     /// Describe the existing console inner rectangle only after matching frame publication.
     /// Leave the settled Retry peer's original rectangle available above this native child.

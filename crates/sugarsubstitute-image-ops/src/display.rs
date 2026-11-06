@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Canonical opaque sRGB display encoding with a shared bounded transfer lookup.
+//! Canonical premultiplied sRGB display encoding with a shared bounded transfer lookup.
 use crate::{ImageError, Pixel};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 
@@ -25,9 +25,12 @@ impl SrgbEncoder {
         }
         Ok(Self { table, _memory: claim })
     }
-    /// Convert one already-composited opaque linear pixel to `[red, green, blue, 255]`.
+    /// Convert one already-composited linear premultiplied pixel to premultiplied
+    /// `[red, green, blue, alpha]` sRGB8, the display presentation form. Opaque composites encode
+    /// with alpha 255 and unchanged color; zero coverage encodes as transparent black. Other
+    /// coverage encodes its straight color and scales each channel by the rounded 8-bit alpha.
     /// # Errors
-    /// Rejects nonopaque input; composition over the chosen matte belongs to the image graph.
+    /// Rejects coverage outside `[0, 1]`; composition over the chosen matte belongs to the graph.
     pub fn encode(&self, pixel: Pixel) -> Result<[u8; 4], ImageError> {
         encode(pixel, |index| self.table[index])
     }
@@ -47,11 +50,21 @@ impl SrgbEncoder {
         result[3] = (alpha * 255.0 + 0.5) as u8;
         result
     }
-    /// Encode an occasional opaque constant using the exact lookup quantization without allocation.
+    /// Encode an occasional constant using the exact lookup quantization without allocation.
     /// Image loops use the retained encoder; backgrounds and display uniforms need no new table.
     /// # Errors
-    /// Rejects nonopaque input using the same composition requirement as `encode`.
+    /// Rejects coverage outside `[0, 1]` using the same requirement as `encode`.
     pub fn encode_constant(pixel: Pixel) -> Result<[u8; 4], ImageError> {
+        encode(pixel, transfer)
+    }
+    /// Encode a presentation matte: an opaque color, or transparent black so that the native
+    /// compositor shows its own backdrop wherever no document pixel covers the display.
+    /// # Errors
+    /// Rejects partial coverage and transparent pixels that carry color.
+    pub fn encode_matte(pixel: Pixel) -> Result<[u8; 4], ImageError> {
+        if pixel.channels()[3] != 1.0 && pixel != Pixel::TRANSPARENT {
+            return Err(ImageError::Invalid("Display matte must be opaque or transparent black"));
+        }
         encode(pixel, transfer)
     }
     /// Canonical transfer entries indexed by a nearest 16-bit normalized linear sample.
@@ -59,6 +72,13 @@ impl SrgbEncoder {
     pub fn table(&self) -> &[u8] {
         &self.table
     }
+}
+
+/// Whether one packed `0xAARRGGBB` display word is valid premultiplied presentation storage:
+/// no color channel exceeds its coverage.
+pub const fn is_premultiplied_word(word: u32) -> bool {
+    let alpha = word >> 24;
+    (word >> 16) & 0xff <= alpha && (word >> 8) & 0xff <= alpha && word & 0xff <= alpha
 }
 
 /// Keep table construction and occasional constant conversion numerically identical.
@@ -69,16 +89,34 @@ fn transfer(index: usize) -> u8 {
     (encoded * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
-/// Share the 16-bit half-up index and opaque-composite contract across both conversion paths.
+/// Share the 16-bit half-up index and premultiplied contract across both conversion paths.
+/// GPU display encoding reproduces this exact integer premultiplication.
 fn encode(pixel: Pixel, mut transfer: impl FnMut(usize) -> u8) -> Result<[u8; 4], ImageError> {
     let channels = pixel.channels();
-    if channels[3] != 1.0 {
-        return Err(ImageError::Invalid("Display encoding requires an opaque composite"));
+    let alpha = channels[3];
+    if !(0.0..=1.0).contains(&alpha) {
+        return Err(ImageError::Invalid("Display encoding requires coverage within [0, 1]"));
+    }
+    if alpha == 0.0 {
+        if channels[..3].iter().any(|channel| *channel != 0.0) {
+            return Err(ImageError::Invalid("Display encoding requires premultiplied color"));
+        }
+        return Ok([0; 4]);
     }
     let mut result = [255; 4];
-    for (output, input) in result[..3].iter_mut().zip(channels) {
-        *output = transfer(index(input));
+    if alpha == 1.0 {
+        for (output, input) in result[..3].iter_mut().zip(channels) {
+            *output = transfer(index(input));
+        }
+        return Ok(result);
     }
+    // The bounded product rounds half up without scalar roundf.
+    let coverage = (alpha * 255.0 + 0.5) as u32;
+    for (output, input) in result[..3].iter_mut().zip(channels) {
+        let straight = u32::from(transfer(index(input / alpha)));
+        *output = ((straight * coverage + 127) / 255) as u8;
+    }
+    result[3] = coverage as u8;
     Ok(result)
 }
 

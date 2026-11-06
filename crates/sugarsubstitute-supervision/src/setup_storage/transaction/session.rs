@@ -70,7 +70,15 @@ impl InstallationSession {
             releases.path().join(crate::setup_storage::identity::generation()?.as_str());
         crate::durable_storage::protection::with(context, |protection| {
             protection.directory(
-                &root.path().join(sugarsubstitute_configuration::layout::DESKTOP_DATA),
+                &root.path().join(sugarsubstitute_configuration::layout::USER),
+                crate::durable_storage::protected::directories::Mode::OpenOrCreate,
+                context,
+            )?;
+            protection.directory(
+                &root
+                    .path()
+                    .join(sugarsubstitute_configuration::layout::USER)
+                    .join(sugarsubstitute_configuration::layout::DESKTOP_DATA),
                 crate::durable_storage::protected::directories::Mode::OpenOrCreate,
                 context,
             )?;

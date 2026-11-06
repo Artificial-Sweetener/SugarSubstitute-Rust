@@ -23,6 +23,20 @@ pub(super) struct Context<'a> {
     pub(super) limit: Option<Instant>,
 }
 
+/// Deliver a changed system accent to the content and repaint the splash with it.
+pub(super) fn system_accent(
+    session: &mut Session,
+    content: &mut impl StartupWindowContent,
+) -> Result<(), DesktopError> {
+    if let Some(accent) = session.accent.take_change() {
+        content
+            .system_accent(accent)
+            .map_err(|cause| DesktopError::boxed("adopt_system_accent", cause))?;
+        session.splash.state.dirty();
+    }
+    Ok(())
+}
+
 pub(super) fn dispatch(
     session: &mut Session,
     content: &mut impl StartupWindowContent,
@@ -128,6 +142,9 @@ pub(super) fn dispatch(
             if !session.closing && !session.splash.retiring =>
         {
             session.splash.window()?.request_redraw();
+        }
+        Event::UserEvent(NativeAction::SystemAccent) if !session.closing => {
+            system_accent(session, content)?;
         }
         Event::UserEvent(NativeAction::Completions) => {
             if session.splash.state.poll(content, shape, session.drain, session.started.elapsed())

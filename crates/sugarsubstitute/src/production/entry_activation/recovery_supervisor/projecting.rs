@@ -41,6 +41,7 @@ impl RecoveryPreparation {
                     connection: value.entry_connection,
                     request: value.entry_request,
                 },
+                resources.authority.running_installation(),
             ));
             let spec = JobSpec {
                 id: resources.jobs.allocate()?,

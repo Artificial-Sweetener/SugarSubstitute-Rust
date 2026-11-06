@@ -40,17 +40,7 @@ fn unused_projection_source_return_keeps_first_cause_controls_and_original_charg
     let client = executor.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     // No authenticated loan/native authority is fabricated in this failure fixture.
-    let mut input = Some(ProjectionInput {
-        request: None,
-        client: None,
-        run: None,
-        restart: None,
-        snapshot: None,
-        capture_root: PathBuf::new(),
-        cause: ProjectionCause::NotStarted,
-        post: None,
-        _charge: None,
-    });
+    let mut input = Some(ProjectionInput::without_request());
     let data_bytes = projection_data_bytes().ok_or("Projection partition underflow")?;
     let mut job = client.submit_blocking_owned_box(
         &scope,

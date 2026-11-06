@@ -5,7 +5,7 @@
 use super::*;
 use crate::native_canvas::session::{RetentionKey, SelectedOriginals, acquisition::SourceAcquirer};
 use std::io;
-use sugarsubstitute_canvas::NavigationCommand;
+use sugarsubstitute_canvas::{CursorIntent, NavigationCommand, Viewport, ZoomMode};
 
 mod budget;
 
@@ -310,10 +310,9 @@ impl Fixture {
     }
 }
 
-#[test]
-fn reselecting_a_retained_output_presents_its_finished_detail_at_its_camera_without_new_work()
--> Result<(), Box<dyn Error>> {
-    let mut fixture = Fixture::retaining()?;
+/// Show red output "a" zoomed to one-to-one, then green "b" at Fit, parking "a" with its zoom.
+/// Returns the Fit and one-to-one cameras.
+fn park_zoomed(fixture: &mut Fixture) -> Result<(Viewport, Viewport), Box<dyn Error>> {
     fixture.show([255, 0, 0], "a")?;
     let fit = fixture.session.document.tools.navigation().viewport();
     assert!(matches!(
@@ -327,31 +326,60 @@ fn reselecting_a_retained_output_presents_its_finished_detail_at_its_camera_with
     fixture.show([0, 255, 0], "b")?;
     assert_eq!(fixture.session.document.tools.navigation().viewport(), fit);
     assert!(fixture.session.retained.contains(&key("a")));
+    Ok((fit, zoomed))
+}
 
+#[test]
+fn reselecting_a_retained_output_without_a_frame_starts_at_fit_like_a_fresh_load()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::retaining()?;
+    let (fit, _) = park_zoomed(&mut fixture)?;
+
+    // The page's shared view is at Fit, which a selection expresses by carrying no frame.
     assert!(fixture.session.reselect_retained(&key("a"))?);
-    let selection = fixture.session.selection;
-    let shown = fixture.next_shown(|session| {
-        if session.loading.is_some() {
-            return Err("Reselection loaded its source again");
-        }
-        if session.rendering.is_some() {
-            return Err("Reselection prepared its frame again");
-        }
-        Ok(())
-    })?;
-    assert_eq!(shown.evidence.tier, BackingTier::Detail);
-    assert_eq!(shown.evidence.source_revision, selection);
+    fixture.session.frame_selection(None);
+    let shown = fixture.next_shown(|_| Ok(()))?;
     assert!(red(shown.pixel), "{:x}", shown.pixel);
-    let camera = fixture.session.accepted_camera().ok_or("Reselected camera absent")?;
-    assert_eq!(camera.viewport, zoomed);
-    assert_eq!(camera.source_revision, selection);
-    assert!(fixture.session.retained.contains(&key("b")));
-    assert!(!fixture.session.retained.contains(&key("a")));
     fixture.settle()?;
+    let camera = fixture.session.accepted_camera().ok_or("Reselected camera absent")?;
+    assert_eq!(camera.viewport, fit, "the retained document kept a camera of its own");
+    assert_eq!(fixture.session.document.tools.navigation().zoom_mode(), ZoomMode::Fit);
+    assert_eq!(fixture.session.canvas_cursor(), CursorIntent::Arrow, "fitted content cannot pan");
     let _directory = fixture.finish()?;
     Ok(())
 }
 
+#[test]
+fn reselecting_a_retained_output_presents_its_detail_at_the_selection_frame_without_loading_it()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::retaining()?;
+    let (fit, zoomed) = park_zoomed(&mut fixture)?;
+
+    assert!(fixture.session.reselect_retained(&key("a"))?);
+    // The page's shared view: ten physical pixels per document pixel at the image centre,
+    // closer than Fit's eight.
+    let span = 0.1;
+    fixture
+        .session
+        .frame_selection(Some(NavigationCommand::Frame { center: [0.5, 0.5], span: [span; 2] }));
+    let selection = fixture.session.selection;
+    // The retained source is never acquired or loaded again; the new camera renders anew.
+    let shown = fixture.next_shown(|session| {
+        session.loading.is_none().then_some(()).ok_or("Reselection loaded its source again")
+    })?;
+    assert_eq!(shown.evidence.source_revision, selection);
+    assert!(red(shown.pixel), "{:x}", shown.pixel);
+    fixture.settle()?;
+    let camera = fixture.session.accepted_camera().ok_or("Reselected camera absent")?;
+    assert_eq!(camera.viewport.zoom(), 10.0, "the selection's frame, not the parked zoom");
+    assert!(camera.viewport.zoom() > fit.zoom());
+    assert_ne!(camera.viewport, zoomed);
+    assert_eq!(camera.source_revision, selection);
+    assert!(fixture.session.retained.contains(&key("b")));
+    assert!(!fixture.session.retained.contains(&key("a")));
+    let _directory = fixture.finish()?;
+    Ok(())
+}
 #[test]
 fn returning_while_another_output_downloads_relabels_the_current_document()
 -> Result<(), Box<dyn Error>> {

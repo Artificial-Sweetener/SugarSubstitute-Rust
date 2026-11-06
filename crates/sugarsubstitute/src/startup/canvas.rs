@@ -167,7 +167,10 @@ impl EmbeddedCanvas {
             gpu,
             capture: false,
             verify_native: false,
-            cache: self.anchor.clone(),
+            cache: sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                &self.anchor,
+            )
+            .user(),
             initial: InitialSource::AwaitHost,
             locale: locale.to_owned(),
             extent: Extent::new(1, 1)?,
@@ -430,7 +433,8 @@ impl EmbeddedCanvas {
         {
             let preview = self.surface.preview_deadline(self.clock.now());
             let editing = self.surface.editing_deadline(self.clock.now());
-            [native, preview, editing].into_iter().flatten().min()
+            let viewport = self.surface.viewport_deadline(self.clock.now());
+            [native, preview, editing, viewport].into_iter().flatten().min()
         }
         #[cfg(not(feature = "native-composition"))]
         native

@@ -64,7 +64,7 @@ impl ProductionChild {
         }
         let now = self.client()?.now()?;
         if self.panel.is_none() {
-            let Some(panel) = PanelOwner::new(identity, lease, now)? else {
+            let Some(panel) = PanelOwner::new(identity, lease, now, self.system_accent)? else {
                 if !self.panel_owner_admission_warned {
                     tracing::warn!(
                         operation = "panel_owner_admission",
@@ -142,6 +142,22 @@ impl ProductionChild {
             return Err("Panel observation belongs to another native lifetime".into());
         }
         self.panel_deliveries.bind(identity, lease)
+    }
+
+    /// Retain the operating-system accent for future pages and reconfigure the live page.
+    pub(in crate::production::child) fn adopt_system_accent(
+        &mut self,
+        accent: Option<AccentColor>,
+    ) -> Result<()> {
+        self.system_accent = accent;
+        if self.shutdown.closing() {
+            return Ok(());
+        }
+        let now = match &self.panel {
+            Some(_) => self.client()?.now()?,
+            None => return Ok(()),
+        };
+        self.panel.as_mut().ok_or("Panel owner disappeared")?.update_accent(accent, now)
     }
 
     /// Advance the same session with the existing execution clock when its wake is due.

@@ -5,11 +5,13 @@
 //! A storage worker reads the retained original, charges the copy to the canvas memory lease
 //! and stages it as a real file, so the UI thread only hands completed results to the desktop's
 //! drag source. The latest staged copies stay pinned because a drop target may read after the
-//! drag ends; older ones are released on the worker of the next drag.
+//! drag ends; older ones are released on the worker of the next drag. The same worker decodes
+//! the drag image, so the UI thread only fits an already small preview to its monitor.
 
 use super::*;
 use crate::native_canvas::drag_staging::{self, STAGED_DRAGS, StagedDrag};
 use std::{collections::VecDeque, path::PathBuf};
+use sugarsubstitute_desktop::canvas::{DRAG_PREVIEW_CEILING, DragPreview};
 
 /// Largest original handed to an OS drag; larger outputs stay in Comfy's storage.
 pub(crate) const DRAG_OUT_BYTES: u64 = 128 * 1024 * 1024;
@@ -24,6 +26,8 @@ pub(crate) struct DragOutBytes {
     pub(crate) claim: MemoryClaim,
     /// The staged file named after the original, when staging succeeded.
     pub(crate) staged: Option<PathBuf>,
+    /// The decoded drag image, when the original could be decoded within its admission.
+    pub(crate) preview: Option<DragPreview>,
 }
 
 /// One worker result: the copy and its pinned staged file.
@@ -32,6 +36,7 @@ pub(super) struct Copied {
     bytes: Vec<u8>,
     claim: MemoryClaim,
     staged: Option<StagedDrag>,
+    preview: Option<DragPreview>,
 }
 
 /// At most one copy in flight, one completed copy awaiting the desktop, and the pins of the
@@ -103,7 +108,13 @@ impl Session {
                         "The drag-out offers no file path; drops that need one are refused");
                 })
                 .ok();
-            Ok(Copied { request, bytes, claim, staged })
+            let preview = DragPreview::decode(&bytes, DRAG_PREVIEW_CEILING, &memory)
+                .inspect_err(|cause| {
+                    tracing::warn!(operation = "drag_out_preview", cause = %cause,
+                        "The drag-out shows no preview of its output");
+                })
+                .ok();
+            Ok(Copied { request, bytes, claim, staged, preview })
         }) {
             Ok(job) => {
                 self.drag_out.job = Some(job);
@@ -132,10 +143,11 @@ impl Session {
                     ..Default::default()
                 })?;
             }
-            Ok(Copied { request, bytes, claim, staged }) => {
+            Ok(Copied { request, bytes, claim, staged, preview }) => {
                 let path = staged.as_ref().map(|staged| staged.path.clone());
                 self.drag_out.staged.extend(staged);
-                self.drag_out.ready = Some(DragOutBytes { request, bytes, claim, staged: path });
+                self.drag_out.ready =
+                    Some(DragOutBytes { request, bytes, claim, staged: path, preview });
             }
             Err(cause) => {
                 tracing::warn!(operation = "canvas_drag_out_copy", cause = %cause,

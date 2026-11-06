@@ -179,7 +179,15 @@ pub(crate) fn resolve_namespace(
     let layout = sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
         &installed_path,
     );
-    let directory = runtime_base::pin(layout.runtime_base(), handles, budget.clone())?;
+    let user = layout.runtime_base();
+    paths::create_directory(
+        &user,
+        account.sid.bytes()?,
+        budget.clone(),
+        handles,
+        &mut NativePhase::ordinary(&budget)?,
+    )?;
+    let directory = runtime_base::pin(&user, handles, budget.clone())?;
     let (directory, directory_slot, directory_identity) = namespace_directory::resolve(
         directory,
         namespace_directory::Namespace::Claims,

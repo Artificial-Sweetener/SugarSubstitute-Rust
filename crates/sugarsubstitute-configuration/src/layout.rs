@@ -78,9 +78,9 @@ impl InstallationLayout {
     pub fn user(&self) -> PathBuf {
         self.root.join(USER)
     }
-    /// Base of per-account runtime records; storage owners add the `runtime` child themselves.
-    pub fn runtime_base(&self) -> &Path {
-        &self.root
+    /// User-data base of per-account runtime records; storage owners add `runtime` themselves.
+    pub fn runtime_base(&self) -> PathBuf {
+        self.user()
     }
     /// Default setup workspace folder.
     pub fn setup(&self) -> PathBuf {
@@ -88,7 +88,15 @@ impl InstallationLayout {
     }
     /// WebView profile owned by the desktop host.
     pub fn webview_profile(&self) -> PathBuf {
-        self.root.join(DESKTOP_DATA).join("profile")
+        self.user().join(DESKTOP_DATA).join("profile")
+    }
+    /// ComfyUI's mutable base, separate from its selected source and interpreter.
+    pub fn comfy_data(&self) -> PathBuf {
+        self.user().join("comfy-data")
+    }
+    /// Crash-capture generations and their native handler data.
+    pub fn capture_root(&self) -> PathBuf {
+        self.user().join("capture")
     }
 }
 
@@ -147,8 +155,10 @@ mod tests {
         ] {
             assert_eq!(folder, root.join(expected));
         }
-        assert_eq!(layout.webview_profile(), root.join("desktop-data").join("profile"));
-        assert_eq!(layout.runtime_base(), root);
+        assert_eq!(layout.webview_profile(), root.join("user/desktop-data").join("profile"));
+        assert_eq!(layout.comfy_data(), root.join("user/comfy-data"));
+        assert_eq!(layout.capture_root(), root.join("user/capture"));
+        assert_eq!(layout.runtime_base(), root.join("user"));
     }
 
     #[test]
@@ -156,6 +166,10 @@ mod tests {
         let root = PathBuf::from(if cfg!(windows) { r"E:\Sugar" } else { "/Sugar" });
         let generation = root.join("Releases").join("0123");
         assert_eq!(InstallationLayout::for_image_directory(&generation).root(), root);
+        assert_eq!(
+            InstallationLayout::for_image_directory(&generation).capture_root(),
+            root.join("user/capture"),
+        );
         assert_eq!(InstallationLayout::for_image_directory(&root).root(), root);
         let build = root.join("target").join("debug");
         assert_eq!(InstallationLayout::for_image_directory(&build).root(), build);

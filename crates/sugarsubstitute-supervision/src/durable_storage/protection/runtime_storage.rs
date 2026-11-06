@@ -18,7 +18,21 @@ impl Protection {
         check(context)?;
         self.require_primary_account(context)?;
         if create {
-            drop(crate::durable_storage::files::Directory::open(base, true)?);
+            match crate::durable_storage::files::Directory::open(base, false) {
+                Ok(_) => {}
+                Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
+                    let parent = base
+                        .parent()
+                        .ok_or_else(|| super::super::invalid("Runtime base parent missing"))?;
+                    let _parent = crate::durable_storage::files::Directory::open(parent, true)?;
+                    self.directory(
+                        base,
+                        crate::durable_storage::protected::directories::Mode::CreateNew,
+                        context,
+                    )?;
+                }
+                Err(cause) => return Err(cause),
+            }
         }
         let directory = account::runtime_base::pin(base, &mut self.handles, self.budget.clone())
             .map_err(io::Error::other)?;

@@ -373,16 +373,16 @@ impl Session {
         Some(ShownInput { document, snapshot, target: self.document.tools.target() })
     }
 
-    /// The content revision of every loaded synced document, current or parked.
-    pub(crate) fn input_revisions(&self) -> Vec<(InputDocumentId, u64)> {
+    /// What every loaded synced document shows, current or parked: see [`ShownRevision`].
+    pub(crate) fn input_revisions(&self) -> Vec<(InputDocumentId, ShownRevision)> {
         self.inputs
             .workflows
             .iter()
             .flat_map(|(_, surfaces)| surfaces)
             .filter(|surface| surface.loaded)
             .filter_map(|surface| {
-                let scene = self.input_document(surface.identity)?.scene.as_ref()?;
-                Some((surface.identity, scene.document.snapshot().revision()))
+                let (_, revision, staged) = self.input_document(surface.identity)?.shown_key()?;
+                Some((surface.identity, ShownRevision { revision, staged }))
             })
             .collect()
     }

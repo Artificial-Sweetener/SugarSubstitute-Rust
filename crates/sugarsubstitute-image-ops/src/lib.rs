@@ -32,7 +32,7 @@ pub use coverage::{
     CoverageResampling, CoverageTileValues, FULL_COVERAGE, Path, PiecewiseMapping,
     coverage_from_u8, coverage_to_u8, triangle_affine,
 };
-pub use display::SrgbEncoder;
+pub use display::{SrgbEncoder, is_premultiplied_word};
 pub use display_sampling::{DisplaySample, bilinear_display_pixel, bilinear_display_row};
 pub use error::ImageError;
 pub(crate) use error::check;

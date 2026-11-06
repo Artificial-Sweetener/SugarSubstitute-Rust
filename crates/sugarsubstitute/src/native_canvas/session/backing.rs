@@ -108,10 +108,28 @@ pub(super) fn choose_backing(
 }
 
 impl Session {
+    /// Whether the acknowledged display shows the shown document's current source: its evidence
+    /// names that document and source, and an attached presenter acknowledged exactly that
+    /// frame. Camera acceptance requires this, and a display that fails it is drawn again.
+    pub(super) fn display_shows_current_source(&self) -> bool {
+        let (Some(evidence), Some(scene), Some(key)) =
+            (self.document.display_evidence, &self.document.scene, self.document.shown_key())
+        else {
+            return false;
+        };
+        evidence.document == key
+            && evidence.source_revision == scene.source_revision
+            && (!self.presentation.attached()
+                || self.document.native_presented == Some(evidence.target))
+    }
+
     /// Compare every sampled backing identity and the overlay generation before reusing an
-    /// acknowledged display.
+    /// acknowledged display. A display that does not show the current source is never reused,
+    /// so a document swap, relabel or lost acknowledgement draws again even when the frame
+    /// forced for it was dropped.
     pub(super) fn display_selection_pending(&self, selection: BackingSelection) -> bool {
         self.expose_pending
+            || !self.display_shows_current_source()
             || self.document.display_evidence.map_or(0, |shown| shown.overlay)
                 != self.shown_overlay_generation()
             || self.document.display_source != Some(selection.primary.source)

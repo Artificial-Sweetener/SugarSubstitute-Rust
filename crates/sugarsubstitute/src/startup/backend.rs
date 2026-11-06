@@ -70,6 +70,12 @@ pub trait StartupBackend {
         observation: DesktopStartupObservation,
         prepared: Option<&Self::Prepared>,
     ) -> BackendResult<()>;
+    /// Present a changed operating-system accent to SugarCubes; `None` withdraws a host accent.
+    /// Called on the UI thread; delivery to a live page is queued, never awaited.
+    fn system_accent(
+        &mut self,
+        accent: Option<sugarsubstitute_contracts::appearance::AccentColor>,
+    ) -> BackendResult<()>;
     /// Check that a canvas message belongs to the current admitted panel and allocation.
     #[cfg(feature = "native-composition")]
     fn admits_canvas(&self, identity: MainIdentity, lease: &MemoryLease) -> bool;

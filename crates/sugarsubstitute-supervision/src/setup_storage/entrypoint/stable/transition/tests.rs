@@ -38,7 +38,7 @@ fn fixture(
     let previous = records.remove(0);
     let next = records.remove(0);
     record::publish(&state, &previous, protection, context)?;
-    drop(payload::ensure(root, &previous, protection, context)?);
+    drop(payload::ensure(root, &state, &previous, protection, context)?);
     Ok((state, previous, next))
 }
 

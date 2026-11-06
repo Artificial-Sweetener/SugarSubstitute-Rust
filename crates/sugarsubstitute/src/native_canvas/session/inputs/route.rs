@@ -178,20 +178,13 @@ impl Session {
         let viewport = Viewport::new(self.document.tools.navigation().viewport().surface())?;
         let mut output = Box::new(document::DocumentState::new(viewport));
         output.tools.set_refresh_rate(self.display_refresh)?;
-        output.tools.set_content(
-            Some(scene.document.snapshot().extent()),
+        let frame = self.selection_frame(intent);
+        selection_camera::start_at_selection_camera(
+            &mut output.tools,
             Some(&scene.document),
+            frame,
             now,
         )?;
-        if let Some((_, frame)) =
-            self.initial_frame.take().filter(|(offered, _)| *offered == intent)
-        {
-            let outcome = output.tools.navigate(frame, now)?;
-            if !matches!(outcome, sugarsubstitute_canvas::NavigationCommandOutcome::Applied { .. })
-            {
-                tracing::debug!(operation="canvas_selection_frame", outcome=?outcome, "Selection camera was not admitted; the image starts at Fit");
-            }
-        }
         output.scene = Some(scene);
         output.retention = retention;
         output.initial_preview = true;
@@ -201,12 +194,16 @@ impl Session {
         Ok(())
     }
 
-    /// Keep a reselected retained output behind the shown input document.
+    /// Keep a reselected retained output behind the shown input document, starting it at the
+    /// selection's camera on the current physical extent as a newly loaded output starts.
+    ///
+    /// # Errors
+    /// Preserves navigation time and geometry failures.
     pub(in crate::native_canvas::session) fn park_retained_output(
         &mut self,
         key: &RetentionKey,
         intent: u64,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         if self
             .inputs
             .parked_output
@@ -216,8 +213,22 @@ impl Session {
         {
             self.stow_document(document);
         }
+        let frame = self.selection_frame(intent);
+        let now = self.navigation_time();
+        let extent = self.document.tools.navigation().viewport().surface();
+        if let Some(output) = self
+            .inputs
+            .parked_output
+            .as_mut()
+            .filter(|document| document.retention.as_ref() == Some(key))
+        {
+            let scene = output.scene.as_ref().map(|scene| &scene.document);
+            output.tools.resize(extent, scene, now)?;
+            selection_camera::return_to_selection_camera(&mut output.tools, scene, frame, now)?;
+        }
         self.document.rebind(intent);
         self.expose_pending = true;
+        Ok(())
     }
 
     /// An empty output document, shown when the Output route has nothing parked.

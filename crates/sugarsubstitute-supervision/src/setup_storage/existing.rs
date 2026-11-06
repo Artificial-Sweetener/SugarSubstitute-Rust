@@ -11,7 +11,7 @@ mod accepted;
 mod initial;
 mod recovery;
 pub use recovery::RecoveryFailure;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{borrow::Cow, fs::File, io, path::Path};
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_contracts::installation::Generation;
@@ -26,15 +26,6 @@ pub struct InstallationSummary {
     pub executable_missing: bool,
     /// Saved configuration was recovered because the installation's shell entry is absent.
     pub launch_entry_missing: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ReadyRecord {
-    schema_version: u32,
-    bundle_sha256: String,
-    selection: Selection,
-    runtime: RuntimePaths,
 }
 
 use sugarsubstitute_configuration::{
@@ -159,33 +150,8 @@ impl ExistingInstallation {
         context: &JobContext,
     ) -> io::Result<Self> {
         check(context)?;
-        let mut record_file = directory.read("installation-ready.json")?;
-        let record: ReadyRecord =
-            serde_json::from_slice(&files::read_bounded(&mut record_file, 1024 * 1024)?)
-                .map_err(io::Error::other)?;
-        if record.schema_version != 1
-            || record.bundle_sha256.len() != 64
-            || !record.bundle_sha256.bytes().all(|b| b.is_ascii_hexdigit())
-        {
-            return Err(invalid("Unsupported native installation record"));
-        }
-        if expected.is_some_and(|generation| generation.package.as_str() != record.bundle_sha256) {
-            return Err(invalid("Saved configuration differs from its recorded package identity"));
-        }
-        record.selection.validate()?;
-        if crate::durable_storage::files::canonical_path(&record.selection.install_root, context)?
-            != crate::durable_storage::files::canonical_path(root.path(), context)?
-        {
-            return Err(invalid("Saved installation choices belong to another folder"));
-        }
-        for path in [
-            &record.runtime.directory,
-            &record.runtime.python,
-            &record.runtime.frontend,
-            &record.runtime.metadata,
-        ] {
-            files::lexical(path)?;
-        }
+        let (record, record_file) =
+            super::runtime_record::read(root, &directory, expected, context)?;
         let mut startup_file = directory.read("startup.local.toml")?;
         let startup = files::read_bounded(&mut startup_file, MAX_STARTUP_CONFIGURATION_BYTES)?;
         sugarsubstitute_configuration::initial::validate_preserved(&startup)?;

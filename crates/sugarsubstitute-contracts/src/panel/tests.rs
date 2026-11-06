@@ -105,6 +105,29 @@ fn constructors_validate_session_presentation_and_all_supported_styles()
     Ok(())
 }
 
+/// The operating-system accent reaches SugarCubes through the existing presentation member.
+#[test]
+fn system_accent_roundtrips_as_the_presentation_accent_color() -> Result<(), Box<dyn Error>> {
+    let accent = crate::appearance::AccentColor::new(0, 120, 212);
+    let session = PanelSession::new("session-12345678".into())?;
+    let presentation = PanelPresentation::new(
+        false,
+        PanelStyle::Comfy,
+        PanelPalette::DarkGray,
+        Some(accent.css_hex()),
+        0,
+    )?;
+    let value = PanelMessage::Configure { session, presentation };
+    let encoded = value.encode()?;
+    let json: serde_json::Value = serde_json::from_slice(&encoded)?;
+    assert_eq!(json["presentation"]["accentColor"], "#0078d4");
+    let PanelMessage::Configure { presentation, .. } = PanelMessage::decode(&encoded)? else {
+        return Err("Configure message changed kind".into());
+    };
+    assert_eq!(presentation.accent_color(), Some("#0078d4"));
+    Ok(())
+}
+
 #[test]
 fn main_session_distinguishes_complete_run_and_navigation_identity() -> Result<(), Box<dyn Error>> {
     use crate::{

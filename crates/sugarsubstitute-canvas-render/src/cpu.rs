@@ -244,10 +244,10 @@ impl<S: RasterSource> CpuRenderer<S> {
                     let pixel = tile
                         .pixel(x, y)
                         .ok_or(RenderError::Invalid("Missing prepared canvas pixel"))?;
-                    let [red, green, blue, _] = encoder.encode(pixel)?;
+                    let [red, green, blue, alpha] = encoder.encode(pixel)?;
                     let index = (y - patch.y()) as usize * patch.width() as usize
                         + (x - patch.x()) as usize;
-                    pixels[index] = u32::from_be_bytes([255, red, green, blue]);
+                    pixels[index] = u32::from_be_bytes([alpha, red, green, blue]);
                 }
             }
             Ok(())

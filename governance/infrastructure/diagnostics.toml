@@ -8,6 +8,13 @@ required_roots = ["native/crashpad", "installer/worker", "crates/sugarsubstitute
 script_manifests = ["installer/package.json"]
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protection/runtime_storage/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:138755508e26484816e9125c92ece57a9722a14cd6a8c0be38d61bb282b1fbcd"
+disposition = "fixture"
+rationale = "Append an isolated operational record before native namespace discovery to qualify protected user-directory creation, unchanged namespace identity and preserved history. Runtime routing and storage remain with the existing diagnostic owner."
+
+[[records]]
 path = "crates/sugarsubstitute/src/canvas_surface_diagnostic/tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:640d289bf0094587cd681874034826bb8510f3ed7b3a9f2e45bd532484705f41"
@@ -570,7 +577,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/launch/test_managed.py"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:1469cb588760a96259a905f753cc61834f795143d5b4b4fdcd5669ae28bc4577"
+source_sha256 = "sha256:27fe8625c930a2f72798aaa8c8d0ab9c97f4c38d47cc7481195cd9fd8f22d471"
 disposition = "fixture"
 rationale = "The managed-launch test child prints readiness and cleanup markers into captured pipes so the harness can prove owned process termination."
 
@@ -1019,7 +1026,7 @@ rationale = "Isolated native qualification reports observed GPU display, repair 
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/display.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:7f4c47de69c0f6fa1b784f34bcd69a87328e444ecf1fa9bbc42b102f67274040"
+source_sha256 = "sha256:fc45d119e1834f4b018d48375a0c421435f45d35f7cbb814667ec81437c058e2"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
@@ -1061,6 +1068,27 @@ rationale = "Isolated finite CPU qualification reports physical 4K projection co
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:7e004911ad20be321157388a870a5bfdff69a20dffaa982fa76a0db56b5ef1fc"
+source_sha256 = "sha256:3f7474b69a5e932265bf68f91b1f1b3f680309ab3180ebd55dc0dde3c2ad3b63"
 disposition = "fixture"
 rationale = "The explicit single-device offscreen composite check reports native adapter identity, exact CPU/GPU pixel agreement including overlay pixels and execution retirement; it creates no window or runtime diagnostic sink."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/environment/storage.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:523b9861882c803ddb1e6d55de03659c5452b7edf8544ae40c277d2bbfe6406f"
+disposition = "upstream"
+rationale = "Redirect delegated pip log paths to the caller's explicit installation-local storage directory; this environment preparation creates no diagnostic sink."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/tests/backend_environment.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:b292a348257025aa6ecad1f85c7ae1f5229abf770750aceabca287c5aa3788da"
+disposition = "fixture"
+rationale = "Verify that inherited delegated-tool log destinations are replaced by the explicit installation-local path without mutating the original environment."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/entry_activation/projection_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:cd6ddd0c22ea59bf3f1d13a2af3cf5c54a1c18a24e92c731ff15f5d57f8bced1"
+disposition = "fixture"
+rationale = "Assert that production projection confines delegated pip log and temporary destinations while preserving the original captured environment; no diagnostic sink is created."

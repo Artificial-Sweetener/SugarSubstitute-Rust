@@ -7,9 +7,13 @@
 //! receive that copy through `CF_HDROP`; others read a virtual file, `FileGroupDescriptorW`
 //! naming the original filename with `FileContents` holding the bytes. Neither exposes a Comfy
 //! or user folder. OLE requires the drag source to run modally on the window's STA thread.
+//! With a decoded preview the drag shows it as CuteCanvas's Qt drag did, as the cursor itself.
+
+mod cursors;
 
 use super::*;
 use crate::canvas::MainCanvasDragOut;
+use cursors::DragCursors;
 use std::{mem::ManuallyDrop, os::windows::ffi::OsStrExt, path::Path};
 use windows::{
     Win32::{
@@ -351,17 +355,23 @@ fn continuation(escape: bool, keys: MODIFIERKEYS_FLAGS) -> HRESULT {
     }
 }
 
-/// OLE's drag source; the standard cursors show the effect each target offers.
+/// OLE's drag source: the preview cursors for each offered effect, or the standard cursors.
 #[implement(IDropSource, Agile = false)]
-struct Source;
+struct Source(Option<Rc<DragCursors>>);
 
 impl IDropSource_Impl for Source_Impl {
     fn QueryContinueDrag(&self, escape: BOOL, keys: MODIFIERKEYS_FLAGS) -> HRESULT {
         continuation(escape.as_bool(), keys)
     }
 
-    fn GiveFeedback(&self, _effect: DROPEFFECT) -> HRESULT {
-        DRAGDROP_S_USEDEFAULTCURSORS
+    fn GiveFeedback(&self, effect: DROPEFFECT) -> HRESULT {
+        match &self.0 {
+            Some(cursors) => {
+                cursors.select(effect);
+                HRESULT(0)
+            }
+            None => DRAGDROP_S_USEDEFAULTCURSORS,
+        }
     }
 }
 
@@ -370,18 +380,34 @@ fn data_object(drag: MainCanvasDragOut) -> Result<IDataObject, DesktopError> {
     Ok(Data(Rc::new(VirtualFile::new(drag, Formats::register()?)?)).into())
 }
 
+/// Compose the preview cursors; a drag whose preview cannot be shown keeps the standard cursors.
+fn preview_cursors(drag: &mut MainCanvasDragOut) -> Option<Rc<DragCursors>> {
+    let preview = drag.preview.take()?;
+    DragCursors::new(&preview)
+        .inspect_err(|cause| {
+            tracing::warn!(operation = "canvas_drag_preview", cause = %cause,
+                "The drag shows the standard cursors without its preview");
+        })
+        .ok()
+        .map(Rc::new)
+}
+
 /// Run one modal copy drag on the window's OLE-initialized UI thread.
 ///
 /// Returns the effect the drop target chose; a cancelled or refused drag returns
 /// `DROPEFFECT_NONE`. A target may keep the data object, and with it the bytes and their
 /// claim, until it finishes reading.
-pub(super) fn run(drag: MainCanvasDragOut) -> Result<DROPEFFECT, DesktopError> {
+pub(super) fn run(mut drag: MainCanvasDragOut) -> Result<DROPEFFECT, DesktopError> {
+    let cursors = preview_cursors(&mut drag);
     let data = data_object(drag)?;
-    let source: IDropSource = Source.into();
+    let source: IDropSource = Source(cursors.clone()).into();
     let mut effect = DROPEFFECT_NONE;
     // SAFETY: Both COM objects belong to this STA, which initialized OLE for the window's
     // drop registration; `effect` is live local storage for the modal call.
     let result = unsafe { DoDragDrop(&data, &source, DROPEFFECT_COPY, &raw mut effect) };
+    if let Some(cursors) = &cursors {
+        cursors.deselect();
+    }
     match result {
         DRAGDROP_S_DROP => Ok(DROPEFFECT(effect.0 & DROPEFFECT_COPY.0)),
         DRAGDROP_S_CANCEL => Ok(DROPEFFECT_NONE),

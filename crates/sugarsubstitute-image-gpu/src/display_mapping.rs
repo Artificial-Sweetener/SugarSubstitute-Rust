@@ -7,7 +7,7 @@ use sugarsubstitute_image_ops::{DisplaySample, Extent};
 
 /// Borrowed fixed-point sampling map for one completed encoded display image.
 /// Each output axis selects two source indices and an eight-bit interpolation weight.
-/// Uncovered samples select the opaque matte.
+/// Uncovered samples select the matte: opaque, or transparent black for a compositor backdrop.
 /// The producer owns camera math. This adapter validates only bounded texture access.
 #[derive(Clone, Copy)]
 pub struct DisplayMapping<'a> {
@@ -20,7 +20,8 @@ pub struct DisplayMapping<'a> {
 impl<'a> DisplayMapping<'a> {
     /// Validate immutable indices and encoded RGBA matte before native allocation or writes.
     /// # Errors
-    /// Rejects extents above 16384 per edge, incomplete maps, nonopaque matte or invalid indices.
+    /// Rejects extents above 16384 per edge, incomplete maps, a partially covered or colored
+    /// transparent matte, or invalid indices.
     pub fn new(
         source: Extent,
         output: Extent,
@@ -33,7 +34,7 @@ impl<'a> DisplayMapping<'a> {
             .any(|edge| *edge > 16384)
             || columns.len() != output.width() as usize
             || rows.len() != output.height() as usize
-            || matte[3] != 255
+            || !matches!(matte, [_, _, _, 255] | [0, 0, 0, 0])
             || columns.iter().any(|sample| !sample.is_valid_for(source.width()))
             || rows.iter().any(|sample| !sample.is_valid_for(source.height()))
         {
@@ -146,7 +147,7 @@ fn encode_mappings(
 mod tests {
     use super::*;
     #[test]
-    fn display_mapping_rejects_incomplete_foreign_indices_and_transparency()
+    fn display_mapping_rejects_incomplete_foreign_indices_and_partial_mattes()
     -> Result<(), Box<dyn std::error::Error>> {
         let source = Extent::new(3, 2)?;
         let output = Extent::new(2, 3)?;
@@ -165,7 +166,10 @@ mod tests {
         assert!(DisplayMapping::new(source, output, &foreign_column, &rows, matte).is_err());
         assert!(DisplayMapping::new(source, output, &columns, &foreign_row, matte).is_err());
         assert!(DisplayMapping::new(source, output, &columns[..1], &rows, matte).is_err());
-        assert!(DisplayMapping::new(source, output, &columns, &rows, [0; 4]).is_err());
+        // Transparent black lets the compositor backdrop show; partial or colored coverage cannot.
+        assert!(DisplayMapping::new(source, output, &columns, &rows, [0; 4]).is_ok());
+        assert!(DisplayMapping::new(source, output, &columns, &rows, [17, 29, 41, 128]).is_err());
+        assert!(DisplayMapping::new(source, output, &columns, &rows, [17, 0, 0, 0]).is_err());
         assert!(DisplayMapping::new(source, Extent::new(16385, 1)?, &[], &[], matte).is_err());
         Ok(())
     }

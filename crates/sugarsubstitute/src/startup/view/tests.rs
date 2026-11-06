@@ -4,7 +4,10 @@
 use super::*;
 use std::error::Error;
 fn view(reduced: bool) -> Result<StartupView, Box<dyn Error>> {
-    Ok(StartupView::new(Presentation::new("en", RequestedTheme::Dark, reduced)?))
+    Ok(StartupView::new(
+        Presentation::new("en", RequestedTheme::Dark, reduced)?,
+        sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
+    ))
 }
 
 /// Every noninteractive splash region moves the same window; disclosure follows publication.
@@ -245,8 +248,10 @@ fn native_console_visibility_tracks_published_disclosure_and_preserves_identity_
 fn readonly_console_geometry_preserves_original_retry_peer_and_locale_owner()
 -> Result<(), Box<dyn Error>> {
     for messages in sugarsubstitute_contracts::localization::LOCALES {
-        let mut view =
-            StartupView::new(Presentation::new(messages.id, RequestedTheme::Dark, true)?);
+        let mut view = StartupView::new(
+            Presentation::new(messages.id, RequestedTheme::Dark, true)?,
+            sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
+        );
         view.activate(1);
         view.publish_controls(view.appearance);
         let before = view.console(None);

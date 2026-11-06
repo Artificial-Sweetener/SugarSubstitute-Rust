@@ -12,6 +12,7 @@ use sugarsubstitute_update::package::PayloadHasher;
 /// A missing owned file is recovered from its recorded source; changed files are preserved.
 pub(super) fn ensure(
     root: &Directory,
+    state: &Directory,
     record: &record::Record,
     protection: &mut Protection,
     context: &JobContext,
@@ -25,12 +26,15 @@ pub(super) fn ensure(
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
         Err(cause) => return Err(cause),
     }
-    replace(root, record, false, protection, context)
+    replace(root, state, record, false, protection, context)
 }
 
 /// Copy a verified source and atomically publish it after the caller establishes replacement authority.
+/// A conflicting root-directory capture leaves the journaled stage intact for recovery and retry
+/// after that capture retires; publication never weakens an existing sharing exclusion.
 pub(super) fn replace(
     root: &Directory,
+    state: &Directory,
     record: &record::Record,
     replacing: bool,
     protection: &mut Protection,
@@ -40,7 +44,7 @@ pub(super) fn replace(
         Directory::open(&root.path().join("releases").join(record.source.id.as_str()), false)?;
     let mut input = source.read(SOURCE)?;
     verify(&mut input, record, context)?;
-    let mut stage = publication::Stage::create(root, protection, context)?;
+    let mut stage = publication::Stage::create(state, protection, context)?;
     let output = stage.file();
     let mut buffer = [0; 65536];
     loop {
@@ -54,7 +58,7 @@ pub(super) fn replace(
     files::sync(output, context)?;
     verify(output, record, context)?;
     check(context)?;
-    stage.publish(&root.path().join(ENTRY), replacing, protection, context)?;
+    stage.publish_entry(root, replacing, protection, context)?;
     let mut file = root.read(ENTRY)?;
     protection.verify_file(&file)?;
     verify(&mut file, record, context)?;

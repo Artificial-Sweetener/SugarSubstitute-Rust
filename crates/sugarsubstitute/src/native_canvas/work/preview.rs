@@ -88,6 +88,7 @@ impl Resources {
         let metadata = Arc::new(self.memory.claim(1024 * 1024)?);
         Ok(Self {
             capture: self.capture,
+            matte: self.matte,
             verify_native: self.verify_native,
             memory: self.memory.clone(),
             presentation: self.presentation.clone(),

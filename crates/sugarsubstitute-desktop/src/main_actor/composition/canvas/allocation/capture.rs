@@ -8,7 +8,10 @@ use windows::{
     Win32::{
         Foundation::POINT,
         Graphics::{
-            Direct2D::{ID2D1Bitmap1, ID2D1DeviceContext},
+            Direct2D::{
+                Common::{D2D_RECT_F, D2D1_COLOR_F},
+                D2D1_ANTIALIAS_MODE_ALIASED, ID2D1Bitmap1, ID2D1DeviceContext,
+            },
             Direct3D11::{
                 D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE,
                 D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING, ID3D11DeviceContext, ID3D11Texture2D,
@@ -23,6 +26,9 @@ use windows::{
 #[derive(Default)]
 pub(in super::super) struct Capture {
     requested: bool,
+    /// Opaque color to leave in the next update rectangle before the production draw, as
+    /// DirectComposition may hand back a buffer still holding an earlier frame.
+    stale: Option<u32>,
     pending: Option<(ID3D11Texture2D, ID3D11DeviceContext, Extent)>,
     pixels: Option<Vec<u32>>,
 }
@@ -31,6 +37,25 @@ impl Capture {
     /// Capture the next drawn frame.
     pub(in super::super) fn request(&mut self) {
         self.requested = true;
+    }
+
+    /// Leave opaque `0xffRRGGBB` content in the next update rectangle before it is drawn.
+    pub(in super::super) fn leave_stale(&mut self, color: u32) {
+        self.stale = Some(color);
+    }
+
+    /// Fill the update rectangle with the requested stale content, if any.
+    pub(super) fn prefill(&mut self, context: &ID2D1DeviceContext, rectangle: &D2D_RECT_F) {
+        let Some(color) = self.stale.take() else { return };
+        #[allow(clippy::cast_precision_loss)]
+        let channel = |shift: u32| ((color >> shift) & 0xff) as f32 / 255.0;
+        let fill = D2D1_COLOR_F { r: channel(16), g: channel(8), b: channel(0), a: 1.0 };
+        // SAFETY: The test thread owns this active drawing context; the clip is popped here.
+        unsafe {
+            context.PushAxisAlignedClip(rectangle, D2D1_ANTIALIAS_MODE_ALIASED);
+            context.Clear(Some(&fill));
+            context.PopAxisAlignedClip();
+        }
     }
 
     /// Take completed `0xAARRGGBB` words in row-major order.

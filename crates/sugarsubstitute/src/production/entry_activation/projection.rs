@@ -14,7 +14,9 @@ mod retirement_tests;
 #[cfg(test)]
 #[path = "projection_tests.rs"]
 mod tests;
-use std::{error::Error, ffi::OsString, fmt, os::windows::ffi::OsStringExt, path::PathBuf};
+use std::{
+    error::Error, ffi::OsString, fmt, os::windows::ffi::OsStringExt, path::PathBuf, sync::Arc,
+};
 use sugarsubstitute_contracts::{
     configuration::{LaunchConfiguration, LocaleId, ProfileId},
     coordinator_entry::{
@@ -29,7 +31,9 @@ use sugarsubstitute_execution::{
     REGISTERED_STARTUP_BYTES, RegisteredStartupSource,
 };
 use sugarsubstitute_supervision::{
-    LaunchEnvironment, installed_frontend::FrontendInstallationInput,
+    LaunchEnvironment,
+    installed_frontend::FrontendInstallationInput,
+    setup_storage::{BackendStorage, RunningApplication},
 };
 
 /// Bound known projection buffers; the original frame keeps its own native loan.
@@ -71,6 +75,7 @@ pub(super) struct ProjectionInput {
     restart: Option<RestartProjection>,
     snapshot: Option<PreparedStartupSnapshot>,
     capture_root: PathBuf,
+    installation: Option<Arc<RunningApplication>>,
     cause: ProjectionCause,
     post: Option<ControlFailure>,
     _charge: Option<MemoryClaim>,
@@ -81,6 +86,7 @@ impl ProjectionInput {
         capture_root: PathBuf,
         client: ExecutionClient,
         run: sugarsubstitute_contracts::lifecycle::RunKey,
+        installation: Option<Arc<RunningApplication>>,
     ) -> Self {
         Self {
             request: Some(request),
@@ -89,6 +95,7 @@ impl ProjectionInput {
             restart: None,
             snapshot: None,
             capture_root,
+            installation,
             cause: ProjectionCause::NotStarted,
             post: None,
             _charge: None,
@@ -104,6 +111,7 @@ impl ProjectionInput {
             restart: None,
             snapshot: None,
             capture_root: PathBuf::new(),
+            installation: None,
             cause: ProjectionCause::NotStarted,
             post: None,
             _charge: None,
@@ -258,7 +266,14 @@ pub(super) fn project(
         .and_then(|()| request.view().map_err(|cause| Box::new(cause) as _))
         .and_then(|view| {
             LaunchConfiguration::validate_path(&input.input().capture_root)?;
-            fields(view, &input.input().capture_root, bytes)
+            fields(view, &input.input().capture_root, bytes, |configuration| {
+                match &input.input().installation {
+                    Some(installation) => installation
+                        .backend_storage(configuration.root(), &context)
+                        .map_err(|cause| Box::new(cause) as _),
+                    None => Ok(BackendStorage::External),
+                }
+            })
         });
     // The same preclaimed slot adopts the primary before any lazy provider.
     let projected = match outcome {
@@ -347,13 +362,16 @@ impl super::ProductionActivation {
     pub(in crate::production) fn projected_target_for_test(
         view: EntryLaunchRequestView<'_>,
     ) -> Result<BackendTarget, Box<dyn Error + Send + Sync>> {
-        Ok(fields(view, &PathBuf::new(), u64::MAX)?.target)
+        Ok(fields(view, &PathBuf::new(), u64::MAX, |_| Ok(BackendStorage::External))?.target)
     }
 }
-fn fields(
+fn fields<'storage>(
     view: EntryLaunchRequestView<'_>,
     capture: &PathBuf,
     available: u64,
+    backend_storage: impl FnOnce(
+        &LaunchConfiguration,
+    ) -> Result<BackendStorage<'storage>, Box<dyn Error + Send + Sync>>,
 ) -> Result<Fields, Box<dyn Error + Send + Sync>> {
     capacity::preflight(view, capture, available)?;
     let profile_units = collect_units(view.profile_directory())?;
@@ -390,11 +408,14 @@ fn fields(
     let mut environment = Vec::new();
     environment.try_reserve_exact(view.environment().unit_len())?;
     environment.extend(view.environment().units());
-    let desktop_environment = LaunchEnvironment::from_snapshot_utf16(&environment, &[])?;
+    let storage = requested_profile.parent().ok_or("Profile storage parent missing")?;
+    let desktop_environment = LaunchEnvironment::for_local_storage(&environment, storage)?;
     let backend_environment = match &target {
-        BackendTarget::Managed(configuration) => {
-            Some(LaunchEnvironment::for_managed_backend(&environment, configuration)?)
-        }
+        BackendTarget::Managed(configuration) => Some(LaunchEnvironment::for_managed_backend(
+            &environment,
+            configuration,
+            backend_storage(configuration)?,
+        )?),
         BackendTarget::Attached(_) => None,
     };
     let mut fields = Fields {

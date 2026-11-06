@@ -164,3 +164,97 @@ fn watching_reports_each_changed_document_revision() -> Result<(), Box<dyn Error
     assert_eq!(off["result"]["supported"], true);
     inputs.close()
 }
+
+#[test]
+fn previews_follow_a_stroke_while_it_is_drawn_and_watching_reports_each_step()
+-> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let mut inputs = Inputs::start(directory.path())?;
+    let result = inputs.workflow(sync(None))?;
+    let image = synced(&result, "image")?.clone();
+    let empty = layer(&image, "empty")?;
+    inputs.workflow(activate(Some("image"), Some("empty"), "input"))?;
+    inputs.context_until(|document| document["id"] == image["document"]["id"])?;
+    let watching = inputs.ask("source.request", Some(json!({"type":"watch", "enabled":true})))?;
+    assert_eq!(watching["result"]["kind"], "watching");
+    let mask = json!([{"kind":"layer", "layerId":empty}]);
+    let preview = |inputs: &mut Inputs| -> Result<Value, Box<dyn Error>> {
+        let reply =
+            inputs.ask("source.request", Some(capture(&image["document"], mask.clone(), 4)))?;
+        Ok(reply["result"]["snapshots"][0].clone())
+    };
+    let blank = preview(&mut inputs)?;
+    let brush = inputs.ask("edit.request", Some(json!({"type":"tool", "tool":"brush"})))?;
+    assert_eq!(brush["result"]["state"]["tool"], "brush", "{brush}");
+    let before = inputs.changes.len();
+    inputs.drag(&[[2.0, 3.0], [6.0, 3.0]])?;
+    // While the button is still pressed, the canvas shows the staged stroke.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let staged = loop {
+        let latest = inputs.changes[before..]
+            .iter()
+            .rev()
+            .find(|change| change["change"]["documentId"] == image["document"]["id"])
+            .cloned();
+        if let Some(change) = latest.filter(|change| {
+            change["change"]["revision"].as_str().is_some_and(|text| text.contains('+'))
+        }) {
+            break change;
+        }
+        assert!(Instant::now() < deadline, "No staged stroke step was reported");
+        inputs.ask("context.request", None)?;
+    };
+    let drawing = preview(&mut inputs)?;
+    assert_ne!(drawing["pixels"], blank["pixels"], "the preview shows the stroke being drawn");
+    assert_eq!(drawing["revision"], blank["revision"], "the stroke is not yet published");
+    let state = inputs.ask("edit.request", Some(json!({"type":"state"})))?;
+    assert_eq!(state["result"]["state"]["history"]["undo"], false, "{state}");
+    // Releasing publishes it; watching reports the new published revision without a step.
+    let reported = inputs.changes.len();
+    inputs.release()?;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !inputs.changes[reported..]
+        .iter()
+        .any(|change| change["change"]["revision"].as_str().is_some_and(|text| !text.contains('+')))
+    {
+        assert!(Instant::now() < deadline, "The published stroke was not reported: {staged}");
+        inputs.ask("context.request", None)?;
+    }
+    let published = preview(&mut inputs)?;
+    assert_ne!(published["revision"], blank["revision"]);
+    assert_eq!(published["pixels"], drawing["pixels"]);
+    inputs.close()
+}
+
+#[test]
+fn watching_reports_a_document_the_input_route_shows_again() -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let mut inputs = Inputs::start(directory.path())?;
+    let result = inputs.workflow(sync(None))?;
+    let image = synced(&result, "image")?.clone();
+    inputs.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    inputs.context_until(|document| document["id"] == image["document"]["id"])?;
+    inputs.ask("source.request", Some(json!({"type":"watch", "enabled":true})))?;
+    let until = |inputs: &mut Inputs,
+                 since: usize,
+                 document: &Value|
+     -> Result<(), Box<dyn Error>> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !inputs.changes[since..]
+            .iter()
+            .any(|change| change["change"]["documentId"] == *document)
+        {
+            assert!(Instant::now() < deadline, "No change named {document}: {:?}", inputs.changes);
+            inputs.ask("context.request", None)?;
+        }
+        Ok(())
+    };
+    let hidden = inputs.changes.len();
+    inputs.workflow(activate(None, None, "output"))?;
+    until(&mut inputs, hidden, &Value::Null)?;
+    // Showing the unchanged document again lets sources that failed without it resolve.
+    let shown = inputs.changes.len();
+    inputs.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    until(&mut inputs, shown, &image["document"]["id"])?;
+    inputs.close()
+}

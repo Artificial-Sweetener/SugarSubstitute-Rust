@@ -8,6 +8,53 @@ use crate::{
 };
 
 #[test]
+fn delegated_tools_override_inherited_profile_cache_and_temporary_paths() -> TestResult {
+    worker::run_reserved(32 * 1024 * 1024, |context, _| {
+        let root = tempfile::tempdir()?;
+        let cache = RuntimeCache::open(root.path(), cache::CachePolicy::default(), context)?;
+        let mut grants = ProvisioningCaches::prepare(&cache, &"e".repeat(64), context)?;
+        let snapshot =
+            "tEmP=C:\\outside\0UV_CACHE_DIR=C:\\outside\0HTTP_PROXY=http://proxy.invalid\0\0"
+                .encode_utf16()
+                .collect::<Vec<_>>();
+        let original = crate::LaunchEnvironment::from_snapshot_utf16(&snapshot, &[])?;
+        let environment = grants.environment(&original)?;
+        let rows = String::from_utf16(environment.as_utf16())?;
+        assert!(!rows.contains(r"C:\outside"));
+        for name in [
+            "TEMP",
+            "TMP",
+            "HOME",
+            "USERPROFILE",
+            "APPDATA",
+            "LOCALAPPDATA",
+            "UV_CACHE_DIR",
+            "PIP_CACHE_DIR",
+            "npm_config_cache",
+            "HF_HOME",
+            "TORCH_HOME",
+        ] {
+            assert!(
+                rows.split('\0')
+                    .any(|row| row == format!("{name}={}", grants.runtime.path().display()))
+            );
+        }
+        for setting in [
+            "UV_NO_CACHE=1",
+            "PIP_NO_CACHE_DIR=1",
+            "PYTHONDONTWRITEBYTECODE=1",
+            "PYTHONNOUSERSITE=1",
+            "HTTP_PROXY=http://proxy.invalid",
+        ] {
+            assert!(rows.split('\0').any(|row| row == setting));
+        }
+        assert!(String::from_utf16(original.as_utf16())?.contains(r"C:\outside"));
+        grants.finish_settled(Default::default(), context)?;
+        Ok(())
+    })
+}
+
+#[test]
 fn native_provisioning_grants_survive_host_pin_loss_and_recover_on_an_eight_mib_worker()
 -> TestResult {
     let mut pipeline = Pipeline::new()?;

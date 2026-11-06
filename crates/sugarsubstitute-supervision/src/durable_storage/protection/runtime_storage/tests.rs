@@ -110,3 +110,53 @@ fn runtime_storage_resolves_below_the_installation_base()
         Ok(())
     })
 }
+
+/// Operational logging may precede coordinator discovery; its user base must already
+/// satisfy the same protected-directory contract that native claims require.
+#[test]
+fn logging_before_native_discovery_keeps_history_and_claims_under_protected_user()
+-> crate::setup_storage::test_worker::TestResult {
+    crate::setup_storage::test_worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let layout =
+            sugarsubstitute_configuration::layout::InstallationLayout::new(temporary.path());
+        crate::diagnostic_storage::operational::append(
+            &layout.runtime_base(),
+            &["operation=before_discovery\n".into()],
+            0,
+            context,
+        )?;
+        let memory = context.memory().claim(1024 * 1024)?;
+        let budget = crate::native_claims::files::Budget::Protected(std::sync::Arc::new(memory));
+        let mut handles = Vec::new();
+        let resolved = crate::durable_storage::protected::account::resolve_namespace(
+            temporary.path(),
+            &mut handles,
+            budget,
+        )?;
+        assert_eq!(
+            std::fs::canonicalize(&resolved.directory)?,
+            std::fs::canonicalize(layout.user().join("runtime/claims"))?,
+        );
+        assert!(layout.user().join("runtime/operational-v1/page-0.json").is_file());
+        assert!(!temporary.path().join("runtime").exists());
+        let expected_namespace = resolved.namespace;
+        for handle in handles.iter_mut().rev() {
+            handle.close()?;
+        }
+        handles.clear();
+        let budget = crate::native_claims::files::Budget::Protected(std::sync::Arc::new(
+            context.memory().claim(1024 * 1024)?,
+        ));
+        let reopened = crate::durable_storage::protected::account::resolve_namespace(
+            temporary.path(),
+            &mut handles,
+            budget,
+        )?;
+        assert_eq!(reopened.namespace, expected_namespace);
+        for handle in handles.iter_mut().rev() {
+            handle.close()?;
+        }
+        Ok(())
+    })
+}

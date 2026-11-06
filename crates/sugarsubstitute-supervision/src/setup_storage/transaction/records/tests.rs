@@ -62,9 +62,55 @@ fn native_publication_reopens_with_the_runtime_configuration_contract() -> TestR
                 runtime.metadata,
                 cube,
                 runtime.directory.join("main.py"),
-                selection.install_root.join("desktop-data/profile")
+                selection.install_root.join("user/desktop-data/profile")
             ]
         );
+        Ok(())
+    })
+}
+
+#[test]
+fn owned_publication_confines_comfy_defaults_below_installation_user() -> TestResult {
+    test_worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let generation = Directory::open(&temporary.path().join("generation"), true)?;
+        let runtime = RuntimePaths {
+            directory: temporary.path().join("managed/ComfyUI"),
+            python: temporary.path().join("managed/python.exe"),
+            frontend: temporary.path().join("frontend"),
+            metadata: temporary.path().join("METADATA"),
+        };
+        let selection = Selection {
+            locale: "en".into(),
+            install_root: temporary.path().join("installed"),
+            mode: "managed".into(),
+            comfy_root: temporary.path().join("managed"),
+            python: String::new(),
+            models: temporary.path().join("models"),
+            outputs: temporary.path().join("explicit output"),
+            selection_token: Some("selected-plan".into()),
+        };
+        write(generation.path(), &selection, &runtime, &temporary.path().join("cube"))?;
+        let mut file = generation.read("startup.local.toml")?;
+        let startup = parse_startup_configuration(&files::read_bounded(&mut file, 65536)?)?;
+        let ConnectionConfiguration::Launch(launch) = startup.connection() else {
+            return Err("Expected owned backend launch".into());
+        };
+        let data = selection.install_root.join("user").join("comfy-data");
+        assert_eq!(
+            launch.arguments(),
+            [
+                "--base-directory",
+                data.to_str().ok_or("Unicode data path")?,
+                "--user-directory",
+                data.join("user").to_str().ok_or("Unicode user path")?,
+                "--temp-directory",
+                data.join("temp").to_str().ok_or("Unicode temp path")?,
+                "--output-directory",
+                selection.outputs.to_str().ok_or("Unicode output path")?,
+            ]
+        );
+        check(context)?;
         Ok(())
     })
 }

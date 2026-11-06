@@ -5,12 +5,17 @@ use super::*;
 use std::error::Error;
 
 fn draw(decoration: Decoration) -> Result<Bitmap, Box<dyn Error>> {
+    draw_with(decoration, AccentPalette::PRODUCT)
+}
+
+fn draw_with(decoration: Decoration, accent: AccentPalette) -> Result<Bitmap, Box<dyn Error>> {
     let mut target = Bitmap::new(100, 60).ok_or("Target absent")?;
     let mut cursor = DecorationCursor::new(
         100,
         60,
         Bounds { x: 8.0, y: 8.0, width: 80.0, height: 32.0 },
         decoration,
+        accent,
         1.0,
     )?;
     while !cursor.step(&mut target)? {}
@@ -33,6 +38,29 @@ fn primary_action_and_disabled_state_keep_the_original_palette() -> Result<(), B
     Ok(())
 }
 
+/// Every accent role follows the surface's supplied system accent rather than product pink.
+#[test]
+fn emphasized_controls_paint_the_supplied_system_accent() -> Result<(), Box<dyn Error>> {
+    let accent =
+        AccentPalette::system(sugarsubstitute_contracts::appearance::AccentColor::new(0, 120, 212));
+    for (decoration, expected) in [
+        (Decoration::Button { primary: true, state: ControlState::Rest }, [0, 120, 212, 255]),
+        (Decoration::Button { primary: true, state: ControlState::Hover }, [0, 114, 201, 255]),
+        (Decoration::Check { checked: true }, [0, 120, 212, 255]),
+    ] {
+        let target = draw_with(decoration, accent)?;
+        let pixel = target.pixel(40, 20).ok_or("Control interior absent")?;
+        assert_eq!([pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()], expected);
+    }
+    let field = draw_with(
+        Decoration::Field { selection: false, focused: true, state: ControlState::Rest },
+        accent,
+    )?;
+    let edge = field.pixel(40, 39).ok_or("Field edge absent")?;
+    assert_eq!([edge.red(), edge.green(), edge.blue(), edge.alpha()], [0, 120, 212, 255]);
+    Ok(())
+}
+
 #[test]
 fn focused_field_uses_two_accent_rows_and_preserves_the_other_edges() -> Result<(), Box<dyn Error>>
 {
@@ -50,14 +78,22 @@ fn focused_field_uses_two_accent_rows_and_preserves_the_other_edges() -> Result<
 #[test]
 fn form_cursor_rejects_a_changed_target_before_any_mutation() -> Result<(), Box<dyn Error>> {
     let b = Bounds { x: 8.0, y: 8.0, width: 80.0, height: 32.0 };
-    let mut cursor = DecorationCursor::new(100, 60, b, Decoration::Section, 1.0)?;
+    let mut cursor =
+        DecorationCursor::new(100, 60, b, Decoration::Section, AccentPalette::PRODUCT, 1.0)?;
     let mut wrong = Bitmap::new(100, 61).ok_or("Target absent")?;
     assert!(cursor.step(&mut wrong).is_err());
     assert!(wrong.data().iter().all(|v| *v == 0));
     for width in [0.0, f32::NAN, f32::INFINITY, 4097.0] {
         assert!(
-            DecorationCursor::new(100, 60, Bounds { width, ..b }, Decoration::Section, 1.0)
-                .is_err()
+            DecorationCursor::new(
+                100,
+                60,
+                Bounds { width, ..b },
+                Decoration::Section,
+                AccentPalette::PRODUCT,
+                1.0
+            )
+            .is_err()
         );
     }
     Ok(())
@@ -75,6 +111,7 @@ fn fractional_page_placement_renders_at_installer_qualification_scales()
             height,
             Bounds { x: 380.0, y: 442.5, width: 420.0, height: 33.0 },
             Decoration::Field { selection: true, focused: false, state: ControlState::Rest },
+            AccentPalette::PRODUCT,
             scale,
         )?;
         loop {

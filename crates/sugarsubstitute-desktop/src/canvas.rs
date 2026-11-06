@@ -16,6 +16,10 @@ pub mod placement;
 pub mod acknowledgement;
 
 #[cfg(feature = "native-composition")]
+pub(crate) mod drag_preview;
+#[cfg(feature = "native-composition")]
+pub use drag_preview::{DRAG_PREVIEW_CEILING, DragPreview};
+#[cfg(feature = "native-composition")]
 mod gesture;
 #[cfg(feature = "native-composition")]
 pub use gesture::{
@@ -99,7 +103,9 @@ pub enum CpuFrameKind {
     Projected,
 }
 
-/// Borrowed opaque top-row-first sRGB words, `0xffRRGGBB`, with explicit pixel semantics.
+/// Borrowed premultiplied top-row-first sRGB words, `0xAARRGGBB`, with explicit pixel semantics.
+/// The main-window composition shows partial coverage over the window backdrop; the standalone
+/// GDI surface ignores coverage, so its producer composites every frame over an opaque matte.
 /// The application keeps the original execution-backed pixels alive for the complete borrow.
 #[derive(Clone, Copy)]
 pub struct CpuFrame<'a> {

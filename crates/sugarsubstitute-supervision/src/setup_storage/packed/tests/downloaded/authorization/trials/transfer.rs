@@ -2,9 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise transfer with real protected storage, duplicated handles and authenticated packages.
 use super::*;
-use crate::setup_storage::{
-    InheritedLaunch, RunningApplication, capture_launch, retain_running_generation,
-};
+use crate::setup_storage::{InheritedLaunch, capture_launch, retain_running_generation};
 use crate::setup_storage::{InheritedTrial, TrialTransfer, capture_trial_custody};
 use std::os::windows::io::{AsRawHandle, BorrowedHandle, IntoRawHandle};
 use windows::Win32::Foundation::{
@@ -97,15 +95,13 @@ fn receiving_trial_after_creator_drop_retains_payloads_and_accepts_only_once() -
         drop(transfer);
         assert!(InstallationRun::acquire(store.clone(), case.context).is_err());
         assert_eq!(snapshots(case.directory.path())?.len(), 1);
-        let RunningApplication::Trial(application) = retain_running_generation(
+        let running = retain_running_generation(
             &directory,
             Some(InheritedLaunch::Trial(inherited)),
             case.context,
         )?
-        .ok_or("Running trial absent")?
-        else {
-            return Err("Running entry lost trial authority".into());
-        };
+        .ok_or("Running trial absent")?;
+        let application = running.trial().ok_or("Running entry lost trial authority")?;
         assert_eq!(application.directory(), directory);
         assert!(snapshots(case.directory.path())?.is_empty());
         assert!(std::fs::write(directory.join("sugarsubstitute.exe"), b"changed").is_err());
@@ -116,7 +112,7 @@ fn receiving_trial_after_creator_drop_retains_payloads_and_accepts_only_once() -
         assert!(application.accept(case.context).is_err());
         assert!(application.reject(case.context).is_err());
         assert!(InstallationRun::acquire(store.clone(), case.context).is_err());
-        drop(application);
+        drop(running);
         let _run = InstallationRun::acquire(store, case.context)?;
         case.preserved()
     })

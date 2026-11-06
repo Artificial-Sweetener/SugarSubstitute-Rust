@@ -8,6 +8,41 @@ use crate::setup_storage::test_worker::{self, TestResult};
 use super::fixture::installed as fixture;
 
 #[test]
+fn ready_record_validation_preserves_supported_bytes_and_every_rejected_original() -> TestResult {
+    test_worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let root = Directory::open(temporary.path(), false)?;
+        let generation = fixture(&root, context)?;
+        let path = generation.join("installation-ready.json");
+        let original = std::fs::read(&path)?;
+        assert!(ExistingInstallation::read(&root, context)?.is_some());
+        assert_eq!(std::fs::read(&path)?, original);
+        for (pointer, invalid) in [
+            ("/schema_version", serde_json::json!(2)),
+            ("/bundle_sha256", serde_json::json!("unknown")),
+            ("/selection/mode", serde_json::json!("unknown")),
+            ("/runtime/directory", serde_json::json!("relative")),
+        ] {
+            let mut value: serde_json::Value = serde_json::from_slice(&original)?;
+            *value.pointer_mut(pointer).ok_or("Fixture field missing")? = invalid;
+            let rejected = serde_json::to_vec(&value)?;
+            std::fs::write(&path, &rejected)?;
+            assert!(ExistingInstallation::read(&root, context).is_err());
+            assert_eq!(std::fs::read(&path)?, rejected);
+        }
+        let mut value: serde_json::Value = serde_json::from_slice(&original)?;
+        value["unknown"] = serde_json::json!(true);
+        let rejected = serde_json::to_vec(&value)?;
+        std::fs::write(&path, &rejected)?;
+        assert!(ExistingInstallation::read(&root, context).is_err());
+        assert_eq!(std::fs::read(&path)?, rejected);
+        std::fs::write(&path, &original)?;
+        assert!(ExistingInstallation::read(&root, context)?.is_some());
+        Ok(())
+    })
+}
+
+#[test]
 fn maintenance_retains_native_path_policy_for_every_saved_input() -> TestResult {
     test_worker::run(|context, _| {
         let temporary = tempfile::tempdir()?;
