@@ -128,6 +128,9 @@ mod pending;
 pub use pending::PendingIncidentSnapshot;
 
 #[cfg(windows)]
+pub mod portable;
+
+#[cfg(windows)]
 mod recovery_origin;
 #[cfg(windows)]
 pub use recovery_origin::{IncidentRecoveryCaptureOriginValidator, RecoveryCaptureOriginCommit};

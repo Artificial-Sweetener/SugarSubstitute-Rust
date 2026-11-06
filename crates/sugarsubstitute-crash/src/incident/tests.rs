@@ -91,3 +91,8 @@ mod allocation_validation;
 
 #[cfg(windows)]
 mod pending;
+
+#[cfg(windows)]
+mod portable;
+#[cfg(windows)]
+mod portable_fixture;
