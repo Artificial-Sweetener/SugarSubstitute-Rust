@@ -27,6 +27,16 @@ import { type InputBinding } from '../domain/InputBinding.js';
 import { readInputBinding, withInputBinding } from './InputBindingMetadata.js';
 import { observeInputLoaderWidgets } from './ComfyInputWidgetObserver.js';
 import type { LegacyMaskMigration } from './LegacyMaskMigration.js';
+
+/** Identify source fields authored by a native link instead of a selectable file or canvas. */
+export function isComfyInputSourceLinked(node: ComfyNode, field: string): boolean {
+  return Boolean(
+    node.inputs?.some(
+      (input) => input.name === field && input.link !== null && input.link !== undefined,
+    ),
+  );
+}
+
 /** Supply native boundaries without leaking editor or browser APIs into source-state policy. */
 export interface ComfyInputBindingPorts {
   host(id?: string): CanvasSourceHost | null;
@@ -63,12 +73,7 @@ export function createComfyInputBinding(
     {
       read: () => readInputBinding(node.properties, loader.kind, loader.field),
       load: async () => {
-        if (
-          node.inputs?.some(
-            (input) =>
-              input.name === loader.field && input.link !== null && input.link !== undefined,
-          )
-        )
+        if (isComfyInputSourceLinked(node, loader.field))
           throw new Error('Disconnect the linked source field before selecting a canvas source.');
         const saved =
           readInputBinding(node.properties, loader.kind, loader.field) ??
