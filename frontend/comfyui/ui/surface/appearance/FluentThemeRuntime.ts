@@ -15,13 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bundle Microsoft's theme implementation at the third-party browser boundary. */
 import { setTheme } from '@fluentui/web-components/theme/set-theme.js';
-import { webDarkTheme, webLightTheme, createDarkTheme, createLightTheme } from '@fluentui/tokens';
-import {
-  accentForeground,
-  accentIndicatorColor,
-  createAccentBrandPalette,
-  mixAccentColor,
-} from './AccentPalette.js';
+import { webDarkTheme, webLightTheme } from '@fluentui/tokens';
+import { createAccentPalette } from './AccentPalette.js';
 import { Slider } from '@fluentui/web-components/slider/class.js';
 import { definition as SliderDefinition } from '@fluentui/web-components/slider/definition.js';
 import { Button } from '@fluentui/web-components/button/class.js';
@@ -287,32 +282,27 @@ export function applyOwnedFluentTheme(element: HTMLElement, dark: boolean | null
   appliedThemes.set(element, dark);
 }
 
-/** Derive all brand roles through Microsoft's factories while retaining one visible accent. */
+/** Translate shared accent roles into Microsoft's provider token vocabulary. */
 export function fluentAccentColorTokens(
   color: string,
   dark: boolean,
 ): Readonly<Record<string, string>> {
-  const theme = (dark ? createDarkTheme : createLightTheme)(createAccentBrandPalette(color));
-  const indicator = accentIndicatorColor(color, dark);
-  const tokens: Record<string, string> = Object.fromEntries(
-    Object.entries(theme).flatMap(([name, value]) =>
-      /Brand|colorStrokeFocus2/.test(name) && typeof value === 'string' ? [[name, value]] : [],
-    ),
-  );
-  for (const name of ['colorBrandBackground']) tokens[name] = color;
-  for (const name of [
-    'colorBrandForeground1',
-    'colorCompoundBrandForeground1',
-    'colorCompoundBrandBackground',
-    'colorBrandStroke1',
-    'colorCompoundBrandStroke',
-    'colorStrokeFocus2',
-  ])
-    tokens[name] = indicator;
-  tokens.colorBrandBackgroundHover = mixAccentColor(color, '#000000', 0.08);
-  tokens.colorBrandBackgroundPressed = mixAccentColor(color, '#000000', 0.16);
-  tokens.colorCompoundBrandBackgroundHover = mixAccentColor(indicator, '#000000', 0.08);
-  tokens.colorCompoundBrandBackgroundPressed = mixAccentColor(indicator, '#000000', 0.16);
-  tokens.colorNeutralForegroundOnBrand = accentForeground(color);
+  const p = createAccentPalette(color, dark);
+  const tokens: Record<string, string> = {};
+  for (const name of Object.keys(dark ? webDarkTheme : webLightTheme)) {
+    if (!/Brand|colorStrokeFocus2/.test(name)) continue;
+    const states = name.includes('Compound') ? p.checkbox : p.button;
+    const foreground = name.includes('Foreground');
+    tokens[name] = name.includes('Hover')
+      ? foreground
+        ? p.link.hover
+        : states.hover
+      : name.includes('Pressed')
+        ? foreground
+          ? p.link.pressed
+          : states.pressed
+        : p.indicator;
+  }
+  tokens.colorNeutralForegroundOnBrand = p.foreground;
   return tokens;
 }

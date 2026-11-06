@@ -60,6 +60,7 @@ export const settingsWorkspaceCss = `
 .sc-settings-about__card strong { font-weight:600; }
 .sc-settings-about__card a { flex-shrink:0; }
 .sc-settings-about a { color:var(--sc-accent-indicator,var(--p-primary-color)); text-decoration:underline; text-underline-offset:3px; }
+.sc-settings-about a:active { color:var(--sc-accent-link-pressed,var(--p-primary-color)); }
 .sc-settings-about__actions { display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; }
 .sc-settings-about__status { color:var(--sc-settings-muted); }
 .sc-settings-about button { font:inherit; }
@@ -79,7 +80,7 @@ export const settingsWorkspaceCss = `
   --p-select-focus-border-color:var(--sc-accent-indicator);
   --p-slider-range-background:var(--sc-accent-indicator);
   --p-toggleswitch-checked-background:var(--sc-accent-indicator);
-  --p-toggleswitch-checked-hover-background:var(--sc-accent-hover);
+  --p-toggleswitch-checked-hover-background:var(--sc-accent-toggle-hover);
   font-family:var(--sc-font-family); color:var(--sc-text);
   border-radius:8px !important; background:var(--sc-surface-secondary);
 }
@@ -166,6 +167,8 @@ export const settingsWorkspaceCss = `
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-slider { border:1px solid var(--sc-border-accessible); border-radius:10px; background:transparent; }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-handle { width:12px; height:12px; margin-top:-6px; left:4px; background:var(--sc-text-secondary); }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-checked .p-toggleswitch-slider { background:var(--sc-accent-indicator); border-color:transparent; }
+[data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-checked:not(.p-disabled):hover .p-toggleswitch-slider { background:var(--sc-accent-toggle-hover); }
+[data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-checked:not(.p-disabled):active .p-toggleswitch-slider { background:var(--sc-accent-toggle-pressed); }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-checked .p-toggleswitch-handle { left:24px; background:var(--sc-accent-foreground); }
 [data-sc-settings-themed] [data-sc-setting-kind] button {
   background:var(--sc-button-fill); color:var(--sc-text);

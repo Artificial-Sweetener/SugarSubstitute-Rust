@@ -13,13 +13,54 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove accent validation, brand ramp ordering, and foreground contrast decisions. */
+/** Compare all variants and control-role assignments with shared Qt-generated fixtures. */
+import { readFileSync } from 'node:fs';
 import {
+  accentVariants,
+  createAccentPalette,
   normalizeAccentColor,
-  createAccentBrandPalette,
-  accentForeground,
-  accentIndicatorColor,
 } from '../../../frontend/comfyui/ui/surface/appearance/AccentPalette.js';
+
+const vectors = readFileSync(new URL('../support/accent-vectors.txt', import.meta.url), 'utf8')
+  .split('\n')
+  .filter((line) => line && !line.startsWith('#'))
+  .map((line) => line.split(' '));
+
+test('the shared fixture covers thirty seeds in both modes', () => {
+  expect(vectors).toHaveLength(60);
+});
+
+test.each(vectors)('matches every qfluentwidgets shade for %s %s', (base, mode, ...expected) => {
+  const dark = mode === 'dark';
+  const variants = accentVariants('#' + base, dark);
+  expect(Object.values(variants)).toEqual(expected.map((hex) => '#' + hex));
+  const p = createAccentPalette('#' + base, dark);
+  expect(p.button).toEqual({
+    rest: variants.primary,
+    hover: dark ? variants.dark1 : variants.light1,
+    pressed: dark ? variants.dark2 : variants.light3,
+  });
+  expect(p.checkbox).toEqual({
+    rest: variants.primary,
+    hover: p.button.hover,
+    pressed: dark ? variants.dark2 : variants.light2,
+  });
+  expect(p.toggle).toEqual({
+    rest: variants.primary,
+    hover: variants.light1,
+    pressed: variants.light2,
+  });
+  expect(p.link).toEqual({
+    rest: variants.primary,
+    hover: variants.primary,
+    pressed: dark ? variants.dark1 : variants.primary,
+  });
+  expect(p.indicator).toBe(variants.primary);
+  expect(p.selection).toBe(dark ? variants.primary : variants.light1);
+  expect(p.foreground).toBe(dark ? '#000000' : '#ffffff');
+  expect(p.buttonBorder).toBe(variants.light1);
+  expect(p.buttonBottomBorder).toBe(dark ? variants.light2 : variants.dark1);
+});
 
 test.each([
   ['#B58CFF', '#b58cff'],
@@ -29,32 +70,10 @@ test.each([
   expect(normalizeAccentColor(value)).toBe(expected);
 });
 
-test('preserves a legible accent and adjusts extreme accents for their neutral surface', () => {
-  expect(accentIndicatorColor('#479ef5', true)).toBe('#479ef5');
-  expect(accentIndicatorColor('#071530', true)).not.toBe('#071530');
-  expect(accentIndicatorColor('#ffe066', false)).not.toBe('#ffe066');
-  expect(accentIndicatorColor('#071530', false)).toBe('#071530');
-  expect(() => accentIndicatorColor('invalid', true)).toThrow(TypeError);
-});
 test.each(['red', 'url(x)', '#abcd', '#12345678', ';color:red', null, 42])(
   'rejects invalid accent %p',
   (value) => {
     expect(normalizeAccentColor(value)).toBeNull();
+    expect(() => accentVariants(String(value), true)).toThrow(TypeError);
   },
 );
-test.each([
-  ['#ffff00', '#000000'],
-  ['#ffffff', '#000000'],
-  ['#000000', '#ffffff'],
-  ['#102060', '#ffffff'],
-])('keeps text readable on %s', (color, expected) => {
-  expect(accentForeground(color)).toBe(expected);
-});
-test('keeps the seed and every brand slot while producing distinct state colors', () => {
-  const ramp = createAccentBrandPalette('#b58cff');
-  expect(ramp[80]).toBe('#b58cff');
-  expect(Object.keys(ramp)).toHaveLength(16);
-  expect(new Set(Object.values(ramp)).size).toBe(16);
-  expect(Object.values(ramp).every((color) => normalizeAccentColor(color) === color)).toBe(true);
-  expect(() => createAccentBrandPalette('url(x)')).toThrow(TypeError);
-});

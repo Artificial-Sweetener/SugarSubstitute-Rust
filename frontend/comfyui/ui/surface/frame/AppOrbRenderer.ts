@@ -14,8 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Load exact Substitute artwork and cache complete accent-tinted orb interaction variants. */
-import { orbStateAccent, tintOrbPixel, type OrbRgb } from './OrbTint.js';
+import { tintOrbPixel, type OrbRgb } from './OrbTint.js';
 import { resampleOrbRaster, orbPhysicalEdge } from './OrbRaster.js';
+import { createAccentPalette } from '../appearance/AccentPalette.js';
 import { OrbDisplayDensity } from './OrbDisplayDensity.js';
 
 /** Compose glass layers around the original witch icon outside pointer-event hot paths. */
@@ -60,15 +61,21 @@ export class AppOrbRenderer {
       ));
     if (this.#disposed || revision !== this.#revision) return;
     this.#layers = layers;
-    const accent: OrbRgb = [
-      Number.parseInt(color.slice(1, 3), 16),
-      Number.parseInt(color.slice(3, 5), 16),
-      Number.parseInt(color.slice(5, 7), 16),
-    ];
+    const palette = createAccentPalette(color, dark);
     const variants = new Map<string, HTMLCanvasElement>();
     const edge = orbPhysicalEdge(this.#document.defaultView?.devicePixelRatio ?? 1);
-    for (const state of ['idle', 'hover', 'pressed'] as const)
-      variants.set(state, this.#compose(layers, orbStateAccent(accent, state), edge));
+    for (const [state, shade] of Object.entries({
+      idle: palette.button.rest,
+      hover: palette.button.hover,
+      pressed: palette.button.pressed,
+    })) {
+      const accent: OrbRgb = [
+        Number.parseInt(shade.slice(1, 3), 16),
+        Number.parseInt(shade.slice(3, 5), 16),
+        Number.parseInt(shade.slice(5, 7), 16),
+      ];
+      variants.set(state, this.#compose(layers, accent, edge));
+    }
     this.#variants = variants;
     this.setState(this.#state);
   }
