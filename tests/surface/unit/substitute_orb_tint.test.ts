@@ -13,17 +13,8 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Characterize the source renderer's glass shading and accent-preserving interaction states. */
-import {
-  orbStateAccent,
-  tintOrbPixel,
-} from '../../../frontend/comfyui/ui/surface/frame/OrbTint.js';
-
-test('preserve hue while darkening pressed state and brightening hover', () => {
-  expect(orbStateAccent([100, 50, 25], 'pressed')).toEqual([88, 44, 22]);
-  expect(orbStateAccent([100, 50, 25], 'hover')).toEqual([108, 54, 27]);
-  expect(orbStateAccent([255, 128, 0], 'hover')).toEqual([255, 128, 0]);
-});
+/** Preserve artwork shading while the shared accent owner supplies interaction shades. */
+import { tintOrbPixel } from '../../../frontend/comfyui/ui/surface/frame/OrbTint.js';
 
 test('transparent pixels, opaque accent and translucent white highlights retain their alpha', () => {
   expect(tintOrbPixel([255, 255, 255, 0], [100, 50, 25])).toEqual([0, 0, 0, 0]);

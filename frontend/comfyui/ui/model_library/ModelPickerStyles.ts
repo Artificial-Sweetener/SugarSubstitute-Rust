@@ -29,7 +29,8 @@ export const modelPickerCss =
   modelKeyRequiredBadgeCss +
   `
 .sc-model-find { display:inline-flex; align-items:center; justify-content:center; gap:8px; width:100%; height:32px; padding:0 12px; border:1px solid transparent; border-radius:4px; background:var(--sc-brand-fill,#0078d4); color:var(--sc-text-on-accent,#fff); font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); cursor:pointer; }
-.sc-model-find:hover { background:var(--sc-brand-fill-hover,#106ebe); }
+.sc-model-find:not(:disabled):hover { background:var(--sc-brand-fill-hover,#106ebe); }
+.sc-model-find:not(:disabled):active { background:var(--sc-brand-fill-pressed); color:var(--sc-accent-foreground-pressed); }
 .sc-model-find-icon { width:16px; height:16px; background:currentColor; mask:url("${findIcon}") center/contain no-repeat; }
 .sc-model-field { position:relative; display:flex; align-items:center; box-sizing:border-box; width:100%; max-width:100%; min-width:0; height:${CONTROL_HEIGHT}; overflow:hidden; border:1px solid var(--sc-border,#595959); border-bottom-color:var(--sc-border-accessible,#929292); border-radius:5px; background:var(--sc-surface,#383838); color:var(--sc-text,#eee); font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); }
 [data-sc-model-appearance]:not([data-sc-model-appearance="native"]) .sc-model-field:has(.sc-model-banner) { color:#fff; }

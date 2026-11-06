@@ -22,8 +22,30 @@ import { SaveNodePresetDialog } from '../../../frontend/comfyui/ui/editor_action
 import { GLOBAL_ASSOCIATION } from '../../../frontend/comfyui/ui/editor_actions/domain/UserPreset.js';
 import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
+import { injectModalAppearanceStyles } from '../../../frontend/comfyui/ui/dialogs/ModalAppearanceStyles.js';
+import { accentThemeCss } from '../../../frontend/comfyui/ui/surface/appearance/AccentThemeStyles.js';
 
 const adapter = { getDocument: () => document, getWindow: () => window };
+
+test.each([true, false])('modal primary press uses the mode foreground for dark=%s', (dark) => {
+  const accent = document.createElement('style');
+  accent.textContent = accentThemeCss('#0078d4', dark);
+  document.head.append(accent);
+  injectModalAppearanceStyles(document);
+  const skin = document.querySelector<HTMLStyleElement>('#sugarcubes-modal-appearance');
+  const active = Array.from(skin?.sheet?.cssRules ?? []).find(
+    (rule): rule is CSSStyleRule =>
+      rule instanceof CSSStyleRule &&
+      rule.selectorText.includes('.sugarcubes-modal__footer-actions') &&
+      rule.selectorText.endsWith(':active'),
+  );
+  expect(active?.style.color).toBe('var(--sc-accent-foreground-pressed)');
+  const root = accent.sheet?.cssRules[0];
+  if (!(root instanceof CSSStyleRule)) throw new Error('Missing accent root rule');
+  expect(root.style.getPropertyValue('--sc-accent-foreground-pressed')).toBe(
+    dark ? 'rgba(0,0,0,0.63)' : 'rgba(255,255,255,0.63)',
+  );
+});
 
 test('follows an accepted dual-style appearance source without replacing controls or retaining subscriptions after close', async () => {
   const source = new AppearanceState();

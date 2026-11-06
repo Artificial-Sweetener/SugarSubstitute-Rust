@@ -19,12 +19,57 @@ import { CubeFaceActivationControl } from '../../../frontend/comfyui/ui/surface/
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 import { NativeCardTitlebar } from '../../../frontend/comfyui/ui/surface/appearance/NativeCardTitlebar.js';
 import { Switch } from '@spectrum-web-components/switch/src/Switch.js';
+import { accentThemeCss } from '../../../frontend/comfyui/ui/surface/appearance/AccentThemeStyles.js';
+import { createAccentPalette } from '../../../frontend/comfyui/ui/surface/appearance/AccentPalette.js';
 
 afterEach(() => {
   document.body.replaceChildren();
   document.head.replaceChildren();
   document.documentElement.removeAttribute('data-sc-visual-style');
 });
+
+test.each([true, false])(
+  'owned Fluent switch uses toggle interaction roles for dark=%s',
+  (dark) => {
+    const palette = createAccentPalette('#0078d4', dark);
+    const accent = document.createElement('style');
+    accent.textContent = accentThemeCss('#0078d4', dark);
+    document.head.append(accent);
+    const view = new CubeFaceActivationControl(
+      document,
+      {
+        id: 'accent',
+        node: { id: 'accent', type: 'LoraLoader' },
+        label: 'Accent',
+        visible: true,
+        enabled: true,
+        showActivationControl: true,
+      },
+      jest.fn(),
+    );
+    try {
+      const skin = document.querySelector<HTMLStyleElement>('#sugarcubes-cube-activation-styles');
+      const rules = Array.from(skin?.sheet?.cssRules ?? []);
+      for (const [state, role, expected] of [
+        ['hover', '--sc-accent-toggle-hover', palette.toggle.hover],
+        ['active', '--sc-accent-toggle-pressed', palette.toggle.pressed],
+      ] as const) {
+        const rule = rules.find(
+          (candidate): candidate is CSSStyleRule =>
+            candidate instanceof CSSStyleRule &&
+            candidate.selectorText.includes(`input:checked:${state}`),
+        );
+        expect(rule?.style.background).toContain(`var(${role},`);
+        expect(rule?.selectorText).toContain(':not(:disabled)');
+        const root = accent.sheet?.cssRules[0];
+        if (!(root instanceof CSSStyleRule)) throw new Error('Missing accent root rule');
+        expect(root.style.getPropertyValue(role)).toBe(expected);
+      }
+    } finally {
+      view.dispose();
+    }
+  },
+);
 
 test('PhotoPro activation uses the shared checkbox and preserves edits across style changes', () => {
   publishVisualStyle(document, 'photopro');

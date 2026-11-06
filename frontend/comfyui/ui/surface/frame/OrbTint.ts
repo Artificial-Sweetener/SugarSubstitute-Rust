@@ -16,15 +16,6 @@
 /** Preserve Substitute's luminance shading and translucent glass highlights in web composition. */
 export type OrbRgb = readonly [number, number, number];
 
-/** Scale HSV value while retaining accent hue and saturation. */
-export function orbStateAccent(accent: OrbRgb, state: 'idle' | 'hover' | 'pressed'): OrbRgb {
-  const scale = state === 'pressed' ? 0.88 : state === 'hover' ? 1.08 : 1;
-  const maximum = Math.max(...accent);
-  const value = Math.min(255, Math.round(maximum * scale));
-  const channel = (input: number): number => (maximum ? Math.round((input * value) / maximum) : 0);
-  return [channel(accent[0]), channel(accent[1]), channel(accent[2])];
-}
-
 /** Transform one source pixel with the original glass-highlight and accent-shading formulas. */
 export function tintOrbPixel(
   source: readonly [number, number, number, number],

@@ -19,11 +19,41 @@ import { ModelPickerAppearance } from '../../../frontend/comfyui/ui/model_librar
 import { modelPickerCss } from '../../../frontend/comfyui/ui/model_library/ModelPickerStyles.js';
 import { VISUAL_STYLE_SETTING } from '../../../frontend/comfyui/ui/surface/appearance/VisualStylePreference.js';
 import type { VisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyle.js';
+import { accentThemeCss } from '../../../frontend/comfyui/ui/surface/appearance/AccentThemeStyles.js';
+import { createAccentPalette } from '../../../frontend/comfyui/ui/surface/appearance/AccentPalette.js';
 
 afterEach(() => {
   jest.restoreAllMocks();
   document.body.replaceChildren();
   document.documentElement.removeAttribute('style');
+});
+
+test.each([true, false])('model actions use accent press roles for dark=%s', (dark) => {
+  const palette = createAccentPalette('#0078d4', dark);
+  const accent = document.createElement('style');
+  const picker = document.createElement('style');
+  accent.textContent = accentThemeCss('#0078d4', dark);
+  picker.textContent = modelPickerCss;
+  document.head.append(accent, picker);
+  try {
+    const active = Array.from(picker.sheet?.cssRules ?? []).find(
+      (rule): rule is CSSStyleRule =>
+        rule instanceof CSSStyleRule &&
+        rule.selectorText === '.sc-model-find:not(:disabled):active',
+    );
+    expect(active?.style.background).toBe('var(--sc-brand-fill-pressed)');
+    expect(active?.style.color).toBe('var(--sc-accent-foreground-pressed)');
+    const root = accent.sheet?.cssRules[0];
+    if (!(root instanceof CSSStyleRule)) throw new Error('Missing accent root rule');
+    expect(root.style.getPropertyValue('--sc-accent-pressed')).toBe(palette.button.pressed);
+    expect(root.style.getPropertyValue('--sc-accent-foreground-pressed')).toBe(
+      palette.pressedForeground,
+    );
+    expect(root.style.getPropertyValue('--sc-accent-foreground')).toBe(palette.foreground);
+  } finally {
+    accent.remove();
+    picker.remove();
+  }
 });
 
 test('keeps thumbnail-wash captions white while ordinary native fields inherit the host foreground', () => {
