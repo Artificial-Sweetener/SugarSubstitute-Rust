@@ -17,6 +17,7 @@ impl ProjectionInput {
         client: ExecutionClient,
         capture_root: PathBuf,
         restart: RestartProjection,
+        installation: Option<Arc<RunningApplication>>,
     ) -> Self {
         Self {
             request: None,
@@ -25,6 +26,7 @@ impl ProjectionInput {
             run: Some(restart.run),
             restart: Some(restart),
             capture_root,
+            installation,
             cause: ProjectionCause::NotStarted,
             post: None,
             _charge: None,
@@ -40,7 +42,15 @@ pub(super) fn project(
         check(&context, data.original.started(), data.original.until())?;
         let available =
             input.input()._charge.as_ref().ok_or("Original data claim missing")?.bytes();
-        let fields = fields(data.source.view()?, &input.input().capture_root, available)?;
+        let fields =
+            fields(data.source.view()?, &input.input().capture_root, available, |configuration| {
+                match &input.input().installation {
+                    Some(installation) => installation
+                        .backend_storage(configuration.root(), &context)
+                        .map_err(|cause| Box::new(cause) as _),
+                    None => Ok(BackendStorage::External),
+                }
+            })?;
         let client =
             input.input().client.as_ref().ok_or("Actual restart execution owner missing")?;
         let snapshot = client.restart_startup_snapshot(

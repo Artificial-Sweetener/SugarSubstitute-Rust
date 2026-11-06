@@ -36,7 +36,7 @@ fn interrupted_trial_restores_accepted_launch_without_retiring_candidate_files()
         std::fs::create_dir(&candidate)?;
         let unknown = candidate.join("preserve.bin");
         std::fs::write(&unknown, b"retained candidate data")?;
-        let user = temporary.path().join("desktop-data").join("user-project.bin");
+        let user = temporary.path().join("user/desktop-data").join("user-project.bin");
         std::fs::write(&user, b"authored data")?;
         drop(trial);
         drop(run);

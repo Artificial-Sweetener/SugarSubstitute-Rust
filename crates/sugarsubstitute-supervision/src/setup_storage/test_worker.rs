@@ -11,7 +11,10 @@ pub(crate) fn installation(
 ) -> Result<tempfile::TempDir, Box<dyn Error + Send + Sync>> {
     use sugarsubstitute_contracts::installation::{InstallationId, InstallationRecord};
     let root = tempfile::tempdir()?;
-    std::fs::write(root.path().join(super::ownership::MARKER), super::ownership::CONTENT)?;
+    super::ownership::establish(&crate::durable_storage::files::Directory::open(
+        root.path(),
+        false,
+    )?)?;
     super::SelectionStore::initialize(
         root.path(),
         &InstallationRecord::empty(InstallationId::new(format!("{number:032x}"))?),

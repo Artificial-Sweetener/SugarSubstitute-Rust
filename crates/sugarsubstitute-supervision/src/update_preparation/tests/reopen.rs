@@ -62,7 +62,7 @@ fn corrupt_completed_records_are_preserved_without_reextracting_or_publishing() 
     ] {
         let (fixture, generation) = restart::prepared()?;
         let selection =
-            fixture.installation.path().join(".selection-state/.substitute-selection.json");
+            fixture.installation.path().join("state/selection/.substitute-selection.json");
         let original = std::fs::read(&selection)?;
         let damaged = generation.join(leaf);
         std::fs::write(&damaged, b"preserve damaged record")?;
@@ -172,7 +172,7 @@ fn cancelling_each_cached_startup_boundary_releases_custody_without_changing_sel
                 std::fs::remove_file(generation.join("sugarsubstitute.exe"))?;
             }
             let selection =
-                fixture.installation.path().join(".selection-state/.substitute-selection.json");
+                fixture.installation.path().join("state/selection/.substitute-selection.json");
             let original = std::fs::read(&selection)?;
             let mut pipeline = Pipeline::new()?;
             let mut worker = cached(&fixture)?;

@@ -20,7 +20,7 @@ fn expired_transfer_and_discarded_success_recover_with_the_original_creator() ->
             Ok((fixture, ApplicationLaunch::trial(candidate)))
         })?;
         let root = fixture.installation.path().to_owned();
-        let record = root.join(".selection-state/.substitute-selection.json");
+        let record = root.join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&record)?;
         let owned = launch.clone();
         worker::run_reserved_expiring(SIGNED_TRANSFER_RESERVATION_BYTES, move |context, clock| {
@@ -40,7 +40,7 @@ fn expired_transfer_and_discarded_success_recover_with_the_original_creator() ->
                         })
                 })?,
                 "snapshot" => clock.observe_checks(move || {
-                    std::fs::read_dir(root.join(".selection-state")).is_ok_and(|entries| {
+                    std::fs::read_dir(root.join("state/selection")).is_ok_and(|entries| {
                         entries.flatten().any(|entry| {
                             entry.file_name().to_string_lossy().starts_with(".trial-transfer")
                         })

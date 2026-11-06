@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! First-launch publication releases setup custody and recovers exact owned interruption points.
 use super::*;
-use crate::setup_storage::entrypoint;
+
+/// Stable root entry users launch.
+const ENTRY: &str = "SugarSubstitute.exe";
 
 /// Complete production phases under separate reservations while retaining one execution ledger.
 fn prepared(pipeline: &mut Pipeline) -> Result<(tempfile::TempDir, SignedCandidate), Failure> {
@@ -16,12 +18,24 @@ fn prepared(pipeline: &mut Pipeline) -> Result<(tempfile::TempDir, SignedCandida
     })
 }
 
+/// Names of the root's direct entries, marking folders with a trailing separator.
+fn root_entries(root: &std::path::Path) -> Result<Vec<String>, Failure> {
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        names.push(if entry.file_type()?.is_dir() { format!("{name}/") } else { name });
+    }
+    names.sort();
+    Ok(names)
+}
+
 #[test]
-fn ready_publishes_both_entries_and_releases_setup_without_accepting_health() -> TestResult {
+fn ready_publishes_only_the_root_entry_and_releases_setup_without_accepting_health() -> TestResult {
     let mut pipeline = Pipeline::new()?;
     let (temporary, candidate) = prepared(&mut pipeline)?;
     let root = temporary.path().join("native");
-    let selection = root.join(".selection-state/.substitute-selection.json");
+    let selection = root.join("state/selection/.substitute-selection.json");
     let before = std::fs::read(&selection)?;
     let completed = pipeline.run(SIGNED_TRANSFER_RESERVATION_BYTES, move |context| {
         Ok(candidate.authorize_installation(|| NOW, &context)?.publish(&context)?)
@@ -29,15 +43,18 @@ fn ready_publishes_both_entries_and_releases_setup_without_accepting_health() ->
     assert_eq!(completed.root(), root);
     assert_eq!(std::fs::read(&selection)?, before);
     assert_eq!(
-        std::fs::read(root.join("sugarsubstitute-launcher.exe"))?,
+        std::fs::read(root.join(ENTRY))?,
         std::fs::read(completed.directory().join("sugarsubstitute-launcher.exe"))?
     );
+    // The root holds the stable entry and folders only: no shortcut, marker or hidden state.
+    let entries = root_entries(&root)?;
+    assert!(entries.iter().all(|name| name == ENTRY || name.ends_with('/')), "{entries:?}");
+    for folder in ["releases/", "state/"] {
+        assert!(entries.iter().any(|name| name == folder), "{entries:?}");
+    }
+    assert!(!root.join("SugarSubstitute.lnk").exists());
     let inspected = root.clone();
     pipeline.run(LAUNCH_RESERVATION_BYTES, move |context| {
-        assert_eq!(
-            entrypoint::native::target(&inspected.join("SugarSubstitute.lnk"))?,
-            inspected.join("sugarsubstitute-launcher.exe")
-        );
         let summary = inspect_installation(&inspected, &context)?.ok_or("Settings absent")?;
         assert!(!summary.launch_entry_missing);
         assert!(!summary.executable_missing);
@@ -63,38 +80,38 @@ fn unknown_root_executable_prevents_ready_without_overwriting_it() -> TestResult
     let mut pipeline = Pipeline::new()?;
     let (temporary, candidate) = prepared(&mut pipeline)?;
     let root = temporary.path().join("native");
-    let executable = root.join("sugarsubstitute-launcher.exe");
+    let executable = root.join(ENTRY);
     std::fs::write(&executable, b"user executable")?;
     pipeline.run(SIGNED_TRANSFER_RESERVATION_BYTES, move |context| {
         assert!(candidate.authorize_installation(|| NOW, &context)?.publish(&context).is_err());
         Ok(())
     })?;
     assert_eq!(std::fs::read(executable)?, b"user executable");
-    assert!(!root.join("SugarSubstitute.lnk").exists());
-    assert!(!root.join(".selection-state/.launcher-generation.json").exists());
+    assert!(!root.join("state/selection/.launcher-generation.json").exists());
     Ok(())
 }
 
 #[test]
-fn edited_shortcut_is_preserved_and_missing_owned_entries_can_be_repaired() -> TestResult {
+fn edited_entry_is_preserved_and_a_missing_owned_entry_can_be_repaired() -> TestResult {
     let mut pipeline = Pipeline::new()?;
     let (temporary, candidate) = prepared(&mut pipeline)?;
     let completed = pipeline.run(SIGNED_TRANSFER_RESERVATION_BYTES, move |context| {
         Ok(candidate.authorize_installation(|| NOW, &context)?.publish(&context)?)
     })?;
     let root = temporary.path().join("native");
-    let link = root.join("SugarSubstitute.lnk");
-    let original = std::fs::read(&link)?;
-    std::fs::write(&link, b"user shortcut")?;
+    let entry = root.join(ENTRY);
+    let original = std::fs::read(&entry)?;
+    std::fs::write(&entry, b"user executable")?;
     let damaged = root.clone();
-    pipeline.run(LAUNCH_RESERVATION_BYTES, move |context| {
-        assert!(InstalledCandidate::reopen(&damaged, &context).is_err());
+    let rejected = pipeline.run(LAUNCH_RESERVATION_BYTES, move |context| {
+        Ok(InstalledCandidate::reopen(&damaged, &context)?.ok_or("Choice missing")?)
+    })?;
+    pipeline.run(SIGNED_TRANSFER_RESERVATION_BYTES, move |context| {
+        assert!(rejected.publish(&context).is_err());
         Ok(())
     })?;
-    assert_eq!(std::fs::read(&link)?, b"user shortcut");
-    std::fs::write(&link, original)?;
-    std::fs::remove_file(&link)?;
-    std::fs::remove_file(root.join("sugarsubstitute-launcher.exe"))?;
+    assert_eq!(std::fs::read(&entry)?, b"user executable");
+    std::fs::remove_file(&entry)?;
     let installed = pipeline.run(LAUNCH_RESERVATION_BYTES, move |context| {
         Ok(InstalledCandidate::reopen(&root, &context)?.ok_or("Choice missing")?)
     })?;
@@ -102,8 +119,7 @@ fn edited_shortcut_is_preserved_and_missing_owned_entries_can_be_repaired() -> T
         installed.publish(&context)?;
         Ok(())
     })?;
-    assert!(completed.root().join("sugarsubstitute-launcher.exe").is_file());
-    assert!(link.is_file());
+    assert_eq!(std::fs::read(completed.root().join(ENTRY))?, original);
     Ok(())
 }
 
@@ -118,7 +134,7 @@ fn publication_does_not_take_application_run_custody() -> TestResult {
         let before = store.load(context)?;
         let _run = InstallationRun::acquire(store.clone(), context)?;
         let completed = candidate.authorize_installation(|| NOW, context)?.publish(context)?;
-        assert!(completed.root().join("SugarSubstitute.lnk").is_file());
+        assert!(completed.root().join(ENTRY).is_file());
         assert_eq!(store.load(context)?, before);
         Ok(())
     })
@@ -126,11 +142,7 @@ fn publication_does_not_take_application_run_custody() -> TestResult {
 
 #[test]
 fn interrupted_entry_publication_resumes_from_each_owned_boundary() -> TestResult {
-    for boundary in [
-        ".selection-state/.launcher-generation.json",
-        "sugarsubstitute-launcher.exe",
-        ".selection-state/SugarSubstitute.lnk",
-    ] {
+    for boundary in ["state/selection/.launcher-generation.json", ENTRY] {
         let temporary = tempfile::tempdir()?;
         let path = temporary.path().to_owned();
         worker::run_reserved_expiring(
@@ -150,10 +162,7 @@ fn interrupted_entry_publication_resumes_from_each_owned_boundary() -> TestResul
         worker::run_reserved(LAUNCH_RESERVATION_BYTES, move |context, _| {
             let installed = InstalledCandidate::reopen(&root, context)?.ok_or("Choice missing")?;
             let completed = installed.publish(context)?;
-            assert_eq!(
-                entrypoint::native::target(&root.join("SugarSubstitute.lnk"))?,
-                root.join("sugarsubstitute-launcher.exe")
-            );
+            assert!(root.join(ENTRY).is_file());
             let state =
                 SelectionStore::open(&root, context)?.load(context)?.ok_or("State absent")?;
             assert!(state.accepted().is_none());

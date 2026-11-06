@@ -53,7 +53,8 @@ impl TrustStore {
             &repository,
             &sugarsubstitute_update::ReleaseHistory::empty().encode()?,
         )?;
-        let destination = parent.path().join(DIRECTORY);
+        let state = ownership::state(&parent)?;
+        let destination = state.path().join(DIRECTORY);
         if Self::has_state(parent.path(), context)? {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
@@ -61,7 +62,7 @@ impl TrustStore {
             )
             .into());
         }
-        let staged = InitialState::stage(&parent, &bytes, &history, context)?;
+        let staged = InitialState::stage(&state, &bytes, &history, context)?;
         let root = staged.publish(&destination, context)?;
         let mut store = Self {
             cache: std::sync::Mutex::new(None),
@@ -87,8 +88,9 @@ impl TrustStore {
 
     /// Any canonical object or continuity evidence requires opening, never bootstrap fallback.
     pub(super) fn has_state(installation_root: &Path, context: &JobContext) -> io::Result<bool> {
+        let state = installation_root.join(sugarsubstitute_configuration::layout::STATE);
         for name in [DIRECTORY, continuity::MARKER] {
-            match crate::durable_storage::files::inspect(installation_root.join(name), context) {
+            match crate::durable_storage::files::inspect(state.join(name), context) {
                 Ok(_) => return Ok(true),
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
                 Err(cause) => return Err(cause),

@@ -330,6 +330,7 @@ impl EntryActivation for ProductionActivation {
             self.capture_root.clone(),
             resources.client.clone(),
             run,
+            resources.authority.running_installation(),
         ));
         let submitted = resources.client.submit_blocking_owned_box(
             resources.finite,

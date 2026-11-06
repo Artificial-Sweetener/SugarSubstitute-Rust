@@ -70,14 +70,7 @@ impl Shell {
         };
         client
             .submit_blocking(scope, spec, move |context| {
-                match application.as_ref() {
-                    RunningApplication::Trial(trial) => trial.repair_launch_entry(&context),
-                    RunningApplication::Accepted(accepted) => {
-                        accepted.repair_launch_entry(&context)
-                    }
-                }
-                .map(|_| ())
-                .map_err(io::Error::other)
+                application.repair_launch_entry(&context).map(|_| ()).map_err(io::Error::other)
             })
             .map_err(io::Error::other)
     }

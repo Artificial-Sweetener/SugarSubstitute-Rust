@@ -45,10 +45,13 @@ use sugarsubstitute_contracts::{
     installation::{Candidate, InstallationRecord, MAX_RECORD_BYTES},
 };
 
-const DIRECTORY: &str = ".selection-state";
+/// Protected selection namespace inside the installation state folder.
+pub(super) const DIRECTORY: &str = "selection";
 const RECORD: &str = ".substitute-selection.json";
 const LOCK: &str = ".selection-lock";
-pub(super) const NAMESPACE_MARKER: &str = ".selection-enabled.json";
+pub(super) const NAMESPACE_MARKER: &str = "selection-enabled.json";
+/// Rendezvous serializing first selection enablement with earlier installer publication.
+pub(super) const TRANSITION_LOCK: &str = "selection-transition-lock";
 
 /// Pinned native installation and protected selection namespace.
 /// Short writer ownership is independent of application lifetime and preparation workers.

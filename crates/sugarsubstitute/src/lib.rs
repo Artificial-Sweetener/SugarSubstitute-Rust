@@ -273,7 +273,7 @@ fn run_application(
         Option<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
     >,
 ) -> Result<Option<i32>, Box<dyn Error>> {
-    diagnostics::Diagnostics::run(|health| {
+    diagnostics::Diagnostics::run(crate::diagnostics::RecordsBase::RunningImage, |health| {
         #[cfg(all(windows, feature = "windows-native-host"))]
         let result = execute(health, inherited);
         #[cfg(not(all(windows, feature = "windows-native-host")))]

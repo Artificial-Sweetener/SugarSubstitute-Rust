@@ -92,10 +92,7 @@ fn interrupted_only_installation_is_preserved_without_becoming_fresh_setup() -> 
     test_worker::run(|context, _| {
         let temporary = tempfile::tempdir()?;
         let root = Directory::open(temporary.path(), false)?;
-        files::write_new(
-            &root.path().join(crate::setup_storage::ownership::MARKER),
-            crate::setup_storage::ownership::CONTENT,
-        )?;
+        crate::setup_storage::ownership::establish(&root)?;
         let partial = Directory::open(&root.path().join("releases/partial"), true)?;
         files::write_new(&partial.path().join("startup.local.toml"), b"preserved partial input")?;
         assert!(inspect_installation(root.path(), context).is_err());

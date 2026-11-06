@@ -37,8 +37,55 @@ impl Protection {
         if source == destination || source.parent() != destination.parent() {
             return Err(super::super::invalid("Publication requires distinct siblings"));
         }
+        self.publish_retained(source, destination, expected, publication, context)
+    }
+
+    /// Publish only the stable executable from this installation's selection-state folder.
+    /// The retained root prevents destination redirection; source identity and protection
+    /// are rechecked on the rename handle before the same-volume activation.
+    pub(crate) fn publish_entry(
+        &mut self,
+        source: &Path,
+        root: &Directory,
+        expected: (u32, u32, u32),
+        replace: bool,
+        context: &JobContext,
+    ) -> io::Result<()> {
+        let layout = sugarsubstitute_configuration::layout::InstallationLayout::new(root.path());
+        if source.parent() != Some(layout.state().join("selection").as_path()) {
+            return Err(super::super::invalid(
+                "Entry publication requires selection-state staging",
+            ));
+        }
+        self.publish_retained(
+            source,
+            &layout.entry(),
+            expected,
+            Publication::File { replace },
+            context,
+        )
+    }
+
+    /// Keep both directory chains pinned through the checked handle-based rename.
+    fn publish_retained(
+        &mut self,
+        source: &Path,
+        destination: &Path,
+        expected: (u32, u32, u32),
+        publication: Publication,
+        context: &JobContext,
+    ) -> io::Result<()> {
+        check(context)?;
+        files::lexical(source)?;
+        files::lexical(destination)?;
         let _parent = Directory::open(
             source.parent().ok_or_else(|| super::super::invalid("Publication parent missing"))?,
+            false,
+        )?;
+        let _destination_parent = Directory::open(
+            destination
+                .parent()
+                .ok_or_else(|| super::super::invalid("Publication destination parent missing"))?,
             false,
         )?;
         if self.handles.len() == self.handles.capacity() {
@@ -69,7 +116,11 @@ impl Protection {
         phase.context(context).map_err(io::Error::other)?;
         native_rename::rename(
             &self.handles[index],
-            native_rename::Target::SameDirectory(destination),
+            if source.parent() == destination.parent() {
+                native_rename::Target::SameDirectory(destination)
+            } else {
+                native_rename::Target::Absolute(destination)
+            },
             matches!(publication, Publication::File { replace: true }),
             &mut phase,
         )

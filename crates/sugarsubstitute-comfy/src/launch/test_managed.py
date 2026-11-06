@@ -15,9 +15,28 @@ class ManagedShutdownTests(unittest.TestCase):
     def test_eof_interrupts_idle_server_and_runs_finally(self):
         source = Path(__file__).with_name("managed.py").read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory(prefix="sugar-managed-shutdown-") as directory:
+            root = Path(directory)
+            (root / "comfy").mkdir()
+            (root / "comfy" / "__init__.py").write_text("", encoding="utf-8")
+            (root / "comfy" / "options.py").write_text(
+                "enabled = False\n"
+                "def enable_args_parsing():\n"
+                "    global enabled\n"
+                "    enabled = True\n", encoding="utf-8",
+            )
+            (root / "folder_paths.py").write_text(
+                "from comfy import options\n"
+                "assert options.enabled\n"
+                "paths = {'custom_nodes': ['user/comfy-data/custom_nodes']}\n"
+                "def add_model_folder_path(kind, path):\n"
+                "    if path not in paths[kind]: paths[kind].append(path)\n", encoding="utf-8",
+            )
             script = Path(directory) / "main.py"
             script.write_text(
-                "import asyncio, os, sys\n"
+                "import asyncio, os, sys, folder_paths\n"
+                "assert folder_paths.paths['custom_nodes'] == [\n"
+                "    'user/comfy-data/custom_nodes',\n"
+                "    os.path.join(os.path.dirname(__file__), 'custom_nodes')]\n"
                 "os.fstat(sys.stdin.fileno())\n"
                 "sys.stdin.isatty()\n"
                 "assert os.read(sys.stdin.fileno(), 1) == b''\n"

@@ -3,7 +3,7 @@
 //! Keep immutable trust continuity outside the directory containing mutable verification floors.
 use super::*;
 
-pub(super) const MARKER: &str = ".update-trust-enabled";
+pub(super) const MARKER: &str = super::CONTINUITY_MARKER;
 const CONTENT: &[u8] = b".update-trust";
 
 /// Establish continuity while retaining the trust writer and validated checkpoint/history.
@@ -23,13 +23,14 @@ pub(super) fn ensure(
         &store.repository,
         CONTENT,
     )?;
-    let staged = staging::unique_path(&store._installation_root, ".update-trust-enable-stage")?;
+    let state = ownership::state(&store._installation_root)?;
+    let staged = staging::unique_path(&state, ".update-trust-enable-stage")?;
     let mut file = protection.file(&staged, context)?;
     file.write_all(&bytes)?;
     files::sync(&file, context)?;
     drop(file);
     check(context)?;
-    staging::publish(&staged, &store._installation_root.path().join(MARKER))?;
+    staging::publish(&staged, &state.path().join(MARKER))?;
     read(store, protection)?
         .ok_or_else(|| invalid("Published update trust continuity is absent").into())
 }
@@ -39,11 +40,12 @@ pub(super) fn read(
     store: &TrustStore,
     protection: &Protection,
 ) -> Result<Option<File>, TrustFailure> {
-    let mut file = match store._installation_root.read(MARKER) {
-        Ok(file) => file,
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(cause) => return Err(cause.into()),
-    };
+    let mut file =
+        match ownership::state(&store._installation_root).and_then(|state| state.read(MARKER)) {
+            Ok(file) => file,
+            Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(cause) => return Err(cause.into()),
+        };
     protection.verify_file(&file)?;
     let bytes = files::read_bounded(&mut file, envelope::Kind::Continuity.limit())?;
     let payload = envelope::decode(

@@ -12,7 +12,7 @@ fn replacement(root: &Directory, context: &JobContext) -> io::Result<record::Rec
         };
         let source =
             Directory::open(&root.path().join("releases").join(generation.id.as_str()), true)?;
-        publication::write_immutable(&source, EXECUTABLE, b"rescue launcher", protection, context)?;
+        publication::write_immutable(&source, SOURCE, b"rescue launcher", protection, context)?;
         publication::write_immutable(
             &source,
             "sugarsubstitute-launcher.json",
@@ -32,7 +32,7 @@ fn pending_fixture(
 ) -> io::Result<(Directory, record::Record, record::Record)> {
     let (state, previous, next) =
         protection::with(context, |protection| fixture(root, context, protection))?;
-    let pin = if after_image { state.read(RECORD)? } else { root.read(EXECUTABLE)? };
+    let pin = if after_image { state.read(RECORD)? } else { root.read(ENTRY)? };
     protection::with(context, |protection| {
         assert!(begin(root, &state, previous.clone(), next.clone(), protection, context).is_err());
         Ok(())
@@ -58,11 +58,11 @@ fn rescue(after_image: bool, missing_image: bool, ownership_advanced: bool) -> T
         }
         for source in [&previous, &next] {
             std::fs::remove_file(
-                root.path().join("releases").join(source.source.id.as_str()).join(EXECUTABLE),
+                root.path().join("releases").join(source.source.id.as_str()).join(SOURCE),
             )?;
         }
         if missing_image {
-            std::fs::remove_file(root.path().join(EXECUTABLE))?;
+            std::fs::remove_file(root.path().join(ENTRY))?;
         }
         let replacement = replacement(&root, context)?;
         protection::with(context, |protection| {
@@ -73,7 +73,7 @@ fn rescue(after_image: bool, missing_image: bool, ownership_advanced: bool) -> T
             assert!(recover(&root, &state, protection, context)?.is_none());
             Ok(())
         })?;
-        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"rescue launcher");
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"rescue launcher");
         assert!(!state.path().join(JOURNAL).exists());
         Ok(())
     })
@@ -119,7 +119,7 @@ fn interrupted_rescue_reconciles_ownership_before_retiring_old_intent() -> TestR
             assert!(record::read(&state, protection, context)?.as_ref() == Some(&next));
             Ok(())
         })?;
-        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"new launcher");
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"new launcher");
         assert_eq!(std::fs::read(state.path().join(JOURNAL))?, original);
         drop(pin);
         protection::with(context, |protection| {
@@ -127,7 +127,7 @@ fn interrupted_rescue_reconciles_ownership_before_retiring_old_intent() -> TestR
             assert!(record::read(&state, protection, context)?.as_ref() == Some(&replacement));
             Ok(())
         })?;
-        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"rescue launcher");
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"rescue launcher");
         Ok(())
     })
 }
@@ -149,7 +149,7 @@ fn rescue_rejects_incompatible_replacement_without_discarding_old_intent() -> Te
             Ok(())
         })?;
         assert_eq!(std::fs::read(state.path().join(JOURNAL))?, original);
-        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"old launcher");
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"old launcher");
         Ok(())
     })
 }
@@ -180,14 +180,14 @@ fn rescue_preserves_foreign_intent_and_unknown_root_bytes() -> TestResult {
             assert_eq!(std::fs::read(state.path().join(JOURNAL))?, bytes);
         }
         std::fs::write(state.path().join(JOURNAL), &original)?;
-        std::fs::write(root.path().join(EXECUTABLE), b"unknown owner")?;
+        std::fs::write(root.path().join(ENTRY), b"unknown owner")?;
         protection::with(context, |protection| {
             assert!(supersede(&root, &state, replacement, protection, context).is_err());
             assert!(record::read(&state, protection, context)?.as_ref() == Some(&previous));
             Ok(())
         })?;
         assert_eq!(std::fs::read(state.path().join(JOURNAL))?, original);
-        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"unknown owner");
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"unknown owner");
         Ok(())
     })
 }

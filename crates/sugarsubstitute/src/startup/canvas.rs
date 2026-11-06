@@ -31,11 +31,10 @@ pub(super) use surface::RoutedInput;
 #[cfg(test)]
 mod tests;
 
-/// The input canvas's session directory below the installation root: the installation's
-/// `desktop-data` directory holds user state the installer creates and every installation change
-/// preserves.
+/// The input canvas's session directory inside the installation's `user` folder, which holds
+/// user data that every installation change preserves.
 #[cfg(feature = "native-composition")]
-const INPUT_DOCUMENTS: [&str; 2] = ["desktop-data", "input-canvas"];
+const INPUT_DOCUMENTS: &str = "input-canvas";
 
 /// Canvas storage the application's execution capacity funds.
 #[derive(Clone, Copy)]
@@ -168,7 +167,10 @@ impl EmbeddedCanvas {
             gpu,
             capture: false,
             verify_native: false,
-            cache: self.anchor.clone(),
+            cache: sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                &self.anchor,
+            )
+            .user(),
             initial: InitialSource::AwaitHost,
             locale: locale.to_owned(),
             extent: Extent::new(1, 1)?,
@@ -192,7 +194,11 @@ impl EmbeddedCanvas {
         }
         #[cfg(feature = "native-composition")]
         session.persist_inputs(crate::input_documents::InputDocumentStore::new(
-            INPUT_DOCUMENTS.iter().fold(self.anchor.clone(), |path, part| path.join(part)),
+            sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                &self.anchor,
+            )
+            .user()
+            .join(INPUT_DOCUMENTS),
         )?);
         self.session = Some(session);
         let runtime = Runtime::shared(client, self.scope)?;

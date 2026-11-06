@@ -3,7 +3,8 @@
 //! Derive namespace children from each actual retained protected directory's final name.
 use super::super::security;
 use super::*;
-/// Fixed account-owned roots; the final native name determines each following child.
+/// Fixed account runtime roots below an installation's `runtime` folder; the final native name
+/// determines each following child.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(crate) enum Namespace {
     /// Durable process ownership and incident claims.
@@ -11,7 +12,7 @@ pub(crate) enum Namespace {
     /// A validated account-runtime child whose persisted name belongs to its feature owner.
     RuntimeChild(&'static str),
 }
-/// Resolve and validate a fixed namespace under the retained account root.
+/// Resolve and validate a fixed namespace under the retained installation runtime base.
 /// Creation uses the account storage boundary; existing-only access preserves absent names.
 /// The native boundary can redirect a logical directory name. Each next child and
 /// every returned claim stem uses the final name of that actual opened directory.
@@ -35,6 +36,8 @@ pub(crate) fn resolve(
 trait DirectoryBoundary {
     fn create_and_observe(&mut self, path: &Path) -> Result<PathBuf, ClaimError>;
 }
+/// Components from the runtime base to the pinned namespace directory: `runtime\<leaf>`.
+const NAMESPACE_DEPTH: usize = 2;
 struct NativeDirectory<'a> {
     sid: &'a [u8],
     budget: Budget,
@@ -65,7 +68,7 @@ impl DirectoryBoundary for NativeDirectory<'_> {
             .get(index)
             .ok_or_else(|| ClaimError::invalid("namespace_directory_handle"))?;
         self.count += 1;
-        if self.count == 3 {
+        if self.count == NAMESPACE_DEPTH {
             self.namespace = Some((index, paths::file_identity(handle, &mut phase)?));
         }
         paths::final_path(
@@ -89,7 +92,7 @@ fn resolve_with_boundary(
             leaf
         }
     };
-    for component in ["SugarSubstitute", "runtime", leaf] {
+    for component in [sugarsubstitute_configuration::layout::RUNTIME, leaf] {
         directory = boundary.create_and_observe(&directory.join(component))?;
     }
     if namespace == Namespace::Claims {

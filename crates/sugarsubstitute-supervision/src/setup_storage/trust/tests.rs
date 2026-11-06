@@ -133,7 +133,7 @@ fn writer_exclusion_releases_without_stale_file_lockout_or_application_lease() -
             .read(true)
             .write(true)
             .create_new(true)
-            .open(installation.path().join(".setup-lock"))?;
+            .open(installation.path().join("state/setup-lock"))?;
         setup.try_lock().map_err(io::Error::from)?;
         assert!(SelectionStore::open(installation.path(), context)?.load(context)?.is_some());
         drop(writer);
@@ -234,7 +234,7 @@ fn progressed_or_unknown_installations_cannot_start_new_trust_history() -> TestR
             )
             .is_err()
         );
-        assert!(!installation.path().join(DIRECTORY).exists());
+        assert!(!installation.path().join("state").join(DIRECTORY).exists());
         let unknown = tempfile::tempdir()?;
         std::fs::write(unknown.path().join("user-file"), b"preserve")?;
         assert!(

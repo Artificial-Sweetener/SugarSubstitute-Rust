@@ -40,7 +40,7 @@ fn newer_signed_metadata_cannot_downgrade_or_reuse_a_published_sequence_after_re
             case.context,
         )?;
         let selected = std::fs::read(case.directory.path().join("SugarSubstitute.lnk"))?;
-        let history = std::fs::read(case.directory.path().join(".update-trust/releases"))?;
+        let history = std::fs::read(case.directory.path().join("state/update-trust/releases"))?;
         let reopened = TrustStore::open(case.directory.path(), [92; 32], case.context)?;
         for (signed, expected) in [
             (offered(case.archive, 7, 9)?, Rejection::Rollback),
@@ -56,7 +56,7 @@ fn newer_signed_metadata_cannot_downgrade_or_reuse_a_published_sequence_after_re
             );
             assert_eq!(std::fs::read(case.directory.path().join("SugarSubstitute.lnk"))?, selected);
             assert_eq!(
-                std::fs::read(case.directory.path().join(".update-trust/releases"))?,
+                std::fs::read(case.directory.path().join("state/update-trust/releases"))?,
                 history
             );
         }
@@ -115,7 +115,8 @@ fn failed_final_activation_preserves_floor_and_same_package_remains_retryable() 
 #[test]
 fn history_commit_failure_never_publishes_and_releases_exclusion_for_retry() -> TestResult {
     run(8, |case| {
-        let trust_directory = Directory::open(&case.directory.path().join(".update-trust"), false)?;
+        let trust_directory =
+            Directory::open(&case.directory.path().join("state/update-trust"), false)?;
         let pinned = trust_directory.read("releases")?;
         let previous = std::fs::read(trust_directory.path().join("releases"))?;
         assert!(matches!(
@@ -145,13 +146,14 @@ fn history_commit_failure_never_publishes_and_releases_exclusion_for_retry() -> 
 #[test]
 fn missing_damaged_or_wrong_record_kind_never_resets_release_history() -> TestResult {
     run(8, |case| {
-        let path = case.directory.path().join(".update-trust/releases");
+        let path = case.directory.path().join("state/update-trust/releases");
         let original = std::fs::read(&path)?;
-        let checkpoint = std::fs::read(case.directory.path().join(".update-trust/checkpoint"))?;
+        let checkpoint =
+            std::fs::read(case.directory.path().join("state/update-trust/checkpoint"))?;
         let foreign = crate::setup_storage::test_worker::installation(99, case.context)?;
         let _other =
             TrustStore::initialize(foreign.path(), [92; 32], &case.signed.root, case.context)?;
-        let foreign_history = std::fs::read(foreign.path().join(".update-trust/releases"))?;
+        let foreign_history = std::fs::read(foreign.path().join("state/update-trust/releases"))?;
         for bytes in [
             None,
             Some(b"damaged".as_slice()),
@@ -202,7 +204,7 @@ fn missing_damaged_or_wrong_record_kind_never_resets_release_history() -> TestRe
 #[test]
 fn discovery_without_publication_does_not_advance_the_package_floor() -> TestResult {
     run(8, |case| {
-        let path = case.directory.path().join(".update-trust/releases");
+        let path = case.directory.path().join("state/update-trust/releases");
         let original = std::fs::read(&path)?;
         let future = offered(case.archive, 9, 9)?;
         case.trust.offer(

@@ -136,6 +136,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_main_receivers.rs",
     "crates/sugarsubstitute-desktop/src/windows_main_receivers/bulk.rs",
     "crates/sugarsubstitute-desktop/src/windows_main_receivers/completion.rs",
+    "crates/sugarsubstitute-desktop/src/windows_main_receivers/downloads/destination.rs",
     "crates/sugarsubstitute-desktop/src/windows_main_receivers/navigation.rs",
     "crates/sugarsubstitute-desktop/src/windows_present_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_scroll/paint.rs",
@@ -144,7 +145,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:1de5a1d69a9dc64fe4575cbeb1f3282f29208044e23ff128d30ed859afd2fb5a"
+source_sha256 = "sha256:af2c23f94b886f50195c2aece456793104c82def675c7f864f0c57e63af3c6bd"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"

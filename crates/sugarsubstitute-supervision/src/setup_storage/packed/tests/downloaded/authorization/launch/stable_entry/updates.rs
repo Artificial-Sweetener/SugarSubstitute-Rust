@@ -101,7 +101,7 @@ fn prepared_application_refreshes_launcher_source_without_replacing_identical_by
         let first = application.generation().clone();
         drop(application);
         let ownership = std::fs::read(root.path().join(OWNERSHIP))?;
-        let identity = crate::durable_storage::files::file_identity(&root.read(LAUNCHER)?)?;
+        let identity = crate::durable_storage::files::file_identity(&root.read(ENTRY)?)?;
         let (prepared, signed, trust) = next_package(&root, workspace.path(), context)?;
         let candidate = prepared.prepare_update(
             prepared.maintenance_runtime().ok_or("Runtime absent")?,
@@ -123,12 +123,12 @@ fn prepared_application_refreshes_launcher_source_without_replacing_identical_by
             return Err("Next accepted generation absent".into());
         };
         let installed = next.repair_launch_entry(context)?;
-        assert_eq!(installed.executable, root.path().join(LAUNCHER));
+        assert_eq!(installed.executable, root.path().join(ENTRY));
         let next_ownership = std::fs::read(root.path().join(OWNERSHIP))?;
         assert_ne!(next_ownership, ownership);
         let next_record: serde_json::Value = serde_json::from_slice(&next_ownership)?;
         assert_eq!(next_record["source"]["id"], next.generation().id.as_str());
-        assert_eq!(crate::durable_storage::files::file_identity(&root.read(LAUNCHER)?)?, identity);
+        assert_eq!(crate::durable_storage::files::file_identity(&root.read(ENTRY)?)?, identity);
         assert!(root.path().join("releases").join(first.id.as_str()).join(LAUNCHER).exists());
         Ok(())
     })
@@ -156,7 +156,7 @@ fn signed_preparation_rescues_missing_launcher_with_obsolete_pending_source() ->
             "previous": original,
             "next": obsolete,
         }))?;
-        let state = Directory::open(&root.path().join(".selection-state"), false)?;
+        let state = Directory::open(&root.path().join("state/selection"), false)?;
         crate::durable_storage::protection::with(context, |protection| {
             crate::setup_storage::publication::write_immutable(
                 &state,
@@ -166,10 +166,9 @@ fn signed_preparation_rescues_missing_launcher_with_obsolete_pending_source() ->
                 context,
             )
         })?;
-        std::fs::remove_file(root.path().join(LAUNCHER))?;
+        std::fs::remove_file(root.path().join(ENTRY))?;
         std::fs::remove_file(source.join(LAUNCHER))?;
         std::fs::write(root.path().join("user-document.txt"), b"preserve user work")?;
-        let link = std::fs::read(root.path().join(LINK))?;
         let (prepared, signed, trust) = next_package(&root, workspace.path(), context)?;
         let store = Arc::new(SelectionStore::open(root.path(), context)?);
         // Application run custody remains available to the live app during signed repair.
@@ -185,14 +184,10 @@ fn signed_preparation_rescues_missing_launcher_with_obsolete_pending_source() ->
             serde_json::from_slice(&std::fs::read(root.path().join(OWNERSHIP))?)?;
         assert_eq!(owner["source"]["id"], candidate.generation().id.as_str());
         assert_eq!(
-            std::fs::read(root.path().join(LAUNCHER))?,
+            std::fs::read(root.path().join(ENTRY))?,
             std::fs::read(candidate.directory().join(LAUNCHER))?
         );
-        assert_eq!(std::fs::read(root.path().join(LINK))?, link);
-        assert_eq!(
-            entrypoint::native::target(&root.path().join(LINK))?,
-            root.path().join(LAUNCHER)
-        );
+        assert!(!root.path().join(LINK).exists());
         assert_eq!(std::fs::read(root.path().join("user-document.txt"))?, b"preserve user work");
         assert!(!state.path().join(".launcher-transition-v1.json").exists());
         Ok(())

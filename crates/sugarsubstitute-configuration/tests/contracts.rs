@@ -33,7 +33,14 @@ fn paths() -> Result<StartupPaths> {
 #[test]
 fn initial_defaults_roundtrip_through_the_actual_runtime_parser() -> Result {
     let root = root();
-    let document = initial::managed(&root, &root.join("python.exe"), &root.join("输出"), "ja")?;
+    let data = root.join("user/comfy-data");
+    let document = initial::installation_owned(
+        &root,
+        &root.join("python.exe"),
+        &data,
+        &root.join("输出"),
+        "ja",
+    )?;
     let parsed = parse_startup_configuration(document.as_bytes())?;
     assert_eq!(parsed.profile().as_str(), "default");
     assert_eq!(parsed.presentation().theme(), Theme::Dark);
@@ -46,15 +53,48 @@ fn initial_defaults_roundtrip_through_the_actual_runtime_parser() -> Result {
     assert_eq!(launch.port().get(), 8188);
     assert_eq!(
         launch.arguments(),
-        ["--output-directory", root.join("输出").to_str().ok_or("Unicode")?]
+        [
+            "--base-directory",
+            data.to_str().ok_or("Unicode")?,
+            "--user-directory",
+            data.join("user").to_str().ok_or("Unicode")?,
+            "--temp-directory",
+            data.join("temp").to_str().ok_or("Unicode")?,
+            "--output-directory",
+            root.join("输出").to_str().ok_or("Unicode")?
+        ]
     );
+    Ok(())
+}
+
+#[test]
+fn external_startup_preserves_normal_comfy_data_locations_and_selected_output() -> Result {
+    let root = root();
+    let outputs = root.join("selected 出力");
+    let bytes = initial::external(&root, &root.join("python.exe"), &outputs, "ja")?;
+    let parsed = parse_startup_configuration(bytes.as_bytes())?;
+    let ConnectionConfiguration::Launch(launch) = parsed.connection() else {
+        return Err("External ComfyUI lost its explicit launch request".into());
+    };
+    assert_eq!(launch.root(), root);
+    assert_eq!(
+        launch.arguments(),
+        ["--output-directory", outputs.to_str().ok_or("Unicode output")?]
+    );
+    assert_eq!(parsed.presentation().locale().as_str(), "ja");
     Ok(())
 }
 
 #[test]
 fn persisted_explicit_values_win_over_initial_defaults() -> Result {
     let root = root();
-    let initial = initial::managed(&root, &root.join("python.exe"), &root.join("output"), "en")?;
+    let initial = initial::installation_owned(
+        &root,
+        &root.join("python.exe"),
+        &root.join("user/comfy-data"),
+        &root.join("output"),
+        "en",
+    )?;
     let changed = initial
         .replace("8188", "9191")
         .replace("default", "custom")
@@ -76,12 +116,30 @@ fn persisted_explicit_values_win_over_initial_defaults() -> Result {
 fn initial_values_cannot_bypass_semantic_validation() {
     let root = root();
     assert!(
-        initial::managed(&root, &root.join("python.exe"), &root.join("output"), "unknown").is_err()
+        initial::installation_owned(
+            &root,
+            &root.join("python.exe"),
+            std::path::Path::new("relative"),
+            &root.join("output"),
+            "en"
+        )
+        .is_err()
     );
     assert!(
-        initial::managed(
+        initial::installation_owned(
+            &root,
+            &root.join("python.exe"),
+            &root.join("user/comfy-data"),
+            &root.join("output"),
+            "unknown"
+        )
+        .is_err()
+    );
+    assert!(
+        initial::installation_owned(
             &PathBuf::from("relative"),
             &root.join("python.exe"),
+            &root.join("user/comfy-data"),
             &root.join("output"),
             "en"
         )
@@ -211,7 +269,14 @@ fn installed_serialization_rejects_nonunicode_without_panicking_or_normalizing()
     let inputs = StartupPaths::new(selected)?;
     assert!(LaunchDescriptor::encode(inputs).is_err());
     assert!(
-        initial::managed(&raw, &root().join("python.exe"), &root().join("output"), "en").is_err()
+        initial::installation_owned(
+            &raw,
+            &root().join("python.exe"),
+            &root().join("user/comfy-data"),
+            &root().join("output"),
+            "en"
+        )
+        .is_err()
     );
     Ok(())
 }

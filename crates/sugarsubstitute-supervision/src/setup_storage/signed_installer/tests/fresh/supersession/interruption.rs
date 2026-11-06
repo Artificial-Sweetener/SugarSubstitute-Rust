@@ -16,7 +16,7 @@ fn first_install_retry_recovers_missing_replacement_directory_with_older_incompl
         let old = before.candidate().ok_or("Candidate absent")?.generation().id.as_str().to_owned();
         std::fs::write(path.join("native/releases").join(&old).join("user-note"), b"keep")?;
         let imported = version(&path, 2, context)?;
-        let selection = path.join("native/.selection-state/.substitute-selection.json");
+        let selection = path.join("native/state/selection/.substitute-selection.json");
         clock.observe_checks(move || {
             let Ok(bytes) = std::fs::read(&selection) else {
                 return false;

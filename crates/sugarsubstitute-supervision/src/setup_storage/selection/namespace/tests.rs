@@ -15,7 +15,7 @@ fn initialization_never_exposes_a_namespace_without_complete_initial_selection()
         let root = root()?;
         let record = initial()?;
         let expected = record.encode()?;
-        let directory = root.path().join(DIRECTORY);
+        let directory = root.path().join("state").join(DIRECTORY);
         let incomplete = Arc::new(AtomicBool::new(false));
         let published = Arc::new(AtomicBool::new(false));
         let observation = (incomplete.clone(), published.clone());
@@ -40,7 +40,7 @@ fn initialization_never_exposes_a_namespace_without_complete_initial_selection()
 fn enabling_selection_pins_one_immutable_marker_across_reopen() -> TestResult {
     worker::run(|context, _| {
         let root = root()?;
-        let path = root.path().join(NAMESPACE_MARKER);
+        let path = root.path().join("state").join(NAMESPACE_MARKER);
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
         assert_eq!(std::fs::read(&path)?, CONTENT);
         assert!(std::fs::OpenOptions::new().write(true).open(&path).is_err());
@@ -59,7 +59,7 @@ fn missing_enabled_namespace_is_never_recreated_by_inspection_or_maintenance() -
         let root = root()?;
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
         drop(store);
-        let original = root.path().join(DIRECTORY);
+        let original = root.path().join("state").join(DIRECTORY);
         let displaced = root.path().join("displaced-selection");
         let before = std::fs::read(original.join(RECORD))?;
         std::fs::rename(&original, &displaced)?;
@@ -67,7 +67,7 @@ fn missing_enabled_namespace_is_never_recreated_by_inspection_or_maintenance() -
         assert!(SelectionStore::open(root.path(), context).is_err());
         assert!(!original.exists());
         assert_eq!(std::fs::read(displaced.join(RECORD))?, before);
-        assert_eq!(std::fs::read(root.path().join(NAMESPACE_MARKER))?, CONTENT);
+        assert_eq!(std::fs::read(root.path().join("state").join(NAMESPACE_MARKER))?, CONTENT);
         std::fs::rename(&displaced, &original)?;
         assert_eq!(SelectionStore::open(root.path(), context)?.load(context)?, Some(initial()?));
         Ok(())
@@ -81,9 +81,9 @@ fn earlier_selection_is_read_without_mutation_and_enabled_without_rewriting_hist
         let root = root()?;
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
         drop(store);
-        let marker = root.path().join(NAMESPACE_MARKER);
+        let marker = root.path().join("state").join(NAMESPACE_MARKER);
         std::fs::remove_file(&marker)?;
-        let record = root.path().join(DIRECTORY).join(RECORD);
+        let record = root.path().join("state").join(DIRECTORY).join(RECORD);
         let before = std::fs::read(&record)?;
         let earlier = SelectionStore::existing(root.path(), context)?.ok_or("Namespace absent")?;
         assert_eq!(earlier.load(context)?, Some(initial()?));
@@ -103,7 +103,7 @@ fn invalid_or_unprotected_continuity_marker_is_preserved_without_creating_state(
         for protected in [false, true] {
             let temporary = root()?;
             let directory = Directory::open(temporary.path(), false)?;
-            let path = temporary.path().join(NAMESPACE_MARKER);
+            let path = temporary.path().join("state").join(NAMESPACE_MARKER);
             let bytes: &[u8] = if protected { br#"{"schema_version":2}"# } else { CONTENT };
             if protected {
                 protection::with(context, |p| {
@@ -116,7 +116,7 @@ fn invalid_or_unprotected_continuity_marker_is_preserved_without_creating_state(
             }
             assert!(SelectionStore::existing(directory.path(), context).is_err());
             assert!(SelectionStore::open(directory.path(), context).is_err());
-            assert!(!directory.path().join(DIRECTORY).exists());
+            assert!(!directory.path().join("state").join(DIRECTORY).exists());
             assert_eq!(std::fs::read(path)?, bytes);
         }
         Ok(())
@@ -129,9 +129,10 @@ fn interrupted_marker_staging_is_not_selection_authority_and_is_preserved() -> T
         let root = root()?;
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
         drop(store);
-        let marker = root.path().join(NAMESPACE_MARKER);
+        let marker = root.path().join("state").join(NAMESPACE_MARKER);
         std::fs::remove_file(&marker)?;
-        let abandoned = root.path().join(DIRECTORY).join(".selection-enable-stage-interrupted");
+        let abandoned =
+            root.path().join("state").join(DIRECTORY).join(".selection-enable-stage-interrupted");
         std::fs::write(&abandoned, b"partial marker")?;
         assert!(SelectionStore::existing(root.path(), context)?.is_some());
         assert!(!marker.exists());

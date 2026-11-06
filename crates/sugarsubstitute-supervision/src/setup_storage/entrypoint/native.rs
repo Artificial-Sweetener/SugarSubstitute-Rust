@@ -55,7 +55,7 @@ impl Drop for Apartment {
 
 /// Serialize the complete shell link in memory on this worker without creating temporary files.
 /// Only bounded shell bytes leave the apartment; no COM interface crosses a thread boundary.
-pub(super) fn encode(executable: &Path) -> io::Result<Vec<u8>> {
+pub(in crate::setup_storage) fn encode(executable: &Path) -> io::Result<Vec<u8>> {
     super::files::lexical(executable)?;
     let directory =
         executable.parent().ok_or_else(|| super::invalid("Shell target parent absent"))?;

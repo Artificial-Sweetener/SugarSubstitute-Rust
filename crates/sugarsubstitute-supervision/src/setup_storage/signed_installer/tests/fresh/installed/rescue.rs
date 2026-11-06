@@ -56,7 +56,7 @@ fn quarantined_first_installation_repairs_explicitly_without_resetting_saved_inp
         let directory = completed.directory();
         let startup = std::fs::read(directory.join("startup.local.toml"))?;
         let original_python = std::fs::read(path.join("python.exe"))?;
-        let authored = root.join("desktop-data/user-workflow.json");
+        let authored = root.join("user/desktop-data/user-workflow.json");
         std::fs::write(&authored, b"authored content")?;
         std::fs::remove_file(directory.join("sugarsubstitute.exe"))?;
         let store = SelectionStore::open(root, context)?;
@@ -108,7 +108,7 @@ fn stable_entry_recovery_ignores_unknown_completed_folders_without_selecting_a_p
         let unknown = completed.root().join("releases/user-notes");
         std::fs::create_dir(&unknown)?;
         std::fs::write(unknown.join("installation-ready.json"), b"unrelated user file")?;
-        let selection = completed.root().join(".selection-state/.substitute-selection.json");
+        let selection = completed.root().join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&selection)?;
         let summary = inspect_installation(completed.root(), context)?.ok_or("Settings absent")?;
         assert!(summary.selection == choices(temporary.path()));
@@ -120,18 +120,23 @@ fn stable_entry_recovery_ignores_unknown_completed_folders_without_selecting_a_p
 }
 
 #[test]
-fn quarantined_configuration_recovery_preserves_unknown_links_and_conflicting_package_binding()
+fn quarantined_configuration_recovery_preserves_unknown_entries_and_conflicting_package_binding()
 -> TestResult {
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
         let temporary = tempfile::tempdir()?;
         let completed = quarantine(temporary.path(), context)?;
         let root = completed.root();
-        let link = root.join("SugarSubstitute.lnk");
-        let original = std::fs::read(&link)?;
-        std::fs::write(&link, b"edited shortcut")?;
+        let entry = root.join("SugarSubstitute.exe");
+        let original = std::fs::read(&entry)?;
+        std::fs::remove_file(&entry)?;
+        std::fs::write(&entry, b"unowned executable")?;
         assert!(inspect_installation(root, context).is_err());
-        assert_eq!(std::fs::read(&link)?, b"edited shortcut");
-        std::fs::write(&link, original)?;
+        assert_eq!(std::fs::read(&entry)?, b"unowned executable");
+        std::fs::remove_file(&entry)?;
+        crate::durable_storage::protection::with(context, |protection| {
+            use std::io::Write as _;
+            protection.file(&entry, context)?.write_all(&original)
+        })?;
         let ready = completed.directory().join("installation-ready.json");
         let mut record: serde_json::Value = serde_json::from_slice(&std::fs::read(&ready)?)?;
         record["bundle_sha256"] = serde_json::json!("f".repeat(64));
@@ -149,14 +154,12 @@ fn missing_owned_shell_entries_do_not_hide_quarantined_first_installation_settin
         let temporary = tempfile::tempdir()?;
         let completed = quarantine(temporary.path(), context)?;
         let root = completed.root();
-        std::fs::remove_file(root.join("SugarSubstitute.lnk"))?;
-        std::fs::remove_file(root.join("sugarsubstitute-launcher.exe"))?;
+        std::fs::remove_file(root.join("SugarSubstitute.exe"))?;
         let summary = inspect_installation(root, context)?.ok_or("Settings absent")?;
         assert!(summary.selection == choices(temporary.path()));
         assert!(summary.launch_entry_missing);
         assert!(InstalledCandidate::reopen(root, context)?.is_none());
-        assert!(!root.join("SugarSubstitute.lnk").exists());
-        assert!(!root.join("sugarsubstitute-launcher.exe").exists());
+        assert!(!root.join("SugarSubstitute.exe").exists());
         Ok(())
     })
 }
@@ -180,7 +183,7 @@ fn stable_launcher_source_does_not_choose_between_conflicting_unaccepted_setting
         let configuration = first.directory().join("startup.local.toml");
         let changed = b"schema_version = 1\n# Preserved user alternative\n";
         std::fs::write(&configuration, changed)?;
-        let link = root.join("SugarSubstitute.lnk");
+        let link = root.join("SugarSubstitute.exe");
         let original = std::fs::read(&link)?;
         let failure = match inspect_installation(root, context) {
             Err(cause) => cause,

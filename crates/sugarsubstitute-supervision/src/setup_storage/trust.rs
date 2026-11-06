@@ -46,7 +46,10 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_update::{MetadataSet, RepositoryTrust, VerifiedOffer};
 
-const DIRECTORY: &str = ".update-trust";
+/// Protected update trust inside the installation state folder.
+pub(super) const DIRECTORY: &str = "update-trust";
+/// Immutable trust continuity marker beside the trust directory in the state folder.
+pub(super) const CONTINUITY_MARKER: &str = "update-trust-enabled";
 const RECORD: &str = "checkpoint";
 const LOCK: &str = "writer";
 const WORK_BYTES: u64 = 128 * 1024 * 1024;

@@ -21,20 +21,18 @@ impl SelectionStore {
         }
         let bytes = initial.encode()?;
         let (installation, ownership, memory) = Self::installation(installation_root, context)?;
+        let state = super::super::ownership::state(&installation)?;
         let (root, marker) = protection::with_domain(context, |protection| {
             let _transition = namespace::transition(&installation, protection, context)?;
             for leaf in [DIRECTORY, NAMESPACE_MARKER] {
-                match crate::durable_storage::files::inspect(
-                    installation.path().join(leaf),
-                    context,
-                ) {
+                match crate::durable_storage::files::inspect(state.path().join(leaf), context) {
                     Ok(_) => return Err(SelectionFailure::Changed),
                     Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
                     Err(cause) => return Err(cause.into()),
                 }
             }
             let (stage, identity) = protection::with(context, |owner| {
-                let path = staging::unique_path(&installation, ".selection-init")?;
+                let path = staging::unique_path(&state, ".selection-init")?;
                 owner.directory(&path, Mode::CreateNew, context)?;
                 let root = Directory::open(&path, false)?;
                 files::sync(&owner.file(&path.join(LOCK), context)?, context)?;
@@ -44,7 +42,7 @@ impl SelectionStore {
                 check(context)?;
                 Ok((path, root.identity()?))
             })?;
-            let destination = installation.path().join(DIRECTORY);
+            let destination = state.path().join(DIRECTORY);
             protection::with(context, |owner| {
                 owner.publish(
                     &stage,

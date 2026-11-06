@@ -142,7 +142,7 @@ impl Fixture {
                             .as_ref()
                             .ok_or("Installed result absent")?
                             .root()
-                            .join("sugarsubstitute-launcher.exe"),
+                            .join(sugarsubstitute_configuration::layout::ENTRY),
                     );
                     return Ok(HeadlessStep::Shutdown);
                 }

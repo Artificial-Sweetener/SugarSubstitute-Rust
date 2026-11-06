@@ -5,6 +5,7 @@ use super::{
     EnvironmentOverride, LaunchEnvironment, LaunchEnvironmentError, MAX_UNITS, MAX_VARIABLES,
     entries,
 };
+use crate::setup_storage::BackendStorage;
 use std::{os::windows::ffi::OsStrExt, path::Path};
 use sugarsubstitute_contracts::configuration::LaunchConfiguration;
 
@@ -17,13 +18,23 @@ impl LaunchEnvironment {
     /// private marker has a fixed name/value and suppresses TTS startup installation.
     /// Explicit `--enable-manager` adds Comfy's root and Manager environment defaults;
     /// an unprobed pygit2 backend is removed. This performs no detection or installation.
+    /// External ComfyUI keeps captured storage settings. Installation-owned storage requires
+    /// opaque authority from the verified running installation and provisioning owner.
     /// Ordinary/private snapshot validation and all native block limits still apply.
     /// # Errors
     /// Preserves malformed snapshot, invalid path, ordinal, allocation and bound causes.
     pub fn for_managed_backend(
         snapshot: &[u16],
         configuration: &LaunchConfiguration,
+        storage: BackendStorage<'_>,
     ) -> Result<Self> {
+        let local = match storage {
+            BackendStorage::External => Self::from_snapshot_utf16(snapshot, &[])?,
+            BackendStorage::InstallationOwned(owned) => {
+                Self::for_local_storage(snapshot, owned.directory())?
+            }
+        };
+        let snapshot = local.as_utf16();
         entries::preflight(snapshot, &[])?;
         let initial = entries::merge(snapshot, &[])?;
         let path_name = wide("PATH")?;
@@ -103,7 +114,7 @@ fn wide(text: &str) -> Result<Vec<u16>> {
 }
 
 /// Reuse the native cwd owner's equivalent operational path spelling.
-fn operational(path: &Path) -> Result<Vec<u16>> {
+pub(super) fn operational(path: &Path) -> Result<Vec<u16>> {
     let mut units = Vec::new();
     units
         .try_reserve_exact(path.as_os_str().encode_wide().count())

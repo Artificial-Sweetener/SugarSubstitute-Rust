@@ -149,8 +149,8 @@ fn foreign_engine_request_is_rejected_before_initializing_update_state() -> Test
         let mut signed = SignedPackage::new(&fixture.archive, 1)?;
         signed.request.component = sugarsubstitute_contracts::update::Component::Updater;
         assert!(fixture.import(signed, context).is_err());
-        assert!(!fixture.installation.path().join(".selection-state").exists());
-        assert!(!fixture.installation.path().join(".update-trust").exists());
+        assert!(!fixture.installation.path().join("state/selection").exists());
+        assert!(!fixture.installation.path().join("state/update-trust").exists());
         fixture.preserved()
     })
 }

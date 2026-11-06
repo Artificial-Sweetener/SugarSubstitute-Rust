@@ -50,7 +50,7 @@ impl Publication {
         decision: Decision,
     ) -> Result<(), sugarsubstitute_contracts::execution::AdmissionError> {
         self.job = Some(client.submit_blocking(scope, spec, move |context| {
-            if let RunningApplication::Trial(trial) = application.as_ref() {
+            if let Some(trial) = application.trial() {
                 let record = match decision {
                     Decision::Accept => trial.accept(&context),
                     Decision::FinishSettled => trial.finish_settled(&context),

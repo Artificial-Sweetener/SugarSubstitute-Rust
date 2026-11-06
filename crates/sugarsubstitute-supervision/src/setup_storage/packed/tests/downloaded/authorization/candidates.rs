@@ -136,7 +136,7 @@ fn selection_publication_failure_preserves_old_record_and_allows_clean_retry() -
     run(1, |case| {
         let store = SelectionStore::open(case.directory.path(), case.context)?;
         let before = store.load(case.context)?;
-        let protected = Directory::open(&case.directory.path().join(".selection-state"), false)?;
+        let protected = Directory::open(&case.directory.path().join("state/selection"), false)?;
         let pinned = protected.read(".substitute-selection.json")?;
         assert!(
             case.prepared

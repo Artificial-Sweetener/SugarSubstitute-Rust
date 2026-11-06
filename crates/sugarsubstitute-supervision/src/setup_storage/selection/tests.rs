@@ -11,8 +11,9 @@ pub(super) type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
 
 pub(super) fn root() -> Result<tempfile::TempDir, Box<dyn Error + Send + Sync>> {
     let root = tempfile::tempdir()?;
+    std::fs::create_dir(root.path().join("state"))?;
     std::fs::write(
-        root.path().join(".substitute-installation.json"),
+        root.path().join("state/installation.json"),
         br#"{"schema_version":1,"product":"SugarSubstitute"}"#,
     )?;
     Ok(root)
@@ -107,7 +108,7 @@ fn writer_exclusion_is_os_backed_and_a_leftover_lock_file_is_not_a_lockout() -> 
         assert!(matches!(second.load(context), Err(SelectionFailure::WriterBusy)));
         drop(held);
         assert_eq!(second.load(context)?, Some(initial()?));
-        assert!(root.path().join(DIRECTORY).join(LOCK).exists());
+        assert!(root.path().join("state").join(DIRECTORY).join(LOCK).exists());
         assert_eq!(first.load(context)?, Some(initial()?));
         Ok(())
     })
@@ -118,7 +119,7 @@ fn ownership_marker_cannot_be_replaced_or_modified_while_store_is_open() -> Test
     worker::run(|context, _| {
         let root = root()?;
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
-        let marker = root.path().join(".substitute-installation.json");
+        let marker = root.path().join("state/installation.json");
         let original = std::fs::read(&marker)?;
         assert!(std::fs::write(&marker, b"changed").is_err());
         assert!(std::fs::remove_file(&marker).is_err());
@@ -142,10 +143,13 @@ fn invalid_unknown_and_foreign_records_are_preserved_without_reinitialization() 
                 value["schema_version"] = 99.into();
                 serde_json::to_vec(&value)?
             };
-            std::fs::write(root.path().join(DIRECTORY).join(RECORD), &bytes)?;
+            std::fs::write(root.path().join("state").join(DIRECTORY).join(RECORD), &bytes)?;
             assert!(store.load(context).is_err());
             assert!(SelectionStore::initialize(root.path(), &initial, context).is_err());
-            assert_eq!(std::fs::read(root.path().join(DIRECTORY).join(RECORD))?, bytes);
+            assert_eq!(
+                std::fs::read(root.path().join("state").join(DIRECTORY).join(RECORD))?,
+                bytes
+            );
         }
         Ok(())
     })
@@ -193,7 +197,9 @@ fn expired_operation_preserves_accepted_record() -> TestResult {
             Err(SelectionFailure::Storage(_))
         ));
         assert_eq!(
-            InstallationRecord::decode(&std::fs::read(root.path().join(DIRECTORY).join(RECORD))?)?,
+            InstallationRecord::decode(&std::fs::read(
+                root.path().join("state").join(DIRECTORY).join(RECORD)
+            )?)?,
             initial
         );
         Ok(())
@@ -204,7 +210,7 @@ fn expired_operation_preserves_accepted_record() -> TestResult {
 fn unprotected_namespace_and_earlier_selection_are_preserved_without_adoption() -> TestResult {
     worker::run(|context, _| {
         let root = root()?;
-        let directory = root.path().join(DIRECTORY);
+        let directory = root.path().join("state").join(DIRECTORY);
         std::fs::create_dir(&directory)?;
         std::fs::write(directory.join(RECORD), initial()?.encode()?)?;
         assert!(SelectionStore::open(root.path(), context).is_err());
@@ -212,7 +218,7 @@ fn unprotected_namespace_and_earlier_selection_are_preserved_without_adoption() 
         let earlier = super::tests::root()?;
         std::fs::write(earlier.path().join(RECORD), initial()?.encode()?)?;
         assert!(SelectionStore::open(earlier.path(), context).is_err());
-        assert!(!earlier.path().join(DIRECTORY).exists());
+        assert!(!earlier.path().join("state").join(DIRECTORY).exists());
         assert_eq!(std::fs::read(earlier.path().join(RECORD))?, initial()?.encode()?);
         Ok(())
     })
