@@ -19,12 +19,62 @@ from __future__ import annotations
 
 import json
 import os
+import stat
+from enum import Enum
 from pathlib import Path
 from uuid import uuid4
 
 _CONFIG_DIRECTORY = ".substitute"
 _CONFIG_FILE = "model_root.json"
 _SCHEMA_VERSION = 1
+_PRESERVED_RECORD_MAX_BYTES = 256 * 1024
+
+
+class ModelRootSelectionSource(str, Enum):
+    """Identify the authoritative record considered by a preservation read."""
+
+    CURRENT = "current"
+    LEGACY = "legacy"
+
+
+class ModelRootSelectionFailure(str, Enum):
+    """Classify preservation refusal without disclosing configuration bytes."""
+
+    UNSUPPORTED_SCHEMA = "unsupported_schema"
+    CORRUPT = "corrupt"
+    CONFLICT = "conflict"
+    UNREADABLE = "unreadable"
+
+
+class ModelRootSelectionError(ValueError):
+    """Retain a failed record's identity and chain its original decoding or IO cause."""
+
+    def __init__(
+        self,
+        reason: ModelRootSelectionFailure,
+        source: ModelRootSelectionSource,
+        path: Path,
+    ) -> None:
+        """Expose typed refusal metadata without putting user paths or bytes in the message."""
+        super().__init__(
+            f"Preserved {source.value} model-root selection is {reason.value}."
+        )
+        self.reason = reason
+        self.source = source
+        self.path = path
+
+
+class _RecordError(ValueError):
+    """Share codec rejection classification with existing configuration consumers."""
+
+    def __init__(self, reason: ModelRootSelectionFailure, message: str) -> None:
+        """Preserve established configuration diagnostics and attach a machine reason."""
+        super().__init__(message)
+        self.reason = reason
+
+
+class _RootConflict(ValueError):
+    """Distinguish an existing nondirectory from malformed configured path text."""
 
 
 class ModelRootStore:
@@ -35,6 +85,9 @@ class ModelRootStore:
 
         self._comfy_root = comfy_root.resolve()
         self._config_path = self._comfy_root / _CONFIG_DIRECTORY / _CONFIG_FILE
+        self._legacy_path = (
+            self._comfy_root / _CONFIG_DIRECTORY / "managed_model_root.json"
+        )
 
     @property
     def config_path(self) -> Path:
@@ -52,15 +105,127 @@ class ModelRootStore:
 
         if not self._config_path.exists():
             return None
-        payload = json.loads(self._config_path.read_text(encoding="utf-8"))
-        if (
-            not isinstance(payload, dict)
-            or payload.get("schemaVersion") != _SCHEMA_VERSION
-        ):
-            raise ValueError("Unsupported model-root configuration schema.")
-        value = payload.get("modelRoot")
+        return self._read_record(self._config_path, ModelRootSelectionSource.CURRENT)
+
+    def read_preserved_selection(self) -> Path | None:
+        """Read current or legacy intent without writing, creating, renaming or migrating.
+
+        Current presence is authoritative. A valid current record returns immediately,
+        without reading even corrupt or conflicting legacy state; an invalid current
+        record never falls back. Only when current is absent is legacy considered.
+        ``None`` means both records are absent, so the caller may use ``default_root``.
+        Path validation stays with ``resolve_custom_root``. This read grants no native
+        file custody; the caller retains ownership and preservation of original bytes.
+        Each selected record is limited to 256 KiB of encoded UTF-8 JSON before decode,
+        including when the file grows after inspection. This accommodates a maximum
+        Windows path even when JSON escapes every UTF-16 code unit.
+
+        Raises:
+            ModelRootSelectionError: A selected record has an unsupported schema,
+                corrupt contents, unreadable storage or a filesystem conflict. The
+                original cause is chained and original files remain untouched.
+        """
+        current = self._read_preserved_record(
+            self._config_path, ModelRootSelectionSource.CURRENT
+        )
+        if current is not None:
+            return current
+        return self._read_preserved_record(
+            self._legacy_path, ModelRootSelectionSource.LEGACY
+        )
+
+    def _read_preserved_record(
+        self, path: Path, source: ModelRootSelectionSource
+    ) -> Path | None:
+        """Separate genuine absence from selected-record failures before decoding."""
+        try:
+            if not self._record_present(path):
+                return None
+            if not stat.S_ISREG(path.stat().st_mode):
+                raise _RootConflict("Model-root configuration must be a regular file.")
+            with path.open("rb") as record:
+                contents = record.read(_PRESERVED_RECORD_MAX_BYTES + 1)
+            if len(contents) > _PRESERVED_RECORD_MAX_BYTES:
+                raise _RecordError(
+                    ModelRootSelectionFailure.CORRUPT,
+                    "Preserved model-root configuration exceeds 256 KiB.",
+                )
+            return self._decode_record(contents.decode("utf-8"), source)
+        except _RecordError as error:
+            raise ModelRootSelectionError(error.reason, source, path) from error
+        except RecursionError as error:
+            raise ModelRootSelectionError(
+                ModelRootSelectionFailure.CORRUPT, source, path
+            ) from error
+        except (_RootConflict, NotADirectoryError, RuntimeError) as error:
+            raise ModelRootSelectionError(
+                ModelRootSelectionFailure.CONFLICT, source, path
+            ) from error
+        except ValueError as error:
+            raise ModelRootSelectionError(
+                ModelRootSelectionFailure.CORRUPT, source, path
+            ) from error
+        except OSError as error:
+            raise ModelRootSelectionError(
+                ModelRootSelectionFailure.UNREADABLE, source, path
+            ) from error
+
+    def _record_present(self, path: Path) -> bool:
+        """Distinguish absent records from colliding namespaces and broken selected links."""
+        try:
+            root = self._comfy_root.stat()
+        except FileNotFoundError:
+            return False
+        if not stat.S_ISDIR(root.st_mode):
+            raise _RootConflict("The Comfy configuration root must be a directory.")
+        try:
+            path.parent.lstat()
+        except FileNotFoundError:
+            return False
+        if not stat.S_ISDIR(path.parent.stat().st_mode):
+            raise _RootConflict(
+                "The model-root configuration namespace must be a directory."
+            )
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            return False
+        return True
+
+    def _read_record(self, path: Path, source: ModelRootSelectionSource) -> Path:
+        """Retain established loading behavior while sharing the authoritative codec."""
+        return self._decode_record(path.read_text(encoding="utf-8"), source)
+
+    def _decode_record(self, contents: str, source: ModelRootSelectionSource) -> Path:
+        """Decode both historical spellings through the one model-root path owner."""
+        legacy = source is ModelRootSelectionSource.LEGACY
+        schema_key, root_key = (
+            ("schema_version", "model_root")
+            if legacy
+            else ("schemaVersion", "modelRoot")
+        )
+        unsupported = (
+            "Unsupported legacy model-root configuration."
+            if legacy
+            else "Unsupported model-root configuration schema."
+        )
+        payload: object = json.loads(contents)
+        if not isinstance(payload, dict):
+            raise _RecordError(ModelRootSelectionFailure.CORRUPT, unsupported)
+        if payload.get(schema_key) != _SCHEMA_VERSION:
+            raise _RecordError(
+                ModelRootSelectionFailure.UNSUPPORTED_SCHEMA, unsupported
+            )
+        value: object = payload.get(root_key)
         if not isinstance(value, str) or not value.strip():
-            raise ValueError("Model-root configuration does not contain a path.")
+            raise _RecordError(
+                ModelRootSelectionFailure.CORRUPT,
+                (
+                    "Legacy model-root configuration is invalid."
+                    if legacy
+                    else "Model-root configuration does not contain a path."
+                ),
+            )
         return self.resolve_custom_root(value)
 
     def save(self, model_root: Path | None) -> Path | None:
@@ -106,22 +271,16 @@ class ModelRootStore:
             raise ValueError("Model root must be an absolute path.")
         resolved = expanded.resolve()
         if resolved.exists() and not resolved.is_dir():
-            raise ValueError("Model root must be a directory.")
+            raise _RootConflict("Model root must be a directory.")
         return resolved
 
     def migrate_legacy(self) -> None:
         """Adopt historical desktop state while retaining recoverable original bytes."""
-        legacy = self._comfy_root / _CONFIG_DIRECTORY / "managed_model_root.json"
+        legacy = self._legacy_path
         if not legacy.exists():
             return
         if not self._config_path.exists():
-            payload: object = json.loads(legacy.read_text(encoding="utf-8"))
-            if not isinstance(payload, dict) or payload.get("schema_version") != 1:
-                raise ValueError("Unsupported legacy model-root configuration.")
-            value: object = payload.get("model_root")
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError("Legacy model-root configuration is invalid.")
-            self.save(self.resolve_custom_root(value))
+            self.save(self._read_record(legacy, ModelRootSelectionSource.LEGACY))
         self.load()
         backup = legacy.with_name(f"{legacy.name}.migrated-{uuid4().hex}")
         os.replace(legacy, backup)
@@ -136,4 +295,9 @@ class ModelRootStore:
             directory.rmdir()
 
 
-__all__ = ["ModelRootStore"]
+__all__ = [
+    "ModelRootStore",
+    "ModelRootSelectionError",
+    "ModelRootSelectionFailure",
+    "ModelRootSelectionSource",
+]
