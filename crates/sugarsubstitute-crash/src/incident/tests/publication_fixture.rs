@@ -37,11 +37,18 @@ impl CompletionWake for Wake {
 pub(in crate::incident) fn admitted(
     work: impl FnOnce(JobContext) -> TestResult + Send + 'static,
 ) -> TestResult {
+    admitted_bytes(DIAGNOSTIC_STORAGE_BYTES, work)
+}
+/// Admit independently budgeted passive-history tests without changing existing native budgets.
+pub(in crate::incident) fn admitted_bytes(
+    bytes: u64,
+    work: impl FnOnce(JobContext) -> TestResult + Send + 'static,
+) -> TestResult {
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(Arc::new(TestClock), wake.clone())?;
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-    run_job(&client, &scope, &wake, 1, work)?;
+    run_job(&client, &scope, &wake, 1, bytes, work)?;
     drop(owner);
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
@@ -57,8 +64,10 @@ pub(super) fn admitted_handoff<T: Send + 'static>(
     let client = owner.client();
     let first = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let second = client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
-    let retained = run_job(&client, &first, &wake, 1, prepare)?;
-    run_job(&client, &second, &wake, 2, move |context| consume(context, retained))?;
+    let retained = run_job(&client, &first, &wake, 1, DIAGNOSTIC_STORAGE_BYTES, prepare)?;
+    run_job(&client, &second, &wake, 2, DIAGNOSTIC_STORAGE_BYTES, move |context| {
+        consume(context, retained)
+    })?;
     drop(owner);
     assert_eq!(first.snapshot().reserved_bytes, 0);
     assert_eq!(second.snapshot().reserved_bytes, 0);
@@ -69,6 +78,7 @@ fn run_job<T: Send + 'static>(
     scope: &Scope,
     wake: &Wake,
     id: u64,
+    bytes: u64,
     work: impl FnOnce(JobContext) -> Result<T, TestError> + Send + 'static,
 ) -> Result<T, TestError> {
     let mut job = client.submit_blocking(
@@ -78,7 +88,7 @@ fn run_job<T: Send + 'static>(
             operation: Operation::NativeLifecycle,
             class: JobClass::InfrastructureLifecycle,
             deadline: Some(Moment::from_nanos(100)),
-            reservation_bytes: DIAGNOSTIC_STORAGE_BYTES,
+            reservation_bytes: bytes,
             replacement: None,
         },
         work,
