@@ -210,7 +210,7 @@ test('uses existing replay protection for a limited host discovery without layer
     session,
     requestId: 1,
     type: 'surface.capabilities.request',
-    schema: 1,
+    schema: 2,
   } as const;
   server.receive(request);
   await Promise.resolve();
@@ -223,7 +223,7 @@ test('uses existing replay protection for a limited host discovery without layer
   server.receive(request);
   expect(replies).toHaveLength(2);
   expect(insert).not.toHaveBeenCalled();
-  expect(server.receive({ ...request, schema: 2 })).toBe(false);
+  expect(server.receive({ ...request, schema: 3 })).toBe(false);
   server.dispose();
 });
 
@@ -263,7 +263,7 @@ test('synchronous transport refusal stops its deadline, never retries and permit
 });
 
 test.each([
-  { schema: 2 },
+  { schema: 3 },
   { other: true },
   { imageFormats: ['unknown'] },
   { imageFormats: ['png', 'png', 'png', 'png'] },
@@ -279,7 +279,7 @@ test.each([
     session,
     requestId: 1,
     type: 'surface.capabilities.request',
-    schema: 1,
+    schema: 2,
   } as const;
   expect(
     isCanvasMessage({

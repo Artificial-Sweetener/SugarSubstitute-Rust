@@ -202,6 +202,8 @@ export function rustProperty(
     const hasMinimum = node.minimum !== undefined;
     const hasExclusive = node.exclusiveMinimum !== undefined;
     if (hasMinimum === hasExclusive) throw new Error('Rust contract number needs one lower bound.');
+    if (node.minimum === -Number.MAX_VALUE && node.maximum === Number.MAX_VALUE)
+      return { type: 'f64', valid: [`${access}.is_finite()`] };
     const lower = literal(hasMinimum ? node.minimum : node.exclusiveMinimum);
     const upper = literal(node.maximum);
     return {

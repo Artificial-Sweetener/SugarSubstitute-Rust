@@ -72,6 +72,7 @@ export class CanvasServer {
   readonly #entries = new Map<number, Entry>();
   #highest = 0;
   #disposed = false;
+  #surfaceSchemaRejected = false;
   #retainedCharacters = 0;
   readonly #sourceChanges: CanvasChangeRelay<CanvasSourceChange>;
   readonly #presentationChanges: CanvasChangeRelay<CanvasSurfacePresentationChange>;
@@ -209,11 +210,13 @@ export class CanvasServer {
     this.#retainedCharacters += retained;
     this.#entries.set(value.requestId, entry);
     if (value.type === 'context.request') void this.#context(value.requestId, entry);
-    else if (value.type === 'surface.capabilities.request')
+    else if (value.type === 'surface.capabilities.request') {
+      this.#surfaceSchemaRejected =
+        value.schema !== 2 || this.port.surface?.capabilities.schema !== 2;
       void dispatchCanvasSurfaceDiscovery(value, entry.cancellation, this.port).then((reply) => {
         this.#reply(entry, reply);
       });
-    else if (value.type === 'surface.presentation.request') void this.#presentation(value, entry);
+    } else if (value.type === 'surface.presentation.request') void this.#presentation(value, entry);
     else if (value.type === 'geometry.request') void this.#geometry(value, entry);
     else if (value.type === 'source.request') void this.#source(value, entry);
     else if (value.type === 'image.insert') void this.#insert(value, entry);
@@ -222,6 +225,22 @@ export class CanvasServer {
   }
   /** Reuse the session's replay, admission and cancellation owner for surface operations. */
   async #surface(request: CanvasSurfaceRequest, entry: Entry): Promise<void> {
+    if (
+      this.#surfaceSchemaRejected &&
+      request.type !== 'surface.release' &&
+      request.type !== 'surface.preview.withdraw'
+    ) {
+      this.#reply(entry, {
+        ...this.#envelope(request.requestId),
+        type: 'surface.reply',
+        address: request.address,
+        revision: request.revision,
+        status: 'unavailable',
+        message:
+          'Native surface schema 2 is required. Update SugarCubes and its native host together.',
+      });
+      return;
+    }
     if (
       isCanvasPreviewCommand(request) &&
       request.type !== 'surface.preview.withdraw' &&

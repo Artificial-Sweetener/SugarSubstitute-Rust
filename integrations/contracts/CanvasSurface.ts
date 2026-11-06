@@ -106,13 +106,18 @@ export interface CanvasSurfaceHost {
    * the current scale around the viewport center; native centers physical 1:1. Pan uses
    * viewport fractions. Successful viewport replies describe the settled camera represented
    * by an accepted native frame. Empty or hidden surfaces return unavailable without a snapshot.
-   * Inspection requires the declared `inspect` viewport command. Its `center` is the image point
-   * at the viewport center, normalized to 0..1 of the image; its `span` is the normalized image
-   * distance per physical display pixel on each axis, independent of viewport size. A selection
-   * carrying an inspection presents its first frame at that camera, and the inspect command
-   * applies one to the shown image, both immediately without animation; the host contains the
-   * span across differing aspect ratios and applies its ordinary scale and pan bounds. Such a
-   * host reports `center` in every viewport state.
+   * Native surface discovery uses schema 2 within canvas protocol version 3. Schema 1 is
+   * recognized only to return an unsupported discovery result; matching host and client
+   * upgrades are required before any surface mutation. Camera notifications use schema 2;
+   * presentation observation retains its independent schema 1.
+   * Inspection requires the declared `inspect` viewport command. Its finite `center` is the
+   * image-relative point at the viewport center and can lie outside the image on either axis.
+   * Its positive `span` is normalized image distance per physical display pixel, independent
+   * of viewport size. A selection carrying an inspection presents its first frame at that
+   * camera; inspect applies one immediately without animation. The host contains differing
+   * axis spans, preserves the center and representable scale without interactive pan/zoom
+   * clamping, and reports the actual accepted center in every viewport state. Unrepresentable
+   * transforms fail without replacing the preceding camera or authored document.
    * Preview begin/chunk/end acknowledgements transfer bounded byte custody only. Each step
    * releases its request; preparation and native acceptance arrive through presentation.
    * The encoded transfer ceiling is 64 MiB, with independent stricter host memory/decoder
