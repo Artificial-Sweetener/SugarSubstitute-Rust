@@ -1,0 +1,5638 @@
+{
+  "schemaSha256": "c4360598ca4ef8f9eb7dea33b1bfdf17f0fdc53f1737a0c73b21866a3947e34d",
+  "shapes": [
+    {
+      "name": "SessionScope",
+      "base": {
+        "installation": "",
+        "profile": "",
+        "workspace": "",
+        "backend": ""
+      },
+      "probes": [
+        {
+          "field": "installation",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "installation",
+          "kind": "string",
+          "value": 32,
+          "valid": true
+        },
+        {
+          "field": "installation",
+          "kind": "string",
+          "value": 33,
+          "valid": false
+        },
+        {
+          "field": "profile",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "profile",
+          "kind": "string",
+          "value": 64,
+          "valid": true
+        },
+        {
+          "field": "profile",
+          "kind": "string",
+          "value": 65,
+          "valid": false
+        },
+        {
+          "field": "workspace",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "workspace",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "workspace",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "backend",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "backend",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "backend",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionSource",
+      "base": {
+        "id": "",
+        "nodeId": "",
+        "executionPath": "",
+        "label": "",
+        "graphRevision": 0
+      },
+      "probes": [
+        {
+          "field": "id",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "nodeId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "nodeId",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "nodeId",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "executionPath",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "executionPath",
+          "kind": "string",
+          "value": 4096,
+          "valid": true
+        },
+        {
+          "field": "executionPath",
+          "kind": "string",
+          "value": 4097,
+          "valid": false
+        },
+        {
+          "field": "label",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "label",
+          "kind": "string",
+          "value": 4096,
+          "valid": true
+        },
+        {
+          "field": "label",
+          "kind": "string",
+          "value": 4097,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionScene",
+      "base": {
+        "groupId": "",
+        "sceneId": "",
+        "order": 0,
+        "count": 1,
+        "title": ""
+      },
+      "probes": [
+        {
+          "field": "groupId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "groupId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "groupId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "sceneId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sceneId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "sceneId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "order",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "order",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "order",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "order",
+          "kind": "literal",
+          "value": 8191,
+          "valid": true
+        },
+        {
+          "field": "order",
+          "kind": "literal",
+          "value": 8192,
+          "valid": false
+        },
+        {
+          "field": "order",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "count",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "count",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "count",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "count",
+          "kind": "literal",
+          "value": 8192,
+          "valid": true
+        },
+        {
+          "field": "count",
+          "kind": "literal",
+          "value": 8193,
+          "valid": false
+        },
+        {
+          "field": "count",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "title",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "title",
+          "kind": "string",
+          "value": 4096,
+          "valid": true
+        },
+        {
+          "field": "title",
+          "kind": "string",
+          "value": 4097,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionFile",
+      "base": {
+        "storage": "output",
+        "filename": "",
+        "subfolder": "",
+        "managedArtifact": ""
+      },
+      "probes": [
+        {
+          "field": "storage",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "storage",
+          "kind": "literal",
+          "value": "output",
+          "valid": true
+        },
+        {
+          "field": "storage",
+          "kind": "literal",
+          "value": "input",
+          "valid": true
+        },
+        {
+          "field": "storage",
+          "kind": "literal",
+          "value": "temp",
+          "valid": true
+        },
+        {
+          "field": "storage",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "filename",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "filename",
+          "kind": "string",
+          "value": 255,
+          "valid": true
+        },
+        {
+          "field": "filename",
+          "kind": "string",
+          "value": 256,
+          "valid": false
+        },
+        {
+          "field": "subfolder",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "subfolder",
+          "kind": "string",
+          "value": 4096,
+          "valid": true
+        },
+        {
+          "field": "subfolder",
+          "kind": "string",
+          "value": 4097,
+          "valid": false
+        },
+        {
+          "field": "managedArtifact",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "managedArtifact",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "managedArtifact",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "managedArtifact",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionAsset",
+      "base": {
+        "version": 1,
+        "digest": "",
+        "bytes": 1,
+        "extension": "png",
+        "media": "image"
+      },
+      "probes": [
+        {
+          "field": "version",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "version",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "digest",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "digest",
+          "kind": "string",
+          "value": 64,
+          "valid": true
+        },
+        {
+          "field": "digest",
+          "kind": "string",
+          "value": 65,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 8589934592,
+          "valid": true
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 8589934593,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "extension",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "extension",
+          "kind": "literal",
+          "value": "png",
+          "valid": true
+        },
+        {
+          "field": "extension",
+          "kind": "literal",
+          "value": "jpg",
+          "valid": true
+        },
+        {
+          "field": "extension",
+          "kind": "literal",
+          "value": "webp",
+          "valid": true
+        },
+        {
+          "field": "extension",
+          "kind": "literal",
+          "value": "gif",
+          "valid": true
+        },
+        {
+          "field": "extension",
+          "kind": "literal",
+          "value": "mp4",
+          "valid": true
+        },
+        {
+          "field": "extension",
+          "kind": "literal",
+          "value": "webm",
+          "valid": true
+        },
+        {
+          "field": "extension",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "media",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "media",
+          "kind": "literal",
+          "value": "image",
+          "valid": true
+        },
+        {
+          "field": "media",
+          "kind": "literal",
+          "value": "video",
+          "valid": true
+        },
+        {
+          "field": "media",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOutput",
+      "base": {
+        "id": "",
+        "entryId": "",
+        "backend": "",
+        "promptId": "",
+        "runId": "",
+        "runOrder": 0,
+        "sourceId": "",
+        "scene": {
+          "groupId": "",
+          "sceneId": "",
+          "order": 0,
+          "count": 1,
+          "title": ""
+        },
+        "listIndex": 0,
+        "batchIndex": 0,
+        "imageIndex": 0,
+        "file": {
+          "storage": "output",
+          "filename": "",
+          "subfolder": "",
+          "managedArtifact": ""
+        },
+        "assetDigest": "",
+        "digest": "",
+        "bytes": 1,
+        "width": 1,
+        "height": 1,
+        "media": "image",
+        "mime": "",
+        "metadataEmbedded": false
+      },
+      "probes": [
+        {
+          "field": "id",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "entryId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "entryId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "entryId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "backend",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "backend",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "backend",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "promptId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "promptId",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "promptId",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "promptId",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "runId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "runId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "runId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "runOrder",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "sourceId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourceId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "sourceId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "scene",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "scene",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "listIndex",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": 8191,
+          "valid": true
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": 8192,
+          "valid": false
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 8191,
+          "valid": true
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 8192,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "imageIndex",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "imageIndex",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "imageIndex",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "imageIndex",
+          "kind": "literal",
+          "value": 8191,
+          "valid": true
+        },
+        {
+          "field": "imageIndex",
+          "kind": "literal",
+          "value": 8192,
+          "valid": false
+        },
+        {
+          "field": "imageIndex",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "file",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "assetDigest",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "assetDigest",
+          "kind": "string",
+          "value": 64,
+          "valid": true
+        },
+        {
+          "field": "assetDigest",
+          "kind": "string",
+          "value": 65,
+          "valid": false
+        },
+        {
+          "field": "assetDigest",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "digest",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "digest",
+          "kind": "string",
+          "value": 64,
+          "valid": true
+        },
+        {
+          "field": "digest",
+          "kind": "string",
+          "value": 65,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 8589934592,
+          "valid": true
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 8589934593,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "width",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 131072,
+          "valid": true
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 131073,
+          "valid": false
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "height",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 131072,
+          "valid": true
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 131073,
+          "valid": false
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "media",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "media",
+          "kind": "literal",
+          "value": "image",
+          "valid": true
+        },
+        {
+          "field": "media",
+          "kind": "literal",
+          "value": "video",
+          "valid": true
+        },
+        {
+          "field": "media",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "mime",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "mime",
+          "kind": "string",
+          "value": 128,
+          "valid": true
+        },
+        {
+          "field": "mime",
+          "kind": "string",
+          "value": 129,
+          "valid": false
+        },
+        {
+          "field": "metadataEmbedded",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionSelection",
+      "base": {
+        "outputId": "",
+        "sourceId": "",
+        "sceneId": "",
+        "batchIndex": 0,
+        "listIndex": 0
+      },
+      "probes": [
+        {
+          "field": "outputId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "outputId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "outputId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "sourceId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourceId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "sourceId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "sceneId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sceneId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "sceneId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "sceneId",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "batchIndex",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 8191,
+          "valid": true
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 8192,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "listIndex",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": 8191,
+          "valid": true
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": 8192,
+          "valid": false
+        },
+        {
+          "field": "listIndex",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionCamera",
+      "base": {
+        "outputId": "",
+        "inspection": {
+          "mode": "fit",
+          "centerX": -1000000,
+          "centerY": -1000000,
+          "spanX": 1e-12,
+          "spanY": 1e-12
+        }
+      },
+      "probes": [
+        {
+          "field": "outputId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "outputId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "outputId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "inspection",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionComparison",
+      "base": {
+        "enabled": false,
+        "selection": {
+          "outputId": "",
+          "sourceId": "",
+          "sceneId": "",
+          "batchIndex": 0,
+          "listIndex": 0
+        },
+        "orientation": "horizontal",
+        "split": 0
+      },
+      "probes": [
+        {
+          "field": "enabled",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "selection",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "selection",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "orientation",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "orientation",
+          "kind": "literal",
+          "value": "horizontal",
+          "valid": true
+        },
+        {
+          "field": "orientation",
+          "kind": "literal",
+          "value": "vertical",
+          "valid": true
+        },
+        {
+          "field": "orientation",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "split",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "split",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "split",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "split",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "split",
+          "kind": "literal",
+          "value": 2,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionView",
+      "base": {
+        "canvasEnabled": false,
+        "masonryEnabled": false,
+        "editorWidth": 0,
+        "route": "input",
+        "follow": "auto",
+        "mode": "image",
+        "linked": false,
+        "selection": {
+          "outputId": "",
+          "sourceId": "",
+          "sceneId": "",
+          "batchIndex": 0,
+          "listIndex": 0
+        },
+        "comparison": {
+          "enabled": false,
+          "selection": {
+            "outputId": "",
+            "sourceId": "",
+            "sceneId": "",
+            "batchIndex": 0,
+            "listIndex": 0
+          },
+          "orientation": "horizontal",
+          "split": 0
+        },
+        "cameras": [],
+        "navigation": {
+          "sceneOverview": false,
+          "sceneId": "",
+          "sourceId": "",
+          "batchIndex": 0,
+          "batchOverview": false
+        },
+        "sourcePreview": false,
+        "sharedInspection": {
+          "mode": "fit",
+          "centerX": -1000000,
+          "centerY": -1000000,
+          "spanX": 1e-12,
+          "spanY": 1e-12
+        }
+      },
+      "probes": [
+        {
+          "field": "canvasEnabled",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "masonryEnabled",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "editorWidth",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "editorWidth",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "editorWidth",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "editorWidth",
+          "kind": "literal",
+          "value": 16384,
+          "valid": true
+        },
+        {
+          "field": "editorWidth",
+          "kind": "literal",
+          "value": 16385,
+          "valid": false
+        },
+        {
+          "field": "editorWidth",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "route",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "route",
+          "kind": "literal",
+          "value": "input",
+          "valid": true
+        },
+        {
+          "field": "route",
+          "kind": "literal",
+          "value": "output",
+          "valid": true
+        },
+        {
+          "field": "route",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "follow",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "follow",
+          "kind": "literal",
+          "value": "auto",
+          "valid": true
+        },
+        {
+          "field": "follow",
+          "kind": "literal",
+          "value": "manual",
+          "valid": true
+        },
+        {
+          "field": "follow",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "mode",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "mode",
+          "kind": "literal",
+          "value": "image",
+          "valid": true
+        },
+        {
+          "field": "mode",
+          "kind": "literal",
+          "value": "overview",
+          "valid": true
+        },
+        {
+          "field": "mode",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "linked",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "selection",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "selection",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "comparison",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "cameras",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "cameras",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "outputId": "",
+            "inspection": {
+              "mode": "fit",
+              "centerX": -1000000,
+              "centerY": -1000000,
+              "spanX": 1e-12,
+              "spanY": 1e-12
+            }
+          },
+          "valid": true
+        },
+        {
+          "field": "cameras",
+          "kind": "array",
+          "value": 8192,
+          "item": {
+            "outputId": "",
+            "inspection": {
+              "mode": "fit",
+              "centerX": -1000000,
+              "centerY": -1000000,
+              "spanX": 1e-12,
+              "spanY": 1e-12
+            }
+          },
+          "valid": true
+        },
+        {
+          "field": "cameras",
+          "kind": "array",
+          "value": 8193,
+          "item": {
+            "outputId": "",
+            "inspection": {
+              "mode": "fit",
+              "centerX": -1000000,
+              "centerY": -1000000,
+              "spanX": 1e-12,
+              "spanY": 1e-12
+            }
+          },
+          "valid": false
+        },
+        {
+          "field": "navigation",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourcePreview",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sharedInspection",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sharedInspection",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionGraphView",
+      "base": {
+        "x": -1000000000,
+        "y": -1000000000,
+        "scale": 1e-6
+      },
+      "probes": [
+        {
+          "field": "x",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "x",
+          "kind": "literal",
+          "value": -1000000001,
+          "valid": false
+        },
+        {
+          "field": "x",
+          "kind": "literal",
+          "value": -1000000000,
+          "valid": true
+        },
+        {
+          "field": "x",
+          "kind": "literal",
+          "value": 1000000000,
+          "valid": true
+        },
+        {
+          "field": "x",
+          "kind": "literal",
+          "value": 1000000001,
+          "valid": false
+        },
+        {
+          "field": "y",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "y",
+          "kind": "literal",
+          "value": -1000000001,
+          "valid": false
+        },
+        {
+          "field": "y",
+          "kind": "literal",
+          "value": -1000000000,
+          "valid": true
+        },
+        {
+          "field": "y",
+          "kind": "literal",
+          "value": 1000000000,
+          "valid": true
+        },
+        {
+          "field": "y",
+          "kind": "literal",
+          "value": 1000000001,
+          "valid": false
+        },
+        {
+          "field": "scale",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "scale",
+          "kind": "literal",
+          "value": -0.999999,
+          "valid": false
+        },
+        {
+          "field": "scale",
+          "kind": "literal",
+          "value": 1e-6,
+          "valid": true
+        },
+        {
+          "field": "scale",
+          "kind": "literal",
+          "value": 1000000,
+          "valid": true
+        },
+        {
+          "field": "scale",
+          "kind": "literal",
+          "value": 1000001,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionDocument",
+      "base": {
+        "graphJson": "",
+        "graphRevision": 0,
+        "path": "",
+        "name": "",
+        "temporary": false,
+        "dirty": false,
+        "sourceIdentity": "",
+        "view": {
+          "x": -1000000000,
+          "y": -1000000000,
+          "scale": 1e-6
+        },
+        "baselineGraphJson": ""
+      },
+      "probes": [
+        {
+          "field": "graphJson",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "graphJson",
+          "kind": "string",
+          "value": 33554432,
+          "valid": true
+        },
+        {
+          "field": "graphJson",
+          "kind": "string",
+          "value": 33554433,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "path",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "path",
+          "kind": "string",
+          "value": 4096,
+          "valid": true
+        },
+        {
+          "field": "path",
+          "kind": "string",
+          "value": 4097,
+          "valid": false
+        },
+        {
+          "field": "path",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "name",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "name",
+          "kind": "string",
+          "value": 4096,
+          "valid": true
+        },
+        {
+          "field": "name",
+          "kind": "string",
+          "value": 4097,
+          "valid": false
+        },
+        {
+          "field": "temporary",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "dirty",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourceIdentity",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourceIdentity",
+          "kind": "string",
+          "value": 4096,
+          "valid": true
+        },
+        {
+          "field": "sourceIdentity",
+          "kind": "string",
+          "value": 4097,
+          "valid": false
+        },
+        {
+          "field": "sourceIdentity",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "view",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "baselineGraphJson",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "baselineGraphJson",
+          "kind": "string",
+          "value": 33554432,
+          "valid": true
+        },
+        {
+          "field": "baselineGraphJson",
+          "kind": "string",
+          "value": 33554433,
+          "valid": false
+        },
+        {
+          "field": "baselineGraphJson",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionInput",
+      "base": {
+        "documentId": "",
+        "generation": 0,
+        "signature": "",
+        "surface": "",
+        "mask": ""
+      },
+      "probes": [
+        {
+          "field": "documentId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "documentId",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "documentId",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "generation",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "signature",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "signature",
+          "kind": "string",
+          "value": 64,
+          "valid": true
+        },
+        {
+          "field": "signature",
+          "kind": "string",
+          "value": 65,
+          "valid": false
+        },
+        {
+          "field": "surface",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "surface",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "surface",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "surface",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "mask",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "mask",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "mask",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "mask",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionSubmission",
+      "base": {
+        "entryId": "",
+        "backend": "",
+        "promptId": "",
+        "runId": "",
+        "runOrder": 0,
+        "graphRevision": 0,
+        "scene": {
+          "groupId": "",
+          "sceneId": "",
+          "order": 0,
+          "count": 1,
+          "title": ""
+        },
+        "sources": [
+          {
+            "id": "",
+            "nodeId": "",
+            "executionPath": "",
+            "label": "",
+            "graphRevision": 0
+          }
+        ]
+      },
+      "probes": [
+        {
+          "field": "entryId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "entryId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "entryId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "backend",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "backend",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "backend",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "promptId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "promptId",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "promptId",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "runId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "runId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "runId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "runOrder",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "runOrder",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "scene",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "scene",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "sources",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sources",
+          "kind": "array",
+          "value": 1,
+          "item": {
+            "id": "",
+            "nodeId": "",
+            "executionPath": "",
+            "label": "",
+            "graphRevision": 0
+          },
+          "valid": true
+        },
+        {
+          "field": "sources",
+          "kind": "array",
+          "value": 8192,
+          "item": {
+            "id": "",
+            "nodeId": "",
+            "executionPath": "",
+            "label": "",
+            "graphRevision": 0
+          },
+          "valid": true
+        },
+        {
+          "field": "sources",
+          "kind": "array",
+          "value": 8193,
+          "item": {
+            "id": "",
+            "nodeId": "",
+            "executionPath": "",
+            "label": "",
+            "graphRevision": 0
+          },
+          "valid": false
+        },
+        {
+          "field": "sources",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "id": "",
+            "nodeId": "",
+            "executionPath": "",
+            "label": "",
+            "graphRevision": 0
+          },
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionEntry",
+      "base": {
+        "id": "",
+        "document": {
+          "graphJson": "",
+          "graphRevision": 0,
+          "path": "",
+          "name": "",
+          "temporary": false,
+          "dirty": false,
+          "sourceIdentity": "",
+          "view": {
+            "x": -1000000000,
+            "y": -1000000000,
+            "scale": 1e-6
+          },
+          "baselineGraphJson": ""
+        },
+        "input": {
+          "documentId": "",
+          "generation": 0,
+          "signature": "",
+          "surface": "",
+          "mask": ""
+        },
+        "view": {
+          "canvasEnabled": false,
+          "masonryEnabled": false,
+          "editorWidth": 0,
+          "route": "input",
+          "follow": "auto",
+          "mode": "image",
+          "linked": false,
+          "selection": {
+            "outputId": "",
+            "sourceId": "",
+            "sceneId": "",
+            "batchIndex": 0,
+            "listIndex": 0
+          },
+          "comparison": {
+            "enabled": false,
+            "selection": {
+              "outputId": "",
+              "sourceId": "",
+              "sceneId": "",
+              "batchIndex": 0,
+              "listIndex": 0
+            },
+            "orientation": "horizontal",
+            "split": 0
+          },
+          "cameras": [],
+          "navigation": {
+            "sceneOverview": false,
+            "sceneId": "",
+            "sourceId": "",
+            "batchIndex": 0,
+            "batchOverview": false
+          },
+          "sourcePreview": false,
+          "sharedInspection": {
+            "mode": "fit",
+            "centerX": -1000000,
+            "centerY": -1000000,
+            "spanX": 1e-12,
+            "spanY": 1e-12
+          }
+        },
+        "sourceRevision": 0,
+        "navigationRevision": 0,
+        "sources": [],
+        "outputs": [],
+        "submissions": []
+      },
+      "probes": [
+        {
+          "field": "id",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "document",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "input",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "input",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "view",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "sources",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sources",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "id": "",
+            "nodeId": "",
+            "executionPath": "",
+            "label": "",
+            "graphRevision": 0
+          },
+          "valid": true
+        },
+        {
+          "field": "sources",
+          "kind": "array",
+          "value": 8192,
+          "item": {
+            "id": "",
+            "nodeId": "",
+            "executionPath": "",
+            "label": "",
+            "graphRevision": 0
+          },
+          "valid": true
+        },
+        {
+          "field": "sources",
+          "kind": "array",
+          "value": 8193,
+          "item": {
+            "id": "",
+            "nodeId": "",
+            "executionPath": "",
+            "label": "",
+            "graphRevision": 0
+          },
+          "valid": false
+        },
+        {
+          "field": "outputs",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "outputs",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "id": "",
+            "entryId": "",
+            "backend": "",
+            "promptId": "",
+            "runId": "",
+            "runOrder": 0,
+            "sourceId": "",
+            "scene": {
+              "groupId": "",
+              "sceneId": "",
+              "order": 0,
+              "count": 1,
+              "title": ""
+            },
+            "listIndex": 0,
+            "batchIndex": 0,
+            "imageIndex": 0,
+            "file": {
+              "storage": "output",
+              "filename": "",
+              "subfolder": "",
+              "managedArtifact": ""
+            },
+            "assetDigest": "",
+            "digest": "",
+            "bytes": 1,
+            "width": 1,
+            "height": 1,
+            "media": "image",
+            "mime": "",
+            "metadataEmbedded": false
+          },
+          "valid": true
+        },
+        {
+          "field": "outputs",
+          "kind": "array",
+          "value": 8192,
+          "item": {
+            "id": "",
+            "entryId": "",
+            "backend": "",
+            "promptId": "",
+            "runId": "",
+            "runOrder": 0,
+            "sourceId": "",
+            "scene": {
+              "groupId": "",
+              "sceneId": "",
+              "order": 0,
+              "count": 1,
+              "title": ""
+            },
+            "listIndex": 0,
+            "batchIndex": 0,
+            "imageIndex": 0,
+            "file": {
+              "storage": "output",
+              "filename": "",
+              "subfolder": "",
+              "managedArtifact": ""
+            },
+            "assetDigest": "",
+            "digest": "",
+            "bytes": 1,
+            "width": 1,
+            "height": 1,
+            "media": "image",
+            "mime": "",
+            "metadataEmbedded": false
+          },
+          "valid": true
+        },
+        {
+          "field": "outputs",
+          "kind": "array",
+          "value": 8193,
+          "item": {
+            "id": "",
+            "entryId": "",
+            "backend": "",
+            "promptId": "",
+            "runId": "",
+            "runOrder": 0,
+            "sourceId": "",
+            "scene": {
+              "groupId": "",
+              "sceneId": "",
+              "order": 0,
+              "count": 1,
+              "title": ""
+            },
+            "listIndex": 0,
+            "batchIndex": 0,
+            "imageIndex": 0,
+            "file": {
+              "storage": "output",
+              "filename": "",
+              "subfolder": "",
+              "managedArtifact": ""
+            },
+            "assetDigest": "",
+            "digest": "",
+            "bytes": 1,
+            "width": 1,
+            "height": 1,
+            "media": "image",
+            "mime": "",
+            "metadataEmbedded": false
+          },
+          "valid": false
+        },
+        {
+          "field": "submissions",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "submissions",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "entryId": "",
+            "backend": "",
+            "promptId": "",
+            "runId": "",
+            "runOrder": 0,
+            "graphRevision": 0,
+            "scene": {
+              "groupId": "",
+              "sceneId": "",
+              "order": 0,
+              "count": 1,
+              "title": ""
+            },
+            "sources": [
+              {
+                "id": "",
+                "nodeId": "",
+                "executionPath": "",
+                "label": "",
+                "graphRevision": 0
+              }
+            ]
+          },
+          "valid": true
+        },
+        {
+          "field": "submissions",
+          "kind": "array",
+          "value": 8192,
+          "item": {
+            "entryId": "",
+            "backend": "",
+            "promptId": "",
+            "runId": "",
+            "runOrder": 0,
+            "graphRevision": 0,
+            "scene": {
+              "groupId": "",
+              "sceneId": "",
+              "order": 0,
+              "count": 1,
+              "title": ""
+            },
+            "sources": [
+              {
+                "id": "",
+                "nodeId": "",
+                "executionPath": "",
+                "label": "",
+                "graphRevision": 0
+              }
+            ]
+          },
+          "valid": true
+        },
+        {
+          "field": "submissions",
+          "kind": "array",
+          "value": 8193,
+          "item": {
+            "entryId": "",
+            "backend": "",
+            "promptId": "",
+            "runId": "",
+            "runOrder": 0,
+            "graphRevision": 0,
+            "scene": {
+              "groupId": "",
+              "sceneId": "",
+              "order": 0,
+              "count": 1,
+              "title": ""
+            },
+            "sources": [
+              {
+                "id": "",
+                "nodeId": "",
+                "executionPath": "",
+                "label": "",
+                "graphRevision": 0
+              }
+            ]
+          },
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionRect",
+      "base": {
+        "x": -1000000,
+        "y": -1000000,
+        "width": 1,
+        "height": 1
+      },
+      "probes": [
+        {
+          "field": "x",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "x",
+          "kind": "literal",
+          "value": -1000001,
+          "valid": false
+        },
+        {
+          "field": "x",
+          "kind": "literal",
+          "value": -1000000,
+          "valid": true
+        },
+        {
+          "field": "x",
+          "kind": "literal",
+          "value": 1000000,
+          "valid": true
+        },
+        {
+          "field": "x",
+          "kind": "literal",
+          "value": 1000001,
+          "valid": false
+        },
+        {
+          "field": "y",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "y",
+          "kind": "literal",
+          "value": -1000001,
+          "valid": false
+        },
+        {
+          "field": "y",
+          "kind": "literal",
+          "value": -1000000,
+          "valid": true
+        },
+        {
+          "field": "y",
+          "kind": "literal",
+          "value": 1000000,
+          "valid": true
+        },
+        {
+          "field": "y",
+          "kind": "literal",
+          "value": 1000001,
+          "valid": false
+        },
+        {
+          "field": "width",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 1000000,
+          "valid": true
+        },
+        {
+          "field": "width",
+          "kind": "literal",
+          "value": 1000001,
+          "valid": false
+        },
+        {
+          "field": "height",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 1000000,
+          "valid": true
+        },
+        {
+          "field": "height",
+          "kind": "literal",
+          "value": 1000001,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionPlacement",
+      "base": {
+        "version": 1,
+        "bounds": {
+          "x": -1000000,
+          "y": -1000000,
+          "width": 1,
+          "height": 1
+        },
+        "maximized": false,
+        "monitor": "",
+        "workArea": {
+          "x": -1000000,
+          "y": -1000000,
+          "width": 1,
+          "height": 1
+        },
+        "dpi": 24
+      },
+      "probes": [
+        {
+          "field": "version",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "version",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "bounds",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "maximized",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "monitor",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "monitor",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "monitor",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "workArea",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "dpi",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "dpi",
+          "kind": "literal",
+          "value": 23,
+          "valid": false
+        },
+        {
+          "field": "dpi",
+          "kind": "literal",
+          "value": 24,
+          "valid": true
+        },
+        {
+          "field": "dpi",
+          "kind": "literal",
+          "value": 960,
+          "valid": true
+        },
+        {
+          "field": "dpi",
+          "kind": "literal",
+          "value": 961,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionCheckpoint",
+      "base": {
+        "version": 1,
+        "id": "",
+        "revision": 0,
+        "previousId": "",
+        "capturedAt": 0,
+        "scope": {
+          "installation": "",
+          "profile": "",
+          "workspace": "",
+          "backend": ""
+        },
+        "producer": "",
+        "frontend": "",
+        "sugarcubes": "",
+        "entries": [],
+        "activeEntry": "",
+        "route": "workflow",
+        "placement": {
+          "version": 1,
+          "bounds": {
+            "x": -1000000,
+            "y": -1000000,
+            "width": 1,
+            "height": 1
+          },
+          "maximized": false,
+          "monitor": "",
+          "workArea": {
+            "x": -1000000,
+            "y": -1000000,
+            "width": 1,
+            "height": 1
+          },
+          "dpi": 24
+        },
+        "assets": []
+      },
+      "probes": [
+        {
+          "field": "version",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "version",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "id",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "previousId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "previousId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "previousId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "previousId",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "capturedAt",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "capturedAt",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "capturedAt",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "capturedAt",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "capturedAt",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "capturedAt",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "scope",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "producer",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "producer",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "producer",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "frontend",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "frontend",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "frontend",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "sugarcubes",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sugarcubes",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "sugarcubes",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "entries",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "entries",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "id": "",
+            "document": {
+              "graphJson": "",
+              "graphRevision": 0,
+              "path": "",
+              "name": "",
+              "temporary": false,
+              "dirty": false,
+              "sourceIdentity": "",
+              "view": {
+                "x": -1000000000,
+                "y": -1000000000,
+                "scale": 1e-6
+              },
+              "baselineGraphJson": ""
+            },
+            "input": {
+              "documentId": "",
+              "generation": 0,
+              "signature": "",
+              "surface": "",
+              "mask": ""
+            },
+            "view": {
+              "canvasEnabled": false,
+              "masonryEnabled": false,
+              "editorWidth": 0,
+              "route": "input",
+              "follow": "auto",
+              "mode": "image",
+              "linked": false,
+              "selection": {
+                "outputId": "",
+                "sourceId": "",
+                "sceneId": "",
+                "batchIndex": 0,
+                "listIndex": 0
+              },
+              "comparison": {
+                "enabled": false,
+                "selection": {
+                  "outputId": "",
+                  "sourceId": "",
+                  "sceneId": "",
+                  "batchIndex": 0,
+                  "listIndex": 0
+                },
+                "orientation": "horizontal",
+                "split": 0
+              },
+              "cameras": [],
+              "navigation": {
+                "sceneOverview": false,
+                "sceneId": "",
+                "sourceId": "",
+                "batchIndex": 0,
+                "batchOverview": false
+              },
+              "sourcePreview": false,
+              "sharedInspection": {
+                "mode": "fit",
+                "centerX": -1000000,
+                "centerY": -1000000,
+                "spanX": 1e-12,
+                "spanY": 1e-12
+              }
+            },
+            "sourceRevision": 0,
+            "navigationRevision": 0,
+            "sources": [],
+            "outputs": [],
+            "submissions": []
+          },
+          "valid": true
+        },
+        {
+          "field": "entries",
+          "kind": "array",
+          "value": 256,
+          "item": {
+            "id": "",
+            "document": {
+              "graphJson": "",
+              "graphRevision": 0,
+              "path": "",
+              "name": "",
+              "temporary": false,
+              "dirty": false,
+              "sourceIdentity": "",
+              "view": {
+                "x": -1000000000,
+                "y": -1000000000,
+                "scale": 1e-6
+              },
+              "baselineGraphJson": ""
+            },
+            "input": {
+              "documentId": "",
+              "generation": 0,
+              "signature": "",
+              "surface": "",
+              "mask": ""
+            },
+            "view": {
+              "canvasEnabled": false,
+              "masonryEnabled": false,
+              "editorWidth": 0,
+              "route": "input",
+              "follow": "auto",
+              "mode": "image",
+              "linked": false,
+              "selection": {
+                "outputId": "",
+                "sourceId": "",
+                "sceneId": "",
+                "batchIndex": 0,
+                "listIndex": 0
+              },
+              "comparison": {
+                "enabled": false,
+                "selection": {
+                  "outputId": "",
+                  "sourceId": "",
+                  "sceneId": "",
+                  "batchIndex": 0,
+                  "listIndex": 0
+                },
+                "orientation": "horizontal",
+                "split": 0
+              },
+              "cameras": [],
+              "navigation": {
+                "sceneOverview": false,
+                "sceneId": "",
+                "sourceId": "",
+                "batchIndex": 0,
+                "batchOverview": false
+              },
+              "sourcePreview": false,
+              "sharedInspection": {
+                "mode": "fit",
+                "centerX": -1000000,
+                "centerY": -1000000,
+                "spanX": 1e-12,
+                "spanY": 1e-12
+              }
+            },
+            "sourceRevision": 0,
+            "navigationRevision": 0,
+            "sources": [],
+            "outputs": [],
+            "submissions": []
+          },
+          "valid": true
+        },
+        {
+          "field": "entries",
+          "kind": "array",
+          "value": 257,
+          "item": {
+            "id": "",
+            "document": {
+              "graphJson": "",
+              "graphRevision": 0,
+              "path": "",
+              "name": "",
+              "temporary": false,
+              "dirty": false,
+              "sourceIdentity": "",
+              "view": {
+                "x": -1000000000,
+                "y": -1000000000,
+                "scale": 1e-6
+              },
+              "baselineGraphJson": ""
+            },
+            "input": {
+              "documentId": "",
+              "generation": 0,
+              "signature": "",
+              "surface": "",
+              "mask": ""
+            },
+            "view": {
+              "canvasEnabled": false,
+              "masonryEnabled": false,
+              "editorWidth": 0,
+              "route": "input",
+              "follow": "auto",
+              "mode": "image",
+              "linked": false,
+              "selection": {
+                "outputId": "",
+                "sourceId": "",
+                "sceneId": "",
+                "batchIndex": 0,
+                "listIndex": 0
+              },
+              "comparison": {
+                "enabled": false,
+                "selection": {
+                  "outputId": "",
+                  "sourceId": "",
+                  "sceneId": "",
+                  "batchIndex": 0,
+                  "listIndex": 0
+                },
+                "orientation": "horizontal",
+                "split": 0
+              },
+              "cameras": [],
+              "navigation": {
+                "sceneOverview": false,
+                "sceneId": "",
+                "sourceId": "",
+                "batchIndex": 0,
+                "batchOverview": false
+              },
+              "sourcePreview": false,
+              "sharedInspection": {
+                "mode": "fit",
+                "centerX": -1000000,
+                "centerY": -1000000,
+                "spanX": 1e-12,
+                "spanY": 1e-12
+              }
+            },
+            "sourceRevision": 0,
+            "navigationRevision": 0,
+            "sources": [],
+            "outputs": [],
+            "submissions": []
+          },
+          "valid": false
+        },
+        {
+          "field": "activeEntry",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "activeEntry",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "activeEntry",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "activeEntry",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "route",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "route",
+          "kind": "literal",
+          "value": "workflow",
+          "valid": true
+        },
+        {
+          "field": "route",
+          "kind": "literal",
+          "value": "settings",
+          "valid": true
+        },
+        {
+          "field": "route",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "placement",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "placement",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "assets",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "assets",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "version": 1,
+            "digest": "",
+            "bytes": 1,
+            "extension": "png",
+            "media": "image"
+          },
+          "valid": true
+        },
+        {
+          "field": "assets",
+          "kind": "array",
+          "value": 65536,
+          "item": {
+            "version": 1,
+            "digest": "",
+            "bytes": 1,
+            "extension": "png",
+            "media": "image"
+          },
+          "valid": true
+        },
+        {
+          "field": "assets",
+          "kind": "array",
+          "value": 65537,
+          "item": {
+            "version": 1,
+            "digest": "",
+            "bytes": 1,
+            "extension": "png",
+            "media": "image"
+          },
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionBinding",
+      "base": {
+        "entryId": "",
+        "runtimeSession": "",
+        "generation": 0,
+        "graphRevision": 0,
+        "sourceRevision": 0,
+        "navigationRevision": 0
+      },
+      "probes": [
+        {
+          "field": "entryId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "entryId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "entryId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "runtimeSession",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "runtimeSession",
+          "kind": "string",
+          "value": 256,
+          "valid": true
+        },
+        {
+          "field": "runtimeSession",
+          "kind": "string",
+          "value": 257,
+          "valid": false
+        },
+        {
+          "field": "generation",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "generation",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "graphRevision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "sourceRevision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "navigationRevision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionFence",
+      "base": {
+        "webview": "",
+        "revision": 0,
+        "bindings": []
+      },
+      "probes": [
+        {
+          "field": "webview",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "webview",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "webview",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "bindings",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "bindings",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "entryId": "",
+            "runtimeSession": "",
+            "generation": 0,
+            "graphRevision": 0,
+            "sourceRevision": 0,
+            "navigationRevision": 0
+          },
+          "valid": true
+        },
+        {
+          "field": "bindings",
+          "kind": "array",
+          "value": 256,
+          "item": {
+            "entryId": "",
+            "runtimeSession": "",
+            "generation": 0,
+            "graphRevision": 0,
+            "sourceRevision": 0,
+            "navigationRevision": 0
+          },
+          "valid": true
+        },
+        {
+          "field": "bindings",
+          "kind": "array",
+          "value": 257,
+          "item": {
+            "entryId": "",
+            "runtimeSession": "",
+            "generation": 0,
+            "graphRevision": 0,
+            "sourceRevision": 0,
+            "navigationRevision": 0
+          },
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionCapabilities",
+      "base": {
+        "capture": false,
+        "materialize": false,
+        "chunkTransfer": false,
+        "artifactResolution": false
+      },
+      "probes": [
+        {
+          "field": "capture",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "materialize",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "chunkTransfer",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "artifactResolution",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionTransfer",
+      "base": {
+        "id": "",
+        "checkpointId": "",
+        "revision": 0,
+        "bytes": 1,
+        "chunks": 1,
+        "digest": "",
+        "direction": "capture"
+      },
+      "probes": [
+        {
+          "field": "id",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "id",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "checkpointId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "checkpointId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "checkpointId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 134217728,
+          "valid": true
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 134217729,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "chunks",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "chunks",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "chunks",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "chunks",
+          "kind": "literal",
+          "value": 8192,
+          "valid": true
+        },
+        {
+          "field": "chunks",
+          "kind": "literal",
+          "value": 8193,
+          "valid": false
+        },
+        {
+          "field": "chunks",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "digest",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "digest",
+          "kind": "string",
+          "value": 64,
+          "valid": true
+        },
+        {
+          "field": "digest",
+          "kind": "string",
+          "value": 65,
+          "valid": false
+        },
+        {
+          "field": "direction",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "direction",
+          "kind": "literal",
+          "value": "capture",
+          "valid": true
+        },
+        {
+          "field": "direction",
+          "kind": "literal",
+          "value": "materialize",
+          "valid": true
+        },
+        {
+          "field": "direction",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionFailure",
+      "base": {
+        "code": "unsupported",
+        "retryable": false,
+        "entryId": "",
+        "outputId": ""
+      },
+      "probes": [
+        {
+          "field": "code",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "unsupported",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "invalid",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "too-large",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "stale",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "cancelled",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "untrusted-origin",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "unavailable",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "identity-mismatch",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "quota",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "storage",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "migration-required",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "opted-out",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "not-committed",
+          "valid": true
+        },
+        {
+          "field": "code",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "retryable",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "entryId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "entryId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "entryId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "entryId",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "outputId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "outputId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "outputId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "outputId",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "ready",
+        "capabilities": {
+          "capture": false,
+          "materialize": false,
+          "chunkTransfer": false,
+          "artifactResolution": false
+        },
+        "committed": false,
+        "workflowPersistence": false,
+        "fence": {
+          "webview": "",
+          "revision": 0,
+          "bindings": []
+        }
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "ready",
+          "valid": true
+        },
+        {
+          "field": "capabilities",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "committed",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "workflowPersistence",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "fence",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "capture",
+        "fence": {
+          "webview": "",
+          "revision": 0,
+          "bindings": []
+        },
+        "checkpointId": "",
+        "revision": 0
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "capture",
+          "valid": true
+        },
+        {
+          "field": "fence",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "checkpointId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "checkpointId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "checkpointId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "materialize",
+        "fence": {
+          "webview": "",
+          "revision": 0,
+          "bindings": []
+        },
+        "transferId": ""
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "materialize",
+          "valid": true
+        },
+        {
+          "field": "fence",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "transferId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "transferId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "transferId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "begin",
+        "transfer": {
+          "id": "",
+          "checkpointId": "",
+          "revision": 0,
+          "bytes": 1,
+          "chunks": 1,
+          "digest": "",
+          "direction": "capture"
+        }
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "begin",
+          "valid": true
+        },
+        {
+          "field": "transfer",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "chunk",
+        "transferId": "",
+        "index": 0,
+        "text": ""
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "chunk",
+          "valid": true
+        },
+        {
+          "field": "transferId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "transferId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "transferId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "index",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "index",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "index",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "index",
+          "kind": "literal",
+          "value": 8191,
+          "valid": true
+        },
+        {
+          "field": "index",
+          "kind": "literal",
+          "value": 8192,
+          "valid": false
+        },
+        {
+          "field": "index",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "text",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "text",
+          "kind": "string",
+          "value": 65536,
+          "valid": true
+        },
+        {
+          "field": "text",
+          "kind": "string",
+          "value": 65537,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "commit",
+        "transferId": ""
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "commit",
+          "valid": true
+        },
+        {
+          "field": "transferId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "transferId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "transferId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "cancel",
+        "targetRequestId": ""
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "cancel",
+          "valid": true
+        },
+        {
+          "field": "targetRequestId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "targetRequestId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "targetRequestId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "acknowledged",
+        "checkpointId": "",
+        "revision": 0,
+        "phase": "captured",
+        "bindings": []
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "acknowledged",
+          "valid": true
+        },
+        {
+          "field": "checkpointId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "checkpointId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "checkpointId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740991,
+          "valid": true
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 9007199254740992,
+          "valid": false
+        },
+        {
+          "field": "revision",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "phase",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "phase",
+          "kind": "literal",
+          "value": "captured",
+          "valid": true
+        },
+        {
+          "field": "phase",
+          "kind": "literal",
+          "value": "materialized",
+          "valid": true
+        },
+        {
+          "field": "phase",
+          "kind": "literal",
+          "value": "durable",
+          "valid": true
+        },
+        {
+          "field": "phase",
+          "kind": "literal",
+          "value": "restored",
+          "valid": true
+        },
+        {
+          "field": "phase",
+          "kind": "literal",
+          "value": "cancelled",
+          "valid": true
+        },
+        {
+          "field": "phase",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "bindings",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "bindings",
+          "kind": "array",
+          "value": 0,
+          "item": {
+            "entryId": "",
+            "runtimeSession": "",
+            "generation": 0,
+            "graphRevision": 0,
+            "sourceRevision": 0,
+            "navigationRevision": 0
+          },
+          "valid": true
+        },
+        {
+          "field": "bindings",
+          "kind": "array",
+          "value": 256,
+          "item": {
+            "entryId": "",
+            "runtimeSession": "",
+            "generation": 0,
+            "graphRevision": 0,
+            "sourceRevision": 0,
+            "navigationRevision": 0
+          },
+          "valid": true
+        },
+        {
+          "field": "bindings",
+          "kind": "array",
+          "value": 257,
+          "item": {
+            "entryId": "",
+            "runtimeSession": "",
+            "generation": 0,
+            "graphRevision": 0,
+            "sourceRevision": 0,
+            "navigationRevision": 0
+          },
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "error",
+        "failure": {
+          "code": "unsupported",
+          "retryable": false,
+          "entryId": "",
+          "outputId": ""
+        }
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "error",
+          "valid": true
+        },
+        {
+          "field": "failure",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "resolve",
+        "output": {
+          "id": "",
+          "entryId": "",
+          "backend": "",
+          "promptId": "",
+          "runId": "",
+          "runOrder": 0,
+          "sourceId": "",
+          "scene": {
+            "groupId": "",
+            "sceneId": "",
+            "order": 0,
+            "count": 1,
+            "title": ""
+          },
+          "listIndex": 0,
+          "batchIndex": 0,
+          "imageIndex": 0,
+          "file": {
+            "storage": "output",
+            "filename": "",
+            "subfolder": "",
+            "managedArtifact": ""
+          },
+          "assetDigest": "",
+          "digest": "",
+          "bytes": 1,
+          "width": 1,
+          "height": 1,
+          "media": "image",
+          "mime": "",
+          "metadataEmbedded": false
+        }
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "resolve",
+          "valid": true
+        },
+        {
+          "field": "output",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionOperation",
+      "base": {
+        "kind": "resolved",
+        "outputId": "",
+        "digest": "",
+        "bytes": 1,
+        "file": {
+          "storage": "output",
+          "filename": "",
+          "subfolder": "",
+          "managedArtifact": ""
+        }
+      },
+      "probes": [
+        {
+          "field": "kind",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "kind",
+          "kind": "literal",
+          "value": "resolved",
+          "valid": true
+        },
+        {
+          "field": "outputId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "outputId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "outputId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "digest",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "digest",
+          "kind": "string",
+          "value": 64,
+          "valid": true
+        },
+        {
+          "field": "digest",
+          "kind": "string",
+          "value": 65,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 0,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 8589934592,
+          "valid": true
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 8589934593,
+          "valid": false
+        },
+        {
+          "field": "bytes",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "file",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionMessage",
+      "base": {
+        "protocol": "sugarcubes.desktop-session",
+        "version": 1,
+        "requestId": "",
+        "scope": {
+          "installation": "",
+          "profile": "",
+          "workspace": "",
+          "backend": ""
+        },
+        "origin": "",
+        "operation": {
+          "kind": "ready",
+          "capabilities": {
+            "capture": false,
+            "materialize": false,
+            "chunkTransfer": false,
+            "artifactResolution": false
+          },
+          "committed": false,
+          "workflowPersistence": false,
+          "fence": {
+            "webview": "",
+            "revision": 0,
+            "bindings": []
+          }
+        }
+      },
+      "probes": [
+        {
+          "field": "protocol",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "protocol",
+          "kind": "literal",
+          "value": "sugarcubes.desktop-session",
+          "valid": true
+        },
+        {
+          "field": "version",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "version",
+          "kind": "literal",
+          "value": 1,
+          "valid": true
+        },
+        {
+          "field": "requestId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "requestId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "requestId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "scope",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "origin",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "origin",
+          "kind": "string",
+          "value": 2048,
+          "valid": true
+        },
+        {
+          "field": "origin",
+          "kind": "string",
+          "value": 2049,
+          "valid": false
+        },
+        {
+          "field": "operation",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionNavigation",
+      "base": {
+        "sceneOverview": false,
+        "sceneId": "",
+        "sourceId": "",
+        "batchIndex": 0,
+        "batchOverview": false
+      },
+      "probes": [
+        {
+          "field": "sceneOverview",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sceneId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sceneId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "sceneId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "sceneId",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "sourceId",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "sourceId",
+          "kind": "string",
+          "value": 36,
+          "valid": true
+        },
+        {
+          "field": "sourceId",
+          "kind": "string",
+          "value": 37,
+          "valid": false
+        },
+        {
+          "field": "sourceId",
+          "kind": "literal",
+          "value": null,
+          "valid": true
+        },
+        {
+          "field": "batchIndex",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": -1,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 0,
+          "valid": true
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 8191,
+          "valid": true
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 8192,
+          "valid": false
+        },
+        {
+          "field": "batchIndex",
+          "kind": "literal",
+          "value": 0.5,
+          "valid": false
+        },
+        {
+          "field": "batchOverview",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    },
+    {
+      "name": "SessionInspection",
+      "base": {
+        "mode": "fit",
+        "centerX": -1000000,
+        "centerY": -1000000,
+        "spanX": 1e-12,
+        "spanY": 1e-12
+      },
+      "probes": [
+        {
+          "field": "mode",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "mode",
+          "kind": "literal",
+          "value": "fit",
+          "valid": true
+        },
+        {
+          "field": "mode",
+          "kind": "literal",
+          "value": "native",
+          "valid": true
+        },
+        {
+          "field": "mode",
+          "kind": "literal",
+          "value": "custom",
+          "valid": true
+        },
+        {
+          "field": "mode",
+          "kind": "literal",
+          "value": "unknown-future-value",
+          "valid": false
+        },
+        {
+          "field": "centerX",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "centerX",
+          "kind": "literal",
+          "value": -1000001,
+          "valid": false
+        },
+        {
+          "field": "centerX",
+          "kind": "literal",
+          "value": -1000000,
+          "valid": true
+        },
+        {
+          "field": "centerX",
+          "kind": "literal",
+          "value": 1000000,
+          "valid": true
+        },
+        {
+          "field": "centerX",
+          "kind": "literal",
+          "value": 1000001,
+          "valid": false
+        },
+        {
+          "field": "centerY",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "centerY",
+          "kind": "literal",
+          "value": -1000001,
+          "valid": false
+        },
+        {
+          "field": "centerY",
+          "kind": "literal",
+          "value": -1000000,
+          "valid": true
+        },
+        {
+          "field": "centerY",
+          "kind": "literal",
+          "value": 1000000,
+          "valid": true
+        },
+        {
+          "field": "centerY",
+          "kind": "literal",
+          "value": 1000001,
+          "valid": false
+        },
+        {
+          "field": "spanX",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "spanX",
+          "kind": "literal",
+          "value": -0.999999999999,
+          "valid": false
+        },
+        {
+          "field": "spanX",
+          "kind": "literal",
+          "value": 1e-12,
+          "valid": true
+        },
+        {
+          "field": "spanX",
+          "kind": "literal",
+          "value": 1000000000000.0,
+          "valid": true
+        },
+        {
+          "field": "spanX",
+          "kind": "literal",
+          "value": 1000000000001.0,
+          "valid": false
+        },
+        {
+          "field": "spanY",
+          "kind": "missing",
+          "value": null,
+          "valid": false
+        },
+        {
+          "field": "spanY",
+          "kind": "literal",
+          "value": -0.999999999999,
+          "valid": false
+        },
+        {
+          "field": "spanY",
+          "kind": "literal",
+          "value": 1e-12,
+          "valid": true
+        },
+        {
+          "field": "spanY",
+          "kind": "literal",
+          "value": 1000000000000.0,
+          "valid": true
+        },
+        {
+          "field": "spanY",
+          "kind": "literal",
+          "value": 1000000000001.0,
+          "valid": false
+        },
+        {
+          "field": "unknownFutureMember",
+          "kind": "literal",
+          "value": true,
+          "valid": false
+        }
+      ]
+    }
+  ]
+}
