@@ -18,7 +18,11 @@ import type { ComfyNode } from '../../types/graph.js';
 import type { InputLoader } from '../domain/InputLoader.js';
 import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
 import type { InputBindingController } from '../application/InputBindingController.js';
-import { createComfyInputBinding, type ComfyInputBindingPorts } from './ComfyInputBinding.js';
+import {
+  createComfyInputBinding,
+  isComfyInputSourceLinked,
+  type ComfyInputBindingPorts,
+} from './ComfyInputBinding.js';
 import { getGraphNodes } from '../../graph/GraphQuery.js';
 import { isRecord } from '../../types/common.js';
 
@@ -62,7 +66,7 @@ export class ComfyInputBindings {
     void binding.initialize();
     return binding;
   }
-  /** Restore recognized sources through Comfy's exact loaded-node lifecycle, including unconfigured loaders. */
+  /** Restore selectable sources through Comfy's loaded-node lifecycle, including unconfigured loaders. */
   loaded(node: ComfyNode): void {
     this.#loaded(node, new Set());
   }
@@ -73,6 +77,7 @@ export class ComfyInputBindings {
     if (isRecord(node.subgraph))
       for (const child of getGraphNodes(node.subgraph)) this.#loaded(child, seen);
     for (const loader of this.loaders.all(node.type ?? node.class_type ?? '')) {
+      if (isComfyInputSourceLinked(node, loader.field)) continue;
       try {
         this.get(node, loader);
       } catch (error: unknown) {

@@ -16,7 +16,7 @@
 /**
  * Expose native Mica through the negotiated frame without changing browser presentation. The tab
  * bar and the canvas pane stay unwashed Mica; the selected tab and the override toolbar share the
- * chrome wash; masonry, the cube stack above it and the Comfy graph sit on the body wash once.
+ * chrome wash; masonry and the graph paint one body wash, with a faded aperture for compact stacks.
  */
 export const desktopFrameCss = `
   [data-sc-desktop-frame-surface] { background:transparent !important; }
@@ -25,6 +25,22 @@ export const desktopFrameCss = `
     --sc-substitute-toolbar-fill:var(--sc-desktop-chrome-wash); }
   :root[data-sc-desktop-frame-surface] :where(#graph-canvas,.sugarcubes-workflow-masonry__backdrop) {
     background:var(--sc-desktop-body-wash); }
+  :root[data-sc-desktop-frame-surface] #graph-canvas-container[data-sugarcubes-masonry='true'],
+  :root[data-sc-desktop-frame-surface] #graph-canvas-container[data-sugarcubes-masonry='true'] #graph-canvas {
+    background:transparent; }
+  :root[data-sc-desktop-frame-surface] .sugarcubes-workflow-masonry__backdrop {
+    background:linear-gradient(to right,
+      color-mix(in srgb,var(--sc-desktop-body-wash) calc(var(--sc-stack-wash-opacity,1) * 100%),transparent) 0 var(--sc-stack-material-width,0px),
+      var(--sc-desktop-body-wash) var(--sc-stack-material-width,0px) 100%); }
+  :root[data-sc-desktop-frame-surface] .sc-cube-stack-host,
+  :root[data-sc-desktop-frame-surface] .sc-cube-stack-host[data-appearance] { background:transparent; border:0; box-shadow:none; }
+  :root[data-sc-desktop-frame-surface] .sc-cube-stack[data-kind='rail'] {
+    --sc-stack-row:var(--sc-desktop-card-wash); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] :is([data-sc-style-node],[data-sc-style-surface]) {
+    --sc-card-fill:var(--sc-desktop-card-wash); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
+    [data-testid^='node-header-'],[data-testid^='node-body-'],[data-testid='advanced-inputs-button']) {
+    background:transparent; }
   [data-sc-desktop-frame-host] { border:0 !important; box-shadow:none !important; }
   [data-sc-desktop-frame-host] .sc-substitute-frame { app-region:drag; }
   [data-sc-desktop-frame-host] .sc-substitute-frame :is(

@@ -1,4 +1,4 @@
-import { createComfyInputBinding } from './ComfyInputBinding.js';
+import { createComfyInputBinding, isComfyInputSourceLinked, } from './ComfyInputBinding.js';
 import { getGraphNodes } from '../../graph/GraphQuery.js';
 import { isRecord } from '../../types/common.js';
 /** Restore bound-node observers at native workflow loading, with no DOM-driven graph discovery. */
@@ -43,7 +43,7 @@ export class ComfyInputBindings {
         void binding.initialize();
         return binding;
     }
-    /** Restore recognized sources through Comfy's exact loaded-node lifecycle, including unconfigured loaders. */
+    /** Restore selectable sources through Comfy's loaded-node lifecycle, including unconfigured loaders. */
     loaded(node) {
         this.#loaded(node, new Set());
     }
@@ -56,6 +56,8 @@ export class ComfyInputBindings {
             for (const child of getGraphNodes(node.subgraph))
                 this.#loaded(child, seen);
         for (const loader of this.loaders.all(node.type ?? node.class_type ?? '')) {
+            if (isComfyInputSourceLinked(node, loader.field))
+                continue;
             try {
                 this.get(node, loader);
             }
