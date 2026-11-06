@@ -16,6 +16,7 @@
 /** Prove cached physical-pixel orb variants, density observation and browser-resource cleanup. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { AppOrbRenderer } from '../../../frontend/comfyui/ui/surface/frame/AppOrbRenderer.js';
+import { createAccentPalette } from '../../../frontend/comfyui/ui/surface/appearance/AccentPalette.js';
 
 const densityDescriptor = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
 const mediaDescriptor = Object.getOwnPropertyDescriptor(window, 'matchMedia');
@@ -33,7 +34,7 @@ afterEach(() => {
 });
 
 /** Supply the missing JSDOM raster adapter while keeping all composition orchestration real. */
-function mount() {
+function mount(opaqueSource = false) {
   let density = 1;
   Object.defineProperty(window, 'devicePixelRatio', { configurable: true, get: () => density });
   const listeners = new Set<() => void>();
@@ -50,7 +51,7 @@ function mount() {
     value: decode,
   });
   const raster = (width: number, height: number): ImageData => ({
-    data: new Uint8ClampedArray(width * height * 4),
+    data: new Uint8ClampedArray(width * height * 4).fill(opaqueSource ? 255 : 0),
     width,
     height,
     colorSpace: 'srgb',
@@ -62,7 +63,7 @@ function mount() {
       raster(width, height),
     ),
     createImageData: jest.fn((width: number, height: number) => raster(width, height)),
-    putImageData: jest.fn(),
+    putImageData: jest.fn<(image: ImageData, x: number, y: number) => void>(),
     imageSmoothingEnabled: false,
     imageSmoothingQuality: 'low',
   };
@@ -84,6 +85,22 @@ function mount() {
     },
   };
 }
+
+test.each([true, false])('orb layers use the shared button shades for dark=%s', async (dark) => {
+  const f = mount(true);
+  await f.renderer.update('#0078d4', dark);
+  const p = createAccentPalette('#0078d4', dark);
+  for (const [index, shade] of [p.button.rest, p.button.hover, p.button.pressed].entries()) {
+    const pixel = f.context.putImageData.mock.calls[index * 4]?.[0].data.slice(0, 4);
+    expect(Array.from(pixel ?? [])).toEqual([
+      Number.parseInt(shade.slice(1, 3), 16),
+      Number.parseInt(shade.slice(3, 5), 16),
+      Number.parseInt(shade.slice(5, 7), 16),
+      255,
+    ]);
+  }
+  f.renderer.dispose();
+});
 
 test('raster variants are downsampled once to display pixels and pointer changes only blit cached images', async () => {
   const f = mount();

@@ -54,13 +54,13 @@ export const generationStripCss = `
   :root[data-sc-substitute-frame] button[data-sc-generation-queue] { position:fixed!important; left:var(--sc-queue-left)!important;
     top:var(--sc-queue-top)!important; width:40px!important; height:30px!important; min-width:40px!important; padding:0!important;
     border:0!important; border-radius:0 var(--sc-generation-top-radius,0px) 6px 0!important; box-shadow:none!important; z-index:1100; font-size:0!important;
-    display:grid!important; place-items:center!important; background:var(--sc-accent-color)!important; color:black!important; }
+    display:grid!important; place-items:center!important; background:var(--sc-accent-color)!important; color:var(--sc-accent-foreground)!important; }
   :root[data-sc-substitute-frame] button[data-sc-generation-queue][data-sc-queue-theme='light'] { color:white!important; }
   :root[data-sc-substitute-frame] button[data-sc-generation-queue] > :not(.sc-generation-queue-glyph,.sc-generation-queue-badge) { display:none!important; }
   :root[data-sc-substitute-frame] button[data-sc-generation-queue]::before { content:''; position:absolute; left:0; top:5px; bottom:5px;
     width:1px; background:rgba(0,0,0,.322); }
-  :root[data-sc-substitute-frame] button[data-sc-generation-queue]:hover { background:color-mix(in srgb,var(--sc-accent-color),white 11.8%)!important; }
-  :root[data-sc-substitute-frame] button[data-sc-generation-queue]:active { background:color-mix(in srgb,var(--sc-accent-color),black 12.5%)!important; }
+  :root[data-sc-substitute-frame] button[data-sc-generation-queue]:hover { background:var(--sc-accent-hover)!important; }
+  :root[data-sc-substitute-frame] button[data-sc-generation-queue]:active { background:var(--sc-accent-pressed)!important; color:var(--sc-accent-foreground-pressed)!important; }
   .sc-generation-queue-glyph { display:block; width:16px; height:16px; background:currentColor; mask:var(--sc-queue-glyph) center/contain no-repeat; pointer-events:none; }
   .sc-generation-queue-badge { position:absolute; right:3px; bottom:2px; min-width:12px; height:12px; padding:0 3px; border-radius:6px;
     background:black; color:var(--sc-accent-color); font:700 8px/12px var(--sc-font-family); pointer-events:none; }

@@ -19,7 +19,10 @@ import {
   AccentThemeHost,
   ACCENT_COLOR_SETTING,
 } from '../../../frontend/comfyui/ui/surface/appearance/AccentThemeHost.js';
-import { DEFAULT_ACCENT_COLOR } from '../../../frontend/comfyui/ui/surface/appearance/AccentPalette.js';
+import {
+  DEFAULT_ACCENT_COLOR,
+  createAccentPalette,
+} from '../../../frontend/comfyui/ui/surface/appearance/AccentPalette.js';
 
 interface ColorSetting {
   id: string;
@@ -92,14 +95,14 @@ test('loads the saved color without rewriting it, then updates through the regis
   expect(setting.category).toEqual(['SugarCubes', 'Appearance', 'AccentColor']);
   expect(setSettingValue).not.toHaveBeenCalled();
   const style = document.getElementById('sugarcubes-accent-theme')!;
-  expect(style.textContent).toContain('--sc-accent-color:#b58cff');
+  expect(style.textContent).toContain('--sc-accent-color:#c19eff');
   const row = setting.type();
   const input = row.querySelector<HTMLInputElement>('input[type="text"]')!;
   input.value = '#071530';
   input.dispatchEvent(new Event('change'));
   expect(setSettingValue).toHaveBeenCalledWith(ACCENT_COLOR_SETTING, '#071530');
-  expect(style.textContent).toContain('--sc-accent-foreground:#ffffff');
-  expect(style.textContent).toContain('--sc-accent-color:#071530');
+  expect(style.textContent).toContain('--sc-accent-foreground:#000000');
+  expect(style.textContent).toContain('--sc-accent-color:#4887ff');
   expect(style.textContent).toContain('--sc-brand-fill:var(--sc-accent-color) !important');
   expect(setDirty).toHaveBeenCalledTimes(2);
   host.refresh();
@@ -114,13 +117,13 @@ test('external root CSS wins until removed, preserves user choices, and never re
   document.documentElement.style.setProperty('--sugarcubes-accent', '#ffe066');
   await settle();
   const style = document.getElementById('sugarcubes-accent-theme')!;
-  expect(style.textContent).toContain('--sc-accent-color:#ffe066');
+  expect(style.textContent).toContain('--sc-accent-color:#ffe57e');
   expect(style.textContent).toContain('--sc-accent-foreground:#000000');
   setting.onChange('#123456');
-  expect(style.textContent).toContain('--sc-accent-color:#ffe066');
+  expect(style.textContent).toContain('--sc-accent-color:#ffe57e');
   document.documentElement.style.removeProperty('--sugarcubes-accent');
   await settle();
-  expect(style.textContent).toContain('--sc-accent-color:#123456');
+  expect(style.textContent).toContain('--sc-accent-color:#56aaff');
   expect(setDirty).toHaveBeenCalledTimes(3);
   expect(inventory).not.toHaveBeenCalled();
   expect(setSettingValue).not.toHaveBeenCalled();
@@ -168,12 +171,16 @@ test('identical native stylesheet rewrites do not force palette style reads', as
 test('rejects invalid settings, falls back from invalid CSS, and releases only owned styles', async () => {
   const { setting, report, host } = createHost({ bad: 'data' });
   const style = document.getElementById('sugarcubes-accent-theme')!;
-  expect(style.textContent).toContain(`--sc-accent-color:${DEFAULT_ACCENT_COLOR}`);
+  expect(style.textContent).toContain(
+    `--sc-accent-color:${createAccentPalette(DEFAULT_ACCENT_COLOR, true).indicator}`,
+  );
   setting.onChange('red; } body { display:none');
   expect(report).toHaveBeenCalledWith(expect.any(TypeError));
   document.documentElement.style.setProperty('--sugarcubes-accent', 'transparent');
   await settle();
-  expect(style.textContent).toContain(`--sc-accent-color:${DEFAULT_ACCENT_COLOR}`);
+  expect(style.textContent).toContain(
+    `--sc-accent-color:${createAccentPalette(DEFAULT_ACCENT_COLOR, true).indicator}`,
+  );
   host.dispose();
   expect(style.isConnected).toBe(false);
   expect(document.documentElement.style.getPropertyValue('--sugarcubes-accent')).toBe(
@@ -287,4 +294,20 @@ test('a previously saved accent outranks the host system accent and registration
   expect(host.theme.color).toBe(DEFAULT_ACCENT_COLOR);
   const saved = createHost('#b58cff', undefined, hostAccent);
   expect(saved.host.theme.color).toBe('#b58cff');
+});
+
+test('recomputes all variant roles when the mode changes without changing the base', async () => {
+  document.documentElement.style.colorScheme = 'dark';
+  const { host, setSettingValue } = createHost('#0078d4');
+  const style = document.getElementById('sugarcubes-accent-theme')!;
+  expect(style.textContent).toContain('--sc-accent-color:#29a2ff');
+  expect(style.textContent).toContain('--sc-accent-hover:#2592e6');
+  document.documentElement.style.colorScheme = 'light';
+  await settle();
+  expect(host.theme).toEqual({ color: '#0078d4', dark: false });
+  expect(style.textContent).toContain('--sc-accent-color:#0078d4');
+  expect(style.textContent).toContain('--sc-accent-hover:#007edf');
+  expect(style.textContent).toContain('--sc-accent-pressed:#4ea0df');
+  expect(style.textContent).toContain('--sc-accent-toggle-pressed:#3896df');
+  expect(setSettingValue).not.toHaveBeenCalled();
 });

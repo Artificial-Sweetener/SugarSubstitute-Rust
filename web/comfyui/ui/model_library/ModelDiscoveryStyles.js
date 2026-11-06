@@ -34,7 +34,7 @@ export const modelDiscoveryCss = modelRecommendationPreviewCss +
 .sc-model-discovery-portrait:focus-visible { outline:2px solid var(--sc-brand-border,#4ca6f9); outline-offset:2px; }
 .sc-model-discovery-caption { position:absolute; inset:auto 0 0; z-index:2; padding:16px 16px 15px; font:700 17.333px/1.35 'Segoe UI',sans-serif; overflow-wrap:anywhere; pointer-events:none; }
 .sc-model-discovery-check { position:absolute; right:20px; top:16px; z-index:2; display:grid; place-items:center; width:20px; height:20px; border:1px solid #ffffff70; border-radius:4px; font:14px 'Segoe UI',sans-serif; background:#ffffff08; }
-.sc-model-discovery-portrait.is-selected .sc-model-discovery-check { background:var(--sc-brand-fill,#0078d4); border-color:transparent; }
+.sc-model-discovery-portrait.is-selected .sc-model-discovery-check { background:var(--sc-brand-fill,#0078d4); border-color:transparent; color:var(--sc-text-on-accent); }
 .sc-model-discovery-provider { position:absolute; left:20px; top:20px; width:28px; height:28px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; cursor:pointer; }
 .sc-model-discovery-provider img { width:20px; height:20px; object-fit:contain; }
 .sc-model-discovery-card .sc-model-key-required { left:50px; top:22px; }
