@@ -37,7 +37,7 @@ fn repair(missing_executable: bool, formatted: bool) -> TestResult {
             .map(|name| std::fs::read(directory.join(name)))
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
-        let authored = path.join("native/desktop-data/authored-workflow.json");
+        let authored = path.join("native/user/desktop-data/authored-workflow.json");
         std::fs::write(&authored, b"preserve authored data")?;
         if missing_executable {
             std::fs::remove_file(&executable)?;

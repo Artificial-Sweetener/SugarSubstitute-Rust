@@ -131,7 +131,7 @@ fn missing_trust_is_an_observed_failure_and_never_bootstraps_a_repository() -> T
         return Err("Failed preparation reported success to the execution owner".into());
     };
     assert!(Arc::ptr_eq(cause, observed.failure.as_ref().ok_or("Original cause absent")?));
-    assert!(!fixture.installation.path().join(".update-trust").exists());
+    assert!(!fixture.installation.path().join("state/update-trust").exists());
     assert!(submit(&mut pipeline, &mut worker).is_err());
     retire(&mut pipeline, &mut worker)?;
     assert_application_unlocked(&mut pipeline, &fixture)?;

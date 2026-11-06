@@ -44,7 +44,7 @@ fn accepted_probe_continues_with_independent_files_and_releases_preparation_excl
                 std::fs::OpenOptions::new()
                     .read(true)
                     .share_mode(0)
-                    .open(fixture.root.path().join(".update-trust/updater-preparation-v1"))?,
+                    .open(fixture.root.path().join("state/update-trust/updater-preparation-v1"))?,
             );
             let state = trust.updater_selection(&context)?;
             assert_eq!(state.accepted(), Some(&generation));

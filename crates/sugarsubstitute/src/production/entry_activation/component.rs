@@ -217,9 +217,13 @@ impl EntryActivation for ProfileComponent {
         let source = request.take().ok_or("Original component entry transferred")?;
         let mut input = Some(projection::ProjectionInput::new(
             source,
-            self.installation.join("capture"),
+            sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                &self.installation,
+            )
+            .capture_root(),
             resources.client.clone(),
             run,
+            resources.authority.running_installation(),
         ));
         match resources.client.submit_blocking_owned_box(
             resources.finite,

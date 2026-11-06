@@ -48,7 +48,7 @@ fn cached_restart_preserves_modified_payload_and_configuration_without_publishin
     for leaf in ["sugarsubstitute.exe", "startup.local.toml"] {
         let (fixture, generation) = prepared()?;
         let selection =
-            fixture.installation.path().join(".selection-state/.substitute-selection.json");
+            fixture.installation.path().join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&selection)?;
         let changed = generation.join(leaf);
         let bytes = b"modified staged data must remain intact";
@@ -76,7 +76,7 @@ fn cached_restart_preserves_modified_payload_and_configuration_without_publishin
 #[test]
 fn cached_restart_repairs_missing_payload_in_place_and_preserves_unknown_files() -> TestResult {
     let (fixture, generation) = prepared()?;
-    let selection = fixture.installation.path().join(".selection-state/.substitute-selection.json");
+    let selection = fixture.installation.path().join("state/selection/.substitute-selection.json");
     let before = std::fs::read(&selection)?;
     let payload = generation.join("sugarsubstitute.exe");
     let original = std::fs::read(&payload)?;

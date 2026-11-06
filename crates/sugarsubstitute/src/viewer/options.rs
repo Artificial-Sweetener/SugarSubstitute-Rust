@@ -167,10 +167,17 @@ fn cache_anchor(
 ) -> io::Result<PathBuf> {
     let path = match selected {
         Some(path) => path,
-        None => executable()?
-            .parent()
-            .ok_or_else(|| invalid("Viewer executable has no parent directory"))?
-            .join("cache"),
+        None => {
+            let executable = executable()?;
+            let directory = executable
+                .parent()
+                .ok_or_else(|| invalid("Viewer executable has no parent directory"))?;
+            sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                directory,
+            )
+            .user()
+            .join("cache")
+        }
     };
     if !path.is_absolute() {
         return Err(invalid("Viewer cache folder must be absolute"));
@@ -218,7 +225,14 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let root =
             PathBuf::from(if cfg!(windows) { "E:\\portable-画像" } else { "/portable-画像" });
-        assert_eq!(cache_anchor(None, || Ok(root.join("canvas-viewer.exe")))?, root.join("cache"));
+        assert_eq!(
+            cache_anchor(None, || Ok(root.join("canvas-viewer.exe")))?,
+            root.join("user/cache")
+        );
+        assert_eq!(
+            cache_anchor(None, || Ok(root.join("releases/generation/canvas-viewer.exe")))?,
+            root.join("user/cache"),
+        );
         let explicit = root.join("selected-cache");
         assert_eq!(
             cache_anchor(Some(explicit.clone()), || Err(io::Error::other("not queried")))?,

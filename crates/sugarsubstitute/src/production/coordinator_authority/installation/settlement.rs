@@ -8,9 +8,7 @@ impl Ownership {
     pub(in super::super) fn settled(&self) -> bool {
         !self.pending()
             && ((self.settlement.unissued()
-                && self.application().is_none_or(|application| {
-                    !matches!(application.as_ref(), RunningApplication::Trial(_))
-                }))
+                && self.application().is_none_or(|application| application.trial().is_none()))
                 || self.settlement.succeeded())
     }
 }

@@ -16,8 +16,8 @@ fn opening_absent_state_cannot_create_an_empty_authoritative_namespace() -> Test
             SelectionStore::open(root.path(), context),
             Err(SelectionFailure::Missing)
         ));
-        assert!(!root.path().join(DIRECTORY).exists());
-        assert!(!root.path().join(NAMESPACE_MARKER).exists());
+        assert!(!root.path().join("state").join(DIRECTORY).exists());
+        assert!(!root.path().join("state").join(NAMESPACE_MARKER).exists());
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
         assert_eq!(store.load(context)?, Some(initial()?));
         Ok(())
@@ -31,20 +31,20 @@ fn interrupted_staging_leaves_no_authority_and_a_fresh_attempt_succeeds() -> Tes
     worker::run_expiring(move |context, clock| {
         let observed = path.clone();
         clock.observe_checks(move || {
-            std::fs::read_dir(&observed).is_ok_and(|entries| {
+            std::fs::read_dir(observed.join("state")).is_ok_and(|entries| {
                 entries.flatten().any(|entry| {
                     entry.file_name().to_string_lossy().starts_with(".selection-init-")
                 })
             })
         })?;
         assert!(SelectionStore::initialize(&path, &initial()?, context).is_err());
-        assert!(!path.join(DIRECTORY).exists());
-        assert!(!path.join(NAMESPACE_MARKER).exists());
+        assert!(!path.join("state").join(DIRECTORY).exists());
+        assert!(!path.join("state").join(NAMESPACE_MARKER).exists());
         Ok(())
     })?;
     let path = root.path().to_owned();
     worker::run(move |context, _| {
-        let abandoned = std::fs::read_dir(&path)?
+        let abandoned = std::fs::read_dir(path.join("state"))?
             .map(|entry| entry.map(|entry| entry.path()))
             .collect::<io::Result<Vec<_>>>()?;
         assert!(abandoned.iter().any(|path| {
@@ -67,12 +67,15 @@ fn interrupted_after_directory_publication_reopens_without_resetting_identity() 
     worker::run_expiring(move |context, clock| {
         let observed = path.clone();
         clock.observe_checks(move || {
-            observed.join(DIRECTORY).join(RECORD).exists()
-                && !observed.join(NAMESPACE_MARKER).exists()
+            observed.join("state").join(DIRECTORY).join(RECORD).exists()
+                && !observed.join("state").join(NAMESPACE_MARKER).exists()
         })?;
         assert!(SelectionStore::initialize(&path, &initial()?, context).is_err());
-        assert_eq!(std::fs::read(path.join(DIRECTORY).join(RECORD))?, initial()?.encode()?);
-        assert!(!path.join(NAMESPACE_MARKER).exists());
+        assert_eq!(
+            std::fs::read(path.join("state").join(DIRECTORY).join(RECORD))?,
+            initial()?.encode()?
+        );
+        assert!(!path.join("state").join(NAMESPACE_MARKER).exists());
         Ok(())
     })?;
     let path = root.path().to_owned();
@@ -80,8 +83,11 @@ fn interrupted_after_directory_publication_reopens_without_resetting_identity() 
         assert!(SelectionStore::initialize(&path, &initial()?, context).is_err());
         let store = SelectionStore::open(&path, context)?;
         assert_eq!(store.load(context)?, Some(initial()?));
-        assert!(path.join(NAMESPACE_MARKER).exists());
-        assert_eq!(std::fs::read(path.join(DIRECTORY).join(RECORD))?, initial()?.encode()?);
+        assert!(path.join("state").join(NAMESPACE_MARKER).exists());
+        assert_eq!(
+            std::fs::read(path.join("state").join(DIRECTORY).join(RECORD))?,
+            initial()?.encode()?
+        );
         Ok(())
     })
 }
@@ -92,12 +98,12 @@ fn missing_authoritative_record_is_preserved_as_damage_and_cannot_be_reset() -> 
         let root = root()?;
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
         drop(store);
-        let record = root.path().join(DIRECTORY).join(RECORD);
+        let record = root.path().join("state").join(DIRECTORY).join(RECORD);
         let saved = root.path().join("preserved-record");
         std::fs::rename(&record, &saved)?;
         for marker_present in [true, false] {
             if !marker_present {
-                std::fs::remove_file(root.path().join(NAMESPACE_MARKER))?;
+                std::fs::remove_file(root.path().join("state").join(NAMESPACE_MARKER))?;
             }
             assert!(SelectionStore::open(root.path(), context).is_err());
             assert!(SelectionStore::existing(root.path(), context).is_err());

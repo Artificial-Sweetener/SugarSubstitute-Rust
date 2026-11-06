@@ -12,6 +12,7 @@ mod entries;
 mod errors;
 #[allow(unsafe_code)]
 mod ordinal;
+mod storage;
 pub use errors::LaunchEnvironmentError;
 use std::fmt;
 

@@ -6,7 +6,19 @@ use super::*;
 
 /// The session directory below a fixture anchor.
 fn session_directory(anchor: &std::path::Path) -> std::path::PathBuf {
-    anchor.join("desktop-data").join("input-canvas")
+    anchor.join("user").join("input-canvas")
+}
+
+#[test]
+fn embedded_canvas_cache_stays_below_the_installation_user_directory() -> Result<(), Box<dyn Error>>
+{
+    let directory = anchor()?;
+    let mut inputs = Inputs::start(directory.path())?;
+    inputs.workflow(sync(None))?;
+    let namespace = sugarsubstitute_supervision::setup_storage::cache::DIRECTORY;
+    assert!(directory.path().join("user").join(namespace).is_dir());
+    assert!(!directory.path().join(namespace).exists());
+    inputs.close()
 }
 
 impl Inputs {

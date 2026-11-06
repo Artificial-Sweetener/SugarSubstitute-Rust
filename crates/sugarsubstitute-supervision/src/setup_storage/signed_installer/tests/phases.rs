@@ -50,7 +50,7 @@ fn retained_workspace_does_not_reuse_the_import_jobs_cancellation_or_deadline() 
         let imported = fixture.import(SignedPackage::new(&fixture.archive, 1)?, &context)?;
         Ok((fixture, imported))
     })?;
-    let selection = fixture.installation.path().join(".selection-state/.substitute-selection.json");
+    let selection = fixture.installation.path().join("state/selection/.substitute-selection.json");
     let before = std::fs::read(&selection)?;
     worker::run_reserved_expiring(SIGNED_PREPARATION_RESERVATION_BYTES, move |context, clock| {
         // The first execution owner's clock remains live at zero; only this new job expires.
@@ -76,7 +76,7 @@ fn rejected_execution_admission_retains_prepared_custody_for_a_later_launch() ->
         let candidate = Arc::new(prepared.complete(&runtime, || NOW, &context)?);
         Ok((fixture, candidate))
     })?;
-    let selection = fixture.installation.path().join(".selection-state/.substitute-selection.json");
+    let selection = fixture.installation.path().join("state/selection/.substitute-selection.json");
     let before = std::fs::read(&selection)?;
     let pending = Arc::clone(&candidate);
     let rejected = pipeline

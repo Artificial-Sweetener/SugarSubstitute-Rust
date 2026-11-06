@@ -13,8 +13,14 @@ pub(in crate::setup_storage) fn legacy<T>(
 ) -> io::Result<T> {
     protection::with(context, |protection| {
         let _transition = namespace::transition(installation, protection, context)?;
-        for leaf in [DIRECTORY, NAMESPACE_MARKER, RECORD, LOCK] {
-            match crate::durable_storage::files::inspect(installation.path().join(leaf), context) {
+        let state = super::super::ownership::state_path(installation);
+        for path in [
+            state.join(DIRECTORY),
+            state.join(NAMESPACE_MARKER),
+            installation.path().join(RECORD),
+            installation.path().join(LOCK),
+        ] {
+            match crate::durable_storage::files::inspect(path, context) {
                 Ok(_) => {
                     return Err(super::super::invalid(
                         "This installation requires health-checked update activation; its shortcut has been preserved",

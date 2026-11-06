@@ -25,15 +25,19 @@ impl NativeEntry {
 /// Report one unavailable native entry and observe diagnostic teardown before returning failure.
 /// Product copy uses the canonical localization fallback. Logging workers retire before process status returns.
 pub fn unavailable_native_entry(entry: NativeEntry) -> ExitCode {
-    let result: Result<(), Box<dyn Error>> = crate::diagnostics::Diagnostics::run(|_health| {
-        let message = sugarsubstitute_contracts::localization::messages("en").report.startup_failed;
-        tracing::error!(
-            operation = "native_adapter_unavailable",
-            adapter = entry.name(),
-            "{message}"
-        );
-        Err(io::Error::new(io::ErrorKind::Unsupported, message).into())
-    });
+    let result: Result<(), Box<dyn Error>> = crate::diagnostics::Diagnostics::run(
+        crate::diagnostics::RecordsBase::RunningImage,
+        |_health| {
+            let message =
+                sugarsubstitute_contracts::localization::messages("en").report.startup_failed;
+            tracing::error!(
+                operation = "native_adapter_unavailable",
+                adapter = entry.name(),
+                "{message}"
+            );
+            Err(io::Error::new(io::ErrorKind::Unsupported, message).into())
+        },
+    );
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(_retained) => ExitCode::FAILURE,

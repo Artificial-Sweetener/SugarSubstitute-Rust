@@ -8,7 +8,7 @@ pub(in crate::setup_storage) fn installed(
     root: &Directory,
     context: &JobContext,
 ) -> io::Result<PathBuf> {
-    files::write_new(&root.path().join(ownership::MARKER), ownership::CONTENT)?;
+    ownership::establish(root)?;
     let generation = root.path().join("releases").join("installed");
     let _directory = Directory::open(&generation, true)?;
     files::write_new(&generation.join("sugarsubstitute.exe"), b"unexecuted fixture")?;

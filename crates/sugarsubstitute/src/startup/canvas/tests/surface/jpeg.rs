@@ -65,13 +65,13 @@ fn an_unsupported_progressive_jpeg_final_replies_error() -> Result<(), Box<dyn E
 }
 
 #[test]
-fn finals_outside_png_and_jpeg_output_storage_are_refused() -> Result<(), Box<dyn Error>> {
+fn finals_outside_png_and_jpeg_result_storage_are_refused() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;
     for (id, file) in [
         (3, output("flat.webp", "output")),
         (4, output("flat", "output")),
         (5, output("flat.jpg", "input")),
-        (6, output("flat.jpeg", "temp")),
+        (6, output("flat.webp", "temp")),
     ] {
         fixture.send(id, "surface.select", json!({"itemId":"result:refused", "file":file}))?;
         fixture.take(id, "error")?;

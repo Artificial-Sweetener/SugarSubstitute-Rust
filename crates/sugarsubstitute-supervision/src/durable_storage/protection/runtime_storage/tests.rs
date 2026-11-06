@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Exercise actual account discovery and protected account namespace custody.
+//! Exercise installation-local account runtime storage and protected namespace custody.
 /// A real directory junction cannot enroll an account namespace or alter its authored target.
 #[test]
 fn account_namespace_rejects_an_actual_junction_before_creating_children()
@@ -9,12 +9,12 @@ fn account_namespace_rejects_an_actual_junction_before_creating_children()
     use std::os::windows::fs::MetadataExt;
     crate::setup_storage::test_worker::run_reserved(8 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
-        let account = temporary.path().join("account");
+        let account = temporary.path().join("installation");
         let target = temporary.path().join("authored");
         std::fs::create_dir(&account)?;
         std::fs::create_dir(&target)?;
         std::fs::write(target.join("preserve"), b"authored")?;
-        let link = account.join("SugarSubstitute");
+        let link = account.join("runtime");
         let output = std::process::Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", "New-Item -ItemType Junction -Path $env:SUGAR_TEST_JUNCTION -Target $env:SUGAR_TEST_JUNCTION_TARGET -ErrorAction Stop | Out-Null"])
             .env("SUGAR_TEST_JUNCTION", &link)
@@ -90,16 +90,73 @@ fn operational_account_namespace_reopens_exact_identity_and_preserves_missing_hi
         Ok(())
     })
 }
-/// Exercise primary-account discovery on the production reservation without changing account data.
+/// Runtime records resolve exactly to `<base>\runtime\<leaf>` on the production reservation,
+/// creating a missing installation base and reopening the same directory.
 #[test]
-fn actual_account_folder_resolves_under_the_original_diagnostic_job_reservation()
+fn runtime_storage_resolves_below_the_installation_base()
 -> crate::setup_storage::test_worker::TestResult {
     crate::setup_storage::test_worker::run_reserved(8 * 1024 * 1024, |context, _| {
-        let path = super::super::with(context, |owner| owner.local_storage(context))?;
-        assert!(path.is_absolute());
-        assert!(path.is_dir());
-        let directory = crate::durable_storage::files::Directory::open(&path, false)?;
-        assert_eq!(directory.retained()?.identity()?, directory.identity()?);
+        let temporary = tempfile::tempdir()?;
+        let base = temporary.path().join("SugarSubstitute");
+        let path = super::super::with(context, |owner| {
+            owner.runtime_storage(&base, "history", true, context)
+        })?;
+        let canonical = std::fs::canonicalize(&base)?;
+        assert_eq!(std::fs::canonicalize(&path)?, canonical.join("runtime").join("history"));
+        let reopened = super::super::with(context, |owner| {
+            owner.runtime_storage(&base, "history", false, context)
+        })?;
+        assert_eq!(reopened, path);
+        Ok(())
+    })
+}
+
+/// Operational logging may precede coordinator discovery; its user base must already
+/// satisfy the same protected-directory contract that native claims require.
+#[test]
+fn logging_before_native_discovery_keeps_history_and_claims_under_protected_user()
+-> crate::setup_storage::test_worker::TestResult {
+    crate::setup_storage::test_worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let layout =
+            sugarsubstitute_configuration::layout::InstallationLayout::new(temporary.path());
+        crate::diagnostic_storage::operational::append(
+            &layout.runtime_base(),
+            &["operation=before_discovery\n".into()],
+            0,
+            context,
+        )?;
+        let memory = context.memory().claim(1024 * 1024)?;
+        let budget = crate::native_claims::files::Budget::Protected(std::sync::Arc::new(memory));
+        let mut handles = Vec::new();
+        let resolved = crate::durable_storage::protected::account::resolve_namespace(
+            temporary.path(),
+            &mut handles,
+            budget,
+        )?;
+        assert_eq!(
+            std::fs::canonicalize(&resolved.directory)?,
+            std::fs::canonicalize(layout.user().join("runtime/claims"))?,
+        );
+        assert!(layout.user().join("runtime/operational-v1/page-0.json").is_file());
+        assert!(!temporary.path().join("runtime").exists());
+        let expected_namespace = resolved.namespace;
+        for handle in handles.iter_mut().rev() {
+            handle.close()?;
+        }
+        handles.clear();
+        let budget = crate::native_claims::files::Budget::Protected(std::sync::Arc::new(
+            context.memory().claim(1024 * 1024)?,
+        ));
+        let reopened = crate::durable_storage::protected::account::resolve_namespace(
+            temporary.path(),
+            &mut handles,
+            budget,
+        )?;
+        assert_eq!(reopened.namespace, expected_namespace);
+        for handle in handles.iter_mut().rev() {
+            handle.close()?;
+        }
         Ok(())
     })
 }

@@ -67,15 +67,56 @@ impl<'a> Stage<'a> {
         if destination.parent() != Some(self.parent.path()) {
             return Err(invalid("Journaled publication requires a sibling destination"));
         }
+        self.commit(destination, None, replace, protection, context)
+    }
+
+    /// Publish only the stable entry from the pinned installation's selection state.
+    /// Both source custody and its recovery journal stay in that folder across interruption.
+    pub(super) fn publish_entry(
+        self,
+        root: &Directory,
+        replace: bool,
+        protection: &mut Protection,
+        context: &JobContext,
+    ) -> io::Result<()> {
+        if self.parent.path()
+            != super::ownership::state_path(root).join(super::selection::DIRECTORY)
+        {
+            return Err(invalid("Root entry staging requires the installation state folder"));
+        }
+        self.commit(
+            &root.path().join(sugarsubstitute_configuration::layout::ENTRY),
+            Some(root),
+            replace,
+            protection,
+            context,
+        )
+    }
+
+    /// Commit an already validated sibling or stable-entry destination under retained custody.
+    fn commit(
+        self,
+        destination: &Path,
+        entry_root: Option<&Directory>,
+        replace: bool,
+        protection: &mut Protection,
+        context: &JobContext,
+    ) -> io::Result<()> {
         files::sync(&self.file, context)?;
         protection.close_file(self.file)?;
-        protection.publish(
-            &self.parent.path().join(self.record.stage()),
-            destination,
-            self.record.file,
-            Publication::File { replace },
-            context,
-        )?;
+        let source = self.parent.path().join(self.record.stage());
+        match entry_root {
+            Some(root) => {
+                protection.publish_entry(&source, root, self.record.file, replace, context)?
+            }
+            None => protection.publish(
+                &source,
+                destination,
+                self.record.file,
+                Publication::File { replace },
+                context,
+            )?,
+        }
         if let Err(cause) = protection.remove_journaled(
             &self.parent.path().join(self.record.journal_name()),
             self.journal_identity,

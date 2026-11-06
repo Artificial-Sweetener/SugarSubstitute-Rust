@@ -1,38 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Resolve the accent roles native widgets paint from the operating-system accent.
-//!
-//! Surfaces receive one palette from their composition owner and pass it to every shared
-//! renderer. When the platform reports no accent, the product palette is the defined fallback.
+//! Own qfluentwidgets-compatible mode-dependent accent variants and semantic control roles.
+//! The configured RGB seed remains unchanged; every shade is derived independently from it.
 
+use crate::widgets::ControlState;
 use sugarsubstitute_contracts::appearance::AccentColor;
+mod hsv;
 
-/// Accent colors for every shared widget role, as unpremultiplied opaque RGBA.
+/// An opaque sRGB seed, resolved by the composition owner before shared widget preparation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct AccentPalette {
-    progress_dark: [u8; 3],
-    progress_light: [u8; 3],
-    fill: [u8; 3],
-    hover: [u8; 3],
-}
+pub struct AccentPalette([u8; 3]);
 
 impl AccentPalette {
-    /// Product pink used when the operating system reports no accent. Its theme-specific
-    /// progress shades and hover shade retain the original Fluent reference values.
-    pub const PRODUCT: Self = Self {
-        progress_dark: [255, 68, 132],
-        progress_light: [233, 30, 99],
-        fill: [255, 64, 137],
-        hover: [243, 58, 128],
-    };
+    /// Canonical product pink used when no system accent is available.
+    pub const PRODUCT: Self = Self([233, 30, 99]);
 
-    /// Paint every accent role with the operating-system accent; hover darkens it slightly.
+    /// Retain the exact operating-system seed independently of the surface's mode.
     pub const fn system(accent: AccentColor) -> Self {
-        let rgb = accent.rgb();
-        Self { progress_dark: rgb, progress_light: rgb, fill: rgb, hover: darken(rgb) }
+        Self(accent.rgb())
     }
 
-    /// Use the reported accent, or the product palette when the platform reports none.
+    /// Use the reported accent, or the canonical product seed.
     pub const fn resolve(accent: Option<AccentColor>) -> Self {
         match accent {
             Some(accent) => Self::system(accent),
@@ -40,64 +28,113 @@ impl AccentPalette {
         }
     }
 
-    /// Opaque progress completion color for a dark or light background.
-    pub const fn progress(self, dark: bool) -> [u8; 4] {
-        opaque(if dark { self.progress_dark } else { self.progress_light })
+    /// Derive all seven qfluentwidgets shades for the resolved surface mode.
+    pub fn variants(self, dark: bool) -> AccentVariants {
+        let hsv = hsv::Hsv::from_rgb(self.0);
+        let s = if dark { hsv.saturation * 0.84 } else { hsv.saturation };
+        let v = if dark { 1.0 } else { hsv.value };
+        let shade = |saturation, value| hsv.rgb(s * saturation, v * value);
+        AccentVariants {
+            dark,
+            primary: shade(1.0, 1.0),
+            dark1: shade(1.0, if dark { 0.9 } else { 0.75 }),
+            dark2: shade(if dark { 0.977 } else { 1.05 }, if dark { 0.82 } else { 0.5 }),
+            dark3: shade(if dark { 0.95 } else { 1.1 }, if dark { 0.7 } else { 0.4 }),
+            light1: shade(if dark { 0.92 } else { 1.0 }, if dark { 1.0 } else { 1.05 }),
+            light2: shade(if dark { 0.78 } else { 0.75 }, if dark { 1.0 } else { 1.05 }),
+            light3: shade(0.65, if dark { 1.0 } else { 1.05 }),
+        }
     }
 
-    /// Opaque emphasized control fill, such as a primary button or a checked box.
-    pub const fn fill(self) -> [u8; 4] {
-        opaque(self.fill)
-    }
-
-    /// Emphasized control fill under the pointer or during a press.
-    pub const fn hover(self) -> [u8; 4] {
-        opaque(self.hover)
-    }
-
-    /// Translucent emphasized fill, such as an icon badge wash.
-    pub const fn tint(self, alpha: u8) -> [u8; 4] {
-        let [red, green, blue] = self.fill;
-        [red, green, blue, alpha]
+    /// Opaque progress completion uses the resolved mode's primary shade.
+    pub fn progress(self, dark: bool) -> [u8; 4] {
+        self.variants(dark).primary
     }
 }
 
-const fn opaque([red, green, blue]: [u8; 3]) -> [u8; 4] {
-    [red, green, blue, 255]
+/// Independently derived qfluentwidgets shades, in unpremultiplied opaque RGBA.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AccentVariants {
+    dark: bool,
+    /// Default accent fill, indicator, progress, slider and focus shade.
+    pub primary: [u8; 4],
+    /// First darker shade; dark-mode button hover and pressed link.
+    pub dark1: [u8; 4],
+    /// Second darker shade; dark-mode button and checkbox press.
+    pub dark2: [u8; 4],
+    /// Third darker shade; available for accent separators.
+    pub dark3: [u8; 4],
+    /// First lighter shade; light-mode hover and switch hover in both modes.
+    pub light1: [u8; 4],
+    /// Second lighter shade; light-mode checkbox press and switch press in both modes.
+    pub light2: [u8; 4],
+    /// Third lighter shade; light-mode button press.
+    pub light3: [u8; 4],
 }
 
-/// Scale each channel to 95%, the product hover's approximate darkening, rounding to nearest.
-const fn darken([red, green, blue]: [u8; 3]) -> [u8; 3] {
-    const fn channel(value: u8) -> u8 {
-        ((value as u16 * 95 + 50) / 100) as u8
+impl AccentVariants {
+    /// Enabled primary button fill; disabled neutral treatment belongs to the widget.
+    pub fn button(self, state: ControlState) -> [u8; 4] {
+        match state {
+            ControlState::Hover => {
+                if self.dark {
+                    self.dark1
+                } else {
+                    self.light1
+                }
+            }
+            ControlState::Pressed => {
+                if self.dark {
+                    self.dark2
+                } else {
+                    self.light3
+                }
+            }
+            _ => self.primary,
+        }
     }
-    [channel(red), channel(green), channel(blue)]
+
+    /// Enabled checked checkbox fill and border, including its distinct light-mode press.
+    pub fn checkbox(self, state: ControlState) -> [u8; 4] {
+        if state == ControlState::Pressed && !self.dark { self.light2 } else { self.button(state) }
+    }
+
+    /// Enabled checked switch fill; both modes use lighter hover and pressed variants.
+    pub fn toggle(self, state: ControlState) -> [u8; 4] {
+        match state {
+            ControlState::Hover => self.light1,
+            ControlState::Pressed => self.light2,
+            _ => self.primary,
+        }
+    }
+
+    /// Enabled link foreground; only a dark-mode press changes its shade.
+    pub fn link(self, state: ControlState) -> [u8; 4] {
+        if self.dark && state == ControlState::Pressed { self.dark1 } else { self.primary }
+    }
+
+    /// Text-selection fill for the resolved mode.
+    pub fn selection(self) -> [u8; 4] {
+        if self.dark { self.primary } else { self.light1 }
+    }
+
+    /// Enabled text or icon on accent; pressed button text uses 63% opacity.
+    pub fn foreground(self, state: ControlState) -> [u8; 4] {
+        foreground(self.dark, state)
+    }
+
+    /// Apply a surface-owned wash opacity to the resolved primary shade.
+    pub fn tint(self, alpha: u8) -> [u8; 4] {
+        let [r, g, b, _] = self.primary;
+        [r, g, b, alpha]
+    }
+}
+
+/// Resolve seed-independent on-accent text for the actual surface mode and pointer state.
+pub(crate) fn foreground(dark: bool, state: ControlState) -> [u8; 4] {
+    let channel = if dark { 0 } else { 255 };
+    [channel, channel, channel, if state == ControlState::Pressed { 161 } else { 255 }]
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Without a reported accent, native surfaces keep the original product colors exactly.
-    #[test]
-    fn missing_system_accent_falls_back_to_the_product_palette() {
-        let palette = AccentPalette::resolve(None);
-        assert_eq!(palette, AccentPalette::PRODUCT);
-        assert_eq!(palette.progress(true), [255, 68, 132, 255]);
-        assert_eq!(palette.progress(false), [233, 30, 99, 255]);
-        assert_eq!(palette.fill(), [255, 64, 137, 255]);
-        assert_eq!(palette.hover(), [243, 58, 128, 255]);
-        assert_eq!(palette.tint(31), [255, 64, 137, 31]);
-    }
-
-    /// A reported accent replaces every role, independent of theme.
-    #[test]
-    fn system_accent_supplies_every_role() {
-        let palette = AccentPalette::resolve(Some(AccentColor::new(0, 120, 212)));
-        assert_eq!(palette.progress(true), [0, 120, 212, 255]);
-        assert_eq!(palette.progress(false), [0, 120, 212, 255]);
-        assert_eq!(palette.fill(), [0, 120, 212, 255]);
-        assert_eq!(palette.hover(), [0, 114, 201, 255]);
-        assert_eq!(palette.tint(61), [0, 120, 212, 61]);
-    }
-}
+mod tests;

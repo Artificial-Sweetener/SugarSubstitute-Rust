@@ -8,8 +8,12 @@ use crate::setup_storage::{
 };
 
 type Failure = Box<dyn std::error::Error + Send + Sync>;
+/// Historical shortcut published by the trial fixture's earlier installation.
 const LINK: &str = "SugarSubstitute.lnk";
+/// Launcher image inside each application generation.
 const LAUNCHER: &str = "sugarsubstitute-launcher.exe";
+/// Stable root entry users launch.
+const ENTRY: &str = "SugarSubstitute.exe";
 
 #[test]
 fn retained_trial_publications_fit_their_independent_operation_reservation() -> TestResult {
@@ -61,15 +65,12 @@ fn trial_shell_publication_requires_health_and_retains_run_custody() -> TestResu
         let old_link = std::fs::read(root.path().join(LINK))?;
         assert!(application.repair_launch_entry(context).is_err());
         assert_eq!(std::fs::read(root.path().join(LINK))?, old_link);
-        assert!(!root.path().join(LAUNCHER).exists());
+        assert!(!root.path().join(ENTRY).exists());
         let accepted = application.accept(context)?;
         let installed = application.repair_launch_entry(context)?;
-        assert_eq!(installed.executable, root.path().join(LAUNCHER));
+        assert_eq!(installed.executable, root.path().join(ENTRY));
         assert_eq!(installed.directory, root.path());
-        assert_eq!(
-            crate::setup_storage::entrypoint::native::target(&root.path().join(LINK))?,
-            installed.executable
-        );
+        assert!(!root.path().join(LINK).exists());
         assert_eq!(
             std::fs::read(&installed.executable)?,
             std::fs::read(application.directory().join(LAUNCHER))?
@@ -101,7 +102,7 @@ fn busy_setup_preserves_accepted_trial_and_shell_publication_can_retry() -> Test
         drop(setup);
         application.repair_launch_entry(context)?;
         assert_eq!(store.load(context)?, Some(accepted));
-        assert!(root.path().join(LAUNCHER).is_file());
+        assert!(root.path().join(ENTRY).is_file());
         Ok(())
     })
 }
@@ -112,13 +113,13 @@ fn unknown_shell_files_cannot_undo_health_or_be_overwritten() -> TestResult {
         let root = tempfile::tempdir()?;
         let application = trial(root.path(), context)?;
         let accepted = application.accept(context)?;
-        std::fs::write(root.path().join(LAUNCHER), b"user-owned executable")?;
+        std::fs::write(root.path().join(ENTRY), b"user-owned executable")?;
         let old_link = std::fs::read(root.path().join(LINK))?;
         assert!(application.repair_launch_entry(context).is_err());
         assert_eq!(SelectionStore::open(root.path(), context)?.load(context)?, Some(accepted));
-        assert_eq!(std::fs::read(root.path().join(LAUNCHER))?, b"user-owned executable");
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"user-owned executable");
         assert_eq!(std::fs::read(root.path().join(LINK))?, old_link);
-        assert!(!root.path().join(".selection-state/.launcher-generation.json").exists());
+        assert!(!root.path().join("state/selection/.launcher-generation.json").exists());
         Ok(())
     })
 }
@@ -130,7 +131,7 @@ fn interruption_after_launcher_intent_reopens_offline_with_accepted_selection() 
     worker::run_reserved_expiring(SIGNED_INSTALLER_RESERVATION_BYTES, move |context, clock| {
         let application = trial(&path, context)?;
         application.accept(context)?;
-        let observed = path.join(".selection-state/.launcher-generation.json");
+        let observed = path.join("state/selection/.launcher-generation.json");
         clock.observe_checks(move || observed.exists())?;
         assert!(application.repair_launch_entry(context).is_err());
         Ok(())
@@ -141,17 +142,15 @@ fn interruption_after_launcher_intent_reopens_offline_with_accepted_selection() 
         let accepted = store.load(context)?.ok_or("Selection missing")?;
         assert!(accepted.accepted().is_some());
         assert!(accepted.candidate().is_none());
-        assert!(path.join(".selection-state/.launcher-generation.json").is_file());
+        assert!(path.join("state/selection/.launcher-generation.json").is_file());
         let mut run = InstallationRun::acquire(store.clone(), context)?;
         let InstallationLaunch::Application(application) = run.select_launch(None, context)? else {
             return Err("Accepted application could not reopen after shell interruption".into());
         };
         application.repair_launch_entry(context)?;
         assert_eq!(store.load(context)?, Some(accepted));
-        assert_eq!(
-            crate::setup_storage::entrypoint::native::target(&path.join(LINK))?,
-            path.join(LAUNCHER)
-        );
+        assert!(path.join(ENTRY).is_file());
+        assert!(!path.join(LINK).exists());
         Ok(())
     })
 }

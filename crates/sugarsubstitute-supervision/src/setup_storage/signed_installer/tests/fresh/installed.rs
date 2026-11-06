@@ -129,7 +129,7 @@ fn explicit_installation_reopens_without_metadata_and_retains_real_trial_recover
         Ok(candidate.authorize_installation(|| NOW, &context)?)
     })?;
     let root = temporary.path().join("native");
-    let selection = root.join(".selection-state/.substitute-selection.json");
+    let selection = root.join("state/selection/.substitute-selection.json");
     let before = std::fs::read(&selection)?;
     assert!(directory.join(AUTHORIZATION).is_file());
     drop(installed);
@@ -236,7 +236,7 @@ fn corrupt_foreign_and_future_installation_authorizations_are_preserved() -> Tes
         let original = std::fs::read(&record)?;
         drop(installed);
         let root = temporary.path().join("native");
-        let selection = root.join(".selection-state/.substitute-selection.json");
+        let selection = root.join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&selection)?;
         for (field, value) in [
             ("schema_version", serde_json::json!(2)),

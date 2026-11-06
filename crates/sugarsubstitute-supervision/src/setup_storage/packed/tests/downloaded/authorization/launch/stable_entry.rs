@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Real filesystem and shell-link publication, using inert accepted launcher payloads.
+//! Real filesystem publication of the stable root entry, using inert accepted launcher payloads.
 use super::*;
 use sugarsubstitute_contracts::application_launch::{CURRENT_CONTRACT, CURRENT_LAUNCHER_CONTRACT};
 
+/// Launcher image inside each application generation.
 const LAUNCHER: &str = "sugarsubstitute-launcher.exe";
-const OWNERSHIP: &str = ".selection-state/.launcher-generation.json";
+/// Stable root entry users launch.
+const ENTRY: &str = "SugarSubstitute.exe";
+const OWNERSHIP: &str = "state/selection/.launcher-generation.json";
+/// Shortcut of earlier layouts; the stable root holds no shortcut.
 const LINK: &str = "SugarSubstitute.lnk";
 mod updates;
 
@@ -31,7 +35,8 @@ fn prepare(
 }
 
 #[test]
-fn accepted_launcher_and_shortcut_publish_under_captured_directory_pin() -> TestResult {
+fn accepted_launcher_preserves_locked_root_then_publishes_the_entry_after_capture_retires()
+-> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
         let root = Directory::open(temporary.path(), false)?;
@@ -40,39 +45,42 @@ fn accepted_launcher_and_shortcut_publish_under_captured_directory_pin() -> Test
         use windows::Win32::Storage::FileSystem::{
             FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ,
         };
-        let _capture_parent = std::fs::OpenOptions::new()
+        let capture_parent = std::fs::OpenOptions::new()
             .read(true)
             .share_mode(FILE_SHARE_READ.0)
             .custom_flags((FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).0)
             .open(root.path())?;
-        let selection = root.path().join(".selection-state/.substitute-selection.json");
+        let selection = root.path().join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&selection)?;
         let old_link = std::fs::read(root.path().join(LINK))?;
+        assert!(application.repair_launch_entry(context).is_err());
+        assert!(!root.path().join(ENTRY).exists());
+        assert_eq!(std::fs::read(&selection)?, before);
+        assert_eq!(std::fs::read(root.path().join(LINK))?, old_link);
+        for entry in std::fs::read_dir(root.path())? {
+            assert!(!entry?.file_name().to_string_lossy().starts_with(".substitute-publication-"));
+        }
+        drop(capture_parent);
         let installed = application.repair_launch_entry(context)?;
-        assert_eq!(installed.executable, root.path().join(LAUNCHER));
+        assert_eq!(installed.executable, root.path().join(ENTRY));
         assert_eq!(installed.directory, root.path());
         assert_eq!(
-            std::fs::read(root.path().join(LAUNCHER))?,
+            std::fs::read(root.path().join(ENTRY))?,
             std::fs::read(application.directory().join(LAUNCHER))?
         );
-        let stable = std::fs::read(root.path().join(LINK))?;
-        assert_ne!(stable, old_link);
+        assert!(!root.path().join(LINK).exists());
         let record = std::fs::read(root.path().join(OWNERSHIP))?;
         let ownership: serde_json::Value = serde_json::from_slice(&record)?;
         assert_eq!(ownership["source"]["id"], application.generation().id.as_str());
         assert_eq!(ownership["source"]["package"], application.generation().package.as_str());
-        assert_eq!(
-            entrypoint::native::target(&root.path().join(LINK))?,
-            root.path().join(LAUNCHER)
-        );
-        let link = root.read(LINK)?;
-        let identity = crate::durable_storage::files::file_identity(&link)?;
+        let entry = root.read(ENTRY)?;
+        let identity = crate::durable_storage::files::file_identity(&entry)?;
+        drop(entry);
         application.repair_launch_entry(context)?;
-        assert_eq!(crate::durable_storage::files::file_identity(&root.read(LINK)?)?, identity);
-        assert_eq!(std::fs::read(root.path().join(LINK))?, stable);
+        assert_eq!(crate::durable_storage::files::file_identity(&root.read(ENTRY)?)?, identity);
         assert_eq!(std::fs::read(root.path().join(OWNERSHIP))?, record);
         assert_eq!(std::fs::read(selection)?, before);
-        for directory in [root.path(), &root.path().join(".selection-state")] {
+        for directory in [root.path(), &root.path().join("state/selection")] {
             for entry in std::fs::read_dir(directory)? {
                 let name = entry?.file_name();
                 let name = name.to_string_lossy();
@@ -91,43 +99,50 @@ fn accepted_launcher_and_shortcut_publish_under_captured_directory_pin() -> Test
 }
 
 #[test]
-fn persisted_launcher_intent_repairs_missing_image_and_links_without_cache() -> TestResult {
+fn persisted_launcher_intent_repairs_missing_image_without_cache() -> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
         let root = Directory::open(temporary.path(), false)?;
         let application = prepare(&root, context)?;
         application.repair_launch_entry(context)?;
         let record = std::fs::read(root.path().join(OWNERSHIP))?;
-        let image = std::fs::read(root.path().join(LAUNCHER))?;
-        std::fs::remove_file(root.path().join(LINK))?;
-        std::fs::remove_file(root.path().join(LAUNCHER))?;
-        std::fs::remove_file(root.path().join(".selection-state/SugarSubstitute.lnk"))?;
+        let image = std::fs::read(root.path().join(ENTRY))?;
+        std::fs::remove_file(root.path().join(ENTRY))?;
         // A complete ownership intent without its published payload is a restart state.
         application.repair_launch_entry(context)?;
         assert_eq!(std::fs::read(root.path().join(OWNERSHIP))?, record);
-        assert_eq!(std::fs::read(root.path().join(LAUNCHER))?, image);
-        let link = std::fs::read(root.path().join(LINK))?;
-        std::fs::remove_file(root.path().join(LINK))?;
-        application.repair_launch_entry(context)?;
-        assert_eq!(std::fs::read(root.path().join(LINK))?, link);
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, image);
+        assert!(!root.path().join(LINK).exists());
         Ok(())
     })
 }
 
 #[test]
-fn foreign_root_executable_and_edited_links_cannot_create_launcher_ownership() -> TestResult {
+fn foreign_root_executable_cannot_create_launcher_ownership() -> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, _| {
-        for leaf in [LAUNCHER, LINK] {
-            let temporary = tempfile::tempdir()?;
-            let root = Directory::open(temporary.path(), false)?;
-            let application = prepare(&root, context)?;
-            std::fs::write(root.path().join(leaf), b"user-owned bytes")?;
-            let link = std::fs::read(root.path().join(LINK))?;
-            assert!(application.repair_launch_entry(context).is_err());
-            assert_eq!(std::fs::read(root.path().join(leaf))?, b"user-owned bytes");
-            assert_eq!(std::fs::read(root.path().join(LINK))?, link);
-            assert!(!root.path().join(OWNERSHIP).exists());
-        }
+        let temporary = tempfile::tempdir()?;
+        let root = Directory::open(temporary.path(), false)?;
+        let application = prepare(&root, context)?;
+        std::fs::write(root.path().join(ENTRY), b"user-owned bytes")?;
+        let link = std::fs::read(root.path().join(LINK))?;
+        assert!(application.repair_launch_entry(context).is_err());
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, b"user-owned bytes");
+        assert_eq!(std::fs::read(root.path().join(LINK))?, link);
+        assert!(!root.path().join(OWNERSHIP).exists());
+        Ok(())
+    })
+}
+
+#[test]
+fn edited_historical_shortcut_is_preserved_beside_the_published_entry() -> TestResult {
+    worker::run_reserved(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        let root = Directory::open(temporary.path(), false)?;
+        let application = prepare(&root, context)?;
+        std::fs::write(root.path().join(LINK), b"user-owned bytes")?;
+        application.repair_launch_entry(context)?;
+        assert_eq!(std::fs::read(root.path().join(LINK))?, b"user-owned bytes");
+        assert!(root.path().join(ENTRY).is_file());
         Ok(())
     })
 }
@@ -150,17 +165,12 @@ fn changed_stable_entry_case(leaf: &'static str) -> TestResult {
 
 #[test]
 fn changed_stable_payload_is_preserved() -> TestResult {
-    changed_stable_entry_case(LAUNCHER)
+    changed_stable_entry_case(ENTRY)
 }
 
 #[test]
 fn changed_stable_ownership_record_is_preserved() -> TestResult {
     changed_stable_entry_case(OWNERSHIP)
-}
-
-#[test]
-fn changed_stable_shortcut_is_preserved() -> TestResult {
-    changed_stable_entry_case(LINK)
 }
 
 #[test]
@@ -182,25 +192,23 @@ fn launcher_publication_requires_setup_custody_and_respects_cancellation() -> Te
         assert!(application.repair_launch_entry(context).is_err());
         assert_eq!(std::fs::read(root.path().join(LINK))?, before);
         assert!(!root.path().join(OWNERSHIP).exists());
-        assert!(!root.path().join(LAUNCHER).exists());
+        assert!(!root.path().join(ENTRY).exists());
         Ok(())
     })
 }
 
 #[test]
-fn missing_launcher_ownership_is_not_inferred_from_a_surviving_shell_entry() -> TestResult {
+fn missing_launcher_ownership_is_not_inferred_from_a_surviving_root_entry() -> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
         let root = Directory::open(temporary.path(), false)?;
         let application = prepare(&root, context)?;
         application.repair_launch_entry(context)?;
-        let link = std::fs::read(root.path().join(LINK))?;
+        let entry = std::fs::read(root.path().join(ENTRY))?;
         std::fs::remove_file(root.path().join(OWNERSHIP))?;
-        std::fs::remove_file(root.path().join(LAUNCHER))?;
         assert!(application.repair_launch_entry(context).is_err());
-        assert_eq!(std::fs::read(root.path().join(LINK))?, link);
+        assert_eq!(std::fs::read(root.path().join(ENTRY))?, entry);
         assert!(!root.path().join(OWNERSHIP).exists());
-        assert!(!root.path().join(LAUNCHER).exists());
         Ok(())
     })
 }
@@ -235,9 +243,9 @@ fn matching_installer_publishes_and_returns_the_stable_launcher() -> TestResult 
         prepared.stage(context)?;
         let installed =
             prepared.activate(prepared.maintenance_runtime().ok_or("Runtime absent")?, context)?;
-        assert_eq!(installed.executable, root.path().join(LAUNCHER));
+        assert_eq!(installed.executable, root.path().join(ENTRY));
         assert_eq!(installed.directory, root.path());
-        assert_eq!(entrypoint::native::target(&root.path().join(LINK))?, installed.executable);
+        assert!(!root.path().join(LINK).exists());
         assert!(!root.path().join("external-comfy").exists());
         assert!(!root.path().join("python.exe").exists());
         Ok(())

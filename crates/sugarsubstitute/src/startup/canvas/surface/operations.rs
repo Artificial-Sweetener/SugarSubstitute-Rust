@@ -319,10 +319,10 @@ fn output_leaf(file: &CanvasFileReference) -> String {
     file.filename().rsplit(['/', '\\']).next().unwrap_or_default().to_owned()
 }
 
-/// Admit only a Comfy output-storage reference that the backend adapter may fetch; the view
+/// Admit saved or temporary Comfy results that the backend adapter may fetch; the view
 /// target owns the closed PNG/JPEG filename rule.
 pub(super) fn admitted_output(file: &CanvasFileReference) -> Option<ComfyViewTarget> {
-    if file.storage() != CanvasFileStorage::Output {
+    if !matches!(file.storage(), CanvasFileStorage::Output | CanvasFileStorage::Temporary) {
         return None;
     }
     ComfyViewTarget::new(file).ok()

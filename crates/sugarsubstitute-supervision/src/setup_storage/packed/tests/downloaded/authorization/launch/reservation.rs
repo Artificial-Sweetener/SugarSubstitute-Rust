@@ -104,7 +104,7 @@ fn reservation_preserves_trials_and_empty_installations_as_explicit_nonlaunch_re
         let temporary = crate::setup_storage::test_worker::installation(71, context)?;
         let store = Arc::new(SelectionStore::open(temporary.path(), context)?);
         assert!(matches!(store.reserve_launch(context)?, ReservedLaunch::NeedsInstallation));
-        assert!(!temporary.path().join(".selection-state/.installation-run-lock").exists());
+        assert!(!temporary.path().join("state/selection/.installation-run-lock").exists());
         let before = store.load(context)?.ok_or("Selection absent")?;
         let generation = next_generation()?;
         let staging = before.prepare(generation.clone(), PreparationIntent::Automatic)?;
@@ -135,7 +135,7 @@ fn invalid_selection_is_preserved_and_does_not_leave_an_unreleaseable_read_pin()
         let directory = Directory::open(temporary.path(), false)?;
         accept_fixture(&directory, context)?;
         let store = Arc::new(SelectionStore::open(directory.path(), context)?);
-        let path = directory.path().join(".selection-state/.substitute-selection.json");
+        let path = directory.path().join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&path)?;
         std::fs::write(&path, b"invalid preserved selection")?;
         assert!(store.reserve_launch(context).is_err());
@@ -215,7 +215,7 @@ fn expired_adoption_releases_selection_pin_without_rewriting_state() -> TestResu
         let directory = Directory::open(temporary.path(), false)?;
         accept_fixture(&directory, context)?;
         let store = Arc::new(SelectionStore::open(directory.path(), context)?);
-        let path = directory.path().join(".selection-state/.substitute-selection.json");
+        let path = directory.path().join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&path)?;
         let ReservedLaunch::Application(reserved) = store.reserve_launch(context)? else {
             return Err("Reservation absent".into());

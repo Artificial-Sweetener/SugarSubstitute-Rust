@@ -41,9 +41,9 @@ fn known_installation_cannot_bypass_run_ownership_by_losing_its_marker_or_select
             let root = Directory::open(temporary.path(), false)?;
             let (generation, _) = accept_fixture(&root, context)?;
             let path = root.path().join(if marker {
-                ".substitute-installation.json"
+                "state/installation.json"
             } else {
-                ".selection-state/.substitute-selection.json"
+                "state/selection/.substitute-selection.json"
             });
             std::fs::remove_file(&path)?;
             assert!(
@@ -70,7 +70,7 @@ fn source_and_earlier_native_launches_do_not_create_updater_selection() -> TestR
         let root = Directory::open(temporary.path(), false)?;
         let older = fixture::installed(&root, context)?;
         assert!(retain_running_generation(&older, None, context)?.is_none());
-        assert!(!root.path().join(".selection-state").exists());
+        assert!(!root.path().join("state/selection").exists());
         Ok(())
     })
 }
@@ -94,12 +94,12 @@ fn lost_namespace_and_ownership_cannot_disguise_an_enabled_installation_as_an_ol
         let temporary = tempfile::tempdir()?;
         let root = Directory::open(temporary.path(), false)?;
         let (generation, _) = accept_fixture(&root, context)?;
-        let source = root.path().join(".selection-state");
+        let source = root.path().join("state/selection");
         let displaced = root.path().join("displaced-selection");
         std::fs::rename(&source, &displaced)?;
         let image = root.path().join("releases").join(generation.id.as_str());
         assert!(retain_running_generation(&image, None, context).is_err());
-        std::fs::remove_file(root.path().join(".substitute-installation.json"))?;
+        std::fs::remove_file(root.path().join("state/installation.json"))?;
         assert!(retain_running_generation(&image, None, context).is_err());
         assert!(!source.exists());
         assert!(displaced.join(".substitute-selection.json").exists());

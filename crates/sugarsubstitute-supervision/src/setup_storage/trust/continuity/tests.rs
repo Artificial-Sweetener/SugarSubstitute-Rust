@@ -15,7 +15,7 @@ fn opened_trust_retains_its_exact_bound_marker_against_replacement() -> TestResu
             &root(&key(60)?, 1, None)?,
             context,
         )?;
-        let marker = installation.path().join(MARKER);
+        let marker = installation.path().join("state").join(MARKER);
         let bytes = std::fs::read(&marker)?;
         assert_eq!(
             envelope::decode(envelope::Kind::Continuity, &store.installation, &[60; 32], &bytes)?,
@@ -46,12 +46,12 @@ fn earlier_complete_trust_enables_continuity_without_rewriting_accepted_floors()
         let checkpoint = std::fs::read(store.root.path().join(RECORD))?;
         let history = std::fs::read(store.root.path().join(releases::RECORD))?;
         drop(store);
-        std::fs::remove_file(installation.path().join(MARKER))?;
+        std::fs::remove_file(installation.path().join("state").join(MARKER))?;
         let reopened = TrustStore::open(installation.path(), [60; 32], context)?;
         assert_eq!(reopened.next_root_version(context)?, 3);
         assert_eq!(std::fs::read(reopened.root.path().join(RECORD))?, checkpoint);
         assert_eq!(std::fs::read(reopened.root.path().join(releases::RECORD))?, history);
-        assert!(installation.path().join(MARKER).exists());
+        assert!(installation.path().join("state").join(MARKER).exists());
         Ok(())
     })
 }
@@ -80,7 +80,7 @@ fn unprotected_corrupt_or_foreign_markers_are_preserved_and_never_replaced() -> 
                 bytes[7] = b'9';
             }
             drop(store);
-            let marker = installation.path().join(MARKER);
+            let marker = installation.path().join("state").join(MARKER);
             std::fs::remove_file(&marker)?;
             if variant == 0 {
                 std::fs::write(&marker, &bytes)?;
@@ -98,7 +98,7 @@ fn unprotected_corrupt_or_foreign_markers_are_preserved_and_never_replaced() -> 
             );
             assert_eq!(std::fs::read(marker)?, bytes);
             assert_eq!(
-                std::fs::read(installation.path().join(DIRECTORY).join(RECORD))?,
+                std::fs::read(installation.path().join("state").join(DIRECTORY).join(RECORD))?,
                 checkpoint
             );
         }
@@ -118,12 +118,17 @@ fn incomplete_earlier_history_cannot_enable_continuity() -> TestResult {
         )?;
         let checkpoint = std::fs::read(store.root.path().join(RECORD))?;
         drop(store);
-        let marker = installation.path().join(MARKER);
+        let marker = installation.path().join("state").join(MARKER);
         std::fs::remove_file(&marker)?;
-        std::fs::remove_file(installation.path().join(DIRECTORY).join(releases::RECORD))?;
+        std::fs::remove_file(
+            installation.path().join("state").join(DIRECTORY).join(releases::RECORD),
+        )?;
         assert!(TrustStore::open(installation.path(), [60; 32], context).is_err());
         assert!(!marker.exists());
-        assert_eq!(std::fs::read(installation.path().join(DIRECTORY).join(RECORD))?, checkpoint);
+        assert_eq!(
+            std::fs::read(installation.path().join("state").join(DIRECTORY).join(RECORD))?,
+            checkpoint
+        );
         Ok(())
     })
 }
@@ -134,7 +139,7 @@ fn interruption_before_marker_publication_reopens_complete_trust() -> TestResult
     let temporary = tempfile::tempdir()?;
     let path = temporary.path().to_owned();
     worker::run_reserved_expiring(TRUST_RESERVATION_BYTES, move |context, clock| {
-        std::fs::write(path.join(ownership::MARKER), ownership::CONTENT)?;
+        ownership::establish(&crate::durable_storage::files::Directory::open(&path, false)?)?;
         SelectionStore::initialize(
             &path,
             &InstallationRecord::empty(InstallationId::new("6".repeat(32))?),
@@ -142,23 +147,24 @@ fn interruption_before_marker_publication_reopens_complete_trust() -> TestResult
         )?;
         let observed = path.clone();
         clock.observe_checks(move || {
-            observed.join(DIRECTORY).join(RECORD).exists() && !observed.join(MARKER).exists()
+            observed.join("state").join(DIRECTORY).join(RECORD).exists()
+                && !observed.join("state").join(MARKER).exists()
         })?;
         assert!(
             TrustStore::initialize(&path, [60; 32], &root(&key(60)?, 1, None)?, context).is_err()
         );
-        assert!(path.join(DIRECTORY).join(RECORD).exists());
-        assert!(path.join(DIRECTORY).join(releases::RECORD).exists());
-        assert!(!path.join(MARKER).exists());
+        assert!(path.join("state").join(DIRECTORY).join(RECORD).exists());
+        assert!(path.join("state").join(DIRECTORY).join(releases::RECORD).exists());
+        assert!(!path.join("state").join(MARKER).exists());
         Ok(())
     })?;
     let path = temporary.path().to_owned();
     worker::run_reserved(TRUST_RESERVATION_BYTES, move |context, _| {
-        let checkpoint = std::fs::read(path.join(DIRECTORY).join(RECORD))?;
+        let checkpoint = std::fs::read(path.join("state").join(DIRECTORY).join(RECORD))?;
         let store = TrustStore::open(&path, [60; 32], context)?;
         assert_eq!(store.next_root_version(context)?, 2);
-        assert!(path.join(MARKER).exists());
-        assert_eq!(std::fs::read(path.join(DIRECTORY).join(RECORD))?, checkpoint);
+        assert!(path.join("state").join(MARKER).exists());
+        assert_eq!(std::fs::read(path.join("state").join(DIRECTORY).join(RECORD))?, checkpoint);
         Ok(())
     })
 }
@@ -168,7 +174,7 @@ fn occupied_continuity_marker_alone_blocks_bootstrap_without_changing_unknown_by
 {
     worker::run_reserved(TRUST_RESERVATION_BYTES, |context, _| {
         let installation = installation(68, context)?;
-        let marker = installation.path().join(MARKER);
+        let marker = installation.path().join("state").join(MARKER);
         std::fs::write(&marker, b"unknown preserved state")?;
         assert!(
             TrustStore::initialize(
@@ -179,7 +185,7 @@ fn occupied_continuity_marker_alone_blocks_bootstrap_without_changing_unknown_by
             )
             .is_err()
         );
-        assert!(!installation.path().join(DIRECTORY).exists());
+        assert!(!installation.path().join("state").join(DIRECTORY).exists());
         assert_eq!(std::fs::read(marker)?, b"unknown preserved state");
         Ok(())
     })

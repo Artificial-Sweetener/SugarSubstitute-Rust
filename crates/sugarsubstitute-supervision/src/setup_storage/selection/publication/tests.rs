@@ -19,8 +19,8 @@ fn legacy_publication_excludes_first_enablement_until_its_commit_finishes() -> T
                 )
                 .is_err()
             );
-            assert!(!root.path().join(DIRECTORY).exists());
-            assert!(!root.path().join(NAMESPACE_MARKER).exists());
+            assert!(!root.path().join("state").join(DIRECTORY).exists());
+            assert!(!root.path().join("state").join(NAMESPACE_MARKER).exists());
             Ok(())
         })?;
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
@@ -70,7 +70,11 @@ fn incomplete_and_damaged_selection_never_reenable_legacy_publication() -> TestR
         for leaf in [DIRECTORY, NAMESPACE_MARKER, RECORD, LOCK] {
             let temporary = root()?;
             let root = Directory::open(temporary.path(), false)?;
-            let path = root.path().join(leaf);
+            let path = if [DIRECTORY, NAMESPACE_MARKER].contains(&leaf) {
+                root.path().join("state").join(leaf)
+            } else {
+                root.path().join(leaf)
+            };
             std::fs::write(&path, b"unknown preserved state")?;
             let mut published = false;
             assert!(

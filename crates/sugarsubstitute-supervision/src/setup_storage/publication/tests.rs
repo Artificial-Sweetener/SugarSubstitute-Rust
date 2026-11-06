@@ -8,6 +8,34 @@ use crate::setup_storage::test_worker::{self as worker, TestResult};
 mod preservation;
 
 #[test]
+fn stable_entry_stages_and_recovers_only_below_selection_state() -> TestResult {
+    worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let root = Directory::open(temporary.path(), false)?;
+        let state = Directory::open(&root.path().join("state/selection"), true)?;
+        protection::with(context, |protection| {
+            let mut abandoned = Stage::create(&state, protection, context)?;
+            abandoned.file().write_all(b"partial entry")?;
+            drop(abandoned);
+            assert_eq!(std::fs::read_dir(root.path())?.count(), 1);
+            recover(&state, protection, context)?;
+            recover(&state, protection, context)?;
+            assert_eq!(std::fs::read_dir(state.path())?.count(), 0);
+            let mut stage = Stage::create(&state, protection, context)?;
+            stage.file().write_all(b"accepted entry")?;
+            stage.publish_entry(&root, false, protection, context)?;
+            assert_eq!(std::fs::read(root.path().join("SugarSubstitute.exe"))?, b"accepted entry");
+            assert_eq!(std::fs::read_dir(root.path())?.count(), 2);
+            assert_eq!(std::fs::read_dir(state.path())?.count(), 0);
+            let stage = Stage::create(&root, protection, context)?;
+            assert!(stage.publish_entry(&root, false, protection, context).is_err());
+            recover(&root, protection, context)
+        })?;
+        Ok(())
+    })
+}
+
+#[test]
 fn successful_publication_remains_successful_when_journal_cleanup_is_busy() -> TestResult {
     worker::run(|context, _| {
         let temporary = tempfile::tempdir()?;

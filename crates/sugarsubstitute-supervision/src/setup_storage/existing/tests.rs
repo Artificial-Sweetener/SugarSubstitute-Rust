@@ -8,6 +8,41 @@ use crate::setup_storage::test_worker::{self, TestResult};
 use super::fixture::installed as fixture;
 
 #[test]
+fn ready_record_validation_preserves_supported_bytes_and_every_rejected_original() -> TestResult {
+    test_worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let root = Directory::open(temporary.path(), false)?;
+        let generation = fixture(&root, context)?;
+        let path = generation.join("installation-ready.json");
+        let original = std::fs::read(&path)?;
+        assert!(ExistingInstallation::read(&root, context)?.is_some());
+        assert_eq!(std::fs::read(&path)?, original);
+        for (pointer, invalid) in [
+            ("/schema_version", serde_json::json!(2)),
+            ("/bundle_sha256", serde_json::json!("unknown")),
+            ("/selection/mode", serde_json::json!("unknown")),
+            ("/runtime/directory", serde_json::json!("relative")),
+        ] {
+            let mut value: serde_json::Value = serde_json::from_slice(&original)?;
+            *value.pointer_mut(pointer).ok_or("Fixture field missing")? = invalid;
+            let rejected = serde_json::to_vec(&value)?;
+            std::fs::write(&path, &rejected)?;
+            assert!(ExistingInstallation::read(&root, context).is_err());
+            assert_eq!(std::fs::read(&path)?, rejected);
+        }
+        let mut value: serde_json::Value = serde_json::from_slice(&original)?;
+        value["unknown"] = serde_json::json!(true);
+        let rejected = serde_json::to_vec(&value)?;
+        std::fs::write(&path, &rejected)?;
+        assert!(ExistingInstallation::read(&root, context).is_err());
+        assert_eq!(std::fs::read(&path)?, rejected);
+        std::fs::write(&path, &original)?;
+        assert!(ExistingInstallation::read(&root, context)?.is_some());
+        Ok(())
+    })
+}
+
+#[test]
 fn maintenance_retains_native_path_policy_for_every_saved_input() -> TestResult {
     test_worker::run(|context, _| {
         let temporary = tempfile::tempdir()?;
@@ -40,7 +75,7 @@ fn maintenance_preserves_exact_config_and_external_launch_paths() -> TestResult 
         let root = Directory::open(temporary.path(), false)?;
         let original = fixture(&root, context)?;
         let summary = inspect_installation(root.path(), context)?.ok_or("Missing summary")?;
-        assert!(!root.path().join(".selection-state").exists());
+        assert!(!root.path().join("state/selection").exists());
         assert!(!summary.executable_missing);
         assert_eq!(summary.selection.locale, "ja");
         let existing = ExistingInstallation::read(&root, context)?.ok_or("Missing installation")?;
@@ -105,7 +140,7 @@ fn maintenance_pins_inputs_against_mid_transaction_edit_or_removal() -> TestResu
         let original = fixture(&root, context)?;
         let existing = ExistingInstallation::read(&root, context)?.ok_or("Missing installation")?;
         for path in [
-            root.path().join(ownership::MARKER),
+            root.path().join("state").join(ownership::MARKER),
             original.join("startup.local.toml"),
             original.join("sugarsubstitute-launch.local.json"),
             original.join("installation-ready.json"),
@@ -151,7 +186,7 @@ fn inspection_does_not_adopt_unknown_populated_directories() -> TestResult {
         std::fs::write(temporary.path().join("user-file"), b"preserve")?;
         assert!(inspect_installation(temporary.path(), context).is_err());
         assert_eq!(std::fs::read(temporary.path().join("user-file"))?, b"preserve");
-        assert!(!temporary.path().join(ownership::MARKER).exists());
+        assert!(!temporary.path().join("state").exists());
         Ok(())
     })
 }

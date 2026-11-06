@@ -65,12 +65,11 @@ fn lifetime_at(now: u64) -> Result<TestRig, Box<dyn Error>> {
 #[test]
 fn helper_uncaptured_first_arithmetic_failure_cannot_create_later_shutdown_budget()
 -> Result<(), Box<dyn Error>> {
-    let (mut lifetime, clock, _wake) = lifetime_at(u64::MAX)?;
+    let (mut lifetime, _clock, _wake) = lifetime_at(u64::MAX)?;
     let failure = lifetime.advance_shutdown().err().ok_or("Original arithmetic failure missing")?;
     assert!(failure.is::<TimeError>());
     assert!(lifetime.uncaptured_sampled);
     assert!(lifetime.until.is_none());
-    clock.0.store(0, Ordering::Release);
     lifetime.advance_shutdown()?;
     assert!(lifetime.until.is_none());
     assert!(!lifetime.poll_shutdown()?);

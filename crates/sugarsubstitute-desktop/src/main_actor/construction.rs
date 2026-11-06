@@ -297,6 +297,10 @@ impl MainActor {
     fn observe_controller(&mut self) -> Result<Option<DesktopStartupObservation>, DesktopError> {
         self.resize()?;
         let core = self.view()?.webview();
+        crate::windows_main_receivers::configure_download_destination(
+            &core,
+            self.request()?.profile_directory(),
+        )?;
         let mut pid = 0;
         // SAFETY: This UI thread owns the live controller; output is adopted as data.
         unsafe { core.BrowserProcessId(&mut pid) }

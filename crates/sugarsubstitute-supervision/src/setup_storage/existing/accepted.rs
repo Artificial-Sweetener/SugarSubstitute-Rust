@@ -36,10 +36,14 @@ pub(super) fn read(
     let mut existing =
         ExistingInstallation::from_directory(root, directory, marker, Some(generation), context)?;
     existing.accepted = Some(generation.clone());
-    existing.summary.launch_entry_missing = match root.read("SugarSubstitute.lnk") {
-        Ok(_) => false,
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => true,
-        Err(cause) => return Err(cause),
-    };
+    // The stable root entry, or a historical installation's generation shortcut, opens the app.
+    existing.summary.launch_entry_missing = true;
+    for leaf in [crate::setup_storage::entrypoint::stable::ENTRY, "SugarSubstitute.lnk"] {
+        match root.read(leaf) {
+            Ok(_) => existing.summary.launch_entry_missing = false,
+            Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
+            Err(cause) => return Err(cause),
+        }
+    }
     Ok(existing)
 }

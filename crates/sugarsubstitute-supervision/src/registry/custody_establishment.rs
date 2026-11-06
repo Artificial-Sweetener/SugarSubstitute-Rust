@@ -44,7 +44,7 @@ impl WindowsProcessRegistry {
     /// Account for independent protected snapshot work only when this coordinator owns a trial.
     pub fn backend_custody_establishment_bytes(application: Option<&RunningApplication>) -> u64 {
         crate::registry_input::FAMILY_STORAGE_BYTES
-            + if matches!(application, Some(RunningApplication::Trial(_))) {
+            + if application.is_some_and(|application| application.trial().is_some()) {
                 TRIAL_WITNESS_RESERVATION_BYTES
             } else {
                 0
@@ -135,38 +135,39 @@ impl WindowsProcessRegistry {
                 data.destination.open()?;
                 let (parent_handle, identity) = data.destination.duplicate_current_parent()?;
                 let containment = data.destination.duplicate(job)?;
-                let trial =
-                    if let Some(RunningApplication::Trial(application)) = application.as_deref() {
-                        data.trial = Some(TrialEstablishment {
-                            transfer: application.prepare_witness(&context).map_err(|cause| {
-                                RegistryError::new("custody_trial_snapshot", cause)
-                            })?,
-                            destination: CustodyDestination::new(&original),
-                        });
-                        let trial = data
-                            .trial
-                            .as_mut()
-                            .ok_or_else(|| RegistryError::invalid("custody_trial_owner"))?;
-                        trial.destination.open()?;
-                        let handles = trial.transfer.handles();
-                        let run = trial.destination.duplicate(
-                            windows::Win32::Foundation::HANDLE(handles[0].as_raw_handle()),
-                        )?;
-                        let snapshot = trial.destination.duplicate(
-                            windows::Win32::Foundation::HANDLE(handles[1].as_raw_handle()),
-                        )?;
-                        let counter = client
-                            .encode_lifecycle_deadline(until)
-                            .map_err(|cause| RegistryError::new("custody_trial_counter", cause))?;
-                        Some(sugarsubstitute_contracts::backend_custody::InstallationTrialCustody {
-                            run,
-                            snapshot,
-                            until_ticks: counter.ticks(),
-                            frequency: counter.frequency(),
-                        })
-                    } else {
-                        None
-                    };
+                let trial = if let Some(application) =
+                    application.as_deref().and_then(RunningApplication::trial)
+                {
+                    data.trial = Some(TrialEstablishment {
+                        transfer: application
+                            .prepare_witness(&context)
+                            .map_err(|cause| RegistryError::new("custody_trial_snapshot", cause))?,
+                        destination: CustodyDestination::new(&original),
+                    });
+                    let trial = data
+                        .trial
+                        .as_mut()
+                        .ok_or_else(|| RegistryError::invalid("custody_trial_owner"))?;
+                    trial.destination.open()?;
+                    let handles = trial.transfer.handles();
+                    let run = trial.destination.duplicate(windows::Win32::Foundation::HANDLE(
+                        handles[0].as_raw_handle(),
+                    ))?;
+                    let snapshot = trial.destination.duplicate(
+                        windows::Win32::Foundation::HANDLE(handles[1].as_raw_handle()),
+                    )?;
+                    let counter = client
+                        .encode_lifecycle_deadline(until)
+                        .map_err(|cause| RegistryError::new("custody_trial_counter", cause))?;
+                    Some(sugarsubstitute_contracts::backend_custody::InstallationTrialCustody {
+                        run,
+                        snapshot,
+                        until_ticks: counter.ticks(),
+                        frequency: counter.frequency(),
+                    })
+                } else {
+                    None
+                };
                 data.command = Some(BackendCustodyCommand::Establish {
                     parent: parent_handle,
                     pid: identity.pid,

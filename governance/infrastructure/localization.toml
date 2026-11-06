@@ -66,19 +66,19 @@ rationale = "Host composition of localized native startup/profile-conflict feedb
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/runtime.rs"
-source_sha256 = "sha256:d8b155358beadb8ff2fd3e5fa819f4ecb63ba52b769d354755f99f28d41d0c75"
+source_sha256 = "sha256:f780077b31c1a46e8fc25e871e1118b3a91e2aaf562acd2f6a95a041a57645cd"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Select the real coordinator or inherited desktop role and compose its owned runtime."
 
 [[records]]
 path = "crates/sugarsubstitute/src/setup.rs"
-source_sha256 = "sha256:fc00eb56da3c30ff8cefea283891fa7f98e647d579699790096ea523d06ea1de"
+source_sha256 = "sha256:5fb663595bafee906bf4154b116346ffaa84632fa6a165ee4272ce2526a23a42"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Compose the branded installer with isolated upstream provisioning and native ownership."
 
 [[records]]
 path = "crates/sugarsubstitute/src/stable_launcher.rs"
-source_sha256 = "sha256:7871da1e8f77e1bdca7ef803e5ffc2adba61151c8c4e65bda2f90ebb28ed99b4"
+source_sha256 = "sha256:957f537326ac15d967ee3b12d0870c7135167fc0d2ccb85e1373fe8879a1d4f9"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Stable installed entry point; the selected application owns the only visible startup window."
 
@@ -144,7 +144,7 @@ rationale = "Behavioral fixture creates a hidden OS STATIC window with a technic
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:f59af12f81d64cdcedf0247c4a2aa08967e24850f238d22c0fb18b614733aade"
+source_sha256 = "sha256:6bf00d909ad5430bac4f0fdd14ebd1c6bf7d944fb4569911399cd9faf5812140"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -402,7 +402,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:9f58bca06780a27bd5d8b626f96131c054c2538edade1af9f6cd8eb7aca7cf0f"
+source_sha256 = "sha256:7bae20c5d75a9dda7c72684eeb15d59ffc1cc15d3b630d56ac2215e8d625b2cc"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 

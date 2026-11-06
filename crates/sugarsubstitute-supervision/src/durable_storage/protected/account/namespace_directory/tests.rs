@@ -11,7 +11,7 @@ fn invalid_runtime_child_names_have_no_directory_effects() {
     {
         let mut boundary = Observed { calls: Vec::new(), first: PathBuf::new(), fail_at: None };
         let cause = resolve_with_boundary(
-            PathBuf::from(r"\\?\C:\account\Local"),
+            PathBuf::from(r"\\?\C:\Sugar"),
             Namespace::RuntimeChild(leaf),
             &mut boundary,
         );
@@ -38,45 +38,43 @@ impl DirectoryBoundary for Observed {
 }
 #[test]
 fn physical_final_directory_drives_every_later_namespace_and_stage_name() -> TestResult {
-    let logical = PathBuf::from(r"\\?\C:\account\Local");
-    let physical = PathBuf::from(r"\\?\C:\account\Packages\Codex\LocalCache\Local\SugarSubstitute");
+    let logical = PathBuf::from(r"\\?\C:\Sugar");
+    let physical = PathBuf::from(r"\\?\C:\Redirected\Sugar\runtime");
     let mut boundary = Observed { calls: Vec::new(), first: physical.clone(), fail_at: None };
     let directory = resolve_with_boundary(logical.clone(), Namespace::Claims, &mut boundary)?;
     assert_eq!(
         boundary.calls,
         [
-            logical.join("SugarSubstitute"),
-            physical.join("runtime"),
-            physical.join(r"runtime\claims"),
-            physical.join(r"runtime\claims\coordinators"),
-            physical.join(r"runtime\claims\backends")
+            logical.join("runtime"),
+            physical.join("claims"),
+            physical.join(r"claims\coordinators"),
+            physical.join(r"claims\backends")
         ]
     );
-    assert_eq!(directory, physical.join(r"runtime\claims"));
+    assert_eq!(directory, physical.join("claims"));
     let record = directory.join(r"coordinators\incident.record");
     assert_eq!(
         record.with_extension("nonce.stage"),
-        physical.join(r"runtime\claims\coordinators\incident.nonce.stage")
+        physical.join(r"claims\coordinators\incident.nonce.stage")
     );
     Ok(())
 }
 #[test]
 fn unchanged_native_names_preserve_directory_order_and_final_claim_root() -> TestResult {
-    let parent = PathBuf::from(r"\\?\D:\account");
-    let mut boundary =
-        Observed { calls: Vec::new(), first: parent.join("SugarSubstitute"), fail_at: None };
+    let parent = PathBuf::from(r"\\?\D:\SugarSubstitute");
+    let mut boundary = Observed { calls: Vec::new(), first: parent.join("runtime"), fail_at: None };
     assert_eq!(
         resolve_with_boundary(parent.clone(), Namespace::Claims, &mut boundary)?,
-        parent.join(r"SugarSubstitute\runtime\claims")
+        parent.join(r"runtime\claims")
     );
-    assert_eq!(boundary.calls.len(), 5);
+    assert_eq!(boundary.calls.len(), 4);
     Ok(())
 }
 #[test]
 fn failed_final_name_preserves_genuine_cause_and_stops_child_creation() -> TestResult {
     let mut boundary = Observed {
         calls: Vec::new(),
-        first: PathBuf::from(r"\\?\D:\physical\SugarSubstitute"),
+        first: PathBuf::from(r"\\?\D:\physical\runtime"),
         fail_at: Some(2),
     };
     let cause = match resolve_with_boundary(
@@ -95,7 +93,7 @@ fn failed_final_name_preserves_genuine_cause_and_stops_child_creation() -> TestR
     Ok(())
 }
 
-/// Model AppData redirection at the newly created history leaf, after unchanged existing parents.
+/// Model native redirection at the newly created history leaf, after an unchanged existing parent.
 #[test]
 fn operational_history_uses_the_final_native_leaf_without_creating_claim_subdirectories()
 -> TestResult {
@@ -106,25 +104,16 @@ fn operational_history_uses_the_final_native_leaf_without_creating_claim_subdire
     impl DirectoryBoundary for RedirectedHistory {
         fn create_and_observe(&mut self, path: &Path) -> Result<PathBuf, ClaimError> {
             self.calls.push(path.to_owned());
-            Ok(if self.calls.len() == 3 { self.physical.clone() } else { path.to_owned() })
+            Ok(if self.calls.len() == 2 { self.physical.clone() } else { path.to_owned() })
         }
     }
-    let logical = PathBuf::from(r"\\?\C:\account\Local");
-    let physical = PathBuf::from(
-        r"\\?\C:\account\Packages\Codex\LocalCache\Local\SugarSubstitute\runtime\history",
-    );
+    let logical = PathBuf::from(r"\\?\C:\Sugar");
+    let physical = PathBuf::from(r"\\?\C:\Redirected\Sugar\runtime\history");
     let mut boundary = RedirectedHistory { calls: Vec::new(), physical: physical.clone() };
     assert_eq!(
         resolve_with_boundary(logical.clone(), Namespace::RuntimeChild("history"), &mut boundary)?,
         physical
     );
-    assert_eq!(
-        boundary.calls,
-        [
-            logical.join("SugarSubstitute"),
-            logical.join(r"SugarSubstitute\runtime"),
-            logical.join(r"SugarSubstitute\runtime\history")
-        ]
-    );
+    assert_eq!(boundary.calls, [logical.join("runtime"), logical.join(r"runtime\history")]);
     Ok(())
 }

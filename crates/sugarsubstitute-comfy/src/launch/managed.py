@@ -12,6 +12,16 @@ sys.path.insert(0, os.path.dirname(sys.argv[0]))
 finished = threading.Event()
 
 
+def prepare_custom_nodes():
+    """Keep installed nodes discoverable when mutable Comfy paths use another base."""
+    import comfy.options
+    comfy.options.enable_args_parsing()
+    import folder_paths
+    folder_paths.add_model_folder_path(
+        "custom_nodes", os.path.join(os.path.dirname(sys.argv[0]), "custom_nodes")
+    )
+
+
 def prepare_shutdown_input():
     """Keep the shutdown pipe private; backend libraries receive ordinary null stdin."""
     descriptor = os.dup(sys.stdin.fileno())
@@ -55,6 +65,7 @@ def observe_desktop():
 # ends on desktop shutdown; daemon teardown also permits ComfyUI to exit first.
 threading.Thread(target=observe_desktop, name="SugarSubstitute shutdown", daemon=True).start()
 try:
+    prepare_custom_nodes()
     runpy.run_path(sys.argv[0], run_name="__main__")
 except KeyboardInterrupt:
     # Closing the splash during imports is an ordinary cancelled startup.

@@ -97,7 +97,7 @@ fn trial_token_retains_os_custody_and_cannot_be_reconstructed_from_persisted_sta
         let persisted = store.load(context)?.ok_or("missing trial")?;
         drop(run);
         drop(store);
-        let marker = root.path().join(".substitute-installation.json");
+        let marker = root.path().join("state/installation.json");
         assert!(std::fs::write(&marker, b"changed").is_err());
         assert!(std::fs::rename(root.path(), root.path().with_extension("moved")).is_err());
         let store = Arc::new(SelectionStore::open(root.path(), context)?);

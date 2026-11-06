@@ -93,7 +93,7 @@ fn historical_declaration(
     }
     let bytes = serde_json::to_vec(&manifest)?;
     std::fs::write(manifest_path, &bytes)?;
-    let record = directory.path().join(".selection-state/.substitute-selection.json");
+    let record = directory.path().join("state/selection/.substitute-selection.json");
     let mut state: serde_json::Value = serde_json::from_slice(&std::fs::read(&record)?)?;
     state["accepted"]["package"] = format!("{:x}", Sha256::digest(bytes)).into();
     std::fs::write(record, serde_json::to_vec(&state)?)?;
@@ -143,7 +143,7 @@ fn historical_direct_launch_remains_available_but_unsupported_transfer_is_reject
             drop(
                 std::fs::OpenOptions::new()
                     .write(true)
-                    .open(directory.path().join(".selection-state/.substitute-selection.json"))?,
+                    .open(directory.path().join("state/selection/.substitute-selection.json"))?,
             );
             assert!(InstallationRun::acquire(store, context).is_ok());
         }

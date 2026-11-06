@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Authenticate packaged setup inputs and retain filesystem custody during installation.
 mod application;
+mod backend_data;
+pub use backend_data::{BackendStorage, OwnedBackendStorage};
 mod bundle;
 pub mod cache;
 #[allow(unsafe_code)]
@@ -30,6 +32,7 @@ mod image;
 mod inventory;
 pub use image::PreparationImage;
 mod running;
+mod runtime_record;
 pub use running::{RunningApplication, retain_running_generation};
 mod ownership;
 mod packed;

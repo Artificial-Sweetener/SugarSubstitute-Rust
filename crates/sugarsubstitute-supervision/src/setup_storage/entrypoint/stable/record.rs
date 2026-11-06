@@ -28,7 +28,7 @@ impl Record {
         directory: &Directory,
         context: &JobContext,
     ) -> io::Result<Self> {
-        let mut source = directory.read(EXECUTABLE)?;
+        let mut source = directory.read(SOURCE)?;
         let mut declaration = directory.read(LAUNCHER_CONTRACT_FILE)?;
         let contract =
             String::from_utf8(files::read_bounded(&mut declaration, MAX_CONTRACT_BYTES)?)

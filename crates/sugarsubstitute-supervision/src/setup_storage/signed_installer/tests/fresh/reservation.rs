@@ -46,7 +46,7 @@ fn interrupted_reservation(during_staging: bool) -> TestResult {
         let observed = path.join("native");
         clock.observe_checks(move || {
             let Some(record) =
-                std::fs::read(observed.join(".selection-state/.substitute-selection.json")).ok()
+                std::fs::read(observed.join("state/selection/.substitute-selection.json")).ok()
             else {
                 return false;
             };

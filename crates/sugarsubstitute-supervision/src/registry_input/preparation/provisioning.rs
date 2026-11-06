@@ -74,6 +74,7 @@ impl WindowsLaunchInput {
             ));
         }
         let caches = ProvisioningCaches::prepare(cache, bundle.digest(), context)?;
+        let environment = caches.environment(&environment)?;
         let pin = bundle.bind_native_cache(caches.family(), context)?;
         let worker = bundle.worker()?;
         let mut arguments = worker.arguments().to_vec();

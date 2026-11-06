@@ -28,20 +28,23 @@ pub(crate) fn activate(
 /// Must be called once on the native main thread. Selected application startup is independent
 /// after creation; this process retires its own worker scopes and inherited-handle duplicates.
 pub fn run() -> ExitCode {
-    let result = crate::diagnostics::Diagnostics::run(|_health| {
-        let Err(cause) = run_inner() else { return Ok(()) };
-        let details = crate::failure_details::Details(cause.as_ref());
-        tracing::error!(operation="stable_launcher_failed",cause=%details,"Installed application could not start");
-        if let Err(secondary) = sugarsubstitute_desktop::show_startup_failure(
-            crate::APPLICATION_NAME,
-            sugarsubstitute_contracts::localization::messages("en").report.startup_failed,
-            format_args!("{details}"),
-        ) {
-            tracing::error!(operation="stable_launcher_failure_presentation",cause=?secondary,"Startup failure presentation failed");
-            return Err(crate::failure_details::retain_presentation(cause, secondary));
-        }
-        Err(cause)
-    });
+    let result = crate::diagnostics::Diagnostics::run(
+        crate::diagnostics::RecordsBase::RunningImage,
+        |_health| {
+            let Err(cause) = run_inner() else { return Ok(()) };
+            let details = crate::failure_details::Details(cause.as_ref());
+            tracing::error!(operation="stable_launcher_failed",cause=%details,"Installed application could not start");
+            if let Err(secondary) = sugarsubstitute_desktop::show_startup_failure(
+                crate::APPLICATION_NAME,
+                sugarsubstitute_contracts::localization::messages("en").report.startup_failed,
+                format_args!("{details}"),
+            ) {
+                tracing::error!(operation="stable_launcher_failure_presentation",cause=?secondary,"Startup failure presentation failed");
+                return Err(crate::failure_details::retain_presentation(cause, secondary));
+            }
+            Err(cause)
+        },
+    );
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(_retained) => ExitCode::FAILURE,
@@ -77,7 +80,7 @@ mod tests {
     fn entry_uses_its_own_directory_without_reading_or_creating_state() -> Result<(), Box<dyn Error>>
     {
         assert_eq!(
-            installation_root(Path::new(r"E:\unopened\sugarsubstitute-launcher.exe"), [])?,
+            installation_root(Path::new(r"E:\unopened\SugarSubstitute.exe"), [])?,
             Path::new(r"E:\unopened")
         );
         Ok(())
@@ -86,12 +89,12 @@ mod tests {
     fn entry_cannot_redirect_to_a_foreign_installation_or_use_a_drive_root() {
         assert!(
             installation_root(
-                Path::new(r"E:\unopened\sugarsubstitute-launcher.exe"),
+                Path::new(r"E:\unopened\SugarSubstitute.exe"),
                 [OsString::from("--installation-root")]
             )
             .is_err()
         );
-        assert!(installation_root(Path::new(r"E:\sugarsubstitute-launcher.exe"), []).is_err());
+        assert!(installation_root(Path::new(r"E:\SugarSubstitute.exe"), []).is_err());
         assert!(installation_root(Path::new("relative.exe"), []).is_err());
     }
 }

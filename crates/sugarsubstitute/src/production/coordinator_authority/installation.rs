@@ -38,9 +38,7 @@ impl CoordinatorAuthority {
             return None;
         }
         let application = self.installation.application()?;
-        if matches!(application.as_ref(), RunningApplication::Trial(_))
-            && !self.installation.health.succeeded()
-        {
+        if application.trial().is_some() && !self.installation.health.succeeded() {
             return None;
         }
         Some((self.key()?, application.clone()))
@@ -154,10 +152,7 @@ impl Ownership {
 
     /// Only the original successful admission can provide a trial needing health publication.
     pub(super) fn needs_health(&self) -> bool {
-        self.health.unissued()
-            && self
-                .application()
-                .is_some_and(|value| matches!(value.as_ref(), RunningApplication::Trial(_)))
+        self.health.unissued() && self.application().is_some_and(|value| value.trial().is_some())
     }
 
     /// Record only authenticated main/browser/backend readiness supplied by the parent owner.
@@ -195,9 +190,7 @@ impl Ownership {
         jobs: &JobSequence,
     ) {
         let accepted_launch = self.readiness_observed
-            && self.application().is_some_and(|application| {
-                matches!(application.as_ref(), RunningApplication::Accepted(_))
-            });
+            && self.application().is_some_and(|application| application.trial().is_none());
         if (self.health.succeeded() || accepted_launch)
             && self.shell.unissued()
             && let Some(application) = self.application().cloned()

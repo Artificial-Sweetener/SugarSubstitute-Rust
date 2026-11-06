@@ -8,6 +8,13 @@ required_roots = ["native/crashpad", "installer/worker", "crates/sugarsubstitute
 script_manifests = ["installer/package.json"]
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protection/runtime_storage/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:138755508e26484816e9125c92ece57a9722a14cd6a8c0be38d61bb282b1fbcd"
+disposition = "fixture"
+rationale = "Append an isolated operational record before native namespace discovery to qualify protected user-directory creation, unchanged namespace identity and preserved history. Runtime routing and storage remain with the existing diagnostic owner."
+
+[[records]]
 path = "crates/sugarsubstitute/src/canvas_surface_diagnostic/tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:640d289bf0094587cd681874034826bb8510f3ed7b3a9f2e45bd532484705f41"
@@ -17,14 +24,14 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:496b92d7f8fd9953652fff6a8782e3af151a6a02dce4674eaeb2dd0b9a849058"
+source_sha256 = "sha256:e690f861a0e7956f6ade696e80a72866ffdf505512bc8aa75c1924b1993f7ac5"
 disposition = "routing"
 rationale = "Process-global supported subscriber and original diagnostic failure health."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d58ca889c5d8d591d493825e765f5fb3871d15825bfcf684d714f7c65806648b"
+source_sha256 = "sha256:5fcaaf60aa1a733958fc8ec184a69a668e797459f807bdd09def1de3ef9cc6f7"
 disposition = "storage"
 rationale = "Bounded operational pages and export through shared protected durable storage, separate from preserved incident records. Under exclusive writer custody it retires only verified page stages abandoned by interrupted writers."
 
@@ -87,7 +94,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2035b515aae632c6768bc430bb767c2ecb7c54eda12738b52b7f02da52fc9151"
+source_sha256 = "sha256:028c3078638d6cc9bf6c5b20fce183bd2c079e8caacf9c0e9405e910ca8bfc6b"
 disposition = "routing"
 rationale = "Host lifetime composes the existing execution adapter with the protected operational storage port."
 
@@ -409,7 +416,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3d2686ca3cab1e2c7bd49a486210d27b56305227f21f74d46be9c53dee860857"
+source_sha256 = "sha256:952c2d297db0e3b7eed45cb67cea14304a048927f88185ae885053efaed2fef0"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -570,7 +577,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/launch/test_managed.py"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:1469cb588760a96259a905f753cc61834f795143d5b4b4fdcd5669ae28bc4577"
+source_sha256 = "sha256:27fe8625c930a2f72798aaa8c8d0ab9c97f4c38d47cc7481195cd9fd8f22d471"
 disposition = "fixture"
 rationale = "The managed-launch test child prints readiness and cleanup markers into captured pipes so the harness can prove owned process termination."
 
@@ -1064,3 +1071,24 @@ owner = "sugarsubstitute-image-gpu"
 source_sha256 = "sha256:3f7474b69a5e932265bf68f91b1f1b3f680309ab3180ebd55dc0dde3c2ad3b63"
 disposition = "fixture"
 rationale = "The explicit single-device offscreen composite check reports native adapter identity, exact CPU/GPU pixel agreement including overlay pixels and execution retirement; it creates no window or runtime diagnostic sink."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/environment/storage.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:523b9861882c803ddb1e6d55de03659c5452b7edf8544ae40c277d2bbfe6406f"
+disposition = "upstream"
+rationale = "Redirect delegated pip log paths to the caller's explicit installation-local storage directory; this environment preparation creates no diagnostic sink."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/tests/backend_environment.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:b292a348257025aa6ecad1f85c7ae1f5229abf770750aceabca287c5aa3788da"
+disposition = "fixture"
+rationale = "Verify that inherited delegated-tool log destinations are replaced by the explicit installation-local path without mutating the original environment."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/entry_activation/projection_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:cd6ddd0c22ea59bf3f1d13a2af3cf5c54a1c18a24e92c731ff15f5d57f8bced1"
+disposition = "fixture"
+rationale = "Assert that production projection confines delegated pip log and temporary destinations while preserving the original captured environment; no diagnostic sink is created."

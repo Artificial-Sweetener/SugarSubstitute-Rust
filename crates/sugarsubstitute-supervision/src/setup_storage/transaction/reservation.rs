@@ -91,7 +91,12 @@ impl InstallationSession {
                 };
                 protection::with(context, |protection| {
                     protection.directory(
-                        &self.directory().join("desktop-data"),
+                        &self.directory().join(sugarsubstitute_configuration::layout::USER),
+                        crate::durable_storage::protected::directories::Mode::OpenOrCreate,
+                        context,
+                    )?;
+                    protection.directory(
+                        &self.directory().join("user").join("desktop-data"),
                         crate::durable_storage::protected::directories::Mode::OpenOrCreate,
                         context,
                     )?;

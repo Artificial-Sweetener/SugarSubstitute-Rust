@@ -38,15 +38,18 @@ pub(super) trait Sink: Send + Sync + 'static {
         false
     }
 }
-/// Publish only through the established protected operational history port.
-pub(super) struct AccountSink;
+/// Publish only through the established protected operational history port, below the
+/// installation-local base that the process role selected.
+pub(super) struct AccountSink {
+    pub(super) base: std::path::PathBuf,
+}
 impl Sink for AccountSink {
     fn overloaded(&self, cause: &io::Error) -> bool {
         sugarsubstitute_supervision::diagnostic_storage::operational::writer_busy(cause)
     }
     fn append(&self, frames: &[String], omitted: u64, context: &JobContext) -> io::Result<()> {
         sugarsubstitute_supervision::diagnostic_storage::operational::append(
-            frames, omitted, context,
+            &self.base, frames, omitted, context,
         )
     }
 }

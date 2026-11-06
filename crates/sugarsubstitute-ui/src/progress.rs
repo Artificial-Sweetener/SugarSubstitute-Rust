@@ -97,7 +97,7 @@ impl ProgressBar {
             ProgressAppearance::Hairline { dark } | ProgressAppearance::Panel { dark } => {
                 (accent.progress(dark), if dark { [255, 255, 255, 18] } else { [0, 0, 0, 12] })
             }
-            ProgressAppearance::Wizard => (accent.fill(), [255, 255, 255, 56]),
+            ProgressAppearance::Wizard => (accent.progress(true), [255, 255, 255, 56]),
         }
     }
 }

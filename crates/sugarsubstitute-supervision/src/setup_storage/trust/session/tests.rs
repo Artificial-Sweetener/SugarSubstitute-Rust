@@ -80,10 +80,10 @@ fn invalid_bootstrap_root_leaves_selection_and_trust_uninitialized() -> TestResu
         let temporary = tempfile::tempdir()?;
         let session = InstallationSession::create(choices(temporary.path()), context)?;
         assert!(session.update_trust([70; 32], b"invalid root", context).is_err());
-        assert!(!temporary.path().join(".selection-state").exists());
-        assert!(!temporary.path().join(".selection-enabled.json").exists());
-        assert!(!temporary.path().join(DIRECTORY).exists());
-        assert!(!temporary.path().join(continuity::MARKER).exists());
+        assert!(!temporary.path().join("state/selection").exists());
+        assert!(!temporary.path().join("state/selection-enabled.json").exists());
+        assert!(!temporary.path().join("state").join(DIRECTORY).exists());
+        assert!(!temporary.path().join("state").join(continuity::MARKER).exists());
         session.update_trust([70; 32], &root(&key(70)?, 1, None)?, context)?;
         Ok(())
     })
@@ -95,8 +95,8 @@ fn insufficient_metadata_admission_cannot_enable_selection() -> TestResult {
         let temporary = tempfile::tempdir()?;
         let session = InstallationSession::create(choices(temporary.path()), context)?;
         assert!(session.update_trust([70; 32], &root(&key(70)?, 1, None)?, context).is_err());
-        assert!(!temporary.path().join(".selection-state").exists());
-        assert!(!temporary.path().join(DIRECTORY).exists());
+        assert!(!temporary.path().join("state/selection").exists());
+        assert!(!temporary.path().join("state").join(DIRECTORY).exists());
         Ok(())
     })
 }
@@ -106,23 +106,26 @@ fn missing_authoritative_records_never_trigger_session_bootstrap() -> TestResult
     worker::run_reserved(TRUST_RESERVATION_BYTES, |context, _| {
         let trusted_root = root(&key(70)?, 1, None)?;
         for missing in [
-            ".update-trust/checkpoint",
-            ".update-trust/releases",
-            ".update-trust",
-            ".selection-state/.substitute-selection.json",
-            ".selection-state",
+            "state/update-trust/checkpoint",
+            "state/update-trust/releases",
+            "state/update-trust",
+            "state/selection/.substitute-selection.json",
+            "state/selection",
         ] {
             let temporary = tempfile::tempdir()?;
             let session = InstallationSession::create(choices(temporary.path()), context)?;
             drop(session.update_trust([70; 32], &trusted_root, context)?);
-            let marker = std::fs::read(temporary.path().join(continuity::MARKER))?;
+            let marker = std::fs::read(temporary.path().join("state").join(continuity::MARKER))?;
             let path = temporary.path().join(missing);
             let saved = temporary.path().join("preserved-state");
             std::fs::rename(&path, &saved)?;
             assert!(session.update_trust([70; 32], &trusted_root, context).is_err(), "{missing}");
             assert!(!path.exists(), "{missing}");
             assert!(saved.exists());
-            assert_eq!(std::fs::read(temporary.path().join(continuity::MARKER))?, marker);
+            assert_eq!(
+                std::fs::read(temporary.path().join("state").join(continuity::MARKER))?,
+                marker
+            );
         }
         Ok(())
     })
@@ -134,11 +137,11 @@ fn trust_evidence_without_selection_never_allocates_a_replacement_identity() -> 
         for name in [DIRECTORY, continuity::MARKER] {
             let temporary = tempfile::tempdir()?;
             let session = InstallationSession::create(choices(temporary.path()), context)?;
-            std::fs::write(temporary.path().join(name), b"unknown state")?;
+            std::fs::write(temporary.path().join("state").join(name), b"unknown state")?;
             assert!(session.update_trust([70; 32], &root(&key(70)?, 1, None)?, context).is_err());
-            assert!(!temporary.path().join(".selection-state").exists());
-            assert!(!temporary.path().join(".selection-enabled.json").exists());
-            assert_eq!(std::fs::read(temporary.path().join(name))?, b"unknown state");
+            assert!(!temporary.path().join("state/selection").exists());
+            assert!(!temporary.path().join("state/selection-enabled.json").exists());
+            assert_eq!(std::fs::read(temporary.path().join("state").join(name))?, b"unknown state");
         }
         Ok(())
     })
@@ -151,15 +154,15 @@ fn interruption_after_selection_resumes_with_the_original_installation_identity(
     worker::run_reserved_expiring(TRUST_RESERVATION_BYTES, move |context, clock| {
         let session = InstallationSession::create(choices(&path), context)?;
         let observed = path.clone();
-        clock.observe_checks(move || observed.join(".selection-enabled.json").exists())?;
+        clock.observe_checks(move || observed.join("state/selection-enabled.json").exists())?;
         assert!(session.update_trust([70; 32], &root(&key(70)?, 1, None)?, context).is_err());
-        assert!(path.join(".selection-enabled.json").exists());
-        assert!(!path.join(DIRECTORY).exists());
+        assert!(path.join("state/selection-enabled.json").exists());
+        assert!(!path.join("state").join(DIRECTORY).exists());
         Ok(())
     })?;
     let path = temporary.path().to_owned();
     worker::run_reserved(TRUST_RESERVATION_BYTES, move |context, _| {
-        let record = path.join(".selection-state/.substitute-selection.json");
+        let record = path.join("state/selection/.substitute-selection.json");
         let original = std::fs::read(&record)?;
         let session = InstallationSession::create(choices(&path), context)?;
         let trust = session.update_trust([70; 32], &root(&key(70)?, 1, None)?, context)?;

@@ -79,7 +79,7 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     assert!(available < PROJECTION_BYTES);
     assert_eq!(claim.bytes(), available);
     assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);
-    let projected = fields(original, &capture, available)?;
+    let projected = fields(original, &capture, available, |_| Ok(BackendStorage::External))?;
     let BackendTarget::Managed(launch) = &projected.target else {
         return Err("Managed target changed mode".into());
     };
@@ -107,7 +107,11 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     ] {
         assert!(backend_environment.split('\0').any(|line| line == expected));
     }
-    assert_eq!(projected.desktop_environment.as_utf16(), [0, 0]);
+    let desktop_environment = String::from_utf16(projected.desktop_environment.as_utf16())?;
+    for expected in [r"TEMP=E:\", r"APPDATA=E:\", r"PIP_LOG=E:\pip.log"] {
+        assert!(desktop_environment.split('\0').any(|line| line == expected));
+    }
+    assert_eq!(original.environment().units().collect::<Vec<_>>(), [0, 0]);
     let EntryConnectionView::Managed { arguments, .. } = original.connection() else {
         return Err("Original mode changed".into());
     };
@@ -146,6 +150,7 @@ fn parent_projection_rejects_effective_command_overflow_without_changing_extra_s
         original,
         &PathBuf::new(),
         projection_data_bytes().ok_or("Joined projection partition underflow")?,
+        |_| Ok(BackendStorage::External),
     )
     .err()
     .ok_or("Complete command limit bypassed")?;
@@ -182,6 +187,7 @@ fn configured_japanese_locale_reaches_production_report_view_work_without_web_co
         original,
         &PathBuf::new(),
         projection_data_bytes().ok_or("Joined projection partition underflow")?,
+        |_| Ok(BackendStorage::External),
     )
     .map_err(|cause| cause as Box<dyn Error>)?;
     assert_eq!(projected.locale.as_str(), "ja");

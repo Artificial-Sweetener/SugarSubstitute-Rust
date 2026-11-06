@@ -173,7 +173,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
     "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/readers.rs",
 ]
-source_sha256 = "sha256:4655f77659fc5c5ffc7837416f3cc0af502f7ea541d5559c295b6bc4a0f47996"
+source_sha256 = "sha256:8b84fecbebadfcf4dd209b2a593584d25e21a20abacf085ae0c527590eb22695"
 namespace = "runtime-cache-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -186,13 +186,13 @@ recovery = "Damaged entry records are observable misses. New independent generat
 id = "setup-private-runtime"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/provisioning_cache.rs"]
-source_sha256 = "sha256:8fe4f4a9c451a049398d9933e60b1c0e932218e2166590b7dd53ed5998431c8c"
+source_sha256 = "sha256:07449a31abe9ed8dbaaf010f6b74f3ff813809e7a12b90342c3e578e962db393"
 namespace = "setup-runtime-v1"
 storage_schema = 1
 compatibility_epoch = 1
-compatibility_inputs = ["private_native_family", "electron_session_data_format"]
-freshness = "Each provisioning family receives a fresh private headless session directory before Electron becomes ready. No application session uses this grant."
-retention = "Shared storage reserves 256 MiB before launch; Chromium disk cache requests 64 MiB. Actual family retirement inventories and retires the whole private SDK output. Idle retention is one day; durable unfinished production remains pinned."
+compatibility_inputs = ["private_native_family", "delegated_tool_environment"]
+freshness = "Each provisioning family receives a fresh private headless runtime directory. Child profile, temporary and tool data paths use that grant; uv and pip package caches are disabled."
+retention = "Shared storage reserves 256 MiB before launch. Actual family retirement inventories and retires the private tool output. Idle retention is one day; durable unfinished production remains pinned."
 recovery = "Native containment object absence proves stopped writers after host loss. Unknown or changed storage remains preserved. Configuration and user data are outside the private session grant."
 
 [[caches]]

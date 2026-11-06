@@ -15,6 +15,7 @@ use crate::{
     main_events::{Command, Events, Kind},
 };
 pub(crate) use bulk::random_token;
+pub(crate) use downloads::destination::configure as configure_download_destination;
 #[cfg(feature = "k1-native-qualification")]
 pub(crate) use downloads::qualification::DownloadWitness;
 use std::rc::Rc;

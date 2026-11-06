@@ -104,7 +104,7 @@ fn expired_repair_preserves_the_existing_shortcut_and_selection() -> TestResult 
         accept_fixture(&root, context)?;
         let link = root.path().join("SugarSubstitute.lnk");
         let old = std::fs::read(&link)?;
-        let record = root.path().join(".selection-state/.substitute-selection.json");
+        let record = root.path().join("state/selection/.substitute-selection.json");
         let before = std::fs::read(&record)?;
         let store = Arc::new(SelectionStore::open(root.path(), context)?);
         let mut run = InstallationRun::acquire(store, context)?;

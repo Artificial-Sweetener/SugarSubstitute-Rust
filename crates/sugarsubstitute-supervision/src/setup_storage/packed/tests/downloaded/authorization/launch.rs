@@ -76,7 +76,7 @@ fn accepted_launch_needs_no_extracted_cache_or_repository_and_retains_native_cus
         let (generation, workspace) = accept_fixture(&directory, context)?;
         assert!(!workspace.exists());
         std::fs::write(
-            directory.path().join(".update-trust/checkpoint"),
+            directory.path().join("state/update-trust/checkpoint"),
             b"repository needs repair",
         )?;
         let store = Arc::new(SelectionStore::open(directory.path(), context)?);

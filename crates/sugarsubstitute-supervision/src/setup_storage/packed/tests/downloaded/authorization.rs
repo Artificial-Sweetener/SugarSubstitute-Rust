@@ -240,7 +240,7 @@ fn foreign_installation_with_same_logical_id_and_keys_cannot_authorize_publicati
 fn publication_requires_durable_checkpoint_and_cannot_bypass_download_authority() -> TestResult {
     run(1, |case| {
         assert!(case.prepared.activate(case.runtime, case.context).is_err());
-        let directory = Directory::open(&case.directory.path().join(".update-trust"), false)?;
+        let directory = Directory::open(&case.directory.path().join("state/update-trust"), false)?;
         let checkpoint = directory.read("checkpoint")?;
         assert!(
             case.prepared
@@ -315,7 +315,7 @@ fn updater_payload_and_fabricated_engine_capabilities_cannot_reach_application_p
 fn trust_writer_remains_held_through_final_check_and_candidate_preparation() -> TestResult {
     run(1, |case| {
         let rotated = root(&key(94)?, 2, Some(&key(92)?))?;
-        let directory = Directory::open(&case.directory.path().join(".update-trust"), false)?;
+        let directory = Directory::open(&case.directory.path().join("state/update-trust"), false)?;
         let writer = directory.read("writer")?;
         let mut checks = 0;
         let installed = case.prepared.prepare_update(

@@ -3,7 +3,10 @@
 //! Preserve selection continuity independently of its mutable state directory.
 use super::*;
 
-const CONTENT: &[u8] = br#"{"schema_version":1,"namespace":".selection-state"}"#;
+/// The continuity marker names the namespace it was published for. Markers published by the
+/// earlier root-level layout name `.selection-state` and remain valid after the move.
+const CONTENT: &[u8] = br#"{"schema_version":1,"namespace":"selection"}"#;
+const EARLIER_NAMESPACE: &str = ".selection-state";
 
 /// Pin complete selection state and its immutable continuity marker on an admitted worker.
 /// Maintenance enables continuity for earlier complete protected state. Read-only inspection
@@ -17,7 +20,7 @@ pub(super) fn open(
         let _transition =
             if enable { Some(transition(installation, protection, context)?) } else { None };
         let mut marker = read_marker(installation, protection)?;
-        let path = installation.path().join(DIRECTORY);
+        let path = super::super::ownership::state_path(installation).join(DIRECTORY);
         let root = match Directory::open(&path, false) {
             Ok(directory) => directory,
             Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
@@ -57,7 +60,10 @@ pub(super) fn publish_marker(
     files::sync(&file, context)?;
     drop(file);
     check(context)?;
-    staging::publish(&staged, &installation.path().join(NAMESPACE_MARKER))?;
+    staging::publish(
+        &staged,
+        &super::super::ownership::state_path(installation).join(NAMESPACE_MARKER),
+    )?;
     read_marker(installation, protection)?
         .ok_or_else(|| super::super::invalid("Published selection continuity marker is absent"))
 }
@@ -78,15 +84,17 @@ pub(super) fn transition(
     protection: &Protection,
     context: &JobContext,
 ) -> io::Result<File> {
-    let lock =
-        protection.rendezvous(&installation.path().join(".selection-transition-lock"), context)?;
+    let state = super::super::ownership::state_creating(installation)?;
+    let lock = protection.rendezvous(&state.path().join(TRANSITION_LOCK), context)?;
     lock.try_lock().map_err(io::Error::from)?;
     Ok(lock)
 }
 
 /// Validate the complete bounded marker and deny modification while its handle remains held.
 fn read_marker(installation: &Directory, protection: &Protection) -> io::Result<Option<File>> {
-    let mut file = match installation.read(NAMESPACE_MARKER) {
+    let mut file = match super::super::ownership::state(installation)
+        .and_then(|state| state.read(NAMESPACE_MARKER))
+    {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(cause) => return Err(cause),
@@ -94,7 +102,9 @@ fn read_marker(installation: &Directory, protection: &Protection) -> io::Result<
     protection.verify_file(&file)?;
     let value: serde_json::Value =
         serde_json::from_slice(&files::read_bounded(&mut file, 4096)?).map_err(io::Error::other)?;
-    if value != serde_json::json!({"schema_version":1,"namespace":DIRECTORY}) {
+    if value != serde_json::json!({"schema_version":1,"namespace":DIRECTORY})
+        && value != serde_json::json!({"schema_version":1,"namespace":EARLIER_NAMESPACE})
+    {
         return Err(super::super::invalid("Installation selection continuity marker is invalid"));
     }
     Ok(Some(file))

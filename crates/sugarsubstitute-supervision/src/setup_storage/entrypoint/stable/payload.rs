@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Copy and verify the independently owned root executable without replacing unknown bytes.
+//! Copy and verify the independently owned root entry without replacing unknown bytes.
 use super::*;
 use std::{
     fs::File,
@@ -12,11 +12,12 @@ use sugarsubstitute_update::package::PayloadHasher;
 /// A missing owned file is recovered from its recorded source; changed files are preserved.
 pub(super) fn ensure(
     root: &Directory,
+    state: &Directory,
     record: &record::Record,
     protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<File> {
-    match root.read(EXECUTABLE) {
+    match root.read(ENTRY) {
         Ok(mut file) => {
             protection.verify_file(&file)?;
             verify(&mut file, record, context)?;
@@ -25,12 +26,15 @@ pub(super) fn ensure(
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
         Err(cause) => return Err(cause),
     }
-    replace(root, record, false, protection, context)
+    replace(root, state, record, false, protection, context)
 }
 
 /// Copy a verified source and atomically publish it after the caller establishes replacement authority.
+/// A conflicting root-directory capture leaves the journaled stage intact for recovery and retry
+/// after that capture retires; publication never weakens an existing sharing exclusion.
 pub(super) fn replace(
     root: &Directory,
+    state: &Directory,
     record: &record::Record,
     replacing: bool,
     protection: &mut Protection,
@@ -38,9 +42,9 @@ pub(super) fn replace(
 ) -> io::Result<File> {
     let source =
         Directory::open(&root.path().join("releases").join(record.source.id.as_str()), false)?;
-    let mut input = source.read(EXECUTABLE)?;
+    let mut input = source.read(SOURCE)?;
     verify(&mut input, record, context)?;
-    let mut stage = publication::Stage::create(root, protection, context)?;
+    let mut stage = publication::Stage::create(state, protection, context)?;
     let output = stage.file();
     let mut buffer = [0; 65536];
     loop {
@@ -54,11 +58,63 @@ pub(super) fn replace(
     files::sync(output, context)?;
     verify(output, record, context)?;
     check(context)?;
-    stage.publish(&root.path().join(EXECUTABLE), replacing, protection, context)?;
-    let mut file = root.read(EXECUTABLE)?;
+    stage.publish_entry(root, replacing, protection, context)?;
+    let mut file = root.read(ENTRY)?;
     protection.verify_file(&file)?;
     verify(&mut file, record, context)?;
     Ok(file)
+}
+
+/// Retire an earlier root launcher copy only while it is a protected single-link file with
+/// exactly the recorded bytes. A copy that is still running cannot be deleted yet; it is kept
+/// and retried on the next publication. Unknown or changed files are preserved.
+pub(super) fn retire_earlier(
+    root: &Directory,
+    leaf: &str,
+    record: &record::Record,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    let mut file = match root.read(leaf) {
+        Ok(file) => file,
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(cause) => return Err(cause),
+    };
+    if protection.verify_file(&file).is_err()
+        || files::single_link(&file).is_err()
+        || verify(&mut file, record, context).is_err()
+    {
+        tracing::warn!(
+            operation = "earlier_launcher_retirement",
+            "The earlier root launcher differs from protected ownership; it has been preserved"
+        );
+        return Ok(());
+    }
+    let identity = files::file_identity(&file)?;
+    drop(file);
+    match crate::durable_storage::retirement::file(root, leaf, identity) {
+        Ok(()) => {
+            tracing::info!(
+                operation = "earlier_launcher_retirement",
+                "Retired the earlier root launcher"
+            );
+            Ok(())
+        }
+        Err(cause)
+            if matches!(
+                cause.kind(),
+                io::ErrorKind::PermissionDenied | io::ErrorKind::ResourceBusy
+            ) || cause.raw_os_error() == Some(32) =>
+        {
+            tracing::warn!(
+                operation = "earlier_launcher_retirement",
+                cause = %cause,
+                "The earlier root launcher is in use; it will be retired on a later publication"
+            );
+            Ok(())
+        }
+        Err(cause) => Err(cause),
+    }
 }
 
 /// Match the retained handle to protected ownership without reopening its path.

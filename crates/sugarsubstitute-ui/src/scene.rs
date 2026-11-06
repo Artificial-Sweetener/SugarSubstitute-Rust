@@ -41,6 +41,8 @@ pub enum Element {
         bounds: Bounds,
         /// Authoritative icon identity.
         icon: FluentIcon,
+        /// Render the glyph with the resolved surface mode's on-accent foreground.
+        on_accent: bool,
     },
     /// Embedded product artwork, parsed with the shared resource restrictions.
     Artwork {
@@ -269,16 +271,29 @@ impl SceneCursor {
                 ProgressCursor::new(s.width, s.height, bar, frame, self.accent, s.scale)
                     .map_err(io::Error::other)?,
             ),
-            Element::Icon { bounds, icon } => self.vector(bounds, icon.source())?,
-            Element::Artwork { bounds, source } => self.vector(bounds, source)?,
+            Element::Icon { bounds, icon, on_accent } => {
+                let foreground = on_accent.then(|| {
+                    crate::accent::foreground(
+                        s.theme == sugarsubstitute_contracts::configuration::Theme::Dark,
+                        crate::widgets::ControlState::Rest,
+                    )
+                });
+                self.vector(bounds, icon.source(), foreground)?
+            }
+            Element::Artwork { bounds, source } => self.vector(bounds, source, None)?,
         });
         Ok(false)
     }
 
     /// Retain exact fractional artwork placement with the output memory claim.
-    fn vector(&self, b: Bounds, source: &'static str) -> io::Result<Active> {
+    fn vector(
+        &self,
+        b: Bounds,
+        source: &'static str,
+        foreground: Option<[u8; 4]>,
+    ) -> io::Result<Active> {
         let asset = VectorAsset::parse(source)?;
-        Ok(Active::Vector(asset.rasterize(
+        let mut pixels = asset.rasterize(
             VectorViewport {
                 x: b.x,
                 y: b.y,
@@ -287,6 +302,10 @@ impl SceneCursor {
                 scale: self.surface.scale,
             },
             self.lease.clone(),
-        )?))
+        )?;
+        if let Some(foreground) = foreground {
+            pixels.recolor(foreground);
+        }
+        Ok(Active::Vector(pixels))
     }
 }

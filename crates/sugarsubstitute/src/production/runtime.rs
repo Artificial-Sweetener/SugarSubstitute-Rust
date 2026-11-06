@@ -33,7 +33,10 @@ pub(crate) fn execute_inherited(
             ProductionActivation::new(
                 std::env::current_exe()?,
                 command.installation.clone(),
-                command.installation.join("capture"),
+                sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                    &command.installation,
+                )
+                .capture_root(),
             )
         },
         diagnostics,
@@ -95,7 +98,10 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
         ProductionActivation::new(
             std::env::current_exe()?,
             command.installation.clone(),
-            command.installation.join("capture"),
+            sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                &command.installation,
+            )
+            .capture_root(),
         )
         .map(|activation| activation.with_qualification(qualification))
     })
