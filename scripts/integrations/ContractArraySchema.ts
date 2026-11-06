@@ -62,9 +62,9 @@ export function contractArraySchema(node: Schema): ContractArraySchema {
     typeof node.maxItems !== 'number' ||
     !Number.isSafeInteger(node.maxItems) ||
     node.maxItems < 0 ||
-    node.maxItems > 4096
+    node.maxItems > 65536
   )
-    throw new Error('Contract arrays require a finite integer bound from 0 through 4096.');
+    throw new Error('Contract arrays require a finite integer bound from 0 through 65536.');
   const minimum = node.minItems ?? 0;
   if (
     'minItems' in node &&
