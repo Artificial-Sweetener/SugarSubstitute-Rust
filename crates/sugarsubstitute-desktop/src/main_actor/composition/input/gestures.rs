@@ -4,23 +4,17 @@
 //!
 //! Keyboard messages belong to the browser's focus window, so the host never sees Shift, Ctrl
 //! or Alt change. Each drain therefore samples the live modifiers first and lets routing
-//! re-deliver a held gesture's latest sample when they changed. A press the canvas captured
-//! never gives the page a focus change of its own, so it hands the page's focus to the body.
+//! re-deliver a held gesture's latest sample when they changed. Page focus remains with the
+//! pointer delivery owner; draining a gesture never changes the page's focused control.
 
 use super::{modifiers, *};
 
 impl State {
     /// Take the oldest gesture routed to the canvas after re-delivering a held gesture's sample
-    /// with changed modifiers; a captured press first moves the page's focus to its body.
+    /// with changed modifiers, preserving the page focus chosen during pointer delivery.
     pub(super) fn take_gesture(&self) -> Option<MainCanvasGesture> {
-        let gesture = {
-            let mut routing = self.routing.borrow_mut();
-            routing.refresh_modifiers(modifiers::live());
-            routing.take()
-        }?;
-        if matches!(gesture, MainCanvasGesture::Button { pressed: true, .. }) {
-            self.focus.focus_page();
-        }
-        Some(gesture)
+        let mut routing = self.routing.borrow_mut();
+        routing.refresh_modifiers(modifiers::live());
+        routing.take()
     }
 }

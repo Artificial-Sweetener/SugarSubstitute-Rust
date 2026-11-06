@@ -3,6 +3,30 @@
 //! Exercise the host's keyboard-focus decisions without a browser.
 
 use super::*;
+
+#[test]
+#[cfg(feature = "native-composition")]
+fn forwarded_mouse_press_keeps_the_viewports_page_focus() {
+    assert!(!releases_page_text_entry(true, true));
+}
+
+#[test]
+#[cfg(feature = "native-composition")]
+fn forwarded_pen_controls_and_text_fields_keep_their_page_focus() {
+    assert!(!releases_page_text_entry(true, true));
+    assert!(!releases_page_text_entry(false, true));
+}
+
+#[test]
+#[cfg(feature = "native-composition")]
+fn captured_pen_contact_releases_text_entry_only_on_its_press() {
+    let contact = [false, true, false, false, false];
+    assert_eq!(
+        contact.into_iter().filter(|pressed| releases_page_text_entry(*pressed, false)).count(),
+        1
+    );
+    assert!(!releases_page_text_entry(false, false));
+}
 #[cfg(feature = "native-composition")]
 use windows::Win32::UI::WindowsAndMessaging::{
     WM_CHAR, WM_IME_CHAR, WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_NOTIFY,

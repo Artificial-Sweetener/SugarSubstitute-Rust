@@ -19,6 +19,7 @@ use crate::main_actor::composition::{
     modifiers,
     routing::{Button, Message, Routing},
 };
+use crate::main_actor::focus;
 use std::cell::Cell;
 use sugarsubstitute_canvas::{PointerKind, PointerSample, Pressure, ToolModifiers};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
@@ -138,6 +139,9 @@ impl State {
             Transition::Enter => Message::Other,
         };
         let forward = self.update_routing(|routing| routing.route_pen(routed));
+        if focus::releases_page_text_entry(matches!(transition, Transition::Press(_)), forward) {
+            self.focus.release_captured_pen_focus();
+        }
         self.present_cursor()?;
         let (events, tracked) = page_events(message, forward, self.pen.page.get());
         self.pen.page.set(tracked);

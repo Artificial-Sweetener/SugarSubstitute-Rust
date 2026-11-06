@@ -24,6 +24,15 @@ use webview2_com::{
 };
 use windows::Win32::Foundation::E_POINTER;
 
+/// Whether an admitted pointer transition needs to release page text-entry focus.
+///
+/// Forwarded pointer input lets the page choose its own focused control. A captured contact
+/// whose press never reaches the page must release the previous text-entry owner itself.
+#[cfg(feature = "native-composition")]
+pub(in crate::main_actor) fn releases_page_text_entry(pressed: bool, forwarded: bool) -> bool {
+    pressed && !forwarded
+}
+
 /// Whether forwarding this mouse message must first move keyboard focus into the browser.
 ///
 /// A press moves focus only while the browser reports that it lacks focus, so clicks inside an
@@ -129,13 +138,12 @@ impl Focus {
         }
     }
 
-    /// Give the page's focus to its document body after a press the native canvas captured, as
-    /// a press on the canvas viewport element would, so the editing UI's shortcuts apply rather
-    /// than a text field the person was typing in.
+    /// Release the previous page control after a captured pen contact whose press was withheld
+    /// from WebView2. Forwarded mouse presses leave focus with the page's pointer handler.
     ///
     /// Failure is logged rather than escalated: focus is advisory and the next press retries.
     #[cfg(feature = "native-composition")]
-    pub(in crate::main_actor) fn focus_page(&self) {
+    pub(in crate::main_actor) fn release_captured_pen_focus(&self) {
         use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2ExecuteScriptCompletedHandler as Completed;
         // SAFETY: The retained controller belongs to this UI thread; the script is a constant
         // and its completion is not observed.

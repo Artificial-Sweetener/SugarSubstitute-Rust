@@ -8,6 +8,9 @@ use sugarsubstitute_canvas::{Pressure, ToolModifiers};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+#[path = "tests/focus.rs"]
+mod focus;
+
 const CLIP: PhysicalRect = PhysicalRect { x: 10, y: 20, width: 100, height: 50 };
 const MENU: PhysicalRect = PhysicalRect { x: 10, y: 20, width: 30, height: 10 };
 const RULE: ClickRule = ClickRule { time: 1_000, bounds: [4, 4], limit: 500, drag: [4, 4] };
