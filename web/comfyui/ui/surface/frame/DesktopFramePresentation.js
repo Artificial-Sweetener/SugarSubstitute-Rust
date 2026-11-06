@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Negotiate document-local desktop frame presentation without granting native privileges. */
 import { isRecord } from '../../types/common.js';
-import { DESKTOP_BODY_WASH_PROPERTY, DESKTOP_CHROME_WASH_PROPERTY, desktopMaterialWash, } from './DesktopMaterialWash.js';
+import { DESKTOP_BODY_WASH_PROPERTY, DESKTOP_CHROME_WASH_PROPERTY, DESKTOP_CARD_WASH_PROPERTY, desktopMaterialWash, } from './DesktopMaterialWash.js';
 /** Reject unknown protocol fields and unsupported geometry before touching browser state. */
 export function desktopFrameConfiguration(value) {
     if (!isRecord(value) ||
@@ -71,6 +71,7 @@ export class DesktopFramePresentation {
         const root = mount.ownerDocument.documentElement;
         this.#style(root, DESKTOP_BODY_WASH_PROPERTY, wash.body);
         this.#style(root, DESKTOP_CHROME_WASH_PROPERTY, wash.chrome);
+        this.#style(root, DESKTOP_CARD_WASH_PROPERTY, wash.card);
     }
     /** Restore only values still owned by this presentation, preserving later host mutations. */
     detach() {
