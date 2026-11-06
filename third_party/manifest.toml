@@ -445,3 +445,16 @@ source_url = "https://nodejs.org/dist/v24.22.1/"
 license = "MIT AND LicenseRef-Nodejs-Bundled-Dependencies"
 license_file = "third_party/licenses/nodejs-24.22.1.txt"
 files = ["installer/runtime.json"]
+
+[[components]]
+id = "sugarcubes-desktop-session-contract"
+source_url = "https://github.com/Artificial-Sweetener/SugarCubes/tree/bfdfd7ea4c03b950b9fb3877d6c092b7562077b3/integrations/contracts"
+license = "AGPL-3.0-or-later"
+license_file = "third_party/licenses/sugarcubes.AGPL-3.0.txt"
+license_header_files = ["crates/sugarsubstitute-contracts/src/desktop_session/wire.rs"]
+files = [
+  "third_party/sugarcubes-session/session.schema.json",
+  "third_party/sugarcubes-session/session_vectors.json",
+  "third_party/sugarcubes-session/session_shape_vectors.json",
+  "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs",
+]

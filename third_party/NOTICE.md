@@ -1,6 +1,6 @@
 # Bundled material
 
-The shared canvas surface and panel schemas, their validation vectors, and generated Rust
+The shared canvas surface, panel, and desktop-session schemas, their validation vectors, and generated Rust
 decoders derive from [SugarCubes](https://github.com/Artificial-Sweetener/SugarCubes),
 Copyright (C) 2026 Artificial Sweetener and contributors, under
 AGPL-3.0-or-later. The retained schema snapshots and their generated decoders are

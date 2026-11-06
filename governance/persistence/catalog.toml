@@ -1538,3 +1538,68 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "sugarcubes-desktop-session-v1"
+owner = "sugarsubstitute-contracts"
+vendored_component = "sugarcubes-desktop-session-contract"
+sources = ["crates/sugarsubstitute-contracts/src/configuration/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session.rs", "crates/sugarsubstitute-contracts/src/desktop_session/document.rs", "crates/sugarsubstitute-contracts/src/desktop_session/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session/navigation.rs", "crates/sugarsubstitute-contracts/src/desktop_session/placement.rs", "crates/sugarsubstitute-contracts/src/desktop_session/primitives.rs", "crates/sugarsubstitute-contracts/src/desktop_session/protocol.rs", "crates/sugarsubstitute-contracts/src/desktop_session/scenes.rs", "crates/sugarsubstitute-contracts/src/desktop_session/snapshot.rs", "crates/sugarsubstitute-contracts/src/desktop_session/submissions.rs", "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs", "third_party/sugarcubes-session/session.schema.json", "third_party/sugarcubes-session/session_shape_vectors.json", "third_party/sugarcubes-session/session_vectors.json"]
+source_sha256 = "sha256:d13d7338529bab3b83298f354e98a70223a964737942b7ad004cf87ed8391152"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "desktop-workspace-session-v1"
+owner = "sugarsubstitute-contracts"
+vendored_component = "sugarcubes-desktop-session-contract"
+sources = ["crates/sugarsubstitute-contracts/src/configuration/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session.rs", "crates/sugarsubstitute-contracts/src/desktop_session/document.rs", "crates/sugarsubstitute-contracts/src/desktop_session/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session/navigation.rs", "crates/sugarsubstitute-contracts/src/desktop_session/placement.rs", "crates/sugarsubstitute-contracts/src/desktop_session/primitives.rs", "crates/sugarsubstitute-contracts/src/desktop_session/protocol.rs", "crates/sugarsubstitute-contracts/src/desktop_session/scenes.rs", "crates/sugarsubstitute-contracts/src/desktop_session/snapshot.rs", "crates/sugarsubstitute-contracts/src/desktop_session/submissions.rs", "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs", "third_party/sugarcubes-session/session.schema.json", "third_party/sugarcubes-session/session_shape_vectors.json", "third_party/sugarcubes-session/session_vectors.json"]
+source_sha256 = "sha256:d13d7338529bab3b83298f354e98a70223a964737942b7ad004cf87ed8391152"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "desktop-output-manifest-v1"
+owner = "sugarsubstitute-contracts"
+vendored_component = "sugarcubes-desktop-session-contract"
+sources = ["crates/sugarsubstitute-contracts/src/configuration/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session.rs", "crates/sugarsubstitute-contracts/src/desktop_session/document.rs", "crates/sugarsubstitute-contracts/src/desktop_session/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session/navigation.rs", "crates/sugarsubstitute-contracts/src/desktop_session/placement.rs", "crates/sugarsubstitute-contracts/src/desktop_session/primitives.rs", "crates/sugarsubstitute-contracts/src/desktop_session/protocol.rs", "crates/sugarsubstitute-contracts/src/desktop_session/scenes.rs", "crates/sugarsubstitute-contracts/src/desktop_session/snapshot.rs", "crates/sugarsubstitute-contracts/src/desktop_session/submissions.rs", "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs", "third_party/sugarcubes-session/session.schema.json", "third_party/sugarcubes-session/session_shape_vectors.json", "third_party/sugarcubes-session/session_vectors.json"]
+source_sha256 = "sha256:d13d7338529bab3b83298f354e98a70223a964737942b7ad004cf87ed8391152"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "desktop-window-placement-v1"
+owner = "sugarsubstitute-contracts"
+vendored_component = "sugarcubes-desktop-session-contract"
+sources = ["crates/sugarsubstitute-contracts/src/configuration/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session.rs", "crates/sugarsubstitute-contracts/src/desktop_session/document.rs", "crates/sugarsubstitute-contracts/src/desktop_session/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session/navigation.rs", "crates/sugarsubstitute-contracts/src/desktop_session/placement.rs", "crates/sugarsubstitute-contracts/src/desktop_session/primitives.rs", "crates/sugarsubstitute-contracts/src/desktop_session/protocol.rs", "crates/sugarsubstitute-contracts/src/desktop_session/scenes.rs", "crates/sugarsubstitute-contracts/src/desktop_session/snapshot.rs", "crates/sugarsubstitute-contracts/src/desktop_session/submissions.rs", "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs", "third_party/sugarcubes-session/session.schema.json", "third_party/sugarcubes-session/session_shape_vectors.json", "third_party/sugarcubes-session/session_vectors.json"]
+source_sha256 = "sha256:d13d7338529bab3b83298f354e98a70223a964737942b7ad004cf87ed8391152"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "desktop-session-assets-v1"
+owner = "sugarsubstitute-contracts"
+vendored_component = "sugarcubes-desktop-session-contract"
+sources = ["crates/sugarsubstitute-contracts/src/configuration/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session.rs", "crates/sugarsubstitute-contracts/src/desktop_session/document.rs", "crates/sugarsubstitute-contracts/src/desktop_session/identity.rs", "crates/sugarsubstitute-contracts/src/desktop_session/navigation.rs", "crates/sugarsubstitute-contracts/src/desktop_session/placement.rs", "crates/sugarsubstitute-contracts/src/desktop_session/primitives.rs", "crates/sugarsubstitute-contracts/src/desktop_session/protocol.rs", "crates/sugarsubstitute-contracts/src/desktop_session/scenes.rs", "crates/sugarsubstitute-contracts/src/desktop_session/snapshot.rs", "crates/sugarsubstitute-contracts/src/desktop_session/submissions.rs", "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs", "third_party/sugarcubes-session/session.schema.json", "third_party/sugarcubes-session/session_shape_vectors.json", "third_party/sugarcubes-session/session_vectors.json"]
+source_sha256 = "sha256:d13d7338529bab3b83298f354e98a70223a964737942b7ad004cf87ed8391152"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
