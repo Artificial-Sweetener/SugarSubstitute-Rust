@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove interruption, stable placement, retirement, and reduced-motion behavior. */
 import { afterEach, expect, jest, test } from '@jest/globals';
+import { SURFACE_GEOMETRY_MOTION_EVENT } from '../../../frontend/comfyui/ui/surface/motion/SurfaceGeometryMotion.js';
 import { SurfaceMotion } from '../../../frontend/comfyui/ui/surface/motion/SurfaceMotion.js';
 
 afterEach(() => {
@@ -43,6 +44,10 @@ function fixture() {
 
 test('preserves committed geometry and coalesces unchanged placement while interrupting changes', () => {
   const { element, effects, motion } = fixture();
+  const moving: boolean[] = [];
+  element.addEventListener(SURFACE_GEOMETRY_MOTION_EVENT, () =>
+    moving.push(element.hasAttribute('data-sc-geometry-moving')),
+  );
   motion.place([{ element, rectangle: { x: 0, y: 0, width: 400, height: 100 } }]);
   expect(effects).toHaveLength(0);
   motion.settle();
@@ -56,6 +61,7 @@ test('preserves committed geometry and coalesces unchanged placement while inter
   expect(effects[0]?.cancel).toHaveBeenCalledTimes(1);
   motion.dispose();
   expect(effects[1]?.cancel).toHaveBeenCalledTimes(1);
+  expect(moving).toEqual([true, false, true, false]);
   expect(element.hasAttribute('data-sc-surface-moving')).toBe(false);
 });
 
@@ -91,6 +97,10 @@ test('reads all interrupted positions before committing any neighbor destination
 
 test('restores existing pointer interaction after moving neighbors can no longer cover the edited card', async () => {
   const { element, effects, motion } = fixture();
+  const moving: boolean[] = [];
+  element.addEventListener(SURFACE_GEOMETRY_MOTION_EVENT, () =>
+    moving.push(element.hasAttribute('data-sc-geometry-moving')),
+  );
   element.style.setProperty('pointer-events', 'auto', 'important');
   motion.place([{ element, rectangle: { x: 0, y: 0, width: 400, height: 100 } }]);
   motion.settle();
@@ -99,6 +109,7 @@ test('restores existing pointer interaction after moving neighbors can no longer
   effects[0]?.finish();
   await Promise.resolve();
   await Promise.resolve();
+  expect(moving).toEqual([true, false]);
   expect(element.style.getPropertyValue('pointer-events')).toBe('auto');
   expect(element.style.getPropertyPriority('pointer-events')).toBe('important');
   expect(element.hasAttribute('data-sc-surface-moving')).toBe(false);

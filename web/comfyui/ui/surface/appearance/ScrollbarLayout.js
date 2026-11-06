@@ -33,6 +33,8 @@ export function scrollbarTrack(element, preserveOwnerExtent = false) {
     const edge = element.getAttribute('data-sc-scrollbar-edge') === 'parent' ? scrollParent(element) : null;
     if (edge)
         right = edge.getBoundingClientRect().right - 1;
+    const rtl = windowRef.getComputedStyle(element).direction === 'rtl';
+    const verticalEdge = rtl ? left : right;
     for (let parent = preserveOwnerExtent ? null : scrollParent(element); parent && !root; parent = scrollParent(parent)) {
         const style = windowRef.getComputedStyle(parent);
         const bounds = parent.getBoundingClientRect();
@@ -61,6 +63,8 @@ export function scrollbarTrack(element, preserveOwnerExtent = false) {
         width: right - left,
         height: bottom - top,
         horizontalBottom,
-        rtl: windowRef.getComputedStyle(element).direction === 'rtl',
+        // Clipping may hide an owner's edge, but must never move its thumb into the content.
+        verticalEdge: verticalEdge >= left && verticalEdge <= right ? verticalEdge : null,
+        rtl,
     };
 }
