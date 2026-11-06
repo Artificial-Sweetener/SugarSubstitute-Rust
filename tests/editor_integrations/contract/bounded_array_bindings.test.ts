@@ -117,15 +117,18 @@ test('generates bounded enum vectors and validates every advertised token', asyn
   for (const command of ['fit', 'native', 'zoom', 'pan']) expect(source).toContain(`"${command}"`);
 });
 
-test.each([0, 4096])('preserves the supported collection boundary %i', async (maxItems) => {
-  const bounded = { ...array, maxItems };
-  const valid = await validator(bounded);
-  expect(valid({ commands: Array.from({ length: maxItems }, () => 'fit') })).toBe(true);
-  expect(valid({ commands: Array.from({ length: maxItems + 1 }, () => 'fit') })).toBe(false);
-  expect(rust(bounded)).toContain(
-    maxItems ? 'if value.len() > 4096 {' : 'self.commands.is_empty()',
-  );
-});
+test.each([0, 4096, 8192, 65536])(
+  'preserves the supported collection boundary %i',
+  async (maxItems) => {
+    const bounded = { ...array, maxItems };
+    const valid = await validator(bounded);
+    expect(valid({ commands: Array.from({ length: maxItems }, () => 'fit') })).toBe(true);
+    expect(valid({ commands: Array.from({ length: maxItems + 1 }, () => 'fit') })).toBe(false);
+    expect(rust(bounded)).toContain(
+      maxItems ? `if value.len() > ${maxItems} {` : 'self.commands.is_empty()',
+    );
+  },
+);
 
 test.each([
   undefined,
@@ -135,7 +138,7 @@ test.each([
   0.5,
   Number.NaN,
   Number.POSITIVE_INFINITY,
-  4097,
+  65537,
   Number.MAX_SAFE_INTEGER + 1,
 ])('refuses a missing or invalid maximum %s in both generators', async (maxItems) => {
   const invalid = { ...array, maxItems };
