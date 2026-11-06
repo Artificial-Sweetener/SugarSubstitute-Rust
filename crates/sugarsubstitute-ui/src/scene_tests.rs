@@ -49,6 +49,7 @@ fn scene_checks_late_commands_before_admitting_scratch() -> Result<(), Box<dyn E
         Element::Icon {
             bounds: Bounds { x: 0.0, y: 0.0, width: 3000.0, height: 1.0 },
             icon: FluentIcon::Home,
+            on_accent: false,
         },
     ];
     assert!(
@@ -84,6 +85,7 @@ fn scene_composes_real_widgets_labels_and_icons_in_order() -> Result<(), Box<dyn
         Element::Icon {
             bounds: Bounds { x: 136.5, y: 16.5, width: 16.0, height: 16.0 },
             icon: FluentIcon::Accept,
+            on_accent: false,
         },
         Element::Progress {
             bar: ProgressBar {
@@ -140,7 +142,38 @@ fn scene_accent_reaches_decorations_and_progress() -> Result<(), Box<dyn Error>>
     while !cursor.step(&mut target, &mut fonts)? {}
     for (x, y) in [(40, 20), (12, 62)] {
         let pixel = target.pixel(x, y).ok_or("Accent pixel absent")?;
-        assert_eq!([pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()], [0, 120, 212, 255]);
+        assert_eq!([pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()], [41, 162, 255, 255]);
+    }
+    Ok(())
+}
+
+/// On-accent icons use mode-specific foregrounds with the exact authored coverage.
+#[test]
+fn icon_foreground_preserves_coverage_in_both_modes() -> Result<(), Box<dyn Error>> {
+    for theme in [Theme::Dark, Theme::Light] {
+        let surface = PaintSpec { theme, ..surface() };
+        let render = |on_accent| -> Result<Bitmap, Box<dyn Error>> {
+            let elements = vec![Element::Icon {
+                bounds: Bounds { x: 8.5, y: 8.5, width: 16.0, height: 16.0 },
+                icon: FluentIcon::Accept,
+                on_accent,
+            }];
+            let mut cursor = SceneCursor::new(surface, AccentPalette::PRODUCT, elements, None)?;
+            let mut target =
+                Bitmap::new(surface.width, surface.height).ok_or("Icon target absent")?;
+            let mut fonts = SceneResources::new("en")?;
+            while !cursor.step(&mut target, &mut fonts)? {}
+            Ok(target)
+        };
+        let authored = render(false)?;
+        let tinted = render(true)?;
+        assert!(tinted.data().chunks_exact(4).any(|p| p[3] > 0));
+        for (original, actual) in authored.data().chunks_exact(4).zip(tinted.data().chunks_exact(4))
+        {
+            assert_eq!(actual[3], original[3]);
+            let channel = if theme == Theme::Dark { 0 } else { actual[3] };
+            assert_eq!(actual[..3], [channel; 3]);
+        }
     }
     Ok(())
 }

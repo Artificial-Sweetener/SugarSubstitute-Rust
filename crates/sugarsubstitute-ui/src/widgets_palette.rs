@@ -7,6 +7,7 @@ use crate::accent::AccentPalette;
 impl Decoration {
     /// Resolve this treatment against the surface's accent; every accent role comes from it.
     pub(super) fn palette(self, accent: AccentPalette) -> Palette {
+        let shades = accent.variants(true);
         let white = |alpha| [255, 255, 255, alpha];
         let uniform = |radius, fill, border| Palette {
             radius,
@@ -21,8 +22,7 @@ impl Decoration {
                 let fill = if primary {
                     match state {
                         ControlState::Disabled => [52, 52, 52, 255],
-                        ControlState::Hover | ControlState::Pressed => accent.hover(),
-                        _ => accent.fill(),
+                        _ => shades.button(state),
                     }
                 } else {
                     white(match state {
@@ -34,6 +34,13 @@ impl Decoration {
                 };
                 let mut palette = uniform(5.0, fill, white(if primary { 20 } else { 14 }));
                 palette.top = white(20);
+                if primary && state != ControlState::Disabled {
+                    palette.border =
+                        if state == ControlState::Pressed { shades.dark2 } else { shades.light1 };
+                    palette.top = palette.border;
+                    palette.bottom =
+                        if state == ControlState::Pressed { shades.dark2 } else { shades.light2 };
+                }
                 palette
             }
             Self::Field { selection, focused, state } => {
@@ -47,7 +54,7 @@ impl Decoration {
                 let mut palette = uniform(5.0, fill, white(if selection { 14 } else { 20 }));
                 palette.top = white(20);
                 if !selection {
-                    palette.bottom = if focused { accent.fill() } else { white(139) };
+                    palette.bottom = if focused { shades.primary } else { white(139) };
                     if focused {
                         palette.insets[3] = 2.0;
                     }
@@ -56,7 +63,7 @@ impl Decoration {
             }
             Self::Section => uniform(22.0, white(10), white(19)),
             Self::ProgressSection => uniform(18.0, white(10), white(19)),
-            Self::IconBadge => uniform(14.0, accent.tint(31), accent.tint(61)),
+            Self::IconBadge => uniform(14.0, shades.tint(31), shades.tint(61)),
             Self::Choice { state } => {
                 uniform(18.0, white(if state == ControlState::Hover { 6 } else { 0 }), white(0))
             }
@@ -64,16 +71,28 @@ impl Decoration {
             Self::Output => uniform(5.0, [16, 16, 16, 255], white(37)),
             Self::Radio { checked } => {
                 let mut palette =
-                    uniform(10.0, white(0), if checked { accent.fill() } else { white(153) });
+                    uniform(10.0, white(0), if checked { shades.primary } else { white(153) });
                 if checked {
                     palette.insets = [5.0; 4];
                 }
                 palette
             }
-            Self::Check { checked } => uniform(
+            Self::Check { checked, state } => uniform(
                 2.0,
-                if checked { accent.fill() } else { [59, 59, 59, 255] },
-                if checked { accent.fill() } else { [133, 133, 133, 255] },
+                if checked && state == ControlState::Disabled {
+                    white(41)
+                } else if checked {
+                    shades.checkbox(state)
+                } else {
+                    [59, 59, 59, 255]
+                },
+                if checked && state == ControlState::Disabled {
+                    white(0)
+                } else if checked {
+                    shades.checkbox(state)
+                } else {
+                    [133, 133, 133, 255]
+                },
             ),
             Self::Close { state } => uniform(
                 0.0,

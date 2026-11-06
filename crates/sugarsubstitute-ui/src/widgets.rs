@@ -102,6 +102,8 @@ pub enum Decoration {
     Check {
         /// Actual application selection.
         checked: bool,
+        /// Observed availability and pointer state.
+        state: ControlState,
     },
     /// Window close hover/press background, with its icon supplied by the caption owner.
     Close {
@@ -140,8 +142,8 @@ impl TextTone {
             Self::Action { primary, state } => match (primary, state) {
                 (true, ControlState::Disabled) => [255, 255, 255, 110],
                 (false, ControlState::Disabled) => [255, 255, 255, 92],
-                (_, ControlState::Pressed) => [255, 255, 255, 200],
-                (true, _) => [0, 0, 0, 255],
+                (false, ControlState::Pressed) => [255, 255, 255, 200],
+                (true, _) => crate::accent::foreground(true, state),
                 (false, _) => [255; 4],
             },
         }

@@ -46,7 +46,7 @@ impl Builder<'_> {
     }
     /// Retain the canonical Fluent asset identity and its centered viewport.
     pub(super) fn icon(&mut self, bounds: Bounds, icon: FluentIcon) {
-        self.elements.push(Element::Icon { bounds, icon });
+        self.elements.push(Element::Icon { bounds, icon, on_accent: false });
     }
     /// Resolve actual native observations with application availability taking precedence.
     pub(super) fn state(&self, action: Action, enabled: bool) -> ControlState {

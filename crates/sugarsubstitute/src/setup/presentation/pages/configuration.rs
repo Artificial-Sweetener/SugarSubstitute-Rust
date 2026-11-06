@@ -62,9 +62,19 @@ impl Builder<'_> {
             let label_height =
                 self.measure(self.copy.mirrors, inner - 27.0, 14.0, 19.0)?.height.max(19.0);
             let check = bounds(left, next + (label_height - 18.0) * 0.5, 18.0, 18.0);
-            self.decoration(check, Decoration::Check { checked: self.state.mirrors });
+            self.decoration(
+                check,
+                Decoration::Check {
+                    checked: self.state.mirrors,
+                    state: self.state(Action::Mirrors, self.state.can_edit),
+                },
+            );
             if self.state.mirrors {
-                self.icon(bounds(check.x + 4.0, check.y + 4.0, 10.0, 10.0), FluentIcon::Accept);
+                self.elements.push(Element::Icon {
+                    bounds: bounds(check.x + 4.0, check.y + 4.0, 10.0, 10.0),
+                    icon: FluentIcon::Accept,
+                    on_accent: true,
+                });
             }
             self.label(
                 self.copy.mirrors,

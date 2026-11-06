@@ -83,11 +83,11 @@ fn completion_pixel(
 /// Keep installer accent and track colors under the same widget owner.
 #[test]
 fn wizard_progress_uses_the_product_fallback_and_track() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(completion_pixel(ProgressAppearance::Wizard, PRODUCT)?, (255, 64, 137, 255));
+    assert_eq!(completion_pixel(ProgressAppearance::Wizard, PRODUCT)?, (255, 68, 132, 255));
     Ok(())
 }
 
-/// Every treatment paints completion with the supplied system accent in either theme.
+/// Completion paints the mode-dependent primary shade from the supplied system seed.
 #[test]
 fn completion_uses_the_supplied_system_accent() -> Result<(), Box<dyn std::error::Error>> {
     let accent = AccentPalette::system(AccentColor::new(0, 120, 212));
@@ -96,7 +96,12 @@ fn completion_uses_the_supplied_system_accent() -> Result<(), Box<dyn std::error
         ProgressAppearance::Panel { dark: true },
         ProgressAppearance::Panel { dark: false },
     ] {
-        assert_eq!(completion_pixel(appearance, accent)?, (0, 120, 212, 255));
+        let expected = if matches!(appearance, ProgressAppearance::Panel { dark: false }) {
+            (0, 120, 212, 255)
+        } else {
+            (41, 162, 255, 255)
+        };
+        assert_eq!(completion_pixel(appearance, accent)?, expected);
     }
     Ok(())
 }

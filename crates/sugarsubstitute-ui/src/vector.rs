@@ -112,6 +112,16 @@ impl VectorAsset {
 }
 
 impl VectorPixels {
+    /// Recolor glyph coverage in place, preserving premultiplication and its output memory claim.
+    pub(crate) fn recolor(&mut self, color: [u8; 4]) {
+        for pixel in self.pixels.data_mut().chunks_exact_mut(4) {
+            let alpha = (u16::from(pixel[3]) * u16::from(color[3]) + 127) / 255;
+            for channel in 0..3 {
+                pixel[channel] = ((u16::from(color[channel]) * alpha + 127) / 255) as u8;
+            }
+            pixel[3] = alpha as u8;
+        }
+    }
     /// Integer device placement of the buffer, including its fractional edge coverage.
     /// Composite at this origin without rescaling or rounding the authored viewport.
     pub fn origin(&self) -> [i32; 2] {

@@ -23,11 +23,12 @@ fn draw_with(decoration: Decoration, accent: AccentPalette) -> Result<Bitmap, Bo
 }
 
 #[test]
-fn primary_action_and_disabled_state_keep_the_original_palette() -> Result<(), Box<dyn Error>> {
+fn primary_action_and_disabled_state_use_the_qfluentwidgets_palette() -> Result<(), Box<dyn Error>>
+{
     for (state, expected) in [
-        (ControlState::Rest, [255, 64, 137, 255]),
-        (ControlState::Hover, [243, 58, 128, 255]),
-        (ControlState::Pressed, [243, 58, 128, 255]),
+        (ControlState::Rest, [255, 68, 132, 255]),
+        (ControlState::Hover, [230, 62, 119, 255]),
+        (ControlState::Pressed, [209, 60, 110, 255]),
         (ControlState::Disabled, [52, 52, 52, 255]),
     ] {
         let target = draw(Decoration::Button { primary: true, state })?;
@@ -44,9 +45,9 @@ fn emphasized_controls_paint_the_supplied_system_accent() -> Result<(), Box<dyn 
     let accent =
         AccentPalette::system(sugarsubstitute_contracts::appearance::AccentColor::new(0, 120, 212));
     for (decoration, expected) in [
-        (Decoration::Button { primary: true, state: ControlState::Rest }, [0, 120, 212, 255]),
-        (Decoration::Button { primary: true, state: ControlState::Hover }, [0, 114, 201, 255]),
-        (Decoration::Check { checked: true }, [0, 120, 212, 255]),
+        (Decoration::Button { primary: true, state: ControlState::Rest }, [41, 162, 255, 255]),
+        (Decoration::Button { primary: true, state: ControlState::Hover }, [37, 146, 230, 255]),
+        (Decoration::Check { checked: true, state: ControlState::Rest }, [41, 162, 255, 255]),
     ] {
         let target = draw_with(decoration, accent)?;
         let pixel = target.pixel(40, 20).ok_or("Control interior absent")?;
@@ -57,8 +58,40 @@ fn emphasized_controls_paint_the_supplied_system_accent() -> Result<(), Box<dyn 
         accent,
     )?;
     let edge = field.pixel(40, 39).ok_or("Field edge absent")?;
-    assert_eq!([edge.red(), edge.green(), edge.blue(), edge.alpha()], [0, 120, 212, 255]);
+    assert_eq!([edge.red(), edge.green(), edge.blue(), edge.alpha()], [41, 162, 255, 255]);
     Ok(())
+}
+
+/// Borders, checkbox states and pressed text follow distinct qfluentwidgets roles.
+#[test]
+fn accent_states_reach_widget_borders_checks_and_foregrounds() {
+    let accent =
+        AccentPalette::system(sugarsubstitute_contracts::appearance::AccentColor::new(0, 120, 212));
+    for (state, fill, border, bottom) in [
+        (ControlState::Rest, [41, 162, 255, 255], [58, 169, 255, 255], [88, 182, 255, 255]),
+        (ControlState::Hover, [37, 146, 230, 255], [58, 169, 255, 255], [88, 182, 255, 255]),
+        (ControlState::Pressed, [37, 135, 209, 255], [37, 135, 209, 255], [37, 135, 209, 255]),
+    ] {
+        let palette = Decoration::Button { primary: true, state }.palette(accent);
+        assert_eq!(palette.fill, fill);
+        assert_eq!(palette.border, border);
+        assert_eq!(palette.bottom, bottom);
+        let checkbox = Decoration::Check { checked: true, state }.palette(accent);
+        assert_eq!(checkbox.fill, fill);
+        assert_eq!(checkbox.border, fill);
+    }
+    let disabled =
+        Decoration::Check { checked: true, state: ControlState::Disabled }.palette(accent);
+    assert_eq!(disabled.fill, [255, 255, 255, 41]);
+    assert_eq!(disabled.border[3], 0);
+    assert_eq!(
+        TextTone::Action { primary: true, state: ControlState::Pressed }.color(),
+        [0, 0, 0, 161]
+    );
+    assert_eq!(
+        TextTone::Action { primary: true, state: ControlState::Rest }.color(),
+        [0, 0, 0, 255]
+    );
 }
 
 #[test]
@@ -68,7 +101,7 @@ fn focused_field_uses_two_accent_rows_and_preserves_the_other_edges() -> Result<
         draw(Decoration::Field { selection: false, focused: true, state: ControlState::Rest })?;
     for y in [38, 39] {
         let pixel = target.pixel(40, y).ok_or("Field edge absent")?;
-        assert_eq!([pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()], [255, 64, 137, 255]);
+        assert_eq!([pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()], [255, 68, 132, 255]);
     }
     assert_eq!(target.pixel(40, 37).ok_or("Field interior absent")?.alpha(), 10);
     assert!(target.pixel(8, 20).ok_or("Field side absent")?.alpha() < 255);
@@ -139,7 +172,7 @@ fn fractional_page_placement_renders_at_installer_qualification_scales()
 /// Match the saved dark installer checkbox independently of its containing translucent section.
 #[test]
 fn checkbox_resting_pixels_match_the_installer_baseline() -> Result<(), Box<dyn Error>> {
-    let target = draw(Decoration::Check { checked: false })?;
+    let target = draw(Decoration::Check { checked: false, state: ControlState::Rest })?;
     for (x, expected) in [(40, 59), (8, 133)] {
         let pixel = target.pixel(x, 20).ok_or("Checkbox pixel absent")?;
         assert_eq!(

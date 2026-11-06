@@ -72,7 +72,7 @@ fn clipped_layer_preserves_fractional_coverage_and_premultiplied_pixels() -> Res
         }
     }
     let pixel = |x: usize, y: usize| &frame.pixels()[(y * 120 + x) * 4..][..4];
-    assert_eq!(pixel(20, 20), &[255, 64, 137, 255]);
+    assert_eq!(pixel(20, 20), &[255, 68, 132, 255]);
     assert_eq!(pixel(10, 20)[3], 191);
     assert_eq!(pixel(20, 9)[3], 191);
     assert_eq!(pixel(20, 59)[3], 64);
@@ -162,6 +162,6 @@ fn consecutive_layers_match_shared_source_over_and_clear_previous_pixels() -> Re
     while !base.step(&mut expected, &mut fonts)? {}
     let at = |x: usize, y: usize| (y * 120 + x) * 4;
     assert_eq!(&frame.pixels()[at(105, 72)..][..4], &expected.data()[at(105, 72)..][..4]);
-    assert_eq!(&frame.pixels()[at(20, 20)..][..4], &[255, 64, 137, 255]);
+    assert_eq!(&frame.pixels()[at(20, 20)..][..4], &[255, 68, 132, 255]);
     Ok(())
 }
