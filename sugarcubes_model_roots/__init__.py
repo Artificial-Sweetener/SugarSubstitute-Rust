@@ -23,7 +23,12 @@ from pathlib import Path
 
 from .service import ModelRootConfigurationService
 from .domain import ModelRootConfigurationStatus
-from .store import ModelRootStore
+from .store import (
+    ModelRootStore,
+    ModelRootSelectionError,
+    ModelRootSelectionFailure,
+    ModelRootSelectionSource,
+)
 from .startup import apply_configured_model_root
 
 MODEL_ROOT_API_VERSION = 1
@@ -94,4 +99,11 @@ class ModelRootConfiguration:
         return self._service.configure(mode, path)
 
 
-__all__ = ["ModelRootConfiguration", "ModelRootStore", "apply_configured_model_root"]
+__all__ = [
+    "ModelRootConfiguration",
+    "ModelRootStore",
+    "ModelRootSelectionError",
+    "ModelRootSelectionFailure",
+    "ModelRootSelectionSource",
+    "apply_configured_model_root",
+]
