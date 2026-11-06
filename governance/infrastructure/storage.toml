@@ -1616,6 +1616,14 @@ rationale = "Borrow the prepared native provisioning cache capability descriptor
 consumer = "memory_metadata"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/session_identity/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:6ca904aa3597ff5e8e626465bcc3e7bfbc62b6f34c092f0601d7995354e3f810"
+capabilities = ["std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native protected-storage fixtures verify stable source-host correlation, preserve invalid original bytes and reject a record moved to a replacement native profile directory. Direct filesystem access deliberately corrupts or observes only owned temporary fixtures."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/application.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:be88668b9b3643d5be9030092b5d61d15845e702f45b337860ac37b6c0cf6cd4"
@@ -2023,7 +2031,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/running.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5b1fa85a138f251583a4134adb8a65c7220125e2124d1c6152736bda37108a35"
+source_sha256 = "sha256:c3a6df882215d3ad28ff839940fe57c4f591b28bed5a1c14a9a230f885384a6f"
 capabilities = ["std::fs::remove_file", "std::fs::rename", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Bind the actual elected generation directory to retained installation custody. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2103,7 +2111,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/trials/transfer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:86523c00dadd0a57e623e82a1566f6d82cf1804bb68462f6c91f47f99e1c944a"
+source_sha256 = "sha256:663e59ada4bc4ed246a2ca8bc185a5c0604b0d21436ce6ffc7fd534de8468500"
 capabilities = ["assert! restricted capability fragments", "std::fs::File::from", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir", "tempfile::tempfile"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise transfer with real protected storage, duplicated handles and authenticated packages. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

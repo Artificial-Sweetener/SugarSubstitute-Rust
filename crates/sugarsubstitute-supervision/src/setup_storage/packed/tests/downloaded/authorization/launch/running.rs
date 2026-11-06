@@ -23,6 +23,19 @@ fn elected_generation_retains_run_ownership_and_rejects_an_older_image_directory
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
         assert!(retain_running_generation(&directory, None, context).is_err());
         let before = store.load(context)?;
+        let selected = before.as_ref().ok_or("Selection absent")?.installation().clone();
+        assert_eq!(guard.installation_id(), &selected);
+        let profile = sugarsubstitute_contracts::configuration::ProfileId::new("real".into())?;
+        assert_eq!(
+            crate::session_identity::session_host_identity(
+                &root.path().join("user"),
+                &profile,
+                Some(&guard),
+                context
+            )?,
+            selected
+        );
+        assert!(!root.path().join("user/sessions/real/source-host-identity.json").exists());
         drop(guard);
         let again =
             retain_running_generation(&directory, None, context)?.ok_or("Run did not retire")?;

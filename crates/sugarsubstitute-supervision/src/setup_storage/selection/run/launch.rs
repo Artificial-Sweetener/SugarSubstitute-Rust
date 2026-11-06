@@ -22,8 +22,13 @@ pub enum InstallationLaunch {
 pub struct AcceptedApplication {
     application: VerifiedApplication,
     custody: Arc<Custody>,
+    installation: sugarsubstitute_contracts::installation::InstallationId,
 }
 impl AcceptedApplication {
+    /// Borrow the existing selection's stable installation identity while its native run is retained.
+    pub fn installation_id(&self) -> &sugarsubstitute_contracts::installation::InstallationId {
+        &self.installation
+    }
     /// Durable accepted identity, including the original authenticated package manifest digest.
     pub fn generation(&self) -> &Generation {
         &self.application.generation
@@ -101,6 +106,7 @@ impl InstallationRun {
         Ok(AcceptedApplication {
             application: reservation.application,
             custody: Arc::clone(&self.custody),
+            installation: current.installation().clone(),
         })
     }
 }

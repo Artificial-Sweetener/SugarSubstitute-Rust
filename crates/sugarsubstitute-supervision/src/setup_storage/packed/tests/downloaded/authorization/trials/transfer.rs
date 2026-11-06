@@ -101,6 +101,7 @@ fn receiving_trial_after_creator_drop_retains_payloads_and_accepts_only_once() -
             case.context,
         )?
         .ok_or("Running trial absent")?;
+        assert_eq!(running.installation_id(), before.installation());
         let application = running.trial().ok_or("Running entry lost trial authority")?;
         assert_eq!(application.directory(), directory);
         assert!(snapshots(case.directory.path())?.is_empty());
