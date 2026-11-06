@@ -18,11 +18,28 @@
 import type { WorkflowSessionContext } from './WorkflowSession.js';
 import type { WorkflowOutputSet, WorkflowRunStatus } from './WorkflowOutput.js';
 import type { WorkflowPreview } from './WorkflowPreview.js';
+import type { WorkflowScene } from './WorkflowScene.js';
+
+/** One scene of the current scene run with the latest output of each source it produced. */
+export interface WorkflowSceneResult extends WorkflowScene {
+  readonly outputs: readonly WorkflowOutputSet[];
+}
+
+/** The scene run whose prompts produced the workflow's current results. */
+export interface WorkflowSceneResults {
+  readonly id: string;
+  readonly scenes: readonly WorkflowSceneResult[];
+  /** The scene of the latest known run, whose preview is the live one. */
+  readonly running: string | null;
+}
 
 export interface WorkflowResultSession {
   readonly context: WorkflowSessionContext;
   readonly revision: number;
+  /** The latest output of each source across every run, including every scene. */
   readonly outputs: readonly WorkflowOutputSet[];
+  /** Per-scene outputs while the current results came from one scene run, or null. */
+  readonly scenes: WorkflowSceneResults | null;
   readonly runOrder: number;
   /** Keep the accepted visual handoff monotonic even after transient previews retire. */
   readonly presentedRunOrder: number;

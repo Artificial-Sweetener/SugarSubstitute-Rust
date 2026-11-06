@@ -196,7 +196,7 @@ test('an image loader, a paired mask loader and an inpaint consumer provision on
     ],
   });
   expect(f.native.graph.extra).toMatchObject({
-    sugarcubes_input_canvas: { version: 1, id: 'workflow-1', route: 'output' },
+    sugarcubes_input_canvas: { version: 1, id: 'workflow-1', route: 'input' },
   });
   const saved = mask.properties?.[MASK_BINDING_KEY] as { entries: { source: unknown }[] };
   expect(saved.entries.map((entry) => entry.source)).toEqual([

@@ -17,20 +17,27 @@
 
 import { defineComponent, h, type PropType } from 'vue';
 import type { CanvasCommand, CanvasViewSnapshot } from '../../domain/CanvasViewPort.js';
+import type { CanvasRouteId, CanvasRouteState } from '../../domain/CanvasRoute.js';
+import { CanvasRoutePicker } from './CanvasRoutePicker.js';
 import { CanvasSelectionPicker } from './CanvasSelectionPicker.js';
 
-/** Keep each reveal image's content navigation explicit and independently selectable. */
+/** Keep each reveal image's content navigation explicit and independently selectable; the first bar also chooses the canvas. */
 export const CanvasComparisonNavigation = defineComponent({
   name: 'CanvasComparisonNavigation',
   props: {
     snapshot: { type: Object as PropType<CanvasViewSnapshot>, required: true },
     send: { type: Function as PropType<(command: CanvasCommand) => void>, required: true },
+    route: { type: Object as PropType<CanvasRouteState | null>, default: null },
+    chooseRoute: { type: Function as PropType<(route: CanvasRouteId) => void>, required: true },
   },
   /** Bind both selectors to the same view authority used by browser and native overlays. */
   setup(props) {
     return () =>
       h('div', { class: 'sc-output-comparison-navigation' }, [
         h('div', { class: 'sc-output-tabstrip sc-output-compare-first' }, [
+          props.route
+            ? h(CanvasRoutePicker, { state: props.route, choose: props.chooseRoute })
+            : null,
           h(CanvasSelectionPicker, {
             sources: props.snapshot.sources,
             selection: props.snapshot.view.selection,

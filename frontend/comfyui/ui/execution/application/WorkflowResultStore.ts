@@ -25,7 +25,11 @@ import type { WorkflowSessionContext } from '../domain/WorkflowSession.js';
 import type { WorkflowRun } from '../domain/WorkflowRun.js';
 import type { WorkflowMediaPayload } from '../domain/WorkflowMedia.js';
 import { combineWorkflowMedia, freezeWorkflowMedia } from '../domain/WorkflowMedia.js';
-import type { WorkflowResultSession } from '../domain/WorkflowResultSession.js';
+import type {
+  WorkflowResultSession,
+  WorkflowSceneResults,
+} from '../domain/WorkflowResultSession.js';
+import type { WorkflowSceneRun } from '../domain/WorkflowScene.js';
 import type { WorkflowPreview } from '../domain/WorkflowPreview.js';
 import type {
   OutputProvenance,
@@ -46,6 +50,15 @@ interface RetainedOutput {
 interface ResultSession {
   snapshot: WorkflowResultSession;
   readonly outputs: Map<OutputSourceId, RetainedOutput>;
+  /** The scene run being shown and each scene's latest output per source. */
+  scenes: SceneOutputs | null;
+}
+interface SceneOutputs {
+  readonly run: WorkflowSceneRun;
+  readonly outputs: Map<string, Map<OutputSourceId, WorkflowOutputSet>>;
+  running: string | null;
+  /** The latest queue order among the scene run's prompts. */
+  order: number;
 }
 export interface WorkflowResultUpdate {
   readonly run: WorkflowRun;
@@ -86,10 +99,12 @@ export class WorkflowResultStore {
       }
       const session: ResultSession = {
         outputs: new Map(),
+        scenes: null,
         snapshot: Object.freeze({
           context: Object.freeze({ ...context }),
           revision: (previous?.snapshot.revision ?? 0) + 1,
           outputs: Object.freeze([]),
+          scenes: null,
           runOrder: 0,
           presentedRunOrder: 0,
           runStatus: 'idle',
@@ -131,14 +146,17 @@ export class WorkflowResultStore {
     const terminal =
       run.status === 'complete' || run.status === 'cancelled' || run.status === 'error';
     const preview = terminal || run.order > previous.runOrder ? null : previous.preview;
+    const scenes = this.#followScene(session, run);
     if (
       previous.runOrder === run.order &&
       previous.runStatus === run.status &&
-      previous.preview === preview
+      previous.preview === preview &&
+      previous.scenes === scenes
     )
       return;
     this.#publish(session, {
       ...previous,
+      scenes,
       runOrder: run.order,
       runStatus: run.status,
       preview,
@@ -205,7 +223,7 @@ export class WorkflowResultStore {
       inputPreview
         ? previous.output.items.filter((item) => item.batchIndex < previous.payload.images.length)
         : [];
-    this.#retain(session, update.source, provenance, payload, delivery, carried);
+    this.#retain(session, update.source, provenance, payload, delivery, carried, update.run);
     return true;
   }
 
@@ -301,6 +319,7 @@ export class WorkflowResultStore {
     payload: WorkflowMediaPayload,
     delivery: string,
     carried: readonly WorkflowOutputItem[] = [],
+    run: WorkflowRun | null = null,
   ): void {
     const media = [...payload.images, ...payload.videos, ...payload.models];
     const items: WorkflowOutputItem[] = [];
@@ -345,6 +364,14 @@ export class WorkflowResultStore {
       session.outputs.get(source.id)?.completedPreviewRunOrder ?? -1,
     );
     session.outputs.set(source.id, { output, payload, delivery, completedPreviewRunOrder });
+    if (run?.scene) {
+      this.#followScene(session, run);
+      if (session.scenes?.run.id === run.scene.run.id) {
+        const outputs = session.scenes.outputs.get(run.scene.key) ?? new Map();
+        outputs.set(source.id, output);
+        session.scenes.outputs.set(run.scene.key, outputs);
+      }
+    } else if (run && session.scenes && run.order > session.scenes.order) session.scenes = null;
     const outputs = Object.freeze(
       [...session.outputs.values()]
         .map((retained) => retained.output)
@@ -356,6 +383,7 @@ export class WorkflowResultStore {
       {
         ...session.snapshot,
         outputs,
+        scenes: this.#sceneResults(session),
         presentedRunOrder: items.reduce(
           (latest, item) =>
             item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder),
@@ -368,6 +396,64 @@ export class WorkflowResultStore {
       },
       provenance.kind === 'execution' ? 'output' : 'restore',
     );
+  }
+
+  /**
+   * Adopt the scene run of the latest run, keeping each scene's outputs while that run lasts.
+   *
+   * A newer run of another scene run starts an empty scene set; a run without scenes leaves the
+   * current scene set until its outputs replace it. Returns the scene results to publish.
+   */
+  #followScene(session: ResultSession, run: WorkflowRun): WorkflowSceneResults | null {
+    const member = run.scene;
+    if (member && run.order >= session.snapshot.runOrder) {
+      if (session.scenes?.run.id !== member.run.id)
+        session.scenes = {
+          run: member.run,
+          outputs: new Map(),
+          running: member.key,
+          order: run.order,
+        };
+      else {
+        session.scenes.running = member.key;
+        session.scenes.order = Math.max(session.scenes.order, run.order);
+      }
+    }
+    return session.scenes ? this.#sceneResults(session) : null;
+  }
+
+  /** Publish the current scene run in authored order, reusing an unchanged publication. */
+  #sceneResults(session: ResultSession): WorkflowSceneResults | null {
+    const scenes = session.scenes;
+    if (!scenes) return null;
+    const previous = session.snapshot.scenes;
+    const next = scenes.run.scenes.map((scene) =>
+      Object.freeze({
+        ...scene,
+        outputs: Object.freeze(
+          [...(scenes.outputs.get(scene.key)?.values() ?? [])].sort(
+            (a, b) => a.source.order - b.source.order,
+          ),
+        ),
+      }),
+    );
+    if (
+      previous?.id === scenes.run.id &&
+      previous.running === scenes.running &&
+      previous.scenes.length === next.length &&
+      previous.scenes.every(
+        (scene, index) =>
+          scene.key === next[index]?.key &&
+          scene.outputs.length === next[index].outputs.length &&
+          scene.outputs.every((output, at) => output === next[index]?.outputs[at]),
+      )
+    )
+      return previous;
+    return Object.freeze({
+      id: scenes.run.id,
+      running: scenes.running,
+      scenes: Object.freeze(next),
+    });
   }
 
   /** Increment one coherent session snapshot revision before notifying its subscribers. */

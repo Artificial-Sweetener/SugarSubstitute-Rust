@@ -102,7 +102,7 @@ const hostFeedback = new CubeHostFeedback({ toast: ui.toast });
 const cubePreconfiguration = ui.workflowPreconfiguration;
 
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-const { workflowExecution, workflowFields, canvasInputs, editorDimensions } =
+const { workflowExecution, workflowFields, canvasInputs, editorDimensions, scenes } =
   createWorkflowCanvasComposition({
     api,
     notify: (severity, title, message) => pushToastMessage(severity, title, message),
@@ -150,7 +150,7 @@ invalidateCubeCatalogs = () => cubeCatalogInvalidation.invalidate();
 const nativeBoundaryResolver = new NativeSubgraphBoundaryResolver(logger);
 const { queue: promptQueueBridge, prepareAnalysisPrompt } = createCubeHostExecution({
   api,
-  observer: workflowExecution.submissionObserver,
+  execution: workflowExecution,
   logger,
   boundaryResolver: nativeBoundaryResolver,
   getGraph: () => appRef?.graph,
@@ -498,7 +498,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     return canvasInputs.surfaces.withNodeMenuItems(node, cubeAffordances.getNodeMenuItems(node));
   },
   async setup() {
-    promptEditors.setup(canvasInputs.surfaces.regions, { app: appRef, logger });
+    promptEditors.setup(canvasInputs.surfaces.regions, { app: appRef, logger, scenes });
     await extensionSetupLifecycle.setup();
     workflowHistory.install();
     relations.setup();

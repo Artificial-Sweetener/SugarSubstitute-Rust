@@ -71,6 +71,11 @@ def install_output_saving(prompt_server: object) -> OutputSavingRuntime:
         hook.close()
         release_runtime_images(runtime.images)
 
+    async def stop_artifacts(app: web.Application) -> None:
+        """Cancel and observe artifact workers before the server releases its application lifetime."""
+        await runtime.artifact_workers.close()
+
+    application.on_shutdown.append(stop_artifacts)
     application.on_cleanup.append(close_runtime)
     application[_RUNTIME] = runtime
     return runtime

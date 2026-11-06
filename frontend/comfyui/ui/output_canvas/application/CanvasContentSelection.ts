@@ -48,12 +48,17 @@ export function canvasItemSelection(item: WorkflowOutputItem): CanvasSelection {
   return { sourceId: item.provenance.sourceId, batchIndex: item.batchIndex };
 }
 
-/** Project a manual source grid or the progressively replaced automatic batch. */
+/**
+ * Project a manual source grid or the progressively replaced automatic batch.
+ *
+ * The every-scene overview is already one cell per scene, so it is its own grid.
+ */
 export function canvasBatchGridCatalog(
   catalog: CanvasCatalogSnapshot,
   selection: CanvasSelection | null,
   automatic = false,
 ): CanvasCatalogSnapshot {
+  if (catalog.sceneOverview) return catalog;
   const active = catalog.entries.find((entry) => entry.source.id === selection?.sourceId);
   if (!active) return Object.freeze({ ...catalog, entries: Object.freeze([]) });
   if (!automatic) return Object.freeze({ ...catalog, entries: Object.freeze([active]) });

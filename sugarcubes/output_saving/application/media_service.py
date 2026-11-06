@@ -19,6 +19,8 @@ from collections.abc import Callable, Sequence
 from typing import NamedTuple, Protocol
 
 from ..domain.media import (
+    PREVIEW_MAXIMUM_SIDE,
+    PREVIEW_MINIMUM_SIDE,
     ImageTransferFormat,
     ImageTransferPayload,
     preferred_copy_format,
@@ -37,6 +39,11 @@ class OutputImageFiles(Protocol):
         self, reference: OutputFileReference, format: ImageTransferFormat, quality: int
     ) -> ImageTransferPayload:
         """Encode one full-resolution request without saving another output."""
+
+    def preview(
+        self, reference: OutputFileReference, longest_side: int
+    ) -> ImageTransferPayload:
+        """Encode a small still preview whose longest side is at most the given pixels."""
 
     def reveal(self, reference: OutputFileReference) -> None:
         """Reveal exactly one validated host file through the desktop adapter."""
@@ -61,6 +68,7 @@ class OutputMediaProfile(NamedTuple):
     copy_format: ImageTransferFormat
     reveal: bool
     photoshop: bool
+    jpeg_quality: int
 
 
 class OutputMediaService:
@@ -77,10 +85,12 @@ class OutputMediaService:
 
     def profile(self) -> OutputMediaProfile:
         """Publish current primary copy preference and desktop availability without opening files."""
+        preferences = self._preferences()
         return OutputMediaProfile(
-            preferred_copy_format(self._preferences()),
+            preferred_copy_format(preferences),
             self._files.can_reveal,
             self._files.can_open_in_photoshop,
+            preferences.jpeg.quality,
         )
 
     def prepare(
@@ -100,6 +110,14 @@ class OutputMediaService:
             else choices.canonical
         )
         return self._files.rendition(source.file, desired, preferences.jpeg.quality)
+
+    def preview(
+        self, reference: OutputFileReference, longest_side: int
+    ) -> ImageTransferPayload:
+        """Downscale an output for chrome that only needs its colours, never its detail."""
+        if not PREVIEW_MINIMUM_SIDE <= longest_side <= PREVIEW_MAXIMUM_SIDE:
+            raise ValueError("The output preview size is invalid.")
+        return self._files.preview(reference, longest_side)
 
     def reveal(self, reference: OutputFileReference) -> None:
         """Delegate a qualified local request without granting callers arbitrary path access."""

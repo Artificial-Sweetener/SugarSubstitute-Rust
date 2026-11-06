@@ -22,10 +22,10 @@ export class BrowserImageDownload {
         this.document = document;
     }
     /** Leave file selection and destination management with the browser's download controls. */
-    start(url) {
+    start(url, filename = '') {
         const anchor = this.document.createElement('a');
         anchor.href = url;
-        anchor.download = '';
+        anchor.download = filename;
         anchor.hidden = true;
         this.document.body.append(anchor);
         try {

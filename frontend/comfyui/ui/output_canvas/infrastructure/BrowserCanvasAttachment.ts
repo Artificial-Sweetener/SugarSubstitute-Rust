@@ -37,6 +37,7 @@ import { BrowserCanvasImages } from '../presentation/browser/BrowserCanvasImages
 import { BrowserCanvasInput } from '../presentation/browser/BrowserCanvasInput.js';
 import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { BrowserCanvasOverview } from '../presentation/browser/BrowserCanvasOverview.js';
+import { canvasOverviewSceneCommand } from '../application/CanvasOverviewWindow.js';
 import { browserCanvasSnapshot } from '../presentation/browser/BrowserCanvasSnapshot.js';
 import {
   mountCanvasOverlay,
@@ -144,9 +145,10 @@ export class BrowserCanvasAttachment {
           options.selection.apply(
             options.address.viewId,
             this.#catalog,
-            cell.preview
-              ? { type: 'select-preview', sourceId: cell.selection.sourceId }
-              : { type: 'select', selection: cell.selection },
+            canvasOverviewSceneCommand(cell) ??
+              (cell.preview
+                ? { type: 'select-preview', sourceId: cell.selection.sourceId }
+                : { type: 'select', selection: cell.selection }),
           );
       },
     );
@@ -233,6 +235,7 @@ export class BrowserCanvasAttachment {
           'select',
           'select-source',
           'select-preview',
+          'select-scene',
           'overview',
           'batch',
           'follow',

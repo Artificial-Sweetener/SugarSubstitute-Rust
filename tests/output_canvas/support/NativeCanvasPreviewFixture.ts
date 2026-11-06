@@ -62,7 +62,7 @@ export function nativePreviewHost(preview = true) {
   const stop = jest.fn();
   const host: CanvasSurfaceHost = {
     capabilities: {
-      schema: 1,
+      schema: 2,
       imageFormats: ['png'],
       previewFormats: preview ? ['jpeg'] : [],
       viewportCommands: ['fit', 'native', 'zoom', 'pan'],

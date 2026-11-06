@@ -40,6 +40,7 @@ test('workflows without surfaces stay unmodified and keep one identity once crea
   expect(f.state.workflow(false)).toBe('workflow-none');
   expect(f.root.extra).toEqual({ other: true });
   expect(f.state.workflow(true)).toBe('workflow-id1');
+  expect(f.state.read('workflow-id1')).toEqual({ route: 'input', surface: null, mask: null });
   expect(f.state.workflow(true)).toBe('workflow-id1');
   expect(f.state.workflow(false)).toBe('workflow-id1');
   f.state.write('workflow-id1', { route: 'input', surface: 's', mask: 'm' });

@@ -22,7 +22,7 @@ import type {
 import type { CanvasClient } from '../../../integrations/shared/CanvasClient.js';
 
 export const selectedPngCapabilities: CanvasSurfaceCapabilities = {
-  schema: 1,
+  schema: 2,
   imageFormats: ['png'],
   viewportCommands: [],
   viewportState: false,

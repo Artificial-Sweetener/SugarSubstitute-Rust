@@ -26,7 +26,7 @@ import { canvasSessionId, type CanvasViewId } from '../domain/CanvasIdentity.js'
 import type { CanvasViewRegistry } from './CanvasViewRegistry.js';
 import type { CanvasSourceInventory } from './CanvasSourceInventory.js';
 import type { CanvasSelectionController } from './CanvasSelectionController.js';
-import { canvasOutputCatalog } from './CanvasOutputCatalog.js';
+import { canvasSceneCatalog } from './CanvasOutputCatalog.js';
 import type { CanvasSelection } from '../domain/CanvasViewState.js';
 
 /** Coordinate lightweight primary views without owning surface resources or native multi-view accounting. */
@@ -40,6 +40,7 @@ export class CanvasSessionCoordinator {
       result: WorkflowResultSession;
       sources: readonly WorkflowOutputSource[];
       inspection: CanvasSelection | null;
+      scene: string | null;
       catalog: CanvasCatalogSnapshot;
     }
   >();
@@ -87,14 +88,16 @@ export class CanvasSessionCoordinator {
     const sources = this.sources.read(result.context);
     const previous = this.#catalogs.get(view);
     const inspection = this.selection.inspection(view);
+    const scene = this.views.read(view).scene;
     if (
       previous?.result === result &&
       previous.sources === sources &&
-      previous.inspection === inspection
+      previous.inspection === inspection &&
+      previous.scene === scene
     )
       return previous.catalog;
-    const catalog = canvasOutputCatalog(result, sources, inspection);
-    this.#catalogs.set(view, { result, sources, inspection, catalog });
+    const catalog = canvasSceneCatalog(result, sources, inspection, scene);
+    this.#catalogs.set(view, { result, sources, inspection, scene, catalog });
     return catalog;
   }
 

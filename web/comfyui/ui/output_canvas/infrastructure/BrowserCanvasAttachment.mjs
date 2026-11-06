@@ -27,6 +27,7 @@ import { BrowserCanvasImages } from '../presentation/browser/BrowserCanvasImages
 import { BrowserCanvasInput } from '../presentation/browser/BrowserCanvasInput.mjs';
 import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { BrowserCanvasOverview } from '../presentation/browser/BrowserCanvasOverview.mjs';
+import { canvasOverviewSceneCommand } from '../application/CanvasOverviewWindow.js';
 import { browserCanvasSnapshot } from '../presentation/browser/BrowserCanvasSnapshot.mjs';
 import { mountCanvasOverlay, } from '../presentation/vue/CanvasOverlayRuntime.js';
 import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.js';
@@ -113,9 +114,10 @@ export class BrowserCanvasAttachment {
         });
         this.#overview = new BrowserCanvasOverview(element, options.frames, (cells) => this.#browserResources.overview(cells), (cell) => {
             if (!this.#disposed && options.accepts())
-                options.selection.apply(options.address.viewId, this.#catalog, cell.preview
-                    ? { type: 'select-preview', sourceId: cell.selection.sourceId }
-                    : { type: 'select', selection: cell.selection });
+                options.selection.apply(options.address.viewId, this.#catalog, canvasOverviewSceneCommand(cell) ??
+                    (cell.preview
+                        ? { type: 'select-preview', sourceId: cell.selection.sourceId }
+                        : { type: 'select', selection: cell.selection }));
         });
         const budget = new CanvasImageBudget();
         this.#releaseMemory = options.memory.register(budget.memoryConsumer(`output-canvas-displayed:${options.address.attachmentId}`));
@@ -182,6 +184,7 @@ export class BrowserCanvasAttachment {
                     'select',
                     'select-source',
                     'select-preview',
+                    'select-scene',
                     'overview',
                     'batch',
                     'follow',

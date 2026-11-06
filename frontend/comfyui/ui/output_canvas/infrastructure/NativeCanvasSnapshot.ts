@@ -16,6 +16,8 @@
 /** Describe shared controls from native presentation facts without borrowing native resources. */
 
 import type { CanvasSurfaceViewportState } from '../../../../../integrations/contracts/CanvasSurface.js';
+import type { CanvasSurfaceGeometry } from '../../../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
+import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { OutputMediaProfile } from '../../output_saving/domain/OutputMedia.js';
 import { canvasComparisonAvailable } from '../application/CanvasComparisonSelection.js';
 import type { CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
@@ -27,6 +29,7 @@ import {
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
 import type {
+  CanvasBackdrop,
   CanvasResourceStatus,
   CanvasSourceSummary,
   CanvasViewSnapshot,
@@ -50,6 +53,37 @@ export interface NativeCanvasSnapshotState {
   readonly comparison: boolean;
   /** Whether the host paints the overview grid's cells. */
   readonly overview: boolean;
+  /** The surface's published client geometry, or null before the first measurement. */
+  readonly geometry: CanvasSurfaceGeometry | null;
+  /** Resolve a small preview of an output for chrome that mirrors the painted image's colours. */
+  backdropUrl(item: WorkflowOutputItem): string;
+}
+
+/**
+ * Locate the single image the host paints, from its camera: the image point at the viewport's
+ * centre and its physical pixels per image pixel. Null for grids, pairs and unmeasured surfaces.
+ */
+function nativeBackdrop(
+  state: NativeCanvasSnapshotState,
+  item: WorkflowOutputItem | null | undefined,
+  image: boolean,
+): CanvasBackdrop | null {
+  const { viewport, geometry } = state;
+  if (!image || !item || item.mediaKind !== 'image' || !viewport || !geometry?.visible) return null;
+  const scale = viewport.physicalScale / geometry.physicalPixelsPerCssPixel;
+  const width = viewport.dimensions.width * scale;
+  const height = viewport.dimensions.height * scale;
+  if (!(width > 0 && height > 0)) return null;
+  const center = viewport.center ?? { x: 0.5, y: 0.5 };
+  return Object.freeze({
+    url: state.backdropUrl(item),
+    rect: Object.freeze({
+      left: geometry.origin.x + geometry.viewport.width / 2 - center.x * width,
+      top: geometry.origin.y + geometry.viewport.height / 2 - center.y * height,
+      width,
+      height,
+    }),
+  });
 }
 
 /**
@@ -133,6 +167,7 @@ export function nativeCanvasSnapshot(state: NativeCanvasSnapshotState): CanvasVi
   );
   return Object.freeze({
     ...snapshot,
+    backdrop: nativeBackdrop(state, item, !overview && !comparison),
     secondary: comparison ? snapshot.secondary : null,
     grid: overview ? snapshot.grid : Object.freeze([]),
     view: Object.freeze({

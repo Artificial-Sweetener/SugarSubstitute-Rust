@@ -20,6 +20,7 @@ import type { CanvasSelection } from '../domain/CanvasViewState.js';
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { ImageDimensions } from '../../execution/domain/WorkflowOutput.js';
 import { canvasBatchLayout } from './CanvasBatchLayout.js';
+import type { CanvasCommand } from '../domain/CanvasViewPort.js';
 
 export interface CanvasOverviewCell {
   readonly key: string;
@@ -27,6 +28,13 @@ export interface CanvasOverviewCell {
   readonly label: string;
   readonly item: WorkflowOutputItem | null;
   readonly preview: boolean;
+  /** The scene a cell of the every-scene overview opens. */
+  readonly scene?: string;
+}
+
+/** Open the scene of an every-scene overview cell; other cells select their own image. */
+export function canvasOverviewSceneCommand(cell: CanvasOverviewCell): CanvasCommand | null {
+  return cell.scene === undefined ? null : { type: 'select-scene', scene: cell.scene };
 }
 
 export interface CanvasOverviewWindow {
@@ -104,7 +112,9 @@ export function canvasOverviewWindow(
   if (!Number.isSafeInteger(count)) throw new RangeError('Canvas overview catalog is too large.');
   const dimensions = reference ??
     catalog.entries[0]?.items[0]?.dimensions ??
-    catalog.entries[0]?.preview?.dimensions ?? { width: 1, height: 1 };
+    // Use the layout policy's 512-pixel reference scale until an adapter knows the aspect.
+    // A 1-pixel square makes the minimum two-image-pixel gutter larger than each cell.
+    catalog.entries[0]?.preview?.dimensions ?? { width: 512, height: 512 };
   const packed =
     count > 0 && count <= 8 && width > 0 && height > 0
       ? canvasBatchLayout(count, { width, height }, dimensions, previousColumns)
@@ -144,11 +154,19 @@ export function canvasOverviewWindow(
         });
         cells.push(
           Object.freeze({
-            key: JSON.stringify([selection.sourceId, index]),
+            key: JSON.stringify(
+              entry.scene === undefined
+                ? [selection.sourceId, index]
+                : ['scene', entry.scene, selection.sourceId, index],
+            ),
             selection,
-            label: `${entry.summary.label} · ${preview ? 'Source preview' : `${item?.mediaKind === 'model' ? '3D model' : item?.mediaKind === 'video' ? 'Video' : item?.mediaKind === 'animated' ? 'Animation' : 'Image'} ${index + 1}`}`,
+            label:
+              entry.scene === undefined
+                ? `${entry.summary.label} · ${preview ? 'Source preview' : `${item?.mediaKind === 'model' ? '3D model' : item?.mediaKind === 'video' ? 'Video' : item?.mediaKind === 'animated' ? 'Animation' : 'Image'} ${index + 1}`}`
+                : entry.summary.label,
             item,
             preview,
+            ...(entry.scene === undefined ? {} : { scene: entry.scene }),
           }),
         );
       }

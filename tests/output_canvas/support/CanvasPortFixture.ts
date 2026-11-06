@@ -80,6 +80,7 @@ export function canvasSnapshot(key: string): CanvasViewSnapshot {
       selection: { sourceId: outputSourceId('7'), batchIndex: 2 },
     },
     grid: [],
+    scenes: [],
     sources: [
       {
         id: outputSourceId('7'),

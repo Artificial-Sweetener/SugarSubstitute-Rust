@@ -23,6 +23,11 @@ from .preferences import OutputSavingPreferences, TransferFormat
 
 ImageMimeType = Literal["image/png", "image/jpeg", "image/webp"]
 
+PREVIEW_MINIMUM_SIDE = 64
+"""Smallest longest side, in image pixels, an output preview may be encoded at."""
+PREVIEW_MAXIMUM_SIDE = 512
+"""Largest longest side, in image pixels, an output preview may be encoded at."""
+
 
 class ImageTransferFormat(str, Enum):
     """Distinguish an explicit clipboard rendition from the user's preferred transfer format."""
@@ -34,7 +39,7 @@ class ImageTransferFormat(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class ImageTransferPayload:
-    """Hold one request's full-resolution bytes without creating a persistent companion."""
+    """Hold one request's encoded image bytes without creating a persistent companion."""
 
     data: bytes
     filename: str

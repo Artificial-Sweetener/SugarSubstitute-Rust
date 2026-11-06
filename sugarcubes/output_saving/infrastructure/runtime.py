@@ -23,6 +23,9 @@ import sys
 from ..application.settings_service import OutputSavingSettingsService
 from ..application.transfer_service import OutputTransferService
 from ..application.media_service import OutputMediaService
+from ..application.artifact_service import OutputArtifactService
+from .artifact_files import HostArtifactFiles
+from .artifact_workers import ArtifactWorkers
 from .media_files import HostOutputImageFiles
 from .file_revealer import WindowsImageFileRevealer
 from .photoshop_opener import WindowsPhotoshopOpener
@@ -64,6 +67,10 @@ class OutputSavingRuntime:
         roots = {"output": output_root, "temp": temporary_root}
         if input_root is not None:
             roots["input"] = input_root
+        self.artifact_workers = ArtifactWorkers()
+        self.artifact_resolution = OutputArtifactService(
+            HostArtifactFiles(self.artifacts, roots)
+        )
         self.media = OutputMediaService(
             self.settings.load,
             HostOutputImageFiles(

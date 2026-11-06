@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Render themed choice rows with the selected row aligned over its canvas control. */
+/** Render a segment that opens an anchored row picker with the active row over the segment. */
 
 import { defineComponent, h, nextTick, onBeforeUnmount, ref, Teleport, type PropType } from 'vue';
 import { FloatingSurface } from '../../../menus/FloatingSurface.js';
@@ -21,6 +21,8 @@ import { FloatingSurface } from '../../../menus/FloatingSurface.js';
 export interface CanvasPickerChoice {
   readonly value: string;
   readonly label: string;
+  /** Shown but not choosable, such as a scene with nothing to show yet. */
+  readonly disabled?: boolean;
 }
 
 /** Adapt choice focus and selected-row alignment to the shared floating transport. */
@@ -32,6 +34,8 @@ export const CanvasAnchoredPicker = defineComponent({
     text: { type: String, default: '' },
     items: { type: Array as PropType<readonly CanvasPickerChoice[]>, required: true },
     centered: { type: Boolean, default: false },
+    /** Size the control to its longest choice so changing the choice never moves its neighbours. */
+    stable: { type: Boolean, default: false },
     choose: { type: Function as PropType<(value: string) => void>, required: true },
   },
   /** Keep popup work finite and scoped to the control's owning document. */
@@ -40,7 +44,7 @@ export const CanvasAnchoredPicker = defineComponent({
     const popup = ref<HTMLElement | null>(null);
     const opened = ref(false);
     const active = ref(0);
-    const geometry = ref({ left: 0, top: 0, width: 0, height: 0 });
+    const geometry = ref({ left: 0, top: 0, width: 0, height: 0, row: 30, anchorWidth: 0 });
     let surface: FloatingSurface | null = null;
 
     /** Retire the shared surface and optionally return focus after deliberate dismissal. */
@@ -58,7 +62,7 @@ export const CanvasAnchoredPicker = defineComponent({
       row?.scrollIntoView?.({ block: 'nearest' });
     }
 
-    /** Align the selected row with the anchor while bounding overflow to the viewport. */
+    /** Lay the active row over the anchor, scrolling rows that exceed the viewport. */
     async function open(): Promise<void> {
       if (opened.value) {
         close(true);
@@ -72,7 +76,9 @@ export const CanvasAnchoredPicker = defineComponent({
       const stride = rowHeight + 2;
       active.value = Math.max(
         0,
-        props.items.findIndex((item) => item.value === props.value),
+        props.items.findIndex((item) => item.value === props.value && !item.disabled) < 0
+          ? props.items.findIndex((item) => !item.disabled)
+          : props.items.findIndex((item) => item.value === props.value),
       );
       const above = Math.max(0, Math.floor((rect.top - 8) / stride));
       const below = Math.max(0, Math.floor((viewport.innerHeight - rect.bottom - 8) / stride));
@@ -80,15 +86,31 @@ export const CanvasAnchoredPicker = defineComponent({
       const slot = Math.min(active.value, above, visible - 1);
       const width = Math.min(Math.max(rect.width, 34) + 16, viewport.innerWidth - 16);
       const height = visible * stride - 2 + 16;
+      // The active row covers the anchor when the rows fit; otherwise the bottom row does, as a
+      // WinUI combo flyout falls back, so rows always stay on the anchor's slot grid.
+      const aligned = rect.top - 8 - slot * stride;
+      const top =
+        aligned >= 0 && aligned + height <= viewport.innerHeight
+          ? aligned
+          : Math.max(0, rect.top - 8 - (visible - 1) * stride);
       geometry.value = {
         left: Math.max(8, Math.min(rect.left - 8, viewport.innerWidth - width - 8)),
-        top: Math.max(0, Math.min(rect.top - 8 - slot * stride, viewport.innerHeight - height)),
+        top,
         width,
         height,
+        row: rowHeight,
+        anchorWidth: rect.width,
       };
       opened.value = true;
       await nextTick();
       if (!opened.value || !popup.value) return;
+      // Rows are at least the control's width and grow to fit their longest label.
+      const fitted = popup.value.offsetWidth;
+      if (fitted > width)
+        geometry.value = {
+          ...geometry.value,
+          left: Math.max(8, Math.min(geometry.value.left, viewport.innerWidth - fitted - 8)),
+        };
       surface = new FloatingSurface(popup.value);
       surface.open({
         anchor: { kind: 'pointer', x: geometry.value.left, y: geometry.value.top },
@@ -103,7 +125,7 @@ export const CanvasAnchoredPicker = defineComponent({
     /** Emit only a choice still present in the current snapshot, then restore control focus. */
     function select(index: number): void {
       const item = props.items[index];
-      if (!item) return;
+      if (!item || item.disabled) return;
       close(true);
       props.choose(item.value);
     }
@@ -122,28 +144,44 @@ export const CanvasAnchoredPicker = defineComponent({
         close(true);
         return;
       }
+      const enabled = props.items.flatMap((item, index) => (item.disabled ? [] : [index]));
+      const position = enabled.indexOf(active.value);
       const index =
         event.key === 'ArrowDown'
-          ? Math.min(props.items.length - 1, active.value + 1)
+          ? enabled[Math.min(enabled.length - 1, position + 1)]
           : event.key === 'ArrowUp'
-            ? Math.max(0, active.value - 1)
+            ? enabled[Math.max(0, position - 1)]
             : event.key === 'Home'
-              ? 0
+              ? enabled[0]
               : event.key === 'End'
-                ? props.items.length - 1
+                ? enabled.at(-1)
                 : null;
       if (index === null) return;
       event.preventDefault();
       event.stopPropagation();
+      if (index === undefined) return;
       active.value = index;
       focusRow();
     }
 
     onBeforeUnmount(() => close());
-    return () =>
-      h(
+    return () => {
+      const shown =
+        props.text || props.items.find((item) => item.value === props.value)?.label || 'Output';
+      return h(
         'span',
-        { class: 'sc-output-choice', 'data-centered': props.centered ? 'true' : undefined },
+        {
+          class: 'sc-output-choice',
+          'data-centered': props.centered ? 'true' : undefined,
+          'data-stable': props.stable ? 'true' : undefined,
+          style: props.stable
+            ? {
+                '--sc-choice-label-chars': String(
+                  Math.max(1, ...props.items.map((item) => item.label.length)),
+                ),
+              }
+            : undefined,
+        },
         [
           h(
             'button',
@@ -154,10 +192,11 @@ export const CanvasAnchoredPicker = defineComponent({
               'aria-label': props.label,
               'aria-haspopup': 'listbox',
               'aria-expanded': opened.value,
+              title: shown,
               disabled: !props.items.length,
               onClick: open,
             },
-            props.text || props.items.find((item) => item.value === props.value)?.label || 'Output',
+            shown,
           ),
           opened.value
             ? h(Teleport, { to: anchor.value?.ownerDocument.body }, [
@@ -172,8 +211,11 @@ export const CanvasAnchoredPicker = defineComponent({
                     style: {
                       left: `${geometry.value.left}px`,
                       top: `${geometry.value.top}px`,
-                      width: `${geometry.value.width}px`,
+                      minWidth: `${geometry.value.width}px`,
+                      maxWidth: `${String(Math.max(geometry.value.width, (anchor.value?.ownerDocument.defaultView?.innerWidth ?? 0) - 16))}px`,
                       maxHeight: `${geometry.value.height}px`,
+                      '--sc-picker-row': `${String(geometry.value.row)}px`,
+                      '--sc-picker-anchor-width': `${String(geometry.value.anchorWidth)}px`,
                     },
                     onKeydown: keydown,
                   },
@@ -185,13 +227,15 @@ export const CanvasAnchoredPicker = defineComponent({
                         type: 'button',
                         role: 'option',
                         'aria-selected': index === active.value,
+                        'aria-disabled': item.disabled ? 'true' : undefined,
+                        disabled: item.disabled === true,
                         tabIndex: index === active.value ? 0 : -1,
                         onFocus: () => {
                           active.value = index;
                         },
                         onClick: () => select(index),
                       },
-                      item.label,
+                      h('span', { class: 'sc-output-picker-text', title: item.label }, item.label),
                     ),
                   ),
                 ),
@@ -199,5 +243,6 @@ export const CanvasAnchoredPicker = defineComponent({
             : null,
         ],
       );
+    };
   },
 });
