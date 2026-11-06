@@ -93,14 +93,17 @@ test('desktop publishes the original Substitute Mica washes for the native theme
   owner.attach(mount);
   expect(root.style.getPropertyValue('--sc-desktop-body-wash')).toBe('rgba(32, 32, 32, 0.5882)');
   expect(root.style.getPropertyValue('--sc-desktop-chrome-wash')).toBe('rgba(44, 44, 44, 0.5882)');
+  expect(root.style.getPropertyValue('--sc-desktop-card-wash')).toBe('rgba(255, 255, 255, 0.0510)');
   owner.configure({ ...configuration, darkTheme: false });
   expect(root.style.getPropertyValue('--sc-desktop-body-wash')).toBe('rgba(251, 251, 251, 0.7373)');
+  expect(root.style.getPropertyValue('--sc-desktop-card-wash')).toBe('rgba(255, 255, 255, 0.7020)');
   expect(root.style.getPropertyValue('--sc-desktop-chrome-wash')).toBe(
     'rgba(252, 252, 252, 0.7686)',
   );
   owner.dispose();
   expect(root.style.getPropertyValue('--sc-desktop-body-wash')).toBe('');
   expect(root.style.getPropertyValue('--sc-desktop-chrome-wash')).toBe('');
+  expect(root.style.getPropertyValue('--sc-desktop-card-wash')).toBe('');
 });
 
 test('remounts retain accepted configuration and later host mutations are not overwritten', () => {
@@ -190,7 +193,7 @@ test('washes reach the selected tab, toolbar, graph and masonry only inside the 
     expect(property(root, '--sc-workflow-tab-selected-fill')).toBe('var(--sc-desktop-chrome-wash)');
     expect(property(root, '--sc-substitute-toolbar-fill')).toBe('var(--sc-desktop-chrome-wash)');
     expect(property(graph, 'background')).toBe('var(--sc-desktop-body-wash)');
-    expect(property(backdrop, 'background')).toBe('var(--sc-desktop-body-wash)');
+    expect(property(backdrop, 'background')).toContain('--sc-stack-wash-opacity');
     expect(property(frame, 'background')).toBe('');
   } finally {
     root.removeAttribute('data-sc-desktop-frame-surface');

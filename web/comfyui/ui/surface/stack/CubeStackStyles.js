@@ -26,6 +26,7 @@ export function ensureCubeStackStyles(documentRef) {
     const style = documentRef.createElement('style');
     style.id = 'sugarcubes-cube-stack-styles';
     style.textContent = `
+    @property --sc-stack-wash-opacity { syntax:'<number>'; inherits:true; initial-value:1; }
     .sc-cube-stack {
       --sc-stack-bg:var(--comfy-menu-bg,#202020);
       --sc-stack-row:var(--secondary-background,#303030);

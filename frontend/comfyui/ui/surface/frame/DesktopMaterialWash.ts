@@ -23,12 +23,14 @@ interface WashColor {
   readonly alpha: number;
 }
 
-/** CSS colors for the two washes; the tab bar and the native canvas stay unwashed Mica. */
+/** CSS fills for material and cards; the tab bar and native canvas stay unwashed Mica. */
 export interface DesktopMaterialWash {
   /** Workspace body wash beneath masonry, the cube stack and the Comfy graph, grid included. */
   readonly body: string;
   /** Workflow chrome wash shared by the selected tab and the global override toolbar row. */
   readonly chrome: string;
+  /** White WinUI card fill, painted once over its parent's material. */
+  readonly card: string;
 }
 
 const DARK_BODY: WashColor = { red: 32, green: 32, blue: 32, alpha: 150 };
@@ -40,6 +42,8 @@ const LIGHT_CHROME: WashColor = { red: 252, green: 252, blue: 252, alpha: 196 };
 export const DESKTOP_BODY_WASH_PROPERTY = '--sc-desktop-body-wash';
 /** Root custom property carrying the chrome wash to the selected tab and the override toolbar. */
 export const DESKTOP_CHROME_WASH_PROPERTY = '--sc-desktop-chrome-wash';
+/** Root custom property carrying the canonical translucent WinUI card fill. */
+export const DESKTOP_CARD_WASH_PROPERTY = '--sc-desktop-card-wash';
 
 /** Format one wash with four-decimal alpha so CSS composites the painter's exact 8-bit alpha. */
 function css({ red, green, blue, alpha }: WashColor): string {
@@ -51,5 +55,6 @@ export function desktopMaterialWash(darkTheme: boolean): DesktopMaterialWash {
   return Object.freeze({
     body: css(darkTheme ? DARK_BODY : LIGHT_BODY),
     chrome: css(darkTheme ? DARK_CHROME : LIGHT_CHROME),
+    card: css({ red: 255, green: 255, blue: 255, alpha: darkTheme ? 13 : 179 }),
   });
 }

@@ -22,6 +22,8 @@ const LIGHT_CHROME = { red: 252, green: 252, blue: 252, alpha: 196 };
 export const DESKTOP_BODY_WASH_PROPERTY = '--sc-desktop-body-wash';
 /** Root custom property carrying the chrome wash to the selected tab and the override toolbar. */
 export const DESKTOP_CHROME_WASH_PROPERTY = '--sc-desktop-chrome-wash';
+/** Root custom property carrying the canonical translucent WinUI card fill. */
+export const DESKTOP_CARD_WASH_PROPERTY = '--sc-desktop-card-wash';
 /** Format one wash with four-decimal alpha so CSS composites the painter's exact 8-bit alpha. */
 function css({ red, green, blue, alpha }) {
     return `rgba(${String(red)}, ${String(green)}, ${String(blue)}, ${(alpha / 255).toFixed(4)})`;
@@ -31,5 +33,6 @@ export function desktopMaterialWash(darkTheme) {
     return Object.freeze({
         body: css(darkTheme ? DARK_BODY : LIGHT_BODY),
         chrome: css(darkTheme ? DARK_CHROME : LIGHT_CHROME),
+        card: css({ red: 255, green: 255, blue: 255, alpha: darkTheme ? 13 : 179 }),
     });
 }
