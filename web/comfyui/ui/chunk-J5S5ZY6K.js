@@ -1,9 +1,9 @@
 import {
-  CanvasEditDock
-} from "./chunk-UCIGVQMY.js";
-import {
   CanvasContextualToolbar
 } from "./chunk-A3QVOJMG.js";
+import {
+  CanvasEditDock
+} from "./chunk-GJM3NOUL.js";
 import {
   iconButton
 } from "./chunk-KA4VBPJE.js";

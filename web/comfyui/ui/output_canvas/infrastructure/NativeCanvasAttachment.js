@@ -20,6 +20,7 @@ import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
 import { CanvasViewProjection } from '../application/CanvasViewProjection.js';
 import { mountCanvasOverlay, } from '../presentation/vue/CanvasOverlayRuntime.js';
 import { CanvasMediaActions } from './CanvasMediaActions.js';
+import { outputPreviewUrl } from '../../output_saving/OutputMediaClient.js';
 import { NativeCanvasReadiness } from './NativeCanvasReadiness.js';
 import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.js';
@@ -32,6 +33,7 @@ import { NativeCanvasOcclusions } from './NativeCanvasOcclusions.js';
 import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
 import { nativeCanvasAddressed } from './NativeCanvasDesired.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
+import { canvasOverviewSceneCommand } from '../application/CanvasOverviewWindow.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
 import { NativeCanvasPresentation } from './NativeCanvasPresentation.js';
 import { mountCanvasEditOverlay, } from '../../canvas_editing/presentation/CanvasEditOverlayRuntime.js';
@@ -104,7 +106,7 @@ export class NativeCanvasAttachment {
                     geometry: () => this.#surface,
                     select: (cell) => {
                         if (!this.#disposed && options.accepts())
-                            options.selection.apply(options.address.viewId, this.#catalog, {
+                            options.selection.apply(options.address.viewId, this.#catalog, canvasOverviewSceneCommand(cell) ?? {
                                 type: 'select',
                                 selection: cell.selection,
                             });
@@ -143,6 +145,7 @@ export class NativeCanvasAttachment {
                     'reveal',
                     'select',
                     'select-source',
+                    'select-scene',
                     'batch',
                     'follow',
                     // Opening uses the shared file action because the desktop host opens no browser windows.
@@ -253,7 +256,7 @@ export class NativeCanvasAttachment {
                 scope: element,
                 region: this.viewport,
                 geometry: () => this.#surface,
-                obstacles: () => this.#overlay.routeBounds(),
+                obstacles: () => this.#overlay.navigationBounds(),
                 report: (error) => options.report(error, null),
             });
             cleanup.push(() => this.#editing.dispose());
@@ -473,6 +476,8 @@ export class NativeCanvasAttachment {
             previewAvailable: this.#native?.previewAvailable ?? false,
             comparison: this.#comparison,
             overview: this.#overview !== null,
+            geometry: this.#surface,
+            backdropUrl: (item) => outputPreviewUrl(this.viewport.ownerDocument.location.origin, item.file, item.id),
         });
     }
 }

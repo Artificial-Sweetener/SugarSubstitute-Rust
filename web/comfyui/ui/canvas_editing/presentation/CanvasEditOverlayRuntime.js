@@ -1,20 +1,17 @@
 import {
+  CanvasEditOverlay,
+  canvasEditSurface
+} from "../../chunk-J5S5ZY6K.js";
+import {
   ensureCanvasEditStyles
 } from "../../chunk-CETUOIZM.js";
+import "../../chunk-A3QVOJMG.js";
 import {
   CanvasEditContextMenu
 } from "../../chunk-ZWY52QO3.js";
-import {
-  CanvasEditKeyboard
-} from "../../chunk-BQYNHRW2.js";
-import {
-  CanvasEditOverlay,
-  canvasEditSurface
-} from "../../chunk-E5Z6SMVJ.js";
-import "../../chunk-UCIGVQMY.js";
+import "../../chunk-GJM3NOUL.js";
 import "../../chunk-AWHG7O74.js";
 import "../../chunk-CSZBNOIR.js";
-import "../../chunk-A3QVOJMG.js";
 import "../../chunk-3HDL7XRD.js";
 import {
   canvasEditSlotOf,
@@ -27,6 +24,9 @@ import {
 } from "../../chunk-EFQNN4SR.js";
 import "../../chunk-2WJX4EBF.js";
 import "../../chunk-X5ULNSRV.js";
+import {
+  CanvasEditKeyboard
+} from "../../chunk-BQYNHRW2.js";
 import {
   createApp,
   h,

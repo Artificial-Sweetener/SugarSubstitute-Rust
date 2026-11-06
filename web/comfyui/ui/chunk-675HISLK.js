@@ -1,6 +1,9 @@
 import {
+  CanvasRoutePicker
+} from "./chunk-P7TVKFNT.js";
+import {
   CanvasSelectionPicker
-} from "./chunk-UEULIHLJ.js";
+} from "./chunk-KKVBN3OP.js";
 import {
   defineComponent,
   h
@@ -11,12 +14,15 @@ var CanvasComparisonNavigation = defineComponent({
   name: "CanvasComparisonNavigation",
   props: {
     snapshot: { type: Object, required: true },
-    send: { type: Function, required: true }
+    send: { type: Function, required: true },
+    route: { type: Object, default: null },
+    chooseRoute: { type: Function, required: true }
   },
   /** Bind both selectors to the same view authority used by browser and native overlays. */
   setup(props) {
     return () => h("div", { class: "sc-output-comparison-navigation" }, [
       h("div", { class: "sc-output-tabstrip sc-output-compare-first" }, [
+        props.route ? h(CanvasRoutePicker, { state: props.route, choose: props.chooseRoute }) : null,
         h(CanvasSelectionPicker, {
           sources: props.snapshot.sources,
           selection: props.snapshot.view.selection,

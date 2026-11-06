@@ -17,6 +17,30 @@
 import { canvasComparisonAvailable } from '../application/CanvasComparisonSelection.js';
 import { canvasSecondaryPhysicalScale, canvasSecondaryResource, canvasViewSnapshot, } from '../application/CanvasViewSnapshot.js';
 /**
+ * Locate the single image the host paints, from its camera: the image point at the viewport's
+ * centre and its physical pixels per image pixel. Null for grids, pairs and unmeasured surfaces.
+ */
+function nativeBackdrop(state, item, image) {
+    const { viewport, geometry } = state;
+    if (!image || !item || item.mediaKind !== 'image' || !viewport || !geometry?.visible)
+        return null;
+    const scale = viewport.physicalScale / geometry.physicalPixelsPerCssPixel;
+    const width = viewport.dimensions.width * scale;
+    const height = viewport.dimensions.height * scale;
+    if (!(width > 0 && height > 0))
+        return null;
+    const center = viewport.center ?? { x: 0.5, y: 0.5 };
+    return Object.freeze({
+        url: state.backdropUrl(item),
+        rect: Object.freeze({
+            left: geometry.origin.x + geometry.viewport.width / 2 - center.x * width,
+            top: geometry.origin.y + geometry.viewport.height / 2 - center.y * height,
+            width,
+            height,
+        }),
+    });
+}
+/**
  * Publish only states the native surface can present.
  *
  * Without an overview host the surface presents image detail only, so overview and batch grids
@@ -86,6 +110,7 @@ export function nativeCanvasSnapshot(state) {
     });
     return Object.freeze({
         ...snapshot,
+        backdrop: nativeBackdrop(state, item, !overview && !comparison),
         secondary: comparison ? snapshot.secondary : null,
         grid: overview ? snapshot.grid : Object.freeze([]),
         view: Object.freeze({

@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Restore one independent browser view per open workflow and retire closed bindings. */
 import { canvasSessionId } from '../domain/CanvasIdentity.js';
-import { canvasOutputCatalog } from './CanvasOutputCatalog.js';
+import { canvasSceneCatalog } from './CanvasOutputCatalog.js';
 /** Coordinate lightweight primary views without owning surface resources or native multi-view accounting. */
 export class CanvasSessionCoordinator {
     sessions;
@@ -68,12 +68,14 @@ export class CanvasSessionCoordinator {
         const sources = this.sources.read(result.context);
         const previous = this.#catalogs.get(view);
         const inspection = this.selection.inspection(view);
+        const scene = this.views.read(view).scene;
         if (previous?.result === result &&
             previous.sources === sources &&
-            previous.inspection === inspection)
+            previous.inspection === inspection &&
+            previous.scene === scene)
             return previous.catalog;
-        const catalog = canvasOutputCatalog(result, sources, inspection);
-        this.#catalogs.set(view, { result, sources, inspection, catalog });
+        const catalog = canvasSceneCatalog(result, sources, inspection, scene);
+        this.#catalogs.set(view, { result, sources, inspection, scene, catalog });
         return catalog;
     }
     /** Deliver scoped result changes and explicit active-view transitions. */

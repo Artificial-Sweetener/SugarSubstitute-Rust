@@ -20,6 +20,7 @@ export class CubePromptEditorHost {
     #loraCatalog = null;
     #stopCatalog = null;
     #canvasKeys = null;
+    #sceneQueue = null;
     /** Inject existing model catalog and feedback ownership. */
     constructor(document, catalog, report, appearance) {
         this.appearance = appearance;
@@ -30,6 +31,8 @@ export class CubePromptEditorHost {
     /** Enable prompt enhancement, regional links and the canvas key boundary before Cube fields render. */
     setup(regions = null, canvas = null) {
         this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
+        const scenes = canvas?.scenes;
+        this.#sceneQueue ??= scenes ? (scene) => scenes.queueScene(scene) : null;
         if (canvas && !this.#canvasKeys) {
             this.#canvasKeys = new ComfyCanvasEditorKeyBoundary(canvas.app, this.#document, (error) => canvas.logger.error('[SugarCubes] Prompt editor canvas key boundary unavailable.', {
                 error,
@@ -220,6 +223,7 @@ export class CubePromptEditorHost {
             report: this.#report,
             appearance: this.appearance,
             regionAccent: this.#regions?.accent.current() ?? null,
+            sceneQueue: this.#sceneQueue,
             regionHover: (ordinal) => {
                 try {
                     this.#regions?.hoverPrompt(session.node, ordinal);

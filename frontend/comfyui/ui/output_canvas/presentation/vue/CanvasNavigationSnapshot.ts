@@ -25,6 +25,7 @@ export function canvasNavigationSnapshot(
 ): CanvasViewSnapshot {
   return previous &&
     previous.sources === current.sources &&
+    previous.scenes === current.scenes &&
     sameCanvasNavigation(previous.view, current.view) &&
     previous.view.comparison?.orientation === current.view.comparison?.orientation &&
     previous.selected?.id === current.selected?.id &&

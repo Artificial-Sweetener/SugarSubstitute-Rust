@@ -19,7 +19,7 @@ import asyncio
 import logging
 import subprocess
 from urllib.parse import quote
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from aiohttp import web
 from PIL import UnidentifiedImageError, Image
@@ -70,7 +70,7 @@ def register_media_routes(
             if not isinstance(raw_format, str):
                 raise ValueError("The image transfer format is invalid.")
             format = ImageTransferFormat(raw_format)
-            payload = await _prepare(codec, service, reference, format)
+            payload = await _run(codec, lambda: service.prepare(reference, format))
             filename = quote(payload.filename, safe="")
             return web.Response(
                 body=payload.data,
@@ -91,6 +91,32 @@ def register_media_routes(
         except OSError:
             _LOGGER.exception("An output image rendition could not be prepared.")
             return _error(OSError("The output image could not be prepared."), 500)
+
+    async def preview(request: web.Request) -> web.Response:
+        """Serve a small cacheable preview; the URL's revision names one immutable output."""
+        try:
+            reference = decode_transfer_reference(dict(request.query))
+            raw_size = request.query.get("size", "")
+            if not raw_size.isdigit():
+                raise ValueError("The output preview size is invalid.")
+            payload = await _run(
+                codec, lambda: service.preview(reference, int(raw_size))
+            )
+            return web.Response(
+                body=payload.data,
+                content_type=payload.mime_type,
+                headers={"Cache-Control": "private, max-age=86400"},
+            )
+        except (UnidentifiedImageError, Image.DecompressionBombError):
+            _LOGGER.exception("The requested output is not a readable supported image.")
+            return _error(
+                ValueError("This output is not a readable supported image."), 400
+            )
+        except (ValueError, TypeError) as error:
+            return _error(error, 400)
+        except OSError:
+            _LOGGER.exception("An output image preview could not be prepared.")
+            return _error(OSError("The output preview could not be prepared."), 500)
 
     async def reveal(request: web.Request) -> web.Response:
         """Require a same-origin loopback POST before asking the desktop adapter to reveal a file."""
@@ -137,22 +163,19 @@ def register_media_routes(
 
     routes.get("/sugarcubes/output-saving/media-profile")(profile)
     routes.get("/sugarcubes/output-saving/image")(image)
+    routes.get("/sugarcubes/output-saving/preview")(preview)
     routes.post("/sugarcubes/output-saving/image")(image)
     routes.post("/sugarcubes/output-saving/reveal")(reveal)
     routes.post("/sugarcubes/output-saving/photoshop")(photoshop)
 
 
-async def _prepare(
+async def _run(
     semaphore: asyncio.Semaphore,
-    service: OutputMediaService,
-    reference: OutputFileReference,
-    format: ImageTransferFormat,
+    encode: Callable[[], ImageTransferPayload],
 ) -> ImageTransferPayload:
     """Keep the codec slot until canceled worker threads finish, preventing overlapping decode allocations."""
     async with semaphore:
-        worker = asyncio.create_task(
-            asyncio.to_thread(service.prepare, reference, format)
-        )
+        worker = asyncio.create_task(asyncio.to_thread(encode))
         try:
             return await asyncio.shield(worker)
         except asyncio.CancelledError:

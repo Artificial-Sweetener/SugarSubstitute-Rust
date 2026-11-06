@@ -47,8 +47,8 @@ export const CanvasBatchPicker = defineComponent({
           ? [
               { value: 'grid', label: '0' },
               ...Array.from({ length: count }, (_, index) => ({
-                value: String(index),
-                label: String(index + 1),
+                value: String(count - index - 1),
+                label: String(count - index),
               })),
             ]
           : Array.from({ length: count }, (_, index) => ({

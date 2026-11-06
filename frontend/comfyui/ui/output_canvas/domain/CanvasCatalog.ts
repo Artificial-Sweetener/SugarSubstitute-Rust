@@ -21,7 +21,7 @@ import type {
 } from '../../execution/domain/WorkflowOutput.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type { WorkflowResultSession } from '../../execution/domain/WorkflowResultSession.js';
-import type { CanvasSourceSummary } from './CanvasViewPort.js';
+import type { CanvasSceneSummary, CanvasSourceSummary } from './CanvasViewPort.js';
 import type { CanvasSessionId } from './CanvasIdentity.js';
 
 export interface CanvasCatalogEntry {
@@ -29,6 +29,8 @@ export interface CanvasCatalogEntry {
   readonly summary: CanvasSourceSummary;
   readonly items: readonly WorkflowOutputItem[];
   readonly preview: WorkflowPreview | null;
+  /** The scene this entry represents in the every-scene overview. */
+  readonly scene?: string;
 }
 
 export interface CanvasCatalogSnapshot {
@@ -37,4 +39,8 @@ export interface CanvasCatalogSnapshot {
   readonly sources: readonly WorkflowOutputSource[];
   readonly entries: readonly CanvasCatalogEntry[];
   readonly result: WorkflowResultSession;
+  /** Scenes of the current scene run when it has several; absent otherwise. */
+  readonly scenes?: readonly CanvasSceneSummary[];
+  /** Whether the entries are the every-scene overview, one representative per scene. */
+  readonly sceneOverview?: boolean;
 }
