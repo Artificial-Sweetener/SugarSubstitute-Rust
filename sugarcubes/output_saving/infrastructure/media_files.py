@@ -25,7 +25,9 @@ from ..domain.media import ImageTransferFormat, ImageTransferPayload
 from ..domain.preferences import JpegPreferences
 from ..domain.transfer import OutputFileReference, OutputTransferChoices
 from .artifact_registry import MANAGED_SUBFOLDER_PREFIX, ManagedArtifactRegistry
+from .settings_paths import resolve_output_root
 from .file_revealer import ImageFileRevealer
+from .contained_files import contained_file
 from .jpeg_encoder import JpegCompanionEncoder
 from .photoshop_opener import PhotoshopImageOpener, PhotoshopLayer
 from .transfer_references import ManagedTransferResolver
@@ -43,7 +45,7 @@ class HostOutputImageFiles:
     ) -> None:
         """Bind explicit Comfy namespaces, managed references and the desktop action boundaries."""
         self._registry = registry
-        self._roots = {kind: root.resolve() for kind, root in roots.items()}
+        self._roots = {kind: resolve_output_root(root) for kind, root in roots.items()}
         self._choices = ManagedTransferResolver(registry)
         self._revealer = revealer
         self._photoshop = photoshop
@@ -90,12 +92,12 @@ class HostOutputImageFiles:
         root = self._roots.get(reference.type)
         if root is None:
             raise ValueError("This host image namespace is unavailable.")
-        path = (root / reference.subfolder / reference.filename).resolve()
-        if not path.is_relative_to(root) or not path.is_file():
+        try:
+            return contained_file(root, root / reference.subfolder / reference.filename)
+        except OSError as error:
             raise ValueError(
                 "This output image is unavailable or outside its host folder."
-            )
-        return path
+            ) from error
 
     def rendition(
         self, reference: OutputFileReference, format: ImageTransferFormat, quality: int

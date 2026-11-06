@@ -21,12 +21,14 @@ import av
 from PIL import Image
 
 
-def animated_preview(format: str) -> bytes:
-    """Build a red-first, blue-second GIF or video entirely in memory."""
+def animated_preview(format: str, *, first_color: bytes = b"\xff\x00\x00\xff") -> bytes:
+    """Build distinguishable first and blue-second GIF or video frames entirely in memory."""
     target = BytesIO()
     width, height = 64, 96
     if format == "gif":
-        first = Image.new("RGB", (width, height), "red")
+        first = Image.new(
+            "RGB", (width, height), (first_color[0], first_color[1], first_color[2])
+        )
         second = Image.new("RGB", (width, height), "blue")
         first.save(target, format="GIF", save_all=True, append_images=[second])
     else:
@@ -36,7 +38,7 @@ def animated_preview(format: str) -> bytes:
             )
             stream.width, stream.height = width, height
             stream.pix_fmt = "yuv420p"
-            for color in (b"\xff\x00\x00\xff", b"\x00\x00\xff\xff"):
+            for color in (first_color, b"\x00\x00\xff\xff"):
                 frame = av.VideoFrame.from_bytes(
                     color * width * height, width, height, "rgba"
                 )

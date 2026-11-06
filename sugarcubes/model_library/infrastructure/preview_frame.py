@@ -16,6 +16,7 @@
 """Decode one bounded visual frame for portable model-thumbnail preparation."""
 
 from io import BytesIO
+from typing import BinaryIO, Literal
 
 import av
 from PIL import Image, ImageOps
@@ -73,3 +74,28 @@ def _validate_dimensions(width: int, height: int) -> None:
     """Reject invalid or oversized visual frames before converting pixel buffers."""
     if width <= 0 or height <= 0 or width * height > _PIXEL_LIMIT:
         raise ValueError("Model preview exceeds the supported pixel limit.")
+
+
+def probe_video_dimensions(
+    source: BinaryIO, format: Literal["mov", "matroska"]
+) -> tuple[int, int]:
+    """Inspect one explicit video container through its caller-bounded reader without retaining decoded frames."""
+    try:
+        with av.open(
+            source,
+            mode="r",
+            format=format,
+            options={
+                "probesize": "1048576",
+                "analyzeduration": "1000000",
+                "threads": "1",
+            },
+        ) as container:
+            if not container.streams.video:
+                raise ValueError("Output media contains no video stream.")
+            stream = container.streams.video[0]
+            width, height = stream.codec_context.width, stream.codec_context.height
+            _validate_dimensions(width, height)
+            return width, height
+    except av.error.FFmpegError as error:
+        raise ValueError("The output video header could not be inspected.") from error

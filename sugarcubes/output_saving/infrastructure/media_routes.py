@@ -48,6 +48,7 @@ def register_media_routes(
                 "success": True,
                 "data": {
                     "preferred_copy_format": profile.copy_format.value,
+                    "jpeg_quality": profile.jpeg_quality,
                     "reveal": profile.reveal and local,
                     "photoshop": profile.photoshop and local,
                 },

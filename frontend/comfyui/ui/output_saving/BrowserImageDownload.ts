@@ -17,7 +17,7 @@
 
 export interface OutputImageDownload {
   /** Start a same-origin image download using its server-supplied filename. */
-  start(url: string): void;
+  start(url: string, filename?: string): void;
 }
 
 /** Own the short-lived DOM anchor without opening another canvas or browser tab. */
@@ -26,10 +26,10 @@ export class BrowserImageDownload implements OutputImageDownload {
   constructor(private readonly document: Document) {}
 
   /** Leave file selection and destination management with the browser's download controls. */
-  start(url: string): void {
+  start(url: string, filename = ''): void {
     const anchor = this.document.createElement('a');
     anchor.href = url;
-    anchor.download = '';
+    anchor.download = filename;
     anchor.hidden = true;
     this.document.body.append(anchor);
     try {

@@ -31,6 +31,7 @@ from .runtime import OutputSavingRuntime
 from .image_views import ManagedImageViews
 from .transfer_references import decode_transfer_reference, encode_transfer
 from .media_routes import register_media_routes
+from .artifact_routes import register_artifact_routes
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -125,6 +126,9 @@ def register_saving_routes(
 
     routes.post("/sugarcubes/output-saving/transfer")(choose_transfer)
     register_media_routes(routes, runtime.media)
+    register_artifact_routes(
+        routes, runtime.artifact_resolution, runtime.artifact_workers
+    )
 
 
 def managed_image_middleware(runtime: OutputSavingRuntime) -> Middleware:

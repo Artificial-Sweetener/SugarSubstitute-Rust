@@ -1,5 +1,6 @@
 import { OutputMediaClient } from './OutputMediaClient.js';
 import { OutputMediaProfileSource } from './OutputMediaProfileSource.js';
+import { BrowserRetainedOutputTransfer, retainedOutputCapabilities, } from './BrowserRetainedOutputTransfer.js';
 import { OutputTransferClient, outputFileUrl, } from './OutputTransferClient.js';
 /** Coordinate the shared file selection with browser-owned transport and clipboard boundaries. */
 export class BrowserOutputTransfer {
@@ -7,23 +8,28 @@ export class BrowserOutputTransfer {
     fetch;
     clipboard;
     download;
+    rendition;
     #client;
     #media;
     #profile;
+    #retained;
     #disposed = false;
     /** Bind platform collaborators explicitly so native canvases can use the same selection endpoint. */
-    constructor(origin, fetch, clipboard, download) {
+    constructor(origin, fetch, clipboard, download, rendition) {
         this.origin = origin;
         this.fetch = fetch;
         this.clipboard = clipboard;
         this.download = download;
+        this.rendition = rendition;
         this.#client = new OutputTransferClient(fetch);
         this.#media = new OutputMediaClient(origin, fetch);
         this.#profile = new OutputMediaProfileSource(() => this.#media.profile());
+        this.#retained = new BrowserRetainedOutputTransfer(origin, fetch);
     }
     /** Expose a conservative cached profile without network work when a context menu opens. */
-    profile() {
-        return this.#profile.read();
+    profile(retained) {
+        const profile = this.#profile.read();
+        return retained ? { ...profile, fileAction: 'download', photoshop: false } : profile;
     }
     /** Observe accepted profile changes independently of canvas or image resource identity. */
     subscribe(listener) {
@@ -34,9 +40,11 @@ export class BrowserOutputTransfer {
         return this.#profile.refresh();
     }
     /** Copy exact preferred bytes only while the originating output remains current. */
-    async copy(file, accepts, format, signal) {
+    async copy(file, accepts, format, signal, retained) {
         if (this.#disposed || signal?.aborted || !accepts())
             return false;
+        if (retained)
+            return this.#copyRetained(file, retained, accepts, format, signal);
         const image = await this.#media.image(file, format, signal);
         if (this.#disposed || signal?.aborted || !accepts())
             return false;
@@ -48,9 +56,18 @@ export class BrowserOutputTransfer {
      *
      * Only still images have preferred renditions, so other media download their exact file.
      */
-    async fileAction(file, accepts, signal, content = 'image') {
+    async fileAction(file, accepts, signal, content = 'image', retained) {
         if (this.#disposed || signal?.aborted || !accepts())
             return false;
+        if (retained) {
+            if (!retainedOutputCapabilities(retained).download)
+                return false;
+            const url = await this.#retained.download(file, retained, signal);
+            if (this.#disposed || signal?.aborted || !accepts())
+                return false;
+            this.download.start(url, file.filename);
+            return true;
+        }
         if (this.#profile.read().fileAction === 'reveal')
             await this.#media.reveal(file, signal);
         else
@@ -61,6 +78,8 @@ export class BrowserOutputTransfer {
     async photoshop(document, layers, accepts, signal) {
         if (this.#disposed || signal?.aborted || !accepts() || !this.#profile.read().photoshop)
             return false;
+        if (layers.some((layer) => layer.retained))
+            return false;
         await this.#media.photoshop(document, layers, signal);
         return true;
     }
@@ -68,9 +87,21 @@ export class BrowserOutputTransfer {
     dispose() {
         this.#disposed = true;
         this.#profile.dispose();
+        this.#retained.dispose();
     }
     /** Prepare exact preferred file bytes for a synchronous browser drag without retaining them here. */
-    async drag(file, signal) {
+    async drag(file, signal, retained) {
+        if (retained) {
+            if (this.#disposed || signal.aborted || !retainedOutputCapabilities(retained).drag)
+                return null;
+            const image = await this.#retained.image(file, retained, signal);
+            if (this.#disposed || signal.aborted)
+                return null;
+            return {
+                file: new File([image.blob], image.filename, { type: image.mimeType }),
+                url: image.url,
+            };
+        }
         const image = await this.#read(file, () => !signal.aborted, signal);
         return image
             ? {
@@ -80,6 +111,28 @@ export class BrowserOutputTransfer {
                 url: image.url,
             }
             : null;
+    }
+    /** Preserve current copy policy while acquiring original pixels from their native retained owner. */
+    async #copyRetained(file, retained, accepts, format, signal) {
+        if (!retainedOutputCapabilities(retained).copy)
+            return false;
+        const image = await this.#retained.image(file, retained, signal);
+        if (this.#disposed || signal?.aborted || !accepts())
+            return false;
+        const policy = await this.#media.copyPolicy(signal);
+        if (this.#disposed || signal?.aborted || !accepts())
+            return false;
+        const desired = (format === 'preferred' ? policy.format : format) === 'jpeg' ? 'image/jpeg' : 'image/png';
+        let blob = image.blob;
+        if (image.mimeType !== desired) {
+            if (!this.rendition)
+                throw new Error('Retained output image encoding is unavailable.');
+            blob = await this.rendition.encode(blob, desired, policy.quality, image.dimensions, signal);
+        }
+        if (this.#disposed || signal?.aborted || !accepts())
+            return false;
+        await this.clipboard.write(blob, desired);
+        return true;
     }
     /** Share bounded validation and byte transport between Copy and outbound dragging. */
     async #read(file, accepts, signal) {

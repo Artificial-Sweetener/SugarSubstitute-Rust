@@ -38,13 +38,7 @@ class HostSavingSettingsPaths:
             if preferences.organization.output_root is not None
             else self._default_root
         )
-        if not root.is_absolute():
-            raise ValueError(
-                "Output folder must be an absolute path on the Comfy server."
-            )
-        if root.exists() and not root.is_dir():
-            raise ValueError("Output folder must be a directory on the Comfy server.")
-        return root.resolve()
+        return resolve_output_root(root)
 
     def validate(self, preferences: OutputSavingPreferences) -> None:
         """Exercise actual path containment without creating folders or encoding images."""
@@ -74,3 +68,12 @@ class HostSavingSettingsPaths:
         if not path.is_relative_to(root):
             raise ValueError("Output path escapes the configured folder.")
         return str(path)
+
+
+def resolve_output_root(root: Path) -> Path:
+    """Canonicalize an explicitly host-admitted root, preserving supported configured directory aliases."""
+    if not root.is_absolute():
+        raise ValueError("Output folder must be an absolute path on the Comfy server.")
+    if root.exists() and not root.is_dir():
+        raise ValueError("Output folder must be a directory on the Comfy server.")
+    return root.resolve()

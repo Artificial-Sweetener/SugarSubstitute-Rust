@@ -53,6 +53,24 @@ export class OutputMediaClient {
             });
         });
     }
+    /** Read one authoritative copy-policy snapshot for browser-encoded retained image renditions. */
+    async copyPolicy(signal) {
+        return this.#request('/sugarcubes/output-saving/media-profile', async (response) => {
+            const value = await response.json();
+            if (!response.ok ||
+                !isRecord(value) ||
+                value.success !== true ||
+                !isRecord(value.data) ||
+                (value.data.preferred_copy_format !== 'png' &&
+                    value.data.preferred_copy_format !== 'jpeg') ||
+                typeof value.data.jpeg_quality !== 'number' ||
+                !Number.isInteger(value.data.jpeg_quality) ||
+                value.data.jpeg_quality < 1 ||
+                value.data.jpeg_quality > 100)
+                throw new Error('Retained output copy policy is unavailable.');
+            return { format: value.data.preferred_copy_format, quality: value.data.jpeg_quality / 100 };
+        }, undefined, signal);
+    }
     /** Fetch a full-resolution PNG or JPEG rendition without creating a permanent companion. */
     async image(file, format, signal) {
         return this.#request('/sugarcubes/output-saving/image', async (response) => {
