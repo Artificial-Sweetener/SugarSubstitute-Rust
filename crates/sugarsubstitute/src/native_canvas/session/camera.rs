@@ -242,6 +242,40 @@ impl Session {
 /// display paths could leave behind when the frame forced to replace them was dropped.
 #[cfg(test)]
 impl Session {
+    /// Describe retained display custody when a fixture cannot settle its camera.
+    pub(crate) fn camera_diagnostic(&self) -> String {
+        let evidence = self.document.display_evidence.map(|shown| {
+            (shown.document, shown.source_revision, shown.target, shown.source, shown.view)
+        });
+        let backing = self
+            .select_backing()
+            .map(|selection| {
+                selection.map(|selection| {
+                    (
+                        selection.primary.shown.document,
+                        selection.primary.shown.source_revision,
+                        selection.primary.source,
+                        selection.primary.projection.target(),
+                        self.display_selection_pending(selection),
+                    )
+                })
+            })
+            .map_err(|cause| cause.to_string());
+        format!(
+            "evidence {evidence:?}, native {:?}, projection {:?}, buffers {:?}, backing {backing:?}, retirement {:?}, pacing {:?}, overlay {}",
+            self.document.native_presented,
+            self.document.cpu_projection.as_ref().map(|frame| frame.target()),
+            self.document.display_buffers.each_ref().map(Option::is_some),
+            (
+                self.pending_retirement.is_some(),
+                self.deferred_retirement.is_some(),
+                self.retirement.is_some()
+            ),
+            self.pacing.readiness(self.navigation_time()),
+            self.shown_overlay_generation()
+        )
+    }
+
     /// Forget the native acknowledgement of the shown frame while its evidence stays.
     pub(crate) fn lose_native_acknowledgement(&mut self) {
         self.document.native_presented = None;

@@ -62,3 +62,38 @@ fn foreign_source_cpu_display_retires_pixels_without_recycling_into_replacement(
     assert!(fixture.session.failed.is_none());
     Ok(())
 }
+
+/// Keep reusable storage after an edit retires its pixels, while respecting a replaced extent.
+#[test]
+fn an_edited_document_recovers_obsolete_cpu_projection_storage() -> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_canvas::DocumentEdit;
+    use sugarsubstitute_contracts::execution::{MemoryLease, MemoryRelease};
+    use sugarsubstitute_image_ops::Coverage;
+
+    struct Released;
+    impl MemoryRelease for Released {
+        fn release(&self, _: u64) {}
+    }
+
+    for resized in [false, true] {
+        let (mut fixture, target) = surface::cpu_draw(true)?;
+        let memory = MemoryLease::new(64 * 1024, Box::new(Released));
+        let scene = fixture.session.document.scene.as_mut().ok_or("Missing selected scene")?;
+        let selection = Coverage::new(scene.document.snapshot().extent(), u16::MAX, &memory)?;
+        assert!(scene.document.apply(DocumentEdit::Select(Some(selection)))?);
+        fixture.session.document.display_buffer_extent =
+            Some(if resized { Extent::new(256, 192)? } else { fixture.view.surface() });
+
+        consume(&mut fixture.session, &fixture.wake)?;
+
+        let buffers = &fixture.session.document.display_buffers;
+        assert_eq!(buffers.iter().flatten().count(), usize::from(!resized));
+        assert!(buffers.iter().flatten().all(|buffer| buffer.extent() == fixture.view.surface()));
+        assert!(fixture.session.document.cpu_projection.is_none());
+        assert!(fixture.session.document.cpu_pending.is_none());
+        assert!(fixture.session.document.display_evidence.is_none());
+        assert!(fixture.session.did_present_cpu(target).is_err());
+        assert!(fixture.session.failed.is_none());
+    }
+    Ok(())
+}

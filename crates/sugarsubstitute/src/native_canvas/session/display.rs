@@ -260,15 +260,26 @@ impl Session {
         let current_source = self.admitted_source_is_current(document, source_revision);
         match Self::terminal(completion.outcome) {
             Ok(drawing) => {
+                let matching = drawing.target == target
+                    && drawing.source.surface == target.surface
+                    && drawing.document == document
+                    && drawing.source_revision == source_revision;
                 if !current_source {
                     self.pacing.abandoned(target, now)?;
+                    let reusable = !self.closing
+                        && matching
+                        && source_revision == self.selection
+                        && self.document.scene.as_ref().is_some_and(|scene| {
+                            scene.source_revision == source_revision
+                                && scene.document.snapshot().identity() == document.0
+                        });
+                    // An edit revokes these pixels, but not their same-source storage lease.
+                    if reusable && let work::DrawPixels::Cpu(frame) = drawing.pixels {
+                        return self.recycle_buffer((*frame).into_buffer());
+                    }
                     return self.retire(Retired { _drawing: Some(drawing), ..Default::default() });
                 }
-                if drawing.target != target
-                    || drawing.source.surface != target.surface
-                    || drawing.document != document
-                    || drawing.source_revision != source_revision
-                {
+                if !matching {
                     self.pacing.abandoned(target, now)?;
                     self.retire(Retired { _drawing: Some(drawing), ..Default::default() })?;
                     return Err("Canvas received a foreign completed display identity".into());
