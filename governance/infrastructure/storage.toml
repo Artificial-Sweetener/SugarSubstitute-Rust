@@ -4407,10 +4407,10 @@ rationale = "An owned temporary cache fixture verifies nonblocking contention, s
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/output_media/transfer/tests/native_http.rs"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:04d60a481eb94dcb438346c2de08746ca9f6eecaf4fa865458fe1f904709945b"
+source_sha256 = "sha256:78059ad5f8feba9a479608a027ba77476454a5385e386ba8b8e0f8861bc5afbd"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
-rationale = "An owned temporary cache scope qualifies the real loopback output transfer, peer identity checks and worker retirement without accessing user data."
+rationale = "An owned temporary cache scope qualifies actual PNG/JPEG and authored GIF original transfers, current-peer custody, recorded SHA-256 rejection and observed worker retirement without accessing user data."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"

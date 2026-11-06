@@ -6,7 +6,7 @@ mod native;
 #[cfg(test)]
 mod tests;
 
-use super::ComfyViewTarget;
+use super::{ComfyViewTarget, OutputArtifactIdentity};
 use std::{
     error::Error,
     fmt,
@@ -34,6 +34,7 @@ pub struct ComfyOutputTransfer {
     target: ComfyViewTarget,
     peer: BackendPeer,
     maximum: u64,
+    expected: Option<OutputArtifactIdentity>,
     state: Mutex<State>,
 }
 
@@ -61,6 +62,22 @@ impl ComfyOutputTransfer {
         peer: BackendPeer,
         maximum: u64,
     ) -> Result<Self, OutputTransferError> {
+        if !matches!(
+            target.format(),
+            super::ComfyOutputFormat::Png | super::ComfyOutputFormat::Jpeg
+        ) {
+            return Err(OutputTransferError::invalid("output_native_image_format"));
+        }
+        Self::prepare(origin, target, peer, maximum)
+    }
+
+    /// Prepare shared current-peer custody; artifact formats require the public verified constructor.
+    fn prepare(
+        origin: LoopbackOrigin,
+        target: ComfyViewTarget,
+        peer: BackendPeer,
+        maximum: u64,
+    ) -> Result<Self, OutputTransferError> {
         if maximum < target.format().minimum_bytes() {
             return Err(OutputTransferError::invalid("output_limit"));
         }
@@ -69,6 +86,7 @@ impl ComfyOutputTransfer {
             target,
             peer,
             maximum,
+            expected: None,
             state: Mutex::new(State {
                 http: Transport::default(),
                 listener: AttachedListenerLease::new(),
@@ -81,9 +99,29 @@ impl ComfyOutputTransfer {
         })
     }
 
-    /// Fetch and pin one complete PNG or JPEG, as the target's filename names, on an
-    /// execution-owned ordinary storage worker. Content type, length and leading signature
-    /// must match that format; the image decoder validates the remaining stream.
+    /// Prepare a current-peer transfer that must match a durable receipt before publication.
+    /// The caller supplies an independently authorized current origin and peer; the receipt
+    /// never establishes backend custody. Use the normal fetch and checked retirement lifecycle.
+    /// # Errors
+    /// Rejects a receipt length outside the configured source or encoded-format bounds.
+    pub fn verified(
+        origin: LoopbackOrigin,
+        target: ComfyViewTarget,
+        peer: BackendPeer,
+        maximum: u64,
+        expected: OutputArtifactIdentity,
+    ) -> Result<Self, OutputTransferError> {
+        if expected.bytes() > maximum || expected.bytes() < target.format().minimum_bytes() {
+            return Err(OutputTransferError::invalid("output_identity_limit"));
+        }
+        let mut transfer = Self::prepare(origin, target, peer, maximum)?;
+        transfer.expected = Some(expected);
+        Ok(transfer)
+    }
+
+    /// Fetch and pin one complete original matching the target on an execution-owned storage worker.
+    /// Content type, length and framing must match; verified artifacts also match their recorded
+    /// digest before publication. Native image and browser media owners validate presentation.
     /// The connected peer is checked against the parent-granted PID and creation time
     /// before and after the bounded body. `now` is Unix UTC seconds for cache retention.
     /// The returned reader and its final release remain storage-worker responsibilities.
@@ -194,10 +232,10 @@ pub struct OutputTransferError {
     cause: Box<dyn Error + Send + Sync>,
 }
 impl OutputTransferError {
-    fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
+    pub(super) fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
         Self { stage, cause: Box::new(cause) }
     }
-    fn invalid(stage: &'static str) -> Self {
+    pub(super) fn invalid(stage: &'static str) -> Self {
         Self::new(
             stage,
             std::io::Error::new(std::io::ErrorKind::InvalidData, "Comfy output rejected"),

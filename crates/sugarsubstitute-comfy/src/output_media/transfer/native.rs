@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Stream a bounded PNG or JPEG from the exact connected Comfy peer into retained cache custody.
+//! Stream bounded original encoded media from the exact connected Comfy peer into retained cache custody.
 
 use super::*;
-use crate::output_media::ComfyOutputFormat;
-use std::io::{self, Write};
+use crate::output_media::encoded_copy::copy_media;
+use std::io;
 use sugarsubstitute_supervision::{
     backend_listener::ConnectedLoopback,
     cache::{Namespace, storage_key},
@@ -63,6 +63,9 @@ pub(super) fn fetch(
         transfer.maximum,
     )
     .map_err(|cause| OutputTransferError::new("output_headers", cause))?;
+    if transfer.expected.is_some_and(|expected| expected.bytes() != length) {
+        return Err(OutputTransferError::invalid("output_identity_length"));
+    }
     let identity = format!(
         "comfy-output-v1:{}:{}:{}:{}",
         port,
@@ -75,8 +78,8 @@ pub(super) fn fetch(
         .fresh(Namespace::ComfyOutputs, &key, length, now, context)
         .map_err(|cause| OutputTransferError::new("output_cache_admission", cause))?;
     entry
-        .write_with(entry_name(format), length, context, |output| {
-            copy_media(format, length, output, |buffer| {
+        .write_with(format.entry_name(), length, context, |output| {
+            copy_media(format, length, transfer.expected, output, |buffer| {
                 state.http.read(buffer, context).map_err(io::Error::other)
             })
         })
@@ -88,7 +91,7 @@ pub(super) fn fetch(
     qualify(state, after, transfer.peer, context)?;
     entry.publish(context).map_err(|cause| OutputTransferError::new("output_publish", cause))?;
     let reader = entry
-        .into_file_reader(entry_name(format), context)
+        .into_file_reader(format.entry_name(), context)
         .map_err(|cause| OutputTransferError::new("output_pin", cause))?;
     tracing::info!(
         operation = "comfy_output_acquired",
@@ -98,60 +101,6 @@ pub(super) fn fetch(
         "Selected Comfy output acquired from the verified peer"
     );
     Ok(reader)
-}
-
-/// Name the retained original by format; the cache key already binds the exact view target.
-fn entry_name(format: ComfyOutputFormat) -> &'static str {
-    match format {
-        ComfyOutputFormat::Png => "output.png",
-        ComfyOutputFormat::Jpeg => "output.jpg",
-    }
-}
-
-/// Copy exactly `length` body bytes and require the format's leading signature.
-pub(super) fn copy_media(
-    format: ComfyOutputFormat,
-    length: u64,
-    output: &mut dyn Write,
-    mut read: impl FnMut(&mut [u8]) -> io::Result<usize>,
-) -> io::Result<()> {
-    let mut scratch = [0u8; 32 * 1024];
-    let mut signature = [0u8; 8];
-    let mut total = 0u64;
-    loop {
-        let count = read(&mut scratch)?;
-        if count == 0 {
-            break;
-        }
-        if count > scratch.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Comfy output reader returned an invalid byte count",
-            ));
-        }
-        let next =
-            total.checked_add(count as u64).filter(|value| *value <= length).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Comfy output exceeded its declared length",
-                )
-            })?;
-        if total < signature.len() as u64 {
-            let start = total as usize;
-            let copied = count.min(signature.len() - start);
-            signature[start..start + copied].copy_from_slice(&scratch[..copied]);
-        }
-        output.write_all(&scratch[..count])?;
-        total = next;
-    }
-    let expected = format.signature();
-    if total != length || !signature.starts_with(expected) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Comfy output is truncated or does not match its format",
-        ));
-    }
-    Ok(())
 }
 
 fn connection(
