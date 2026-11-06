@@ -42,7 +42,10 @@ from .sugarcubes.execution.comfy_execution_port import (
     PromptServerLike,
 )
 from .sugarcubes.host_api import set_active_backend_services
-from .sugarcubes.runtime import queue_observer_registry
+from .sugarcubes.runtime import (
+    execution_node_resolver_registry,
+    queue_observer_registry,
+)
 from .sugarcubes.model_library.integration import install_model_library
 from .sugarcubes.output_saving.integration import install_output_saving
 from .sugarcubes.input_canvas.infrastructure.http_routes import install_input_previews
@@ -78,6 +81,7 @@ if PromptServer is not None:
                 prompt_server=cast(PromptServerLike, prompt_server),
                 execution_module=cast(ComfyExecutionModuleLike, comfy_execution),
                 observers=queue_observer_registry(),
+                node_resolvers=execution_node_resolver_registry(),
                 prompt_policy=_output_saving_runtime.policy,
             ),
         )

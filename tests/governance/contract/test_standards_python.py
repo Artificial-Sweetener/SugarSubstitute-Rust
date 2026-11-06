@@ -21,6 +21,7 @@ from typing import Any
 
 import importlib.util
 from pathlib import Path
+import pytest
 
 
 def _load_audit_module() -> Any:
@@ -42,3 +43,39 @@ def test_python_standards_audit_passes() -> None:
     audit_module = _load_audit_module()
     failures = audit_module.run_audit()
     assert failures == []
+
+
+@pytest.mark.parametrize(
+    ("diagnostic", "mapped_error", "accepted"),
+    [
+        (
+            "_logger.exception('integration failed')",
+            "ExecutionNodeResolutionError",
+            True,
+        ),
+        ("pass", "ExecutionNodeResolutionError", False),
+        ("_logger.exception('integration failed')", "RuntimeError", False),
+    ],
+)
+def test_execution_boundary_requires_diagnostics_and_typed_failure(
+    tmp_path: Path, diagnostic: str, mapped_error: str, accepted: bool
+) -> None:
+    """Allow logged execution-boundary mapping without admitting silent catches."""
+    audit = _load_audit_module()
+    for relative in audit.DOCSTRING_TARGETS:
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text('"""Audit fixture."""\n', encoding="utf-8")
+    runtime = tmp_path / "sugarcubes" / "boundary.py"
+    runtime.write_text(
+        '"""Audit fixture for external callback failure."""\n'
+        "def resolve():\n"
+        "    try:\n"
+        "        external_callback()\n"
+        "    except Exception as error:\n"
+        f"        {diagnostic}\n"
+        f"        raise {mapped_error}('rejected') from error\n",
+        encoding="utf-8",
+    )
+    failures = audit.run_audit(tmp_path)
+    assert (failures == []) is accepted
