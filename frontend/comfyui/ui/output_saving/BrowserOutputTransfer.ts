@@ -20,6 +20,12 @@ import type { OutputImageDownload } from './BrowserImageDownload.js';
 import type { OutputCopyFormat, OutputMediaProfile } from './domain/OutputMedia.js';
 import { OutputMediaClient } from './OutputMediaClient.js';
 import { OutputMediaProfileSource } from './OutputMediaProfileSource.js';
+import type { OutputImageRendition } from './BrowserImageRendition.js';
+import {
+  BrowserRetainedOutputTransfer,
+  retainedOutputCapabilities,
+  type BrowserRetainedOutputSource,
+} from './BrowserRetainedOutputTransfer.js';
 import {
   OutputTransferClient,
   outputFileUrl,
@@ -34,6 +40,7 @@ export class BrowserOutputTransfer {
   readonly #client: OutputTransferClient;
   readonly #media: OutputMediaClient;
   readonly #profile: OutputMediaProfileSource;
+  readonly #retained: BrowserRetainedOutputTransfer;
   #disposed = false;
 
   /** Bind platform collaborators explicitly so native canvases can use the same selection endpoint. */
@@ -42,15 +49,18 @@ export class BrowserOutputTransfer {
     private readonly fetch: typeof globalThis.fetch,
     private readonly clipboard: OutputImageClipboard,
     private readonly download: OutputImageDownload,
+    private readonly rendition?: OutputImageRendition,
   ) {
     this.#client = new OutputTransferClient(fetch);
     this.#media = new OutputMediaClient(origin, fetch);
     this.#profile = new OutputMediaProfileSource(() => this.#media.profile());
+    this.#retained = new BrowserRetainedOutputTransfer(origin, fetch);
   }
 
   /** Expose a conservative cached profile without network work when a context menu opens. */
-  profile(): OutputMediaProfile {
-    return this.#profile.read();
+  profile(retained?: BrowserRetainedOutputSource): OutputMediaProfile {
+    const profile = this.#profile.read();
+    return retained ? { ...profile, fileAction: 'download', photoshop: false } : profile;
   }
 
   /** Observe accepted profile changes independently of canvas or image resource identity. */
@@ -69,8 +79,10 @@ export class BrowserOutputTransfer {
     accepts: () => boolean,
     format: OutputCopyFormat,
     signal?: AbortSignal,
+    retained?: BrowserRetainedOutputSource,
   ): Promise<boolean> {
     if (this.#disposed || signal?.aborted || !accepts()) return false;
+    if (retained) return this.#copyRetained(file, retained, accepts, format, signal);
     const image = await this.#media.image(file, format, signal);
     if (this.#disposed || signal?.aborted || !accepts()) return false;
     await this.clipboard.write(image.blob, image.mimeType);
@@ -87,8 +99,16 @@ export class BrowserOutputTransfer {
     accepts: () => boolean,
     signal?: AbortSignal,
     content: OutputFileContent = 'image',
+    retained?: BrowserRetainedOutputSource,
   ): Promise<boolean> {
     if (this.#disposed || signal?.aborted || !accepts()) return false;
+    if (retained) {
+      if (!retainedOutputCapabilities(retained).download) return false;
+      const url = await this.#retained.download(file, retained, signal);
+      if (this.#disposed || signal?.aborted || !accepts()) return false;
+      this.download.start(url, file.filename);
+      return true;
+    }
     if (this.#profile.read().fileAction === 'reveal') await this.#media.reveal(file, signal);
     else
       this.download.start(
@@ -100,12 +120,17 @@ export class BrowserOutputTransfer {
   /** Open still images in Photoshop through the local backend while their outputs stay current. */
   async photoshop(
     document: string,
-    layers: readonly { readonly file: OutputFileReference; readonly name: string }[],
+    layers: readonly {
+      readonly file: OutputFileReference;
+      readonly name: string;
+      readonly retained?: BrowserRetainedOutputSource;
+    }[],
     accepts: () => boolean,
     signal?: AbortSignal,
   ): Promise<boolean> {
     if (this.#disposed || signal?.aborted || !accepts() || !this.#profile.read().photoshop)
       return false;
+    if (layers.some((layer) => layer.retained)) return false;
     await this.#media.photoshop(document, layers, signal);
     return true;
   }
@@ -114,13 +139,25 @@ export class BrowserOutputTransfer {
   dispose(): void {
     this.#disposed = true;
     this.#profile.dispose();
+    this.#retained.dispose();
   }
 
   /** Prepare exact preferred file bytes for a synchronous browser drag without retaining them here. */
   async drag(
     file: OutputFileReference,
     signal: AbortSignal,
+    retained?: BrowserRetainedOutputSource,
   ): Promise<{ readonly file: File; readonly url: string } | null> {
+    if (retained) {
+      if (this.#disposed || signal.aborted || !retainedOutputCapabilities(retained).drag)
+        return null;
+      const image = await this.#retained.image(file, retained, signal);
+      if (this.#disposed || signal.aborted) return null;
+      return {
+        file: new File([image.blob], image.filename, { type: image.mimeType }),
+        url: image.url,
+      };
+    }
     const image = await this.#read(file, () => !signal.aborted, signal);
     return image
       ? {
@@ -130,6 +167,31 @@ export class BrowserOutputTransfer {
           url: image.url,
         }
       : null;
+  }
+
+  /** Preserve current copy policy while acquiring original pixels from their native retained owner. */
+  async #copyRetained(
+    file: OutputFileReference,
+    retained: BrowserRetainedOutputSource,
+    accepts: () => boolean,
+    format: OutputCopyFormat,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (!retainedOutputCapabilities(retained).copy) return false;
+    const image = await this.#retained.image(file, retained, signal);
+    if (this.#disposed || signal?.aborted || !accepts()) return false;
+    const policy = await this.#media.copyPolicy(signal);
+    if (this.#disposed || signal?.aborted || !accepts()) return false;
+    const desired =
+      (format === 'preferred' ? policy.format : format) === 'jpeg' ? 'image/jpeg' : 'image/png';
+    let blob = image.blob;
+    if (image.mimeType !== desired) {
+      if (!this.rendition) throw new Error('Retained output image encoding is unavailable.');
+      blob = await this.rendition.encode(blob, desired, policy.quality, image.dimensions, signal);
+    }
+    if (this.#disposed || signal?.aborted || !accepts()) return false;
+    await this.clipboard.write(blob, desired);
+    return true;
   }
 
   /** Share bounded validation and byte transport between Copy and outbound dragging. */

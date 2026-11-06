@@ -68,6 +68,7 @@ class OutputMediaProfile(NamedTuple):
     copy_format: ImageTransferFormat
     reveal: bool
     photoshop: bool
+    jpeg_quality: int
 
 
 class OutputMediaService:
@@ -84,10 +85,12 @@ class OutputMediaService:
 
     def profile(self) -> OutputMediaProfile:
         """Publish current primary copy preference and desktop availability without opening files."""
+        preferences = self._preferences()
         return OutputMediaProfile(
-            preferred_copy_format(self._preferences()),
+            preferred_copy_format(preferences),
             self._files.can_reveal,
             self._files.can_open_in_photoshop,
+            preferences.jpeg.quality,
         )
 
     def prepare(

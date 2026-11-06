@@ -82,6 +82,7 @@ def test_local_reveal_remote_refusal_and_on_demand_jpeg(tmp_path: Path) -> None:
             ).json()
             assert profile["data"] == {
                 "preferred_copy_format": "png",
+                "jpeg_quality": 100,
                 "reveal": True,
                 "photoshop": False,
             }
