@@ -147,9 +147,7 @@
           }
         }
       }
-    }
-  ],
-  "invalidRequests": [
+    },
     {
       "name": "center beyond the image",
       "value": {
@@ -215,6 +213,42 @@
         }
       }
     },
+    {
+      "name": "off-image center preserved without clamping",
+      "value": {
+        "protocol": "sugarcubes.canvas",
+        "version": 3,
+        "session": "surface-inspection-session",
+        "requestId": 5,
+        "type": "surface.select",
+        "address": {
+          "sessionId": "canvas:workflow",
+          "viewId": "view:one",
+          "windowId": "window:one",
+          "attachmentId": "attachment:one",
+          "generation": 1
+        },
+        "revision": 7,
+        "itemId": "result:1",
+        "file": {
+          "filename": "ComfyUI_00001_.png",
+          "subfolder": "",
+          "type": "output"
+        },
+        "inspection": {
+          "center": {
+            "x": -3.25,
+            "y": 2.75
+          },
+          "span": {
+            "x": 0.0005,
+            "y": 0.000625
+          }
+        }
+      }
+    }
+  ],
+  "invalidRequests": [
     {
       "name": "zero span",
       "value": {
@@ -586,9 +620,7 @@
           }
         }
       }
-    }
-  ],
-  "invalidReplies": [
+    },
     {
       "name": "center beyond the image",
       "value": {
@@ -653,6 +685,40 @@
         }
       }
     },
+    {
+      "name": "off-image center preserved without clamping",
+      "value": {
+        "protocol": "sugarcubes.canvas",
+        "version": 3,
+        "session": "surface-inspection-session",
+        "requestId": 5,
+        "type": "surface.viewport.reply",
+        "address": {
+          "sessionId": "canvas:workflow",
+          "viewId": "view:one",
+          "windowId": "window:one",
+          "attachmentId": "attachment:one",
+          "generation": 1
+        },
+        "revision": 7,
+        "status": "applied",
+        "message": "",
+        "viewport": {
+          "mode": "custom",
+          "physicalScale": 2,
+          "dimensions": {
+            "width": 1000,
+            "height": 800
+          },
+          "center": {
+            "x": -3.25,
+            "y": 2.75
+          }
+        }
+      }
+    }
+  ],
+  "invalidReplies": [
     {
       "name": "missing center axis",
       "value": {
@@ -726,7 +792,7 @@
     "type": "surface.capabilities.reply",
     "status": "available",
     "capabilities": {
-      "schema": 1,
+      "schema": 2,
       "imageFormats": ["png"],
       "viewportCommands": ["fit", "native", "zoom", "pan", "wipe", "inspect"],
       "viewportState": true,
@@ -741,230 +807,6 @@
     "valid": [
       {
         "name": "settled custom camera",
-        "value": {
-          "protocol": "sugarcubes.canvas",
-          "version": 3,
-          "session": "surface-inspection-session",
-          "requestId": 0,
-          "type": "surface.camera.changed",
-          "schema": 1,
-          "change": {
-            "address": {
-              "sessionId": "canvas:workflow",
-              "viewId": "view:one",
-              "windowId": "window:one",
-              "attachmentId": "attachment:one",
-              "generation": 1
-            },
-            "sequence": 4,
-            "selectionRevision": 7,
-            "viewport": {
-              "mode": "custom",
-              "physicalScale": 2,
-              "dimensions": {
-                "width": 1000,
-                "height": 800
-              },
-              "center": {
-                "x": 0.25,
-                "y": 0.75
-              }
-            }
-          }
-        }
-      },
-      {
-        "name": "settled camera without a center",
-        "value": {
-          "protocol": "sugarcubes.canvas",
-          "version": 3,
-          "session": "surface-inspection-session",
-          "requestId": 0,
-          "type": "surface.camera.changed",
-          "schema": 1,
-          "change": {
-            "address": {
-              "sessionId": "canvas:workflow",
-              "viewId": "view:one",
-              "windowId": "window:one",
-              "attachmentId": "attachment:one",
-              "generation": 1
-            },
-            "sequence": 4,
-            "selectionRevision": 7,
-            "viewport": {
-              "mode": "custom",
-              "physicalScale": 2,
-              "dimensions": {
-                "width": 1000,
-                "height": 800
-              }
-            }
-          }
-        }
-      }
-    ],
-    "invalid": [
-      {
-        "name": "correlated request identity",
-        "value": {
-          "protocol": "sugarcubes.canvas",
-          "version": 3,
-          "session": "surface-inspection-session",
-          "requestId": 3,
-          "type": "surface.camera.changed",
-          "schema": 1,
-          "change": {
-            "address": {
-              "sessionId": "canvas:workflow",
-              "viewId": "view:one",
-              "windowId": "window:one",
-              "attachmentId": "attachment:one",
-              "generation": 1
-            },
-            "sequence": 4,
-            "selectionRevision": 7,
-            "viewport": {
-              "mode": "custom",
-              "physicalScale": 2,
-              "dimensions": {
-                "width": 1000,
-                "height": 800
-              },
-              "center": {
-                "x": 0.25,
-                "y": 0.75
-              }
-            }
-          }
-        }
-      },
-      {
-        "name": "zero sequence",
-        "value": {
-          "protocol": "sugarcubes.canvas",
-          "version": 3,
-          "session": "surface-inspection-session",
-          "requestId": 0,
-          "type": "surface.camera.changed",
-          "schema": 1,
-          "change": {
-            "address": {
-              "sessionId": "canvas:workflow",
-              "viewId": "view:one",
-              "windowId": "window:one",
-              "attachmentId": "attachment:one",
-              "generation": 1
-            },
-            "sequence": 0,
-            "selectionRevision": 7,
-            "viewport": {
-              "mode": "custom",
-              "physicalScale": 2,
-              "dimensions": {
-                "width": 1000,
-                "height": 800
-              },
-              "center": {
-                "x": 0.25,
-                "y": 0.75
-              }
-            }
-          }
-        }
-      },
-      {
-        "name": "zero selection revision",
-        "value": {
-          "protocol": "sugarcubes.canvas",
-          "version": 3,
-          "session": "surface-inspection-session",
-          "requestId": 0,
-          "type": "surface.camera.changed",
-          "schema": 1,
-          "change": {
-            "address": {
-              "sessionId": "canvas:workflow",
-              "viewId": "view:one",
-              "windowId": "window:one",
-              "attachmentId": "attachment:one",
-              "generation": 1
-            },
-            "sequence": 4,
-            "selectionRevision": 0,
-            "viewport": {
-              "mode": "custom",
-              "physicalScale": 2,
-              "dimensions": {
-                "width": 1000,
-                "height": 800
-              },
-              "center": {
-                "x": 0.25,
-                "y": 0.75
-              }
-            }
-          }
-        }
-      },
-      {
-        "name": "missing viewport",
-        "value": {
-          "protocol": "sugarcubes.canvas",
-          "version": 3,
-          "session": "surface-inspection-session",
-          "requestId": 0,
-          "type": "surface.camera.changed",
-          "schema": 1,
-          "change": {
-            "address": {
-              "sessionId": "canvas:workflow",
-              "viewId": "view:one",
-              "windowId": "window:one",
-              "attachmentId": "attachment:one",
-              "generation": 1
-            },
-            "sequence": 4,
-            "selectionRevision": 7
-          }
-        }
-      },
-      {
-        "name": "center beyond the image",
-        "value": {
-          "protocol": "sugarcubes.canvas",
-          "version": 3,
-          "session": "surface-inspection-session",
-          "requestId": 0,
-          "type": "surface.camera.changed",
-          "schema": 1,
-          "change": {
-            "address": {
-              "sessionId": "canvas:workflow",
-              "viewId": "view:one",
-              "windowId": "window:one",
-              "attachmentId": "attachment:one",
-              "generation": 1
-            },
-            "sequence": 4,
-            "selectionRevision": 7,
-            "viewport": {
-              "mode": "custom",
-              "physicalScale": 2,
-              "dimensions": {
-                "width": 1000,
-                "height": 800
-              },
-              "center": {
-                "x": 0.25,
-                "y": 1.5
-              }
-            }
-          }
-        }
-      },
-      {
-        "name": "unknown schema",
         "value": {
           "protocol": "sugarcubes.canvas",
           "version": 3,
@@ -998,7 +840,266 @@
         }
       },
       {
+        "name": "settled camera without a center",
+        "value": {
+          "protocol": "sugarcubes.canvas",
+          "version": 3,
+          "session": "surface-inspection-session",
+          "requestId": 0,
+          "type": "surface.camera.changed",
+          "schema": 2,
+          "change": {
+            "address": {
+              "sessionId": "canvas:workflow",
+              "viewId": "view:one",
+              "windowId": "window:one",
+              "attachmentId": "attachment:one",
+              "generation": 1
+            },
+            "sequence": 4,
+            "selectionRevision": 7,
+            "viewport": {
+              "mode": "custom",
+              "physicalScale": 2,
+              "dimensions": {
+                "width": 1000,
+                "height": 800
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "center beyond the image",
+        "value": {
+          "protocol": "sugarcubes.canvas",
+          "version": 3,
+          "session": "surface-inspection-session",
+          "requestId": 0,
+          "type": "surface.camera.changed",
+          "schema": 2,
+          "change": {
+            "address": {
+              "sessionId": "canvas:workflow",
+              "viewId": "view:one",
+              "windowId": "window:one",
+              "attachmentId": "attachment:one",
+              "generation": 1
+            },
+            "sequence": 4,
+            "selectionRevision": 7,
+            "viewport": {
+              "mode": "custom",
+              "physicalScale": 2,
+              "dimensions": {
+                "width": 1000,
+                "height": 800
+              },
+              "center": {
+                "x": 0.25,
+                "y": 1.5
+              }
+            }
+          }
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "correlated request identity",
+        "value": {
+          "protocol": "sugarcubes.canvas",
+          "version": 3,
+          "session": "surface-inspection-session",
+          "requestId": 3,
+          "type": "surface.camera.changed",
+          "schema": 2,
+          "change": {
+            "address": {
+              "sessionId": "canvas:workflow",
+              "viewId": "view:one",
+              "windowId": "window:one",
+              "attachmentId": "attachment:one",
+              "generation": 1
+            },
+            "sequence": 4,
+            "selectionRevision": 7,
+            "viewport": {
+              "mode": "custom",
+              "physicalScale": 2,
+              "dimensions": {
+                "width": 1000,
+                "height": 800
+              },
+              "center": {
+                "x": 0.25,
+                "y": 0.75
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "zero sequence",
+        "value": {
+          "protocol": "sugarcubes.canvas",
+          "version": 3,
+          "session": "surface-inspection-session",
+          "requestId": 0,
+          "type": "surface.camera.changed",
+          "schema": 2,
+          "change": {
+            "address": {
+              "sessionId": "canvas:workflow",
+              "viewId": "view:one",
+              "windowId": "window:one",
+              "attachmentId": "attachment:one",
+              "generation": 1
+            },
+            "sequence": 0,
+            "selectionRevision": 7,
+            "viewport": {
+              "mode": "custom",
+              "physicalScale": 2,
+              "dimensions": {
+                "width": 1000,
+                "height": 800
+              },
+              "center": {
+                "x": 0.25,
+                "y": 0.75
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "zero selection revision",
+        "value": {
+          "protocol": "sugarcubes.canvas",
+          "version": 3,
+          "session": "surface-inspection-session",
+          "requestId": 0,
+          "type": "surface.camera.changed",
+          "schema": 2,
+          "change": {
+            "address": {
+              "sessionId": "canvas:workflow",
+              "viewId": "view:one",
+              "windowId": "window:one",
+              "attachmentId": "attachment:one",
+              "generation": 1
+            },
+            "sequence": 4,
+            "selectionRevision": 0,
+            "viewport": {
+              "mode": "custom",
+              "physicalScale": 2,
+              "dimensions": {
+                "width": 1000,
+                "height": 800
+              },
+              "center": {
+                "x": 0.25,
+                "y": 0.75
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "missing viewport",
+        "value": {
+          "protocol": "sugarcubes.canvas",
+          "version": 3,
+          "session": "surface-inspection-session",
+          "requestId": 0,
+          "type": "surface.camera.changed",
+          "schema": 2,
+          "change": {
+            "address": {
+              "sessionId": "canvas:workflow",
+              "viewId": "view:one",
+              "windowId": "window:one",
+              "attachmentId": "attachment:one",
+              "generation": 1
+            },
+            "sequence": 4,
+            "selectionRevision": 7
+          }
+        }
+      },
+      {
+        "name": "unknown schema",
+        "value": {
+          "protocol": "sugarcubes.canvas",
+          "version": 3,
+          "session": "surface-inspection-session",
+          "requestId": 0,
+          "type": "surface.camera.changed",
+          "schema": 3,
+          "change": {
+            "address": {
+              "sessionId": "canvas:workflow",
+              "viewId": "view:one",
+              "windowId": "window:one",
+              "attachmentId": "attachment:one",
+              "generation": 1
+            },
+            "sequence": 4,
+            "selectionRevision": 7,
+            "viewport": {
+              "mode": "custom",
+              "physicalScale": 2,
+              "dimensions": {
+                "width": 1000,
+                "height": 800
+              },
+              "center": {
+                "x": 0.25,
+                "y": 0.75
+              }
+            }
+          }
+        }
+      },
+      {
         "name": "unknown change member",
+        "value": {
+          "protocol": "sugarcubes.canvas",
+          "version": 3,
+          "session": "surface-inspection-session",
+          "requestId": 0,
+          "type": "surface.camera.changed",
+          "schema": 2,
+          "change": {
+            "address": {
+              "sessionId": "canvas:workflow",
+              "viewId": "view:one",
+              "windowId": "window:one",
+              "attachmentId": "attachment:one",
+              "generation": 1
+            },
+            "sequence": 4,
+            "selectionRevision": 7,
+            "viewport": {
+              "mode": "custom",
+              "physicalScale": 2,
+              "dimensions": {
+                "width": 1000,
+                "height": 800
+              },
+              "center": {
+                "x": 0.25,
+                "y": 0.75
+              }
+            },
+            "token": "a"
+          }
+        }
+      },
+      {
+        "name": "legacy camera schema",
         "value": {
           "protocol": "sugarcubes.canvas",
           "version": 3,
@@ -1027,8 +1128,7 @@
                 "x": 0.25,
                 "y": 0.75
               }
-            },
-            "token": "a"
+            }
           }
         }
       }

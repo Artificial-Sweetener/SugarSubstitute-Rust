@@ -30,7 +30,7 @@ fn discovery(
     assert_eq!(value["type"], "surface.capabilities.reply");
     assert_eq!(value["requestId"], request_id);
     assert_eq!(value["status"], expected);
-    assert_eq!(value["capabilities"]["schema"], 1);
+    assert_eq!(value["capabilities"]["schema"], 2);
     assert_eq!(
         value["capabilities"]["imageFormats"],
         if expected == "available" { json!(["png", "jpeg"]) } else { json!([]) }
@@ -61,7 +61,7 @@ fn discovery_request(
 ) -> Result<CanvasSurfaceMessage, Box<dyn Error>> {
     Ok(CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
-        "requestId":request_id, "type":"surface.capabilities.request", "schema":1
+        "requestId":request_id, "type":"surface.capabilities.request", "schema":2
     }))?)?)
 }
 

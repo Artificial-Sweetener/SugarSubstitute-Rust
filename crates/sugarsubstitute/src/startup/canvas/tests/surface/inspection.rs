@@ -7,6 +7,8 @@ use sugarsubstitute_canvas::{PointerSample, ToolModifiers};
 use sugarsubstitute_desktop::canvas::{MainCanvasButton, MainCanvasGesture, MainCanvasInput};
 use viewport::fixture::{Execution, Fixture};
 
+mod restore;
+
 /// An inspection at `zoom` physical pixels per pixel of the 320x160 `wide.png` output.
 fn inspection(center: [f64; 2], zoom: f64) -> Value {
     json!({
@@ -75,7 +77,7 @@ fn inspections_at_fit_and_one_to_one_take_their_semantic_modes() -> Result<(), B
     fixture.viewport(5, json!({"type":"inspect","inspection":inspection([0.5, 0.5], 1.0)}))?;
     assert_camera(&fixture.complete(5)?["viewport"], "native", 1.0, [0.5, 0.5]);
     fixture.viewport(6, json!({"type":"inspect","inspection":inspection([0.1, 0.9], 0.25)}))?;
-    assert_camera(&fixture.complete(6)?["viewport"], "fit", 0.25, [0.5, 0.5]);
+    assert_camera(&fixture.complete(6)?["viewport"], "custom", 0.25, [0.1, 0.9]);
     fixture.finish()
 }
 

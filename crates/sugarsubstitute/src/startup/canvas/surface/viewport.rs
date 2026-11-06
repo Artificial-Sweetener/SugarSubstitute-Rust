@@ -70,7 +70,18 @@ impl NativeSurface {
             }),
         };
         let admitted = match navigation {
-            Some(command) => session.navigate(command)?,
+            Some(command) => match session.navigate(command) {
+                Ok(admitted) => admitted,
+                Err(cause) => {
+                    tracing::warn!(operation = "canvas_viewport_rejected", request_id = request.request_id(), cause = %cause,
+                        "The requested camera cannot be represented; the preceding camera is retained");
+                    super::lifecycle::replied(&request, CanvasSurfaceReplyStatus::Error);
+                    return self.enqueue(DesktopStartupCommand::SendSurface(SurfaceReply::new(
+                        identity, &request, CanvasSurfaceReplyStatus::Error,
+                        "The saved camera cannot be represented by the native canvas. Its preceding camera is retained.", claim,
+                    )?));
+                }
+            },
             None => session.camera_intent(),
         };
         let CameraCommandResult::Accepted(intent) = admitted else {
@@ -188,7 +199,7 @@ impl NativeSurface {
 
 /// Report the image point at the accepted viewport's center, normalized to the image extent,
 /// so the web inspection owner can record this camera and restore it later.
-/// iewport is the native-accepted camera and image the presented image's extent.
+/// `viewport` is the native-accepted camera and image the presented image's extent.
 pub(in crate::startup::canvas::surface) fn with_center(
     state: CanvasViewportState,
     viewport: Viewport,
@@ -197,7 +208,7 @@ pub(in crate::startup::canvas::surface) fn with_center(
     let surface = viewport.surface();
     let point = viewport
         .document_at([f64::from(surface.width()) * 0.5, f64::from(surface.height()) * 0.5])?;
-    let normalized = |value: f64, extent: u32| (value / f64::from(extent)).clamp(0.0, 1.0);
+    let normalized = |value: f64, extent: u32| value / f64::from(extent);
     Ok(state
         .with_center(normalized(point[0], image.width()), normalized(point[1], image.height()))?)
 }

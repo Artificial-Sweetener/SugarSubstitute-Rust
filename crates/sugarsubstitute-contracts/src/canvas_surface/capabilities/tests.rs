@@ -25,6 +25,40 @@ fn request() -> Result<CanvasSurfaceDiscoveryRequest, Box<dyn Error>> {
 }
 
 #[test]
+fn legacy_discovery_receives_only_an_empty_parseable_unsupported_descriptor()
+-> Result<(), Box<dyn Error>> {
+    let mut value = vectors()?["request"].clone();
+    value["schema"] = json!(1);
+    let CanvasSurfaceMessage::Discovery(request) =
+        CanvasSurfaceMessage::decode(&serde_json::to_vec(&value)?)?
+    else {
+        return Err("Expected legacy discovery".into());
+    };
+    let capabilities = CanvasSurfaceCapabilities {
+        image_formats: vec![CanvasSurfaceImageFormat::Png],
+        viewport_commands: vec![CanvasSurfaceViewportCommand::Inspect],
+        viewport_state: true,
+        ..Default::default()
+    };
+    let value: Value = serde_json::from_slice(&request.reply(
+        CanvasSurfaceDiscoveryStatus::Available,
+        &capabilities,
+        "",
+    )?)?;
+    assert_eq!(value["status"], "unsupported");
+    assert_eq!(value["capabilities"]["schema"], 1);
+    assert_eq!(value["capabilities"]["imageFormats"], json!([]));
+    assert_eq!(value["capabilities"]["viewportCommands"], json!([]));
+    assert_eq!(value["capabilities"]["viewportState"], false);
+    assert!(
+        value["message"]
+            .as_str()
+            .is_some_and(|text| text.contains("Update SugarCubes and its native host together"))
+    );
+    Ok(())
+}
+
+#[test]
 fn discovery_replies_match_the_shared_web_contract() -> Result<(), Box<dyn Error>> {
     let vectors = vectors()?;
     let request = request()?;
@@ -99,7 +133,7 @@ fn discovery_preserves_each_typed_capability_without_enabling_others() -> Result
     assert_eq!(
         value["capabilities"],
         json!({
-            "schema": 1,
+            "schema": 2,
             "imageFormats": ["png", "jpeg", "webp"],
             "viewportCommands": ["fit", "native", "zoom", "pan", "wipe", "inspect"],
             "viewportState": true,
@@ -211,7 +245,7 @@ fn discovery_requires_exact_versions_and_unambiguous_request_fields() -> Result<
         ("version", json!(4)),
         ("version", json!(3.5)),
         ("schema", json!(0)),
-        ("schema", json!(2)),
+        ("schema", json!(3)),
         ("protocol", json!("different.canvas")),
         ("requestId", json!(-1)),
         ("address", json!({})),

@@ -8,6 +8,7 @@ use std::io;
 use sugarsubstitute_canvas::{CursorIntent, NavigationCommand, Viewport, ZoomMode};
 
 mod budget;
+mod camera_restore;
 
 /// Enough retained-document storage for every 8x8 test document these tests park.
 const FUNDED: u64 = 8 * 1024 * 1024;
@@ -198,6 +199,7 @@ impl Fixture {
             evidence.tier == BackingTier::Detail
                 && evidence.source_revision == session.selection
                 && session.document.native_presented == Some(evidence.target)
+                && evidence.view == session.document.tools.navigation().viewport()
         }) && session.pending_restore.is_none()
             && session.document.cpu_pending.is_none()
             && !self.busy()

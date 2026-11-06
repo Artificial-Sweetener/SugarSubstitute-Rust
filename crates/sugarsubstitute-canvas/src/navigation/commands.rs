@@ -78,9 +78,7 @@ impl Navigation {
                 return Err(CanvasError::Invalid("Semantic pan exceeds viewport bounds"));
             }
             NavigationCommand::Frame { center, span }
-                if center
-                    .iter()
-                    .any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
+                if center.iter().any(|value| !value.is_finite())
                     || span.iter().any(|value| {
                         !value.is_finite() || *value <= 0.0 || *value > MAXIMUM_FRAME_SPAN
                     }) =>
@@ -109,6 +107,7 @@ impl Navigation {
             *self = next;
             return Ok(NavigationCommandOutcome::Applied { target });
         }
+        next.restored_camera = false;
         let mode = match command {
             NavigationCommand::Fit => {
                 target.fit(content)?;
@@ -161,7 +160,7 @@ impl Navigation {
 const MAXIMUM_FRAME_SPAN: f64 = 1e9;
 
 impl Navigation {
-    /// Place an image-relative camera with no transition, snapping exact Fit/one-to-one scales.
+    /// Restore a numerically representable image-relative camera without interactive bounds.
     /// The caller has already cancelled gestures and motion and validated the parameters.
     fn frame(
         &mut self,
@@ -173,41 +172,31 @@ impl Navigation {
         let image = [f64::from(content.width()), f64::from(content.height())];
         let mut fitted = target;
         fitted.fit(content)?;
-        let fit = fitted.zoom();
         let requested = (1.0 / (image[0] * span[0])).min(1.0 / (image[1] * span[1]));
-        let bounded = self.wheel_scale(requested).max(requested.min(fit)).min(requested.max(fit));
-        let zoom = if same_scale(bounded, fit) {
-            fit
-        } else if same_scale(bounded, 1.0) {
-            1.0
-        } else {
-            bounded
-        };
-        self.mode = if zoom == fit {
+        let panel =
+            [f64::from(target.surface().width()) * 0.5, f64::from(target.surface().height()) * 0.5];
+        target.reframe(
+            [
+                center[0] * image[0] - panel[0] / requested,
+                center[1] * image[1] - panel[1] / requested,
+            ],
+            requested,
+        )?;
+        target.device_at([0.0; 2])?;
+        target.device_at(image)?;
+        target.document_at([
+            f64::from(target.surface().width()),
+            f64::from(target.surface().height()),
+        ])?;
+        self.mode = if target == fitted {
             ZoomMode::Fit
-        } else if zoom == 1.0 {
+        } else if requested == 1.0 {
             ZoomMode::OneToOne
         } else {
             ZoomMode::Custom
         };
-        if self.mode == ZoomMode::Fit {
-            target = fitted;
-        } else {
-            let panel = [
-                f64::from(target.surface().width()) * 0.5,
-                f64::from(target.surface().height()) * 0.5,
-            ];
-            target.reframe(
-                [center[0] * image[0] - panel[0] / zoom, center[1] * image[1] - panel[1] / zoom],
-                zoom,
-            )?;
-        }
-        self.view = self.clamp(target)?;
+        self.view = target;
+        self.restored_camera = true;
         Ok(())
     }
-}
-
-/// Compare scales without making exact semantic modes depend on normalization rounding.
-fn same_scale(left: f64, right: f64) -> bool {
-    (left - right).abs() <= left.max(right).max(f64::EPSILON) * 1e-8
 }

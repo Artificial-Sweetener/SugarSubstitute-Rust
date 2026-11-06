@@ -13,12 +13,17 @@ accepted_versions = [3]
 compatibility = "reject"
 migrations = []
 
+# Canvas envelope version three contains native-surface discovery schema two and camera
+# notification schema two. Discovery schema one is decoded only for an empty, actionable
+# unsupported reply; it never negotiates a surface. Matching host/frontend upgrades are
+# required. Presentation observation remains schema one. This transient protocol has no
+# persisted camera migration; desktop-session inspection schema one is preserved unchanged.
 [[formats]]
 id = "sugarcubes-canvas-surface-v3"
 owner = "sugarsubstitute-contracts"
 vendored_component = "sugarcubes-canvas-surface-contract"
 sources = ["crates/sugarsubstitute-contracts/src/canvas_surface.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/address.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/camera.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/capabilities.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/file_reference.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/message.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/presentation.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/preview.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/preview/admission.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/reply.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/viewport.rs", "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs", "third_party/sugarcubes-canvas/canvas.schema.json"]
-source_sha256 = "sha256:727767f5868351d33fe4a4f3d57167065dc32fc2fb19bb33903f32c661d2eef2"
+source_sha256 = "sha256:0d34f2fc6a18cf718c9b9fd05233a1acbdb9cca7c949afb3edf201618ee55f0f"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -31,7 +36,7 @@ id = "sugarcubes-canvas-native-v3"
 owner = "sugarsubstitute-contracts"
 vendored_component = "sugarcubes-canvas-surface-contract"
 sources = ["crates/sugarsubstitute-contracts/src/canvas_native.rs", "crates/sugarsubstitute-contracts/src/canvas_native/context.rs", "crates/sugarsubstitute-contracts/src/canvas_native/edit.rs", "crates/sugarsubstitute-contracts/src/canvas_native/edit_state.rs", "crates/sugarsubstitute-contracts/src/canvas_native/geometry.rs", "crates/sugarsubstitute-contracts/src/canvas_native/identity.rs", "crates/sugarsubstitute-contracts/src/canvas_native/raster.rs", "crates/sugarsubstitute-contracts/src/canvas_native/source.rs", "crates/sugarsubstitute-contracts/src/canvas_native/workflow.rs", "crates/sugarsubstitute-contracts/src/canvas_native/workflow_result.rs", "crates/sugarsubstitute-contracts/src/canvas_native/wire.rs", "third_party/sugarcubes-canvas/canvas.schema.json"]
-source_sha256 = "sha256:9929d460e6891feca1f68b40aa0ff32a43adb02c8e2626f2b9ff5663fd0cf49b"
+source_sha256 = "sha256:b4533af7a75a7f48d0c1b01e7cdc2f467cdbb33548ad73acdc261cb46c819820"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3

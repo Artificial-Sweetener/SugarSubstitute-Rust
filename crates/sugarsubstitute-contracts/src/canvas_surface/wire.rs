@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): d9d243f3ccecb0394dabbed54902e320aabacf2618c9922756a42f4fd9feeb9a
+// Schema SHA-256 (LF): 877e0757e25e931a04382616d727383b84778d70679ae1d8729fa6ceb113e0c4
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -19,7 +19,7 @@ pub(super) struct CanvasSurfaceCapabilities {
 impl CanvasSurfaceCapabilities {
     /// Reject values outside the exact schema-defined bounds.
     pub(super) fn valid(&self) -> bool {
-        self.schema == 1
+        (1..=2).contains(&self.schema)
             && valid_canvas_surface_capabilities_image_formats(&self.image_formats)
             && valid_canvas_surface_capabilities_viewport_commands(&self.viewport_commands)
             && valid_canvas_surface_capabilities_preview_formats(&self.preview_formats)
@@ -45,7 +45,7 @@ impl CanvasSurfaceCapabilitiesRequest {
             && valid_panel_session(&self.session)
             && (1..=2147483647).contains(&self.request_id)
             && self.r#type == "surface.capabilities.request"
-            && self.schema == 1
+            && (1..=2).contains(&self.schema)
     }
 }
 
@@ -562,7 +562,7 @@ pub(super) struct CanvasSurfaceViewportCenter {
 impl CanvasSurfaceViewportCenter {
     /// Reject values outside the exact schema-defined bounds.
     pub(super) fn valid(&self) -> bool {
-        (0.0..=1.0).contains(&self.x) && (0.0..=1.0).contains(&self.y)
+        self.x.is_finite() && self.y.is_finite()
     }
 }
 
@@ -667,7 +667,7 @@ impl CanvasSurfaceCameraChanged {
             && valid_panel_session(&self.session)
             && self.request_id == 0
             && self.r#type == "surface.camera.changed"
-            && self.schema == 1
+            && self.schema == 2
             && self.change.valid()
     }
 }

@@ -210,18 +210,20 @@ fn shared_inspection_vectors_decode_selection_and_inspect_cameras() -> Result<()
 }
 
 #[test]
-fn viewport_centers_are_bounded_normalized_points_in_the_reply() -> Result<(), Box<dyn Error>> {
+fn viewport_centers_preserve_finite_image_relative_points_in_the_reply()
+-> Result<(), Box<dyn Error>> {
     let vectors = vectors()?;
     let request = request(&vectors["validRequests"][0])?;
     let state = CanvasViewportState::new(CanvasViewportMode::Custom, 2.0, 1000, 800)?;
     assert_eq!(state.center(), None);
-    for center in [[0.0, 1.0], [0.25, 0.75], [1.0, 0.0]] {
+    for center in [[0.0, 1.0], [0.25, 0.75], [1.0, 0.0], [-3.25, 2.75], [f64::MIN, f64::MAX]] {
         let centered = state.with_center(center[0], center[1])?;
         assert_eq!(centered.center(), Some(center));
         let reply: Value = serde_json::from_slice(&request.viewport_reply(&centered, "")?)?;
         assert_eq!(reply["viewport"]["center"], json!({"x":center[0], "y":center[1]}));
     }
-    for (x, y) in [(-0.01, 0.5), (0.5, 1.01), (f64::NAN, 0.5), (0.5, f64::INFINITY)] {
+    for (x, y) in [(f64::NEG_INFINITY, 0.5), (0.5, f64::NAN), (f64::NAN, 0.5), (0.5, f64::INFINITY)]
+    {
         assert!(state.with_center(x, y).is_err());
     }
     let reply: Value = serde_json::from_slice(&request.viewport_reply(&state, "")?)?;

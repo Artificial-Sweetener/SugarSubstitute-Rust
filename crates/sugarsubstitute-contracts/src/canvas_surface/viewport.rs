@@ -42,10 +42,12 @@ pub enum CanvasViewportCommand {
 
 /// A schema-validated image-relative camera that a native owner can restore on any image.
 ///
-/// center is the image point shown at the viewport center, normalized from 0 through 1 on
-/// each axis. span is the normalized image distance per physical display pixel on each axis,
+/// center is the finite image-relative point shown at the viewport center and can lie outside
+/// the image on either axis. span is normalized image distance per physical display pixel,
 /// greater than 0 and at most 1e9, so it is independent of the viewport extent. Receivers
-/// contain the span across differing aspect ratios and apply their own scale and pan bounds.
+/// contain differing axis spans and validate numerical camera safety without interactive
+/// scale or pan clamping. Surface discovery and camera observations require schema two;
+/// canvas envelope version three and presentation observation schema one are independent.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CanvasViewportInspection {
     center: [f64; 2],
@@ -113,7 +115,7 @@ impl CanvasViewportInspection {
         Self { center: [value.center.x, value.center.y], span: [value.span.x, value.span.y] }
     }
 
-    /// Return the normalized image point at the viewport center, each axis from 0 through 1.
+    /// Return the finite image-relative point at the viewport center, including outside the image.
     pub const fn center(&self) -> [f64; 2] {
         self.center
     }
@@ -179,10 +181,10 @@ impl CanvasViewportState {
         self.secondary
     }
 
-    /// Report the image point at the viewport center, normalized from 0 through 1 per axis.
+    /// Report the finite image-relative point at the viewport center without clamping.
     /// Inspection-capable owners report it so the web owner can record the camera.
     /// # Errors
-    /// Rejects nonfinite or out-of-range coordinates.
+    /// Rejects nonfinite coordinates.
     pub fn with_center(self, x: f64, y: f64) -> Result<Self, CanvasSurfaceMessageError> {
         let value = Self { center: Some([x, y]), ..self };
         if !value.to_wire().valid() {

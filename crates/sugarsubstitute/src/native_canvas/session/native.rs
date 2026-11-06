@@ -488,7 +488,12 @@ impl Session {
             let snapshot = scene.document.snapshot();
             let target = self.document.tools.navigation().viewport();
             rendering.display_extent == target.surface()
-                && rendering.coverage.overlaps(target, snapshot.extent())?
+                && coverage::is_useful(
+                    rendering.tier,
+                    rendering.coverage,
+                    target,
+                    snapshot.extent(),
+                )?
         } else {
             false
         };

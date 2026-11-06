@@ -172,7 +172,7 @@ impl Fixture {
         }
     }
 
-    /// Close and join the canvas scope, then the same shared executor, under one cutoff.
+    /// Close and join the canvas scope and shared executor before reporting a retained failure.
     fn finish(mut self) -> Result<tempfile::TempDir, Box<dyn Error>> {
         let cutoff = Moment::from_nanos(10_000_000_000);
         self.session.close_until(cutoff).map_err(|cause| format!("Canvas close: {cause}"))?;
@@ -188,7 +188,7 @@ impl Fixture {
                 .wait_after(observed)
                 .map_err(|cause| format!("Canvas scope settlement: {cause}"))?;
         }
-        self.session.finish().map_err(|cause| format!("Canvas finish: {cause}"))?;
+        let finished = self.session.finish().map_err(|cause| format!("Canvas finish: {cause}"));
         self.owner.request_shutdown(cutoff);
         let deadline = std::time::Instant::now()
             .checked_add(Duration::from_secs(10))
@@ -211,6 +211,7 @@ impl Fixture {
             std::hint::spin_loop();
         }
         self.owner.finish_shutdown()?;
+        finished?;
         Ok(self._directory)
     }
 }

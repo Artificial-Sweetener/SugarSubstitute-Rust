@@ -35,6 +35,22 @@ impl BackingTier {
     }
 }
 
+/// Whether admitted coverage supplies target image pixels or the complete required crop.
+/// Image-free targets need only matte and remain useful through the domain crop contract.
+/// Callers independently match the document, source, reconstruction, revision and extent.
+/// # Errors
+/// Preserves unrepresentable camera projection and document-footprint failures.
+pub(super) fn is_useful(
+    tier: BackingTier,
+    backing: BackingCoverage,
+    target: Viewport,
+    document: Extent,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    Ok(tier == BackingTier::Fallback
+        || backing.overlaps(target, document)?
+        || backing.crop(target, document)?.is_some())
+}
+
 /// Construct bounded whole-document coverage while preserving document aspect ratio.
 /// # Errors
 /// Preserves checked extent, Fit-camera and guard-coverage geometry failures.

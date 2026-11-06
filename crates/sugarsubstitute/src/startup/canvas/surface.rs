@@ -162,6 +162,8 @@ pub(super) struct NativeSurface {
     /// The latest routed drag-out awaiting its copied original.
     drag_out: Option<input::DragRequest>,
     drag_sequence: u64,
+    /// A rejected feature schema fences this navigation's later surface mutations.
+    rejected_schema: Option<MainIdentity>,
     closed: bool,
 }
 
@@ -188,6 +190,7 @@ impl NativeSurface {
             editing: editing::Editing::default(),
             drag_out: None,
             drag_sequence: 0,
+            rejected_schema: None,
             closed: false,
         }
     }
@@ -319,6 +322,18 @@ impl NativeSurface {
                 return self.watch_presentation(identity, request, claim, session);
             }
         };
+        if self.rejected_schema == Some(identity)
+            && !matches!(
+                request.operation(),
+                CanvasSurfaceOperation::Release | CanvasSurfaceOperation::PreviewWithdraw(_)
+            )
+        {
+            lifecycle::replied(&request, CanvasSurfaceReplyStatus::Unavailable);
+            return self.enqueue(DesktopStartupCommand::SendSurface(SurfaceReply::new(
+                identity, &request, CanvasSurfaceReplyStatus::Unavailable,
+                "Native surface schema 2 is required. Update SugarCubes and its native host together.", claim,
+            )?));
+        }
         if matches!(
             request.operation(),
             CanvasSurfaceOperation::PreviewBegin(_)

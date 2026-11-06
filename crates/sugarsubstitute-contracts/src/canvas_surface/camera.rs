@@ -62,7 +62,7 @@ impl CanvasSurfaceCameraChange {
 
     /// Encode this camera for an independently qualified watching panel session.
     ///
-    /// Asynchronous changes use request identity zero and schema one within the shared
+    /// Asynchronous changes use request identity zero and schema two within the shared
     /// surface-message byte bound.
     /// # Errors
     /// Rejects invalid session data, oversized output and serialization failures.
@@ -73,7 +73,7 @@ impl CanvasSurfaceCameraChange {
             session: session.as_str().into(),
             request_id: 0,
             r#type: "surface.camera.changed".into(),
-            schema: 1,
+            schema: 2,
             change: self.to_wire(),
         };
         if !value.valid() {

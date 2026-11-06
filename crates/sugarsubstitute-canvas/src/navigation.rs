@@ -21,6 +21,8 @@ pub struct Navigation {
     view: Viewport,
     content: Option<Extent>,
     mode: ZoomMode,
+    /// Preserve an explicit inspection across geometry until navigation replaces its camera.
+    restored_camera: bool,
     pointer: [f64; 2],
     dragging: bool,
     locked: bool,
@@ -39,6 +41,7 @@ impl Navigation {
             view,
             content: None,
             mode: ZoomMode::Fit,
+            restored_camera: false,
             pointer: [0.0; 2],
             dragging: false,
             locked: false,
@@ -108,6 +111,7 @@ impl Navigation {
         next.cancel();
         next.content = content;
         next.mode = ZoomMode::Fit;
+        next.restored_camera = false;
         if let Some(extent) = content {
             next.view.fit(extent)?;
         }
@@ -115,6 +119,8 @@ impl Navigation {
         Ok(())
     }
     /// Update physical viewport bounds, preserving manual centers and refitting semantic Fit.
+    /// Explicit inspection centers survive idle geometry changes. Interactive camera owners
+    /// retain ordinary pan bounds until another inspection replaces their destination.
     /// # Errors
     /// Rejects backward time or invalid geometry without mutation.
     pub fn resize(&mut self, extent: Extent, now: Duration) -> Result<(), CanvasError> {
@@ -127,7 +133,7 @@ impl Navigation {
             if transition.is_none() {
                 if fitting && let Some(content) = next.content {
                     next.view.fit(content)?;
-                } else {
+                } else if !next.restored_camera {
                     next.view = next.clamp(next.view)?;
                 }
             } else if let Some(mut transition) = transition {

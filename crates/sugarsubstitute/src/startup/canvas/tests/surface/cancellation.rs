@@ -212,7 +212,7 @@ fn discovery_without_a_session_returns_unavailable_with_its_original_terminal_cr
     let panel = PanelSession::for_main(identity)?;
     let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&json!({
         "protocol":"sugarcubes.canvas", "version":3, "session":panel.as_str(),
-        "requestId":17, "type":"surface.capabilities.request", "schema":1
+        "requestId":17, "type":"surface.capabilities.request", "schema":2
     }))?)?;
     let memory = MemoryLease::new(64 * 1024, Box::new(Release));
     canvas.surface(identity, message, None, memory.claim(64 * 1024)?)?;
@@ -227,7 +227,7 @@ fn discovery_without_a_session_returns_unavailable_with_its_original_terminal_cr
     assert_eq!(
         value["capabilities"],
         json!({
-            "schema":1, "imageFormats":[], "viewportCommands":[], "viewportState":false,
+            "schema":2, "imageFormats":[], "viewportCommands":[], "viewportState":false,
             "previewFormats":[], "comparison":false, "overview":false, "input":false
         })
     );
