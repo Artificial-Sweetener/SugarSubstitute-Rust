@@ -5004,6 +5004,37 @@ function validatePreparedSceneQueue(value) {
   if (value !== null && (typeof value !== "object" || !value || !authorities.has(value)))
     throw new TypeError("Invalid prepared scene queue capability");
 }
+function prepareSceneQueue(adapter) {
+  const { revision, sourceRevision, queueableKeys, queue } = adapter;
+  if (typeof revision !== "string" || !revision || revision.length > 256 || !Number.isSafeInteger(sourceRevision) || sourceRevision < 0 || !Array.isArray(queueableKeys) || queueableKeys.length > 1e4 || typeof queue !== "function")
+    throw new TypeError("Invalid scene queue publication");
+  let total = 0;
+  const keys = Array.from(queueableKeys, (key) => {
+    if (typeof key !== "string" || !key || key.length > 1e6)
+      throw new TypeError("Scene queue requires normalized nonempty keys");
+    total += key.length;
+    if (total > 8e6) throw new RangeError("Scene queue preparation limit exceeded");
+    if (normalizeSceneTitle(key) !== key)
+      throw new TypeError("Scene queue requires normalized nonempty keys");
+    return key;
+  });
+  if (new Set(keys).size !== keys.length) throw new TypeError("Duplicate scene queue key");
+  const requests2 = new Map(
+    keys.map((sceneKey) => [sceneKey, Object.freeze({ revision, sourceRevision, sceneKey })])
+  );
+  const prepared = Object.freeze({
+    revision,
+    sourceRevision,
+    queueableKeys: Object.freeze(keys),
+    /** Lookup reuses the captured request without retaining source or traversing the host catalog. */
+    request: (key) => requests2.get(key) ?? null
+  });
+  authorities.set(prepared, {
+    requests: new Set(requests2.values()),
+    execute: (request2, signal) => queue.call(adapter, request2, signal)
+  });
+  return prepared;
+}
 var SceneQueueSession = class {
   lane = new LatestRequest();
   authority;
@@ -7451,6 +7482,7 @@ export {
   mapReorderSelection,
   LatestRequest,
   validatePreparedSceneQueue,
+  prepareSceneQueue,
   SceneQueueSession,
   featureDefinitions,
   resolveFeatureProfile,

@@ -123,6 +123,27 @@ class HostOutputImageFiles:
                 buffer.getvalue(), path.with_suffix(".png").name, "image/png"
             )
 
+    def preview(
+        self, reference: OutputFileReference, longest_side: int
+    ) -> ImageTransferPayload:
+        """Decode at reduced scale where the codec allows and encode a small WebP in request memory."""
+        path = self.resolve(reference)
+        with Image.open(path) as original:
+            # JPEG decodes directly at a power-of-two reduction, avoiding a full-size bitmap.
+            original.draft("RGB", (longest_side, longest_side))
+            with ImageOps.exif_transpose(original) as oriented:
+                image = oriented.convert(
+                    "RGBA" if "A" in oriented.getbands() else "RGB"
+                )
+        image.thumbnail(
+            (longest_side, longest_side), Image.Resampling.BILINEAR, reducing_gap=2.0
+        )
+        buffer = BytesIO()
+        image.save(buffer, format="WEBP", quality=70, method=0)
+        return ImageTransferPayload(
+            buffer.getvalue(), f"{path.stem}.preview.webp", "image/webp"
+        )
+
     def reveal(self, reference: OutputFileReference) -> None:
         """Select a currently contained output of any media kind, never a client-supplied absolute path."""
         self._revealer.reveal(self._contained(reference))

@@ -1,21 +1,18 @@
 import {
-  CanvasRouteTabs
-} from "./chunk-ZAF7C7KA.js";
-import {
-  CanvasSourceTabs
-} from "./chunk-T26L5BHO.js";
-import {
   CanvasWipeSeparator
 } from "./chunk-WIEFPHCO.js";
 import {
   CanvasComparisonNavigation
-} from "./chunk-CIRP6VLK.js";
+} from "./chunk-675HISLK.js";
 import {
   CanvasLoadingIndicator
 } from "./chunk-Z66IIUOP.js";
 import {
+  CanvasNavigationBar
+} from "./chunk-C5JVIQFD.js";
+import {
   canvasNavigationSnapshot
-} from "./chunk-HDLA7PWP.js";
+} from "./chunk-ORLQ3IYI.js";
 import {
   computed,
   defineComponent,
@@ -44,6 +41,7 @@ var CanvasOverlay = defineComponent({
     const navigation = computed(
       (previous) => canvasNavigationSnapshot(props.snapshot, previous)
     );
+    const chooseRoute = (value) => props.chooseRoute?.(value);
     return () => {
       const snapshot = props.snapshot;
       const zoom = snapshot.zoom?.dimensions && snapshot.zoom.physicalScale > 0 ? snapshot.zoom : null;
@@ -61,10 +59,6 @@ var CanvasOverlay = defineComponent({
           "data-canvas-image-height": zoom?.dimensions?.height
         },
         [
-          props.route ? h(CanvasRouteTabs, {
-            state: props.route,
-            choose: (value) => props.chooseRoute?.(value)
-          }) : null,
           !input && snapshot.view.mode === "image" && snapshot.view.comparison && props.capabilities.commands.includes("wipe") ? h(CanvasWipeSeparator, { snapshot, send: props.send }) : null,
           !input && (!snapshot.connected || Boolean(primaryMessage) || snapshot.resource.canRetry || snapshot.resource.canAdmitLargeImage || Boolean(secondaryMessage) || snapshot.secondaryResource?.canRetry || snapshot.secondaryResource?.canAdmitLargeImage) ? h("div", { class: "sc-output-status" }, [
             snapshot.connected ? null : h("span", "Disconnected"),
@@ -102,11 +96,19 @@ var CanvasOverlay = defineComponent({
             },
             props.announcement
           ),
-          input ? null : snapshot.view.comparison && props.capabilities.commands.includes("select-comparison") ? h(CanvasComparisonNavigation, { snapshot: navigation.value, send: props.send }) : props.capabilities.commands.includes("select-source") && (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1) ? h(CanvasSourceTabs, {
+          !input && snapshot.view.comparison && props.capabilities.commands.includes("select-comparison") ? h(CanvasComparisonNavigation, {
+            snapshot: navigation.value,
+            send: props.send,
+            route: props.route,
+            chooseRoute
+          }) : h(CanvasNavigationBar, {
             snapshot: navigation.value,
             capabilities: props.capabilities,
-            send: props.send
-          }) : null
+            send: props.send,
+            route: props.route,
+            chooseRoute,
+            backdrop: snapshot.backdrop ?? null
+          })
         ]
       );
     };

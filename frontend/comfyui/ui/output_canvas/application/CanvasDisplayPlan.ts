@@ -83,6 +83,7 @@ export function canvasDisplayPlan(
     catalog.generation,
     view.mode,
     grid.map((entry) => [
+      entry.scene ?? null,
       entry.source.id,
       entry.items.map((item) => item.id),
       entry.preview ? canvasPreviewLane(entry.preview) : null,

@@ -19,7 +19,6 @@ export const WORKFLOW_SURFACE_COPY = Object.freeze({
   inputRoute: 'Input',
   outputRoute: 'Output',
   routeLabel: 'Canvas route',
-  noInputSurfaces: 'No input canvas nodes',
   maskOnlySurface: 'Mask canvas',
   visualOpacity: 'Visual opacity',
   maskDimensionsMismatchTitle: 'Mask dimensions do not match',

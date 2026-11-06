@@ -32,9 +32,16 @@ function canvasEditDockPlacement(obstacles, topBar, rail) {
       bar.left = obstacle.left + obstacle.width + CANVAS_EDIT_CHROME_GAP;
   const column = { left: CANVAS_EDIT_CHROME_INSET, top: CANVAS_EDIT_CHROME_INSET, ...rail };
   for (const obstacle of [...obstacles, bar].sort((a, b) => a.top - b.top))
-    if (intersects(column, obstacle))
+    if (obstacle.top <= column.top && intersects(column, obstacle))
       column.top = obstacle.top + obstacle.height + CANVAS_EDIT_CHROME_GAP;
-  return { topBar: { x: bar.left, y: bar.top }, rail: { x: column.left, y: column.top } };
+  const limits = obstacles.filter(
+    (obstacle) => obstacle.width > 0 && obstacle.height > 0 && obstacle.top > column.top && obstacle.left < column.left + column.width && column.left < obstacle.left + obstacle.width
+  ).map((obstacle) => obstacle.top - CANVAS_EDIT_CHROME_GAP - column.top);
+  return {
+    topBar: { x: bar.left, y: bar.top },
+    rail: { x: column.left, y: column.top },
+    railHeight: limits.length ? Math.max(0, Math.min(...limits)) : null
+  };
 }
 function intersects(a, b) {
   if (a.width <= 0 || a.height <= 0 || b.width <= 0 || b.height <= 0) return false;
@@ -69,7 +76,8 @@ var CanvasEditDock = defineComponent({
       );
       move(bar, placement.topBar);
       move(column, placement.rail);
-      column.style.maxHeight = `calc(100% - ${placement.rail.y + CANVAS_EDIT_CHROME_INSET}px)`;
+      const fill = `calc(100% - ${String(placement.rail.y + CANVAS_EDIT_CHROME_INSET)}px)`;
+      column.style.maxHeight = placement.railHeight === null ? fill : `min(${fill}, ${String(placement.railHeight)}px)`;
     }
     onMounted(() => {
       place();

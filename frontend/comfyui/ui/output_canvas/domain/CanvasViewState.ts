@@ -45,6 +45,8 @@ export interface CanvasViewState extends CanvasViewAddress {
   readonly sourcePreview: boolean;
   readonly follow: 'auto' | 'manual';
   readonly mode: 'image' | 'overview';
+  /** The prompt scene shown while results come from a scene run; null shows every scene. */
+  readonly scene: string | null;
   readonly linked: boolean;
   readonly comparison: CanvasComparison | null;
 }
@@ -58,6 +60,7 @@ export function initialCanvasViewState(address: CanvasViewAddress): CanvasViewSt
     sourcePreview: true,
     follow: 'auto',
     mode: 'image',
+    scene: null,
     linked: true,
     comparison: null,
   });
@@ -87,6 +90,7 @@ export function sameCanvasNavigation(previous: CanvasViewState, next: CanvasView
     previous.sessionId === next.sessionId &&
     previous.follow === next.follow &&
     previous.mode === next.mode &&
+    previous.scene === next.scene &&
     previous.sourcePreview === next.sourcePreview &&
     previous.linked === next.linked &&
     previous.selection?.sourceId === next.selection?.sourceId &&

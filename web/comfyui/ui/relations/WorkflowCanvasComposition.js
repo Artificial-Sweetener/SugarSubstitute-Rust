@@ -23,6 +23,7 @@ export function createWorkflowCanvasComposition(options) {
         app: options.app,
         api: options.api,
         logger: options.logger,
+        notify: options.notify,
     });
     const workflowFields = createWorkflowFieldHost({
         ...options,
@@ -60,6 +61,7 @@ export function createWorkflowCanvasComposition(options) {
     });
     return {
         workflowExecution,
+        scenes: workflowExecution.scenes,
         workflowFields,
         canvasInputs,
         editorDimensions: {

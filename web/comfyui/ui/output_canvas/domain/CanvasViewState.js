@@ -23,6 +23,7 @@ export function initialCanvasViewState(address) {
         sourcePreview: true,
         follow: 'auto',
         mode: 'image',
+        scene: null,
         linked: true,
         comparison: null,
     });
@@ -49,6 +50,7 @@ export function sameCanvasNavigation(previous, next) {
         previous.sessionId === next.sessionId &&
         previous.follow === next.follow &&
         previous.mode === next.mode &&
+        previous.scene === next.scene &&
         previous.sourcePreview === next.sourcePreview &&
         previous.linked === next.linked &&
         previous.selection?.sourceId === next.selection?.sourceId &&

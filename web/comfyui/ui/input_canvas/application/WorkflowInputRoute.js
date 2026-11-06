@@ -1,10 +1,11 @@
 import { workflowMaskKey } from '../domain/WorkflowSurfacePlan.js';
-import { WORKFLOW_SURFACE_COPY } from './WorkflowSurfaceCopy.js';
-const OUTPUT = { route: 'output', surface: null, mask: null };
+/** A workflow that remembers no selection opens on its input images, as it did in Substitute. */
+const STARTING = { route: 'input', surface: null, mask: null };
 /**
  * Keep the canvas's visible route and input document in step with the remembered selection.
  *
  * Input is available only while the workflow has surfaces; otherwise the view stays on Output.
+ * A workflow without a remembered selection starts on Input when it has surfaces.
  * A remembered surface or mask that disappears is cleared rather than reassigned. Showing Input
  * with no active surface activates the first surface and its first mask.
  *
@@ -22,7 +23,7 @@ export class WorkflowInputRoute {
     #opening = null;
     #stop;
     #workflow = null;
-    #selection = OUTPUT;
+    #selection = STARTING;
     #view = null;
     #activated = null;
     /** Follow synced surfaces and send activation through the canvas that holds them. */
@@ -125,11 +126,11 @@ export class WorkflowInputRoute {
             this.#workflow = state.workflow;
             this.#activated = null;
             try {
-                this.#selection = this.store.read(state.workflow) ?? OUTPUT;
+                this.#selection = this.store.read(state.workflow) ?? STARTING;
             }
             catch (error) {
                 this.report(error);
-                this.#selection = OUTPUT;
+                this.#selection = STARTING;
             }
         }
         if (this.#open(state))
@@ -148,7 +149,6 @@ export class WorkflowInputRoute {
             surface: surface?.key ?? null,
             mask,
             available,
-            reason: available ? '' : WORKFLOW_SURFACE_COPY.noInputSurfaces,
         });
         const command = {
             type: 'activate',

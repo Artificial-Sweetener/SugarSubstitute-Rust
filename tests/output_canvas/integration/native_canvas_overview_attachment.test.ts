@@ -26,7 +26,10 @@ import {
   canvasOverviewPlacements,
   canvasOverviewWindow,
 } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOverviewWindow.js';
-import { canvasOutputCatalog } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOutputCatalog.js';
+import {
+  canvasOutputCatalog,
+  canvasSceneCatalog,
+} from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOutputCatalog.js';
 import { CanvasSurfaceGeometryObserver } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasSurfaceGeometryObserver.js';
 import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.js';
 import type { CanvasCommand } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
@@ -118,6 +121,7 @@ function batchCatalog() {
 function fixture(
   capabilities: Partial<CanvasSurfaceCapabilities>,
   actions: Partial<Pick<NativeCanvasAttachmentOptions, 'fileAction' | 'drag'>> = {},
+  build: () => ReturnType<typeof batchCatalog> = batchCatalog,
 ) {
   jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
@@ -138,7 +142,7 @@ function fixture(
   });
   // jsdom cannot measure visibility; keep the observed allocation equal to the surface geometry.
   jest.spyOn(CanvasSurfaceGeometryObserver.prototype, 'read').mockReturnValue(surfaceGeometry);
-  const catalog = batchCatalog();
+  const catalog = build();
   let sequence = 0;
   const views = new CanvasViewRegistry(() => String(++sequence));
   const view = views.create(catalog.sessionId).viewId;
@@ -186,6 +190,8 @@ function fixture(
     catalog,
     address,
     errors,
+    views,
+    view,
     /** Acknowledge every outstanding native ticket, answering camera requests with state. */
     async drain(): Promise<void> {
       for (let guard = 0; guard < 16; guard++) {
@@ -438,4 +444,49 @@ test('the native presenter hides Open media without a shared file action', async
   await f.drain();
   expect(f.surface.port.capabilities.commands).not.toContain('open-media');
   expect(await f.dispatch({ type: 'open-media', target: 'primary' })).toBe('unsupported');
+});
+
+/** Two prompt scenes of one scene run, each with its own two-image batch, viewed on All. */
+function sceneCatalog() {
+  const batch = batchCatalog();
+  const output = batch.result.outputs[0]!;
+  const sceneOutput = (scene: string, run: number) => ({
+    ...output,
+    items: output.items.slice(0, 2).map((item) => ({
+      ...item,
+      id: `${item.id}:${scene}` as typeof item.id,
+      dimensions: null,
+      provenance: { ...item.provenance, runOrder: run },
+      file: { ...item.file, filename: `${scene}.png` },
+    })),
+  });
+  const result = {
+    ...batch.result,
+    runOrder: 2,
+    scenes: {
+      id: 'scene-run',
+      running: null,
+      scenes: [
+        { key: 'morning', title: 'Morning', order: 0, outputs: [sceneOutput('morning', 1)] },
+        { key: 'night', title: 'Night', order: 1, outputs: [sceneOutput('night', 2)] },
+      ],
+    },
+  } as WorkflowResultSession;
+  return canvasSceneCatalog(result, batch.sources, null, null);
+}
+
+test('All paints one natively drawn cell per scene, and a cell opens its scene', async () => {
+  const f = fixture({ overview: true }, {}, sceneCatalog);
+  f.views.update(f.view, (state) => ({ ...state, mode: 'overview', scene: null }));
+  await f.dispatch({ type: 'select-scene', scene: null });
+  await f.drain();
+  const painted = f.overviews().at(-1)?.cells ?? [];
+  expect(painted.map((cell) => cell.file?.filename)).toEqual(['morning.png', 'night.png']);
+  expect(painted[0]!.rect.width).toBeGreaterThan(240);
+  expect(painted[1]!.rect.x - painted[0]!.rect.x - painted[0]!.rect.width).toBeLessThan(3);
+  const cells = [...f.root.querySelectorAll<HTMLButtonElement>('.sc-output-overview-cell')];
+  expect(cells.map((cell) => cell.getAttribute('aria-label'))).toEqual(['Morning', 'Night']);
+  cells[1]!.click();
+  expect(f.views.read(f.view)).toMatchObject({ scene: 'night', follow: 'manual' });
+  expect(f.errors).toEqual([]);
 });

@@ -28,7 +28,11 @@ import type { WorkflowPromptPreparation } from '../../execution/domain/WorkflowP
 
 export interface CubeHostExecutionOptions {
   api: unknown;
-  observer: PromptQueueObserver;
+  /** The execution runtime: its queue observer and its prompt-scene expansion. */
+  execution: {
+    readonly submissionObserver: PromptQueueObserver;
+    readonly scenes: CubeHostScenePrompts;
+  };
   logger: Pick<Console, 'debug' | 'warn' | 'error'>;
   boundaryResolver: NativeSubgraphBoundaryResolver;
   getGraph(): ComfyGraph | null | undefined;
@@ -39,6 +43,12 @@ export interface CubeHostExecutionOptions {
   preflight(): void;
   prepareCanvasInputs?(payload: unknown): Promise<WorkflowPromptPreparation>;
 }
+
+/** Expand prompt scenes and give directly executed workflows their scene's prompt texts. */
+export interface CubeHostScenePrompts {
+  expand(payload: unknown): readonly unknown[] | null;
+  workflow(payload: unknown, workflow: unknown): unknown;
+}
 export interface CubeHostExecution {
   readonly queue: ComfyPromptQueueBridge;
   prepareAnalysisPrompt(payload: unknown): Promise<unknown>;
@@ -46,6 +56,7 @@ export interface CubeHostExecution {
 
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
 export function createCubeHostExecution(options: CubeHostExecutionOptions): CubeHostExecution {
+  const scenes = options.execution.scenes;
   const outputAdapter = new CubeOutputPromptAdapter({
     getCubes: options.getCubes,
     boundaryResolver: options.boundaryResolver,
@@ -60,12 +71,14 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Cube
     getGraph: options.getGraph,
     getProximityMatches: options.getProximityMatches,
     ...(options.prepareCanvasInputs ? { prepareInputs: options.prepareCanvasInputs } : {}),
+    sceneWorkflow: (payload, workflow) => scenes.workflow(payload, workflow),
   });
   const transport = new ComfyDirectPromptTransport({ api: options.api });
   const queue = new ComfyPromptQueueBridge({
     api: options.api as ComfyPromptQueueApi,
-    observer: options.observer,
+    observer: options.execution.submissionObserver,
     preflight: options.preflight,
+    expand: (payload) => scenes.expand(payload),
     prepare: options.prepareRelations,
     transform: async (payload) => {
       const candidate = await pipeline.transform(payload);

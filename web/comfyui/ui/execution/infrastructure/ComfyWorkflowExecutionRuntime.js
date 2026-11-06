@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the shared execution lifetime while keeping host registration and cube queue policy thin. */
+import { ComfyWorkflowScenePrompts } from './ComfyWorkflowScenePrompts.js';
 import { WorkflowSessionStore } from '../application/WorkflowSessionStore.js';
 import { WorkflowResultStore } from '../application/WorkflowResultStore.js';
 import { WorkflowSeedHistory } from '../application/WorkflowSeedHistory.js';
@@ -49,6 +50,8 @@ export class ComfyWorkflowExecutionRuntime {
     previews;
     outputs;
     submissionObserver;
+    /** Split constructed prompts into one prompt per authored prompt scene. */
+    scenes;
     canvases;
     #generation;
     #cubePreviews;
@@ -99,6 +102,7 @@ export class ComfyWorkflowExecutionRuntime {
                 this.progress.refresh();
             },
         });
+        this.scenes = new ComfyWorkflowScenePrompts(() => options.app, this.#contexts, { pushToast: (severity, title, message) => options.notify?.(severity, title, message) });
         this.previews = new ComfyWorkflowPreviewDelivery(this.results, options.logger, (frame) => this.canvases.preview(frame));
         this.#cubePreviews = new ComfyCubeLivePreview(this.sessions, this.results, this.previews, options.previewUrls, () => options.clock.now(), options.previewVisibility);
         this.outputs = new ComfyWorkflowOutputProjection(this.#cubePreviews, this.sessions, this.results);
