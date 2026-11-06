@@ -62,7 +62,9 @@ fn changed_authored_revision_retires_render_failure_for_the_same_raster_source()
 #[test]
 fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
 -> Result<(), Box<dyn Error>> {
-    for foreign_document in [false, true] {
+    for (foreign_document, matte_only) in
+        [(false, false), (true, false), (false, true), (true, true)]
+    {
         let Fixture { mut session, wake, boundary, _directory } =
             preparing(Reconstruction::Preview)?;
         let rendering = session.rendering.as_mut().ok_or("Missing preparation")?;
@@ -72,8 +74,30 @@ fn successful_render_rejects_payload_outside_its_admitted_document_or_source()
         let snapshot =
             session.document.scene.as_ref().ok_or("Missing selected scene")?.document.snapshot();
         let document = (snapshot.identity(), snapshot.revision(), 0);
-        let view = Viewport::new(Extent::new(1, 1)?)?;
+        let mut view = Viewport::new(Extent::new(1, 1)?)?;
+        if matte_only {
+            view.reframe([-100_000.0, 100_000.0], 1.0)?;
+            let now = session.navigation_time();
+            let admitted = session.document.tools.navigate(
+                sugarsubstitute_canvas::NavigationCommand::Frame {
+                    center: [-100_000.0 / 4096.0, 100_000.0 / 4096.0],
+                    span: [1.0 / 4096.0; 2],
+                },
+                now,
+            )?;
+            assert!(matches!(
+                admitted,
+                sugarsubstitute_canvas::NavigationCommandOutcome::Applied { .. }
+            ));
+        }
         let coverage = BackingCoverage::new(view, [0; 2])?;
+        if matte_only {
+            assert!(
+                coverage
+                    .crop(session.document.tools.navigation().viewport(), snapshot.extent())?
+                    .is_some()
+            );
+        }
         let target = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(2)? };
         let spec = session.spec(
             Operation::Infrastructure,

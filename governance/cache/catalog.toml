@@ -211,13 +211,13 @@ recovery = "Corrupt metadata is an observable miss and a fresh independent gener
 [[caches]]
 id = "comfy-output-originals"
 owner = "sugarsubstitute-comfy"
-sources = ["crates/sugarsubstitute-comfy/src/output_media/transfer.rs", "crates/sugarsubstitute-comfy/src/output_media/transfer/native.rs", "crates/sugarsubstitute-comfy/src/readiness_transport/headers.rs"]
-source_sha256 = "sha256:65a2e7ae61e103ba45b9d3f75ad6c06b8ad9416855366cd4f618d43e8c453920"
+sources = ["crates/sugarsubstitute-comfy/src/output_media.rs", "crates/sugarsubstitute-comfy/src/output_media/format.rs", "crates/sugarsubstitute-comfy/src/output_media/identity.rs", "crates/sugarsubstitute-comfy/src/output_media/encoded_copy.rs", "crates/sugarsubstitute-comfy/src/output_media/retained.rs", "crates/sugarsubstitute-comfy/src/output_media/transfer.rs", "crates/sugarsubstitute-comfy/src/output_media/transfer/native.rs", "crates/sugarsubstitute-comfy/src/readiness_transport/headers.rs"]
+source_sha256 = "sha256:2ee94727ed4323d9ce1d3ed112f98fcdfae5873180ecd63d77c4f146ece00589"
 namespace = "comfy-outputs-v1"
 storage_schema = 1
 compatibility_epoch = 1
-compatibility_inputs = ["backend_process_identity", "encoded_view_target", "png_or_jpeg_original"]
-freshness = "Each acquired selection downloads a fresh bounded PNG or JPEG, as the view target's filename extension names, from the independently qualified current Comfy peer. Reselecting an output whose canvas document is still retained for the same backend reuses that document and downloads nothing. The entry file name follows that format, so the target-keyed identity never changes format. The canvas image owner validates and hashes the retained original during import."
+compatibility_inputs = ["source_kind", "backend_process_identity_and_view_target_when_network", "retained_digest_length_and_format_when_session", "supported_encoded_media_original", "expected_original_digest_and_length_when_restoring"]
+freshness = "Each acquisition downloads a fresh bounded original from the independently qualified current Comfy peer. Native canvas imports retain PNG/JPEG admission; verified artifact retention also accepts PNG/APNG, WebP, GIF, MP4 and WebM and checks recorded encoded length and SHA-256 before cache publication. Already owned session originals stream into independent fresh cache custody under a session-retained-v1 key with the same exact format, length and SHA-256 validation; this grants no backend or path authority. The entry name follows the encoded container. Reselecting a native output retained for the same backend reuses its document. Presentation owners validate media, and the session owner publishes durable originals independently of this disposable copy."
 retention = "The shared runtime cache admits up to 32 GiB of encoded Comfy output copies, with seven-day idle retention. A retained reader pins its generation during canvas import and reconstruction."
 recovery = "Interrupted or rejected downloads remain unpublished. A fresh generation preserves earlier pinned entries; shared maintenance removes only owned disposable entries and preserves unknown content."
 

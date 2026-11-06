@@ -1616,6 +1616,14 @@ rationale = "Borrow the prepared native provisioning cache capability descriptor
 consumer = "memory_metadata"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/session_identity/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:6ca904aa3597ff5e8e626465bcc3e7bfbc62b6f34c092f0601d7995354e3f810"
+capabilities = ["std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native protected-storage fixtures verify stable source-host correlation, preserve invalid original bytes and reject a record moved to a replacement native profile directory. Direct filesystem access deliberately corrupts or observes only owned temporary fixtures."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/application.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:be88668b9b3643d5be9030092b5d61d15845e702f45b337860ac37b6c0cf6cd4"
@@ -2023,7 +2031,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/running.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5b1fa85a138f251583a4134adb8a65c7220125e2124d1c6152736bda37108a35"
+source_sha256 = "sha256:c3a6df882215d3ad28ff839940fe57c4f591b28bed5a1c14a9a230f885384a6f"
 capabilities = ["std::fs::remove_file", "std::fs::rename", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Bind the actual elected generation directory to retained installation custody. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2103,7 +2111,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/trials/transfer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:86523c00dadd0a57e623e82a1566f6d82cf1804bb68462f6c91f47f99e1c944a"
+source_sha256 = "sha256:663e59ada4bc4ed246a2ca8bc185a5c0604b0d21436ce6ffc7fd534de8468500"
 capabilities = ["assert! restricted capability fragments", "std::fs::File::from", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir", "tempfile::tempfile"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise transfer with real protected storage, duplicated handles and authenticated packages. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -4263,7 +4271,7 @@ rationale = "Owned temporary directories keep viewer document and refinement fix
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/refinement.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:158ec798a56b57ac556d889b956c044aacee1933afdd19b14fee861eb44a9154"
+source_sha256 = "sha256:6f5d2d0edcf8092521fa85f54db9aae8090bf1164a9be563cacf81bdfe1e3b9c"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary directories keep viewer document and refinement fixtures portable and isolated; test teardown retains the directory through its actual session lifetime."
@@ -4295,7 +4303,7 @@ rationale = "Owned temporary cache fixtures verify retained encoded originals, a
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:361727c4bc77c2db5c4ab7f5cac278df5334326f845f7b33d4f530927fa66805"
+source_sha256 = "sha256:e0a569d2974dc721f0df617e63f28611cea5809b8b8bea7bb993b3f3886982e6"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary cache fixtures exercise canvas source replacement, worker disposal and scoped shutdown without using user data."
@@ -4367,7 +4375,7 @@ rationale = "Reads the staged drag-out copies inside the fixture's owned tempora
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:439913cc0996810421ea9006b0ec7ed45bda323243a22db43c0cf4ebbf502d72"
+source_sha256 = "sha256:91ad2b626412ebbcc68464cc25ab5b4ac9b81c011850ee0bc40131fec82a2a61"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor exercises backend revocation while the canvas session retains its worker lifetime."
@@ -4407,10 +4415,10 @@ rationale = "An owned temporary cache fixture verifies nonblocking contention, s
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/output_media/transfer/tests/native_http.rs"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:04d60a481eb94dcb438346c2de08746ca9f6eecaf4fa865458fe1f904709945b"
+source_sha256 = "sha256:78059ad5f8feba9a479608a027ba77476454a5385e386ba8b8e0f8861bc5afbd"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
-rationale = "An owned temporary cache scope qualifies the real loopback output transfer, peer identity checks and worker retirement without accessing user data."
+rationale = "An owned temporary cache scope qualifies actual PNG/JPEG and authored GIF original transfers, current-peer custody, recorded SHA-256 rejection and observed worker retirement without accessing user data."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"

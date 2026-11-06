@@ -3,6 +3,7 @@
 //! Exercise navigation cancellation against genuine owned execution jobs and terminal delivery.
 use super::*;
 use std::sync::{Condvar, Mutex};
+mod camera_readiness;
 mod source_fencing;
 
 #[derive(Default)]
@@ -331,19 +332,11 @@ fn completed_detail_is_current_for_partial_overlap_but_not_disjoint_motion()
     target.reframe([1000.0, 1000.0], 1.0)?;
     let coverage = coverage::detail(target)?;
     target.pan_by([200.0, 0.0])?;
-    assert!(completion::completed_coverage_is_current(
-        BackingTier::Detail,
-        coverage,
-        target,
-        document,
-    )?);
-    target.pan_by([2000.0, 0.0])?;
-    assert!(!completion::completed_coverage_is_current(
-        BackingTier::Detail,
-        coverage,
-        target,
-        document,
-    )?);
+    assert!(coverage::is_useful(BackingTier::Detail, coverage, target, document,)?);
+    target.pan_by([-2000.0, 0.0])?;
+    let origin = target.document_at([0.0; 2])?;
+    assert!((0.0..4096.0).contains(&origin[0]) && (0.0..4096.0).contains(&origin[1]));
+    assert!(!coverage::is_useful(BackingTier::Detail, coverage, target, document,)?);
     Ok(())
 }
 

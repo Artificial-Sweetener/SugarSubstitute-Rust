@@ -22,6 +22,14 @@ enum Application {
     Trial(Box<TrialApplication>),
 }
 impl RunningApplication {
+    /// Borrow the retained accepted/trial selection's existing stable installation identity.
+    /// This correlation data grants no replacement installation or process ownership.
+    pub fn installation_id(&self) -> &sugarsubstitute_contracts::installation::InstallationId {
+        match &self.application {
+            Application::Accepted(application) => application.installation_id(),
+            Application::Trial(application) => &application.attempt().installation,
+        }
+    }
     /// Exact verified generation retained by this coordinator.
     pub fn generation(&self) -> &sugarsubstitute_contracts::installation::Generation {
         match &self.application {

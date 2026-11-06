@@ -211,29 +211,30 @@ fn framing_places_a_normalized_camera_immediately_without_motion() -> TestResult
 }
 
 #[test]
-fn framing_snaps_exact_semantic_scales_and_keeps_navigation_bounds() -> TestResult {
+fn framing_preserves_representable_cameras_independently_of_interactive_bounds() -> TestResult {
     let mut nav = navigation()?;
     target(nav.command(frame([0.1, 0.1], [2.0, 2.0]), time(0))?)?;
-    let fit = target(nav.command(frame([0.9, 0.2], [0.5 * (1.0 + 1e-12), 0.5]), time(0))?)?;
+    let fit = target(nav.command(frame([0.5, 0.5], [0.5, 0.5]), time(0))?)?;
     assert_eq!(nav.zoom_mode(), ZoomMode::Fit);
     assert_eq!((fit.zoom(), fit.origin()), (0.5, [0.0; 2]));
-    let native = target(nav.command(frame([0.5, 0.5], [1.0 - 1e-12, 1.0]), time(0))?)?;
+    let native = target(nav.command(frame([0.5, 0.5], [1.0, 1.0]), time(0))?)?;
     assert_eq!(nav.zoom_mode(), ZoomMode::OneToOne);
     assert_eq!((native.zoom(), native.origin()), (1.0, [500.0, 250.0]));
-    let closest = target(nav.command(frame([0.5, 0.5], [1e6, 1e6]), time(0))?)?;
-    assert_eq!(closest.zoom(), 10.0);
+    let closest = target(nav.command(frame([0.5, 0.5], [100.0, 100.0]), time(0))?)?;
+    assert_eq!(closest.zoom(), 100.0);
     let farthest = target(nav.command(frame([0.5, 0.5], [1e-6, 1e-6]), time(0))?)?;
-    assert_eq!(farthest.zoom(), 0.064);
+    assert_eq!(farthest.zoom(), 1e-6);
     let corner = target(nav.command(frame([0.0, 0.0], [2.0, 2.0]), time(0))?)?;
-    assert!(close(corner.device_at([0.0, 0.0])?, [200.0, 100.0]));
+    assert!(close(corner.document_at([500.0, 250.0])?, [0.0, 0.0]));
     let mut small = Navigation::new(Viewport::new(Extent::new(1000, 500)?)?);
     small.set_content(Some(Extent::new(20, 10)?), time(0))?;
     let fitted = small.viewport();
-    let framed = target(
-        small.command(NavigationCommand::Frame { center: [0.5; 2], span: [1e-9; 2] }, time(0))?,
-    )?;
-    assert_eq!(framed, fitted);
-    assert_eq!(small.zoom_mode(), ZoomMode::Fit);
+    assert!(
+        small
+            .command(NavigationCommand::Frame { center: [0.5; 2], span: [1e-9; 2] }, time(0))
+            .is_err()
+    );
+    assert_eq!(small.viewport(), fitted);
     Ok(())
 }
 
@@ -243,13 +244,15 @@ fn framing_rejects_out_of_range_parameters_atomically_and_respects_ownership() -
     target(nav.command(NavigationCommand::OneToOne, time(0))?)?;
     let before = (nav.viewport(), nav.target_viewport(), nav.zoom_mode());
     for (center, span) in [
-        ([1.000_001, 0.5], [0.001; 2]),
-        ([0.5, -0.1], [0.001; 2]),
+        ([f64::MAX, 0.5], [0.001; 2]),
+        ([0.5, f64::NEG_INFINITY], [0.001; 2]),
         ([f64::NAN, 0.5], [0.001; 2]),
         ([0.5; 2], [0.0, 0.001]),
         ([0.5; 2], [0.001, -1.0]),
         ([0.5; 2], [1.000_000_001e9, 0.001]),
         ([0.5; 2], [f64::INFINITY, 0.001]),
+        ([0.5; 2], [f64::MIN_POSITIVE; 2]),
+        ([0.5; 2], [1e-20; 2]),
     ] {
         assert!(nav.command(NavigationCommand::Frame { center, span }, time(10)).is_err());
         assert_eq!((nav.viewport(), nav.target_viewport(), nav.zoom_mode()), before);
@@ -261,5 +264,59 @@ fn framing_rejects_out_of_range_parameters_atomically_and_respects_ownership() -
         empty.command(frame([0.5; 2], [2.0; 2]), time(0))?,
         NavigationCommandOutcome::NoContent
     );
+    Ok(())
+}
+
+#[test]
+fn framing_and_idle_resize_preserve_off_image_centers_and_scale() -> TestResult {
+    let mut nav = navigation()?;
+    for (center, zoom) in [([-3.25, 2.75], 2.0), ([1.2, -0.4], 0.5)] {
+        let restored = target(nav.command(frame(center, [zoom; 2]), time(0))?)?;
+        assert_eq!(restored.zoom(), zoom);
+        assert!(close(
+            restored.document_at([500.0, 250.0])?,
+            [center[0] * 2000.0, center[1] * 1000.0]
+        ));
+        assert_eq!(nav.zoom_mode(), ZoomMode::Custom);
+        for surface in [Extent::new(1600, 900)?, Extent::new(80, 40)?, Extent::new(1000, 500)?] {
+            nav.resize(surface, time(0))?;
+            let view = nav.viewport();
+            let panel = [f64::from(surface.width()) * 0.5, f64::from(surface.height()) * 0.5];
+            assert!(close(view.document_at(panel)?, [center[0] * 2000.0, center[1] * 1000.0]));
+            assert_eq!(view.zoom(), zoom);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn navigation_replaces_restoration_bounds_while_idle_pointer_observation_preserves_them()
+-> TestResult {
+    for command in [NavigationCommand::Pan([0.0; 2]), NavigationCommand::Zoom(1.0)] {
+        let mut nav = navigation()?;
+        target(nav.command(frame([-3.25, 2.75], [2.0; 2]), time(0))?)?;
+        nav.input(NavigationInput::Pointer([20.0, 30.0]), time(0))?;
+        nav.resize(Extent::new(1000, 700)?, time(0))?;
+        assert!(close(nav.viewport().document_at([500.0, 350.0])?, [-6500.0, 2750.0]));
+        target(nav.command(command, time(0))?)?;
+        nav.resize(Extent::new(5000, 3000)?, time(0))?;
+        assert!(close(nav.viewport().document_at([2500.0, 1500.0])?, [1000.0, 500.0]));
+    }
+    Ok(())
+}
+
+#[test]
+fn duplicate_drag_pointer_preserves_restoration_until_actual_motion_takes_ownership() -> TestResult
+{
+    let mut nav = navigation()?;
+    let restored = target(nav.command(frame([-3.25, 2.75], [2.0; 2]), time(0))?)?;
+    nav.input(NavigationInput::Pointer([20.0, 30.0]), time(0))?;
+    nav.input(NavigationInput::Pan(true), time(0))?;
+    nav.input(NavigationInput::Pointer([20.0, 30.0]), time(0))?;
+    assert_eq!(nav.viewport(), restored);
+    nav.input(NavigationInput::Pointer([21.0, 30.0]), time(0))?;
+    assert_ne!(nav.viewport(), restored);
+    nav.resize(Extent::new(5000, 3000)?, time(0))?;
+    assert!(close(nav.viewport().document_at([2500.0, 1500.0])?, [1000.0, 500.0]));
     Ok(())
 }

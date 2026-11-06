@@ -5,7 +5,7 @@
     "session": "surface-discovery-session",
     "requestId": 7,
     "type": "surface.capabilities.request",
-    "schema": 1
+    "schema": 2
   },
   "available": {
     "protocol": "sugarcubes.canvas",
@@ -15,7 +15,7 @@
     "type": "surface.capabilities.reply",
     "status": "available",
     "capabilities": {
-      "schema": 1,
+      "schema": 2,
       "imageFormats": ["png"],
       "viewportCommands": [],
       "viewportState": false,
@@ -34,7 +34,7 @@
     "type": "surface.capabilities.reply",
     "status": "unsupported",
     "capabilities": {
-      "schema": 1,
+      "schema": 2,
       "imageFormats": [],
       "viewportCommands": [],
       "viewportState": false,
@@ -52,7 +52,7 @@
       "session": "surface-discovery-session",
       "requestId": 7,
       "type": "surface.capabilities.request",
-      "schema": 2
+      "schema": 3
     },
     {
       "protocol": "sugarcubes.canvas",
@@ -60,7 +60,7 @@
       "session": "surface-discovery-session",
       "requestId": 0,
       "type": "surface.capabilities.request",
-      "schema": 1
+      "schema": 2
     },
     {
       "protocol": "sugarcubes.canvas",
@@ -68,7 +68,7 @@
       "session": "surface-discovery-session",
       "requestId": 2147483648,
       "type": "surface.capabilities.request",
-      "schema": 1
+      "schema": 2
     },
     {
       "protocol": "sugarcubes.canvas",
@@ -76,7 +76,7 @@
       "session": "bad",
       "requestId": 7,
       "type": "surface.capabilities.request",
-      "schema": 1
+      "schema": 2
     },
     {
       "protocol": "sugarcubes.canvas",
@@ -84,7 +84,7 @@
       "session": "surface-discovery-session",
       "requestId": 7,
       "type": "surface.capabilities.request",
-      "schema": 1,
+      "schema": 2,
       "other": true
     }
   ],
@@ -96,45 +96,6 @@
       "requestId": 7,
       "type": "surface.capabilities.reply",
       "status": "ready",
-      "capabilities": {
-        "schema": 1,
-        "imageFormats": ["png"],
-        "viewportCommands": [],
-        "viewportState": false,
-        "previewFormats": [],
-        "comparison": false,
-        "overview": false,
-        "input": false
-      },
-      "message": ""
-    },
-    {
-      "protocol": "sugarcubes.canvas",
-      "version": 3,
-      "session": "surface-discovery-session",
-      "requestId": 7,
-      "type": "surface.capabilities.reply",
-      "status": "available",
-      "capabilities": {
-        "schema": 1,
-        "imageFormats": ["png"],
-        "viewportCommands": [],
-        "viewportState": false,
-        "previewFormats": [],
-        "comparison": false,
-        "overview": false,
-        "input": false
-      },
-      "message": "",
-      "other": true
-    },
-    {
-      "protocol": "sugarcubes.canvas",
-      "version": 3,
-      "session": "surface-discovery-session",
-      "requestId": 7,
-      "type": "surface.capabilities.reply",
-      "status": "available",
       "capabilities": {
         "schema": 2,
         "imageFormats": ["png"],
@@ -155,7 +116,46 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": "",
+      "other": true
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 3,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
         "imageFormats": ["tiff"],
         "viewportCommands": [],
         "viewportState": false,
@@ -174,7 +174,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png", "png", "png", "png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -193,7 +193,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": ["fit", "fit", "fit", "fit", "fit", "fit", "fit"],
         "viewportState": false,
@@ -212,7 +212,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": ["comparison"],
         "viewportState": false,
@@ -231,7 +231,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": null,
@@ -250,7 +250,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -269,7 +269,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -288,7 +288,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -307,7 +307,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -362,7 +362,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportState": false,
         "previewFormats": [],
@@ -380,7 +380,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "previewFormats": [],
@@ -398,7 +398,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -416,7 +416,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -434,7 +434,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -452,7 +452,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": ["wipe", "swap"],
         "viewportState": false,
@@ -471,7 +471,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -489,7 +489,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 1,
+        "schema": 2,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,
@@ -509,7 +509,7 @@
     "type": "surface.capabilities.reply",
     "status": "available",
     "capabilities": {
-      "schema": 1,
+      "schema": 2,
       "imageFormats": ["png"],
       "viewportCommands": ["fit", "native", "zoom", "pan", "wipe"],
       "viewportState": true,
@@ -528,7 +528,7 @@
     "type": "surface.capabilities.reply",
     "status": "available",
     "capabilities": {
-      "schema": 1,
+      "schema": 2,
       "imageFormats": ["png"],
       "viewportCommands": ["fit", "native", "zoom", "pan", "wipe"],
       "viewportState": true,

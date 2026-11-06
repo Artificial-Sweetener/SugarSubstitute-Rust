@@ -5,8 +5,8 @@
 //! A retained document keeps its scene (authored document, pinned source reader and original)
 //! and its full-quality detail and whole-document fallback backings, whose memory claims stay
 //! funded by the session's retained-document allowance. It keeps no camera across selections:
-//! the page's inspection owner holds the one view shared by every output, so a reselected
-//! document starts at the selection's camera exactly as a freshly loaded one does. Display
+//! the page's inspection owner supplies each selection's camera, so a reselected document
+//! starts at that camera exactly as a freshly loaded one does. Display
 //! custody (the projection, its buffers and acknowledged evidence) always stays with the
 //! current document.
 //!
@@ -72,6 +72,11 @@ pub(super) struct RetainedDocuments {
 }
 
 impl RetainedDocuments {
+    /// Borrow retained document geometry for camera admission before withdrawing its custody.
+    pub(super) fn document(&self, key: &RetentionKey) -> Option<&document::DocumentState> {
+        self.entries.iter().find(|entry| entry.key == *key).map(|entry| &*entry.document)
+    }
+
     /// Whether a document for `key` is parked.
     pub(super) fn contains(&self, key: &RetentionKey) -> bool {
         self.entries.iter().any(|entry| entry.key == *key)
@@ -549,6 +554,11 @@ impl Session {
     /// camera on the current physical extent, and one fresh display of the retained backings
     /// proves the selection.
     fn restore_retained(&mut self, key: RetentionKey, intent: u64) -> Result<bool, Box<dyn Error>> {
+        let frame = self.selection_frame(intent);
+        if let Err(cause) = self.validate_retained_selection_camera(&key, frame) {
+            self.fail(cause);
+            return Ok(false);
+        }
         if self.input_shown() {
             // The Input route stays; the reselected output waits behind the input document.
             self.park_retained_output(&key, intent)?;
@@ -565,7 +575,6 @@ impl Session {
             self.document.adopt_display(&mut outgoing);
             self.park(outgoing);
         }
-        let frame = self.selection_frame(intent);
         let document = &mut *self.document;
         document.rebind(intent);
         document.tools.set_refresh_rate(self.display_refresh)?;
@@ -573,6 +582,7 @@ impl Session {
         document.tools.resize(extent, scene, now)?;
         document.tools.advance(now)?;
         selection_camera::return_to_selection_camera(&mut document.tools, scene, frame, now)?;
+        self.selection_framed(intent);
         if self.pacing.period() != self.document.tools.navigation().frame_period() {
             self.pacing.set_frame_period(self.document.tools.navigation().frame_period(), now)?;
         }

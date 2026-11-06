@@ -185,6 +185,7 @@ impl Session {
             frame,
             now,
         )?;
+        self.selection_framed(intent);
         output.scene = Some(scene);
         output.retention = retention;
         output.initial_preview = true;
@@ -225,6 +226,7 @@ impl Session {
             let scene = output.scene.as_ref().map(|scene| &scene.document);
             output.tools.resize(extent, scene, now)?;
             selection_camera::return_to_selection_camera(&mut output.tools, scene, frame, now)?;
+            self.selection_framed(intent);
         }
         self.document.rebind(intent);
         self.expose_pending = true;

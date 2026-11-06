@@ -6,7 +6,7 @@
     "CanvasSurfaceCapabilities": {
       "type": "object",
       "properties": {
-        "schema": { "const": 1 },
+        "schema": { "type": "integer", "minimum": 1, "maximum": 2 },
         "imageFormats": {
           "type": "array",
           "items": { "enum": ["png", "jpeg", "webp"] },
@@ -43,7 +43,7 @@
         "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
         "requestId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
         "type": { "const": "surface.capabilities.request" },
-        "schema": { "const": 1 }
+        "schema": { "type": "integer", "minimum": 1, "maximum": 2 }
       },
       "required": ["protocol", "version", "session", "requestId", "type", "schema"],
       "additionalProperties": false
@@ -2718,8 +2718,16 @@
     "CanvasSurfaceViewportCenter": {
       "type": "object",
       "properties": {
-        "x": { "type": "number", "minimum": 0, "maximum": 1 },
-        "y": { "type": "number", "minimum": 0, "maximum": 1 }
+        "x": {
+          "type": "number",
+          "minimum": -1.7976931348623157e308,
+          "maximum": 1.7976931348623157e308
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1.7976931348623157e308,
+          "maximum": 1.7976931348623157e308
+        }
       },
       "required": ["x", "y"],
       "additionalProperties": false
@@ -2773,7 +2781,7 @@
         "session": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]{16,80}$" },
         "requestId": { "const": 0 },
         "type": { "const": "surface.camera.changed" },
-        "schema": { "const": 1 },
+        "schema": { "const": 2 },
         "change": { "$ref": "#/$defs/CanvasSurfaceCameraChange" }
       },
       "required": ["protocol", "version", "session", "requestId", "type", "schema", "change"],

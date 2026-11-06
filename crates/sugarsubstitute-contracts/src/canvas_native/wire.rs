@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): d9d243f3ccecb0394dabbed54902e320aabacf2618c9922756a42f4fd9feeb9a
+// Schema SHA-256 (LF): 877e0757e25e931a04382616d727383b84778d70679ae1d8729fa6ceb113e0c4
 
 /// Schema-defined untrusted CanvasSurfaceFileReference data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

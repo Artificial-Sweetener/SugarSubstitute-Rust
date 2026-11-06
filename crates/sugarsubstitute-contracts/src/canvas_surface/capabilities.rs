@@ -5,10 +5,13 @@
 use super::{CanvasSurfaceMessageError, MAX_SURFACE_MESSAGE_BYTES, wire};
 use crate::panel::PanelSession;
 
-/// Surface behavior advertised by its runtime owner; empty fields mean unsupported behavior.
+/// Schema-two surface behavior advertised by its runtime owner; empty fields mean unsupported.
 ///
 /// Callers publish only implemented runtime behavior. These values describe presentation
 /// capabilities and never authorize navigation, native handles, or attachment operations.
+/// Discovery schema one is decoded only to return an empty unsupported result with an
+/// upgrade diagnostic. Hosts and SugarCubes upgrade together; canvas envelope version three
+/// and presentation observation schema one retain their independent meanings.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CanvasSurfaceCapabilities {
     /// Admitted selected-image encodings, bounded to three entries by the shared schema.
@@ -84,6 +87,7 @@ pub enum CanvasSurfaceDiscoveryStatus {
 pub struct CanvasSurfaceDiscoveryRequest {
     session: PanelSession,
     request_id: u64,
+    schema: u64,
 }
 
 impl CanvasSurfaceDiscoveryRequest {
@@ -98,6 +102,7 @@ impl CanvasSurfaceDiscoveryRequest {
             session: PanelSession::new(value.session)
                 .map_err(|_| CanvasSurfaceMessageError::Invalid)?,
             request_id: value.request_id,
+            schema: value.schema,
         })
     }
 
@@ -111,11 +116,17 @@ impl CanvasSurfaceDiscoveryRequest {
         self.request_id
     }
 
+    /// Return the requested feature schema; schema one permits only an unsupported reply.
+    pub const fn schema(&self) -> u64 {
+        self.schema
+    }
+
     /// Encode implemented capabilities for this exact discovery request.
     ///
     /// Non-available outcomes require the empty default descriptor. Discovery reports
     /// runtime support and grants no native authority. Message length is measured in
     /// Unicode scalar values, and the complete reply retains the surface byte budget.
+    /// Schema-one requests receive an empty unsupported descriptor and an upgrade diagnostic.
     /// # Errors
     /// Rejects nonempty failure descriptors, oversized lists or text, and JSON failures.
     pub fn reply(
@@ -124,12 +135,24 @@ impl CanvasSurfaceDiscoveryRequest {
         capabilities: &CanvasSurfaceCapabilities,
         message: &str,
     ) -> Result<Vec<u8>, CanvasSurfaceMessageError> {
+        let unsupported = CanvasSurfaceCapabilities::default();
+        let (status, capabilities, message) = if self.schema == 1 {
+            (
+                CanvasSurfaceDiscoveryStatus::Unsupported,
+                &unsupported,
+                "Native surface schema 2 is required. Update SugarCubes and its native host together.",
+            )
+        } else {
+            (status, capabilities, message)
+        };
         if (status != CanvasSurfaceDiscoveryStatus::Available
             && capabilities != &CanvasSurfaceCapabilities::default())
             || message.chars().count() > 512
         {
             return Err(CanvasSurfaceMessageError::Invalid);
         }
+        let mut capabilities = capabilities.to_wire()?;
+        capabilities.schema = self.schema;
         let value = wire::CanvasSurfaceCapabilitiesReply {
             protocol: "sugarcubes.canvas".into(),
             version: 3,
@@ -137,7 +160,7 @@ impl CanvasSurfaceDiscoveryRequest {
             request_id: self.request_id,
             r#type: "surface.capabilities.reply".into(),
             status: status.as_str().into(),
-            capabilities: capabilities.to_wire()?,
+            capabilities,
             message: message.into(),
         };
         if !value.valid() {
@@ -161,7 +184,7 @@ impl CanvasSurfaceCapabilities {
             return Err(CanvasSurfaceMessageError::Invalid);
         }
         let value = wire::CanvasSurfaceCapabilities {
-            schema: 1,
+            schema: 2,
             image_formats: self.image_formats.iter().map(|format| format.as_str().into()).collect(),
             viewport_commands: self
                 .viewport_commands

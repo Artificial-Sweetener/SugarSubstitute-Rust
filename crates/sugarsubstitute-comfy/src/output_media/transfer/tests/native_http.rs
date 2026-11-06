@@ -31,6 +31,8 @@ const PNG: &[u8] = &[
     0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
+// One authored black pixel: GIF89a, a two-color table and LZW clear/index/end codes.
+const GIF: &[u8] = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b";
 const JPEG: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../sugarsubstitute-image-io/src/tests/jpeg/fixtures/444.jpg"
@@ -167,6 +169,8 @@ struct Fixture {
     rejected_port: u16,
     jpeg_port: u16,
     mislabeled_port: u16,
+    digest_port: u16,
+    artifact_port: u16,
     cache: RuntimeCache,
 }
 
@@ -192,6 +196,15 @@ fn setup(
         start_server(&client, &scope, &context, exchange(JPEG_TARGET, "image/jpeg", JPEG), 6)?;
     let (mislabeled_server, mislabeled_port) =
         start_server(&client, &scope, &context, exchange(JPEG_TARGET, "image/png", JPEG), 7)?;
+    let (digest_server, digest_port) =
+        start_server(&client, &scope, &context, exchange(target_path, "image/png", PNG), 9)?;
+    let (artifact_server, artifact_port) = start_server(
+        &client,
+        &scope,
+        &context,
+        exchange("/view?filename=image.gif&subfolder=&type=temp", "image/gif", GIF),
+        11,
+    )?;
     let peer = qualified_peer(identity_port, &context)?;
     assert_eq!(peer.process_id.get(), std::process::id());
     let cache = RuntimeCache::open(&anchor, CachePolicy::default(), &context)?;
@@ -202,12 +215,16 @@ fn setup(
             rejected_server,
             jpeg_server,
             mislabeled_server,
+            digest_server,
+            artifact_server,
         ],
         peer,
         valid_port,
         rejected_port,
         jpeg_port,
         mislabeled_port,
+        digest_port,
+        artifact_port,
         cache,
     })
 }
@@ -256,10 +273,49 @@ fn rejected_at(
 }
 
 fn exercise(context: JobContext, fixture: Fixture) -> Exercise {
-    let Fixture { servers, peer, valid_port, rejected_port, jpeg_port, mislabeled_port, cache } =
-        fixture;
+    let Fixture {
+        servers,
+        peer,
+        valid_port,
+        rejected_port,
+        jpeg_port,
+        mislabeled_port,
+        digest_port,
+        artifact_port,
+        cache,
+    } = fixture;
     let result = (|| -> io::Result<()> {
-        assert_eq!(fetched(&bound(valid_port, "image.png", peer)?, &cache, &context)?, PNG);
+        use sha2::{Digest, Sha256};
+        let expected =
+            OutputArtifactIdentity::new(&format!("{:x}", Sha256::digest(PNG)), PNG.len() as u64)
+                .map_err(io::Error::other)?;
+        let raw = bound(valid_port, "image.png", peer)?;
+        let verified =
+            ComfyOutputTransfer::verified(raw.origin, raw.target, raw.peer, raw.maximum, expected)
+                .map_err(io::Error::other)?;
+        assert_eq!(fetched(&verified, &cache, &context)?, PNG);
+        let raw = bound(digest_port, "image.png", peer)?;
+        let mismatch = OutputArtifactIdentity::new(&"0".repeat(64), PNG.len() as u64)
+            .map_err(io::Error::other)?;
+        let rejected =
+            ComfyOutputTransfer::verified(raw.origin, raw.target, raw.peer, raw.maximum, mismatch)
+                .map_err(io::Error::other)?;
+        rejected_at(&rejected, &cache, &context, "output_body")?;
+        let origin =
+            LoopbackOrigin::parse(&format!("http://127.0.0.1:{artifact_port}"), artifact_port)
+                .map_err(io::Error::other)?;
+        let reference = CanvasFileReference::decode(
+            br#"{"filename":"image.gif","subfolder":"","type":"temp"}"#,
+        )
+        .map_err(io::Error::other)?;
+        let target = ComfyViewTarget::artifact(&reference).map_err(io::Error::other)?;
+        let identity =
+            OutputArtifactIdentity::new(&format!("{:x}", Sha256::digest(GIF)), GIF.len() as u64)
+                .map_err(io::Error::other)?;
+        let generic = ComfyOutputTransfer::verified(origin, target, peer, 1024, identity)
+            .map_err(io::Error::other)?;
+        assert_eq!(fetched(&generic, &cache, &context)?, GIF);
+        super::retained::qualify(&cache, &context, PNG)?;
         let changed = BackendPeer {
             creation_time_100ns: NonZeroU64::new(
                 peer.creation_time_100ns
@@ -309,8 +365,8 @@ fn actual_http_transfer_requires_the_granted_process_birth_and_retires_its_handl
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
             deadline: Some(client.now()?.checked_add(Duration::from_secs(20))?),
-            // Five fixture servers claim 5 MiB each beside the TCP owner workspace.
-            reservation_bytes: 48 * 1024 * 1024,
+            // Seven fixture servers claim 5 MiB each beside the TCP owner workspace.
+            reservation_bytes: 96 * 1024 * 1024,
             replacement: None,
         },
         move |context| setup(context, worker_client, worker_scope, anchor),
@@ -324,7 +380,7 @@ fn actual_http_transfer_requires_the_granted_process_birth_and_retires_its_handl
     let mut task = client.submit_blocking_owned_input(
         &scope,
         JobSpec {
-            id: JobId::new(8)?,
+            id: JobId::new(12)?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
             deadline: Some(client.now()?.checked_add(Duration::from_secs(15))?),

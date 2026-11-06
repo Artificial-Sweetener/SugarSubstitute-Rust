@@ -19,12 +19,13 @@ pub enum NavigationCommand {
     Pan([f64; 2]),
     /// Show an image-relative camera immediately, without interpolation.
     ///
-    /// center is the document point at the viewport center, normalized to the inclusive range
-    /// 0 to 1 of the content on each axis. span is the normalized content distance per
+    /// center is the finite document point at the viewport center relative to the content
+    /// extent; it may lie outside the image on either axis. span is normalized content distance per
     /// physical viewport pixel on each axis, greater than 0 and at most 1e9, so the camera is
-    /// independent of viewport extent. The scale is contained across differing aspect ratios,
-    /// bounded like zoom while keeping Fit reachable, and an exact Fit or one-to-one scale
-    /// becomes that semantic mode; pan bounds apply as for every destination.
+    /// independent of viewport extent. The scale is contained across differing aspect ratios
+    /// and validated by Viewport's numerical safety range, without interactive pan/zoom bounds.
+    /// An actual centered fitted camera is Fit; another camera at that scale remains Custom.
+    /// Nonfinite or unrepresentable transforms fail atomically, retaining the preceding camera.
     Frame {
         /// Normalized content point at the viewport center.
         center: [f64; 2],

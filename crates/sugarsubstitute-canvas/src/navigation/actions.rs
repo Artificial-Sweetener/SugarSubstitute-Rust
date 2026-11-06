@@ -4,6 +4,10 @@
 use super::*;
 
 impl Navigation {
+    /// Apply one physical observation, retaining an inspection until actual camera input occurs.
+    /// Duplicate pointer coordinates during capture do not replace the restored destination.
+    /// # Errors
+    /// Preserves invalid input, camera geometry and monotonic deadline failures.
     pub(super) fn apply(
         &mut self,
         input: NavigationInput,
@@ -26,9 +30,13 @@ impl Navigation {
         if let NavigationInput::Pointer(point) = input {
             if self.dragging {
                 self.transition = None;
-                let mut view = self.view;
-                view.pan_by([point[0] - self.pointer[0], point[1] - self.pointer[1]])?;
-                self.view = self.clamp(view)?;
+                let delta = [point[0] - self.pointer[0], point[1] - self.pointer[1]];
+                if delta != [0.0; 2] {
+                    self.restored_camera = false;
+                    let mut view = self.view;
+                    view.pan_by(delta)?;
+                    self.view = self.clamp(view)?;
+                }
             }
             self.pointer = point;
             return Ok(());

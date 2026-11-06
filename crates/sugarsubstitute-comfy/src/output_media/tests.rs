@@ -4,6 +4,8 @@
 
 use super::*;
 
+mod animation;
+
 fn reference(json: &str) -> Result<CanvasFileReference, Box<dyn Error>> {
     Ok(CanvasFileReference::decode(json.as_bytes())?)
 }
@@ -85,5 +87,51 @@ fn filename_extension_selects_one_closed_encoded_format() -> Result<(), Box<dyn 
     assert_eq!(ComfyOutputFormat::Png.content_type(), "image/png");
     assert_eq!(ComfyOutputFormat::Jpeg.content_type(), "image/jpeg");
     assert_eq!(ComfyOutputFormat::Jpeg.signature(), [0xff, 0xd8, 0xff]);
+    Ok(())
+}
+
+#[test]
+fn output_artifact_identity_accepts_only_canonical_digests_and_positive_bounded_bytes()
+-> Result<(), Box<dyn Error>> {
+    let identity = OutputArtifactIdentity::new(&"ab".repeat(32), 8589934592)?;
+    assert_eq!(identity.digest(), &[0xab; 32]);
+    assert_eq!(identity.bytes(), 8589934592);
+    for digest in ["A".repeat(64), "0".repeat(63), "0".repeat(65), "g".repeat(64)] {
+        assert!(OutputArtifactIdentity::new(&digest, 1).is_err());
+    }
+    for bytes in [0, 8589934593, u64::MAX] {
+        assert!(OutputArtifactIdentity::new(&"0".repeat(64), bytes).is_err());
+    }
+    Ok(())
+}
+#[test]
+fn artifact_targets_admit_browser_media_without_widening_native_image_decoding()
+-> Result<(), Box<dyn Error>> {
+    for (filename, format) in [
+        ("clip.webp", ComfyOutputFormat::Webp),
+        ("clip.gif", ComfyOutputFormat::Gif),
+        ("clip.mp4", ComfyOutputFormat::Mp4),
+        ("clip.webm", ComfyOutputFormat::Webm),
+        ("clip.apng", ComfyOutputFormat::Apng),
+    ] {
+        let file =
+            reference(&format!(r#"{{"filename":"{filename}","subfolder":"","type":"temp"}}"#))?;
+        assert_eq!(ComfyViewTarget::new(&file), Err(ComfyViewError::Format));
+        let target = ComfyViewTarget::artifact(&file)?;
+        assert_eq!(target.format(), format);
+        assert!(target.as_str().ends_with("type=temp"));
+        assert_eq!(ComfyOutputFormat::from_filename(filename), None);
+        assert!(ComfyOutputFormat::from_artifact_filename(filename).is_some());
+    }
+    Ok(())
+}
+#[test]
+fn artifact_filename_permits_ordinary_embedded_dots_without_admitting_traversal()
+-> Result<(), Box<dyn Error>> {
+    let file =
+        reference(r#"{"filename":"result..final.gif","subfolder":"batch","type":"output"}"#)?;
+    assert!(ComfyViewTarget::artifact(&file).is_ok());
+    let traversal = reference(r#"{"filename":"../outside.gif","subfolder":"","type":"output"}"#)?;
+    assert!(ComfyViewTarget::artifact(&traversal).is_err());
     Ok(())
 }

@@ -115,6 +115,7 @@ impl Session {
     /// Fence a cancelled selection even after acquisition finished and pixels await native acceptance.
     /// Retained acknowledged presentation stays owned; workers and originals retire on their existing
     /// observed paths. A new source intent or document preparation may proceed after that settlement.
+    /// The pending inspection is retired with this explicitly cancelled intent.
     ///
     /// # Errors
     /// Rejects exhausted source identities or inconsistent pending CPU/pacing custody.
@@ -142,6 +143,7 @@ impl Session {
         self.selection = next;
         self.pending_first_image = None;
         self.pending_restore = None;
+        self.initial_frame = None;
         self.follow_selection();
         Ok(())
     }

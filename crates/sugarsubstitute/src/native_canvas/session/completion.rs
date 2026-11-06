@@ -107,6 +107,17 @@ impl Session {
                     current.source_revision = scene.source_revision;
                     self.retire(Retired { _scene: Some(scene), ..Default::default() })?;
                 } else {
+                    let frame = self.selection_frame(loading.intent);
+                    if let Err(cause) = selection_camera::validate_selection_camera(
+                        self.document.tools.navigation().viewport().surface(),
+                        Some(&scene.document),
+                        frame,
+                        self.navigation_time(),
+                    ) {
+                        self.retire(Retired { _scene: Some(scene), ..Default::default() })?;
+                        self.fail(cause);
+                        return retirement;
+                    }
                     #[cfg(feature = "native-composition")]
                     if self.input_shown() {
                         self.park_loaded_output(scene, loading.retention, loading.intent)?;
@@ -116,13 +127,17 @@ impl Session {
                     #[cfg(feature = "native-composition")]
                     self.adopt_document_for(loading.retention)?;
                     let now = self.navigation_time();
-                    let frame = self.selection_frame(loading.intent);
-                    selection_camera::start_at_selection_camera(
+                    if let Err(cause) = selection_camera::start_at_selection_camera(
                         &mut self.document.tools,
                         Some(&scene.document),
                         frame,
                         now,
-                    )?;
+                    ) {
+                        self.retire(Retired { _scene: Some(scene), ..Default::default() })?;
+                        self.fail(cause);
+                        return retirement;
+                    }
+                    self.selection_framed(loading.intent);
                     if let Some(previous) = self.document.scene.replace(scene) {
                         self.retire(Retired { _scene: Some(previous), ..Default::default() })?;
                     }
@@ -246,7 +261,7 @@ impl Session {
                         packet.document == key
                             && packet.source_revision == scene.source_revision
                             && packet.source_revision == self.selection
-                            && completed_coverage_is_current(
+                            && coverage::is_useful(
                                 packet.tier,
                                 rendering.coverage,
                                 self.document.tools.navigation().viewport(),
@@ -424,15 +439,6 @@ impl Session {
         }
         Ok(())
     }
-}
-/// Completed detail remains publishable while any of its current document pixels stay visible.
-pub(super) fn completed_coverage_is_current(
-    tier: BackingTier,
-    coverage: BackingCoverage,
-    target: Viewport,
-    document: sugarsubstitute_image_ops::Extent,
-) -> Result<bool, Box<dyn Error>> {
-    Ok(tier == BackingTier::Fallback || coverage.overlaps(target, document)?)
 }
 /// Retain only the first completed, current-source fallback preview preparation measurement.
 pub(super) fn retain_first_fallback_io(

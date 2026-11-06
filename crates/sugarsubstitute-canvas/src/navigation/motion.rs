@@ -54,6 +54,9 @@ impl Navigation {
         self.view = self.clamp(self.view)?;
         Ok(())
     }
+    /// Let an explicit physical camera request take ownership under interactive bounds.
+    /// # Errors
+    /// Preserves coordinate, scale and transition deadline failures.
     pub(super) fn transition_to(
         &mut self,
         zoom: f64,
@@ -62,6 +65,7 @@ impl Navigation {
         cadence: Option<Duration>,
         now: Duration,
     ) -> Result<(), CanvasError> {
+        self.restored_camera = false;
         self.mode = mode;
         let mut target = self.view;
         if mode == ZoomMode::Fit {
