@@ -34,14 +34,14 @@ import {
   supportedModelSuggestions,
   targetModelSelectOptions,
 } from '../controls/CubeModelSelection.js';
-import { createComfyPrimeIconElement } from './ComfyPrimeIcons.js';
 import {
   CubeEditorMetadataDraftStore,
   type CubeEditorMetadataValues,
 } from './CubeEditorMetadataDraftStore.js';
 import { CubeEditorHudPositioner } from './CubeEditorHudPositioner.js';
 import type { CubeEditorWorkspaceChromeAdapter } from './CubeEditorWorkspaceChromeAdapter.js';
-import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
+import { resolveCubeModelTitle } from '../cube/CubeModelTitlePresentation.js';
+import { CubeEditorMetadataHeaderView } from './CubeEditorMetadataHeaderView.js';
 
 const FOCUS_KEY_ATTRIBUTE = 'data-sugarcubes-focus-key';
 
@@ -72,6 +72,7 @@ export class CubeEditorMetadataHud {
     ComfySettingsAutocompleteControl | ComfySettingsSingleSelectControl
   >();
   #root: HTMLElement | null = null;
+  #header: CubeEditorMetadataHeaderView | null = null;
   #activeNode: CubeNode | null = null;
   #editable = false;
   #collapsed = false;
@@ -111,6 +112,7 @@ export class CubeEditorMetadataHud {
     this.#releaseMountedControls();
     this.#root?.remove();
     this.#root = null;
+    this.#header = null;
   }
 
   /** Reconcile the card with the Cube currently active in Comfy's native editor. */
@@ -194,17 +196,22 @@ export class CubeEditorMetadataHud {
     this.#releaseMountedControls();
     root.classList.toggle('is-collapsed', this.#collapsed);
     root.classList.toggle('is-readonly', !this.#editable);
-    const titlebar = this.#document.createElement('header');
-    titlebar.className = 'sugarcubes-cube-editor-metadata__titlebar';
-    const title = this.#document.createElement('strong');
-    title.textContent = deriveDefaultAlias(values) || node.title || 'Untitled Cube';
-    titlebar.append(title);
-    if (isCubeAwaitingFirstSave(requireCubeIdentity(node))) {
-      titlebar.append(createCubeUnsavedIndicator(this.#document));
-    }
-    if (this.#editable) titlebar.append(this.#createSaveButton());
-    titlebar.append(this.#createCollapseButton());
-    root.replaceChildren(titlebar);
+    this.#header = new CubeEditorMetadataHeaderView(this.#document, {
+      title: resolveCubeModelTitle({
+        targetModel: values.targetModel,
+        title: deriveDefaultAlias(values) || node.title || 'Untitled Cube',
+      }),
+      unsaved: isCubeAwaitingFirstSave(requireCubeIdentity(node)),
+      editable: this.#editable,
+      saveEnabled: this.#dirty || isDraftCubeNode(node),
+      collapsed: this.#collapsed,
+      save: () => this.#save(),
+      toggle: () => {
+        this.#collapsed = !this.#collapsed;
+        this.#render();
+      },
+    });
+    root.replaceChildren(this.#header.element);
     if (!this.#collapsed) root.append(this.#createBody(node, values));
     restoreFocusedControl(root, focusedControl);
   }
@@ -434,71 +441,41 @@ export class CubeEditorMetadataHud {
     const root = this.#root;
     const values = this.#values;
     if (!root || !values) return;
-    const title = root.querySelector<HTMLElement>(
-      '.sugarcubes-cube-editor-metadata__titlebar strong',
+    this.#header?.edited(
+      resolveCubeModelTitle({
+        targetModel: values.targetModel,
+        title: deriveDefaultAlias(values),
+      }),
     );
-    if (title) title.textContent = deriveDefaultAlias(values);
-    const save = root.querySelector<HTMLButtonElement>('.sugarcubes-cube-editor-metadata__save');
-    if (save) save.disabled = false;
     root.querySelector('.sugarcubes-cube-editor-metadata__error')?.remove();
   }
 
-  /** Create the save control that remains visible in both expanded and rolled-up states. */
-  #createSaveButton(): HTMLButtonElement {
-    const button = this.#document.createElement('button');
-    button.type = 'button';
-    button.className = 'p-button p-component sugarcubes-cube-editor-metadata__save';
-    button.setAttribute('aria-label', 'Save');
-    button.title = 'Save Cube';
-    button.append(createComfyPrimeIconElement(this.#document, 'save'));
-    button.disabled = !this.#dirty && !isDraftCubeNode(this.#activeNode);
-    button.addEventListener('click', () => {
-      const node = this.#activeNode;
-      const values = this.#values;
-      if (!node || !values) return;
-      button.disabled = true;
-      void this.#actions.save(node, normalizeValues(values)).then(
-        (outcome) => {
-          if (outcome === 'cancelled') {
-            if (node !== this.#activeNode) return;
-            this.#render();
-            return;
-          }
-          this.#drafts.delete(node);
+  /** Save the active draft and reconcile only the still-current metadata session. */
+  #save(): void {
+    const node = this.#activeNode;
+    const values = this.#values;
+    if (!node || !values) return;
+    void this.#actions.save(node, normalizeValues(values)).then(
+      (outcome) => {
+        if (outcome === 'cancelled') {
           if (node !== this.#activeNode) return;
-          this.#values = readValues(node);
-          this.#dirty = false;
-          this.#saveError = '';
           this.#render();
-        },
-        (error: unknown) => {
-          if (node !== this.#activeNode) return;
-          this.#saveError = readErrorMessage(error);
-          this.#retainActiveDraft();
-          this.#render();
-        },
-      );
-    });
-    return button;
-  }
-
-  /** Create the card's explicit roll-up affordance. */
-  #createCollapseButton(): HTMLButtonElement {
-    const button = this.#document.createElement('button');
-    button.type = 'button';
-    button.className = 'p-button p-component sugarcubes-cube-editor-metadata__collapse';
-    const label = this.#collapsed ? 'Expand' : 'Minimize';
-    button.setAttribute('aria-label', label);
-    button.title = label;
-    button.append(
-      createComfyPrimeIconElement(this.#document, this.#collapsed ? 'chevron-down' : 'chevron-up'),
+          return;
+        }
+        this.#drafts.delete(node);
+        if (node !== this.#activeNode) return;
+        this.#values = readValues(node);
+        this.#dirty = false;
+        this.#saveError = '';
+        this.#render();
+      },
+      (error: unknown) => {
+        if (node !== this.#activeNode) return;
+        this.#saveError = readErrorMessage(error);
+        this.#retainActiveDraft();
+        this.#render();
+      },
     );
-    button.setAttribute('aria-expanded', String(!this.#collapsed));
-    button.addEventListener('click', () => {
-      this.#collapsed = !this.#collapsed;
-      this.#render();
-    });
-    return button;
   }
 
   /** Release every mounted control before replacing or removing its DOM host. */

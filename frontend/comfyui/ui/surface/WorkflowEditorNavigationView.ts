@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present editor ancestry through the selected control provider and literal host labels. */
+import type { CubeModelTitlePresentation } from '../cube/CubeModelTitlePresentation.js';
+import { createCubeModelTitleElement } from './CubeModelPillDomRenderer.js';
 import { createButton } from './appearance/ControlFactory.js';
 import { subscribeVisualStyle } from './appearance/VisualStyleBoundary.js';
 import { applyOwnedTheme } from './appearance/ThemeService.js';
@@ -21,6 +23,7 @@ import { applyOwnedTheme } from './appearance/ThemeService.js';
 export interface EditorBreadcrumb {
   readonly label: string;
   readonly current: boolean;
+  readonly modelTitle?: CubeModelTitlePresentation;
   select(): void;
 }
 
@@ -64,7 +67,9 @@ export class WorkflowEditorNavigationView {
       this.#dark = dark;
       applyOwnedTheme(this.element, dark);
     }
-    const signature = JSON.stringify(items.map(({ label, current }) => [label, current]));
+    const signature = JSON.stringify(
+      items.map(({ label, current, modelTitle }) => [label, current, modelTitle]),
+    );
     if (signature === this.#signature) return;
     this.#signature = signature;
     this.#trail.replaceChildren(
@@ -73,7 +78,9 @@ export class WorkflowEditorNavigationView {
         const control = item.current
           ? this.document.createElement('span')
           : createButton(this.document);
-        control.textContent = item.label;
+        if (item.modelTitle)
+          control.append(createCubeModelTitleElement(this.document, item.modelTitle));
+        else control.textContent = item.label;
         control.title = item.label;
         if (item.current) control.setAttribute('aria-current', 'page');
         else {
