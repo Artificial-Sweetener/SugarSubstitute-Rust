@@ -503,8 +503,15 @@ test('derives the alias from the native target-model combo and basename-only nam
   );
   expect(name?.value).toBe('Text to Image');
   expect(
-    document.querySelector('.sugarcubes-cube-editor-metadata__titlebar')?.textContent,
-  ).toContain('SDXL/Text to Image');
+    document.querySelector(
+      '.sugarcubes-cube-editor-metadata__titlebar [data-sugarcubes-model-pill]',
+    )?.textContent,
+  ).toBe('SDXL');
+  expect(
+    document.querySelector(
+      '.sugarcubes-cube-editor-metadata__titlebar .sugarcubes-model-title__name',
+    )?.textContent,
+  ).toBe('Text to Image');
 
   settingsSelect.selectSingle('Target model', 'Flux');
 
@@ -514,8 +521,17 @@ test('derives the alias from the native target-model combo and basename-only nam
     )?.textContent,
   ).toBe('Flux');
   expect(
-    document.querySelector('.sugarcubes-cube-editor-metadata__titlebar')?.textContent,
-  ).toContain('Flux/Text to Image');
+    document.querySelector(
+      '.sugarcubes-cube-editor-metadata__titlebar [data-sugarcubes-model-pill]',
+    )?.textContent,
+  ).toBe('Flux');
+  if (!name) throw new Error('Missing Cube name');
+  name.value = '<img src=x>';
+  name.dispatchEvent(new Event('input'));
+  const title = document.querySelector('.sugarcubes-cube-editor-metadata__titlebar')!;
+  expect(title.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('Flux');
+  expect(title.querySelector('.sugarcubes-model-title__name')?.textContent).toBe('<img src=x>');
+  expect(title.querySelector('img')).toBeNull();
   expect(settingsSelect.autocomplete('Supported models').values).toEqual(['Flux']);
   hud.dispose();
 });

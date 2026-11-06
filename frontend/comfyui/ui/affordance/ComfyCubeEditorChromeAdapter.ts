@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy breadcrumb and inspector chrome at the root of a Cube editor. */
+import { CubeEditorTitlePresenter } from './CubeEditorTitlePresenter.js';
+import { resolveCubeModelTitle } from '../cube/CubeModelTitlePresentation.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 
 import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
@@ -43,6 +45,7 @@ export class ComfyCubeEditorChromeAdapter {
   readonly #handleDoubleClick: (event: MouseEvent) => void;
   readonly #handleKeydown: (event: KeyboardEvent) => void;
   readonly #labelStates = new Map<HTMLElement, EditorLabelState>();
+  readonly #titles = new CubeEditorTitlePresenter();
   readonly #textStates = new Map<HTMLElement, string>();
   readonly #hiddenStates = new Map<HTMLElement, EditorHiddenState>();
   #scheduled = false;
@@ -93,6 +96,7 @@ export class ComfyCubeEditorChromeAdapter {
   refresh(): void {
     this.#scheduled = false;
     this.#forgetDetachedMutations();
+    this.#titles.prune();
     const context = this.#contexts.resolveEditor(this.#currentGraph());
     const contextKey = context
       ? `${String(context.node.id)}:${context.isCubeRoot ? 'root' : 'nested'}`
@@ -107,7 +111,14 @@ export class ComfyCubeEditorChromeAdapter {
       `[data-testid="subgraph-breadcrumb-item-subgraph-${cssEscape(graphId)}"]`,
     );
     const label = breadcrumb?.querySelector<HTMLElement>('.p-breadcrumb-item-label');
-    if (label) this.#setText(label, readCubeTitle(context.node));
+    const title = resolveCubeModelTitle({
+      targetModel: requireCubeIdentity(context.node).target_model,
+      title: readCubeTitle(context.node),
+    });
+    if (label) this.#titles.present(label, title);
+    const menu = this.#activeMenu(graphId);
+    const menuTitle = menu?.querySelector<HTMLElement>('.p-menu-submenu-label');
+    if (menuTitle) this.#titles.present(menuTitle, title);
     if (breadcrumb) {
       this.#label(breadcrumb, `${readCubeTitle(context.node)} Cube actions`);
     }
@@ -124,7 +135,6 @@ export class ComfyCubeEditorChromeAdapter {
     const description = this.#decision('set-description');
     const clear = this.#decision('clear-container');
     const aliases = this.#decision('set-search-aliases');
-    const menu = this.#activeMenu(graphId);
     if (menu) {
       this.#relabelMenuItem(menu, '.pi-pencil', description.label);
       this.#relabelMenuItem(menu, '.pi-trash', clear.label);
@@ -279,6 +289,7 @@ export class ComfyCubeEditorChromeAdapter {
 
   /** Restore host chrome exactly when leaving Cube-owned context. */
   #restoreMutations(): void {
+    this.#titles.clear();
     for (const [element, state] of this.#labelStates) {
       restoreAttribute(element, 'aria-label', state.ariaLabel);
       element.title = state.title;

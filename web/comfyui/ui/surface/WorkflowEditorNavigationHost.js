@@ -1,3 +1,20 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Adapt native editor breadcrumbs without inventing a second navigation stack. */
+import { resolveCubeModelTitle } from '../cube/CubeModelTitlePresentation.js';
 import { workflowEditorNavigationCss } from './WorkflowEditorNavigationStyles.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import { WorkflowEditorNavigationView, } from './WorkflowEditorNavigationView.js';
@@ -72,19 +89,35 @@ export class WorkflowEditorNavigationHost {
         const entries = [
             ...native.querySelectorAll('[data-testid^="subgraph-breadcrumb-item-"]'),
         ];
-        const items = entries.map((entry, index) => ({
-            label: entry.querySelector('.p-breadcrumb-item-label')?.textContent ?? entry.textContent ?? '',
-            current: index === entries.length - 1,
-            select: () => this.#run(() => {
-                if (!entry.isConnected)
-                    throw new Error('Comfy editor path changed; retry navigation.');
-                const MouseEventType = document.defaultView?.MouseEvent;
-                if (!MouseEventType)
-                    throw new Error('Comfy breadcrumb input is unavailable.');
-                // Comfy distinguishes single clicks (detail 1) from double-click rename and synthetic detail 0.
-                entry.dispatchEvent(new MouseEventType('click', { bubbles: true, cancelable: true, detail: 1 }));
-            }),
-        }));
+        const items = entries.map((entry, index) => {
+            const nativeLabel = entry.querySelector('.p-breadcrumb-item-label');
+            const modelTitle = nativeLabel?.querySelector('.sugarcubes-model-title');
+            const label = modelTitle?.getAttribute('aria-label') ??
+                nativeLabel?.textContent ??
+                entry.textContent ??
+                '';
+            return {
+                label,
+                ...(modelTitle
+                    ? {
+                        modelTitle: resolveCubeModelTitle({
+                            targetModel: modelTitle.querySelector('[data-sugarcubes-model-pill]')?.textContent,
+                            title: label,
+                        }),
+                    }
+                    : {}),
+                current: index === entries.length - 1,
+                select: () => this.#run(() => {
+                    if (!entry.isConnected)
+                        throw new Error('Comfy editor path changed; retry navigation.');
+                    const MouseEventType = document.defaultView?.MouseEvent;
+                    if (!MouseEventType)
+                        throw new Error('Comfy breadcrumb input is unavailable.');
+                    // Comfy distinguishes single clicks (detail 1) from double-click rename and synthetic detail 0.
+                    entry.dispatchEvent(new MouseEventType('click', { bubbles: true, cancelable: true, detail: 1 }));
+                }),
+            };
+        });
         this.#view.update(items, this.options.appearance.appearance.dark);
         if (this.#view.element.parentElement !== bar)
             bar.prepend(this.#view.element);
