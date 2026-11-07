@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bridge a native host's settled cameras to the view's shared inspection owner. */
+import { canvasInspectionSlotKey, } from '../domain/CanvasInspection.js';
 /** The schema's inclusive span ceiling: one image per physical pixel at the smallest scale. */
 const MAXIMUM_SPAN = 1_000_000_000;
 /**
@@ -36,13 +37,12 @@ export class NativeCanvasInspection {
      * Choose the camera a final selection restores: Fit for a newer Run, the presented camera
      * across comparison partners, and otherwise the view's saved inspection for that slot.
      */
-    restore(item, compared) {
+    restore(item, compared, slot = itemSelection(item)) {
         const { view, inspections } = this.options;
-        if (!this.options.enabled || inspections.retires(view, item.provenance.runOrder))
+        if (!this.options.enabled ||
+            inspections.retires(view, item.provenance.runOrder, slot.scene?.[0] ?? null))
             return null;
-        const saved = compared && this.#current
-            ? this.#current.inspection
-            : inspections.inspection(view, itemSelection(item));
+        const saved = compared && this.#current ? this.#current.inspection : inspections.inspection(view, slot);
         return canvasSurfaceInspection(saved);
     }
     /** Record the settled camera of the shown final; previews and overview grids keep theirs. */
@@ -62,8 +62,8 @@ export class NativeCanvasInspection {
         if (!inspection)
             return;
         const { view, inspections } = this.options;
-        const selection = itemSelection(item);
-        inspections.presentRun(view, item.provenance.runOrder);
+        const selection = plan.primary?.selection ?? itemSelection(item);
+        inspections.presentRun(view, item.provenance.runOrder, selection.scene?.[0] ?? null);
         inspections.record(view, selection, inspection);
         this.#current = Object.freeze({ selection, inspection });
     }
@@ -78,8 +78,8 @@ export class NativeCanvasInspection {
         this.#linked = linked;
         const shown = plan.primary?.selection;
         const current = shown &&
-            this.#current?.selection.sourceId === shown.sourceId &&
-            this.#current.selection.batchIndex === shown.batchIndex
+            this.#current &&
+            canvasInspectionSlotKey(this.#current.selection) === canvasInspectionSlotKey(shown)
             ? this.#current
             : null;
         const { view, inspections } = this.options;
@@ -118,7 +118,7 @@ export function nativeCanvasViewportInspection(viewport) {
 }
 /**
  * Express a saved inspection in the wire's bounds, or null where the host's Fit is the camera.
- * Centers clamp into the image; a span outside the schema bounds cannot be restored.
+ * Relative centers remain unbounded; a span outside the schema bounds cannot be restored.
  */
 export function canvasSurfaceInspection(inspection) {
     if (!inspection || inspection.mode === 'fit')
@@ -126,10 +126,9 @@ export function canvasSurfaceInspection(inspection) {
     const { centerX, centerY, spanX, spanY } = inspection.region;
     if (![centerX, centerY].every(Number.isFinite) ||
         ![spanX, spanY].every((span) => Number.isFinite(span) && span > 0 && span <= MAXIMUM_SPAN))
-        return null;
-    const clamp = (value) => Math.min(1, Math.max(0, value));
+        throw new RangeError('Saved canvas inspection cannot be represented by the native host.');
     return Object.freeze({
-        center: Object.freeze({ x: clamp(centerX), y: clamp(centerY) }),
+        center: Object.freeze({ x: centerX, y: centerY }),
         span: Object.freeze({ x: spanX, y: spanY }),
     });
 }

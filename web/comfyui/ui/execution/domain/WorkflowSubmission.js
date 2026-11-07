@@ -19,6 +19,7 @@ import { freezeWorkflowSceneMember } from './WorkflowScene.js';
 export function freezeWorkflowSubmissionContext(context) {
     return Object.freeze({
         ...(context.scene ? { scene: freezeWorkflowSceneMember(context.scene) } : {}),
+        ...(context.graphRevision !== undefined ? { graphRevision: context.graphRevision } : {}),
         ...(context.canvasReturns
             ? {
                 canvasReturns: Object.freeze(context.canvasReturns.map((value) => value.kind === 'unavailable'

@@ -33,6 +33,7 @@ import type {
   CanvasViewSnapshot,
   CanvasSourceSummary,
 } from '../../domain/CanvasViewPort.js';
+import type { CanvasOutputActions } from '../../domain/CanvasMedia.js';
 
 /** Project only lightweight status, keeping DOM handles out of the renderer-independent port. */
 export function browserCanvasSnapshot(
@@ -47,6 +48,8 @@ export function browserCanvasSnapshot(
   preparing: boolean,
   mediaActions: OutputMediaProfile | null,
   detail: CanvasResourceStatus | null = null,
+  itemActions: readonly CanvasOutputActions[] = [],
+  photoshopAllAvailable?: boolean,
 ): CanvasViewSnapshot {
   const primary = images.find((slot) => slot.slot === 'primary');
   const secondary = images.find((slot) => slot.slot === 'secondary');
@@ -85,20 +88,30 @@ export function browserCanvasSnapshot(
   if (!frame && b) resource = { ...resource, message: `${resource.message} Showing B.` };
   if (plan.view.mode === 'overview') resource = canvasResourceStatus('empty', '');
   if (preparing) resource = canvasResourceStatus('loading', 'Loading workflow output…');
-  return canvasViewSnapshot(address, plan, catalog, sources, connected, mediaActions, {
-    comparisonAvailable: canvasComparisonAvailable(catalog),
-    preview,
-    resource,
-    secondaryResource,
-    zoom: Object.freeze({
-      mode: camera?.camera.mode ?? 'fit',
-      physicalScale,
-      dimensions: camera?.geometry.image ?? null,
-      secondaryPhysicalScale:
-        b && camera
-          ? canvasSecondaryPhysicalScale(physicalScale, camera.geometry.image, b.dimensions)
-          : null,
-      secondaryDimensions: b?.dimensions ?? null,
-    }),
-  });
+  return canvasViewSnapshot(
+    address,
+    plan,
+    catalog,
+    sources,
+    connected,
+    mediaActions,
+    {
+      ...(photoshopAllAvailable === undefined ? {} : { photoshopAllAvailable }),
+      comparisonAvailable: canvasComparisonAvailable(catalog),
+      preview,
+      resource,
+      secondaryResource,
+      zoom: Object.freeze({
+        mode: camera?.camera.mode ?? 'fit',
+        physicalScale,
+        dimensions: camera?.geometry.image ?? null,
+        secondaryPhysicalScale:
+          b && camera
+            ? canvasSecondaryPhysicalScale(physicalScale, camera.geometry.image, b.dimensions)
+            : null,
+        secondaryDimensions: b?.dimensions ?? null,
+      }),
+    },
+    itemActions,
+  );
 }

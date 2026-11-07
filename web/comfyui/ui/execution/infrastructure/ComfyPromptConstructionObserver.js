@@ -18,15 +18,18 @@ import { isRecord } from '../../types/common.js';
 import { ComfyAsyncMethodObserver } from './ComfyAsyncMethodObserver.js';
 import { decodeComfyPromptSources } from './ComfyPromptSourceDecoder.js';
 /** Observe construction only; preserve result identity and leave every node callback untouched. */
-export function createComfyPromptConstructionObserver(app, sessions, contexts, logger) {
+export function createComfyPromptConstructionObserver(app, sessions, contexts, logger, graphRevision = () => undefined) {
     return new ComfyAsyncMethodObserver({
         host: app,
         method: 'graphToPrompt',
         logger,
-        enter: () => sessions.read().active,
-        succeeded: (session, result) => {
-            if (session && isRecord(result))
-                contexts.associate(result, session, decodeComfyPromptSources(result));
+        enter: () => {
+            const session = sessions.read().active;
+            return session ? { session, graphRevision: graphRevision(session) } : null;
+        },
+        succeeded: (captured, result) => {
+            if (captured && isRecord(result))
+                contexts.associate(result, captured.session, decodeComfyPromptSources(result), captured.graphRevision);
         },
         failed: () => undefined,
         cancelled: () => undefined,

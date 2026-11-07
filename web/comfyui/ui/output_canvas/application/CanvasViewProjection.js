@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project one output view and keep its inspection slots aligned with the catalog. */
 import { canvasDisplayPlan } from './CanvasDisplayPlan.js';
+import { canvasInspectionSlots } from './CanvasInspectionSlots.js';
 /** Reuse the authoritative view, selection and inspection owners across surface implementations. */
 export class CanvasViewProjection {
     view;
@@ -31,9 +32,7 @@ export class CanvasViewProjection {
     /** Preserve inspections for retained finals while pruning slots outside current workflow sources. */
     project(catalog) {
         const plan = canvasDisplayPlan(this.views.read(this.view), catalog, this.selection.items(this.view, catalog), this.selection.preview(this.view, catalog));
-        const sources = new Set(catalog.sources.map((source) => source.id));
-        const retained = catalog.result.outputs.filter((output) => sources.has(output.source.id));
-        const slots = [...catalog.entries, ...retained].flatMap((entry) => entry.items.map((item) => ({ sourceId: entry.source.id, batchIndex: item.batchIndex })));
+        const slots = [...canvasInspectionSlots(catalog)];
         for (const slot of [plan.primary, plan.secondary])
             if (slot?.sourcePresent)
                 slots.push(slot.selection);

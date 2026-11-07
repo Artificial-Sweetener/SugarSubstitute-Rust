@@ -17,7 +17,7 @@
 
 import type { ImageDimensions } from '../../execution/domain/WorkflowOutput.js';
 import type { CanvasResourceStatus } from './CanvasViewPort.js';
-import type { CanvasSelection } from './CanvasViewState.js';
+import type { CanvasInspectionSlot as CanvasSelection } from './CanvasInspection.js';
 
 export interface CanvasImageInput<Payload> {
   readonly key: string;

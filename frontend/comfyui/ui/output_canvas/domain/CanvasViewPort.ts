@@ -21,7 +21,7 @@ import type { CanvasCatalogEntry } from './CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from './CanvasIdentity.js';
 import type { CanvasSelection, CanvasViewState } from './CanvasViewState.js';
 import type { CanvasRevealTarget } from './CanvasReveal.js';
-import type { CanvasMediaTarget } from './CanvasMedia.js';
+import type { CanvasMediaTarget, CanvasOutputActions } from './CanvasMedia.js';
 import type {
   OutputCopyFormat,
   OutputMediaProfile,
@@ -65,6 +65,9 @@ export interface CanvasResourceStatus {
 
 export interface CanvasViewSnapshot {
   readonly schema: 1;
+  /** Optional action capability facts for hosts that distinguish each final's byte backing. */
+  readonly itemActions?: readonly CanvasOutputActions[];
+  readonly photoshopAllAvailable?: boolean;
   readonly address: CanvasAttachmentAddress;
   readonly revision: number;
   readonly view: CanvasViewState;

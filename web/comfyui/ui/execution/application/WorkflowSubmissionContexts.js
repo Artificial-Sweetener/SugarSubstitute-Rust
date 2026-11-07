@@ -19,8 +19,12 @@ import { freezeWorkflowSubmissionContext } from '../domain/WorkflowSubmission.js
 export class WorkflowSubmissionContexts {
     #contexts = new WeakMap();
     /** Bind the original result object without adding fields to persisted workflow data. */
-    associate(prompt, session, sources) {
-        this.#contexts.set(prompt, freezeWorkflowSubmissionContext({ session, sources }));
+    associate(prompt, session, sources, graphRevision) {
+        this.#contexts.set(prompt, freezeWorkflowSubmissionContext({
+            session,
+            sources,
+            ...(graphRevision !== undefined ? { graphRevision } : {}),
+        }));
     }
     /** Give one scene's prompt the original prompt's ownership, qualified by its scene. */
     associateScene(prompt, original, scene) {

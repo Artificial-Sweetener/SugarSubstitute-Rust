@@ -17,7 +17,11 @@
 
 import type { ContextMenuEntry } from '../../../menus/ContextMenu.js';
 import type { WorkflowOutputItem } from '../../../execution/domain/WorkflowOutput.js';
-import { canvasMediaItem, type CanvasMediaTarget } from '../../domain/CanvasMedia.js';
+import {
+  canvasMediaItem,
+  canvasMediaFile,
+  type CanvasMediaTarget,
+} from '../../domain/CanvasMedia.js';
 import type {
   CanvasCapabilities,
   CanvasCommand,
@@ -72,16 +76,33 @@ export function canvasContextActions(
     );
   const comparisonCount = entries.length;
   const unavailable = canvasMediaItem(snapshot, target) === null;
-  action('Copy', { type: 'copy-media', target, format: 'preferred' }, unavailable);
+  const item = targetItem(snapshot, target);
+  const actions = item ? snapshot.itemActions?.find((actions) => actions.itemId === item.id) : null;
+  action(
+    'Copy',
+    { type: 'copy-media', target, format: 'preferred' },
+    unavailable || actions?.copy === false,
+  );
   if (!video && snapshot.mediaActions?.photoshop) {
-    action('Open in Photoshop', { type: 'photoshop-media', target }, unavailable);
-    if (!tile) action('Open All in Photoshop', { type: 'photoshop-all-media' });
+    action(
+      'Open in Photoshop',
+      { type: 'photoshop-media', target },
+      unavailable || actions?.photoshop === false,
+    );
+    if (!tile)
+      action(
+        'Open All in Photoshop',
+        { type: 'photoshop-all-media' },
+        snapshot.photoshopAllAvailable === false,
+      );
   }
   if (snapshot.mediaActions)
     action(
-      snapshot.mediaActions.fileAction === 'reveal' ? 'Reveal in File Manager' : 'Download',
+      (actions?.fileAction ?? snapshot.mediaActions.fileAction) === 'reveal'
+        ? 'Reveal in File Manager'
+        : 'Download',
       { type: 'file-media', target },
-      unavailable,
+      canvasMediaFile(snapshot, target) === null || actions?.file === false,
     );
   if (comparisonCount > 0 && entries.length > comparisonCount)
     entries.splice(comparisonCount, 0, { label: '', separator: true });

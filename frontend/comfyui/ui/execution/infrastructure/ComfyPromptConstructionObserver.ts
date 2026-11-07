@@ -28,15 +28,27 @@ export function createComfyPromptConstructionObserver(
   sessions: WorkflowSessionStore,
   contexts: WorkflowSubmissionContexts,
   logger: Pick<Console, 'error'>,
-): ComfyAsyncMethodObserver<WorkflowSessionContext | null> {
+  graphRevision: (session: WorkflowSessionContext) => number | undefined = () => undefined,
+): ComfyAsyncMethodObserver<{
+  session: WorkflowSessionContext;
+  graphRevision: number | undefined;
+} | null> {
   return new ComfyAsyncMethodObserver({
     host: app,
     method: 'graphToPrompt',
     logger,
-    enter: () => sessions.read().active,
-    succeeded: (session, result) => {
-      if (session && isRecord(result))
-        contexts.associate(result, session, decodeComfyPromptSources(result));
+    enter: () => {
+      const session = sessions.read().active;
+      return session ? { session, graphRevision: graphRevision(session) } : null;
+    },
+    succeeded: (captured, result) => {
+      if (captured && isRecord(result))
+        contexts.associate(
+          result,
+          captured.session,
+          decodeComfyPromptSources(result),
+          captured.graphRevision,
+        );
     },
     failed: () => undefined,
     cancelled: () => undefined,

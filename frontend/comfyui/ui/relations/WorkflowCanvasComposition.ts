@@ -22,6 +22,9 @@ import {
 import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputComposition.js';
 import type { DimensionFieldTarget } from '../editor_actions/application/CanvasDimensionFields.js';
 import type { ContextMenuEntry } from '../menus/ContextMenu.js';
+import { ComfyWorkflowWorkspace } from '../surface/ComfyWorkflowWorkspace.js';
+import type { ComfyCanvasHostOptions } from '../output_canvas/infrastructure/ComfyCanvasHost.js';
+import type { WorkflowMasonryHostLifecycleOptions } from '../surface/masonry/WorkflowMasonryHostLifecycle.js';
 
 /** Bind peer canvas capabilities without teaching the web output viewer about native document editing. */
 export function createWorkflowCanvasComposition(
@@ -40,6 +43,14 @@ export function createWorkflowCanvasComposition(
   scenes: ReturnType<typeof createComfyWorkflowExecutionRuntime>['scenes'];
   workflowFields: ReturnType<typeof createWorkflowFieldHost>;
   canvasInputs: ReturnType<typeof createCanvasInputs>;
+  /** Compose presentation from these same execution, route, settings and page owners. */
+  workspace(
+    canvas: Pick<ComfyCanvasHostOptions, 'saving' | 'report'>,
+    masonry: Omit<
+      WorkflowMasonryHostLifecycleOptions,
+      'app' | 'document' | 'presentation' | 'getContainer'
+    >,
+  ): ComfyWorkflowWorkspace;
   /** Canvas geometry and feature contributions for the width/height field menu. */
   editorDimensions: {
     readonly canvases: typeof workflowExecution.canvases;
@@ -94,6 +105,21 @@ export function createWorkflowCanvasComposition(
     scenes: workflowExecution.scenes,
     workflowFields,
     canvasInputs,
+    workspace: (canvas, masonry) =>
+      new ComfyWorkflowWorkspace(
+        {
+          ...canvas,
+          app: options.app,
+          document: options.document,
+          memory: options.memory,
+          execution: workflowExecution,
+          route: canvasInputs.surfaces.route,
+          settingsRoute: workflowFields.settingsRoute,
+          logger: options.logger,
+        },
+        { ...masonry, app: options.app, document: options.document },
+        options.logger,
+      ),
     editorDimensions: {
       canvases: workflowExecution.canvases,
       sessions: workflowExecution.sessions,

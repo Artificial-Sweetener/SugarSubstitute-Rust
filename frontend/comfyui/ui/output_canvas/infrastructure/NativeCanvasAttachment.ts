@@ -29,6 +29,7 @@ import type { CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
 import { CanvasSourceNavigation } from '../application/CanvasSourceNavigation.js';
 import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
 import { CanvasViewProjection } from '../application/CanvasViewProjection.js';
+import { canvasInspectionSlot } from '../application/CanvasInspectionSlots.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import type { CanvasSourceSummary, CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
@@ -192,6 +193,7 @@ export class NativeCanvasAttachment {
       ...(options.copy ? { copy: options.copy } : {}),
       ...(options.fileAction ? { fileAction: options.fileAction } : {}),
       ...(options.mediaProfile ? { profile: options.mediaProfile } : {}),
+      ...(options.mediaCapabilities ? { capabilities: options.mediaCapabilities } : {}),
       ...(options.photoshop ? { photoshop: options.photoshop } : {}),
       entries: () => this.#catalog.entries,
     });
@@ -267,7 +269,16 @@ export class NativeCanvasAttachment {
         this.#preview = value;
         if (this.#ready) this.#status.changed(true);
       },
-      inspection: (item, compared) => this.#inspection.restore(item, compared),
+      inspection: (item, compared) =>
+        this.#inspection.restore(
+          item,
+          compared,
+          canvasInspectionSlot(
+            { sourceId: item.provenance.sourceId, batchIndex: item.batchIndex },
+            item,
+            this.#catalog,
+          ),
+        ),
       inputShown: () => options.route?.read()?.route === 'input',
       report: (error) => options.report(error, null),
     });
@@ -568,6 +579,8 @@ export class NativeCanvasAttachment {
       sources: this.#sources,
       connected: this.options.connected(),
       mediaActions: this.#media.profile(),
+      itemActions: this.#media.itemActions(),
+      photoshopAllAvailable: this.#media.photoshopAllAvailable(),
       presentation: this.#presentation,
       viewport: this.#viewport,
       preview: this.#preview,

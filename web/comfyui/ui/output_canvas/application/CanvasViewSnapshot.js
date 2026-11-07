@@ -15,9 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Assemble shared output controls from renderer-owned presentation status. */
 /** Preserve the same workflow and selection authority for every presentation backend. */
-export function canvasViewSnapshot(address, plan, catalog, sources, connected, mediaActions, presentation) {
+export function canvasViewSnapshot(address, plan, catalog, sources, connected, mediaActions, presentation, itemActions = []) {
     return Object.freeze({
         schema: 1,
+        itemActions,
+        ...(presentation.photoshopAllAvailable === undefined
+            ? {}
+            : { photoshopAllAvailable: presentation.photoshopAllAvailable }),
         address,
         revision: 0,
         view: plan.view,
@@ -28,7 +32,9 @@ export function canvasViewSnapshot(address, plan, catalog, sources, connected, m
         selected: plan.primary?.item ?? null,
         secondary: plan.secondary?.item ?? null,
         preview: presentation.preview,
-        resource: Object.freeze(presentation.resource),
+        resource: Object.freeze(plan.primary?.item?.unavailable
+            ? canvasResourceStatus('unavailable', plan.primary.item.unavailable.message)
+            : presentation.resource),
         secondaryResource: presentation.secondaryResource
             ? Object.freeze(presentation.secondaryResource)
             : null,
@@ -49,6 +55,8 @@ export function canvasResourceStatus(state, message) {
  * active comparison without a chosen B asks for one. No comparison has no B status.
  */
 export function canvasSecondaryResource(plan, loaded) {
+    if (plan.secondary?.item?.unavailable)
+        return canvasResourceStatus('unavailable', plan.secondary.item.unavailable.message);
     if (plan.secondary && (!plan.secondary.sourcePresent || !plan.secondary.item))
         return canvasResourceStatus('unavailable', 'The selected B image is unavailable.');
     if (plan.secondary?.item && plan.secondary.item.mediaKind !== 'image')

@@ -45,7 +45,6 @@ import { CubeGraphConfigurationLifecycle } from './ui/cube/CubeGraphConfiguratio
 import { CubeExtensionSetupLifecycle } from './ui/cube/CubeExtensionSetupLifecycle.js';
 import { CubeHostFeedback } from './ui/core/CubeHostFeedback.js';
 import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
-import { ComfyWorkflowWorkspace } from './ui/surface/ComfyWorkflowWorkspace.js';
 import { createCubeStackCommands } from './ui/surface/stack/CubeStackCommands.js';
 import { ScrollSurfaceWheelHost } from './ui/surface/ScrollSurfaceWheelHost.js';
 import { ModelPickerHost } from './ui/model_library/ModelPickerHost.js';
@@ -102,28 +101,34 @@ const hostFeedback = new CubeHostFeedback({ toast: ui.toast });
 const cubePreconfiguration = ui.workflowPreconfiguration;
 
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-const { workflowExecution, workflowFields, canvasInputs, editorDimensions, scenes } =
-  createWorkflowCanvasComposition({
-    api,
-    notify: (severity, title, message) => pushToastMessage(severity, title, message),
-    app: appRef,
-    document: documentRef ?? document,
-    getLiteGraph: () => adapter.getLiteGraph?.(),
+const {
+  workflowExecution,
+  workflowFields,
+  canvasInputs,
+  editorDimensions,
+  scenes,
+  workspace: createWorkflowWorkspace,
+} = createWorkflowCanvasComposition({
+  api,
+  notify: (severity, title, message) => pushToastMessage(severity, title, message),
+  app: appRef,
+  document: documentRef ?? document,
+  getLiteGraph: () => adapter.getLiteGraph?.(),
 
-    stackControls: () => workflowWorkspace.masonry.stackControls(),
-    getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
-    getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
-    logger,
-    memory: ui.memory,
-    reportPresentationError: (error) => {
-      logger.error('SugarCubes presentation failed', { error });
-      pushToastMessage('error', 'Interface unavailable', readErrorMessage(error));
-    },
-    reportRelationError: (error) => {
-      logger.error('SugarCubes workflow relations failed', { error });
-      pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
-    },
-  });
+  stackControls: () => workflowWorkspace.masonry.stackControls(),
+  getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
+  getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
+  logger,
+  memory: ui.memory,
+  reportPresentationError: (error) => {
+    logger.error('SugarCubes presentation failed', { error });
+    pushToastMessage('error', 'Interface unavailable', readErrorMessage(error));
+  },
+  reportRelationError: (error) => {
+    logger.error('SugarCubes workflow relations failed', { error });
+    pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
+  },
+});
 
 const { appearance, relations, frame, setupPresentation } = workflowFields;
 
@@ -293,15 +298,9 @@ const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
   logger,
 });
 
-const workflowWorkspace = new ComfyWorkflowWorkspace(
+const workflowWorkspace = createWorkflowWorkspace(
   {
     saving: hostSettingsController.outputSaving,
-    memory: ui.memory,
-    app: appRef,
-    document: documentRef ?? document,
-    execution: workflowExecution,
-    route: canvasInputs.surfaces.route,
-    logger,
     report: (error) => {
       logger.error('SugarCubes output canvas failed', { error });
       pushToastMessage('error', 'Output canvas unavailable', readErrorMessage(error));
@@ -322,8 +321,6 @@ const workflowWorkspace = new ComfyWorkflowWorkspace(
         pushToastMessage('error', 'Cube stack unavailable', readErrorMessage(error));
       },
     }),
-    app: appRef,
-    document: documentRef ?? document,
     getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
     getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
     getGraphChanges: () => cubeRuntimeLifecycle.current()?.graphChanges ?? null,
@@ -340,7 +337,6 @@ const workflowWorkspace = new ComfyWorkflowWorkspace(
       pushToastMessage('error', 'Masonry unavailable', readErrorMessage(error));
     },
   },
-  logger,
 );
 const workflowHistory = new ComfyCanvasHistoryAdapter(
   appRef,

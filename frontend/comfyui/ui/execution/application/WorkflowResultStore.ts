@@ -25,11 +25,13 @@ import type { WorkflowSessionContext } from '../domain/WorkflowSession.js';
 import type { WorkflowRun } from '../domain/WorkflowRun.js';
 import type { WorkflowMediaPayload } from '../domain/WorkflowMedia.js';
 import { combineWorkflowMedia, freezeWorkflowMedia } from '../domain/WorkflowMedia.js';
-import type {
-  WorkflowResultSession,
-  WorkflowSceneResults,
-} from '../domain/WorkflowResultSession.js';
-import type { WorkflowSceneRun } from '../domain/WorkflowScene.js';
+import type { WorkflowResultSession } from '../domain/WorkflowResultSession.js';
+import { WorkflowSceneOutputs } from './WorkflowSceneOutputs.js';
+import {
+  restoredWorkflowOutput,
+  type RetainedWorkflowOutput,
+  type RestoredWorkflowResults,
+} from './WorkflowResultRestoration.js';
 import type { WorkflowPreview } from '../domain/WorkflowPreview.js';
 import type {
   OutputProvenance,
@@ -40,25 +42,12 @@ import type {
 
 export type WorkflowResultChange = 'state' | 'output' | 'restore';
 
-interface RetainedOutput {
-  readonly output: WorkflowOutputSet;
-  readonly payload: WorkflowMediaPayload;
-  readonly delivery: string;
-  /** Keep first-member preview retirement monotonic through metadata-only replacement. */
-  readonly completedPreviewRunOrder: number;
-}
 interface ResultSession {
   snapshot: WorkflowResultSession;
-  readonly outputs: Map<OutputSourceId, RetainedOutput>;
+  readonly outputs: Map<OutputSourceId, RetainedWorkflowOutput>;
   /** The scene run being shown and each scene's latest output per source. */
-  scenes: SceneOutputs | null;
-}
-interface SceneOutputs {
-  readonly run: WorkflowSceneRun;
-  readonly outputs: Map<string, Map<OutputSourceId, WorkflowOutputSet>>;
-  running: string | null;
-  /** The latest queue order among the scene run's prompts. */
-  order: number;
+  readonly scenes: WorkflowSceneOutputs;
+  liveRun: boolean;
 }
 export interface WorkflowResultUpdate {
   readonly run: WorkflowRun;
@@ -99,7 +88,8 @@ export class WorkflowResultStore {
       }
       const session: ResultSession = {
         outputs: new Map(),
-        scenes: null,
+        scenes: new WorkflowSceneOutputs(),
+        liveRun: false,
         snapshot: Object.freeze({
           context: Object.freeze({ ...context }),
           revision: (previous?.snapshot.revision ?? 0) + 1,
@@ -137,6 +127,7 @@ export class WorkflowResultStore {
   updateRun(run: WorkflowRun): void {
     const session = this.#session(run.session);
     if (!session || run.order < session.snapshot.runOrder) return;
+    session.liveRun = true;
     const previous = session.snapshot;
     if (
       run.order === previous.runOrder &&
@@ -146,7 +137,8 @@ export class WorkflowResultStore {
     const terminal =
       run.status === 'complete' || run.status === 'cancelled' || run.status === 'error';
     const preview = terminal || run.order > previous.runOrder ? null : previous.preview;
-    const scenes = this.#followScene(session, run);
+    session.scenes.follow(run, session.snapshot.runOrder);
+    const scenes = session.scenes.snapshot(session.snapshot.scenes);
     if (
       previous.runOrder === run.order &&
       previous.runStatus === run.status &&
@@ -258,6 +250,59 @@ export class WorkflowResultStore {
     return true;
   }
 
+  /** Import exact finals in one restore-only publication, refusing a newer genuine execution handoff. */
+  restoreSession(context: WorkflowSessionContext, imported: RestoredWorkflowResults): boolean {
+    const session = this.#session(context);
+    if (
+      !session ||
+      session.liveRun ||
+      session.snapshot.outputs.some((output) => output.provenance.kind === 'execution')
+    )
+      return false;
+    const retained = imported.outputs.map((output) => restoredWorkflowOutput(context, output));
+    if (new Set(retained.map((output) => output.output.source.id)).size !== retained.length)
+      throw new TypeError('Restored latest source output is ambiguous.');
+    const all = new Map(
+      imported.outputs.flatMap((output) => output.items.map((item) => [item.id, item] as const)),
+    );
+    const scenes = imported.scenes
+      ? Object.freeze({
+          ...imported.scenes,
+          running: null,
+          scenes: Object.freeze(
+            imported.scenes.scenes.map((scene) =>
+              Object.freeze({
+                ...scene,
+                outputs: Object.freeze(
+                  scene.outputs.map((output) => restoredWorkflowOutput(context, output).output),
+                ),
+              }),
+            ),
+          ),
+        })
+      : null;
+    if (all.size !== imported.outputs.reduce((count, output) => count + output.items.length, 0))
+      throw new TypeError('Restored final identity was reused.');
+    session.outputs.clear();
+    for (const output of retained) session.outputs.set(output.output.source.id, output);
+    session.scenes.restore(scenes, imported.runOrder);
+    this.#publish(
+      session,
+      {
+        ...session.snapshot,
+        outputs: Object.freeze(retained.map((output) => output.output)),
+        scenes: session.scenes.snapshot(null),
+        runOrder: imported.runOrder,
+        presentedRunOrder: imported.presentedRunOrder,
+        runStatus: 'idle',
+        preview: null,
+        recovery: Object.freeze({ state: 'idle', message: '' }),
+      },
+      'restore',
+    );
+    return true;
+  }
+
   /** Publish only the current known run's latest source preview; bytes are never retained here. */
   publishPreview(preview: WorkflowPreview): boolean {
     const session = this.#sessions.get(preview.sessionId);
@@ -364,14 +409,7 @@ export class WorkflowResultStore {
       session.outputs.get(source.id)?.completedPreviewRunOrder ?? -1,
     );
     session.outputs.set(source.id, { output, payload, delivery, completedPreviewRunOrder });
-    if (run?.scene) {
-      this.#followScene(session, run);
-      if (session.scenes?.run.id === run.scene.run.id) {
-        const outputs = session.scenes.outputs.get(run.scene.key) ?? new Map();
-        outputs.set(source.id, output);
-        session.scenes.outputs.set(run.scene.key, outputs);
-      }
-    } else if (run && session.scenes && run.order > session.scenes.order) session.scenes = null;
+    session.scenes.retain(run, output, session.snapshot.runOrder);
     const outputs = Object.freeze(
       [...session.outputs.values()]
         .map((retained) => retained.output)
@@ -383,7 +421,7 @@ export class WorkflowResultStore {
       {
         ...session.snapshot,
         outputs,
-        scenes: this.#sceneResults(session),
+        scenes: session.scenes.snapshot(session.snapshot.scenes),
         presentedRunOrder: items.reduce(
           (latest, item) =>
             item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder),
@@ -396,64 +434,6 @@ export class WorkflowResultStore {
       },
       provenance.kind === 'execution' ? 'output' : 'restore',
     );
-  }
-
-  /**
-   * Adopt the scene run of the latest run, keeping each scene's outputs while that run lasts.
-   *
-   * A newer run of another scene run starts an empty scene set; a run without scenes leaves the
-   * current scene set until its outputs replace it. Returns the scene results to publish.
-   */
-  #followScene(session: ResultSession, run: WorkflowRun): WorkflowSceneResults | null {
-    const member = run.scene;
-    if (member && run.order >= session.snapshot.runOrder) {
-      if (session.scenes?.run.id !== member.run.id)
-        session.scenes = {
-          run: member.run,
-          outputs: new Map(),
-          running: member.key,
-          order: run.order,
-        };
-      else {
-        session.scenes.running = member.key;
-        session.scenes.order = Math.max(session.scenes.order, run.order);
-      }
-    }
-    return session.scenes ? this.#sceneResults(session) : null;
-  }
-
-  /** Publish the current scene run in authored order, reusing an unchanged publication. */
-  #sceneResults(session: ResultSession): WorkflowSceneResults | null {
-    const scenes = session.scenes;
-    if (!scenes) return null;
-    const previous = session.snapshot.scenes;
-    const next = scenes.run.scenes.map((scene) =>
-      Object.freeze({
-        ...scene,
-        outputs: Object.freeze(
-          [...(scenes.outputs.get(scene.key)?.values() ?? [])].sort(
-            (a, b) => a.source.order - b.source.order,
-          ),
-        ),
-      }),
-    );
-    if (
-      previous?.id === scenes.run.id &&
-      previous.running === scenes.running &&
-      previous.scenes.length === next.length &&
-      previous.scenes.every(
-        (scene, index) =>
-          scene.key === next[index]?.key &&
-          scene.outputs.length === next[index].outputs.length &&
-          scene.outputs.every((output, at) => output === next[index]?.outputs[at]),
-      )
-    )
-      return previous;
-    return Object.freeze({
-      id: scenes.run.id,
-      running: scenes.running,
-      scenes: Object.freeze(next),
-    });
   }
 
   /** Increment one coherent session snapshot revision before notifying its subscribers. */

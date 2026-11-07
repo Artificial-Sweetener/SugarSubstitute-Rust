@@ -93,5 +93,12 @@ export function createWorkflowFieldHost(options) {
                 report: options.reportPresentationError,
             });
     }
-    return { appearance, relations, frame, canvas, setupPresentation };
+    return {
+        appearance,
+        relations,
+        frame,
+        canvas,
+        settingsRoute: settingsWorkspace.sessionRoute,
+        setupPresentation,
+    };
 }

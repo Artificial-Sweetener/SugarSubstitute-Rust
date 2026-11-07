@@ -17,6 +17,7 @@
 import { createComfyWorkflowExecutionRuntime } from '../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { createWorkflowFieldHost, } from './WorkflowFieldComposition.js';
 import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputComposition.js';
+import { ComfyWorkflowWorkspace } from '../surface/ComfyWorkflowWorkspace.js';
 /** Bind peer canvas capabilities without teaching the web output viewer about native document editing. */
 export function createWorkflowCanvasComposition(options) {
     const workflowExecution = createComfyWorkflowExecutionRuntime({
@@ -64,6 +65,16 @@ export function createWorkflowCanvasComposition(options) {
         scenes: workflowExecution.scenes,
         workflowFields,
         canvasInputs,
+        workspace: (canvas, masonry) => new ComfyWorkflowWorkspace({
+            ...canvas,
+            app: options.app,
+            document: options.document,
+            memory: options.memory,
+            execution: workflowExecution,
+            route: canvasInputs.surfaces.route,
+            settingsRoute: workflowFields.settingsRoute,
+            logger: options.logger,
+        }, { ...masonry, app: options.app, document: options.document }, options.logger),
         editorDimensions: {
             canvases: workflowExecution.canvases,
             sessions: workflowExecution.sessions,

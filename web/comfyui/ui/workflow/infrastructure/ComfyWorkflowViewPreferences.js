@@ -55,6 +55,22 @@ export class ComfyWorkflowViewPreferences {
     get ready() {
         return this.#ready;
     }
+    /** Capture accepted choices for one occurrence without activating its graph or touching storage. */
+    capture(sessionId) {
+        const context = this.sessions.read().open.find((item) => item.sessionId === sessionId);
+        return context
+            ? this.#views.snapshotFor({ id: sessionId, path: context.path || null }, this.defaultCanvas)
+            : null;
+    }
+    /** Bind restored choices to an exact current occurrence before output and masonry projection. */
+    restore(sessionId, snapshot) {
+        const context = this.sessions.read().open.find((item) => item.sessionId === sessionId);
+        if (!context)
+            throw new Error('Restored workflow presentation occurrence is unavailable.');
+        this.#views.restore({ id: context.sessionId, path: context.path || null }, snapshot);
+        this.#synchronize();
+        this.#publish();
+    }
     /** Bind once after host setup and ignore intermediate asynchronous graph-load notifications. */
     setup() {
         if (this.#stop)

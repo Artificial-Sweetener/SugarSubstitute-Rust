@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe visible logical image interests without retaining platform handles or preview bytes. */
 import { canvasBatchGridCatalog } from './CanvasContentSelection.js';
+import { canvasInspectionSlot } from './CanvasInspectionSlots.js';
 /** Qualify lightweight preview admission to one source/run rather than each transport frame. */
 export function canvasPreviewLane(preview) {
     return JSON.stringify([
@@ -32,7 +33,7 @@ export function canvasDisplayPlan(view, catalog, items, preview) {
         throw new TypeError('Canvas display catalog belongs to another view.');
     const slot = (selection, item) => selection
         ? Object.freeze({
-            selection,
+            selection: canvasInspectionSlot(selection, item, catalog),
             item,
             sourcePresent: catalog.entries.some((entry) => entry.source.id === selection.sourceId),
         })

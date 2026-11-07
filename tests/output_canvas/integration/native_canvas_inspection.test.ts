@@ -32,6 +32,7 @@ import type {
 } from '../../../integrations/contracts/CanvasSurface.js';
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
+import { canvasSceneCatalog } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOutputCatalog.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import {
   nativePreviewHost,
@@ -87,10 +88,45 @@ function workspace() {
     let catalog: CanvasCatalogSnapshot = canvasCatalogFixture(1, 0, undefined, key);
     const view = views.create(catalog.sessionId).viewId;
     selection.reconcile(view, catalog);
+    const currentCatalog = (): CanvasCatalogSnapshot =>
+      catalog.result.scenes
+        ? canvasSceneCatalog(
+            catalog.result,
+            catalog.sources,
+            selection.inspection(view),
+            views.read(view).scene,
+          )
+        : catalog;
     return {
       view,
       get catalog() {
-        return catalog;
+        return currentCatalog();
+      },
+      /** Keep the actual result owner's scene membership while navigating the same source/batch. */
+      scenes(): void {
+        const second = canvasCatalogFixture(2, 0, undefined, key);
+        catalog = {
+          ...second,
+          result: {
+            ...second.result,
+            scenes: {
+              id: 'scene-run',
+              running: null,
+              scenes: [
+                { key: 'A', title: 'First', order: 0, outputs: catalog.result.outputs },
+                { key: 'B', title: 'Second', order: 1, outputs: second.result.outputs },
+              ],
+            },
+          },
+        };
+        selection.reconcile(view, currentCatalog());
+        selection.apply(view, currentCatalog(), { type: 'select-scene', scene: 'A' });
+        const primary = currentCatalog().entries[0]?.items[0];
+        if (!primary) throw new Error('Missing scene final.');
+        selection.apply(view, currentCatalog(), {
+          type: 'select',
+          selection: { sourceId: primary.provenance.sourceId, batchIndex: primary.batchIndex },
+        });
       },
       /** Present a later Run's outputs in the same workflow generation. */
       run(order: number): void {
@@ -125,7 +161,7 @@ function workspace() {
           selection,
           frames: new CanvasFrameFixture(),
           inspections,
-          catalog: () => catalog,
+          catalog: currentCatalog,
           accepts: () => views.accepts(address),
           acceptsPreparation: () => false,
           nativeSurface: () => host,
@@ -370,4 +406,35 @@ test('gesture-only cameras are restored per workflow when its tab returns', asyn
   await back.drain();
   expect(back.selections().at(-1)?.inspection).toEqual(restored(zoomed(0.7, 0.4, 5)));
   expect([...a.errors, ...b.errors, ...returned.errors, ...back.errors]).toEqual([]);
+});
+
+test('off-image native gesture centers survive selection handoff without clamping', async () => {
+  const workflow = workspace().workflow('off-image');
+  const f = workflow.mount();
+  await f.drain();
+  const settled = zoomed(-3.25, 2.75, 3);
+  f.gesture(settled);
+  await apply(f, slot(workflow.catalog, 1));
+  expect(f.selections().at(-1)?.inspection).toEqual(restored(settled));
+  expect(f.errors).toEqual([]);
+});
+
+test('native scene changes restore distinct cameras for identical source and batch slots', async () => {
+  const workflow = workspace().workflow('scene-slots');
+  workflow.scenes();
+  const f = workflow.mount();
+  await f.drain(zoomed(0.2, 0.3, 2));
+  await apply(f, { type: 'link', enabled: false });
+  f.gesture(zoomed(0.2, 0.3, 2));
+  await apply(f, { type: 'select-scene', scene: 'B' });
+  await apply(f, slot(workflow.catalog, 0));
+  expect(f.selections().at(-1)).not.toHaveProperty('inspection');
+  f.gesture(zoomed(0.7, 0.8, 4));
+  await apply(f, { type: 'select-scene', scene: 'A' });
+  await apply(f, slot(workflow.catalog, 0));
+  expect(f.selections().at(-1)?.inspection).toEqual(restored(zoomed(0.2, 0.3, 2)));
+  await apply(f, { type: 'select-scene', scene: 'B' });
+  await apply(f, slot(workflow.catalog, 0));
+  expect(f.selections().at(-1)?.inspection).toEqual(restored(zoomed(0.7, 0.8, 4)));
+  expect(f.errors).toEqual([]);
 });

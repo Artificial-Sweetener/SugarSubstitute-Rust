@@ -325,6 +325,16 @@ export class CanvasSelectionController {
     manual(viewId) {
         this.views.update(viewId, (state) => state.follow === 'manual' ? state : { ...state, follow: 'manual' });
     }
+    /** Restore navigation and its observed frontier together so imported finals do not act like a new Run. */
+    restore(viewId, catalog, restored) {
+        const candidate = autoCandidate(canvasOutputCatalog(catalog.result, catalog.sources));
+        this.#cursors.set(viewId, {
+            generation: catalog.generation,
+            frontier: candidate?.frontier ?? null,
+            presentedRun: catalog.result.presentedRunOrder,
+        });
+        this.views.update(viewId, (state) => ({ ...state, ...restored }));
+    }
     /** Keep an explicitly inspected source available independently of automatic Run handoff. */
     inspection(viewId) {
         const state = this.views.read(viewId);

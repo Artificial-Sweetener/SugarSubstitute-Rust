@@ -22,6 +22,7 @@ import {
 } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasInspectionStore.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
 import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
+import { captureCanvasInspection } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasInspection.js';
 import { canvasCameraGeometry } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasCamera.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
@@ -294,3 +295,70 @@ describe('canvas camera attachment orchestration', () => {
     f.inspections.dispose();
   });
 });
+
+test('independent cameras survive switching same-source batches across prompts of one scene run', () => {
+  const f = fixture(true);
+  const source = f.slots[0];
+  if (!source) throw new Error('Missing camera source.');
+  const a = { ...source, scene: ['scene-run', 'A'] as const };
+  const b = { ...source, scene: ['scene-run', 'B'] as const };
+  f.inspections.synchronize(f.view, f.catalog.generation, [a, b]);
+  f.inspections.setLinked(f.view, false, null);
+  f.camera.show(a, f.geometry, 1, null);
+  f.camera.native();
+  const first = f.camera.read()?.camera;
+  f.camera.show(b, f.geometry, 2, null);
+  expect(f.camera.read()?.camera.mode).toBe('fit');
+  f.camera.zoom(3);
+  const second = f.camera.read()?.camera;
+  f.camera.show(a, f.geometry, 1, null);
+  expect(f.camera.read()?.camera).toEqual(first);
+  f.camera.show(b, f.geometry, 2, null);
+  expect(f.camera.read()?.camera).toEqual(second);
+  expect(f.inspections.snapshot(f.view).individual).toHaveLength(2);
+  f.camera.dispose();
+});
+
+test.each([
+  ['custom', 32],
+  ['native', 1],
+] as const)(
+  'restores an off-image %s camera exactly before presentation and after density resize',
+  (mode, physicalScale) => {
+    const f = fixture(true);
+    const slot = f.slots[0];
+    if (!slot) throw new Error('Missing saved camera slot.');
+    const saved = {
+      mode,
+      region: {
+        centerX: -3.25,
+        centerY: 2.75,
+        spanX: 1 / (f.geometry.image.width * physicalScale),
+        spanY: 1 / (f.geometry.image.height * physicalScale),
+      },
+    };
+    f.inspections.presentRun(f.view, 1);
+    f.inspections.record(f.view, slot, saved);
+    f.camera.show(slot, f.geometry, 1, null);
+    const first = f.camera.read();
+    if (!first) throw new Error('Saved camera was not presented.');
+    expect(first.camera.mode).toBe(mode);
+    expect(first.camera.scale * f.geometry.density).toBeCloseTo(physicalScale);
+    const displayed = captureCanvasInspection(first.camera, first.geometry);
+    expect(displayed.region.centerX).toBeCloseTo(saved.region.centerX);
+    expect(displayed.region.centerY).toBeCloseTo(saved.region.centerY);
+    const resized = canvasCameraGeometry(f.geometry.image, { width: 1200, height: 700 }, 2);
+    if (!resized) throw new Error('Missing resized camera geometry.');
+    f.camera.show(slot, resized, 1, null);
+    const after = f.camera.read();
+    if (!after) throw new Error('Resized camera was not presented.');
+    expect(after.camera.mode).toBe(mode);
+    expect(after.camera.scale * resized.density).toBeCloseTo(physicalScale);
+    const captured = captureCanvasInspection(after.camera, resized);
+    expect(captured.region.centerX).toBeCloseTo(saved.region.centerX);
+    expect(captured.region.centerY).toBeCloseTo(saved.region.centerY);
+    expect(captured.region.spanX).toBeCloseTo(saved.region.spanX, 12);
+    expect(captured.region.spanY).toBeCloseTo(saved.region.spanY, 12);
+    f.camera.dispose();
+  },
+);

@@ -26,16 +26,22 @@ import { ComfyWorkflowViewPreferences } from '../workflow/infrastructure/ComfyWo
 import { OUTPUT_CANVAS_VISIBLE_SETTING } from '../output_canvas/infrastructure/ComfyCanvasPreferences.js';
 import { WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH } from './masonry/WorkflowMasonryLayout.js';
 import { isRecord } from '../types/common.js';
+import { ComfyDesktopSessionHost } from '../workflow/infrastructure/ComfyDesktopSessionHost.js';
+import type { SettingsWorkspaceRoute } from '../settings/SettingsWorkspaceRoute.js';
 
 /** Keep presentation lifecycle registration outside the host extension entry point. */
 export class ComfyWorkflowWorkspace {
   readonly canvas: ComfyCanvasHost;
   readonly masonry: WorkflowMasonryHostLifecycle;
   readonly #presentation: ComfyWorkflowViewPreferences;
+  readonly #desktop: ComfyDesktopSessionHost | null;
 
   /** Inject existing runtime and surface collaborators without reproducing their policies. */
   constructor(
-    private readonly options: Omit<ComfyCanvasHostOptions, 'presentation' | 'defaultEditorWidth'>,
+    private readonly options: Omit<
+      ComfyCanvasHostOptions,
+      'presentation' | 'defaultEditorWidth'
+    > & { readonly settingsRoute?: SettingsWorkspaceRoute },
     masonry: Omit<WorkflowMasonryHostLifecycleOptions, 'presentation' | 'getContainer'>,
     logger: Pick<Console, 'warn'>,
   ) {
@@ -65,6 +71,18 @@ export class ComfyWorkflowWorkspace {
       presentation: this.#presentation,
       getContainer: () => this.canvas.content,
     });
+    const window = options.document.defaultView;
+    this.#desktop = window
+      ? new ComfyDesktopSessionHost(window, {
+          app: options.app,
+          execution: options.execution,
+          canvas: this.canvas.sessionSnapshots,
+          presentation: this.#presentation,
+          ...(options.route ? { route: options.route } : {}),
+          report: options.report,
+          ...(options.settingsRoute ? { settingsRoute: options.settingsRoute } : {}),
+        })
+      : null;
   }
 
   /** Register view restoration before consumers react to workflow activation. */
@@ -72,12 +90,18 @@ export class ComfyWorkflowWorkspace {
     this.#presentation.setup();
     this.canvas.setup();
     this.masonry.setup();
+    try {
+      this.#desktop?.setup();
+    } catch (error: unknown) {
+      this.options.report(error);
+    }
     this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
   }
 
   /** Release lightweight session state alongside the presentation surfaces at window teardown. */
   readonly #pagehide = (): void => {
     this.options.document.defaultView?.removeEventListener('pagehide', this.#pagehide);
+    this.#desktop?.dispose();
     this.#presentation.dispose();
     this.canvas.dispose();
     this.masonry.dispose();

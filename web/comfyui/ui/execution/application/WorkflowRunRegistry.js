@@ -30,6 +30,12 @@ export class WorkflowRunRegistry {
     latestOrder(session) {
         return this.#orders.get(session) ?? 0;
     }
+    /** Resume queue ordering above restored presentation without recreating a job or replaying execution. */
+    restoreOrder(session, order) {
+        if (!Number.isSafeInteger(order) || order < 0)
+            throw new RangeError('Restored workflow submission order is invalid.');
+        this.#orders.set(session, Math.max(this.#orders.get(session) ?? 0, order));
+    }
     /** Register a validated queue acceptance once while preserving its captured submission order. */
     accept(context, promptId) {
         const existing = this.#runs.get(promptId);

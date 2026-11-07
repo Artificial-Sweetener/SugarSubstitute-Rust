@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Resolve full-fidelity workflow files through the same-origin Comfy media boundary. */
 
+import { parseSessionJson, isSessionBinding } from '../../core/embedded/SessionRuntime.js';
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 
 export interface CanvasMediaWindow {
@@ -28,6 +29,28 @@ export interface CanvasMediaWindow {
 
 /** Preserve exact file identity and stable revision caching without requesting lossy preview conversion. */
 export function comfyCanvasMediaUrl(origin: string, item: WorkflowOutputItem): string {
+  if (item.presentationUrl) {
+    const retained = new URL(item.presentationUrl, origin);
+    const encoded = retained.searchParams.get('binding');
+    const binding = encoded ? parseSessionJson(encoded, 4096) : null;
+    if (
+      retained.origin !== origin ||
+      !['http:', 'https:'].includes(retained.protocol) ||
+      retained.href.length > 4096 ||
+      [...retained.searchParams.keys()].length !== 1 ||
+      retained.searchParams.getAll('binding').length !== 1 ||
+      !isSessionBinding(binding) ||
+      binding.runtimeSession !== item.provenance.sessionId ||
+      binding.generation !== item.provenance.generation ||
+      retained.hash ||
+      !retained.pathname.endsWith(`/${item.id}`) ||
+      !/^\/__sugarsubstitute\/session-media\/v1\/[0-9a-f]{32}\/[0-9a-f-]{36}$/.test(
+        retained.pathname,
+      )
+    )
+      throw new TypeError('Retained canvas media escaped its admitted current-page origin.');
+    return retained.href;
+  }
   const url = new URL('/view', origin);
   if (!['http:', 'https:'].includes(url.protocol))
     throw new TypeError('Canvas media origin is unsupported.');

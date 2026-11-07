@@ -17,7 +17,7 @@
 import { canvasComparisonAvailable } from '../../application/CanvasComparisonSelection.js';
 import { canvasResourceStatus, canvasSecondaryPhysicalScale, canvasSecondaryResource, canvasViewSnapshot, } from '../../application/CanvasViewSnapshot.js';
 /** Project only lightweight status, keeping DOM handles out of the renderer-independent port. */
-export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources, preparing, mediaActions, detail = null) {
+export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources, preparing, mediaActions, detail = null, itemActions = [], photoshopAllAvailable) {
     const primary = images.find((slot) => slot.slot === 'primary');
     const secondary = images.find((slot) => slot.slot === 'secondary');
     const frame = primary?.frame;
@@ -54,6 +54,7 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
     if (preparing)
         resource = canvasResourceStatus('loading', 'Loading workflow output…');
     return canvasViewSnapshot(address, plan, catalog, sources, connected, mediaActions, {
+        ...(photoshopAllAvailable === undefined ? {} : { photoshopAllAvailable }),
         comparisonAvailable: canvasComparisonAvailable(catalog),
         preview,
         resource,
@@ -67,5 +68,5 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
                 : null,
             secondaryDimensions: b?.dimensions ?? null,
         }),
-    });
+    }, itemActions);
 }

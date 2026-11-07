@@ -14,11 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define workflow-qualified identities independently of host graph objects. */
+import { sessionUuid } from '../../core/embedded/SessionRuntime.js';
 
 export type WorkflowSessionId = `workflow:${string}`;
 export type PromptId = `prompt:${string}`;
 export type OutputSourceId = `source:${string}`;
-export type OutputResultId = `result:${string}`;
+export type DesktopOutputResultId = `${string}-${string}-${string}-${string}-${string}`;
+export type OutputResultId = `result:${string}` | DesktopOutputResultId;
 
 /** Construct an in-memory workflow identity from an adapter-generated key. */
 export function workflowSessionId(key: string): WorkflowSessionId {
@@ -55,4 +57,11 @@ export function snapshotOutputResultId(
   batchIndex: number,
 ): OutputResultId {
   return `result:${JSON.stringify(['snapshot', sessionId, snapshotId, sourceId, revision, batchIndex])}`;
+}
+
+/** Preserve the validated durable artifact UUID through native selection and retained-media lookup. */
+export function desktopOutputResultId(key: string): DesktopOutputResultId {
+  if (!sessionUuid(key)) throw new TypeError('Restored desktop output identity is invalid.');
+  // The portable UUID validator establishes the template shape at this string boundary.
+  return key as DesktopOutputResultId;
 }

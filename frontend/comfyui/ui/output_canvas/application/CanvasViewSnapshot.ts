@@ -26,9 +26,11 @@ import type {
   CanvasZoomStatus,
 } from '../domain/CanvasViewPort.js';
 import type { CanvasDisplayPlan } from './CanvasDisplayPlan.js';
+import type { CanvasOutputActions } from '../domain/CanvasMedia.js';
 
 /** Project presenter-specific facts without borrowing its image handles. */
 export interface CanvasSnapshotPresentation {
+  readonly photoshopAllAvailable?: boolean;
   readonly comparisonAvailable: boolean;
   readonly preview: boolean;
   readonly resource: CanvasResourceStatus;
@@ -45,9 +47,14 @@ export function canvasViewSnapshot(
   connected: boolean,
   mediaActions: OutputMediaProfile | null,
   presentation: CanvasSnapshotPresentation,
+  itemActions: readonly CanvasOutputActions[] = [],
 ): CanvasViewSnapshot {
   return Object.freeze({
     schema: 1,
+    itemActions,
+    ...(presentation.photoshopAllAvailable === undefined
+      ? {}
+      : { photoshopAllAvailable: presentation.photoshopAllAvailable }),
     address,
     revision: 0,
     view: plan.view,
@@ -58,7 +65,11 @@ export function canvasViewSnapshot(
     selected: plan.primary?.item ?? null,
     secondary: plan.secondary?.item ?? null,
     preview: presentation.preview,
-    resource: Object.freeze(presentation.resource),
+    resource: Object.freeze(
+      plan.primary?.item?.unavailable
+        ? canvasResourceStatus('unavailable', plan.primary.item.unavailable.message)
+        : presentation.resource,
+    ),
     secondaryResource: presentation.secondaryResource
       ? Object.freeze(presentation.secondaryResource)
       : null,
@@ -87,6 +98,8 @@ export function canvasSecondaryResource(
   plan: CanvasDisplayPlan,
   loaded: CanvasResourceStatus | undefined,
 ): CanvasResourceStatus | null {
+  if (plan.secondary?.item?.unavailable)
+    return canvasResourceStatus('unavailable', plan.secondary.item.unavailable.message);
   if (plan.secondary && (!plan.secondary.sourcePresent || !plan.secondary.item))
     return canvasResourceStatus('unavailable', 'The selected B image is unavailable.');
   if (plan.secondary?.item && plan.secondary.item.mediaKind !== 'image')

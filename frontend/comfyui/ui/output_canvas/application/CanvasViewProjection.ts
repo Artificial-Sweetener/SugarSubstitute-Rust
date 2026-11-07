@@ -20,6 +20,7 @@ import type { CanvasViewId } from '../domain/CanvasIdentity.js';
 import { canvasDisplayPlan, type CanvasDisplayPlan } from './CanvasDisplayPlan.js';
 import type { CanvasInspectionStore } from './CanvasInspectionStore.js';
 import type { CanvasSelectionController } from './CanvasSelectionController.js';
+import { canvasInspectionSlots } from './CanvasInspectionSlots.js';
 import type { CanvasViewRegistry } from './CanvasViewRegistry.js';
 
 /** Reuse the authoritative view, selection and inspection owners across surface implementations. */
@@ -40,11 +41,7 @@ export class CanvasViewProjection {
       this.selection.items(this.view, catalog),
       this.selection.preview(this.view, catalog),
     );
-    const sources = new Set(catalog.sources.map((source) => source.id));
-    const retained = catalog.result.outputs.filter((output) => sources.has(output.source.id));
-    const slots = [...catalog.entries, ...retained].flatMap((entry) =>
-      entry.items.map((item) => ({ sourceId: entry.source.id, batchIndex: item.batchIndex })),
-    );
+    const slots = [...canvasInspectionSlots(catalog)];
     for (const slot of [plan.primary, plan.secondary])
       if (slot?.sourcePresent) slots.push(slot.selection);
     this.inspections.synchronize(this.view, catalog.generation, slots);

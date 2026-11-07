@@ -26,6 +26,7 @@ export class ComfyWorkflowSessionAdapter {
     #contents = new WeakMap();
     #unsubscribe = null;
     #active = false;
+    #lastLoadSequence = 0;
     /** Validate the host's public store without importing private Pinia implementations. */
     constructor(options) {
         this.options = options;
@@ -143,6 +144,23 @@ export class ComfyWorkflowSessionAdapter {
         const tracker = workflow && isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
         return tracker?.activeState;
     }
+    /** Expose one explicitly bound workflow only to the adjacent supported-host document adapter. */
+    readHostWorkflow(sessionId) {
+        return this.#open.get(sessionId) ?? null;
+    }
+    /** Resolve the identity already assigned by this owner after a public materialization operation. */
+    identifyHostWorkflow(workflow) {
+        if (!isRecord(workflow))
+            return null;
+        const direct = this.#identities.get(workflow);
+        if (direct)
+            return direct;
+        return [...this.#open].find(([, candidate]) => sameWorkflow(candidate, workflow))?.[0] ?? null;
+    }
+    /** Expose the observed public-load frontier so materialization rejects competing or nested loads. */
+    readLoadSequence() {
+        return this.#lastLoadSequence;
+    }
     /**
      * Record the workflow a starting graph load configures: the host's target workflow object, or
      * none when the load creates a new workflow (an opened file) that the host commits only after
@@ -150,6 +168,7 @@ export class ComfyWorkflowSessionAdapter {
      * workflow the store still reports as active.
      */
     beginLoad(sequence, args) {
+        this.#lastLoadSequence = sequence;
         const target = args[3];
         this.#loads.set(sequence, isRecord(target) ? target : null);
     }

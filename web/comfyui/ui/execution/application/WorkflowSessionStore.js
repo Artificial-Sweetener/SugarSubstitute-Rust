@@ -48,6 +48,9 @@ export class WorkflowSessionStore {
         const current = new Set(bindings.map((binding) => binding.sessionId));
         const closed = [];
         let changed = this.#selected !== selected;
+        const previousOrder = [...this.#sessions.keys()];
+        if (bindings.some((binding, index) => binding.sessionId !== previousOrder[index]))
+            changed = true;
         for (const id of this.#sessions.keys()) {
             if (current.has(id))
                 continue;
@@ -62,6 +65,13 @@ export class WorkflowSessionStore {
             this.#sessions.set(binding.sessionId, Object.freeze({ ...binding, generation: previous?.generation ?? 0 }));
             changed = true;
         }
+        const ordered = bindings.flatMap((binding) => {
+            const context = this.#sessions.get(binding.sessionId);
+            return context ? [context] : [];
+        });
+        this.#sessions.clear();
+        for (const context of ordered)
+            this.#sessions.set(context.sessionId, context);
         this.#selected = selected && current.has(selected) ? selected : null;
         if (changed)
             this.#publish();

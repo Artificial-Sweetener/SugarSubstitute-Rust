@@ -24,6 +24,7 @@ import { CanvasSelectionController } from '../application/CanvasSelectionControl
 import { CanvasInspectionStore } from '../application/CanvasInspectionStore.js';
 import { WebCanvasAdapter } from '../application/WebCanvasAdapter.js';
 import { CanvasSessionCoordinator } from '../application/CanvasSessionCoordinator.js';
+import { CanvasSessionSnapshots } from '../application/CanvasSessionSnapshots.js';
 import { windowId } from '../domain/CanvasIdentity.js';
 import { isRecord } from '../../types/common.js';
 import { NativeCanvasAttachment } from './NativeCanvasAttachment.js';
@@ -39,10 +40,14 @@ import { ComfyImageRevealHost } from './ComfyImageRevealHost.js';
 import { BrowserOutputTransfer } from '../../output_saving/BrowserOutputTransfer.js';
 import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard.js';
 import { BrowserImageDownload } from '../../output_saving/BrowserImageDownload.js';
+import { BrowserImageRendition } from '../../output_saving/BrowserImageRendition.js';
+import { canvasOutputTransfers } from './CanvasOutputTransfers.js';
 import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
 /** Keep source, selection, resource, frame, settings, and execution ownership explicit in a thin composition. */
 export class ComfyCanvasHost {
     options;
+    /** Share the current view and camera owners with the desktop session composition. */
+    sessionSnapshots;
     #sources;
     #adapter;
     #coordinator;
@@ -65,7 +70,7 @@ export class ComfyCanvasHost {
         const window = document.defaultView;
         if (!window)
             throw new Error('Output canvas window is unavailable.');
-        const transfers = (this.#transfers = new BrowserOutputTransfer(document.location.origin, (input, init) => window.fetch(input, init), new BrowserImageClipboard(document), new BrowserImageDownload(document)));
+        const transfers = (this.#transfers = new BrowserOutputTransfer(document.location.origin, (input, init) => window.fetch(input, init), new BrowserImageClipboard(document), new BrowserImageDownload(document), new BrowserImageRendition(document)));
         const nextKey = () => [...window.crypto.getRandomValues(new Uint32Array(4))]
             .map((word) => word.toString(16).padStart(8, '0'))
             .join('');
@@ -103,6 +108,7 @@ export class ComfyCanvasHost {
             receive: (frame) => this.#primary.receive(frame.preview, frame.bytes),
         });
         this.#coordinator = new CanvasSessionCoordinator(execution.sessions, this.#adapter, inventory, views, selection, this.#sources);
+        this.sessionSnapshots = new CanvasSessionSnapshots(this.#coordinator, views, selection, inspections);
         this.#stops.push(this.#coordinator.onRetired((view) => {
             inspections.remove(view);
             this.#browser?.remove(view);
@@ -151,11 +157,7 @@ export class ComfyCanvasHost {
                     accepts,
                     catalog: () => this.#coordinator.catalog(address.viewId),
                     connected: () => execution.connected,
-                    copy: (item, accepts, format, signal) => transfers.copy(item.file, accepts, format, signal),
-                    fileAction: (item, accepts, signal) => transfers.fileAction(item.file, accepts, signal, item.mediaKind === 'image' ? 'image' : 'media'),
-                    mediaProfile: () => transfers.profile(),
-                    photoshop: (document, layers, accepts, signal) => transfers.photoshop(document, layers.map((layer) => ({ file: layer.item.file, name: layer.name })), accepts, signal),
-                    drag: (item, signal) => transfers.drag(item.file, signal),
+                    ...canvasOutputTransfers(transfers),
                     transferChanged: (listener) => {
                         const profile = transfers.subscribe(listener);
                         const settings = saving?.configuration.subscribe(listener);
@@ -289,6 +291,7 @@ export class ComfyCanvasHost {
         this.#saving?.dispose();
         this.#workspace.dispose();
         this.#toolbar.dispose();
+        this.sessionSnapshots.dispose();
         this.#coordinator.dispose();
         for (const stop of this.#stops.splice(0))
             stop();

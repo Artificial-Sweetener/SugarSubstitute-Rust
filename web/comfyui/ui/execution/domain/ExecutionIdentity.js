@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define workflow-qualified identities independently of host graph objects. */
+import { sessionUuid } from '../../core/embedded/SessionRuntime.js';
 /** Construct an in-memory workflow identity from an adapter-generated key. */
 export function workflowSessionId(key) {
     return `workflow:${key}`;
@@ -33,4 +34,11 @@ export function outputResultId(session, prompt, source, revision, batch) {
 /** Identify host-owned restoration without inventing a backend job identity. */
 export function snapshotOutputResultId(sessionId, snapshotId, sourceId, revision, batchIndex) {
     return `result:${JSON.stringify(['snapshot', sessionId, snapshotId, sourceId, revision, batchIndex])}`;
+}
+/** Preserve the validated durable artifact UUID through native selection and retained-media lookup. */
+export function desktopOutputResultId(key) {
+    if (!sessionUuid(key))
+        throw new TypeError('Restored desktop output identity is invalid.');
+    // The portable UUID validator establishes the template shape at this string boundary.
+    return key;
 }

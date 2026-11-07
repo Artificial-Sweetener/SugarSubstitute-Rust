@@ -93,14 +93,14 @@ test('translates a settled host camera into the shared inspection and back to th
   expect(canvasSurfaceInspection({ mode: 'fit', region })).toBeNull();
   expect(
     canvasSurfaceInspection({ mode: 'native', region: { ...region, centerX: -0.2, centerY: 1.4 } }),
-  ).toEqual({ center: { x: 0, y: 1 }, span: { x: 0.001, y: 0.001 } });
+  ).toEqual({ center: { x: -0.2, y: 1.4 }, span: { x: 0.001, y: 0.001 } });
   for (const span of [0, -1, 1_000_000_001, Number.NaN, Number.POSITIVE_INFINITY])
-    expect(
+    expect(() =>
       canvasSurfaceInspection({ mode: 'custom', region: { ...region, spanY: span } }),
-    ).toBeNull();
-  expect(
+    ).toThrow('cannot be represented');
+  expect(() =>
     canvasSurfaceInspection({ mode: 'custom', region: { ...region, centerX: Number.NaN } }),
-  ).toBeNull();
+  ).toThrow('cannot be represented');
 });
 
 test('previews, overview grids and another image size never replace the saved camera', () => {

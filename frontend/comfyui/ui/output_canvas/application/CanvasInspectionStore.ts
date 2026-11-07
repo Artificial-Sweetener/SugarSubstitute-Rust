@@ -16,7 +16,10 @@
 /** Own linked and independent lightweight inspection state within each canvas view. */
 
 import type { CanvasViewId } from '../domain/CanvasIdentity.js';
-import type { CanvasSelection } from '../domain/CanvasViewState.js';
+import {
+  canvasInspectionSlotKey as selectionKey,
+  type CanvasInspectionSlot as CanvasSelection,
+} from '../domain/CanvasInspection.js';
 import {
   captureCanvasInspection,
   projectCanvasInspection,
@@ -31,9 +34,10 @@ import {
 interface ViewInspection {
   generation: number;
   presentedRun: number | null;
+  presentedGroup: string | null;
   linked: boolean;
   shared: CanvasInspection | null;
-  readonly individual: Map<string, CanvasInspection>;
+  readonly individual: Map<string, CanvasInspectionSample>;
 }
 
 export interface CanvasInspectionTarget {
@@ -49,9 +53,18 @@ export interface CanvasInspectionSample {
   readonly inspection: CanvasInspection;
 }
 
+export interface CanvasInspectionSnapshot {
+  readonly linked: boolean;
+  readonly shared: CanvasInspection | null;
+  readonly individual: readonly CanvasInspectionSample[];
+  readonly presentedRun: number | null;
+  readonly presentedGroup?: string | null;
+}
+
 /** Bound independent camera references to current workflow slots rather than accumulating output history. */
 export class CanvasInspectionStore {
   readonly #views = new Map<CanvasViewId, ViewInspection>();
+  readonly #listeners = new Set<(view: CanvasViewId) => void>();
 
   /** Reset replacement generations and prune slots removed from the current catalog. */
   synchronize(view: CanvasViewId, generation: number, slots: readonly CanvasSelection[]): void {
@@ -60,6 +73,7 @@ export class CanvasInspectionStore {
       record = {
         generation,
         presentedRun: null,
+        presentedGroup: null,
         linked: true,
         shared: null,
         individual: new Map(),
@@ -72,19 +86,28 @@ export class CanvasInspectionStore {
   }
 
   /** Retire previous-Run cameras only when a newer Run's pixels are actually presented. */
-  presentRun(view: CanvasViewId, runOrder: number): boolean {
+  presentRun(view: CanvasViewId, runOrder: number, group: string | null = null): boolean {
     const record = this.#require(view);
-    if (!this.retires(view, runOrder)) return false;
+    if (!this.retires(view, runOrder, group)) {
+      if (record.presentedRun !== null && runOrder > record.presentedRun)
+        record.presentedRun = runOrder;
+      return false;
+    }
     record.presentedRun = runOrder;
+    record.presentedGroup = group;
     record.shared = null;
     record.individual.clear();
+    this.#notify(view);
     return true;
   }
 
   /** Report whether presenting this Run's final would retire saved cameras, without retiring them. */
-  retires(view: CanvasViewId, runOrder: number): boolean {
+  retires(view: CanvasViewId, runOrder: number, group: string | null = null): boolean {
     const record = this.#require(view);
-    return record.presentedRun === null || runOrder > record.presentedRun;
+    return (
+      record.presentedRun === null ||
+      (runOrder > record.presentedRun && (group === null || group !== record.presentedGroup))
+    );
   }
 
   /** Change link policy without overwriting saved independent slot cameras. */
@@ -94,9 +117,10 @@ export class CanvasInspectionStore {
     if (current) {
       const key = selectionKey(current.selection);
       if (linked) record.shared = current.inspection;
-      else if (!record.individual.has(key)) record.individual.set(key, current.inspection);
+      else if (!record.individual.has(key)) record.individual.set(key, freezeSample(current));
     }
     record.linked = linked;
+    this.#notify(view);
   }
 
   /** Save final inspection without allowing preview presentation to replace it. */
@@ -117,14 +141,73 @@ export class CanvasInspectionStore {
   /** Save one final slot's settled inspection under the view's current link policy. */
   record(view: CanvasViewId, slot: CanvasSelection, inspection: CanvasInspection): void {
     const record = this.#require(view);
-    if (record.linked) record.shared = inspection;
-    else record.individual.set(selectionKey(slot), inspection);
+    const next = freezeInspection(inspection);
+    const previous = record.linked
+      ? record.shared
+      : record.individual.get(selectionKey(slot))?.inspection;
+    if (sameInspection(previous, next)) return;
+    if (record.linked) record.shared = next;
+    else
+      record.individual.set(
+        selectionKey(slot),
+        freezeSample({ selection: slot, inspection: next }),
+      );
+    this.#notify(view);
+  }
+
+  /** Observe settled final-camera changes so checkpoint capture does not depend on DOM or frame polling. */
+  subscribe(listener: (view: CanvasViewId) => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
   }
 
   /** Read the inspection a final in this slot restores, or null when it starts at Fit. */
   inspection(view: CanvasViewId, slot: CanvasSelection): CanvasInspection | null {
     const record = this.#require(view);
-    return (record.linked ? record.shared : record.individual.get(selectionKey(slot))) ?? null;
+    return (
+      (record.linked ? record.shared : record.individual.get(selectionKey(slot))?.inspection) ??
+      null
+    );
+  }
+
+  /** Capture both link lanes; choosing linked mode never discards retained independent inspections. */
+  snapshot(view: CanvasViewId): CanvasInspectionSnapshot {
+    const record = this.#require(view);
+    return Object.freeze({
+      linked: record.linked,
+      shared: record.shared ? freezeInspection(record.shared) : null,
+      individual: Object.freeze([...record.individual.values()].map(freezeSample)),
+      presentedRun: record.presentedRun,
+      presentedGroup: record.presentedGroup,
+    });
+  }
+
+  /** Restore final inspection before presentation so the first imported Run cannot erase it. */
+  restore(
+    view: CanvasViewId,
+    generation: number,
+    snapshot: CanvasInspectionSnapshot,
+    slots: readonly CanvasSelection[],
+  ): void {
+    const valid = new Set(slots.map(selectionKey));
+    const individual = new Map<string, CanvasInspectionSample>();
+    for (const sample of snapshot.individual) {
+      const key = selectionKey(sample.selection);
+      if (!valid.has(key) || individual.has(key))
+        throw new TypeError('Restored independent canvas inspection slot is invalid.');
+      individual.set(key, freezeSample(sample));
+    }
+    this.#views.set(view, {
+      generation,
+      linked: snapshot.linked,
+      shared: snapshot.shared ? freezeInspection(snapshot.shared) : null,
+      individual,
+      presentedRun: snapshot.presentedRun,
+      presentedGroup: snapshot.presentedGroup ?? null,
+    });
+    this.#notify(view);
   }
 
   /** Fit new preview compositions independently of existing linked final inspection. */
@@ -149,6 +232,7 @@ export class CanvasInspectionStore {
   /** End this integration without keeping workflow inspection state alive. */
   dispose(): void {
     this.#views.clear();
+    this.#listeners.clear();
   }
 
   /** Require lifecycle enrollment before accepting camera state. */
@@ -157,9 +241,50 @@ export class CanvasInspectionStore {
     if (!record) throw new Error('Canvas inspection view is unavailable.');
     return record;
   }
+
+  /** Notify explicit view owners without discovering graph or presentation surfaces. */
+  #notify(view: CanvasViewId): void {
+    for (const listener of this.#listeners) listener(view);
+  }
 }
 
-/** Key independent slots without retaining superseded execution result identities. */
-function selectionKey(selection: CanvasSelection): string {
-  return JSON.stringify([selection.sourceId, selection.batchIndex]);
+/** Freeze finite image-relative camera values without constraining centers to the image rectangle. */
+function freezeInspection(inspection: CanvasInspection): CanvasInspection {
+  const region = inspection.region;
+  if (
+    !['fit', 'native', 'custom'].includes(inspection.mode) ||
+    ![region.centerX, region.centerY, region.spanX, region.spanY].every(Number.isFinite) ||
+    region.spanX <= 0 ||
+    region.spanY <= 0
+  )
+    throw new TypeError('Restored canvas inspection is invalid.');
+  return Object.freeze({ mode: inspection.mode, region: Object.freeze({ ...region }) });
+}
+
+/** Copy selection and camera facts so snapshots cannot mutate retained owner state. */
+function freezeSample(sample: CanvasInspectionSample): CanvasInspectionSample {
+  return Object.freeze({
+    selection: Object.freeze({
+      ...sample.selection,
+      ...(sample.selection.scene
+        ? { scene: Object.freeze([...sample.selection.scene] as const) }
+        : {}),
+    }),
+    inspection: freezeInspection(sample.inspection),
+  });
+}
+
+/** Coalesce repeated renderer echoes of the same image-relative final inspection. */
+function sameInspection(
+  previous: CanvasInspection | null | undefined,
+  next: CanvasInspection,
+): boolean {
+  return (
+    !!previous &&
+    previous.mode === next.mode &&
+    previous.region.centerX === next.region.centerX &&
+    previous.region.centerY === next.region.centerY &&
+    previous.region.spanX === next.region.spanX &&
+    previous.region.spanY === next.region.spanY
+  );
 }

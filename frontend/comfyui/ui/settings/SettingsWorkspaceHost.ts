@@ -28,6 +28,8 @@ import { AboutSettingsPage } from './AboutSettingsPage.js';
 import { ComfyAboutInformation } from './ComfyAboutInformation.js';
 import { SettingsPopupTheme } from './SettingsPopupTheme.js';
 import { AppearanceState } from '../surface/appearance/AppearanceState.js';
+import type { SettingsWorkspaceRoute } from './SettingsWorkspaceRoute.js';
+import { isRecord } from '../types/common.js';
 
 export interface SettingsWorkspaceOptions {
   readonly document: Document;
@@ -39,6 +41,20 @@ export interface SettingsWorkspaceOptions {
 
 /** Preserve Comfy's page lifecycle and settings commands across both browser presentation modes. */
 export class SettingsWorkspaceHost {
+  /** Expose the actual mounted route to desktop checkpoint coordination. */
+  readonly sessionRoute: SettingsWorkspaceRoute = {
+    read: () => this.#route,
+    subscribe: (listener) => {
+      this.#routeListeners.add(listener);
+      return () => {
+        this.#routeListeners.delete(listener);
+      };
+    },
+    show: (signal) => this.#show(signal),
+  };
+  readonly #routeListeners = new Set<() => void>();
+  #route: 'workflow' | 'settings' = 'workflow';
+  readonly #shows = new Set<(error: Error) => void>();
   readonly #catalog: ComfySettingsCatalog;
   readonly #surfaces = new Map<HTMLElement, SettingsWorkspaceSurface>();
   readonly #stops: (() => void)[] = [];
@@ -114,6 +130,7 @@ export class SettingsWorkspaceHost {
   /** Restore mounted native controls and release only this settings presentation lifetime. */
   readonly dispose = (): void => {
     this.#disposed = true;
+    for (const reject of [...this.#shows]) reject(new Error('Settings workspace retired.'));
     this.#observer?.disconnect();
     for (const stop of this.#stops.splice(0)) stop();
     for (const surface of this.#surfaces.values()) surface.dispose();
@@ -122,6 +139,7 @@ export class SettingsWorkspaceHost {
     this.#about?.dispose();
     this.#appearance.dispose();
     this.#style.remove();
+    this.#routeListeners.clear();
     this.options.document.defaultView?.removeEventListener('pagehide', this.dispose);
   };
 
@@ -166,6 +184,62 @@ export class SettingsWorkspaceHost {
       this.options.mode.enabled,
       this.options.palette.theme.dark,
     );
+    const route = this.#surfaces.size ? 'settings' : 'workflow';
+    if (this.#route !== route) {
+      this.#route = route;
+      for (const listener of this.#routeListeners) listener();
+    }
     this.#observer?.discardPending();
+  }
+
+  /** Observe actual native settings mounting before acknowledging restoration; cancellation owns every wait. */
+  async #show(signal?: AbortSignal): Promise<void> {
+    if (this.#disposed || signal?.aborted)
+      throw new Error('Settings workspace request was cancelled.');
+    if (this.#route === 'settings') return;
+    const app = this.options.app;
+    const manager = isRecord(app) && isRecord(app.extensionManager) ? app.extensionManager : null;
+    const command = manager && isRecord(manager.command) ? manager.command : null;
+    const window = this.options.document.defaultView;
+    if (!window || !command || typeof command.execute !== 'function')
+      throw new Error('Comfy settings command is unavailable.');
+    const execute = command.execute;
+    await new Promise<void>((resolve, reject) => {
+      let done = false;
+      const finish = (error?: Error): void => {
+        if (done) return;
+        done = true;
+        this.#shows.delete(fail);
+        this.#routeListeners.delete(changed);
+        window.clearTimeout(timer);
+        signal?.removeEventListener('abort', cancelled);
+        if (error) reject(error);
+        else resolve();
+      };
+      const fail = (error: Error): void => finish(error);
+      const changed = (): void => {
+        if (this.#route === 'settings') finish();
+      };
+      const cancelled = (): void => finish(new Error('Settings workspace request was cancelled.'));
+      const timer = window.setTimeout(
+        () => finish(new Error('Comfy settings did not mount before the restore deadline.')),
+        15000,
+      );
+      this.#shows.add(fail);
+      this.#routeListeners.add(changed);
+      signal?.addEventListener('abort', cancelled, { once: true });
+      Promise.resolve()
+        .then(() => {
+          if (!done) return execute.call(command, 'Comfy.ShowSettingsDialog');
+          return undefined;
+        })
+        .catch((error: unknown) =>
+          finish(
+            error instanceof Error
+              ? error
+              : new Error('Comfy settings command failed.', { cause: error }),
+          ),
+        );
+    });
   }
 }
