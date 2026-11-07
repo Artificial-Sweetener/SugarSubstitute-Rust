@@ -47,11 +47,21 @@ import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 
 /** Compose actual selection, native and browser-media owners; fake only OS acknowledgements and geometry. */
-function fixture() {
+function fixture(webp = false) {
   jest.spyOn(CanvasSurfaceGeometryObserver.prototype, 'read').mockReturnValue(previewGeometry);
   jest.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   jest.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
   const mixed = mixedMediaFixture();
+  if (webp) {
+    const item = mixed.items[2];
+    if (!item) throw new Error('Missing mixed source slot.');
+    mixed.items[2] = {
+      ...item,
+      mediaKind: 'image',
+      encodedMime: 'image/webp',
+      file: { ...item.file, filename: 'retained.webp' },
+    };
+  }
   const context = mixed.catalog.result.context;
   const source = mixed.catalog.entries[0]!.source;
   const sessions = new WorkflowSessionStore();
@@ -261,4 +271,27 @@ test('Input keeps native ownership and closing while release is pending cannot r
     await f.dispose();
   }
   expect(f.clock.pending).toBe(0);
+});
+
+test('still WebP keeps native ownership through source changes', async () => {
+  const f = fixture(true);
+  try {
+    await f.drain();
+    f.choose(2);
+    await f.drain();
+    expect(f.mounted.browser).toBe(0);
+    expect(f.native.calls.some((call) => call.type === 'surface.release')).toBe(false);
+    expect(
+      f.native.calls.some(
+        (call) => call.type === 'surface.select' && call.file.filename === 'retained.webp',
+      ),
+    ).toBe(true);
+    expect(f.root.querySelector('img,video')).toBeNull();
+    f.choose(0);
+    await f.drain();
+    expect(f.mounted).toEqual({ native: 1, browser: 0 });
+    expect(f.errors).toEqual([]);
+  } finally {
+    await f.dispose();
+  }
 });

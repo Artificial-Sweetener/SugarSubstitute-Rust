@@ -384,6 +384,24 @@ export class CanvasSelectionController {
     );
   }
 
+  /** Restore navigation and its observed frontier together so imported finals do not act like a new Run. */
+  restore(
+    viewId: CanvasViewId,
+    catalog: CanvasCatalogSnapshot,
+    restored: Pick<
+      CanvasViewState,
+      'selection' | 'sourcePreview' | 'follow' | 'mode' | 'scene' | 'linked' | 'comparison'
+    >,
+  ): void {
+    const candidate = autoCandidate(canvasOutputCatalog(catalog.result, catalog.sources));
+    this.#cursors.set(viewId, {
+      generation: catalog.generation,
+      frontier: candidate?.frontier ?? null,
+      presentedRun: catalog.result.presentedRunOrder,
+    });
+    this.views.update(viewId, (state) => ({ ...state, ...restored }));
+  }
+
   /** Keep an explicitly inspected source available independently of automatic Run handoff. */
   inspection(viewId: CanvasViewId): CanvasSelection | null {
     const state = this.views.read(viewId);

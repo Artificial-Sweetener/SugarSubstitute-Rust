@@ -16,7 +16,7 @@
 /** Own one visible lane's queued payload, pending lease and releasable displayed frame. */
 
 import type { CanvasResourceStatus } from '../domain/CanvasViewPort.js';
-import type { CanvasSelection } from '../domain/CanvasViewState.js';
+import type { CanvasInspectionSlot as CanvasSelection } from '../domain/CanvasInspection.js';
 import type { ImageDimensions } from '../../execution/domain/WorkflowOutput.js';
 import { canvasImageBytes } from '../domain/CanvasImageResource.js';
 import type {

@@ -21,6 +21,10 @@ import type {
   PromptId,
   WorkflowSessionId,
 } from './ExecutionIdentity.js';
+import type {
+  SessionBinding,
+  SessionOutput,
+} from '../../../../../integrations/contracts/SessionProtocol.generated.js';
 
 export interface ImageDimensions {
   readonly width: number;
@@ -47,6 +51,13 @@ export type OutputProvenance = OutputProvenanceContext &
   (
     | { readonly kind: 'execution'; readonly promptId: PromptId }
     | { readonly kind: 'workflow-snapshot'; readonly promptId: null; readonly snapshotId: string }
+    | {
+        readonly kind: 'desktop-session';
+        readonly promptId: PromptId | null;
+        readonly snapshotId: string;
+        readonly entryId: string;
+        readonly runId: string;
+      }
   );
 
 export interface WorkflowOutputItem {
@@ -56,6 +67,14 @@ export interface WorkflowOutputItem {
   readonly file: OutputFileReference;
   readonly dimensions: ImageDimensions | null;
   readonly mediaKind: WorkflowMediaKind;
+  /** Carry a revocable current-page retained-asset URL for presentation; file provenance stays independent. */
+  readonly presentationUrl?: string;
+  /** Record a byte-verified encoded MIME when artifact resolution supplies it. */
+  readonly encodedMime?: string;
+  /** Keep verified restored artifact facts distinct from the current backend file descriptor. */
+  readonly artifact?: { readonly output: SessionOutput; readonly binding: SessionBinding };
+  /** Preserve exact final membership when its bytes cannot currently be resolved. */
+  readonly unavailable?: { readonly code: string; readonly message: string };
 }
 
 export type WorkflowMediaKind = 'image' | 'animated' | 'video' | 'model' | 'unsupported';

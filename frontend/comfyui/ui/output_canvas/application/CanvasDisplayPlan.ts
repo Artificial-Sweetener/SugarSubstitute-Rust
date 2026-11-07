@@ -21,10 +21,12 @@ import type { OutputSourceId } from '../../execution/domain/ExecutionIdentity.js
 import { canvasBatchGridCatalog } from './CanvasContentSelection.js';
 import type { CanvasCatalogEntry, CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasSelection, CanvasViewState } from '../domain/CanvasViewState.js';
+import { canvasInspectionSlot } from './CanvasInspectionSlots.js';
+import type { CanvasInspectionSlot } from '../domain/CanvasInspection.js';
 import type { CanvasImagePair } from './CanvasComparisonSelection.js';
 
 export interface CanvasDisplaySlot {
-  readonly selection: CanvasSelection;
+  readonly selection: CanvasInspectionSlot;
   readonly item: WorkflowOutputItem | null;
   readonly sourcePresent: boolean;
 }
@@ -67,7 +69,7 @@ export function canvasDisplayPlan(
   ): CanvasDisplaySlot | null =>
     selection
       ? Object.freeze({
-          selection,
+          selection: canvasInspectionSlot(selection, item, catalog),
           item,
           sourcePresent: catalog.entries.some((entry) => entry.source.id === selection.sourceId),
         })

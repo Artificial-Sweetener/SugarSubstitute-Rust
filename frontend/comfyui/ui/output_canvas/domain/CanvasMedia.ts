@@ -27,8 +27,27 @@ export type CanvasMediaTarget =
       readonly itemId: OutputResultId;
     };
 
+/** Per-final actions derived from the actual byte backing and existing transfer owner's limits. */
+export interface CanvasOutputActions {
+  readonly itemId: OutputResultId;
+  readonly copy: boolean;
+  readonly file: boolean;
+  readonly drag: boolean;
+  readonly photoshop: boolean;
+  readonly fileAction: 'reveal' | 'download';
+}
+
 /** Resolve only the exact current catalog item rather than reusing a batch index across generations. */
 export function canvasMediaItem(
+  snapshot: CanvasViewSnapshot,
+  target: CanvasMediaTarget,
+): WorkflowOutputItem | null {
+  const item = canvasMediaFile(snapshot, target);
+  return item?.mediaKind === 'image' ? item : null;
+}
+
+/** Resolve an exact ready final of any supported kind for its original-file action. */
+export function canvasMediaFile(
   snapshot: CanvasViewSnapshot,
   target: CanvasMediaTarget,
 ): WorkflowOutputItem | null {
@@ -46,7 +65,7 @@ export function canvasMediaItem(
         : (snapshot.grid
             .find((entry) => entry.source.id === target.sourceId)
             ?.items.find((item) => item.id === target.itemId) ?? null);
-  return item?.mediaKind === 'image' ? item : null;
+  return item && item.mediaKind !== 'unsupported' && !item.unavailable ? item : null;
 }
 
 /** List every still image of a result's sources in catalog order, excluding live previews. */

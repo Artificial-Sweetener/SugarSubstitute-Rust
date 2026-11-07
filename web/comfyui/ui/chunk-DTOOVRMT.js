@@ -1,7 +1,11 @@
 // frontend/comfyui/ui/output_canvas/domain/CanvasMedia.ts
 function canvasMediaItem(snapshot, target) {
-  const item = target === "primary" ? !snapshot.preview && snapshot.view.mode !== "overview" && snapshot.resource.state === "ready" ? snapshot.selected : null : target === "secondary" ? snapshot.secondaryResource?.state === "ready" ? snapshot.secondary : null : snapshot.grid.find((entry) => entry.source.id === target.sourceId)?.items.find((item2) => item2.id === target.itemId) ?? null;
+  const item = canvasMediaFile(snapshot, target);
   return item?.mediaKind === "image" ? item : null;
+}
+function canvasMediaFile(snapshot, target) {
+  const item = target === "primary" ? !snapshot.preview && snapshot.view.mode !== "overview" && snapshot.resource.state === "ready" ? snapshot.selected : null : target === "secondary" ? snapshot.secondaryResource?.state === "ready" ? snapshot.secondary : null : snapshot.grid.find((entry) => entry.source.id === target.sourceId)?.items.find((item2) => item2.id === target.itemId) ?? null;
+  return item && item.mediaKind !== "unsupported" && !item.unavailable ? item : null;
 }
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasContextActions.ts
@@ -30,16 +34,31 @@ function canvasContextActions(snapshot, capabilities, send, target = "primary") 
     );
   const comparisonCount = entries.length;
   const unavailable = canvasMediaItem(snapshot, target) === null;
-  action("Copy", { type: "copy-media", target, format: "preferred" }, unavailable);
+  const item = targetItem(snapshot, target);
+  const actions = item ? snapshot.itemActions?.find((actions2) => actions2.itemId === item.id) : null;
+  action(
+    "Copy",
+    { type: "copy-media", target, format: "preferred" },
+    unavailable || actions?.copy === false
+  );
   if (!video && snapshot.mediaActions?.photoshop) {
-    action("Open in Photoshop", { type: "photoshop-media", target }, unavailable);
-    if (!tile) action("Open All in Photoshop", { type: "photoshop-all-media" });
+    action(
+      "Open in Photoshop",
+      { type: "photoshop-media", target },
+      unavailable || actions?.photoshop === false
+    );
+    if (!tile)
+      action(
+        "Open All in Photoshop",
+        { type: "photoshop-all-media" },
+        snapshot.photoshopAllAvailable === false
+      );
   }
   if (snapshot.mediaActions)
     action(
-      snapshot.mediaActions.fileAction === "reveal" ? "Reveal in File Manager" : "Download",
+      (actions?.fileAction ?? snapshot.mediaActions.fileAction) === "reveal" ? "Reveal in File Manager" : "Download",
       { type: "file-media", target },
-      unavailable
+      canvasMediaFile(snapshot, target) === null || actions?.file === false
     );
   if (comparisonCount > 0 && entries.length > comparisonCount)
     entries.splice(comparisonCount, 0, { label: "", separator: true });
@@ -52,6 +71,6 @@ function targetItem(snapshot, target) {
 }
 
 export {
-  canvasMediaItem,
+  canvasMediaFile,
   canvasContextActions
 };

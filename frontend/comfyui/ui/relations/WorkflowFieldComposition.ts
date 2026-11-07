@@ -29,6 +29,7 @@ import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 import type { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
 import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
+import type { SettingsWorkspaceRoute } from '../settings/SettingsWorkspaceRoute.js';
 
 export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
@@ -49,6 +50,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   relations: RelationHostLifecycle;
   frame: SubstituteFrameHost;
   canvas: EmbeddedCanvasConnection;
+  settingsRoute: SettingsWorkspaceRoute;
   setupPresentation(): void;
 } {
   const embedded = new EmbeddedPresentation();
@@ -117,5 +119,12 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         report: options.reportPresentationError,
       });
   }
-  return { appearance, relations, frame, canvas, setupPresentation };
+  return {
+    appearance,
+    relations,
+    frame,
+    canvas,
+    settingsRoute: settingsWorkspace.sessionRoute,
+    setupPresentation,
+  };
 }

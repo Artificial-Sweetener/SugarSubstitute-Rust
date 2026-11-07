@@ -27,7 +27,7 @@ import type {
   CanvasViewSnapshot,
 } from '../../domain/CanvasViewPort.js';
 import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
-import { canvasMediaItem, type CanvasMediaTarget } from '../../domain/CanvasMedia.js';
+import { canvasMediaFile, type CanvasMediaTarget } from '../../domain/CanvasMedia.js';
 import { CanvasOverlay } from './CanvasOverlay.js';
 import { ensureCanvasOverlayStyles } from './CanvasOverlayStyles.js';
 import type { CanvasRouteId, CanvasRoutePort } from '../../domain/CanvasRoute.js';
@@ -133,12 +133,14 @@ export function mountCanvasOverlay(
         snapshot.secondary?.id !== state.value.secondary?.id ||
         snapshot.preview !== state.value.preview ||
         snapshot.view.mode !== state.value.view.mode ||
-        (typeof menuTarget === 'object' && !canvasMediaItem(snapshot, menuTarget))
+        (typeof menuTarget === 'object' && !canvasMediaFile(snapshot, menuTarget))
       )
         menu.close();
       else if (
         canvasNavigationSnapshot(snapshot, state.value) !== state.value ||
-        snapshot.mediaActions !== state.value.mediaActions
+        snapshot.mediaActions !== state.value.mediaActions ||
+        snapshot.itemActions !== state.value.itemActions ||
+        snapshot.photoshopAllAvailable !== state.value.photoshopAllAvailable
       )
         menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
     }

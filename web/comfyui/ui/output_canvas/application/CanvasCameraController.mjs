@@ -16,6 +16,7 @@
 /** Coordinate one attachment's displayed camera with durable view-relative inspection. */
 import { centeredCanvasCamera, doubleClickCanvasCamera, panCanvasCamera, zoomCanvasCamera, canvasWheelFactor, } from '../domain/CanvasCamera.js';
 import { resizeCanvasCamera, captureCanvasInspection, projectCanvasInspection, } from '../domain/CanvasInspection.js';
+import { canvasInspectionSlotKey, } from '../domain/CanvasInspection.js';
 import { CanvasCameraTransition } from './CanvasCameraTransition.mjs';
 /** Keep browser input and DOM transforms outside authoritative camera and inspection transitions. */
 export class CanvasCameraController {
@@ -48,11 +49,13 @@ export class CanvasCameraController {
     show(selection, geometry, runOrder, previewLane) {
         if (this.#disposed)
             return;
-        const freshRun = previewLane === null && this.options.inspections.presentRun(this.options.view, runOrder);
+        const freshRun = previewLane === null &&
+            this.options.inspections.presentRun(this.options.view, runOrder, selection.scene?.[0] ?? null);
         const displayed = this.read();
         const previous = freshRun || displayed?.previewLane !== previewLane ? null : displayed;
-        const sameSlot = previous?.selection.sourceId === selection.sourceId &&
-            previous.selection.batchIndex === selection.batchIndex;
+        const sameSlot = previous !== null &&
+            previous !== undefined &&
+            canvasInspectionSlotKey(previous.selection) === canvasInspectionSlotKey(selection);
         const sameImage = previous?.geometry.image.width === geometry.image.width &&
             previous.geometry.image.height === geometry.image.height;
         if (sameSlot &&

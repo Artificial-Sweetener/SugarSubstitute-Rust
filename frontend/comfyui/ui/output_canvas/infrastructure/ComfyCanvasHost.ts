@@ -29,6 +29,7 @@ import { CanvasSelectionController } from '../application/CanvasSelectionControl
 import { CanvasInspectionStore } from '../application/CanvasInspectionStore.js';
 import { WebCanvasAdapter } from '../application/WebCanvasAdapter.js';
 import { CanvasSessionCoordinator } from '../application/CanvasSessionCoordinator.js';
+import { CanvasSessionSnapshots } from '../application/CanvasSessionSnapshots.js';
 import { windowId } from '../domain/CanvasIdentity.js';
 import { isRecord } from '../../types/common.js';
 import { NativeCanvasAttachment } from './NativeCanvasAttachment.js';
@@ -48,6 +49,8 @@ import { ComfyImageRevealHost } from './ComfyImageRevealHost.js';
 import { BrowserOutputTransfer } from '../../output_saving/BrowserOutputTransfer.js';
 import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard.js';
 import { BrowserImageDownload } from '../../output_saving/BrowserImageDownload.js';
+import { BrowserImageRendition } from '../../output_saving/BrowserImageRendition.js';
+import { canvasOutputTransfers } from './CanvasOutputTransfers.js';
 import type { OutputSavingFeature } from '../../output_saving/OutputSavingFeature.js';
 import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
 import type { MemoryBudgetRegistry } from '../../core/memory/MemoryBudgetRegistry.js';
@@ -71,6 +74,8 @@ export interface ComfyCanvasHostOptions {
 
 /** Keep source, selection, resource, frame, settings, and execution ownership explicit in a thin composition. */
 export class ComfyCanvasHost {
+  /** Share the current view and camera owners with the desktop session composition. */
+  readonly sessionSnapshots: CanvasSessionSnapshots;
   readonly #sources: ComfyCanvasSourceInventory;
   readonly #adapter: WebCanvasAdapter<Blob>;
   readonly #coordinator: CanvasSessionCoordinator;
@@ -97,6 +102,7 @@ export class ComfyCanvasHost {
       (input, init) => window.fetch(input, init),
       new BrowserImageClipboard(document),
       new BrowserImageDownload(document),
+      new BrowserImageRendition(document),
     ));
     const nextKey = (): string =>
       [...window.crypto.getRandomValues(new Uint32Array(4))]
@@ -152,6 +158,12 @@ export class ComfyCanvasHost {
       views,
       selection,
       this.#sources,
+    );
+    this.sessionSnapshots = new CanvasSessionSnapshots(
+      this.#coordinator,
+      views,
+      selection,
+      inspections,
     );
     this.#stops.push(
       this.#coordinator.onRetired((view) => {
@@ -221,24 +233,7 @@ export class ComfyCanvasHost {
           accepts,
           catalog: () => this.#coordinator.catalog(address.viewId),
           connected: () => execution.connected,
-          copy: (item, accepts, format, signal) =>
-            transfers.copy(item.file, accepts, format, signal),
-          fileAction: (item, accepts, signal) =>
-            transfers.fileAction(
-              item.file,
-              accepts,
-              signal,
-              item.mediaKind === 'image' ? 'image' : 'media',
-            ),
-          mediaProfile: () => transfers.profile(),
-          photoshop: (document, layers, accepts, signal) =>
-            transfers.photoshop(
-              document,
-              layers.map((layer) => ({ file: layer.item.file, name: layer.name })),
-              accepts,
-              signal,
-            ),
-          drag: (item, signal) => transfers.drag(item.file, signal),
+          ...canvasOutputTransfers(transfers),
           transferChanged: (listener: () => void) => {
             const profile = transfers.subscribe(listener);
             const settings = saving?.configuration.subscribe(listener);
@@ -387,6 +382,7 @@ export class ComfyCanvasHost {
     this.#saving?.dispose();
     this.#workspace.dispose();
     this.#toolbar.dispose();
+    this.sessionSnapshots.dispose();
     this.#coordinator.dispose();
     for (const stop of this.#stops.splice(0)) stop();
     this.#adapter.dispose();

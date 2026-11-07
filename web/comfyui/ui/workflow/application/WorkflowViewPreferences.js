@@ -38,6 +38,27 @@ export class WorkflowViewPreferences {
     get snapshot() {
         return this.#snapshot;
     }
+    /** Capture one explicit live occurrence, including temporary workflows without browser-history keys. */
+    snapshotFor(binding, defaultCanvas) {
+        const current = this.#live.get(binding.id);
+        if (current)
+            return current.view;
+        const view = (binding.path ? this.#stored.get(binding.path) : null) ??
+            Object.freeze({ canvas: defaultCanvas(), masonry: false, editorWidth: 0 });
+        this.#live.set(binding.id, { path: binding.path, view });
+        return view;
+    }
+    /** Import native checkpoint choices without publishing browser persistence ahead of host durability. */
+    restore(binding, snapshot) {
+        if (typeof snapshot.canvas !== 'boolean' ||
+            typeof snapshot.masonry !== 'boolean' ||
+            !isEditorWidth(snapshot.editorWidth))
+            throw new TypeError('Restored workflow presentation is invalid.');
+        const view = Object.freeze({ ...snapshot });
+        this.#live.set(binding.id, { path: binding.path, view });
+        if (this.#selected === binding.id)
+            this.#snapshot = view;
+    }
     /** Select an explicit committed binding and carry choices through rename or Save As. */
     activate(binding, defaultCanvas) {
         let current = this.#live.get(binding.id);

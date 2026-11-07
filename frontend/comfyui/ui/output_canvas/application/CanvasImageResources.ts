@@ -17,7 +17,7 @@
 
 import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
 import type { ImageDimensions } from '../../execution/domain/WorkflowOutput.js';
-import type { CanvasSelection } from '../domain/CanvasViewState.js';
+import type { CanvasInspectionSlot as CanvasSelection } from '../domain/CanvasInspection.js';
 import type {
   CanvasDecodedImage,
   CanvasImageDiagnostics,

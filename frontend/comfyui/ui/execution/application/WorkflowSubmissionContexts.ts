@@ -30,8 +30,16 @@ export class WorkflowSubmissionContexts {
     prompt: object,
     session: WorkflowSessionContext,
     sources: readonly WorkflowOutputSource[],
+    graphRevision?: number,
   ): void {
-    this.#contexts.set(prompt, freezeWorkflowSubmissionContext({ session, sources }));
+    this.#contexts.set(
+      prompt,
+      freezeWorkflowSubmissionContext({
+        session,
+        sources,
+        ...(graphRevision !== undefined ? { graphRevision } : {}),
+      }),
+    );
   }
 
   /** Give one scene's prompt the original prompt's ownership, qualified by its scene. */

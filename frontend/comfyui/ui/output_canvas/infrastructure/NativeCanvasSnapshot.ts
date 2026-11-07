@@ -32,6 +32,7 @@ import type {
   CanvasViewSnapshot,
 } from '../domain/CanvasViewPort.js';
 import type { NativeCanvasPresentationStatus } from './NativeCanvasStatus.js';
+import type { CanvasOutputActions } from '../domain/CanvasMedia.js';
 
 /** Collect the attachment-owned facts that one native snapshot projects. */
 export interface NativeCanvasSnapshotState {
@@ -41,6 +42,8 @@ export interface NativeCanvasSnapshotState {
   readonly sources: readonly CanvasSourceSummary[];
   readonly connected: boolean;
   readonly mediaActions: OutputMediaProfile | null;
+  readonly itemActions?: readonly CanvasOutputActions[];
+  readonly photoshopAllAvailable?: boolean;
   readonly presentation: NativeCanvasPresentationStatus;
   /** The host's camera for the presented pixels, including B's size while a pair is shown. */
   readonly viewport: CanvasSurfaceViewportState | null;
@@ -109,6 +112,9 @@ export function nativeCanvasSnapshot(state: NativeCanvasSnapshotState): CanvasVi
     state.connected,
     state.mediaActions,
     {
+      ...(state.photoshopAllAvailable === undefined
+        ? {}
+        : { photoshopAllAvailable: state.photoshopAllAvailable }),
       comparisonAvailable: state.comparison && canvasComparisonAvailable(state.catalog),
       preview: state.preview,
       resource,
@@ -131,6 +137,7 @@ export function nativeCanvasSnapshot(state: NativeCanvasSnapshotState): CanvasVi
           }
         : null,
     },
+    state.itemActions,
   );
   return Object.freeze({
     ...snapshot,

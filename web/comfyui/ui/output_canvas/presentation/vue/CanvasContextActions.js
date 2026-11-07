@@ -1,6 +1,6 @@
 import {
   canvasContextActions
-} from "../../../chunk-K34PR526.js";
+} from "../../../chunk-DTOOVRMT.js";
 export {
   canvasContextActions
 };

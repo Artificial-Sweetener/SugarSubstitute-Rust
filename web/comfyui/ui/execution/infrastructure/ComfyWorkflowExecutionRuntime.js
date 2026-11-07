@@ -53,6 +53,13 @@ export class ComfyWorkflowExecutionRuntime {
     /** Split constructed prompts into one prompt per authored prompt scene. */
     scenes;
     canvases;
+    /** Expose only supported document-boundary access while this runtime retains adapter lifecycle ownership. */
+    workflowDocuments = Object.freeze({
+        readHostWorkflow: (session) => this.#adapter?.readHostWorkflow(session) ?? null,
+        identifyHostWorkflow: (workflow) => this.#adapter?.identifyHostWorkflow(workflow) ?? null,
+        refresh: () => this.#adapter?.refresh() ?? false,
+        readLoadSequence: () => this.#adapter?.readLoadSequence() ?? 0,
+    });
     #generation;
     #cubePreviews;
     #runs = new WorkflowRunRegistry();
@@ -70,6 +77,7 @@ export class ComfyWorkflowExecutionRuntime {
     #installed = false;
     #disposed = false;
     #connected = true;
+    #documentRevision = null;
     /** Construct pure owners immediately and defer public-host capability access until extension setup. */
     constructor(options) {
         this.options = options;
@@ -130,7 +138,7 @@ export class ComfyWorkflowExecutionRuntime {
             });
             this.#history = history;
             this.#loads = createComfyWorkflowLoadObserver(this.options.app, this.sessions, adapter, this.options.logger);
-            this.#construction = createComfyPromptConstructionObserver(this.options.app, this.sessions, this.#contexts, this.options.logger);
+            this.#construction = createComfyPromptConstructionObserver(this.options.app, this.sessions, this.#contexts, this.options.logger, (context) => this.#documentRevision?.(context.sessionId));
             this.#lifecycle = new WorkflowResultLifecycle({
                 sessions: this.sessions,
                 results: this.results,
@@ -185,6 +193,28 @@ export class ComfyWorkflowExecutionRuntime {
     latestSubmissionOrder(session) {
         return this.#runs.latestOrder(session);
     }
+    /** Resume the queue frontier above restored finals without manufacturing live jobs or generation events. */
+    restoreSubmissionOrder(session, order) {
+        this.#runs.restoreOrder(session, order);
+    }
+    /** Capture only currently accepted live associations for checkpoint reachability and cancellation fencing. */
+    outstandingRuns() {
+        return this.#runs.outstanding();
+    }
+    /** Let durable semantic observers see acceptance before early final replay without owning execution. */
+    subscribeGeneration(listener) {
+        return this.#generation.subscribe(listener);
+    }
+    /** Bind the document revision owner before graphToPrompt enters asynchronous widget construction. */
+    bindDocumentRevision(read) {
+        if (this.#documentRevision)
+            throw new Error('Workflow document revision owner is already bound.');
+        this.#documentRevision = read;
+        return () => {
+            if (this.#documentRevision === read)
+                this.#documentRevision = null;
+        };
+    }
     /** Read immutable construction ownership without inferring identity from the currently active graph. */
     submissionContext(payload) {
         return isRecord(payload) ? this.#contexts.read(payload) : null;
@@ -233,6 +263,7 @@ export class ComfyWorkflowExecutionRuntime {
         this.activity.dispose();
         this.sessions.dispose();
         this.#connections.clear();
+        this.#documentRevision = null;
     }
     /** Publish connection changes without clearing another workflow's durable results. */
     #setConnected(connected) {

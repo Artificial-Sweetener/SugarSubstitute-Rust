@@ -217,6 +217,7 @@ export class BrowserCanvasAttachment {
       ...(options.copy ? { copy: options.copy } : {}),
       ...(options.fileAction ? { fileAction: options.fileAction } : {}),
       ...(options.mediaProfile ? { profile: options.mediaProfile } : {}),
+      ...(options.mediaCapabilities ? { capabilities: options.mediaCapabilities } : {}),
       ...(options.photoshop ? { photoshop: options.photoshop } : {}),
       entries: () => this.#catalog.entries,
     });
@@ -526,6 +527,8 @@ export class BrowserCanvasAttachment {
       this.#browserResources.preparing,
       this.#media.profile(),
       this.#detail.status(),
+      this.#media.itemActions(),
+      this.#media.photoshopAllAvailable(),
     );
   }
 }

@@ -57,6 +57,17 @@ export class CanvasSessionCoordinator {
         const active = this.sessions.presentation();
         return active ? (this.#primary.get(active.sessionId) ?? null) : null;
     }
+    /** Find an existing occurrence's primary view without activating the graph or creating a surface. */
+    primary(sessionId) {
+        return this.#primary.get(sessionId) ?? null;
+    }
+    /** Bind an imported occurrence's current serialized topology before its inactive view resumes following. */
+    restoreSources(context, sources) {
+        if (this.#contexts.get(context.sessionId)?.generation !== context.generation)
+            throw new TypeError('Restored canvas topology belongs to a retired workflow.');
+        this.sources.replace(context, sources);
+        this.#refresh(context.sessionId);
+    }
     /** Project an exact open session into its view without consulting the active graph. */
     catalog(view) {
         const id = this.#sessionsByView.get(view);

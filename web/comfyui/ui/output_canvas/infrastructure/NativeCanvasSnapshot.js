@@ -65,6 +65,9 @@ export function nativeCanvasSnapshot(state) {
     const comparison = state.comparison ? plan.view.comparison : null;
     const secondaryDimensions = (comparison && viewport?.secondaryDimensions) || null;
     const snapshot = canvasViewSnapshot(state.address, plan, state.catalog, state.sources, state.connected, state.mediaActions, {
+        ...(state.photoshopAllAvailable === undefined
+            ? {}
+            : { photoshopAllAvailable: state.photoshopAllAvailable }),
         comparisonAvailable: state.comparison && canvasComparisonAvailable(state.catalog),
         preview: state.preview,
         resource,
@@ -82,7 +85,7 @@ export function nativeCanvasSnapshot(state) {
                 secondaryDimensions,
             }
             : null,
-    });
+    }, state.itemActions);
     return Object.freeze({
         ...snapshot,
         nativeBackdrop: state.nativeBackdrop ?? 'unavailable',

@@ -11,8 +11,8 @@ import {
 import "../../../chunk-M6SR67MM.js";
 import {
   canvasContextActions,
-  canvasMediaItem
-} from "../../../chunk-K34PR526.js";
+  canvasMediaFile
+} from "../../../chunk-DTOOVRMT.js";
 import "../../../chunk-Z66IIUOP.js";
 import "../../../chunk-JAFCE4SG.js";
 import "../../../chunk-6MZ5BAVS.js";
@@ -117,9 +117,9 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
     if (!active || !sameCanvasAttachment(initial.address, snapshot.address) || snapshot.revision <= state.value.revision)
       return;
     if (menu.isOpen()) {
-      if (snapshot.selected?.id !== state.value.selected?.id || snapshot.secondary?.id !== state.value.secondary?.id || snapshot.preview !== state.value.preview || snapshot.view.mode !== state.value.view.mode || typeof menuTarget === "object" && !canvasMediaItem(snapshot, menuTarget))
+      if (snapshot.selected?.id !== state.value.selected?.id || snapshot.secondary?.id !== state.value.secondary?.id || snapshot.preview !== state.value.preview || snapshot.view.mode !== state.value.view.mode || typeof menuTarget === "object" && !canvasMediaFile(snapshot, menuTarget))
         menu.close();
-      else if (canvasNavigationSnapshot(snapshot, state.value) !== state.value || snapshot.mediaActions !== state.value.mediaActions)
+      else if (canvasNavigationSnapshot(snapshot, state.value) !== state.value || snapshot.mediaActions !== state.value.mediaActions || snapshot.itemActions !== state.value.itemActions || snapshot.photoshopAllAvailable !== state.value.photoshopAllAvailable)
         menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
     }
     const spoken = canvasAnnouncement(state.value, snapshot);

@@ -14,7 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Capture and project image-relative scale per physical pixel, matching QPane inspection semantics. */
-import { canvasCameraMode, centeredCanvasCamera, settleCanvasCamera, } from './CanvasCamera.js';
+import { canvasCameraMode, centeredCanvasCamera, } from './CanvasCamera.js';
+/** Compare camera addresses without treating another scene's same source/batch as the same image. */
+export function canvasInspectionSlotKey(slot) {
+    return JSON.stringify([slot.scene ?? null, slot.sourceId, slot.batchIndex]);
+}
 /** Exclude viewport extent from magnification so resize reveals more content at the same scale. */
 export function captureCanvasInspection(camera, geometry) {
     const physicalScale = camera.scale * geometry.density;
@@ -36,14 +40,10 @@ export function projectCanvasInspection(inspection, geometry) {
     if (![region.centerX, region.centerY, region.spanX, region.spanY].every(Number.isFinite) ||
         region.spanX <= 0 ||
         region.spanY <= 0)
-        return centeredCanvasCamera(geometry);
-    const scale = Math.min(1 / (geometry.image.width * region.spanX), 1 / (geometry.image.height * region.spanY)) / geometry.density;
-    return settleCanvasCamera({
-        scale,
-        x: geometry.viewport.width / 2 - region.centerX * geometry.image.width * scale,
-        y: geometry.viewport.height / 2 - region.centerY * geometry.image.height * scale,
-        mode: canvasCameraMode(scale, geometry),
-    }, geometry);
+        throw new RangeError('Saved canvas inspection is invalid.');
+    const scale = Math.min(1 / region.spanX / geometry.image.width, 1 / region.spanY / geometry.image.height) /
+        geometry.density;
+    return cameraAtInspectionCenter(inspection, geometry, scale);
 }
 /** Resize or change density without scaling custom content with the viewport. */
 export function resizeCanvasCamera(camera, previous, next) {
@@ -52,12 +52,18 @@ export function resizeCanvasCamera(camera, previous, next) {
     const inspection = captureCanvasInspection(camera, previous);
     if (camera.mode === 'native') {
         const scale = 1 / next.density;
-        return settleCanvasCamera({
-            ...camera,
-            scale,
-            x: next.viewport.width / 2 - inspection.region.centerX * next.image.width * scale,
-            y: next.viewport.height / 2 - inspection.region.centerY * next.image.height * scale,
-        }, next);
+        return cameraAtInspectionCenter(inspection, next, scale);
     }
     return projectCanvasInspection(inspection, next);
+}
+/** Restore finite numerical geometry without applying interactive wheel or pan limits to saved state. */
+function cameraAtInspectionCenter(inspection, geometry, scale) {
+    const width = geometry.image.width * scale;
+    const height = geometry.image.height * scale;
+    const x = geometry.viewport.width / 2 - inspection.region.centerX * width;
+    const y = geometry.viewport.height / 2 - inspection.region.centerY * height;
+    if (![scale, width, height].every((value) => Number.isFinite(value) && value > 0) ||
+        ![x, y].every(Number.isFinite))
+        throw new RangeError('Saved canvas inspection cannot be represented by this image geometry.');
+    return Object.freeze({ scale, x, y, mode: canvasCameraMode(scale, geometry) });
 }

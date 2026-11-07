@@ -51,7 +51,7 @@ export class ComfyWorkflowInputState {
         const root = this.root();
         if (!root)
             return null;
-        const stored = this.#read(root);
+        const stored = readComfyWorkflowInputState(root);
         if (stored && !this.peers().some((peer) => storedId(peer) === stored.id))
             return stored.id;
         if (stored) {
@@ -72,12 +72,12 @@ export class ComfyWorkflowInputState {
      */
     loaded() {
         const root = this.root();
-        return root ? (this.#read(root)?.id ?? EMPTY_WORKFLOW) : null;
+        return root ? (readComfyWorkflowInputState(root)?.id ?? EMPTY_WORKFLOW) : null;
     }
     /** Read the remembered selection when it belongs to the requested workflow. */
     read(workflow) {
         const root = this.root();
-        const stored = root ? this.#read(root) : null;
+        const stored = root ? readComfyWorkflowInputState(root) : null;
         return stored?.id === workflow
             ? { route: stored.route, surface: stored.surface, mask: stored.mask }
             : null;
@@ -85,33 +85,34 @@ export class ComfyWorkflowInputState {
     /** Remember a selection for the workflow that is still loaded. */
     write(workflow, selection) {
         const root = this.root();
-        if (!root || this.#read(root)?.id !== workflow)
+        if (!root || readComfyWorkflowInputState(root)?.id !== workflow)
             return;
         this.#write(root, { version: 1, id: workflow, ...selection });
-    }
-    /** Validate the stored record; malformed records are ignored and replaced on the next write. */
-    #read(root) {
-        const value = isRecord(root.extra) ? root.extra[WORKFLOW_INPUT_STATE_KEY] : undefined;
-        if (!isRecord(value) ||
-            value.version !== 1 ||
-            typeof value.id !== 'string' ||
-            !/^workflow-[\w-]{1,100}$/.test(value.id) ||
-            (value.route !== 'input' && value.route !== 'output') ||
-            !optionalKey(value.surface) ||
-            !optionalKey(value.mask))
-            return null;
-        return {
-            version: 1,
-            id: value.id,
-            route: value.route,
-            surface: value.surface,
-            mask: value.mask,
-        };
     }
     /** Replace only this record, keeping every other `extra` entry. */
     #write(root, state) {
         root.extra = { ...(isRecord(root.extra) ? root.extra : {}), [WORKFLOW_INPUT_STATE_KEY]: state };
     }
+}
+/** Read a live or inactive serialized workflow's input selection through its authoritative format owner. */
+export function readComfyWorkflowInputState(root) {
+    const extra = isRecord(root) && isRecord(root.extra) ? root.extra : null;
+    const value = extra?.[WORKFLOW_INPUT_STATE_KEY];
+    if (!isRecord(value) ||
+        value.version !== 1 ||
+        typeof value.id !== 'string' ||
+        !/^workflow-[\w-]{1,100}$/.test(value.id) ||
+        (value.route !== 'input' && value.route !== 'output') ||
+        !optionalKey(value.surface) ||
+        !optionalKey(value.mask))
+        return null;
+    return Object.freeze({
+        version: 1,
+        id: value.id,
+        route: value.route,
+        surface: value.surface,
+        mask: value.mask,
+    });
 }
 /** Read the identity recorded in another workflow's serialized state, or null. */
 function storedId(state) {

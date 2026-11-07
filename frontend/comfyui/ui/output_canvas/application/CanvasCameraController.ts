@@ -31,7 +31,10 @@ import {
   projectCanvasInspection,
 } from '../domain/CanvasInspection.js';
 import type { CanvasViewId } from '../domain/CanvasIdentity.js';
-import type { CanvasSelection } from '../domain/CanvasViewState.js';
+import {
+  canvasInspectionSlotKey,
+  type CanvasInspectionSlot as CanvasSelection,
+} from '../domain/CanvasInspection.js';
 import type { CanvasInspectionStore, CanvasInspectionTarget } from './CanvasInspectionStore.js';
 import { CanvasCameraTransition, type CanvasFrameClock } from './CanvasCameraTransition.js';
 
@@ -86,12 +89,18 @@ export class CanvasCameraController {
   ): void {
     if (this.#disposed) return;
     const freshRun =
-      previewLane === null && this.options.inspections.presentRun(this.options.view, runOrder);
+      previewLane === null &&
+      this.options.inspections.presentRun(
+        this.options.view,
+        runOrder,
+        selection.scene?.[0] ?? null,
+      );
     const displayed = this.read();
     const previous = freshRun || displayed?.previewLane !== previewLane ? null : displayed;
     const sameSlot =
-      previous?.selection.sourceId === selection.sourceId &&
-      previous.selection.batchIndex === selection.batchIndex;
+      previous !== null &&
+      previous !== undefined &&
+      canvasInspectionSlotKey(previous.selection) === canvasInspectionSlotKey(selection);
     const sameImage =
       previous?.geometry.image.width === geometry.image.width &&
       previous.geometry.image.height === geometry.image.height;

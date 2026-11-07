@@ -1,9 +1,10 @@
-import { canvasMediaImages, canvasMediaItem } from '../domain/CanvasMedia.js';
+import { canvasMediaImages, canvasMediaItem, canvasMediaFile, } from '../domain/CanvasMedia.js';
 /** Keep late media requests from acting on a replacement workflow, item or newer copy intent. */
 export class CanvasMediaActions {
     options;
     #operation = 0;
     #disposed = false;
+    #actionCache = null;
     #pending = null;
     /** Bind the live renderer-neutral state and explicit platform action ports. */
     constructor(options) {
@@ -21,16 +22,41 @@ export class CanvasMediaActions {
     profile() {
         return this.options.profile?.() ?? null;
     }
+    /** Cache per-final capability facts at catalog/profile boundaries rather than camera or playback updates. */
+    itemActions() {
+        const entries = this.options.entries?.() ?? [];
+        const profile = this.profile();
+        if (this.#actionCache?.entries === entries && this.#actionCache.profile === profile)
+            return this.#actionCache.actions;
+        const actions = Object.freeze(entries.flatMap((entry) => entry.items.map((item) => this.#actions(item))));
+        this.#actionCache = { entries, profile, actions };
+        return actions;
+    }
+    /** Require every intended image layer and refuse an unresolved final instead of silently dropping it. */
+    photoshopAllAvailable() {
+        const entries = this.options.entries?.() ?? [];
+        const items = canvasMediaImages(entries);
+        return (items.length > 0 &&
+            !entries.some((entry) => entry.items.some((item) => item.unavailable)) &&
+            items.every((item) => this.#actions(item).photoshop));
+    }
     /** Execute a pinned file action and revalidate identity before asynchronous clipboard publication. */
     async run(command, scope) {
         if (this.#disposed || !this.options.accepts() || !scope.current())
             return false;
         if (command.type === 'photoshop-all-media')
             return await this.#photoshopAll(scope);
-        const item = canvasMediaItem(this.options.read(), command.target);
+        const item = command.type === 'file-media'
+            ? canvasMediaFile(this.options.read(), command.target)
+            : canvasMediaItem(this.options.read(), command.target);
         if (!item)
             return false;
-        return await this.#perform(() => canvasMediaItem(this.options.read(), command.target)?.id === item.id, scope, async (accepts, signal) => {
+        const actions = this.#actions(item);
+        if ((command.type === 'copy-media' && !actions.copy) ||
+            (command.type === 'file-media' && !actions.file) ||
+            (command.type === 'photoshop-media' && !actions.photoshop))
+            return false;
+        return await this.#perform(() => canvasMediaFile(this.options.read(), command.target)?.id === item.id, scope, async (accepts, signal) => {
             switch (command.type) {
                 case 'copy-media':
                     return (await this.options.copy?.(item, accepts, command.format, signal)) ?? false;
@@ -52,7 +78,7 @@ export class CanvasMediaActions {
         const photoshop = this.options.photoshop;
         const items = canvasMediaImages(this.options.entries?.() ?? []);
         const first = items[0];
-        if (!photoshop || !first)
+        if (!photoshop || !first || !this.photoshopAllAvailable())
             return false;
         const identity = JSON.stringify(items.map((item) => item.id));
         const layers = items.map((item) => ({ item, name: this.#layerName(item) }));
@@ -79,6 +105,8 @@ export class CanvasMediaActions {
             return snapshot.selected?.id === item.id || snapshot.secondary?.id === item.id;
         };
         if (!selected())
+            return false;
+        if (!this.#actions(item).file)
             return false;
         return await this.#perform(selected, scope, (accepts, signal) => fileAction(item, accepts, signal));
     }
@@ -125,5 +153,26 @@ export class CanvasMediaActions {
         this.#disposed = true;
         this.#pending?.controller.abort();
         this.#operation++;
+        this.#actionCache = null;
+    }
+    /** Combine platform support with current artifact availability, preserving accurate per-item file actions. */
+    #actions(item) {
+        const profile = this.options.profile?.(item);
+        const capability = this.options.capabilities?.(item);
+        const available = !item.unavailable && item.mediaKind !== 'unsupported';
+        return Object.freeze({
+            itemId: item.id,
+            copy: available &&
+                item.mediaKind === 'image' &&
+                !!this.options.copy &&
+                (capability?.copy ?? true),
+            file: available && !!this.options.fileAction && (capability?.file ?? true),
+            drag: available && item.mediaKind === 'image' && (capability?.drag ?? true),
+            photoshop: available &&
+                item.mediaKind === 'image' &&
+                !!this.options.photoshop &&
+                (capability?.photoshop ?? profile?.photoshop ?? true),
+            fileAction: profile?.fileAction ?? 'download',
+        });
     }
 }

@@ -29,6 +29,8 @@ export interface WorkflowSubmissionOrderSource {
 export interface WorkflowSubmissionContext {
   readonly session: WorkflowSessionContext;
   readonly sources: readonly WorkflowOutputSource[];
+  /** Capture the desktop document revision before asynchronous host prompt construction, when available. */
+  readonly graphRevision?: number;
   readonly canvasReturns?: readonly WorkflowCanvasReturn[];
   /** The prompt scene this submission renders, when its request queued one prompt per scene. */
   readonly scene?: WorkflowSceneMember;
@@ -44,6 +46,7 @@ export function freezeWorkflowSubmissionContext(
 ): WorkflowSubmissionContext {
   return Object.freeze({
     ...(context.scene ? { scene: freezeWorkflowSceneMember(context.scene) } : {}),
+    ...(context.graphRevision !== undefined ? { graphRevision: context.graphRevision } : {}),
     ...(context.canvasReturns
       ? {
           canvasReturns: Object.freeze(
