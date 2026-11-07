@@ -90,7 +90,7 @@ impl Builder<'_> {
             font_size: size,
             line_height: line,
             weight: 400,
-            color: tone.color(),
+            color: tone.color(self.view.surface.theme),
         }
     }
     /// Measure complete wrapped text before applying the page's visible clipping rectangle.

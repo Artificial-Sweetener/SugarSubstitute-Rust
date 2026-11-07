@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Authoritative native text-control typography and editing treatment.
 use windows::Win32::{
-    Foundation::{COLORREF, RECT},
+    Foundation::RECT,
     UI::{
         Controls::RichEdit::*,
         WindowsAndMessaging::{ES_AUTOHSCROLL, WS_VSCROLL},
@@ -31,7 +31,8 @@ impl TextStyle {
         };
         font.Base.yHeight = height;
         if self == Self::Field {
-            font.Base.crTextColor = COLORREF(0xffffff);
+            // Plain editable fields resolve automatic foreground through their paint host.
+            font.Base.dwEffects |= CFE_AUTOCOLOR;
         }
         for (slot, unit) in font.Base.szFaceName.iter_mut().zip(family.encode_utf16()) {
             *slot = unit;

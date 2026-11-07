@@ -40,6 +40,7 @@ pub(super) fn qualify(peer: &Peer) -> TestResult {
 pub(super) fn qualify_palette(
     peer: &Peer,
     frame: &sugarsubstitute_contracts::presentation::PreparedFrame,
+    theme: sugarsubstitute_contracts::configuration::Theme,
 ) -> TestResult {
     use crate::native_storage::Dib;
     use sugarsubstitute_contracts::presentation::FrameShape;
@@ -68,10 +69,19 @@ pub(super) fn qualify_palette(
             GdiFlush().ok()?;
         }
         let pixels = dib.pixels_mut()?;
-        let dark = pixels.chunks_exact(4).filter(|pixel| pixel[..3] == [41, 41, 41]).count();
-        let light = pixels.chunks_exact(4).filter(|pixel| pixel[..3] == [255, 255, 255]).count();
-        if dark < pixels.len() / 8 || light == 0 {
-            return Err(format!("Native popup palette differs: dark={dark}, light={light}").into());
+        let (background, foreground) =
+            if theme == sugarsubstitute_contracts::configuration::Theme::Dark {
+                ([41, 41, 41], [255, 255, 255])
+            } else {
+                ([255, 255, 255], [0, 0, 0])
+            };
+        let fill = pixels.chunks_exact(4).filter(|pixel| pixel[..3] == background).count();
+        let text = pixels.chunks_exact(4).filter(|pixel| pixel[..3] == foreground).count();
+        if fill < pixels.len() / 8 || text == 0 {
+            return Err(format!(
+                "Native popup palette differs in {theme:?}: fill={fill}, text={text}"
+            )
+            .into());
         }
         Ok(())
     })();

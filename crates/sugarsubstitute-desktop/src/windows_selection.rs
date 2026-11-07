@@ -29,7 +29,10 @@ impl Callback {
             if input == InputKind::Select
                 && sugarsubstitute_ui::windows::select::popup(hwnd)? == popup
             {
-                return Ok(Some(sugarsubstitute_ui::windows::select::popup_colors(dc)?));
+                return Ok(Some(sugarsubstitute_ui::windows::select::popup_colors(
+                    dc,
+                    self.theme.get(),
+                )?));
             }
             index += 1;
         }

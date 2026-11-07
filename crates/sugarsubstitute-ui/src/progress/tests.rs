@@ -12,7 +12,7 @@ fn progress_geometry_translates_exactly_at_multiple_scales()
     for appearance in [
         ProgressAppearance::Hairline { dark: true },
         ProgressAppearance::Panel { dark: false },
-        ProgressAppearance::Wizard,
+        ProgressAppearance::Wizard { dark: true },
     ] {
         for scale in [1.0, 1.25, 1.5, 2.0] {
             let bar = ProgressBar { x: 4.0, y: 8.0, width: 48.0, height: 4.0, appearance };
@@ -44,7 +44,7 @@ fn invalid_progress_and_destination_are_rejected_atomically()
         y: 8.0,
         width: 48.0,
         height: 4.0,
-        appearance: ProgressAppearance::Wizard,
+        appearance: ProgressAppearance::Wizard { dark: true },
     };
     let frame = ProgressFrame { completed: 0.5, activity: None };
     for scale in [0.0, -1.0, f32::NAN, f32::INFINITY, 4.1] {
@@ -74,7 +74,7 @@ fn completion_pixel(
     let mut cursor = ProgressCursor::new(64, 32, bar, frame, accent, 1.0)?;
     while !cursor.step(&mut target)? {}
     let fill = target.pixel(10, 9).ok_or("Missing fill")?;
-    if matches!(appearance, ProgressAppearance::Wizard) {
+    if matches!(appearance, ProgressAppearance::Wizard { .. }) {
         assert_eq!(target.pixel(42, 9).map(|p| p.alpha()), Some(56));
     }
     Ok((fill.red(), fill.green(), fill.blue(), fill.alpha()))
@@ -83,7 +83,10 @@ fn completion_pixel(
 /// Keep installer accent and track colors under the same widget owner.
 #[test]
 fn wizard_progress_uses_the_product_fallback_and_track() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(completion_pixel(ProgressAppearance::Wizard, PRODUCT)?, (255, 68, 132, 255));
+    assert_eq!(
+        completion_pixel(ProgressAppearance::Wizard { dark: true }, PRODUCT)?,
+        (255, 68, 132, 255)
+    );
     Ok(())
 }
 
@@ -92,11 +95,15 @@ fn wizard_progress_uses_the_product_fallback_and_track() -> Result<(), Box<dyn s
 fn completion_uses_the_supplied_system_accent() -> Result<(), Box<dyn std::error::Error>> {
     let accent = AccentPalette::system(AccentColor::new(0, 120, 212));
     for appearance in [
-        ProgressAppearance::Wizard,
+        ProgressAppearance::Wizard { dark: true },
+        ProgressAppearance::Wizard { dark: false },
         ProgressAppearance::Panel { dark: true },
         ProgressAppearance::Panel { dark: false },
     ] {
-        let expected = if matches!(appearance, ProgressAppearance::Panel { dark: false }) {
+        let expected = if matches!(
+            appearance,
+            ProgressAppearance::Panel { dark: false } | ProgressAppearance::Wizard { dark: false }
+        ) {
             (0, 120, 212, 255)
         } else {
             (41, 162, 255, 255)

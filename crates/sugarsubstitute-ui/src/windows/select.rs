@@ -90,13 +90,15 @@ pub fn popup(hwnd: HWND) -> Result<HWND, NativeUiError> {
     Ok(info.hwndList)
 }
 
-/// Apply the Fluent dropdown palette to an original popup's synchronous color request.
+/// Apply the resolved containing surface's Fluent palette to its original popup's
+/// synchronous color request. Retain that mode with the controls' accepted prepared frame.
 /// The returned DC brush is system-owned; it must not be deleted or retained beyond this paint.
 /// OS selection, accessibility, keyboard input and scrolling remain with the original list.
 /// # Errors
 /// Rejects an invalid paint context or failed native color assignment.
 pub fn popup_colors(
     dc: windows::Win32::Graphics::Gdi::HDC,
+    theme: sugarsubstitute_contracts::configuration::Theme,
 ) -> Result<windows::Win32::Graphics::Gdi::HBRUSH, NativeUiError> {
     use windows::Win32::{
         Foundation::COLORREF,
@@ -107,9 +109,13 @@ pub fn popup_colors(
     if dc.is_invalid() {
         return Err(rejected("native_select_palette"));
     }
-    let [red, green, blue, _] = crate::widgets::TextTone::Primary.color();
+    let [red, green, blue, _] = crate::widgets::TextTone::Primary.color(theme);
     let foreground = COLORREF(u32::from(red) | (u32::from(green) << 8) | (u32::from(blue) << 16));
-    let background = COLORREF(0x292929);
+    let background = COLORREF(if theme == sugarsubstitute_contracts::configuration::Theme::Dark {
+        0x292929
+    } else {
+        0xffffff
+    });
     // SAFETY: The parent lends this original list's paint DC only during WM_CTLCOLORLISTBOX.
     let (text, fill, brush_color, brush) = unsafe {
         (

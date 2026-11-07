@@ -265,7 +265,16 @@ fn qualify() -> TestResult {
         );
 
         popup::qualify(&controls.creation.peers[3].value)?;
-        popup::qualify_palette(&controls.creation.peers[3].value, &frame)?;
+        for theme in [
+            sugarsubstitute_contracts::configuration::Theme::Light,
+            sugarsubstitute_contracts::configuration::Theme::Dark,
+        ] {
+            controls.present_fields(
+                &frame,
+                theme == sugarsubstitute_contracts::configuration::Theme::Dark,
+            )?;
+            popup::qualify_palette(&controls.creation.peers[3].value, &frame, theme)?;
+        }
         popup::qualify_commit(&controls.creation.peers[3].value, &mut events)?;
         popup::qualify_repaint(&mut controls, &mut plan, &mut events)?;
         Ok(())

@@ -289,3 +289,47 @@ fn native_picker_correlation_preserves_current_user_text() -> Result<()> {
     assert_eq!(f.session.navigation.flow.choices().install_root, "Selected🙂");
     f.finish()
 }
+
+/// Normal system mode changes retire old paint; repeated observations keep current pixels valid.
+#[test]
+fn system_theme_change_invalidates_only_changed_prepared_mode() -> Result<()> {
+    use sugarsubstitute_contracts::configuration::Theme;
+    use sugarsubstitute_desktop::installer::native::Event as NativeEvent;
+    let mut fixture = Fixture::new()?;
+    fixture.frame(Duration::ZERO)?;
+    for theme in [Theme::Light, Theme::Dark] {
+        fixture.session.input(&mut fixture.controller, NativeEvent::SystemTheme(theme))?;
+        assert_eq!(fixture.session.view.surface.theme, theme);
+        assert!(!fixture.session.ready());
+        fixture.frame(Duration::ZERO)?;
+        fixture.session.input(&mut fixture.controller, NativeEvent::SystemTheme(theme))?;
+        assert!(fixture.session.ready());
+    }
+    fixture.finish()
+}
+
+/// System appearance reaches the retained PaintSpec before execution or native page admission.
+#[test]
+fn initial_system_theme_updates_inert_controller_paint_spec() -> Result<()> {
+    use sugarsubstitute_contracts::configuration::Theme;
+    use sugarsubstitute_desktop::installer::native::Event as NativeEvent;
+    let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
+    let mut session = Session::new(
+        "Original folder".into(),
+        View {
+            surface: PaintSpec { width: 1180, height: 760, scale: 1.0, theme: Theme::Dark },
+            accent: sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
+            now: Duration::ZERO,
+            scroll: 0.0,
+            interaction: Interaction::default(),
+            text_revisions: [0; 5],
+        },
+    )?;
+    for theme in [Theme::Light, Theme::Dark] {
+        session.input(&mut controller, NativeEvent::SystemTheme(theme))?;
+        assert_eq!(session.view.surface.theme, theme);
+        assert!(!session.ready());
+        assert!(controller.owner.is_none());
+    }
+    Ok(())
+}

@@ -346,3 +346,10 @@ mod scrolling;
 
 #[path = "capture_tests.rs"]
 mod capture;
+
+/// The resolved Tao mode reaches the same shared preparation mode without a forced default.
+#[test]
+fn resolved_native_theme_keeps_both_preparation_modes() {
+    assert_eq!(paint_theme(Theme::Light), sugarsubstitute_contracts::configuration::Theme::Light);
+    assert_eq!(paint_theme(Theme::Dark), sugarsubstitute_contracts::configuration::Theme::Dark);
+}

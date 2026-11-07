@@ -158,7 +158,7 @@ impl Renderer {
                 self.dark,
                 &glyphs.target,
             ),
-            None => draw_field(engine, &glyphs.target),
+            None => draw_field(engine, self.dark, &glyphs.target),
         };
         #[cfg(test)]
         {
@@ -229,8 +229,14 @@ fn rejected(operation: &'static str) -> DesktopError {
     DesktopError::message(operation, "native console alpha surface contract rejected")
 }
 
-/// Paint editable text directly; the native document retains its original format and selection.
-fn draw_field(engine: &Engine, target: &ID2D1RenderTarget) -> Result<(), DesktopError> {
+/// Resolve automatic plain-text foreground for this accepted frame without changing document
+/// formatting, selection, undo or revision. The native host borrows this mode only during draw.
+fn draw_field(engine: &Engine, dark: bool, target: &ID2D1RenderTarget) -> Result<(), DesktopError> {
+    let services = engine.services()?;
+    if engine.state.painting.replace(true) {
+        return Err(rejected("field_paint_reentry"));
+    }
+    let original = engine.state.default_foreground.replace(if dark { 0xffffff } else { 0 });
     let mut update = engine.state.client_bounds();
     let mut logical = windows::Win32::Foundation::RECTL {
         left: update.left,
@@ -239,13 +245,16 @@ fn draw_field(engine: &Engine, target: &ID2D1RenderTarget) -> Result<(), Desktop
         bottom: update.bottom,
     };
     // SAFETY: The affine native document and transparent target remain retained through this draw.
-    unsafe {
-        engine.services()?.TxDrawD2D(
+    let drawn = unsafe {
+        services.TxDrawD2D(
             target,
             &mut logical,
             &mut update,
             windows::Win32::UI::Controls::RichEdit::TXTVIEW_ACTIVE.0,
         )
     }
-    .map_err(|cause| DesktopError::new("field_glyph_draw", cause))
+    .map_err(|cause| DesktopError::new("field_glyph_draw", cause));
+    engine.state.default_foreground.set(original);
+    engine.state.painting.set(false);
+    drawn.and_then(|()| engine.check())
 }

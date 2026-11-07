@@ -58,6 +58,7 @@ pub(crate) struct Callback {
     controls: RefCell<Vec<Registration>>,
     failure: RefCell<Option<DesktopError>>,
     paint_mode: crate::windows_controls::PaintMode,
+    pub(crate) theme: Cell<sugarsubstitute_contracts::configuration::Theme>,
     pub(crate) caption: Cell<Option<caption::Caption>>,
     pub(crate) hovered: Cell<HWND>,
 }
@@ -68,6 +69,7 @@ impl Callback {
         proxy: EventLoopProxy<NativeAction>,
         timings: Option<TimingObserver>,
         paint_mode: crate::windows_controls::PaintMode,
+        theme: sugarsubstitute_contracts::configuration::Theme,
         count: usize,
     ) -> Result<Self, DesktopError> {
         let mut controls = Vec::new();
@@ -86,6 +88,7 @@ impl Callback {
             controls: RefCell::new(controls),
             failure: RefCell::new(None),
             paint_mode,
+            theme: Cell::new(theme),
             caption: Cell::new(None),
             hovered: Cell::new(HWND::default()),
         })

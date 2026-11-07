@@ -80,7 +80,13 @@ impl ScrollViewport {
                 "Original scroll owner is retired",
             ));
         }
-        let model = geometry(frame, bounds, content, position)?;
+        let model = geometry(
+            frame,
+            bounds,
+            content,
+            position,
+            self.window.theme() == tao::window::Theme::Dark,
+        )?;
         let changed = self.state.model.get().is_some_and(|old| {
             model.is_none_or(|new| old.bounds != new.bounds || old.scale != new.scale)
         });
@@ -217,6 +223,7 @@ fn geometry(
     b: Bounds,
     content: f32,
     position: f32,
+    dark: bool,
 ) -> Result<Option<Model>, DesktopError> {
     b.validate(frame.scale() as f32).map_err(|e| DesktopError::new("native_scroll_bounds", e))?;
     let maximum = (content - b.height).max(0.0);
@@ -248,7 +255,7 @@ fn geometry(
         maximum: (maximum * UNITS).round() as i32,
         page: (b.height * UNITS).round() as u32,
         position: (position * UNITS).round() as i32,
-        dark: true,
+        dark,
         enabled: true,
         hover: 0,
         pressed: Part::None,

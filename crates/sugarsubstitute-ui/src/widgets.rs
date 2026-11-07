@@ -6,6 +6,7 @@
 use crate::accent::AccentPalette;
 use crate::bitmap::{Bitmap, CoverageMask};
 use crate::shapes::{AllocationError, CoverageRaster, blend_pixel, rounded};
+use sugarsubstitute_contracts::configuration::Theme;
 
 /// Logical rectangle inside a surface's client area.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -112,7 +113,7 @@ pub enum Decoration {
     },
 }
 
-/// Shared dark Fluent form foreground roles, independent of any page's text or layout.
+/// Shared mode-dependent Fluent form foreground roles, independent of any page's text or layout.
 #[derive(Clone, Copy, Debug)]
 pub enum TextTone {
     /// Primary text and input values.
@@ -132,19 +133,31 @@ pub enum TextTone {
     },
 }
 impl TextTone {
-    /// Unpremultiplied foreground; raster coverage remains with the shared text renderer.
-    pub fn color(self) -> [u8; 4] {
+    /// Unpremultiplied foreground for the resolved surface mode; raster coverage remains
+    /// with the shared text renderer. Callers retain this mode with their prepared scene.
+    pub fn color(self, theme: Theme) -> [u8; 4] {
+        let dark = theme == Theme::Dark;
+        let neutral = |alpha| {
+            let channel = if dark { 255 } else { 0 };
+            [channel, channel, channel, alpha]
+        };
         match self {
-            Self::Primary => [255; 4],
-            Self::Secondary => [255, 255, 255, 189],
-            Self::Tertiary => [255, 255, 255, 150],
-            Self::Error => [255, 173, 191, 255],
+            Self::Primary => neutral(255),
+            Self::Secondary => neutral(189),
+            Self::Tertiary => neutral(150),
+            Self::Error => {
+                if dark {
+                    [255, 173, 191, 255]
+                } else {
+                    [196, 43, 28, 255]
+                }
+            }
             Self::Action { primary, state } => match (primary, state) {
-                (true, ControlState::Disabled) => [255, 255, 255, 110],
-                (false, ControlState::Disabled) => [255, 255, 255, 92],
-                (false, ControlState::Pressed) => [255, 255, 255, 200],
-                (true, _) => crate::accent::foreground(true, state),
-                (false, _) => [255; 4],
+                (true, ControlState::Disabled) => [255, 255, 255, if dark { 110 } else { 230 }],
+                (false, ControlState::Disabled) => neutral(92),
+                (false, ControlState::Pressed) => neutral(if dark { 200 } else { 161 }),
+                (true, _) => crate::accent::foreground(dark, state),
+                (false, _) => neutral(255),
             },
         }
     }
@@ -185,7 +198,7 @@ pub struct DecorationCursor {
 
 impl DecorationCursor {
     /// Capture validated form geometry without initializing the coverage planes.
-    /// The surface's accent supplies every emphasized role of the decoration.
+    /// The resolved surface theme supplies neutral roles; its accent supplies emphasized roles.
     /// # Errors
     /// Rejects unsupported geometry and preserves allocation failures.
     pub fn new(
@@ -193,6 +206,7 @@ impl DecorationCursor {
         height: u32,
         bounds: Bounds,
         decoration: Decoration,
+        theme: Theme,
         accent: AccentPalette,
         scale: f32,
     ) -> Result<Self, AllocationError> {
@@ -200,7 +214,7 @@ impl DecorationCursor {
         if width == 0 || height == 0 || width > 4096 || height > 4096 {
             return Err(AllocationError::InvalidDimensions);
         }
-        let palette = decoration.palette(accent);
+        let palette = decoration.palette(theme, accent);
         let path = rounded(bounds.x, bounds.y, bounds.width, bounds.height, palette.radius, scale)
             .ok_or(AllocationError::InvalidDimensions)?;
         Ok(Self {

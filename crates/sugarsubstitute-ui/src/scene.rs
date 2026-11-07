@@ -257,8 +257,16 @@ impl SceneCursor {
         let s = self.surface;
         self.active = Some(match element {
             Element::Decoration { bounds, appearance } => Active::Decoration(
-                DecorationCursor::new(s.width, s.height, bounds, appearance, self.accent, s.scale)
-                    .map_err(io::Error::other)?,
+                DecorationCursor::new(
+                    s.width,
+                    s.height,
+                    bounds,
+                    appearance,
+                    s.theme,
+                    self.accent,
+                    s.scale,
+                )
+                .map_err(io::Error::other)?,
             ),
             Element::Label { text, layout } => {
                 let spec = LabelPaintSpec { surface: s, layout };

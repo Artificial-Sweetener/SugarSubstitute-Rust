@@ -55,6 +55,12 @@ impl Session {
                 }
             }
             NativeEvent::Picked(request, result) => self.picked(request, result)?,
+            NativeEvent::SystemTheme(theme) => {
+                if theme != self.view.surface.theme {
+                    self.invalidate()?;
+                    self.view.surface.theme = theme;
+                }
+            }
             NativeEvent::SystemAccent(accent) => {
                 let accent = sugarsubstitute_ui::accent::AccentPalette::resolve(accent);
                 if accent != self.view.accent {

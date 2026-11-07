@@ -35,6 +35,7 @@ impl Native {
                         width: 1180,
                         height: 760,
                         scale: 1.0,
+                        // Inert seed; the native owner delivers the resolved system theme before start.
                         theme: sugarsubstitute_contracts::configuration::Theme::Dark,
                     },
                     // The native adapter delivers the system accent before the first page.

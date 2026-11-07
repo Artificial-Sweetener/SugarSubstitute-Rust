@@ -256,10 +256,10 @@ impl ITextHost_Impl for TextHost_Impl {
     }
     fn TxGetSysColor(&self, index: SYS_COLOR_INDEX) -> COLORREF {
         if self.state.painting.get() {
-            if index == COLOR_HIGHLIGHT {
+            if self.state.style == TextStyle::Transcript && index == COLOR_HIGHLIGHT {
                 return COLORREF(self.state.selection_background.get());
             }
-            if index == COLOR_HIGHLIGHTTEXT {
+            if self.state.style == TextStyle::Transcript && index == COLOR_HIGHLIGHTTEXT {
                 return COLORREF(self.state.selection_foreground.get());
             }
             if index == COLOR_WINDOWTEXT {

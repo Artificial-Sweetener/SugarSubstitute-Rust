@@ -252,7 +252,7 @@ rationale = "Native boundary: Own hidden RichEdit resources and the outer qualif
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls.rs"
-source_sha256 = "sha256:08693b1af89806b00d4444565bcbc12b28c4d8b4ce82da37a99cc78ee3a9e269"
+source_sha256 = "sha256:899ea8730be9d5636eef6911198828710fa9a4d469d4ddc061abb96698f5a062"
 kind = "native"
 rationale = "Native boundary: Own native accessible buttons and the bounded read-only console through checked retirement.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -570,13 +570,13 @@ rationale = "Isolated native interaction or rendering qualification uses deliber
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/windows.rs"
-source_sha256 = "sha256:982be0214dfdf7db4626dcd8b36b1f0a8413a2cec624f5625b8ef885a3813aff"
+source_sha256 = "sha256:e06af85da6351536239d90516bb14285b1959881a3ded5a07d69f9fda0dc6e69"
 kind = "native"
 rationale = "Affine native text, control or window adapter consumes original bounded labels and shared widget specifications; the presenting owner supplies catalog copy, and external native references retain their checked lifetime."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls_form_tests.rs"
-source_sha256 = "sha256:c6aac20fd8f65a9676103c3593e3b446e6271fbef653ca6c42f656f4b22c211c"
+source_sha256 = "sha256:b7830e65fad4106fec4f9dd1fd0f7569ee7d9d152f699ffe1dfc26e1f45644fd"
 kind = "fixture"
 rationale = "Isolated native interaction or rendering qualification uses deliberate labels to exercise focus, selection, private desktop lifetimes and checked teardown; product copy remains catalog-owned."
 
@@ -594,7 +594,7 @@ rationale = "Affine native text, control or window adapter consumes original bou
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls_values.rs"
-source_sha256 = "sha256:630253e4b545c0772b523d479c6f52df4219be67e470bb7855b3d073f74d5ba9"
+source_sha256 = "sha256:3f93bed9473ea3555d967d581df27373b3816617e9689670e4e28b19912322e8"
 kind = "native"
 rationale = "Affine native text, control or window adapter consumes original bounded labels and shared widget specifications; the presenting owner supplies catalog copy, and external native references retain their checked lifetime."
 
@@ -630,7 +630,7 @@ rationale = "Isolated native interaction or rendering qualification uses deliber
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_text/host_interface.rs"
-source_sha256 = "sha256:6ae7ff7e8826e38354cf69a8708e449ea788385285b5bdfbb118315ae1924a5f"
+source_sha256 = "sha256:4c1f472d7628c985ced831fce9b0474dfc1cff40e63ebb0ef9513339b2461207"
 kind = "native"
 rationale = "Affine native text, control or window adapter consumes original bounded labels and shared widget specifications; the presenting owner supplies catalog copy, and external native references retain their checked lifetime."
 

@@ -182,6 +182,11 @@ impl Controls {
         frame: &sugarsubstitute_contracts::presentation::PreparedFrame,
         dark: bool,
     ) -> Result<(), DesktopError> {
+        self.callback.theme.set(if dark {
+            sugarsubstitute_contracts::configuration::Theme::Dark
+        } else {
+            sugarsubstitute_contracts::configuration::Theme::Light
+        });
         for slot in &self.creation.peers {
             let peer = &slot.value;
             if let Some(engine) = &peer.engine {

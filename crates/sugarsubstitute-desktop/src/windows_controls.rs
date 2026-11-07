@@ -121,7 +121,12 @@ impl Controls {
         timings: Option<crate::timing::TimingObserver>,
     ) -> Result<Self, DesktopError> {
         specification::validate(&[], controls)?;
-        let callback = Rc::new(Callback::new(proxy, timings, paint_mode, controls.len())?);
+        let theme = if window.theme() == tao::window::Theme::Dark {
+            sugarsubstitute_contracts::configuration::Theme::Dark
+        } else {
+            sugarsubstitute_contracts::configuration::Theme::Light
+        };
+        let callback = Rc::new(Callback::new(proxy, timings, paint_mode, theme, controls.len())?);
         let mut planned = Vec::new();
         planned
             .try_reserve_exact(controls.len())

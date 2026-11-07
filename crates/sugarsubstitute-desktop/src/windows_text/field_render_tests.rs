@@ -60,6 +60,35 @@ pub(super) fn qualify(engine: &Engine) -> TestResult {
     engine.message(EM_SETSEL, WPARAM(0), LPARAM(0))?;
     engine.qualify_pixels(output.dc(), false, output.pixels_mut()?)?;
     assert_eq!(engine.qualified_glyph_draws(), draws + 1, "selection change must redraw once");
+    // The same real document changes mode without replacing text, selection or revision.
+    let selection = engine.message(EM_GETSEL, WPARAM(0), LPARAM(0))?;
+    let value = engine.field_value()?;
+    for dark in [true, false, true] {
+        engine.prepare(
+            &frame,
+            None,
+            RECT { left: 0, top: 40, right: 250, bottom: 72 },
+            dark,
+            1.0,
+        )?;
+        engine.qualify_pixels(output.dc(), true, output.pixels_mut()?)?;
+        let pixels = output.pixels_mut()?;
+        assert!(
+            (6..28).any(|y| (20..180).any(|x| {
+                let pixel = &pixels[((y * 300 + x) * 4)..][..4];
+                pixel[3] == 255
+                    && if dark {
+                        pixel[..3].iter().all(|channel| *channel > 200)
+                    } else {
+                        pixel[..3].iter().all(|channel| *channel < 8)
+                    }
+            })),
+            "Native field lacks resolved foreground in dark={dark}"
+        );
+        assert_eq!(engine.field_value()?.text, value.text);
+        assert_eq!(engine.message(EM_GETSEL, WPARAM(0), LPARAM(0))?, selection);
+        assert_eq!(engine.state.revision.get(), revision);
+    }
     output.close()?;
     Ok(())
 }

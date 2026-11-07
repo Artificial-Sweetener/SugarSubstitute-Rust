@@ -96,6 +96,19 @@ impl Presenter {
         })
     }
 
+    /// Update this retained window's normal material mode before preparing its next frame.
+    /// Fallback pixels use the same resolved mode when DWM material is unavailable.
+    pub(crate) fn set_theme(&mut self, dark: bool) -> Result<(), DesktopError> {
+        let _supported = set_attribute(
+            HWND(self.window.hwnd() as *mut c_void),
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            i32::from(dark),
+            "configure_native_theme",
+        )?;
+        self.background = if dark { 32 } else { 243 };
+        Ok(())
+    }
+
     /// Release copied native storage while its original frame reservation remains charged.
     pub(crate) fn shutdown(&mut self) -> Result<(), DesktopError> {
         if let Some(dib) = &mut self.dib {

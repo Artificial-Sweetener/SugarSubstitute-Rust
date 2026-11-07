@@ -3,6 +3,7 @@
 //! Installer branding, journey, feedback and footer layout surrounding the clipped page viewport.
 use super::{builder::bounds, *};
 use sugarsubstitute_application::setup_flow::Failure;
+use sugarsubstitute_contracts::configuration::Theme;
 use sugarsubstitute_ui::{
     form::Role,
     icons::FluentIcon,
@@ -135,7 +136,9 @@ impl Builder<'_> {
                 y: rect.y,
                 width: rect.width,
                 height: rect.height,
-                appearance: ProgressAppearance::Wizard,
+                appearance: ProgressAppearance::Wizard {
+                    dark: self.view.surface.theme == Theme::Dark,
+                },
             },
             frame: ProgressFrame { completed: completion, activity: None },
         });

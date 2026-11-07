@@ -21,6 +21,15 @@ use tao::{
 mod projection;
 use projection::Projection;
 
+/// Translate the same theme resolved by the native window into shared preparation input.
+fn paint_theme(theme: Theme) -> sugarsubstitute_contracts::configuration::Theme {
+    if theme == Theme::Dark {
+        sugarsubstitute_contracts::configuration::Theme::Dark
+    } else {
+        sugarsubstitute_contracts::configuration::Theme::Light
+    }
+}
+
 /// Own a single event loop from hidden construction through checked native and application teardown.
 pub(super) fn run(
     options: super::Window,
@@ -45,12 +54,12 @@ pub(super) fn run(
             .with_max_inner_size(tao::dpi::PhysicalSize::new(4096, 4096))
             .with_decorations(false)
             .with_transparent(true)
-            .with_theme(Some(Theme::Dark))
+            .with_theme(None)
             .with_visible(false)
             .build(&events)?,
     );
     let (mut presenter, mut failure): (_, Option<Box<dyn Error>>) =
-        match Presenter::new_main(window.clone(), true) {
+        match Presenter::new_main(window.clone(), window.theme() == Theme::Dark) {
             Ok(owner) => (Some(owner), None),
             Err(cause) => (None, Some(Box::new(cause))),
         };
@@ -85,6 +94,12 @@ pub(super) fn run(
     let mut close_started = false;
     let mut revealed = false;
     let started = Instant::now();
+    // Resolve before start so the first prepared page and native peers share this window's mode.
+    if let Err(cause) = lifetime.input(Event::SystemTheme(paint_theme(window.theme())))
+        && failure.is_none()
+    {
+        failure = Some(cause);
+    }
     let mut accent =
         crate::windows_system_accent::SystemAccent::observe(proxy.clone(), wake_lifetime.clone());
     // The first installer page is prepared with the current accent.
@@ -124,6 +139,10 @@ pub(super) fn run(
                 }
                 NativeEvent::UserEvent(NativeAction::FocusChanged) if !closing => {
                     lifetime.input(Event::Interaction { hovered, pressed, focused: controls.as_ref().and_then(Controls::focused) })?;
+                }
+                NativeEvent::WindowEvent { event: WindowEvent::ThemeChanged(theme), .. } if !closing => {
+                    presenter.as_mut().ok_or("Native installer presenter absent")?.set_theme(theme == Theme::Dark)?;
+                    lifetime.input(Event::SystemTheme(paint_theme(theme)))?;
                 }
                 NativeEvent::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } if !closing => {
                     let scale = window.scale_factor();
@@ -218,7 +237,7 @@ pub(super) fn run(
                             let owner = controls.as_mut().ok_or("Native form owner absent")?;
                             owner.update(&next.specifications)?;
                             owner.clip(&next.clips)?;
-                            owner.present_fields(page.frame, true)?;
+                            owner.present_fields(page.frame, window.theme() == Theme::Dark)?;
                             page.frame.fund_storage(storage.as_mut().ok_or("Native control storage absent")?)?;
                             let painter = presenter.as_mut().ok_or("Native installer presenter absent")?;
                             painter.present(page.frame, None)?;

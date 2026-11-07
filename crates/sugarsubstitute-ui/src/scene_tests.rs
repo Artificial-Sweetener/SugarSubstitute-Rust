@@ -25,6 +25,40 @@ impl MemoryRelease for Release {
     }
 }
 
+/// The public scene entry point carries its retained mode into actual control-state pixels.
+#[test]
+fn scene_mode_reaches_actual_primary_button_state_pixels() -> Result<(), Box<dyn Error>> {
+    let mut resources = SceneResources::new("en")?;
+    for (theme, expected) in [
+        (Theme::Dark, [[255, 68, 132, 255], [230, 62, 119, 255], [209, 60, 110, 255]]),
+        (Theme::Light, [[233, 30, 99, 255], [245, 32, 104, 255], [245, 106, 153, 255]]),
+    ] {
+        for (state, expected) in [ControlState::Rest, ControlState::Hover, ControlState::Pressed]
+            .into_iter()
+            .zip(expected)
+        {
+            let mut cursor = SceneCursor::new(
+                PaintSpec { theme, ..surface() },
+                AccentPalette::PRODUCT,
+                vec![Element::Decoration {
+                    bounds: Bounds { x: 8.0, y: 8.0, width: 120.0, height: 32.0 },
+                    appearance: Decoration::Button { primary: true, state },
+                }],
+                None,
+            )?;
+            let mut pixels = Bitmap::new(160, 80).ok_or("Scene target absent")?;
+            while !cursor.step(&mut pixels, &mut resources)? {}
+            let pixel = pixels.pixel(40, 20).ok_or("Primary interior absent")?;
+            assert_eq!(
+                [pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()],
+                expected,
+                "Scene {theme:?} {state:?} pixels differ from the Qt-derived vector"
+            );
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn cancelled_scene_releases_its_masks_without_publishing_a_frame() -> Result<(), Box<dyn Error>> {
     let released = Arc::new(AtomicUsize::new(0));
@@ -93,7 +127,7 @@ fn scene_composes_real_widgets_labels_and_icons_in_order() -> Result<(), Box<dyn
                 y: 60.0,
                 width: 120.0,
                 height: 6.0,
-                appearance: ProgressAppearance::Wizard,
+                appearance: ProgressAppearance::Wizard { dark: true },
             },
             frame: ProgressFrame { completed: 0.5, activity: None },
         },
@@ -131,7 +165,7 @@ fn scene_accent_reaches_decorations_and_progress() -> Result<(), Box<dyn Error>>
                 y: 60.0,
                 width: 120.0,
                 height: 6.0,
-                appearance: ProgressAppearance::Wizard,
+                appearance: ProgressAppearance::Wizard { dark: true },
             },
             frame: ProgressFrame { completed: 0.5, activity: None },
         },

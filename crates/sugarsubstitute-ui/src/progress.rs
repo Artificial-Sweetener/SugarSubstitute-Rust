@@ -43,7 +43,10 @@ pub enum ProgressAppearance {
         dark: bool,
     },
     /// Rounded installer journey and operation progress.
-    Wizard,
+    Wizard {
+        /// Select completion and track colors for the resolved surface mode.
+        dark: bool,
+    },
 }
 
 /// Logical widget coordinates; the native host supplies the device scale separately.
@@ -84,8 +87,11 @@ impl ProgressBar {
             let path = rounded(self.x, self.y, self.width, 12.0, 6.0, scale)?;
             intersect(&path, (self.x + width) * scale, (self.y + self.height) * scale)
         } else {
-            let radius =
-                if matches!(self.appearance, ProgressAppearance::Wizard) { 3.0 } else { 2.0 };
+            let radius = if matches!(self.appearance, ProgressAppearance::Wizard { .. }) {
+                3.0
+            } else {
+                2.0
+            };
             rounded(self.x, self.y, width, self.height, radius, scale)
         }
     }
@@ -97,7 +103,9 @@ impl ProgressBar {
             ProgressAppearance::Hairline { dark } | ProgressAppearance::Panel { dark } => {
                 (accent.progress(dark), if dark { [255, 255, 255, 18] } else { [0, 0, 0, 12] })
             }
-            ProgressAppearance::Wizard => (accent.progress(true), [255, 255, 255, 56]),
+            ProgressAppearance::Wizard { dark } => {
+                (accent.progress(dark), if dark { [255, 255, 255, 56] } else { [0, 0, 0, 56] })
+            }
         }
     }
 }

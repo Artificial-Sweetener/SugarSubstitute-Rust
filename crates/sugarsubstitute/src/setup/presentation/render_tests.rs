@@ -119,3 +119,68 @@ fn checked_mirror_glyph_uses_the_on_accent_foreground() -> Result {
     }
     Ok(())
 }
+
+/// Actual installer scenes preserve mode-specific primary text and rendered fill in every state.
+#[test]
+fn primary_button_uses_resolved_theme_for_foreground_and_pixels() -> Result {
+    use sugarsubstitute_ui::widgets::ControlState;
+    let flow = SetupFlow::new("D:\\SugarSubstitute".into())?;
+    let mut resources = SceneResources::new("en")?;
+    for theme in [Theme::Dark, Theme::Light] {
+        for state in [ControlState::Rest, ControlState::Hover, ControlState::Pressed] {
+            let mut view = view(1180, 760, 1.0);
+            view.surface.theme = theme;
+            if state != ControlState::Rest {
+                view.interaction.hovered = Some(Action::Primary.id());
+            }
+            if state == ControlState::Pressed {
+                view.interaction.pressed = Some(Action::Primary.id());
+            }
+            let shape = FrameShape::new(1180, 760, 1.0)?;
+            let lease = MemoryLease::new(
+                METADATA_BYTES + FramePaint::reservation_bytes(shape),
+                Box::new(Release),
+            );
+            let scene = compose_flow(&flow, view, &mut resources, Some(&lease))?;
+            let primary = scene
+                .layout
+                .shell_controls
+                .iter()
+                .find(|peer| peer.id == Action::Primary.id())
+                .ok_or("Primary peer absent")?;
+            let bounds = primary.bounds;
+            let color = scene
+                .shell
+                .iter()
+                .find_map(|element| match element {
+                    Element::Label { layout, .. }
+                        if layout.origin == [bounds.x + 12.0, bounds.y + 6.0] =>
+                    {
+                        Some(layout.color)
+                    }
+                    _ => None,
+                })
+                .ok_or("Primary label absent")?;
+            let channel = if theme == Theme::Dark { 0 } else { 255 };
+            assert_eq!(
+                color,
+                [channel, channel, channel, if state == ControlState::Pressed { 161 } else { 255 }]
+            );
+            let identity = FrameIdentity {
+                surface: SurfaceId::new(1)?,
+                state_generation: Generation::new(2)?,
+                sequence: Generation::new(3)?,
+            };
+            let mut paint = scene.into_paint(identity, lease)?;
+            while !paint.step(&mut resources)? {}
+            let Prepared { frame, .. } = paint.finish()?;
+            let x = (bounds.x + 5.0) as usize;
+            let y = (bounds.y + bounds.height * 0.5) as usize;
+            assert_eq!(
+                &frame.pixels()[((y * 1180 + x) * 4)..][..4],
+                &view.accent.variants(theme == Theme::Dark).button(state)
+            );
+        }
+    }
+    Ok(())
+}
