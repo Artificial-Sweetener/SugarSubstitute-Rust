@@ -7,9 +7,9 @@ use crate::{
     kernel::{Computed, Parameters},
 };
 use sugarsubstitute_contracts::execution::JobContext;
-use sugarsubstitute_image_ops::{Filter, NodeId, RasterSource, Region, Sampling, SamplingAxis};
+use sugarsubstitute_image_ops::{Filter, NodeId, Region, Sampling, SamplingAxis};
 
-impl<S: RasterSource> GpuEvaluator<S> {
+impl<S> GpuEvaluator<S> {
     pub(crate) fn resample(
         &mut self,
         node: NodeId,

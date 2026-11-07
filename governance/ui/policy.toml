@@ -149,7 +149,7 @@ source_sha256 = "sha256:a5f7c82bbb2804fb16d35c408ac99792d8bb307317c96fc2bb754a99
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
-concern = "Explicit Vulkan/Metal devices, bounded DAG command batches, shared display encoding, native swapchain presentation and original resource custody through observed native completion"
+concern = "Explicit Vulkan/Metal devices, bounded DAG command batches, shared display encoding, projected presentation crops and rounded patches, native swapchain presentation and original resource custody through observed native completion"
 capabilities = ["raster"]
 sources = [
     "crates/sugarsubstitute-image-gpu/src/adapter.rs",
@@ -157,7 +157,10 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/buffer.rs",
     "crates/sugarsubstitute-image-gpu/src/dependency.rs",
     "crates/sugarsubstitute-image-gpu/src/display.rs",
+    "crates/sugarsubstitute-image-gpu/src/display_decode.rs",
     "crates/sugarsubstitute-image-gpu/src/display_image.rs",
+    "crates/sugarsubstitute-image-gpu/src/display_image/allocation.rs",
+    "crates/sugarsubstitute-image-gpu/src/display_projection.rs",
     "crates/sugarsubstitute-image-gpu/src/display_readback.rs",
     "crates/sugarsubstitute-image-gpu/src/evaluate/source.rs",
     "crates/sugarsubstitute-image-gpu/src/evaluate/sparse.rs",
@@ -171,13 +174,15 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/shared_surface.rs",
     "crates/sugarsubstitute-image-gpu/src/transfer.rs",
     "crates/sugarsubstitute-image-gpu/src/boundary_fixtures.rs",
+    "crates/sugarsubstitute-image-gpu/src/boundary_fixtures/patches.rs",
     "crates/sugarsubstitute-image-gpu/src/window.rs",
     "crates/sugarsubstitute-image-gpu/src/window_configuration.rs",
     "crates/sugarsubstitute-image-gpu/src/window_frame.rs",
     "crates/sugarsubstitute-image-gpu/src/window_overlay.rs",
+    "crates/sugarsubstitute-image-gpu/src/window_patch.rs",
     "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:36ffbfcc43cd771a1087dc1ea4670eba2e0e8f3fd30747b049b4748973a7907f"
+source_sha256 = "sha256:5428f611abbb8281c87b0cdfc505c68528eb5ebaaea3bb645d586ce9a17ca340"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"

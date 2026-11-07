@@ -3,7 +3,7 @@
 //! Validated physical source indices for native display without GPU-dependent rounding.
 use crate::GpuError;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{DisplaySample, Extent};
+use sugarsubstitute_image_ops::{DisplaySample, Extent, Region};
 
 /// Borrowed fixed-point sampling map for one completed encoded display image.
 /// Each output axis selects two source indices and an eight-bit interpolation weight.
@@ -49,6 +49,22 @@ impl<'a> DisplayMapping<'a> {
     /// Physical output size, independent of retained source dimensions.
     pub const fn output(self) -> Extent {
         self.output
+    }
+    /// Borrow exact projected source indices for a bounded output rectangle.
+    /// The returned map has local output coordinates and preserves the original sampling phase.
+    /// # Errors
+    /// Rejects a crop outside the original physical output.
+    pub fn cropped(self, region: Region) -> Result<Self, GpuError> {
+        if region.intersection(self.output.region()) != Some(region) {
+            return Err(GpuError::invalid("Projection crop exceeds its physical output"));
+        }
+        Self::new(
+            self.source,
+            Extent::new(region.width(), region.height()).map_err(crate::evaluate::image_error)?,
+            &self.columns[region.x() as usize..region.right() as usize],
+            &self.rows[region.y() as usize..region.bottom() as usize],
+            self.matte,
+        )
     }
 }
 

@@ -8,9 +8,11 @@
 //! Raster values use linear-light sRGB primaries, floating-point premultiplied RGBA. Geometry
 //! remains explicit until evaluated; source assets and document editing state are not caches.
 
+mod blur;
 mod buffer;
 mod coverage;
 mod display;
+mod display_decode;
 mod display_sampling;
 mod error;
 mod evaluate;
@@ -26,6 +28,7 @@ mod retention;
 mod sampling;
 mod spatial;
 
+pub use blur::{GaussianBlur, MAX_GAUSSIAN_SIGMA, MAX_GAUSSIAN_TAPS};
 pub use buffer::{TILE_EDGE, Tile};
 pub use coverage::{
     BilinearMapping, CombineMode, Coverage, CoverageAffine, CoverageBuilder, CoverageMapping,
@@ -33,6 +36,7 @@ pub use coverage::{
     coverage_from_u8, coverage_to_u8, triangle_affine,
 };
 pub use display::{SrgbEncoder, is_premultiplied_word};
+pub use display_decode::{SrgbDecoder, srgb_to_linear};
 pub use display_sampling::{DisplaySample, bilinear_display_pixel, bilinear_display_row};
 pub use error::ImageError;
 pub(crate) use error::check;

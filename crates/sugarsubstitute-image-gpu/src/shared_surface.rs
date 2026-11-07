@@ -44,7 +44,7 @@ impl SharedSurface {
         if image.extent() != target.extent {
             return Err(GpuError::invalid("Composition target differs from retained image"));
         }
-        self.render(target, image, None, None, overlay, context)
+        self.render(target, image, None, None, overlay, &[], context)
     }
     /// Project a retained image into the target through one validated display mapping.
     /// `overlay` pixels, such as selection outlines, are drawn opaque over the display.
@@ -61,7 +61,7 @@ impl SharedSurface {
         if mapping.source() != image.extent() || mapping.output() != target.extent {
             return Err(GpuError::invalid("Composition projection differs from its images"));
         }
-        self.render(target, image, Some(mapping), None, overlay, context)
+        self.render(target, image, Some(mapping), None, overlay, &[], context)
     }
     /// Project a retained detail image over a retained fallback image and its mapping, as native
     /// window composition does. `overlay` pixels, such as selection outlines, are drawn opaque over the display.
@@ -89,9 +89,46 @@ impl SharedSurface {
             Some(mapping),
             Some((underlay, underlay_mapping)),
             overlay,
+            &[],
             context,
         )
     }
+    /// Draw a clean projection and at most two separately prepared rounded material patches.
+    /// Patch inputs retain their exact immutable device custody through actual draw completion.
+    /// # Errors
+    /// Rejects foreign devices, mismatched output/maps/masks and original native/control failures.
+    pub fn draw_with_patches(
+        &mut self,
+        target: &SharedTarget,
+        source: crate::DisplayProjection<'_>,
+        patches: &[crate::DisplayPatch<'_>],
+        context: &JobContext,
+    ) -> Result<(), GpuError> {
+        let output = source.mapping.map_or(source.image.extent(), DisplayMapping::output);
+        if output != target.extent
+            || source.mapping.is_some_and(|m| m.source() != source.image.extent())
+            || source.underlay.is_some_and(|(image, m)| {
+                source.mapping.is_none() || m.source() != image.extent() || m.output() != output
+            })
+        {
+            return Err(GpuError::invalid(
+                "Patched composition projection differs from its target",
+            ));
+        }
+        self.render(
+            target,
+            source.image,
+            source.mapping,
+            source.underlay,
+            source.overlay,
+            patches,
+            context,
+        )
+    }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Keep the exact same-device composition inputs and completed patch custody together"
+    )]
     fn render(
         &mut self,
         target: &SharedTarget,
@@ -99,6 +136,7 @@ impl SharedSurface {
         mapping: Option<DisplayMapping<'_>>,
         underlay: Option<(&DisplayImage, DisplayMapping<'_>)>,
         overlay: &[OverlayPixel],
+        patches: &[crate::DisplayPatch<'_>],
         context: &JobContext,
     ) -> Result<(), GpuError> {
         crate::adapter::check(context)?;
@@ -121,7 +159,8 @@ impl SharedSurface {
             overlay,
             target.extent,
             context,
-        )?;
+        )?
+        .with_patches(&self.device, patches, target.extent, context)?;
         let output = target.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let submission = self.device.submission(context)?;
         let blitter = self

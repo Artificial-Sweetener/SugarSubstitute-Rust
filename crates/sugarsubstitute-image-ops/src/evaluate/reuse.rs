@@ -11,6 +11,7 @@ impl<S: RasterSource> Evaluator<S> {
         context: &JobContext,
     ) -> Result<Option<Arc<Tile>>, ImageError> {
         let input = match operation {
+            Operation::GaussianBlur { input, blur } if blur.sigma() == 0.0 => Some(input),
             Operation::Mask { input, mask } => match self.uniform_region(mask, region)? {
                 Some(color) if color.channels()[3] == 1.0 => Some(input),
                 Some(color) if color.channels()[3] == 0.0 => Some(mask),

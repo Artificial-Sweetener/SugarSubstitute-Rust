@@ -284,9 +284,23 @@ fn pixel(id: vec3<u32>) -> vec4<f32> {
         case 8u: {
             value = a[taps[id.y].y * p.a.z + taps[id.x].x];
         }
+        case 10u, 11u: {
+            let radius = i32(taps[0].x);
+            let position = vec2<i32>(p.output.xy - p.a.xy + id.xy);
+            for (var tap = 0u; tap < taps[0].y; tap++) {
+                var sample = position;
+                if p.control.x == 10u { sample.x += i32(tap) - radius; }
+                else { sample.y += i32(tap) - radius; }
+                sample = clamp(sample, vec2<i32>(0), vec2<i32>(p.a.zw - vec2<u32>(1u)));
+                let local = vec2<u32>(sample);
+                let weight = bitcast<f32>(taps[1u + tap / 2u][tap % 2u]);
+                value += a[local.y * p.a.z + local.x] * weight;
+            }
+            if p.control.x == 11u { value = reconstructed(value); }
+        }
         default: { atomicOr(&group_flags, 1u); }
     }
-    if p.control.x != 6u {
+    if p.control.x != 6u && p.control.x != 10u {
         if !all(abs(value) <= vec4<f32>(bitcast<f32>(0x7f7fffffu)))
             || value.a < 0.0 || value.a > 1.0
             || (value.a == 0.0 && any(value.rgb != vec3<f32>(0.0))) {

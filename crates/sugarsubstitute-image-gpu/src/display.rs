@@ -8,7 +8,7 @@ use crate::{
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{Extent, MAX_RASTER_SAMPLE_BATCH, NodeId, RasterSource, Region};
+use sugarsubstitute_image_ops::{Extent, MAX_RASTER_SAMPLE_BATCH, NodeId, Region};
 
 /// Immutable premultiplied sRGB8 device pixels, packed as little-endian `0xAARRGGBB` words.
 /// Rows have 256-byte alignment for native texture copies; padding is excluded from readback.
@@ -50,7 +50,7 @@ impl DisplayTile {
         Ok(workspace.into_readback(self.region))
     }
 }
-impl<S: RasterSource> GpuEvaluator<S> {
+impl<S> GpuEvaluator<S> {
     /// Evaluate up to 4096 regions and encode completed premultiplied sRGB8 pixels on the selected GPU.
     /// Canonical intermediates remain evictable; display rows use four-byte words with native alignment.
     /// Horizontal sparse-source siblings share one bounded source read before ordinary evaluation.

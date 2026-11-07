@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Append-only typed DAGs with structural identities and bounded graph ownership.
-use crate::{Coverage, Extent, Filter, ImageError, Pixel, Sampling};
+use crate::{Coverage, Extent, Filter, GaussianBlur, ImageError, Pixel, Sampling};
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
@@ -116,6 +116,13 @@ pub enum Operation {
         /// Explicit global sampling phase and inverse scale.
         sampling: Sampling,
     },
+    /// Convolve premultiplied linear RGBA with a finite Gaussian, preserving extent.
+    GaussianBlur {
+        /// Earlier graph node.
+        input: NodeId,
+        /// Validated image-pixel standard deviation and clamped-edge semantics.
+        blur: GaussianBlur,
+    },
     /// Multiply linear RGB by `2^stops`, preserving alpha.
     Exposure {
         /// Earlier graph node.
@@ -157,9 +164,9 @@ impl Operation {
             | Self::Coverage { .. }
             | Self::Solid { .. }
             | Self::Rectangle { .. } => [None; 3],
-            Self::Resample { input, .. } | Self::Exposure { input, .. } => {
-                [Some(input), None, None]
-            }
+            Self::Resample { input, .. }
+            | Self::GaussianBlur { input, .. }
+            | Self::Exposure { input, .. } => [Some(input), None, None],
             Self::Over { background, foreground } => [Some(background), Some(foreground), None],
             Self::Mask { input, mask } => [Some(input), Some(mask), None],
             Self::Mix { original, adjusted, mask, .. } => {
@@ -243,6 +250,7 @@ impl Graph {
                 sampling.validate(source, extent, sampled)?;
                 extent
             }
+            Operation::GaussianBlur { input, .. } => self.extent(input)?,
             Operation::Exposure { input, stops } => {
                 if !stops.is_finite() || !(-32.0..=32.0).contains(&stops) {
                     return Err(ImageError::Invalid("Invalid exposure"));
@@ -446,6 +454,11 @@ impl Graph {
                 for coordinate in sampling.output_translation() {
                     hash.update(coordinate.to_le_bytes());
                 }
+                None
+            }
+            Operation::GaussianBlur { blur, .. } => {
+                hash.update([9]);
+                hash.update(blur.sigma().to_le_bytes());
                 None
             }
             Operation::Exposure { stops, .. } => {

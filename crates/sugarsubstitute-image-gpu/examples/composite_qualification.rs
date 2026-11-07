@@ -19,6 +19,8 @@ use sugarsubstitute_image_gpu::{
 };
 use sugarsubstitute_image_ops::*;
 
+#[path = "composite_qualification/backdrop.rs"]
+mod backdrop;
 type Result<T = ()> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 const PRIMARY: AssetId = AssetId([71; 32]);
 const FALLBACK: AssetId = AssetId([72; 32]);
@@ -73,6 +75,7 @@ impl Wake {
 
 struct Selected {
     device: Arc<GpuDevice>,
+    foreign: Arc<GpuDevice>,
 }
 struct Report {
     adapter: AdapterDescriptor,
@@ -112,7 +115,11 @@ fn main() -> Result {
                 let catalog = AdapterCatalog::discover(&context).await?;
                 let id = catalog.resolve(key)?;
                 let device = catalog.select(id, context.memory(), &context).await?;
-                Ok::<Selected, Box<dyn Error + Send + Sync>>(Selected { device })
+                let foreign_catalog = AdapterCatalog::discover(&context).await?;
+                let foreign_id = foreign_catalog.resolve(key)?;
+                let foreign =
+                    foreign_catalog.select(foreign_id, context.memory(), &context).await?;
+                Ok::<Selected, Box<dyn Error + Send + Sync>>(Selected { device, foreign })
             },
         )?;
         let JobCompletion { outcome, .. } = wake.until(None, || {
@@ -137,7 +144,7 @@ fn main() -> Result {
                 replacement: None,
             },
             &mut input,
-            |selected, context| run(selected.device, &context),
+            |selected, context| run(selected.device, selected.foreign, &context),
         )?;
         let JobCompletion { outcome, .. } = wake.until(None, || {
             client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
@@ -187,10 +194,11 @@ fn main() -> Result {
     }
 }
 
-fn run(device: Arc<GpuDevice>, context: &JobContext) -> Result<Report> {
+fn run(device: Arc<GpuDevice>, foreign: Arc<GpuDevice>, context: &JobContext) -> Result<Report> {
     let encoder = SrgbEncoder::new(context.memory())?;
     let qualification = composite(&device, [17, 29, 41, 255], true, &encoder, context)?;
     let transparent = composite(&device, [0; 4], false, &encoder, context)?;
+    backdrop::qualify(device.clone(), foreign, context)?;
     let video_memory = device.video_memory_budget();
     Ok(Report { adapter: device.descriptor().clone(), qualification, transparent, video_memory })
 }

@@ -54,10 +54,21 @@ pub(crate) fn run<T: Send + 'static>(
     bytes: u64,
     action: impl FnOnce(&JobContext) -> Result<T, ImageError> + Send + 'static,
 ) -> TestResult<T> {
+    run_with_scope(bytes, move |context, _| action(context))?
+        .ok_or_else(|| std::io::Error::other("Image test was unexpectedly cancelled").into())
+}
+
+/// Exercise cancellation through the same real scope that owns the admitted task.
+/// `None` reports observed executor cancellation after the task's actual terminal retirement.
+pub(crate) fn run_with_scope<T: Send + 'static>(
+    bytes: u64,
+    action: impl FnOnce(&JobContext, &Scope) -> Result<T, ImageError> + Send + 'static,
+) -> TestResult<Option<T>> {
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(Arc::new(FixedClock), wake.clone())?;
     let client = owner.client();
-    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let scope =
+        Arc::new(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
     let spec = JobSpec {
         id: JobId::new(1)?,
         operation: Operation::ImageDecode,
@@ -66,8 +77,11 @@ pub(crate) fn run<T: Send + 'static>(
         reservation_bytes: bytes,
         replacement: None,
     };
-    let mut job =
-        client.submit_cpu(&scope, spec, |_| Task { run: Some(action), output: PhantomData })?;
+    let task_scope = scope.clone();
+    let mut job = client.submit_cpu(&scope, spec, |_| Task {
+        run: Some(move |context: &JobContext| action(context, &task_scope)),
+        output: PhantomData,
+    })?;
     let outcome = loop {
         let revision = *wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(completion) = job.try_take_completion() {
@@ -88,7 +102,8 @@ pub(crate) fn run<T: Send + 'static>(
         NonZeroUsize::new(32).ok_or_else(|| std::io::Error::other("Invalid drain bound"))?;
     client.drain_completions(maximum)?;
     match outcome.outcome {
-        JobOutcome::Success(value) => Ok(value),
+        JobOutcome::Success(value) => Ok(Some(value)),
+        JobOutcome::Cancelled => Ok(None),
         JobOutcome::Failure(cause) => Err(cause.into()),
         other => Err(std::io::Error::other(format!(
             "Unexpected image execution outcome: {:?}",

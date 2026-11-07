@@ -6,12 +6,15 @@
 //! This adapter creates no runtime or worker. Native windows remain with the desktop adapter.
 mod adapter;
 mod batch;
+mod blur;
 mod buffer;
 mod coordination;
 mod dependency;
 mod display;
+mod display_decode;
 mod display_image;
 mod display_mapping;
+mod display_projection;
 mod display_readback;
 mod error;
 mod evaluate;
@@ -19,6 +22,8 @@ mod fault;
 mod kernel;
 mod luid;
 mod native_commands;
+mod raster_binding;
+mod raster_input;
 mod request;
 mod resample;
 mod selection;
@@ -37,6 +42,7 @@ mod window;
 mod window_configuration;
 mod window_frame;
 mod window_overlay;
+mod window_patch;
 mod window_shader;
 
 #[cfg(feature = "boundary-fixtures")]
@@ -48,10 +54,12 @@ pub use buffer::{GpuTile, Readback};
 pub use display::{DisplayRegions, DisplayTile};
 pub use display_image::{DisplayCopy, DisplayImage};
 pub use display_mapping::DisplayMapping;
+pub use display_projection::{DisplayProjection, DisplayProjector};
 pub use display_readback::{DisplayReadback, DisplayReadbackWorkspace};
 pub use error::GpuError;
 pub use evaluate::GpuEvaluator;
 pub use luid::AdapterLuid;
+pub use raster_binding::GpuRasterBinding;
 pub use request::GpuRegions;
 pub use selection::AdapterKey;
 #[cfg(windows)]
@@ -63,3 +71,4 @@ pub use timing::GpuDiagnostics;
 pub use video_memory::VideoMemoryBudget;
 pub use window::{NativeWindowHandle, WindowFrame, WindowPresentation, WindowSurface};
 pub use window_overlay::OverlayPixel;
+pub use window_patch::DisplayPatch;

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Headless driver-boundary fixtures using the production display shader and mapping upload.
+#[path = "boundary_fixtures/patches.rs"]
+mod patches;
 use crate::{
     DisplayImage, DisplayMapping, GpuError, OverlayPixel,
     display::row_bytes,
@@ -10,6 +12,7 @@ use crate::{
     window_overlay::OverlayBatches,
     window_shader::Blitter,
 };
+pub use patches::OffscreenDisplay;
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_image_ops::{DisplaySample, bilinear_display_pixel, is_premultiplied_word};
@@ -161,7 +164,15 @@ pub fn qualify_composite(
     let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("SugarSubstitute offscreen composite commands"),
     });
-    blitter.encode(&device, &primary_view, &fallback_view, &output_view, &overlay, &mut commands);
+    blitter.encode(
+        &device,
+        &primary_view,
+        &fallback_view,
+        &output_view,
+        &overlay,
+        &[],
+        &mut commands,
+    );
     device.faults.check()?;
     let submission = device.submission(context)?;
     let mut transfer =

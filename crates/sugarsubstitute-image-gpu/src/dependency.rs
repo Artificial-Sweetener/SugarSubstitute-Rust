@@ -3,9 +3,9 @@
 //! Assemble bounded GPU halos with device copies, preserving aligned source and pyramid reuse.
 use crate::{GpuError, GpuEvaluator, GpuTile, evaluate::image_error};
 use sugarsubstitute_contracts::execution::JobContext;
-use sugarsubstitute_image_ops::{NodeId, Operation, RasterSource, Region, Sampling, TILE_EDGE};
+use sugarsubstitute_image_ops::{NodeId, Operation, Region, Sampling, TILE_EDGE};
 
-impl<S: RasterSource> GpuEvaluator<S> {
+impl<S> GpuEvaluator<S> {
     pub(crate) fn input(
         &mut self,
         node: NodeId,

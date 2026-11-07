@@ -4,14 +4,32 @@
 use super::*;
 use sugarsubstitute_image_ops::{AssetId, CoverageSource};
 
-impl<S: RasterSource> GpuEvaluator<S> {
+impl<S> GpuEvaluator<S> {
     pub(super) fn source_tile(
         &mut self,
+        node: NodeId,
         asset: AssetId,
         region: Region,
         samples: Option<&RasterSamples>,
         context: &JobContext,
     ) -> Result<Computed, GpuError> {
+        if let Some(binding) = self.source.device() {
+            if samples.is_some()
+                || binding.asset() != asset
+                || self.graph.extent(node).map_err(image_error)? != binding.extent()
+            {
+                return Err(GpuError::invalid(
+                    "Device raster does not admit sparse or foreign source reads",
+                ));
+            }
+            let tile = binding.tile(region).cloned();
+            let tile = match tile {
+                Some(tile) => tile,
+                None => self.gather(node, region, context)?,
+            };
+            // Conservatively keep work for device inputs; no CPU alpha probe or pixel readback.
+            return Ok(Computed { tile, coverage: Coverage::Known(true) });
+        }
         Ok({
             let _memory = context
                 .memory()
@@ -25,8 +43,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
             match samples {
                 Some(samples) => self.source.read_samples(asset, samples, &mut pixels, context),
                 None => self.source.read(asset, region, &mut pixels, context),
-            }
-            .map_err(image_error)?;
+            }?;
             self.stats.source_pixels = self.stats.source_pixels.saturating_add(region.pixels());
             self.upload_pixels(region, &pixels, context)?
         })

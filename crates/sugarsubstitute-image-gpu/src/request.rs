@@ -3,7 +3,7 @@
 //! Publish completed region inventories after bounded batches and dynamic mask decisions settle.
 use crate::{GpuError, GpuEvaluator, GpuTile, batch::Batch, kernel::Computed};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{NodeId, RasterSource, Region};
+use sugarsubstitute_image_ops::{NodeId, Region};
 
 /// Immutable completed device regions with their original inventory admission.
 pub struct GpuRegions {
@@ -16,7 +16,7 @@ impl GpuRegions {
         &self.tiles
     }
 }
-impl<S: RasterSource> GpuEvaluator<S> {
+impl<S> GpuEvaluator<S> {
     /// Prepare up to 4096 exact regions through the same graph in bounded native batches.
     /// Returned immutable allocations may outlive this job and evaluator. Cancellation prevents
     /// publication after actual retirement; no queued resource charge escapes unfinished work.

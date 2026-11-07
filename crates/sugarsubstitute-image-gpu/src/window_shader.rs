@@ -20,6 +20,7 @@ pub(crate) struct StagedDraw {
     upload: MappingUpload,
     overlay: OverlayBatches,
     staging: MemoryClaim,
+    patches: Vec<crate::window_patch::StagedPatch>,
 }
 
 impl StagedDraw {
@@ -39,13 +40,33 @@ impl StagedDraw {
             .claim(upload.bytes.len() as u64 + 128)
             .map_err(|cause| GpuError::new("gpu_display_mapping_staging", cause))?;
         let overlay = OverlayBatches::upload(device, overlay, output, context)?;
-        Ok(Self { upload, overlay, staging })
+        Ok(Self { upload, overlay, staging, patches: Vec::new() })
+    }
+    pub(crate) fn with_patches(
+        mut self,
+        device: &Arc<GpuDevice>,
+        patches: &[crate::DisplayPatch<'_>],
+        output: Extent,
+        context: &JobContext,
+    ) -> Result<Self, GpuError> {
+        if patches.len() > 2 {
+            return Err(GpuError::invalid("Too many bounded display patches"));
+        }
+        self.patches
+            .try_reserve_exact(patches.len())
+            .map_err(|cause| GpuError::new("gpu_patch_inventory", cause))?;
+        for patch in patches {
+            self.patches
+                .push(crate::window_patch::StagedPatch::upload(device, *patch, output, context)?);
+        }
+        Ok(self)
     }
 }
 
 pub(crate) struct Blitter {
     pipeline: wgpu::RenderPipeline,
     overlay: wgpu::RenderPipeline,
+    patch: wgpu::RenderPipeline,
     mapping: Arc<Buffer>,
     _memory: MemoryClaim,
 }
@@ -98,7 +119,9 @@ impl Blitter {
         device.faults.check()?;
         let overlay = window_overlay::pipeline(device, format);
         device.faults.check()?;
-        Ok(Self { pipeline, overlay, mapping, _memory: memory })
+        let patch = crate::window_patch::pipeline(device, format);
+        device.faults.check()?;
+        Ok(Self { pipeline, overlay, patch, mapping, _memory: memory })
     }
     /// Retain the exact mapping buffer through its write and draw submission.
     pub(crate) fn mapping(&self) -> Arc<Buffer> {
@@ -120,7 +143,15 @@ impl Blitter {
         });
         let input = image.view();
         let underlay_input = underlay.map_or_else(|| image.view(), DisplayImage::view);
-        self.encode(device, &input, &underlay_input, output, &staged.overlay, &mut commands);
+        self.encode(
+            device,
+            &input,
+            &underlay_input,
+            output,
+            &staged.overlay,
+            &staged.patches,
+            &mut commands,
+        );
         device.faults.check()?;
         Transfer::upload(
             self.mapping(),
@@ -131,6 +162,10 @@ impl Blitter {
         )
         .retire()
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Keep one admitted display submission and its borrowed image custody together"
+    )]
     pub(crate) fn encode(
         &self,
         device: &GpuDevice,
@@ -138,6 +173,7 @@ impl Blitter {
         underlay: &wgpu::TextureView,
         output: &wgpu::TextureView,
         overlay: &OverlayBatches,
+        patches: &[crate::window_patch::StagedPatch],
         commands: &mut wgpu::CommandEncoder,
     ) {
         let group = device.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -172,6 +208,9 @@ impl Blitter {
         pass.set_bind_group(0, &group, &[]);
         pass.draw(0..3, 0..1);
         overlay.draw(device, &self.overlay, &mut pass);
+        for patch in patches {
+            patch.draw(device, &self.patch, &mut pass);
+        }
     }
 }
 

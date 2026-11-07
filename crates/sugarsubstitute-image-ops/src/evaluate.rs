@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bounded demand-driven CPU evaluation with feature-owned process-local tile reuse.
+mod blur;
 mod reuse;
 use crate::{
     Graph, ImageError, NodeId, Operation, Pixel, RasterSamples, Region, Sampling, TILE_EDGE, Tile,
@@ -335,6 +336,9 @@ impl<S: RasterSource> Evaluator<S> {
                         )?;
                     }
                 }
+            }
+            Operation::GaussianBlur { input, blur } => {
+                self.blur(input, blur, &mut output, context)?
             }
             Operation::Exposure { input, stops } => {
                 let input = self.point_input(input, region, context)?;

@@ -1004,7 +1004,7 @@ rationale = "Isolated native hardware qualification reports actual adapter ident
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/image.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:f52dd700fe954ef38b2bf7a98e30804150027f9b368dcf11597d600ccc9e980d"
+source_sha256 = "sha256:7f8daed9e755bc42c2e6d9d32b98d380ac49fb5bb14dc5ba22b1510c33602793"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 
@@ -1068,7 +1068,7 @@ rationale = "Isolated finite CPU qualification reports physical 4K projection co
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:3f7474b69a5e932265bf68f91b1f1b3f680309ab3180ebd55dc0dde3c2ad3b63"
+source_sha256 = "sha256:1c7fbddc7a2c91541cd6ac6df49dfd1ad273b53de75079bd63c5d41610bd30b0"
 disposition = "fixture"
 rationale = "The explicit single-device offscreen composite check reports native adapter identity, exact CPU/GPU pixel agreement including overlay pixels and execution retirement; it creates no window or runtime diagnostic sink."
 
@@ -1092,3 +1092,10 @@ owner = "sugarsubstitute"
 source_sha256 = "sha256:cd6ddd0c22ea59bf3f1d13a2af3cf5c54a1c18a24e92c731ff15f5d57f8bced1"
 disposition = "fixture"
 rationale = "Assert that production projection confines delegated pip log and temporary destinations while preserving the original captured environment; no diagnostic sink is created."
+
+[[records]]
+path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification/backdrop.rs"
+owner = "sugarsubstitute-image-gpu"
+source_sha256 = "sha256:fed4925b53666546bd4eeafa4fb812e8ac4175b704a68892a31c88aa0acb3f8b"
+disposition = "fixture"
+rationale = "The headless explicit-device material qualification reports crop, DAG and patch timing and CPU/GPU pixel agreement. It exercises production device-only projection and rounded composition with no window or application diagnostic sink."

@@ -17,7 +17,7 @@ struct UploadedSparseTile {
     computed: Arc<Computed>,
 }
 
-impl<S: RasterSource> GpuEvaluator<S> {
+impl<S> GpuEvaluator<S> {
     /// Read and upload only uncached mandatory source leaves for one horizontal output group.
     pub(crate) fn prepare_sparse_regions(
         &mut self,
@@ -25,7 +25,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
         regions: &[Region],
         context: &JobContext,
     ) -> Result<(), GpuError> {
-        if regions.len() <= 1 {
+        if self.source.device().is_some() || regions.len() <= 1 {
             return Ok(());
         }
         crate::adapter::check(context)?;
@@ -110,7 +110,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
             samples: &staged.samples,
             output: &mut staged.pixels,
         }));
-        self.source.read_sample_batch(asset, &mut requests, context).map_err(image_error)?;
+        self.source.read_sample_batch(asset, &mut requests, context)?;
         crate::adapter::check(context)?;
         drop(requests);
 

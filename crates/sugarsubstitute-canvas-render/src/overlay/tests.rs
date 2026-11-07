@@ -161,9 +161,87 @@ fn magnified_strokes_sample_only_the_visible_surface() -> harness::TestResult {
         let pixels = OverlayPixels::rasterize(&overlay, view, context)?;
         // Only the document's left edge crosses the view, one column of 32 rows.
         assert_eq!(pixels.pixels().len(), 32);
+        assert_eq!(OverlayPixels::maximum_pixels(&overlay, view)?, PIXEL_CHUNK);
         assert!(pixels.pixels().iter().all(|pixel| pixel.x == 10));
         Ok(())
     })
+}
+
+#[test]
+fn overlay_admission_bounds_actual_capacity_for_every_primitive_camera_and_clip()
+-> harness::TestResult {
+    run(|context| {
+        let document = Extent::new(181, 107)?;
+        let selection = Path::rectangle([3.0, 7.0, 143.0, 81.0])?.rasterize(document, context)?;
+        let boundary = Arc::new(CoverageBoundary::trace(&selection, context)?);
+        let outlines = [
+            OverlayOutline::Line([[-20.0, 30.0], [190.0, 80.0]]),
+            OverlayOutline::Rectangle([-10.0, 5.0, 160.0, 103.0]),
+            OverlayOutline::Ellipse([-20.0, -30.0, 198.0, 100.0]),
+            OverlayOutline::Polygon(Arc::from([
+                [7.0, 3.0],
+                [93.0, 6.0],
+                [170.0, 87.0],
+                [12.0, 93.0],
+            ])),
+        ];
+        for (index, shape) in outlines.into_iter().enumerate() {
+            for zoom in [0.05, 1.0, 32.0] {
+                let mut view = Viewport::new(Extent::new(333, 179)?)?;
+                view.reframe([-15.25, -9.75], zoom)?;
+                let guides = if index.is_multiple_of(2) {
+                    OverlayGuides::Frame([[10.0, 10.0], [153.0, 12.0], [143.0, 97.0], [11.0, 87.0]])
+                } else {
+                    OverlayGuides::Seams(Arc::from([sugarsubstitute_canvas::OverlaySeam {
+                        start: [50.0, -20.0],
+                        end: [60.0, 140.0],
+                        focused: true,
+                        handle: Some(SeamHandle::Start),
+                        enabled: [true, false, true],
+                    }]))
+                };
+                let overlay = PresentationOverlay {
+                    selection: Some(boundary.clone()),
+                    selection_offset: [-3, 5],
+                    outline: Some(shape.clone()),
+                    guides: Some(guides),
+                    snaps: Arc::from([sugarsubstitute_canvas::SnapGuide {
+                        start: [-90.0, 63.0],
+                        end: [220.0, 63.0],
+                    }]),
+                    ants: MarchingAnts::default(),
+                    document,
+                };
+                let maximum = OverlayPixels::maximum_pixels(&overlay, view)?;
+                let actual = OverlayPixels::rasterize(&overlay, view, context)?;
+                assert!(
+                    maximum >= actual.pixels.capacity(),
+                    "Overlay admission undercounts primitive {index} at {zoom}"
+                );
+                assert!(maximum.is_multiple_of(PIXEL_CHUNK));
+            }
+        }
+        Ok(())
+    })
+}
+
+#[test]
+fn overlay_admission_allocates_no_pixel_inventory_and_empty_geometry_reserves_nothing()
+-> Result<(), RenderError> {
+    let extent = Extent::new(333, 179)?;
+    let view = Viewport::new(extent)?;
+    let mut overlay = outline(extent, OverlayOutline::Ellipse([13.25, 7.75, 290.5, 160.25]));
+    let mut counter =
+        Raster { extent, pixels: Vec::new(), memory: Vec::new(), context: None, maximum: Some(0) };
+    trace(&overlay, view, &mut counter)?;
+    assert!(counter.maximum.is_some_and(|count| count > 100));
+    assert_eq!(counter.pixels.capacity(), 0);
+    assert_eq!(counter.memory.capacity(), 0);
+    overlay.outline = None;
+    assert_eq!(OverlayPixels::maximum_pixels(&overlay, view)?, 0);
+    overlay.outline = Some(OverlayOutline::Line([[400.0, 300.0], [500.0, 400.0]]));
+    assert_eq!(OverlayPixels::maximum_pixels(&overlay, view)?, 0);
+    Ok(())
 }
 
 #[test]

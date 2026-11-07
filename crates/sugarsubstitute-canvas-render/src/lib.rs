@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepared canvas presentation independent of native window handles.
+pub mod backdrop;
 mod cpu;
 mod gpu;
 mod gpu_surface;
@@ -9,6 +10,7 @@ mod pacing;
 mod projection;
 mod surface;
 mod update;
+pub use backdrop::{BackdropCrop, BackdropGraph, BackdropPlan, BackdropRegion};
 pub use cpu::{CpuPreparation, CpuRenderer};
 pub use gpu::{GpuRenderer, PreparedGpuUpdate};
 pub use gpu_surface::{GpuFrame, GpuSurface};

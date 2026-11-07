@@ -25,8 +25,7 @@ impl Transfer {
     }
     pub(crate) fn linear(self, encoded: f64) -> f32 {
         match self {
-            Self::Srgb if encoded <= 0.04045 => (encoded / 12.92) as f32,
-            Self::Srgb => ((encoded + 0.055) / 1.055).powf(2.4) as f32,
+            Self::Srgb => sugarsubstitute_image_ops::srgb_to_linear(encoded),
             Self::Gamma(gamma) => encoded.powf(1.0 / f64::from(gamma)) as f32,
         }
     }

@@ -10,7 +10,11 @@ use crate::{
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{Extent, Region, is_premultiplied_word};
+#[cfg(feature = "boundary-fixtures")]
+use sugarsubstitute_image_ops::is_premultiplied_word;
+use sugarsubstitute_image_ops::{Extent, Region};
+#[path = "display_image/allocation.rs"]
+mod allocation;
 
 /// Exact native pixel copy between two immutable display generations.
 #[derive(Clone, Copy, Debug)]
@@ -57,6 +61,30 @@ impl DisplayImage {
         tiles: &[DisplayTile],
         context: &JobContext,
     ) -> Result<Self, GpuError> {
+        Self::compose_local(device, extent.region(), previous, translation, tiles, context)
+    }
+    /// Rebase a complete bounded display patch while preserving the DAG's global sampling phase.
+    /// Pixels outside supplied tiles begin opaque black, as with ordinary retained composition.
+    /// # Errors
+    /// Rejects tiles outside `region`, foreign devices, admission and native completion failures.
+    pub fn compose_region(
+        device: Arc<GpuDevice>,
+        region: Region,
+        tiles: &[DisplayTile],
+        context: &JobContext,
+    ) -> Result<Self, GpuError> {
+        Self::compose_local(device, region, None, None, tiles, context)
+    }
+    fn compose_local(
+        device: Arc<GpuDevice>,
+        region: Region,
+        previous: Option<&Self>,
+        translation: Option<DisplayCopy>,
+        tiles: &[DisplayTile],
+        context: &JobContext,
+    ) -> Result<Self, GpuError> {
+        let extent =
+            Extent::new(region.width(), region.height()).map_err(crate::evaluate::image_error)?;
         crate::adapter::check(context)?;
         if extent.width() > 16384 || extent.height() > 16384 || tiles.len() > 4096 {
             return Err(GpuError::invalid("Retained GPU image exceeds its bounds"));
@@ -65,7 +93,7 @@ impl DisplayImage {
         if previous.is_some_and(|image| !Arc::ptr_eq(&image.0.device, &device))
             || tiles.iter().any(|tile| {
                 !Arc::ptr_eq(&tile.buffer.device, &device)
-                    || tile.region.intersection(extent.region()) != Some(tile.region)
+                    || tile.region.intersection(region) != Some(tile.region)
             })
         {
             return Err(GpuError::invalid(
@@ -130,7 +158,7 @@ impl DisplayImage {
                     buffer: &tile.buffer.raw,
                     layout: layout(tile.region.width(), tile.region.height()),
                 },
-                location(&texture, [tile.region.x(), tile.region.y()]),
+                location(&texture, [tile.region.x() - region.x(), tile.region.y() - region.y()]),
                 size(tile.region.width(), tile.region.height()),
             );
         }

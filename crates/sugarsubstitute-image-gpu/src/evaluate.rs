@@ -21,7 +21,7 @@ use sugarsubstitute_image_ops::{
 /// All methods run on an admitted preparation worker; returned tiles retain their original charges.
 pub struct GpuEvaluator<S> {
     pub(crate) graph: Graph,
-    pub(crate) source: S,
+    pub(crate) source: crate::raster_input::RasterInput<S>,
     pub(crate) device: Arc<GpuDevice>,
     pub(crate) kernels: Kernels,
     pub(crate) cache: TileRetention<Computed>,
@@ -30,18 +30,39 @@ pub struct GpuEvaluator<S> {
     pub(crate) batch: Option<Batch>,
     pub(crate) work: GpuWork,
 }
-impl<S: RasterSource> GpuEvaluator<S> {
+impl<S> GpuEvaluator<S> {
     /// Inspect ready structural tile coverage without native calls, transfers or cache promotion.
     /// This metadata snapshot retains no native handle and grants no allocation or queue admission.
     pub fn has_cached_region(&self, content: [u8; 32], region: Region) -> bool {
         self.batch.is_none() && self.cache.contains_region(content, region)
     }
+}
+impl<S: RasterSource> GpuEvaluator<S> {
     /// Compile kernels and reserve bounded reuse metadata inside an admitted worker.
     /// # Errors
     /// Preserves original image, execution and driver causes; rejects incompatible storage limits.
     pub fn new(
         graph: Graph,
         source: S,
+        maximum_tiles: usize,
+        device: Arc<GpuDevice>,
+        memory: &MemoryLease,
+        context: &JobContext,
+    ) -> Result<Self, GpuError> {
+        Self::from_input(
+            graph,
+            crate::raster_input::RasterInput::host(source),
+            maximum_tiles,
+            device,
+            memory,
+            context,
+        )
+    }
+}
+impl<S> GpuEvaluator<S> {
+    pub(crate) fn from_input(
+        graph: Graph,
+        source: crate::raster_input::RasterInput<S>,
         maximum_tiles: usize,
         device: Arc<GpuDevice>,
         memory: &MemoryLease,
@@ -155,7 +176,9 @@ impl<S: RasterSource> GpuEvaluator<S> {
         }
         let operation = self.graph.operation(node).map_err(image_error)?;
         let computed = match operation {
-            Operation::Raster { asset, .. } => self.source_tile(asset, region, None, context)?,
+            Operation::Raster { asset, .. } => {
+                self.source_tile(node, asset, region, None, context)?
+            }
             Operation::Coverage { source, .. } => {
                 self.coverage_tile(source, region, None, context)?
             }
@@ -212,13 +235,21 @@ impl<S: RasterSource> GpuEvaluator<S> {
                 if let Some((asset, samples)) =
                     self.graph.sampled_source(node, region).map_err(image_error)?
                 {
-                    self.source_tile(asset, region, Some(&samples), context)?
+                    self.source_tile(node, asset, region, Some(&samples), context)?
                 } else if let Some((source, samples)) =
                     self.graph.sampled_coverage(node, region).map_err(image_error)?
                 {
                     self.coverage_tile(source, region, Some(&samples), context)?
                 } else {
                     self.resample(node, input, sampling, region, context)?
+                }
+            }
+            Operation::GaussianBlur { input, blur } => {
+                if blur.sigma() == 0.0 {
+                    let input = self.computed(input, region, context)?;
+                    Computed { tile: input.tile.clone(), coverage: input.coverage.clone() }
+                } else {
+                    self.blur(node, input, blur, region, context)?
                 }
             }
             Operation::Exposure { input, stops } => {

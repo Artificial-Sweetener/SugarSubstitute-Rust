@@ -4,8 +4,8 @@
 use crate::{Extent, Filter, Graph, ImageError, NodeId, Operation, Region, Sampling};
 
 impl Graph {
-    /// Required input regions for an exact output region, including Lanczos filter halos.
-    /// Source edges clamp during resampling; other current operations preserve pixel coordinates.
+    /// Required input regions for an exact output region, including reconstruction and blur halos.
+    /// Source edges clamp during resampling and blur; point operations preserve pixel coordinates.
     /// # Errors
     /// Rejects foreign nodes and output regions outside their evaluation extent.
     pub fn required_inputs(
@@ -20,6 +20,9 @@ impl Graph {
         let inputs = match entry.operation {
             Operation::Resample { input, sampling, .. } => {
                 [Some((input, sampling.required_input(self.extent(input)?, output)?)), None, None]
+            }
+            Operation::GaussianBlur { input, blur } => {
+                [Some((input, blur.expanded(output, self.extent(input)?)?)), None, None]
             }
             operation => operation.inputs().map(|id| id.map(|id| (id, output))),
         };
@@ -44,6 +47,7 @@ impl Graph {
             return Ok(None);
         };
         match entry.operation {
+            Operation::GaussianBlur { blur, .. } => Ok(Some(blur.expanded(changed, entry.extent)?)),
             Operation::Resample { extent, sampling, .. } => {
                 let (left, right) = invalidated_axis(
                     [changed.x(), changed.right()],

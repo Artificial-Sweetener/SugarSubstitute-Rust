@@ -176,7 +176,9 @@ fn collect_filters(graph: &Graph, node: NodeId, filters: &mut [u32; 3]) -> Resul
             }] += 1;
             collect_filters(graph, input, filters)?;
         }
-        Operation::Exposure { input, .. } => collect_filters(graph, input, filters)?,
+        Operation::Exposure { input, .. } | Operation::GaussianBlur { input, .. } => {
+            collect_filters(graph, input, filters)?;
+        }
         Operation::Over { background, foreground } => {
             collect_filters(graph, background, filters)?;
             collect_filters(graph, foreground, filters)?;

@@ -92,7 +92,26 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, [NodeId; 3])> {
     })?;
     let near = Region::new(125, 2, 128, 127)?;
     let mut cases = Vec::new();
-    cases.try_reserve_exact(24)?;
+    cases.try_reserve_exact(32)?;
+    for (name, sigma, region) in [
+        ("gaussian_zero_identity", 0.0, near),
+        ("gaussian_cross_tile", 1.25, near),
+        ("gaussian_clamped_corner", 10.0, Region::new(0, 0, 13, 11)?),
+    ] {
+        let node = graph
+            .add(Operation::GaussianBlur { input: source, blur: GaussianBlur::new(sigma)? })?;
+        cases.push(Case { name, node, region });
+    }
+    let large = graph.add(Operation::Raster { asset: ASSET, extent: Extent::new(1024, 1024)? })?;
+    let maximum_blur = graph.add(Operation::GaussianBlur {
+        input: large,
+        blur: GaussianBlur::new(MAX_GAUSSIAN_SIGMA)?,
+    })?;
+    cases.push(Case {
+        name: "gaussian_maximum_halo",
+        node: maximum_blur,
+        region: Region::new(128, 128, 128, 128)?,
+    });
     for (name, node) in [
         ("source", source),
         ("solid_hdr", solid),

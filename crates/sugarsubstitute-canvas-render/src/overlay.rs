@@ -20,8 +20,12 @@ use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 pub use sugarsubstitute_image_gpu::OverlayPixel;
 use sugarsubstitute_image_ops::{Extent, ImageError};
 
+mod geometry;
+use geometry::trace;
+
 const WHITE: [u8; 3] = [255, 255, 255];
 const BLACK: [u8; 3] = [0, 0, 0];
+const PIXEL_CHUNK: usize = 4096;
 
 #[derive(Clone, Copy)]
 enum Stroke {
@@ -53,7 +57,8 @@ struct Raster<'a> {
     extent: Extent,
     pixels: Vec<OverlayPixel>,
     memory: Vec<MemoryClaim>,
-    context: &'a JobContext,
+    context: Option<&'a JobContext>,
+    maximum: Option<usize>,
 }
 
 impl OverlayPixels {
@@ -69,43 +74,41 @@ impl OverlayPixels {
     ) -> Result<Self, RenderError> {
         check(context)?;
         let extent = view.surface();
-        let mut raster = Raster { extent, pixels: Vec::new(), memory: Vec::new(), context };
-        if let Some(boundary) = &overlay.selection {
-            let [dx, dy] = overlay.selection_offset.map(|value| value as f64);
-            let stroke = Stroke::Ants(overlay.ants);
-            for only in [ANT_LIGHT, ANT_DARK] {
-                for run in boundary.runs() {
-                    let point =
-                        |[x, y]: [u32; 2]| view.device_at([f64::from(x) + dx, f64::from(y) + dy]);
-                    let (from, to) = (point(run.start)?, point(run.end())?);
-                    raster.segment(from, to, 0.0, stroke, None, Some(only))?;
-                }
-                check(context)?;
-            }
-        }
-        if let Some(outline) = &overlay.outline {
-            let document = overlay.document;
-            let [left, top] = view.device_at([0.0, 0.0])?;
-            let [right, bottom] =
-                view.device_at([f64::from(document.width()), f64::from(document.height())])?;
-            let clip = Some([left.floor(), top.floor(), right.ceil(), bottom.ceil()]);
-            let points = outline_points(outline, view)?;
-            match outline {
-                OverlayOutline::Line(_) => {
-                    raster.segment(points[0], points[1], 0.0, Stroke::Outline, clip, None)?;
-                }
-                _ => raster.closed(&points, Stroke::Outline, clip)?,
-            }
-        }
-        if let Some(guides) = &overlay.guides {
-            raster.guides(guides, view)?;
-        }
-        for guide in overlay.snaps.iter() {
-            let (start, end) = (view.device_at(guide.start)?, view.device_at(guide.end)?);
-            raster.segment(start, end, 0.0, Stroke::Solid(SNAP_GUIDE), None, None)?;
-        }
+        let mut raster = Raster {
+            extent,
+            pixels: Vec::new(),
+            memory: Vec::new(),
+            context: Some(context),
+            maximum: None,
+        };
+        trace(overlay, view, &mut raster)?;
         check(context)?;
         Ok(Self { extent, pixels: raster.pixels, _memory: raster.memory })
+    }
+    /// Conservative pixel-capacity admission for this exact overlay and camera, including the
+    /// raster owner's allocation chunks. Reuses the same geometry traversal and clipped segment
+    /// support, while skipping pixel sampling, dash filtering and duplicate suppression.
+    /// No raster pixel storage or execution reservation is allocated by this query.
+    /// # Errors
+    /// Preserves camera failures and rejects a count exceeding the addressable pixel inventory.
+    pub fn maximum_pixels(
+        overlay: &PresentationOverlay,
+        view: Viewport,
+    ) -> Result<usize, RenderError> {
+        let mut raster = Raster {
+            extent: view.surface(),
+            pixels: Vec::new(),
+            memory: Vec::new(),
+            context: None,
+            maximum: Some(0),
+        };
+        trace(overlay, view, &mut raster)?;
+        let count =
+            raster.maximum.ok_or(RenderError::Invalid("Overlay estimate lost its count"))?;
+        count
+            .checked_add(PIXEL_CHUNK - 1)
+            .map(|count| count / PIXEL_CHUNK * PIXEL_CHUNK)
+            .ok_or(RenderError::Invalid("Overlay estimate exceeds addressable pixels"))
     }
     /// Physical surface the pixels were rasterized for.
     pub const fn extent(&self) -> Extent {
@@ -140,37 +143,6 @@ impl CpuProjection {
         let extent = self.view().target().surface();
         overlay.paint(extent, self.pixels_mut())
     }
-}
-
-/// A shape's outline in device coordinates: a closed polyline, or a line's two end points.
-/// Ellipses are flattened in device space so they stay smooth at every zoom.
-fn outline_points(outline: &OverlayOutline, view: Viewport) -> Result<Vec<[f64; 2]>, RenderError> {
-    Ok(match outline {
-        OverlayOutline::Rectangle([left, top, right, bottom]) => vec![
-            view.device_at([*left, *top])?,
-            view.device_at([*right, *top])?,
-            view.device_at([*right, *bottom])?,
-            view.device_at([*left, *bottom])?,
-        ],
-        OverlayOutline::Ellipse([left, top, right, bottom]) => {
-            let [x0, y0] = view.device_at([*left, *top])?;
-            let [x1, y1] = view.device_at([*right, *bottom])?;
-            let centre = [(x0 + x1) / 2.0, (y0 + y1) / 2.0];
-            let radii = [(x1 - x0) / 2.0, (y1 - y0) / 2.0];
-            let perimeter = std::f64::consts::TAU * radii[0].max(radii[1]);
-            let segments = ((perimeter / 2.0).ceil() as usize).clamp(16, 8192);
-            (0..segments)
-                .map(|index| {
-                    let angle = std::f64::consts::TAU * index as f64 / segments as f64;
-                    [centre[0] + radii[0] * angle.cos(), centre[1] + radii[1] * angle.sin()]
-                })
-                .collect()
-        }
-        OverlayOutline::Polygon(points) => {
-            points.iter().map(|point| view.device_at(*point)).collect::<Result<_, _>>()?
-        }
-        OverlayOutline::Line([from, to]) => vec![view.device_at(*from)?, view.device_at(*to)?],
-    })
 }
 
 impl Raster<'_> {
@@ -222,7 +194,7 @@ impl Raster<'_> {
                 }
             }
         }
-        check(self.context)
+        self.control()
     }
     /// A grey handle crossed out, for a handle that cannot be dragged.
     fn disabled_handle(&mut self, center: [f64; 2], radius: f64) -> Result<(), RenderError> {
@@ -244,6 +216,14 @@ impl Raster<'_> {
         let reach = radius + 1.0;
         let (left, top) = ((x - reach).floor().max(0.0), (y - reach).floor().max(0.0));
         let (right, bottom) = ((x + reach).ceil().min(width), (y + reach).ceil().min(height));
+        if self.maximum.is_some() {
+            let columns = (right - left).max(0.0) as usize;
+            let rows = (bottom - top).max(0.0) as usize;
+            self.add_maximum(columns.checked_mul(rows).ok_or(RenderError::Invalid(
+                "Overlay handle estimate exceeds addressable pixels",
+            ))?)?;
+            return Ok(());
+        }
         let mut row = top;
         while row < bottom {
             let mut column = left;
@@ -316,6 +296,12 @@ impl Raster<'_> {
         }
         let first = (low * steps - 0.5).floor().max(0.0) as u64;
         let last = ((high * steps - 0.5).ceil() + 1.0).min(steps) as u64;
+        if self.maximum.is_some() {
+            self.add_maximum(usize::try_from(last.saturating_sub(first)).map_err(|_| {
+                RenderError::Invalid("Overlay segment estimate exceeds addressable pixels")
+            })?)?;
+            return Ok(start + length);
+        }
         for step in first..last {
             let t = (step as f64 + 0.5) / steps;
             let [x, y] = [(from[0] + delta[0] * t).floor(), (from[1] + delta[1] * t).floor()];
@@ -337,16 +323,30 @@ impl Raster<'_> {
         }
         Ok(start + length)
     }
+    fn control(&self) -> Result<(), RenderError> {
+        self.context.map_or(Ok(()), check)
+    }
+    fn add_maximum(&mut self, count: usize) -> Result<(), RenderError> {
+        let maximum =
+            self.maximum.as_mut().ok_or(RenderError::Invalid("Overlay count mode is absent"))?;
+        *maximum = maximum
+            .checked_add(count)
+            .ok_or(RenderError::Invalid("Overlay estimate exceeds addressable pixels"))?;
+        Ok(())
+    }
     fn push(&mut self, pixel: OverlayPixel) -> Result<(), RenderError> {
+        if self.maximum.is_some() {
+            return self.add_maximum(1);
+        }
         if self.pixels.len() == self.pixels.capacity() {
-            const CHUNK: usize = 4096;
-            check(self.context)?;
+            self.control()?;
             let claim = self
                 .context
+                .ok_or(RenderError::Invalid("Overlay raster worker is absent"))?
                 .memory()
-                .claim((CHUNK * size_of::<OverlayPixel>()) as u64)
+                .claim((PIXEL_CHUNK * size_of::<OverlayPixel>()) as u64)
                 .map_err(ImageError::from)?;
-            self.pixels.try_reserve_exact(CHUNK).map_err(ImageError::from)?;
+            self.pixels.try_reserve_exact(PIXEL_CHUNK).map_err(ImageError::from)?;
             self.memory.push(claim);
         }
         self.pixels.push(pixel);
