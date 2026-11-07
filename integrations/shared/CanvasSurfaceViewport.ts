@@ -48,7 +48,7 @@ export function negotiatesCanvasSurfaceInspection(
   capabilities: CanvasSurfaceCapabilities,
 ): boolean {
   return (
-    capabilities.schema === 2 &&
+    (capabilities.schema === 2 || capabilities.schema === 3) &&
     capabilities.viewportState &&
     capabilities.viewportCommands.includes('inspect')
   );

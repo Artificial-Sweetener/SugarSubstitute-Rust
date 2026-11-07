@@ -37,7 +37,7 @@ import {
   snapshotCanvasSurfaceCameraChange,
   snapshotCanvasSurfaceViewport,
 } from './CanvasSurfaceViewport.js';
-import { canvasSurfacePresentation } from './CanvasSurfacePresentation.js';
+import { CanvasSurfaceConnection } from './CanvasSurfaceConnection.js';
 import {
   canvasPreviewMessageFits,
   isCanvasPreviewCommand,
@@ -48,12 +48,8 @@ import type {
   CanvasSurfaceCameraChange,
   CanvasSurfacePresentationChange,
 } from '../contracts/CanvasSurface.js';
-import type { CanvasRemoteChanges } from './CanvasRemoteChanges.js';
 import { canvasSurfaceOverviewMessageFits } from './CanvasSurfaceOverview.js';
-import {
-  snapshotCanvasSurfaceCapabilities,
-  discoverCanvasSurface,
-} from './CanvasSurfaceDiscovery.js';
+import { snapshotCanvasSurfaceCapabilities } from './CanvasSurfaceDiscovery.js';
 import type {
   CanvasEditRequest,
   CanvasGeometryRequest,
@@ -98,7 +94,7 @@ type Request =
   | Pick<CanvasGeometryRequest, 'type' | 'command'>
   | Pick<CanvasEditRequest, 'type' | 'command'>
   | Pick<CanvasWorkflowRequest, 'type' | 'command'>
-  | { readonly type: 'surface.capabilities.request'; readonly schema: 2 }
+  | { readonly type: 'surface.capabilities.request'; readonly schema: 2 | 3 }
   | { readonly type: 'surface.presentation.request'; readonly schema: 1; readonly enabled: boolean }
   | CanvasSurfaceCommand;
 /** Retain one correlated client for a validated host session; never replay mutations after reconnect. */
@@ -107,12 +103,11 @@ export class CanvasClient implements CanvasLayerHost {
   readonly sources: CanvasSourceConnection;
   readonly editing: CanvasEditConnection;
   readonly workflow: CanvasWorkflowHost;
-  #surface: CanvasSurfaceHost | null = null;
+  readonly #surfaces: CanvasSurfaceConnection;
   readonly #pending = new Map<number, Pending>();
   readonly #sourceListeners = new Set<(change: CanvasSourceChange) => void>();
   readonly #presentationListeners = new Set<(change: CanvasSurfacePresentationChange) => void>();
   readonly #cameraListeners = new Set<(change: CanvasSurfaceCameraChange) => void>();
-  #presentation: CanvasRemoteChanges<CanvasSurfacePresentationChange> | null = null;
   #presentationSequence = 0;
   #next = 0;
   #context: CanvasContext | null = null;
@@ -123,6 +118,47 @@ export class CanvasClient implements CanvasLayerHost {
     private readonly session: string,
     private readonly port: CanvasClientPort,
   ) {
+    this.#surfaces = new CanvasSurfaceConnection({
+      read: () =>
+        this.#request(
+          { type: 'surface.capabilities.request', schema: 3 },
+          'surface.capabilities.reply',
+        ),
+      execute: (command, cancellation) =>
+        requestCanvasSurface(command, cancellation, (admitted, scope) =>
+          this.#request(
+            admitted,
+            admitted.type === 'surface.viewport.request'
+              ? 'surface.viewport.reply'
+              : 'surface.reply',
+            scope,
+          ),
+        ),
+      watch: async (enabled) => {
+        const reply = await this.#request(
+          { type: 'surface.presentation.request', schema: 1, enabled },
+          'surface.presentation.reply',
+        );
+        if (reply.type !== 'surface.presentation.reply')
+          throw new Error('Invalid canvas presentation observation reply.');
+        return reply;
+      },
+      presentation: (listener) => {
+        this.#presentationListeners.add(listener);
+        return () => {
+          this.#presentationListeners.delete(listener);
+        };
+      },
+      camera: (listener) => {
+        this.#cameraListeners.add(listener);
+        return () => {
+          this.#cameraListeners.delete(listener);
+        };
+      },
+      report: (error) => {
+        this.port.report(error);
+      },
+    });
     const readIdentity = (): string => this.#context?.canvas.id ?? '';
     const commands: CanvasCommandPort = {
       identity: readIdentity,
@@ -156,82 +192,43 @@ export class CanvasClient implements CanvasLayerHost {
   readCanvas(): CanvasDescriptor | null {
     return this.#context?.canvas ?? null;
   }
-  /** Expose only a surface discovered for the current context read in this live session. */
+  /** Expose the active native grant, including during a query-only refresh of the same canvas. */
   get surface(): CanvasSurfaceHost | null {
-    return this.#surface;
+    return this.#surfaces.surface;
   }
-  /** Read native context while keeping cached capabilities on the latest reply in this live session. */
-  async readContext(): Promise<CanvasContext> {
+  /** Capture a new mutation destination after immediately withdrawing the previous surface. */
+  readContext(): Promise<CanvasContext> {
+    this.withdrawSurface();
+    return this.#readContext();
+  }
+  /** Query current host metadata without replacing an identical active surface or its frame. */
+  refreshContext(): Promise<CanvasContext> {
+    return this.#readContext();
+  }
+  /** Revoke active and pending surface grants at an explicit connection or navigation boundary. */
+  withdrawSurface(): void {
+    this.#contextRevision = {};
+    this.#surfaces.withdraw();
+  }
+  /** Admit only the latest validated context and atomically negotiate its surface grant. */
+  async #readContext(): Promise<CanvasContext> {
     const revision = {};
     this.#contextRevision = revision;
-    this.#presentation?.dispose();
-    this.#presentation = null;
-    this.#surface = null;
-    const reply = await this.#request({ type: 'context.request' }, 'context.reply');
-    if (reply.type !== 'context.reply') throw new Error('Invalid canvas context reply.');
-    this.#requireConnected();
-    if (revision === this.#contextRevision) {
-      this.#context = reply.context;
-      if (reply.context.canvas.capabilities.displayOutput) {
-        const presentation = canvasSurfacePresentation({
-          current: () => !this.#disposed && revision === this.#contextRevision,
-          listen: (listener) => {
-            this.#presentationListeners.add(listener);
-            return () => {
-              this.#presentationListeners.delete(listener);
-            };
-          },
-          watch: async (enabled) => {
-            const observed = await this.#request(
-              { type: 'surface.presentation.request', schema: 1, enabled },
-              'surface.presentation.reply',
-            );
-            if (observed.type !== 'surface.presentation.reply')
-              throw new Error('Invalid canvas presentation observation reply.');
-            return observed;
-          },
-          report: (error) => {
-            this.port.report(error);
-          },
-        });
-        this.#presentation = presentation;
-        const surface = await discoverCanvasSurface({
-          read: () =>
-            this.#request(
-              { type: 'surface.capabilities.request', schema: 2 },
-              'surface.capabilities.reply',
-            ),
-          current: () => !this.#disposed && revision === this.#contextRevision,
-          owns: (host) => this.#surface === host,
-          presentation,
-          camera: {
-            listen: (listener) => {
-              this.#cameraListeners.add(listener);
-              return () => {
-                this.#cameraListeners.delete(listener);
-              };
-            },
-          },
-          observesPresentation: () => presentation.observing,
-          execute: (command, cancellation) =>
-            requestCanvasSurface(command, cancellation, (admitted, scope) =>
-              this.#request(
-                admitted,
-                admitted.type === 'surface.viewport.request'
-                  ? 'surface.viewport.reply'
-                  : 'surface.reply',
-                scope,
-              ),
-            ),
-          report: (error) => {
-            this.port.report(error);
-          },
-        });
-        if (revision === this.#contextRevision) this.#surface = surface;
+    const current = (): boolean => !this.#disposed && revision === this.#contextRevision;
+    try {
+      const reply = await this.#request({ type: 'context.request' }, 'context.reply');
+      if (reply.type !== 'context.reply') throw new Error('Invalid canvas context reply.');
+      this.#requireConnected();
+      if (current()) {
+        this.#context = reply.context;
+        await this.#surfaces.refresh(reply.context.canvas, current);
       }
+      this.#requireConnected();
+      return reply.context;
+    } catch (error: unknown) {
+      if (current()) this.withdrawSurface();
+      throw error;
     }
-    this.#requireConnected();
-    return reply.context;
   }
   /** Recheck page teardown after each awaited discovery step. */
   #requireConnected(): void {
@@ -311,8 +308,7 @@ export class CanvasClient implements CanvasLayerHost {
     if (this.#disposed) return;
     this.sources.dispose();
     this.editing.dispose();
-    this.#presentation?.dispose();
-    this.#presentation = null;
+    this.withdrawSurface();
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();
@@ -323,7 +319,6 @@ export class CanvasClient implements CanvasLayerHost {
     }
     this.#pending.clear();
     this.#context = null;
-    this.#surface = null;
     this.#sourceListeners.clear();
     this.#presentationListeners.clear();
   }

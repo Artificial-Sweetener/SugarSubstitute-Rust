@@ -38,6 +38,8 @@ import type {
 
 export type {
   CanvasSurfaceCapabilities,
+  CanvasSurfaceBackdrop,
+  CanvasSurfaceBackdropSupport,
   CanvasSurfaceOcclusion,
   CanvasSurfaceOverviewCell,
   CanvasSurfaceViewportCommand,

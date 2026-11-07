@@ -175,7 +175,10 @@ export function isCanvasSurfaceGeometry(value: unknown): value is Contract.Canva
   return (
     isRecord(value) &&
     Object.keys(value).length ===
-      8 + (Object.hasOwn(value, 'occlusions') ? 1 : 0) + (Object.hasOwn(value, 'modal') ? 1 : 0) &&
+      8 +
+        (Object.hasOwn(value, 'occlusions') ? 1 : 0) +
+        (Object.hasOwn(value, 'modal') ? 1 : 0) +
+        (Object.hasOwn(value, 'backdrops') ? 1 : 0) &&
     Object.hasOwn(value, 'coordinateSpace') &&
     value['coordinateSpace'] === 'client' &&
     Object.hasOwn(value, 'units') &&
@@ -199,6 +202,47 @@ export function isCanvasSurfaceGeometry(value: unknown): value is Contract.Canva
       (Array.isArray(value['occlusions']) &&
         value['occlusions'].length <= 64 &&
         value['occlusions'].every((item: unknown) => isCanvasSurfaceOcclusion(item)))) &&
-    (!Object.hasOwn(value, 'modal') || typeof value['modal'] === 'boolean')
+    (!Object.hasOwn(value, 'modal') || typeof value['modal'] === 'boolean') &&
+    (!Object.hasOwn(value, 'backdrops') ||
+      (Array.isArray(value['backdrops']) &&
+        value['backdrops'].length <= 2 &&
+        value['backdrops'].every((item: unknown) => isCanvasSurfaceBackdrop(item))))
+  );
+}
+/** Validate a bounded CanvasSurfaceBackdrop payload before dispatch. */
+export function isCanvasSurfaceBackdrop(value: unknown): value is Contract.CanvasSurfaceBackdrop {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 6 &&
+    Object.hasOwn(value, 'x') &&
+    typeof value['x'] === 'number' &&
+    Number.isFinite(value['x']) &&
+    value['x'] >= -1000000 &&
+    value['x'] <= 1000000 &&
+    Object.hasOwn(value, 'y') &&
+    typeof value['y'] === 'number' &&
+    Number.isFinite(value['y']) &&
+    value['y'] >= -1000000 &&
+    value['y'] <= 1000000 &&
+    Object.hasOwn(value, 'width') &&
+    typeof value['width'] === 'number' &&
+    Number.isFinite(value['width']) &&
+    value['width'] > 0 &&
+    value['width'] <= 1000000 &&
+    Object.hasOwn(value, 'height') &&
+    typeof value['height'] === 'number' &&
+    Number.isFinite(value['height']) &&
+    value['height'] > 0 &&
+    value['height'] <= 1000000 &&
+    Object.hasOwn(value, 'cornerRadius') &&
+    typeof value['cornerRadius'] === 'number' &&
+    Number.isFinite(value['cornerRadius']) &&
+    value['cornerRadius'] >= 0 &&
+    value['cornerRadius'] <= 1000000 &&
+    Object.hasOwn(value, 'sigma') &&
+    typeof value['sigma'] === 'number' &&
+    Number.isFinite(value['sigma']) &&
+    value['sigma'] >= 0 &&
+    value['sigma'] <= 64
   );
 }

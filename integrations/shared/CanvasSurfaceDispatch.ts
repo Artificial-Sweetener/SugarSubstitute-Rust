@@ -38,6 +38,7 @@ import {
   validCanvasSurfaceOverview,
 } from './CanvasSurfaceOverview.js';
 import { supportsCanvasSurfaceOcclusion } from './CanvasSurfaceOcclusion.js';
+import { supportsCanvasSurfaceBackdrop } from './CanvasSurfaceBackdrop.js';
 import {
   isCanvasPreviewCommand,
   supportsCanvasSurfacePreview,
@@ -176,6 +177,7 @@ export async function dispatchCanvasSurface(
           !supportsCanvasSurfaceOverview(port.surface.capabilities, command) ||
           !validCanvasSurfaceOverview(command) ||
           !supportsCanvasSurfaceOcclusion(port.surface.capabilities, command) ||
+          !supportsCanvasSurfaceBackdrop(port.surface.capabilities, command) ||
           !supportsCanvasSurfacePreview(port.surface.capabilities, command) ||
           !validCanvasPreviewCommand(command) ||
           (isCanvasPreviewCommand(command) &&

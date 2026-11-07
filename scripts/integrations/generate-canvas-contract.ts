@@ -112,6 +112,7 @@ export async function canvasBindings(
   };
   const surfaceNames = [
     'CanvasSurfaceCapabilities',
+    'CanvasSurfaceBackdropSupport',
     'CanvasSurfaceCapabilitiesRequest',
     'CanvasSurfaceCapabilitiesReply',
     'CanvasSurfaceAddress',
@@ -121,6 +122,7 @@ export async function canvasBindings(
     'CanvasSurfaceClip',
     'CanvasSurfaceOcclusion',
     'CanvasSurfaceGeometry',
+    'CanvasSurfaceBackdrop',
     'CanvasSurfacePrepareRequest',
     'CanvasSurfaceGeometryRequest',
     'CanvasSurfaceComparison',
@@ -229,6 +231,7 @@ export async function canvasBindings(
             'CanvasSurfaceClip',
             'CanvasSurfaceOcclusion',
             'CanvasSurfaceGeometry',
+            'CanvasSurfaceBackdrop',
           ],
         },
         {

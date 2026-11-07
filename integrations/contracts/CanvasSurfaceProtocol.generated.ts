@@ -24,7 +24,10 @@ export type CanvasSurfaceCapabilities = {
   readonly comparison: boolean;
   readonly overview: boolean;
   readonly input: boolean;
+  readonly backdrop?: CanvasSurfaceBackdropSupport;
 };
+/** Describe the schema-defined CanvasSurfaceBackdropSupport wire value. */
+export type CanvasSurfaceBackdropSupport = { readonly schema: 1 };
 /** Describe the schema-defined CanvasSurfaceCapabilitiesRequest wire value. */
 export type CanvasSurfaceCapabilitiesRequest = {
   readonly protocol: 'sugarcubes.canvas';
@@ -89,6 +92,16 @@ export type CanvasSurfaceGeometry = {
   readonly focused: boolean;
   readonly occlusions?: readonly CanvasSurfaceOcclusion[];
   readonly modal?: boolean;
+  readonly backdrops?: readonly CanvasSurfaceBackdrop[];
+};
+/** Describe the schema-defined CanvasSurfaceBackdrop wire value. */
+export type CanvasSurfaceBackdrop = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly cornerRadius: number;
+  readonly sigma: number;
 };
 /** Describe the schema-defined CanvasSurfacePrepareRequest wire value. */
 export type CanvasSurfacePrepareRequest = {

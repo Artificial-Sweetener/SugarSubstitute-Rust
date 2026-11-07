@@ -118,7 +118,7 @@ test('rejects a legacy available descriptor before exposing any surface mutation
       if (message.type === 'context.request')
         client.receive({ ...message, type: 'context.reply', context });
       else if (message.type === 'surface.capabilities.request') {
-        expect(message.schema).toBe(2);
+        expect(message.schema).toBe(3);
         client.receive({
           protocol: message.protocol,
           version: message.version,
