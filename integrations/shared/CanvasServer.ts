@@ -212,7 +212,9 @@ export class CanvasServer {
     if (value.type === 'context.request') void this.#context(value.requestId, entry);
     else if (value.type === 'surface.capabilities.request') {
       this.#surfaceSchemaRejected =
-        value.schema !== 2 || this.port.surface?.capabilities.schema !== 2;
+        (value.schema !== 2 && value.schema !== 3) ||
+        (this.port.surface?.capabilities.schema !== 2 &&
+          this.port.surface?.capabilities.schema !== 3);
       void dispatchCanvasSurfaceDiscovery(value, entry.cancellation, this.port).then((reply) => {
         this.#reply(entry, reply);
       });

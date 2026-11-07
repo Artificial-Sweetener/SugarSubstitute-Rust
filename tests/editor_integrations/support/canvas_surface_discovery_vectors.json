@@ -52,7 +52,7 @@
       "session": "surface-discovery-session",
       "requestId": 7,
       "type": "surface.capabilities.request",
-      "schema": 3
+      "schema": 4
     },
     {
       "protocol": "sugarcubes.canvas",
@@ -136,7 +136,7 @@
       "type": "surface.capabilities.reply",
       "status": "available",
       "capabilities": {
-        "schema": 3,
+        "schema": 4,
         "imageFormats": ["png"],
         "viewportCommands": [],
         "viewportState": false,

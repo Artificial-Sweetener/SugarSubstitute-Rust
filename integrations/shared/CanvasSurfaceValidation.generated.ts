@@ -43,12 +43,12 @@ export function isCanvasSurfaceCapabilities(
 ): value is Contract.CanvasSurfaceCapabilities {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 8 &&
+    Object.keys(value).length === 8 + (Object.hasOwn(value, 'backdrop') ? 1 : 0) &&
     Object.hasOwn(value, 'schema') &&
     typeof value['schema'] === 'number' &&
     Number.isSafeInteger(value['schema']) &&
     value['schema'] >= 1 &&
-    value['schema'] <= 2 &&
+    value['schema'] <= 3 &&
     Object.hasOwn(value, 'imageFormats') &&
     Array.isArray(value['imageFormats']) &&
     value['imageFormats'].length <= 3 &&
@@ -78,7 +78,19 @@ export function isCanvasSurfaceCapabilities(
     Object.hasOwn(value, 'overview') &&
     typeof value['overview'] === 'boolean' &&
     Object.hasOwn(value, 'input') &&
-    typeof value['input'] === 'boolean'
+    typeof value['input'] === 'boolean' &&
+    (!Object.hasOwn(value, 'backdrop') || isCanvasSurfaceBackdropSupport(value['backdrop']))
+  );
+}
+/** Validate a bounded CanvasSurfaceBackdropSupport payload before dispatch. */
+export function isCanvasSurfaceBackdropSupport(
+  value: unknown,
+): value is Contract.CanvasSurfaceBackdropSupport {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 1 &&
+    Object.hasOwn(value, 'schema') &&
+    value['schema'] === 1
   );
 }
 /** Validate a bounded CanvasSurfaceCapabilitiesRequest payload before dispatch. */
@@ -107,7 +119,7 @@ export function isCanvasSurfaceCapabilitiesRequest(
     typeof value['schema'] === 'number' &&
     Number.isSafeInteger(value['schema']) &&
     value['schema'] >= 1 &&
-    value['schema'] <= 2
+    value['schema'] <= 3
   );
 }
 /** Validate a bounded CanvasSurfaceCapabilitiesReply payload before dispatch. */
@@ -448,6 +460,7 @@ export {
   isCanvasSurfaceClip,
   isCanvasSurfaceOcclusion,
   isCanvasSurfaceGeometry,
+  isCanvasSurfaceBackdrop,
 } from './CanvasSurfaceGeometryValidation.generated.js';
 export {
   isCanvasSurfaceOverviewRect,

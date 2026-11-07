@@ -223,7 +223,7 @@ test('uses existing replay protection for a limited host discovery without layer
   server.receive(request);
   expect(replies).toHaveLength(2);
   expect(insert).not.toHaveBeenCalled();
-  expect(server.receive({ ...request, schema: 3 })).toBe(false);
+  expect(server.receive({ ...request, schema: 4 })).toBe(false);
   server.dispose();
 });
 
@@ -263,7 +263,7 @@ test('synchronous transport refusal stops its deadline, never retries and permit
 });
 
 test.each([
-  { schema: 3 },
+  { schema: 4 },
   { other: true },
   { imageFormats: ['unknown'] },
   { imageFormats: ['png', 'png', 'png', 'png'] },

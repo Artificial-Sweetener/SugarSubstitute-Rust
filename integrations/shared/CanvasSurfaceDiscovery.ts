@@ -30,6 +30,7 @@ import {
 import { supportsCanvasSurfaceComparison } from './CanvasSurfaceComparison.js';
 import { supportsCanvasSurfaceOverview } from './CanvasSurfaceOverview.js';
 import { supportsCanvasSurfaceOcclusion } from './CanvasSurfaceOcclusion.js';
+import { supportsCanvasSurfaceBackdrop } from './CanvasSurfaceBackdrop.js';
 import type { CanvasChangeObservation } from '../contracts/CanvasChangeObservation.js';
 import type {
   CanvasSurfaceCameraObservation,
@@ -58,7 +59,8 @@ export function emptyCanvasSurfaceCapabilities(value: CanvasSurfaceCapabilities)
     value.previewFormats.length === 0 &&
     !value.comparison &&
     !value.overview &&
-    !value.input
+    !value.input &&
+    value.backdrop === undefined
   );
 }
 
@@ -71,6 +73,7 @@ export function snapshotCanvasSurfaceCapabilities(
     imageFormats: Object.freeze([...value.imageFormats]),
     viewportCommands: Object.freeze([...value.viewportCommands]),
     previewFormats: Object.freeze([...value.previewFormats]),
+    ...(value.backdrop ? { backdrop: Object.freeze({ ...value.backdrop }) } : {}),
   });
 }
 
@@ -91,8 +94,8 @@ export async function dispatchCanvasSurfaceDiscovery(
     requestId: request.requestId,
     type: 'surface.capabilities.reply',
   } as const;
-  const empty = EMPTY_CANVAS_SURFACE_CAPABILITIES;
-  if (request.schema !== 2)
+  const empty = { ...EMPTY_CANVAS_SURFACE_CAPABILITIES, schema: request.schema };
+  if (request.schema !== 2 && request.schema !== 3)
     return {
       ...envelope,
       status: 'unsupported',
@@ -111,7 +114,7 @@ export async function dispatchCanvasSurfaceDiscovery(
     const capabilities = port.surface.capabilities;
     if (!isCanvasSurfaceCapabilities(capabilities))
       throw new Error('Canvas surface declared invalid capabilities.');
-    if (capabilities.schema !== 2)
+    if (capabilities.schema !== 2 && capabilities.schema !== 3)
       return {
         ...envelope,
         status: 'unsupported',
@@ -130,7 +133,9 @@ export async function dispatchCanvasSurfaceDiscovery(
     return {
       ...envelope,
       status: 'available',
-      capabilities: snapshotCanvasSurfaceCapabilities(capabilities),
+      capabilities: snapshotCanvasSurfaceCapabilities(
+        request.schema === 2 ? legacyCapabilities(capabilities) : capabilities,
+      ),
       message: '',
     };
   } catch (error: unknown) {
@@ -163,7 +168,7 @@ export async function discoverCanvasSurface(port: {
     if (!port.current()) return null;
     if (reply.type !== 'surface.capabilities.reply')
       throw new Error('Invalid canvas surface capability reply.');
-    if (reply.capabilities.schema !== 2)
+    if (reply.capabilities.schema !== 2 && reply.capabilities.schema !== 3)
       throw new Error(
         'Native surface schema 2 is required. Update SugarCubes and its native host together.',
       );
@@ -190,6 +195,7 @@ export async function discoverCanvasSurface(port: {
             supportsCanvasSurfaceComparison(host.capabilities, command) &&
             supportsCanvasSurfaceOverview(host.capabilities, command) &&
             supportsCanvasSurfaceOcclusion(host.capabilities, command) &&
+            supportsCanvasSurfaceBackdrop(host.capabilities, command) &&
             supportsCanvasSurfacePreview(host.capabilities, command) &&
             (!isCanvasPreviewCommand(command) ||
               command.type === 'surface.preview.withdraw' ||
@@ -206,4 +212,18 @@ export async function discoverCanvasSurface(port: {
     if (port.current()) port.report(error);
     return null;
   }
+}
+
+/** Keep the schema-two public contract free of later presentation fields. */
+function legacyCapabilities(value: CanvasSurfaceCapabilities): CanvasSurfaceCapabilities {
+  return {
+    schema: 2,
+    imageFormats: value.imageFormats,
+    viewportCommands: value.viewportCommands,
+    viewportState: value.viewportState,
+    previewFormats: value.previewFormats,
+    comparison: value.comparison,
+    overview: value.overview,
+    input: value.input,
+  };
 }
