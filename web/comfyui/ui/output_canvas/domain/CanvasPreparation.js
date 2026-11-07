@@ -27,3 +27,11 @@ export class CanvasPreparationTimeout extends Error {
         this.name = 'CanvasPreparationTimeout';
     }
 }
+/** Keep a native surface's diagnostic chrome visible when its host cannot prepare pixels. */
+export class CanvasPreparationUnavailable extends Error {
+    /** Preserve the native owner's actionable failure message. */
+    constructor(message) {
+        super(message);
+        this.name = 'CanvasPreparationUnavailable';
+    }
+}

@@ -273,6 +273,58 @@ test('literal titles and keyed tabs survive reorder and activity refresh without
   view.dispose();
 });
 
+test('background restored tabs never activate a workflow before Comfy loads its selected graph', async () => {
+  const viewport = document.createElement('div');
+  const actions = {
+    activate: jest.fn(),
+    close: jest.fn(),
+    menu: async () => [],
+    reorder: jest.fn(),
+    create: jest.fn(),
+    report: jest.fn(),
+  };
+  const view = new WorkflowTabsView(document, actions, viewport);
+  viewport.append(view.element);
+  document.body.append(viewport);
+  const wan = workflowSessionId('WAN');
+  const anima = workflowSessionId('Anima');
+  const tabs = [
+    { id: wan, title: 'WAN', modified: false, selected: false },
+    { id: anima, title: 'Anima', modified: false, selected: false },
+  ];
+  view.update(tabs, () => false);
+  await settle();
+  expect(actions.activate).not.toHaveBeenCalled();
+
+  view.update(
+    tabs.map((tab) => ({ ...tab, selected: tab.id === anima })),
+    () => false,
+  );
+  await settle();
+  expect(view.element.activeid).toBe(`sc-workflow-${anima}`);
+  expect(actions.activate).not.toHaveBeenCalled();
+
+  const target = document.getElementById(`sc-workflow-${wan}`)!;
+  target.focus();
+  target.click();
+  expect(actions.activate).toHaveBeenCalledTimes(1);
+  expect(actions.activate).toHaveBeenCalledWith(wan);
+
+  view.update(
+    tabs.map((tab) => ({ ...tab, selected: tab.id === wan })),
+    () => false,
+  );
+  await settle();
+  const next = document.getElementById(`sc-workflow-${anima}`)!;
+  next.click();
+  expect(actions.activate).toHaveBeenCalledTimes(2);
+  expect(actions.activate).toHaveBeenLastCalledWith(anima);
+  next.querySelector<HTMLElement>('.sc-workflow-close')!.click();
+  expect(actions.close).toHaveBeenCalledWith(anima);
+  expect(actions.activate).toHaveBeenCalledTimes(2);
+  view.dispose();
+});
+
 test('unchanged workflow activity performs no tab scroll geometry reads', () => {
   const viewport = document.createElement('div');
   const readScroll = jest.fn(() => 0);

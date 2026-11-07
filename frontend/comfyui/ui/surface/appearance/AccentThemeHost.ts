@@ -18,22 +18,24 @@ import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSect
 import { isRecord, type UnknownRecord } from '../../types/common.js';
 import { readOwnedDarkTheme } from './OwnedColorScheme.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from './AccentPalette.js';
-import { createAccentColorSetting } from './AccentColorSetting.js';
+import { createAccentColorSetting, updateAccentColorSetting } from './AccentColorSetting.js';
+import { isSubstituteHost } from '../../core/embedded/NativePanelTransport.js';
 import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
 import type { HostAccentSource } from '../../core/embedded/HostAccent.js';
 import { accentThemeCss } from './AccentThemeStyles.js';
 
 /** Persist the user's accent independently of every workflow document. */
 export const ACCENT_COLOR_SETTING = 'SugarCubes.Appearance.AccentColor';
+/** Persist Substitute's source independently of the custom color used in every browser. */
+export const ACCENT_SOURCE_SETTING = 'SugarCubes.Appearance.AccentSource';
 
 /**
  * Project one accepted accent into mounted and future surfaces without rebuilding graph inventories.
  *
  * Precedence, highest first: a host presentation override (hosts using the host preference
- * policy), the --sugarcubes-accent root CSS property, the accent the user explicitly saved,
- * the host's offered default accent (SugarSubstitute's operating-system accent), and finally
- * {@link DEFAULT_ACCENT_COLOR}. A saved value counts as explicit once the user stores one; the
- * registered default alone never hides the host accent.
+ * policy), the --sugarcubes-accent root CSS property, then the selected accent source.
+ * Substitute defaults to the Windows accent when available. Custom mode and other hosts use
+ * the saved color or {@link DEFAULT_ACCENT_COLOR}; the custom color survives source changes.
  */
 export class AccentThemeHost {
   readonly #listeners = new Set<() => void>();
@@ -49,6 +51,9 @@ export class AccentThemeHost {
   readonly #styleTexts = new WeakMap<HTMLStyleElement, string>();
   /** The user's explicitly saved accent, or null when none is stored. */
   #configured: string | null = null;
+  #source: 'system' | 'custom' = 'system';
+  readonly #substitute: boolean;
+  readonly #pickers = new Set<WeakRef<HTMLFieldSetElement>>();
   #registering = false;
   #releaseHostAccent: (() => void) | null = null;
   #signature = '';
@@ -77,6 +82,7 @@ export class AccentThemeHost {
     private readonly hostAccent?: HostAccentSource,
   ) {
     this.#document = documentRef;
+    this.#substitute = !!documentRef.defaultView && isSubstituteHost(documentRef.defaultView);
     this.#app = app;
     this.#report = reportError;
     this.#style = documentRef.createElement('style');
@@ -91,6 +97,11 @@ export class AccentThemeHost {
     if (this.#setup || this.#disposed) return;
     this.#setup = true;
     const settings = this.#settings();
+    if (this.#substitute && typeof settings.getSettingValue === 'function')
+      this.#source =
+        settings.getSettingValue.call(settings, ACCENT_SOURCE_SETTING) === 'custom'
+          ? 'custom'
+          : 'system';
     // Before registration Comfy reports only a stored value; its default is not yet known.
     if (typeof settings.getSettingValue === 'function')
       this.#configured = normalizeAccentColor(
@@ -99,6 +110,28 @@ export class AccentThemeHost {
     // Comfy announces the registered value synchronously; that announcement is not a user choice.
     this.#registering = true;
     try {
+      if (this.#substitute && typeof settings.addSetting === 'function')
+        settings.addSetting.call(settings, {
+          id: ACCENT_SOURCE_SETTING,
+          name: 'Accent source',
+          ...sugarCubesSettingsSection('appearance', 'AccentSource'),
+          type: 'combo',
+          defaultValue: 'system',
+          options: [
+            { value: 'system', text: 'Windows accent color' },
+            { value: 'custom', text: 'Custom' },
+          ],
+          tooltip: 'Use the Windows accent color or choose a custom accent color.',
+          onChange: (value: unknown) => {
+            if (this.#registering) return;
+            if (value !== 'system' && value !== 'custom') {
+              this.#report(new TypeError('The accent source must be system or custom.'));
+              return;
+            }
+            this.#source = value;
+            this.refresh();
+          },
+        });
       if (typeof settings.addSetting === 'function')
         settings.addSetting.call(settings, {
           id: ACCENT_COLOR_SETTING,
@@ -107,8 +140,8 @@ export class AccentThemeHost {
           defaultValue: DEFAULT_ACCENT_COLOR,
           tooltip:
             'Choose the shared SugarCubes accent. Hosts can override it with --sugarcubes-accent on the document root.',
-          type: () =>
-            createAccentColorSetting(this.#document, this.#preferred(), (color) => {
+          type: () => {
+            const picker = createAccentColorSetting(this.#document, this.#preferred(), (color) => {
               if (typeof settings.setSettingValue !== 'function') {
                 this.#report(new Error('Comfy accent setting persistence is unavailable.'));
                 return;
@@ -120,7 +153,11 @@ export class AccentThemeHost {
               } catch (error) {
                 this.#report(error);
               }
-            }),
+            });
+            this.#pickers.add(new WeakRef(picker));
+            updateAccentColorSetting(picker, this.#preferred(), this.#usesSystem());
+            return picker;
+          },
           onChange: (value: unknown) => {
             if (this.#registering) return;
             const color = normalizeAccentColor(value);
@@ -158,16 +195,32 @@ export class AccentThemeHost {
     this.refresh();
   }
 
-  /** The accent a user's saved choice or the host default supplies beneath any override. */
+  /** Use Windows only in Substitute's system mode, retaining the custom browser fallback. */
   #preferred(): string {
     return (
-      this.#configured ?? normalizeAccentColor(this.hostAccent?.read()) ?? DEFAULT_ACCENT_COLOR
+      (this.#usesSystem() ? normalizeAccentColor(this.hostAccent?.read()) : null) ??
+      this.#configured ??
+      DEFAULT_ACCENT_COLOR
+    );
+  }
+
+  /** An unavailable Windows accent falls back to editable custom color, matching Substitute. */
+  #usesSystem(): boolean {
+    return (
+      this.#substitute &&
+      this.#source === 'system' &&
+      !!normalizeAccentColor(this.hostAccent?.read())
     );
   }
 
   /** Resolve the accent by the documented precedence and publish only an actual palette change. */
   refresh(): void {
     if (this.#disposed || !this.#setup) return;
+    for (const reference of this.#pickers) {
+      const picker = reference.deref();
+      if (picker) updateAccentColorSetting(picker, this.#preferred(), this.#usesSystem());
+      else this.#pickers.delete(reference);
+    }
     const style = this.#document.defaultView?.getComputedStyle(this.#document.documentElement);
     const color =
       normalizeAccentColor(this.embedded?.read()?.accentColor) ??
@@ -223,6 +276,7 @@ export class AccentThemeHost {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#listeners.clear();
+    this.#pickers.clear();
     this.#releaseEmbedded?.();
     this.#releaseHostAccent?.();
     this.#observer.disconnect();

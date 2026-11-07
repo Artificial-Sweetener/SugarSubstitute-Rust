@@ -18,6 +18,7 @@ import { afterEach, expect, jest, test } from '@jest/globals';
 import {
   AccentThemeHost,
   ACCENT_COLOR_SETTING,
+  ACCENT_SOURCE_SETTING,
 } from '../../../frontend/comfyui/ui/surface/appearance/AccentThemeHost.js';
 import {
   DEFAULT_ACCENT_COLOR,
@@ -45,15 +46,31 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-sc-photopro-palette');
   document.head.replaceChildren();
   document.body.replaceChildren();
+  Reflect.deleteProperty(window, 'sugarcubesPanelHost');
 });
+
+/** Match the presentation identity supplied by Substitute before frontend setup. */
+function substituteBridge(): void {
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: 'ai.artificialsweetener.sugarsubstitute',
+    session: 'accent-fixture-session-0001',
+    preferencePolicy: 'saved',
+    send: jest.fn(),
+    subscribe: () => () => undefined,
+  });
+}
 
 /** Bind a real observer and stylesheet to a narrow Comfy settings boundary. */
 function createHost(
   saved: unknown = '#b58cff',
   embedded?: EmbeddedPresentationSource,
   hostAccent?: HostAccent,
+  source: unknown = 'system',
+  substitute = !!hostAccent,
 ) {
   let setting: ColorSetting | undefined;
+  let sourceSetting: ColorSetting | undefined;
+  if (substitute) substituteBridge();
   const setDirty = jest.fn();
   const report = jest.fn();
   const setSettingValue = jest.fn<(id: string, value: string) => void>((_id, value) =>
@@ -65,9 +82,10 @@ function createHost(
       canvas: { setDirty },
       ui: {
         settings: {
-          getSettingValue: () => saved,
+          getSettingValue: (id: string) => (id === ACCENT_SOURCE_SETTING ? source : saved),
           addSetting: (value: ColorSetting) => {
-            setting = value;
+            if (value.id === ACCENT_SOURCE_SETTING) sourceSetting = value;
+            else setting = value;
           },
           setSettingValue,
         },
@@ -79,7 +97,7 @@ function createHost(
   );
   hosts.push(host);
   host.setup();
-  return { host, setting: setting!, setDirty, report, setSettingValue };
+  return { host, setting: setting!, sourceSetting, setDirty, report, setSettingValue };
 }
 
 /** Allow native mutation delivery and the owner's coalesced palette task to settle. */
@@ -247,7 +265,7 @@ test('PhotoPro brightness follows accepted palette changes independently of Comf
   expect(setSettingValue).not.toHaveBeenCalled();
 });
 
-test('uses the host system accent until the user saves an explicit accent', () => {
+test('keeps the connected host accent while preserving the saved browser choice', () => {
   const hostAccent = new HostAccent();
   hostAccent.set('#0078d4');
   const f = createHost(null, undefined, hostAccent);
@@ -258,15 +276,18 @@ test('uses the host system accent until the user saves an explicit accent', () =
   expect(f.host.theme.color).toBe(DEFAULT_ACCENT_COLOR);
   hostAccent.set('#0078d4');
   f.setting.onChange('#123456');
-  expect(f.host.theme.color).toBe('#123456');
+  expect(f.host.theme.color).toBe('#0078d4');
   hostAccent.set('#107c10');
+  expect(f.host.theme.color).toBe('#107c10');
+  hostAccent.set(null);
   expect(f.host.theme.color).toBe('#123456');
   expect(f.setSettingValue).not.toHaveBeenCalled();
 });
 
-test('a previously saved accent outranks the host system accent and registration is not a choice', () => {
+test('the host accent outranks a persisted default or custom browser accent without rewriting either', () => {
   const hostAccent = new HostAccent();
   hostAccent.set('#0078d4');
+  substituteBridge();
   let setting: ColorSetting | undefined;
   const host = new AccentThemeHost(
     document,
@@ -275,7 +296,7 @@ test('a previously saved accent outranks the host system accent and registration
         settings: {
           getSettingValue: () => undefined,
           addSetting: (value: ColorSetting) => {
-            setting = value;
+            if (value.id === ACCENT_COLOR_SETTING) setting = value;
             // Comfy announces the registered default synchronously during registration.
             value.onChange(DEFAULT_ACCENT_COLOR);
           },
@@ -291,9 +312,68 @@ test('a previously saved accent outranks the host system accent and registration
   host.setup();
   expect(host.theme.color).toBe('#0078d4');
   setting!.onChange(DEFAULT_ACCENT_COLOR);
-  expect(host.theme.color).toBe(DEFAULT_ACCENT_COLOR);
+  expect(host.theme.color).toBe('#0078d4');
   const saved = createHost('#b58cff', undefined, hostAccent);
+  const persistedDefault = createHost(DEFAULT_ACCENT_COLOR, undefined, hostAccent);
+  expect(saved.host.theme.color).toBe('#0078d4');
+  expect(persistedDefault.host.theme.color).toBe('#0078d4');
+  hostAccent.set('#d65a36');
+  expect(saved.host.theme.color).toBe('#d65a36');
+  expect(persistedDefault.host.theme.color).toBe('#d65a36');
+  hostAccent.set(null);
   expect(saved.host.theme.color).toBe('#b58cff');
+  expect(persistedDefault.host.theme.color).toBe(DEFAULT_ACCENT_COLOR);
+  expect(saved.setSettingValue).not.toHaveBeenCalled();
+  expect(persistedDefault.setSettingValue).not.toHaveBeenCalled();
+});
+
+test('Substitute defaults to Windows and switches live between System and Custom without losing either', () => {
+  const accent = new HostAccent();
+  accent.set('#c30052');
+  const f = createHost('#479ef5', undefined, accent);
+  expect(f.sourceSetting?.id).toBe(ACCENT_SOURCE_SETTING);
+  expect(f.host.theme.color).toBe('#c30052');
+  const picker = f.setting.type() as HTMLFieldSetElement;
+  expect(picker.disabled).toBe(true);
+  f.sourceSetting!.onChange('custom');
+  expect(f.host.theme.color).toBe('#479ef5');
+  expect(picker.disabled).toBe(false);
+  f.setting.onChange('#e91e63');
+  expect(f.host.theme.color).toBe('#e91e63');
+  accent.set('#107c10');
+  expect(f.host.theme.color).toBe('#e91e63');
+  f.sourceSetting!.onChange('system');
+  expect(f.host.theme.color).toBe('#107c10');
+  expect(picker.disabled).toBe(true);
+  expect(picker.querySelector('input')?.value).toBe('#107c10');
+  accent.set(null);
+  expect(f.host.theme.color).toBe('#e91e63');
+  expect(picker.disabled).toBe(false);
+  expect(f.setSettingValue).not.toHaveBeenCalled();
+});
+
+test('restores a persisted Custom source in Substitute and ignores invalid source changes', () => {
+  const accent = new HostAccent();
+  accent.set('#c30052');
+  const f = createHost('#b58cff', undefined, accent, 'custom');
+  expect(f.host.theme.color).toBe('#b58cff');
+  f.sourceSetting!.onChange('invalid');
+  expect(f.host.theme.color).toBe('#b58cff');
+  expect(f.report).toHaveBeenCalledTimes(1);
+});
+
+test('outside Substitute the Windows source setting is absent and the saved or default color applies', () => {
+  const accent = new HostAccent();
+  accent.set('#c30052');
+  const saved = createHost('#b58cff', undefined, accent, 'system', false);
+  const defaults = createHost(null, undefined, accent, 'system', false);
+  expect(saved.sourceSetting).toBeUndefined();
+  expect(defaults.sourceSetting).toBeUndefined();
+  expect(saved.host.theme.color).toBe('#b58cff');
+  expect(defaults.host.theme.color).toBe(DEFAULT_ACCENT_COLOR);
+  expect((saved.setting.type() as HTMLFieldSetElement).disabled).toBe(false);
+  saved.setting.onChange('#e91e63');
+  expect(saved.host.theme.color).toBe('#e91e63');
 });
 
 test('recomputes all variant roles when the mode changes without changing the base', async () => {

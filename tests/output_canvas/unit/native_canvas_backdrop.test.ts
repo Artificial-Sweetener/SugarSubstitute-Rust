@@ -13,15 +13,11 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove glass chrome over a native surface mirrors the painted image where it lies on screen. */
-
+/** Keep native chrome opaque until frame acknowledgement, with browser material unchanged. */
 import { jest } from '@jest/globals';
-import { nextTick } from 'vue';
-import { canvasDisplayPlan } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasDisplayPlan.js';
-import { nativeCanvasSnapshot } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasSnapshot.js';
-import { initialCanvasViewState } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewState.js';
+import { createApp, nextTick } from 'vue';
 import { mountCanvasOverlay } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.js';
-import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
+import { CanvasComparisonNavigation } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasComparisonNavigation.js';
 import { CanvasPortFixture, canvasSnapshot } from '../support/CanvasPortFixture.js';
 
 afterEach(() => {
@@ -29,128 +25,80 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-/** Snapshot one natively painted image at a camera centred on its point (0.25, 0.5) at 2x. */
-function snapshot(mode: 'image' | 'overview' = 'image') {
-  const catalog = canvasCatalogFixture();
-  const entry = catalog.entries[0]!;
-  const view = {
-    ...initialCanvasViewState({ sessionId: catalog.sessionId, viewId: 'canvas-view:a' as never }),
-    selection: { sourceId: entry.source.id, batchIndex: 0 },
-    mode,
-  };
-  const item = entry.items[0]!;
-  const plan = canvasDisplayPlan(view, catalog, { primary: item, secondary: null }, null);
-  return nativeCanvasSnapshot({
-    address: canvasSnapshot('native').address,
-    plan,
-    catalog,
-    sources: catalog.entries.map((value) => value.summary),
-    connected: true,
-    mediaActions: null,
-    presentation: { state: 'ready', message: '' },
-    viewport: {
-      mode: 'custom',
-      physicalScale: 0.5,
-      dimensions: { width: 1600, height: 800 },
-      center: { x: 0.25, y: 0.5 },
-    },
-    preview: false,
-    previewAvailable: false,
-    comparison: false,
-    overview: true,
-    geometry: {
-      coordinateSpace: 'client',
-      units: 'css-pixels',
-      origin: { x: 100, y: 50 },
-      viewport: { width: 600, height: 400 },
-      clip: { x: 0, y: 0, width: 600, height: 400 },
-      physicalPixelsPerCssPixel: 1,
-      visible: true,
-      focused: false,
-    },
-    backdropUrl: (value) => `/preview?id=${value.id}`,
-  });
-}
-
-test('the native snapshot places the painted image from the surface camera', () => {
-  const backdrop = snapshot().backdrop;
-  expect(backdrop?.rect).toEqual({ left: 200, top: 50, width: 800, height: 400 });
-  expect(backdrop?.url).toContain('/preview?id=');
-  expect(snapshot('overview').backdrop).toBeNull();
-});
-
-test('the navigation bar paints the preview as its own blurred background, aligned with the surface', async () => {
-  const native = snapshot();
+test('native readiness alone repaints navigation without a camera or source transition', async () => {
   const root = document.createElement('section');
   document.body.append(root);
-  const bounds = jest
-    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-    .mockImplementation(function (this: HTMLElement) {
-      const [left, top, width, height] = this.classList.contains('sc-output-tabstrip')
-        ? [108, 408, 300, 38]
-        : [0, 0, 0, 0];
-      return {
-        x: left,
-        y: top,
-        left,
-        top,
-        width,
-        height,
-        right: left + width,
-        bottom: top + height,
-        toJSON: () => ({}),
-      };
-    });
-  const port = new CanvasPortFixture({
-    ...canvasSnapshot('native'),
-    backdrop: native.backdrop ?? null,
-  });
+  const port = new CanvasPortFixture({ ...canvasSnapshot('native'), nativeBackdrop: 'pending' });
   const mounted = mountCanvasOverlay(root, port, jest.fn());
-  const layer = root.querySelector<HTMLElement>(
-    '.sc-output-tabstrip .sc-output-backdrop .sc-output-backdrop-image',
-  );
-  // No image-sized element: the bar-sized layer carries the scaled preview as its background.
-  expect(root.querySelector('.sc-output-backdrop img')).toBeNull();
-  expect(layer?.style.backgroundImage).toContain(native.backdrop?.url);
-  expect(layer?.style.backgroundSize).toBe('800px 400px');
-  // Image left 200 - bar 108 + 24 blur margin; image top 50 - bar 408 + 24.
-  expect(layer?.style.backgroundPosition).toBe('116px -334px');
-  // A camera update repositions the background without reading layout again.
-  const reads = bounds.mock.calls.length;
-  const container = root.querySelector('.sc-output-tabstrip')!.parentElement!;
-  const widths = jest.spyOn(container, 'clientWidth', 'get');
-  const backdrop = native.backdrop!;
-  port.publish({
-    ...port.read(),
-    revision: port.read().revision + 1,
-    backdrop: { ...backdrop, rect: { ...backdrop.rect, left: 150, width: 1600, height: 800 } },
-  });
-  await nextTick();
-  expect(layer?.style.backgroundSize).toBe('1600px 800px');
-  expect(layer?.style.backgroundPosition).toBe('66px -334px');
-  expect(bounds.mock.calls.length).toBe(reads);
-  expect(widths).not.toHaveBeenCalled();
-  mounted.dispose();
+  try {
+    const bar = root.querySelector<HTMLElement>('[data-sc-canvas-backdrop]');
+    expect(bar?.dataset.scNativeBackdrop).toBe('pending');
+    expect(root.querySelector('.sc-output-backdrop')).toBeNull();
+    expect(root.querySelector('.sc-output-backdrop-image')).toBeNull();
+    port.publish({ ...port.read(), revision: port.read().revision + 1, nativeBackdrop: 'ready' });
+    await nextTick();
+    expect(root.querySelector('[data-sc-canvas-backdrop]')).toBe(bar);
+    expect(bar?.dataset.scNativeBackdrop).toBe('ready');
+    port.publish({ ...port.read(), revision: port.read().revision + 1, nativeBackdrop: 'pending' });
+    await nextTick();
+    expect(bar?.dataset.scNativeBackdrop).toBe('pending');
+  } finally {
+    mounted.dispose();
+  }
 });
 
-test('the blur covers only the bar and its margin, never the whole image', () => {
+test('both comparison bars use the same acknowledged material state', async () => {
+  const root = document.createElement('section');
+  document.body.append(root);
+  const app = createApp(CanvasComparisonNavigation, {
+    snapshot: { ...canvasSnapshot('native'), nativeBackdrop: 'ready' as const },
+    send: () => {},
+    chooseRoute: () => {},
+  });
+  try {
+    app.mount(root);
+    await nextTick();
+    expect(
+      [...root.querySelectorAll<HTMLElement>('[data-sc-canvas-backdrop]')].map(
+        (bar) => bar.dataset.scNativeBackdrop,
+      ),
+    ).toEqual(['ready', 'ready']);
+    expect(root.querySelector('[style*="background-image"]')).toBeNull();
+  } finally {
+    app.unmount();
+  }
+});
+
+test('browser bars retain CSS blur while native readiness uses exactly one translucent tint', () => {
   const root = document.createElement('section');
   document.body.append(root);
   const mounted = mountCanvasOverlay(
     root,
-    new CanvasPortFixture(canvasSnapshot('native')),
+    new CanvasPortFixture(canvasSnapshot('browser')),
     jest.fn(),
   );
-  const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]);
-  const rule = (selector: string) =>
-    rules.find(
-      (value): value is CSSStyleRule =>
-        value instanceof CSSStyleRule && value.selectorText === selector,
-    )?.style;
-  const layer = rule('.sc-output-backdrop-image');
-  expect(layer?.getPropertyValue('filter')).toBe('blur(var(--p-toast-blur,10px))');
-  expect(layer?.getPropertyValue('inset')).toBe('-24px');
-  expect(rule('.sc-output-backdrop')?.getPropertyValue('overflow')).toBe('hidden');
-  expect(rule('.sc-output-backdrop img')).toBeUndefined();
-  mounted.dispose();
+  try {
+    const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]);
+    const rule = (selector: string) =>
+      rules.find(
+        (entry): entry is CSSStyleRule =>
+          entry instanceof CSSStyleRule && entry.selectorText === selector,
+      )?.style;
+    expect(root.querySelector('[data-sc-native-backdrop]')).toBeNull();
+    expect(rule('.sc-output-tabstrip')?.getPropertyValue('backdrop-filter')).toBe(
+      'blur(var(--p-toast-blur,10px))',
+    );
+    expect(
+      rule('.sc-output-tabstrip[data-sc-native-backdrop]')?.getPropertyValue('backdrop-filter'),
+    ).toBe('none');
+    expect(
+      rule('.sc-output-tabstrip[data-sc-native-backdrop]')?.getPropertyValue('background'),
+    ).toContain('Canvas');
+    expect(
+      rule('.sc-output-tabstrip[data-sc-native-backdrop="ready"]')?.getPropertyValue('background'),
+    ).toBe('var(--sc-output-glass)');
+    expect(rule('.sc-output-backdrop-image')).toBeUndefined();
+  } finally {
+    mounted.dispose();
+  }
 });

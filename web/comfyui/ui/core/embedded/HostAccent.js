@@ -14,9 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the accent a native host offers as this document's default, such as the operating-system
- * accent SugarSubstitute reads. Unlike a host presentation override, it never outranks an accent
- * the user explicitly saved, and it is offered under every host preference policy.
+ * Own the connected native host's accent for this document, such as the operating-system
+ * accent SugarSubstitute reads. It is offered under every host preference policy without
+ * changing the user's saved browser preferences.
  */
 /** Publish only actual host accent changes for this frontend lifetime. */
 export class HostAccent {

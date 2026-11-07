@@ -24,6 +24,8 @@ export const NATIVE_CANVAS_PRESENTATION_FAILURE = 'Native canvas presentation fa
  * unavailable; content with nothing to show is empty.
  */
 export function nativeCanvasPendingStatus(desired, host, surfacePending) {
+    if (!host && !surfacePending())
+        return { state: 'unavailable', message: 'The native canvas is unavailable.' };
     if (!desired.shown)
         return { state: 'empty', message: '' };
     if (host)

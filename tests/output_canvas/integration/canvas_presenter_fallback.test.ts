@@ -13,13 +13,13 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove a refused native surface at startup falls back to the browser presenter silently. */
+/** Keep desktop image pixels native throughout discovery, refusal and reconnect. */
 
 import { jest } from '@jest/globals';
 import { EmbeddedCanvasConnection } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedCanvasConnection.js';
 import {
   createNativePanelTransport,
-  prefersNativeOutputSurface,
+  isSubstituteHost,
 } from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
 import { OutputPresenterSelection } from '../../../frontend/comfyui/ui/output_canvas/application/OutputPresenterSelection.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
@@ -98,14 +98,29 @@ function fixture(discovery: Discovery) {
   const errors: unknown[] = [];
   const listeners = new Set<(value: unknown) => void>();
   const messages: CanvasMessage[] = [];
+  let held = false;
+  let waiting: Extract<CanvasMessage, { type: 'surface.capabilities.request' }> | null = null;
   const reply = (value: unknown) => {
     for (const receive of listeners) receive(value);
   };
+  const capabilities = (
+    message: Extract<CanvasMessage, { type: 'surface.capabilities.request' }>,
+  ) =>
+    reply({
+      protocol: message.protocol,
+      version: message.version,
+      session: message.session,
+      requestId: message.requestId,
+      type: 'surface.capabilities.reply',
+      status: discovery,
+      capabilities:
+        discovery === 'available' ? selectedPngCapabilities : EMPTY_CANVAS_SURFACE_CAPABILITIES,
+      message: '',
+    });
   const bridge = {
     host: 'ai.artificialsweetener.sugarsubstitute',
     session: 'presenter-fallback-session',
     preferencePolicy: 'saved',
-    outputSurfacePreference: 'host',
     send: (message: CanvasMessage) => {
       messages.push(message);
       if (message.type === 'context.request')
@@ -126,17 +141,8 @@ function fixture(discovery: Discovery) {
           },
         });
       if (message.type === 'surface.capabilities.request')
-        reply({
-          protocol: message.protocol,
-          version: message.version,
-          session: message.session,
-          requestId: message.requestId,
-          type: 'surface.capabilities.reply',
-          status: discovery,
-          capabilities:
-            discovery === 'available' ? selectedPngCapabilities : EMPTY_CANVAS_SURFACE_CAPABILITIES,
-          message: '',
-        });
+        if (held) waiting = message;
+        else capabilities(message);
       if (message.type === 'surface.prepare' || message.type === 'surface.release')
         reply({
           protocol: message.protocol,
@@ -162,7 +168,7 @@ function fixture(discovery: Discovery) {
   if (!transport) throw new Error('Native transport fixture was not admitted.');
   const connection = new EmbeddedCanvasConnection();
   const presenter = new OutputPresenterSelection({
-    prefersNative: () => prefersNativeOutputSurface(window),
+    requiresNative: () => isSubstituteHost(window),
     surface: () => connection.surface,
     discovered: () => connection.surfaceDiscovered,
   });
@@ -181,7 +187,9 @@ function fixture(discovery: Discovery) {
     } as unknown as CanvasSessionCoordinator,
     element: () => root,
     renderer: () =>
-      presenter.current() === 'browser' ? 'browser' : nativeCanvasRendererKey(connection.surface),
+      presenter.current() === 'browser'
+        ? 'browser'
+        : `${nativeCanvasRendererKey(connection.surface)}:${presenter.current()}`,
     report: (error) => errors.push(error),
     mount: (element, address, _catalog, accepts, acceptsPreparation) => {
       if (presenter.current() === 'browser') {
@@ -219,12 +227,13 @@ function fixture(discovery: Discovery) {
     connection.dispose();
     Reflect.deleteProperty(window, 'sugarcubesPanelHost');
   };
-  /** Read every status a native attachment published, as its overlay renders it. */
-  const published = () =>
-    natives.map(({ attachment }) => JSON.stringify(attachment.port.read())).join('\n') +
-    (root.textContent ?? '');
+  /** Read the actual overlay copy independently of internal capability states. */
+  const published = () => root.textContent ?? '';
+  /** Inspect the native placeholder's resource contract before browser fallback. */
+  const snapshots = () => natives.map(({ attachment }) => attachment.port.read());
   return {
     published,
+    snapshots,
     connection,
     transport,
     primary,
@@ -234,6 +243,17 @@ function fixture(discovery: Discovery) {
     messages,
     settle,
     dispose,
+    discovery: (value: Discovery) => {
+      discovery = value;
+    },
+    hold: () => {
+      held = true;
+    },
+    release: () => {
+      held = false;
+      if (waiting) capabilities(waiting);
+      waiting = null;
+    },
   };
 }
 
@@ -249,7 +269,7 @@ describe('output presenter at native startup', () => {
   });
 
   test.each(['unsupported', 'unavailable', 'no-display'] as const)(
-    'a %s native discovery selects the browser presenter without unavailable text',
+    'a %s native discovery keeps native diagnostics and recovers without browser pixels',
     async (discovery) => {
       const f = fixture(discovery);
       try {
@@ -258,16 +278,27 @@ describe('output presenter at native startup', () => {
         expect(f.presenter.current()).toBe('pending');
         expect(f.mounted.browser).toBe(0);
         expect(reportedText(f.errors).join('\n')).not.toMatch(/unavailable/i);
+        expect(f.snapshots()).toHaveLength(1);
+        expect(f.snapshots()[0]).toMatchObject({
+          resource: { state: 'empty', message: '' },
+          secondaryResource: null,
+          nativeBackdrop: 'unavailable',
+        });
         expect(f.published()).not.toMatch(/unavailable/i);
         f.connection.connect(f.transport, window, (error) => f.errors.push(error));
         await f.settle();
         expect(f.connection.surfaceDiscovered).toBe(true);
         expect(f.connection.surface).toBeNull();
-        expect(f.presenter.current()).toBe('browser');
-        expect(f.mounted.browser).toBe(1);
-        expect(reportedText(f.errors).join('\n')).not.toMatch(/unavailable/i);
-        // Only the pending native placeholder preceded the browser presenter.
-        expect(f.mounted.native).toBe(1);
+        expect(f.presenter.current()).toBe('native');
+        expect(f.mounted.browser).toBe(0);
+        expect(f.published()).toMatch(/native canvas is unavailable/i);
+        expect(f.mounted.native).toBe(2);
+        f.discovery('available');
+        f.connection.refresh();
+        await f.settle();
+        expect(f.connection.surface).not.toBeNull();
+        expect(f.presenter.current()).toBe('native');
+        expect(f.mounted.browser).toBe(0);
       } finally {
         await f.dispose();
       }
@@ -295,6 +326,39 @@ describe('output presenter at native startup', () => {
       await f.settle();
       expect(f.presenter.current()).toBe('native');
       expect(f.mounted.browser).toBe(0);
+    } finally {
+      await f.dispose();
+    }
+  });
+
+  test('a delayed identical refresh keeps the accepted native attachment and never mounts browser pixels', async () => {
+    const f = fixture('available');
+    try {
+      f.primary.setup();
+      f.connection.connect(f.transport, window, (error) => f.errors.push(error));
+      await f.settle();
+      const surface = f.connection.surface;
+      const mounted = f.mounted.native;
+      const released = f.messages.filter((message) => message.type === 'surface.release').length;
+      f.hold();
+      f.connection.refresh();
+      await f.settle();
+      expect(f.connection.surfaceDiscovered).toBe(false);
+      expect(f.connection.surface).toBe(surface);
+      f.primary.reconcile();
+      await f.settle();
+      expect(f.mounted.native).toBe(mounted);
+      expect(f.mounted.browser).toBe(0);
+      expect(f.messages.filter((message) => message.type === 'surface.release')).toHaveLength(
+        released,
+      );
+      f.release();
+      await f.settle();
+      f.primary.reconcile();
+      expect(f.connection.surface).toBe(surface);
+      expect(f.mounted.native).toBe(mounted);
+      expect(f.mounted.browser).toBe(0);
+      expect(f.errors).toEqual([]);
     } finally {
       await f.dispose();
     }

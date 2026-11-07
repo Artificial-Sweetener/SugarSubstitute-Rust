@@ -52,7 +52,7 @@ const pairViewport: CanvasSurfaceViewportState = {
 };
 
 /** Mount real view, selection, port and presentation owners over a held native host. */
-function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
+function fixture(capabilities: Partial<CanvasSurfaceCapabilities>, comparison = false) {
   jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     x: 0,
     y: 0,
@@ -70,6 +70,7 @@ function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
   const view = views.create(catalog.sessionId).viewId;
   const selection = new CanvasSelectionController(views, { latestOrder: () => 1 });
   selection.reconcile(view, catalog);
+  if (comparison) selection.apply(view, catalog, { type: 'comparison', enabled: true });
   const address = views.prepareAttachment(view, windowId('native-comparison'));
   views.commitAttachment(address);
   const root = document.createElement('section');
@@ -105,6 +106,7 @@ function fixture(capabilities: Partial<CanvasSurfaceCapabilities>) {
   const [a, , c] = catalog.entries.map((entry) => entry.items[0]!);
   return {
     ...native,
+    root,
     surface,
     errors,
     a: a!,
@@ -147,6 +149,7 @@ test('a host without comparison keeps the exact camera-only command set and no B
     'native',
     'zoom',
     'pan',
+    'comparison',
   ]);
   const snapshot = f.surface.port.read();
   expect(snapshot.comparisonAvailable).toBe(false);
@@ -217,7 +220,10 @@ test('compares, places, swaps and rechooses B through the shared selection owner
   });
   expect(snapshot.secondary?.provenance.sourceId).toBe(b.id);
 
-  expect(await f.dispatch({ type: 'comparison', enabled: false })).toBe('applied');
+  const exit = f.root.querySelector<HTMLButtonElement>('[aria-label="Exit comparison"]');
+  expect(exit).not.toBeNull();
+  exit!.click();
+  await settle();
   await f.drain();
   expect(selects().at(-1)).not.toHaveProperty('comparison');
   snapshot = f.surface.port.read();
@@ -225,4 +231,40 @@ test('compares, places, swaps and rechooses B through the shared selection owner
   expect(snapshot.secondary).toBeNull();
   expect(snapshot.zoom?.secondaryDimensions).toBeNull();
   expect(f.errors).toEqual([]);
+});
+
+test('keeps an active comparison escapable after reconnect loses pair support', async () => {
+  const f = fixture({}, true);
+  await f.drain();
+  expect(f.surface.port.read().comparisonAvailable).toBe(false);
+  expect(f.surface.port.read().view.comparison).not.toBeNull();
+  expect(await f.dispatch({ type: 'comparison', enabled: false })).toBe('applied');
+  await f.drain();
+  expect(f.surface.port.read().view.comparison).toBeNull();
+  expect(f.calls.filter((call) => call.type === 'surface.select').at(-1)).not.toHaveProperty(
+    'comparison',
+  );
+});
+
+test('the visible exit still clears comparison after the native pair fails to load', async () => {
+  const f = fixture(comparing);
+  await f.drain();
+  expect(await f.dispatch({ type: 'comparison', enabled: true })).toBe('applied');
+  await settle();
+  const pair = f.calls.findLastIndex(
+    (call) => call.type === 'surface.select' && 'comparison' in call,
+  );
+  expect(pair).toBeGreaterThan(-1);
+  f.respond(pair, 'unavailable');
+  await settle();
+  expect(f.surface.port.read().resource.state).toBe('unavailable');
+  const exit = f.root.querySelector<HTMLButtonElement>('[aria-label="Exit comparison"]');
+  expect(exit).not.toBeNull();
+  exit!.click();
+  await settle();
+  await f.drain();
+  expect(f.surface.port.read().view.comparison).toBeNull();
+  expect(f.calls.filter((call) => call.type === 'surface.select').at(-1)).not.toHaveProperty(
+    'comparison',
+  );
 });

@@ -1,26 +1,27 @@
 import {
   CanvasOverlay
-} from "../../../chunk-BEK435G7.js";
+} from "../../../chunk-H6EEMNR6.js";
+import "../../../chunk-WIEFPHCO.js";
+import {
+  canvasNavigationSnapshot
+} from "../../../chunk-R73MK26O.js";
 import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-VFAQPXVU.js";
-import "../../../chunk-WIEFPHCO.js";
-import "../../../chunk-675HISLK.js";
+} from "../../../chunk-CDSEPZUO.js";
+import "../../../chunk-M6SR67MM.js";
 import {
   canvasContextActions,
   canvasMediaItem
 } from "../../../chunk-K34PR526.js";
 import "../../../chunk-Z66IIUOP.js";
-import "../../../chunk-C5JVIQFD.js";
+import "../../../chunk-JAFCE4SG.js";
 import "../../../chunk-6MZ5BAVS.js";
 import "../../../chunk-HFZ5NECD.js";
 import "../../../chunk-P7TVKFNT.js";
 import "../../../chunk-KKVBN3OP.js";
 import "../../../chunk-KQOAPFCP.js";
 import "../../../chunk-QXRZ6IZZ.js";
-import {
-  canvasNavigationSnapshot
-} from "../../../chunk-ORLQ3IYI.js";
+import "../../../chunk-J2E7XMH3.js";
 import {
   createApp,
   h,
@@ -167,8 +168,8 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
 }
 function canvasAnnouncement(previous, current) {
   const source = current.sources.find((entry) => entry.id === current.view.selection?.sourceId);
-  if (previous.view.selection?.sourceId !== current.view.selection?.sourceId)
-    return source?.label ?? "Output source is unavailable.";
+  if (source && previous.view.selection?.sourceId !== current.view.selection?.sourceId)
+    return source.label;
   if (current.resource.state === "error" && (previous.resource.state !== "error" || previous.resource.message !== current.resource.message))
     return current.resource.message;
   if (!current.preview && current.resource.state === "ready" && current.selected && (previous.selected?.id !== current.selected.id || previous.resource.state !== "ready" || previous.preview))

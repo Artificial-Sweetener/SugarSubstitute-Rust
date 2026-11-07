@@ -22,6 +22,7 @@ import { panelNavigation } from '../../../frontend/comfyui/ui/core/embedded/Brow
 import {
   createNativePanelTransport,
   prefersNativeOutputSurface,
+  isSubstituteHost,
 } from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
 import {
   registerVisualStylePreference,
@@ -34,6 +35,26 @@ import {
 
 const session = 'fixture-session-0001';
 const hostId = 'fixture.editor.panel';
+
+test('only a validated Substitute native identity enables Windows accent settings', () => {
+  expect(isSubstituteHost(window)).toBe(false);
+  Reflect.set(window, 'sugarcubesPanelHost', { host: 'ai.artificialsweetener.sugarsubstitute' });
+  expect(isSubstituteHost(window)).toBe(false);
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    send: jest.fn(),
+    subscribe: () => () => undefined,
+  });
+  expect(isSubstituteHost(window)).toBe(false);
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: 'ai.artificialsweetener.sugarsubstitute',
+    session,
+    send: jest.fn(),
+    subscribe: () => () => undefined,
+  });
+  expect(isSubstituteHost(window)).toBe(true);
+});
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');

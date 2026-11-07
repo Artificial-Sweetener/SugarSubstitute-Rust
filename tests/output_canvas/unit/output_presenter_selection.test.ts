@@ -13,18 +13,29 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove the output presenter follows the first conclusive native discovery. */
+/** Prove native still-image ownership and distinct media-viewer handoffs. */
 
-import { OutputPresenterSelection } from '../../../frontend/comfyui/ui/output_canvas/application/OutputPresenterSelection.js';
+import {
+  OutputPresenterSelection,
+  canvasRequiresBrowserMedia,
+} from '../../../frontend/comfyui/ui/output_canvas/application/OutputPresenterSelection.js';
+import { mixedMediaFixture } from '../support/CanvasMixedMediaFixture.js';
 
 /** Mutable host facts read through the selection's narrow port. */
-function facts(prefersNative: boolean) {
-  const state = { prefersNative, surface: null as object | null, discovered: false };
-  const selection = new OutputPresenterSelection({
-    prefersNative: () => state.prefersNative,
+function facts(requiresNative: boolean) {
+  const state = {
+    requiresNative,
+    surface: null as object | null,
+    discovered: false,
+    browserMedia: false,
+  };
+  const port = {
+    requiresNative: () => state.requiresNative,
     surface: () => state.surface,
     discovered: () => state.discovered,
-  });
+    browserMedia: () => state.browserMedia,
+  };
+  const selection = new OutputPresenterSelection(port);
   return { state, selection };
 }
 
@@ -37,17 +48,21 @@ test('a preferring host stays pending until discovery, then keeps its negotiated
   // A later context refresh withdraws the surface while it renegotiates.
   state.surface = null;
   expect(selection.current()).toBe('native');
+  state.discovered = false;
+  expect(selection.current()).toBe('pending');
+  state.discovered = true;
+  expect(selection.current()).toBe('native');
 });
 
 test.each(['unsupported', 'unavailable', 'failed'])(
-  'a preferring host whose startup discovery is %s falls back to the browser for the page',
+  'a native host whose startup discovery is %s never selects browser image pixels',
   () => {
     const { state, selection } = facts(true);
     expect(selection.current()).toBe('pending');
     state.discovered = true;
-    expect(selection.current()).toBe('browser');
+    expect(selection.current()).toBe('native');
     state.surface = {};
-    expect(selection.current()).toBe('browser');
+    expect(selection.current()).toBe('native');
   },
 );
 
@@ -56,5 +71,41 @@ test('without a host preference the browser presents until a surface is negotiat
   expect(selection.current()).toBe('browser');
   expect(selection.current()).toBe('browser');
   state.surface = {};
+  expect(selection.current()).toBe('native');
+});
+
+test('native image to browser media and back preserves the admitted native presenter for Input and stills', () => {
+  const { state, selection } = facts(true);
+  state.surface = {};
+  state.discovered = true;
+  expect(selection.current()).toBe('native');
+  state.browserMedia = true;
+  expect(selection.current()).toBe('browser');
+  state.browserMedia = false;
+  expect(selection.current()).toBe('native');
+  state.surface = null;
+  expect(selection.current()).toBe('native');
+});
+
+test('content routing consumes the existing selection and grid plan', () => {
+  const mixed = mixedMediaFixture();
+  expect(canvasRequiresBrowserMedia(mixed.plan(0))).toBe(false);
+  expect(canvasRequiresBrowserMedia(mixed.plan(1))).toBe(true);
+  expect(canvasRequiresBrowserMedia(mixed.plan(3))).toBe(true);
+  expect(canvasRequiresBrowserMedia(mixed.plan(0, true))).toBe(true);
+});
+
+test('restored still images retain native ownership for every encoded format', () => {
+  const mixed = mixedMediaFixture();
+  const plan = mixed.plan(0);
+  if (!plan.primary?.item) throw new Error('Image fixture has no selected item.');
+  const restoredWebp = {
+    ...plan,
+    primary: { ...plan.primary, item: { ...plan.primary.item, encodedMime: 'image/webp' } },
+  };
+  expect(canvasRequiresBrowserMedia(restoredWebp)).toBe(false);
+  const { state, selection } = facts(true);
+  state.discovered = true;
+  state.browserMedia = canvasRequiresBrowserMedia(restoredWebp);
   expect(selection.current()).toBe('native');
 });

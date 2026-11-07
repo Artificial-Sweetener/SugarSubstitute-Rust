@@ -1,6 +1,6 @@
 import {
   canvasNavigationSnapshot
-} from "../../../chunk-ORLQ3IYI.js";
+} from "../../../chunk-R73MK26O.js";
 export {
   canvasNavigationSnapshot
 };

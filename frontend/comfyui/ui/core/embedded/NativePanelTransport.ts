@@ -17,6 +17,16 @@
 import { isRecord } from '../../types/common.js';
 import { panelNavigation, type BrowserPanelTransport } from './BrowserPanelTransport.js';
 
+/** Identify Substitute presentation from its validated native panel identity. */
+export function isSubstituteHost(windowRef: Window): boolean {
+  const bridge: unknown = Reflect.get(windowRef, 'sugarcubesPanelHost');
+  return (
+    isRecord(bridge) &&
+    bridge.host === 'ai.artificialsweetener.sugarsubstitute' &&
+    createNativePanelTransport(windowRef) !== null
+  );
+}
+
 /** Read only the host's presentation preference, which grants no canvas or transport authority. */
 export function prefersNativeOutputSurface(windowRef: Window): boolean {
   const bridge: unknown = Reflect.get(windowRef, 'sugarcubesPanelHost');

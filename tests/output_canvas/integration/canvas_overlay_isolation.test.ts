@@ -91,6 +91,43 @@ test('offers comparison but no camera commands, which stay on the canvas control
   ).toEqual(['Compare outputs']);
 });
 
+test.each([true, false])(
+  'offers a visible comparison exit with pair support %s',
+  async (supported) => {
+    const initial = canvasSnapshot('visible-comparison-exit');
+    const state = {
+      ...initial,
+      comparisonAvailable: supported,
+      resource: {
+        ...initial.resource,
+        state: 'unavailable' as const,
+        message: 'Native image unavailable.',
+      },
+      view: {
+        ...initial.view,
+        comparison: {
+          secondary: initial.view.selection!,
+          orientation: 'vertical' as const,
+          split: 0.5,
+        },
+      },
+    };
+    const commands = new CanvasPortFixture(initial).capabilities.commands;
+    const port = new CanvasPortFixture(
+      state,
+      supported ? commands : commands.filter((command) => command !== 'select-comparison'),
+    );
+    const element = root();
+    const mounted = mountCanvasOverlay(element, port, jest.fn());
+    const exit = element.querySelector<HTMLButtonElement>('[aria-label="Exit comparison"]');
+    expect(exit).not.toBeNull();
+    exit!.click();
+    await nextTick();
+    expect(port.requests.at(-1)?.command).toEqual({ type: 'comparison', enabled: false });
+    mounted.dispose();
+  },
+);
+
 test('describes a reactivated preview-only source before its next frame arrives', () => {
   const initial = canvasSnapshot('waiting-preview');
   const port = new CanvasPortFixture({
@@ -187,6 +224,64 @@ test('keeps zoom and preview changes outside the live announcement region', asyn
   });
   await nextTick();
   expect(live.textContent).toBe('Image failed.');
+  mounted.dispose();
+});
+
+test('clearing a source during result replacement does not announce an unavailable source', async () => {
+  const initial = canvasSnapshot('source-replacement');
+  const port = new CanvasPortFixture(initial);
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  const live = element.querySelector('[aria-live="polite"]')!;
+  port.publish({
+    ...initial,
+    revision: 2,
+    view: { ...initial.view, selection: { sourceId: initial.sources[1]!.id, batchIndex: 0 } },
+  });
+  await nextTick();
+  expect(live.textContent).toBe('Detail');
+  port.publish({
+    ...port.read(),
+    revision: 3,
+    sources: [],
+    selected: null,
+    resource: { ...initial.resource, state: 'empty', message: '' },
+    view: { ...initial.view, selection: null },
+  });
+  await nextTick();
+  expect(live.textContent).toBe('Detail');
+  port.publish({
+    ...port.read(),
+    revision: 4,
+    resource: { ...initial.resource, state: 'error', message: 'Image decode failed.' },
+  });
+  await nextTick();
+  expect(live.textContent).toBe('Image decode failed.');
+  mounted.dispose();
+});
+
+test('a selected source without a displayed output announces only a reported resource failure', async () => {
+  const initial = canvasSnapshot('missing-source');
+  const port = new CanvasPortFixture(initial);
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  port.publish({
+    ...initial,
+    revision: 2,
+    sources: [],
+    view: { ...initial.view, selection: { sourceId: initial.sources[1]!.id, batchIndex: 0 } },
+  });
+  await nextTick();
+  expect(element.querySelector('[aria-live="polite"]')?.textContent).toBe('');
+  port.publish({
+    ...port.read(),
+    revision: 3,
+    resource: { ...initial.resource, state: 'error', message: 'Final image unavailable.' },
+  });
+  await nextTick();
+  expect(element.querySelector('[aria-live="polite"]')?.textContent).toBe(
+    'Final image unavailable.',
+  );
   mounted.dispose();
 });
 

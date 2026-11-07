@@ -5,7 +5,7 @@ function sameCanvasNavigation(previous, next) {
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasNavigationSnapshot.ts
 function canvasNavigationSnapshot(current, previous) {
-  return previous && previous.sources === current.sources && previous.scenes === current.scenes && sameCanvasNavigation(previous.view, current.view) && previous.view.comparison?.orientation === current.view.comparison?.orientation && previous.selected?.id === current.selected?.id && previous.secondary?.id === current.secondary?.id && previous.preview === current.preview && sameResource(previous.resource, current.resource) && sameResource(previous.secondaryResource, current.secondaryResource) ? previous : current;
+  return previous && previous.sources === current.sources && previous.scenes === current.scenes && sameCanvasNavigation(previous.view, current.view) && previous.view.comparison?.orientation === current.view.comparison?.orientation && previous.selected?.id === current.selected?.id && previous.secondary?.id === current.secondary?.id && previous.preview === current.preview && previous.nativeBackdrop === current.nativeBackdrop && sameResource(previous.resource, current.resource) && sameResource(previous.secondaryResource, current.secondaryResource) ? previous : current;
 }
 function sameResource(previous, current) {
   return previous?.state === current?.state && previous?.message === current?.message && previous?.canRetry === current?.canRetry && previous?.canAdmitLargeImage === current?.canAdmitLargeImage;

@@ -20,22 +20,33 @@
  * A comparison is presented only with an eligible final image A and an image B, so a host that
  * receives the pair can always place the divider. Overview replaces the selected image; with no
  * paintable cell or drawable geometry it presents nothing rather than a retained final.
+ * Input presents its workflow-owned document under the same geometry without selecting an output.
  * Preparation permits hidden staged geometry.
  */
-export function nativeCanvasDesired(geometry, item, comparison, overview, accepts, preparing) {
+export function nativeCanvasDesired(geometry, item, comparison, overview, accepts, preparing, inputShown) {
     const sized = !!geometry && geometry.viewport.width > 0 && geometry.viewport.height > 0;
     const presentable = sized && geometry.visible && geometry.clip.width > 0 && geometry.clip.height > 0;
     const drawable = presentable || (sized && preparing);
-    const eligible = drawable && !overview && item?.mediaKind === 'image' ? item : null;
-    const grid = overview && (drawable ? overview : []);
-    const pair = eligible && comparison?.item.mediaKind === 'image' ? comparison : null;
+    const eligible = !inputShown &&
+        drawable &&
+        !overview &&
+        item?.mediaKind === 'image' &&
+        item.file.type !== 'input'
+        ? item
+        : null;
+    const grid = inputShown ? null : overview && (drawable ? overview : []);
+    const pair = eligible && comparison?.item.mediaKind === 'image' && comparison.item.file.type !== 'input'
+        ? comparison
+        : null;
     const content = JSON.stringify([
-        item && [item.id, item.file, item.mediaKind],
+        inputShown ? 'input' : 'output',
+        !inputShown && item && [item.id, item.file, item.mediaKind],
         accepts,
         ...(pair ? [[pair.item.id, pair.item.file]] : []),
         ...(grid ? [['overview', grid.length > 0]] : []),
     ]);
     return {
+        input: inputShown,
         geometry,
         item: eligible,
         comparison: pair,
@@ -47,9 +58,10 @@ export function nativeCanvasDesired(geometry, item, comparison, overview, accept
             content,
         ]),
         presentable,
-        empty: grid ? grid.length === 0 : item?.mediaKind !== 'image',
-        previewable: !grid && item === null,
-        shown: eligible !== null || (grid?.length ?? 0) > 0,
+        empty: !inputShown &&
+            (grid ? grid.length === 0 : item?.mediaKind !== 'image' || item.file.type === 'input'),
+        previewable: !inputShown && !grid && item === null,
+        shown: inputShown ? drawable : eligible !== null || (grid?.length ?? 0) > 0,
     };
 }
 /**

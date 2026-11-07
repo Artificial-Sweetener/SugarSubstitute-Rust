@@ -40,6 +40,8 @@ export function nativeCanvasPendingStatus(
   host: boolean,
   surfacePending: () => boolean,
 ): NativeCanvasPresentationStatus {
+  if (!host && !surfacePending())
+    return { state: 'unavailable', message: 'The native canvas is unavailable.' };
   if (!desired.shown) return { state: 'empty', message: '' };
   if (host) return { state: 'loading', message: 'Loading the selected image.' };
   return surfacePending()

@@ -75,12 +75,6 @@ export class WorkflowTabsView {
     );
     this.element.setAttribute('aria-label', 'Workflows');
     this.viewport.addEventListener('scroll', this.#scrolled);
-    this.element.addEventListener('change', () => {
-      if (this.#projecting) return;
-      const selected = [...this.#tabs].find(([, tab]) => tab.element.id === this.element.activeid);
-      if (selected && selected[0] !== this.#order.find((tab) => tab.selected)?.id)
-        this.#run(() => actions.activate(selected[0]));
-    });
     this.viewport.addEventListener('wheel', this.#wheel, { passive: false });
   }
 
@@ -225,6 +219,18 @@ export class WorkflowTabsView {
     element.id = `sc-workflow-${id}`;
     element.setAttribute('value', element.id);
     element.draggable = false;
+    // Fluent also emits change when mounting background tabs; only interaction loads a workflow.
+    element.addEventListener('focusin', (event) => {
+      if (
+        event.target === element &&
+        !this.#projecting &&
+        id !== this.#order.find((tab) => tab.selected)?.id
+      )
+        this.#run(() => this.actions.activate(id));
+    });
+    element.addEventListener('click', (event) => {
+      if (event.button === 0) element.focus({ preventScroll: true });
+    });
     const title = this.document.createElement('span');
     title.className = 'sc-workflow-title';
     const shimmer = this.document.createElement('span');

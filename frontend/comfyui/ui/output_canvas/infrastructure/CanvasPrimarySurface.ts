@@ -26,7 +26,10 @@ import type { CanvasImageDiagnostics } from '../domain/CanvasImageResource.js';
 import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import type { CanvasRevealDestination } from '../application/CanvasRevealCoordinator.js';
 import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
-import { CanvasPreparationTimeout } from '../domain/CanvasPreparation.js';
+import {
+  CanvasPreparationTimeout,
+  CanvasPreparationUnavailable,
+} from '../domain/CanvasPreparation.js';
 import {
   CanvasPreparationRecovery,
   sameCanvasPreparationTarget,
@@ -77,6 +80,8 @@ export interface CanvasPrimarySurfaceOptions {
   readonly clock: Pick<ExecutionClock, 'later'>;
   element(): HTMLElement | null;
   renderer(): string;
+  /** Require observed native/browser retirement before constructing the other presentation owner. */
+  retireBeforeMount?(previous: string, next: string): boolean;
   /**
    * Separate staged preparation authority from committed view and preview delivery. `recover`
    * asks for a fresh attachment when a stalled attachment's request changes.
@@ -97,6 +102,8 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
   #current: AttachmentRecord | null = null;
   #pending: PendingAttachment | null = null;
   #stop: (() => void) | null = null;
+  #stopView: (() => void) | null = null;
+  #watchedView: CanvasViewId | null = null;
   #disposed = false;
   #retirement: Promise<void> | null = null;
   /** Mount a fresh candidate even though the committed attachment matches the target. */
@@ -172,6 +179,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     if (this.#disposed) return;
     const { coordinator, views } = this.options;
     const view = coordinator.active();
+    this.#watchView(view);
     const element = !this.options.document.hidden ? this.options.element() : null;
     const catalog = view && element ? coordinator.catalog(view) : null;
     const renderer = this.options.renderer();
@@ -207,7 +215,9 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       this.#current &&
       (this.#current.view !== view ||
         this.#current.generation !== catalog.generation ||
-        this.#current.element !== element)
+        this.#current.element !== element ||
+        (this.#current.renderer !== renderer &&
+          this.options.retireBeforeMount?.(this.#current.renderer, renderer)))
     )
       this.#release();
     const root = this.options.document.createElement('div');
@@ -312,10 +322,22 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     this.#disposed = true;
     this.#stop?.();
     this.#stop = null;
+    this.#stopView?.();
+    this.#stopView = null;
+    this.#watchedView = null;
     this.options.document.removeEventListener('visibilitychange', this.reconcile);
     this.#recovery.reset();
     this.#cancelPending();
     this.#release();
+  }
+
+  /** Reconsider presentation capability when explicit navigation changes the selected media kind. */
+  #watchView(view: CanvasViewId | null): void {
+    if (view === this.#watchedView) return;
+    this.#stopView?.();
+    this.#stopView = null;
+    this.#watchedView = view;
+    if (view) this.#stopView = this.options.views.subscribe(view, this.reconcile);
   }
 
   /** Attach afresh at once, with a new retry budget, after a stalled attachment's request changed. */
@@ -409,12 +431,19 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
    * loading state replaces a blank pane or an outdated attachment (one from an earlier renderer
    * identity, such as before native discovery concluded). The same target is then retried
    * afresh on a bounded backoff until it prepares or shows its preparation error.
+   * An unavailable native candidate also commits its diagnostic chrome without retrying or
+   * claiming that native pixels prepared successfully.
    */
   #failPending(pending: PendingAttachment, error: unknown): void {
     if (this.#pending !== pending) return;
     const timedOut = error instanceof CanvasPreparationTimeout;
     const served = this.#current !== null && sameCanvasPreparationTarget(this.#current, pending);
-    if (timedOut && !served && pending.attachment) this.#activate(pending, true);
+    if (
+      (timedOut || error instanceof CanvasPreparationUnavailable) &&
+      !served &&
+      pending.attachment
+    )
+      this.#activate(pending, timedOut);
     else this.#cancelPending();
     this.options.report(error);
     if (timedOut) this.#recovery.failed(pending);

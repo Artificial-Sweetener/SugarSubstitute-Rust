@@ -407,6 +407,59 @@ function discoveryFixture() {
 }
 
 /** A later public read owns the single readiness publication for its completed negotiation. */
+test('a new discovery withdraws the previous completion until its own capabilities arrive', async () => {
+  const f = discoveryFixture();
+  try {
+    f.canvas.connect(f.transport, window, f.report);
+    f.context(0);
+    await Promise.resolve();
+    f.capabilities(1, true);
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(f.canvas.surfaceDiscovered).toBe(true);
+    const current = f.canvas.readContext();
+    void current.catch(() => {});
+    expect(f.canvas.surface).toBeNull();
+    expect(f.canvas.surfaceDiscovered).toBe(false);
+    f.context(2);
+    await Promise.resolve();
+    expect(f.canvas.surfaceDiscovered).toBe(false);
+    f.capabilities(3, true);
+    await current;
+    expect(f.canvas.surfaceDiscovered).toBe(true);
+    expect(f.canvas.surface).not.toBeNull();
+    expect(f.report).not.toHaveBeenCalled();
+  } finally {
+    f.canvas.dispose();
+  }
+});
+
+test('backend disconnect revokes an accepted surface and a pending refresh cannot restore it', async () => {
+  const f = discoveryFixture();
+  try {
+    f.canvas.connect(f.transport, window, f.report);
+    f.context(0);
+    await Promise.resolve();
+    f.capabilities(1, true);
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    const previous = f.canvas.surface;
+    expect(previous).not.toBeNull();
+    f.canvas.refresh();
+    f.context(2);
+    await Promise.resolve();
+    expect(f.canvas.surface).toBe(previous);
+    f.canvas.disconnected();
+    expect(f.canvas.surface).toBeNull();
+    expect(f.canvas.surfaceDiscovered).toBe(false);
+    f.capabilities(3, true);
+    for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+    expect(f.canvas.surface).toBeNull();
+    expect(f.canvas.surfaceDiscovered).toBe(false);
+  } finally {
+    f.canvas.dispose();
+  }
+});
+
+/** A later public read owns the single readiness publication for its completed negotiation. */
 test('overlapping context reads cannot announce readiness before the current discovery completes', async () => {
   const f = discoveryFixture();
   const ready = jest.fn();
@@ -477,6 +530,7 @@ test('renegotiates once after reconnect during an unavailable discovery and rele
   expect(f.messages.map(({ type }) => type)).toEqual([
     'context.request',
     'surface.capabilities.request',
+    'context.request',
   ]);
   f.capabilities(1, false);
   for (let turn = 0; turn < 12; turn++) await Promise.resolve();
