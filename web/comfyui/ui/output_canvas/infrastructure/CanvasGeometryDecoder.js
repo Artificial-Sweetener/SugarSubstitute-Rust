@@ -38,6 +38,22 @@ export function decodeCanvasSurfaceGeometry(message, origin, authority) {
         physicalPixelsPerCssPixel: raw.physicalPixelsPerCssPixel,
         visible: raw.visible,
         focused: raw.focused,
+        ...(Object.hasOwn(raw, 'backdrops')
+            ? {
+                backdrops: Array.isArray(raw.backdrops)
+                    ? raw.backdrops.map((region) => isRecord(region)
+                        ? {
+                            x: region.x,
+                            y: region.y,
+                            width: region.width,
+                            height: region.height,
+                            cornerRadius: region.cornerRadius,
+                            sigma: region.sigma,
+                        }
+                        : region)
+                    : raw.backdrops,
+            }
+            : {}),
         ...(Object.hasOwn(raw, 'occlusions')
             ? {
                 occlusions: Array.isArray(raw.occlusions)
@@ -63,6 +79,11 @@ export function decodeCanvasSurfaceGeometry(message, origin, authority) {
         physicalPixelsPerCssPixel: value.physicalPixelsPerCssPixel,
         visible: value.visible,
         focused: value.focused,
+        ...(value.backdrops === undefined
+            ? {}
+            : {
+                backdrops: Object.freeze(value.backdrops.map((region) => Object.freeze({ ...region }))),
+            }),
         ...(value.occlusions
             ? { occlusions: Object.freeze(value.occlusions.map((rect) => Object.freeze({ ...rect }))) }
             : {}),

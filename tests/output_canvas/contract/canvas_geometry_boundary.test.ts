@@ -64,6 +64,19 @@ test('preserves explicit density and units while copying immutable geometry', ()
   ).toBe(false);
 });
 
+test('retains immutable native material regions independently of gesture occlusions', () => {
+  const backdrops = [{ x: 8, y: 550, width: 200, height: 42, cornerRadius: 8, sigma: 10 }];
+  const decoded = decodeCanvasSurfaceGeometry(
+    { schema: 1, address, geometry: { ...geometry, backdrops } },
+    authority.origin,
+    authority,
+  );
+  expect(decoded?.backdrops).toEqual(backdrops);
+  expect(decoded?.backdrops).not.toBe(backdrops);
+  expect(Object.isFrozen(decoded?.backdrops?.[0])).toBe(true);
+  expect(decoded?.occlusions).toBeUndefined();
+});
+
 test.each([
   { ...geometry, units: 'physical-pixels' },
   { ...geometry, coordinateSpace: 'document' },

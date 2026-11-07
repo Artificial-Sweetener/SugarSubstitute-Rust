@@ -31,6 +31,7 @@ export function canvasNavigationSnapshot(
     previous.selected?.id === current.selected?.id &&
     previous.secondary?.id === current.secondary?.id &&
     previous.preview === current.preview &&
+    previous.nativeBackdrop === current.nativeBackdrop &&
     sameResource(previous.resource, current.resource) &&
     sameResource(previous.secondaryResource, current.secondaryResource)
     ? previous

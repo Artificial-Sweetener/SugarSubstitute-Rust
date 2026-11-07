@@ -1,6 +1,6 @@
-import { negotiatesCanvasSurfaceComparison, negotiatesCanvasSurfaceInspection, } from '../../core/embedded/CanvasRuntime.js';
+import { negotiatesCanvasSurfaceComparison, negotiatesCanvasSurfaceInspection, negotiatesCanvasSurfaceBackdrop, } from '../../core/embedded/CanvasRuntime.js';
 const CAMERA_COMMANDS = ['fit', 'native', 'zoom', 'pan'];
-const COMPARISON_COMMANDS = ['comparison', 'select-comparison', 'swap', 'wipe'];
+const COMPARISON_COMMANDS = ['select-comparison', 'swap', 'wipe'];
 /** Rebuild a staged attachment when discovery changes its immutable command capabilities. */
 export function nativeCanvasRendererKey(host) {
     return `native:${JSON.stringify(host?.capabilities ?? null)}`;
@@ -17,11 +17,16 @@ export function nativeCanvasOverview(host) {
 export function nativeCanvasInput(host) {
     return host?.capabilities.input === true;
 }
+/** Admit native-frame material only through the negotiated geometry/frame acknowledgement contract. */
+export function nativeCanvasBackdrop(host) {
+    return host !== null && negotiatesCanvasSurfaceBackdrop(host.capabilities);
+}
 /**
  * Advertise camera commands only with the viewport-state contract required by their shared
- * proxy, the shared comparison commands only with a negotiated pair-and-divider host, and the
+ * proxy, pair controls only with a negotiated pair-and-divider host, and the
  * overview grid only with a host that paints it. Linked inspection requires a host that
- * restores image-relative cameras.
+ * restores image-relative cameras. Comparison exit remains available during capability loss;
+ * shared action admission separately checks whether comparison can be entered.
  */
 export function nativeCanvasCommands(host) {
     const camera = host?.capabilities.viewportState
@@ -29,6 +34,7 @@ export function nativeCanvasCommands(host) {
         : [];
     return [
         ...camera,
+        'comparison',
         ...(nativeCanvasComparison(host) ? COMPARISON_COMMANDS : []),
         ...(nativeCanvasOverview(host) ? ['overview'] : []),
         ...(nativeCanvasInspection(host) ? ['link'] : []),

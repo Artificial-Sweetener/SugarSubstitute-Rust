@@ -17,9 +17,9 @@
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from './AccentPalette.js';
 /** Build a settings row without retaining detached inputs or accepting invalid color text. */
 export function createAccentColorSetting(documentRef, color, save) {
-    const row = documentRef.createElement('div');
+    const row = documentRef.createElement('fieldset');
     row.className = 'sugarcubes-settings-row sc-accent-setting';
-    row.style.cssText = 'display:flex;align-items:center;gap:12px';
+    row.style.cssText = 'display:flex;align-items:center;gap:12px;border:0;padding:0;margin:0';
     const picker = documentRef.createElement('input');
     picker.type = 'color';
     picker.value = color;
@@ -53,4 +53,14 @@ export function createAccentColorSetting(documentRef, color, save) {
     reset.addEventListener('click', () => accept(DEFAULT_ACCENT_COLOR));
     row.append(picker, text, reset);
     return row;
+}
+/** Synchronize a mounted picker with its selected source without disturbing partial text edits. */
+export function updateAccentColorSetting(row, color, disabled) {
+    const signature = `${color}:${disabled}`;
+    if (row.dataset.accentState === signature)
+        return;
+    row.dataset.accentState = signature;
+    row.disabled = disabled;
+    for (const input of row.querySelectorAll('input'))
+        input.value = color;
 }

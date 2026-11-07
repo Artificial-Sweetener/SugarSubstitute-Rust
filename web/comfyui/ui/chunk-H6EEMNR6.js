@@ -2,17 +2,17 @@ import {
   CanvasWipeSeparator
 } from "./chunk-WIEFPHCO.js";
 import {
+  canvasNavigationSnapshot
+} from "./chunk-R73MK26O.js";
+import {
   CanvasComparisonNavigation
-} from "./chunk-675HISLK.js";
+} from "./chunk-M6SR67MM.js";
 import {
   CanvasLoadingIndicator
 } from "./chunk-Z66IIUOP.js";
 import {
   CanvasNavigationBar
-} from "./chunk-C5JVIQFD.js";
-import {
-  canvasNavigationSnapshot
-} from "./chunk-ORLQ3IYI.js";
+} from "./chunk-JAFCE4SG.js";
 import {
   computed,
   defineComponent,
@@ -106,8 +106,7 @@ var CanvasOverlay = defineComponent({
             capabilities: props.capabilities,
             send: props.send,
             route: props.route,
-            chooseRoute,
-            backdrop: snapshot.backdrop ?? null
+            chooseRoute
           })
         ]
       );

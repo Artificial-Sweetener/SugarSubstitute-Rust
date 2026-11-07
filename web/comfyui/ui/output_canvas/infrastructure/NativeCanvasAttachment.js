@@ -20,16 +20,18 @@ import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
 import { CanvasViewProjection } from '../application/CanvasViewProjection.js';
 import { mountCanvasOverlay, } from '../presentation/vue/CanvasOverlayRuntime.js';
 import { CanvasMediaActions } from './CanvasMediaActions.js';
-import { outputPreviewUrl } from '../../output_saving/OutputMediaClient.js';
 import { NativeCanvasReadiness } from './NativeCanvasReadiness.js';
+import { CanvasPreparationUnavailable } from '../domain/CanvasPreparation.js';
 import { CanvasViewportKeyboard } from '../presentation/CanvasViewportKeyboard.js';
 import { CanvasSurfaceGeometryObserver } from './CanvasSurfaceGeometryObserver.js';
 import { CanvasSurfacePort } from './CanvasSurfacePort.js';
 import { ensureCanvasViewportStyles } from './CanvasViewportStyles.js';
 import { NativeCanvasActionSurface } from './NativeCanvasActionSurface.js';
-import { nativeCanvasCommands, nativeCanvasComparison, nativeCanvasInput, nativeCanvasInspection, nativeCanvasOverview, } from './NativeCanvasCapabilities.js';
+import { nativeCanvasCommands, nativeCanvasComparison, nativeCanvasInput, nativeCanvasInspection, nativeCanvasOverview, nativeCanvasBackdrop, } from './NativeCanvasCapabilities.js';
 import { NativeCanvasInspection } from './NativeCanvasInspection.js';
 import { NativeCanvasOcclusions } from './NativeCanvasOcclusions.js';
+import { NativeCanvasBackdrops } from './NativeCanvasBackdrops.js';
+import { nativeMaterialGeometrySnapshot } from './NativeCanvasDiagnostics.js';
 import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
 import { nativeCanvasAddressed } from './NativeCanvasDesired.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
@@ -51,6 +53,7 @@ export class NativeCanvasAttachment {
     #native;
     #inspection;
     #geometry;
+    #backdrops = null;
     #overlay;
     #editing;
     #stopView;
@@ -72,6 +75,7 @@ export class NativeCanvasAttachment {
     #presentation = { state: 'empty', message: '' };
     #ready = false;
     #disposed = false;
+    #constructorSurface;
     /** Preparation passed its deadline and has not completed since; `#stallKey` names its request. */
     #stalled = false;
     #stallKey = null;
@@ -97,6 +101,11 @@ export class NativeCanvasAttachment {
         const editing = document.createElement('div');
         element.append(this.viewport, overlay, editing);
         const host = options.nativeSurface();
+        this.#constructorSurface = Object.freeze({
+            available: host !== null,
+            schema: host?.capabilities.schema ?? null,
+            backdrop: nativeCanvasBackdrop(host),
+        });
         this.#overview =
             host && nativeCanvasOverview(host)
                 ? new NativeCanvasOverview(element, {
@@ -171,6 +180,10 @@ export class NativeCanvasAttachment {
         this.#native = new NativeCanvasPresentation({
             address: options.address,
             clock: options.clock,
+            backdropChanged: () => {
+                if (this.#ready && !this.#disposed)
+                    this.#publish();
+            },
             acceptsPreparation: () => !this.#disposed && options.acceptsPreparation(),
             prepared: () => {
                 this.#stalled = false;
@@ -183,7 +196,7 @@ export class NativeCanvasAttachment {
             status: (value) => {
                 this.#presentation = value;
                 if (value.state === 'error' || value.state === 'unavailable')
-                    this.#readiness.fail(new Error(value.message));
+                    this.#readiness.fail(new CanvasPreparationUnavailable(value.message));
                 if (this.#ready)
                     this.#status.changed(true);
             },
@@ -260,9 +273,13 @@ export class NativeCanvasAttachment {
                 report: (error) => options.report(error, null),
             });
             cleanup.push(() => this.#editing.dispose());
+            if (nativeCanvasBackdrop(host)) {
+                this.#backdrops = new NativeCanvasBackdrops(element, () => this.#publish());
+                cleanup.push(() => this.#backdrops?.dispose());
+            }
             this.#geometry = new CanvasSurfaceGeometryObserver(this.viewport, options.frames, (geometry) => this.#observeGeometry(geometry), 
             // The host routes OS gestures itself, around the web content the page reports covering it.
-            nativeCanvasInput(host) ? new NativeCanvasOcclusions(element, this.viewport) : null);
+            nativeCanvasInput(host) ? new NativeCanvasOcclusions(element, this.viewport) : null, this.#backdrops);
             cleanup.push(() => this.#geometry.dispose());
             this.#stopView = options.views.subscribe(options.address.viewId, () => this.refresh());
             cleanup.push(this.#stopView);
@@ -356,6 +373,10 @@ export class NativeCanvasAttachment {
             unknownLoads: 0,
             renderFrames: 0,
             ...this.#native.diagnostics(),
+            constructorSurface: this.#constructorSurface,
+            observedMaterial: this.#backdrops?.diagnostics() ?? null,
+            currentGeometry: nativeMaterialGeometrySnapshot(this.#surface),
+            materialReady: this.#native.backdropReady(this.#surface),
         };
     }
     /** Release the native surface and shared controls before retiring their view lease. */
@@ -410,6 +431,7 @@ export class NativeCanvasAttachment {
             this.#resize(surface);
         else
             this.port.updateSurface(this.options.address, surface);
+        this.#publish();
     }
     /** Forward qualified geometry without constructing a browser drawing surface. */
     /** Identify the stalled request: the selected output and the presented allocation. */
@@ -476,8 +498,11 @@ export class NativeCanvasAttachment {
             previewAvailable: this.#native?.previewAvailable ?? false,
             comparison: this.#comparison,
             overview: this.#overview !== null,
-            geometry: this.#surface,
-            backdropUrl: (item) => outputPreviewUrl(this.viewport.ownerDocument.location.origin, item.file, item.id),
+            nativeBackdrop: !nativeCanvasBackdrop(this.options.nativeSurface())
+                ? 'unavailable'
+                : this.#backdrops?.current && this.#native?.backdropReady(this.#surface)
+                    ? 'ready'
+                    : 'pending',
         });
     }
 }

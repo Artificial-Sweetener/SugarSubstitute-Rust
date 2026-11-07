@@ -1,4 +1,7 @@
 import {
+  CanvasEditKeyboard
+} from "../../chunk-BQYNHRW2.js";
+import {
   CanvasEditOverlay,
   canvasEditSurface
 } from "../../chunk-J5S5ZY6K.js";
@@ -24,9 +27,6 @@ import {
 } from "../../chunk-EFQNN4SR.js";
 import "../../chunk-2WJX4EBF.js";
 import "../../chunk-X5ULNSRV.js";
-import {
-  CanvasEditKeyboard
-} from "../../chunk-BQYNHRW2.js";
 import {
   createApp,
   h,

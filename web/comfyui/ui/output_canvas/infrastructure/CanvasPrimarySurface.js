@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Retire inactive primary attachments while retaining per-workflow lightweight view state. */
-import { CanvasPreparationTimeout } from '../domain/CanvasPreparation.js';
+import { CanvasPreparationTimeout, CanvasPreparationUnavailable, } from '../domain/CanvasPreparation.js';
 import { CanvasPreparationRecovery, sameCanvasPreparationTarget, } from './CanvasPreparationRecovery.js';
 /** Give exactly one active visible primary workflow ownership of its surface and ephemeral previews. */
 export class CanvasPrimarySurface {
@@ -22,6 +22,8 @@ export class CanvasPrimarySurface {
     #current = null;
     #pending = null;
     #stop = null;
+    #stopView = null;
+    #watchedView = null;
     #disposed = false;
     #retirement = null;
     /** Mount a fresh candidate even though the committed attachment matches the target. */
@@ -94,6 +96,7 @@ export class CanvasPrimarySurface {
             return;
         const { coordinator, views } = this.options;
         const view = coordinator.active();
+        this.#watchView(view);
         const element = !this.options.document.hidden ? this.options.element() : null;
         const catalog = view && element ? coordinator.catalog(view) : null;
         const renderer = this.options.renderer();
@@ -126,7 +129,9 @@ export class CanvasPrimarySurface {
         if (this.#current &&
             (this.#current.view !== view ||
                 this.#current.generation !== catalog.generation ||
-                this.#current.element !== element))
+                this.#current.element !== element ||
+                (this.#current.renderer !== renderer &&
+                    this.options.retireBeforeMount?.(this.#current.renderer, renderer))))
             this.#release();
         const root = this.options.document.createElement('div');
         root.style.position = 'absolute';
@@ -215,10 +220,23 @@ export class CanvasPrimarySurface {
         this.#disposed = true;
         this.#stop?.();
         this.#stop = null;
+        this.#stopView?.();
+        this.#stopView = null;
+        this.#watchedView = null;
         this.options.document.removeEventListener('visibilitychange', this.reconcile);
         this.#recovery.reset();
         this.#cancelPending();
         this.#release();
+    }
+    /** Reconsider presentation capability when explicit navigation changes the selected media kind. */
+    #watchView(view) {
+        if (view === this.#watchedView)
+            return;
+        this.#stopView?.();
+        this.#stopView = null;
+        this.#watchedView = view;
+        if (view)
+            this.#stopView = this.options.views.subscribe(view, this.reconcile);
     }
     /** Attach afresh at once, with a new retry budget, after a stalled attachment's request changed. */
     #recover() {
@@ -312,14 +330,18 @@ export class CanvasPrimarySurface {
      * loading state replaces a blank pane or an outdated attachment (one from an earlier renderer
      * identity, such as before native discovery concluded). The same target is then retried
      * afresh on a bounded backoff until it prepares or shows its preparation error.
+     * An unavailable native candidate also commits its diagnostic chrome without retrying or
+     * claiming that native pixels prepared successfully.
      */
     #failPending(pending, error) {
         if (this.#pending !== pending)
             return;
         const timedOut = error instanceof CanvasPreparationTimeout;
         const served = this.#current !== null && sameCanvasPreparationTarget(this.#current, pending);
-        if (timedOut && !served && pending.attachment)
-            this.#activate(pending, true);
+        if ((timedOut || error instanceof CanvasPreparationUnavailable) &&
+            !served &&
+            pending.attachment)
+            this.#activate(pending, timedOut);
         else
             this.#cancelPending();
         this.options.report(error);

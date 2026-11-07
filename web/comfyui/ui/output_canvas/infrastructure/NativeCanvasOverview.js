@@ -22,15 +22,15 @@ import { CanvasOutputDrag, } from '../presentation/CanvasOutputDrag.js';
 const MAX_OVERVIEW_ITEM_ID = 1024;
 const FORMAT_EXTENSIONS = { png: ['.png'], jpeg: ['.jpg', '.jpeg'], webp: ['.webp'] };
 /**
- * Report whether the native surface can paint an item: a saved output in a negotiated format.
+ * Report whether the native surface can paint a saved or temporary result in a negotiated format.
  *
- * The host reads Comfy outputs only and refuses an overview containing any other file, so other
- * cells stay in the grid as selectable controls instead of failing the whole grid.
+ * The host admits Comfy result storage independently of editable input documents. Other media
+ * stays in the grid as selectable controls instead of failing the whole grid.
  */
 function paintable(item, capabilities) {
     const filename = item.file.filename.toLowerCase();
     return (item.mediaKind === 'image' &&
-        item.file.type === 'output' &&
+        (item.file.type === 'output' || item.file.type === 'temp') &&
         Array.from(item.id).length <= MAX_OVERVIEW_ITEM_ID &&
         capabilities.imageFormats.some((format) => FORMAT_EXTENSIONS[format].some((extension) => filename.endsWith(extension))));
 }

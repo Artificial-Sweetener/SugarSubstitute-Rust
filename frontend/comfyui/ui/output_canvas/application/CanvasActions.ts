@@ -105,7 +105,10 @@ export async function applyCanvasAction(
     case 'photoshop-all-media':
       return await surface.media(command, scope);
     case 'comparison':
-      if (command.enabled && (snapshot.preview || snapshot.resource.state !== 'ready'))
+      if (
+        command.enabled &&
+        (!snapshot.comparisonAvailable || snapshot.preview || snapshot.resource.state !== 'ready')
+      )
         return false;
       break;
     default:

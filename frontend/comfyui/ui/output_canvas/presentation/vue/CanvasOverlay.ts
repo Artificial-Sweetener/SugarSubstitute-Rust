@@ -158,7 +158,6 @@ export const CanvasOverlay = defineComponent({
                 send: props.send,
                 route: props.route,
                 chooseRoute,
-                backdrop: snapshot.backdrop ?? null,
               }),
         ],
       );

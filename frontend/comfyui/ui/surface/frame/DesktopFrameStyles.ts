@@ -38,6 +38,10 @@ export const desktopFrameCss = `
     --sc-stack-row:var(--sc-desktop-card-wash); }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] :is([data-sc-style-node],[data-sc-style-surface]) {
     --sc-card-fill:var(--sc-desktop-card-wash); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] .sugarcubes-native-node-card[data-cube-face-native='nodes-2'] > .lg-node[data-sc-style-node] {
+    background:var(--sc-card-fill); border-radius:var(--sc-node-card-radius); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] .sugarcubes-native-node-card[data-cube-face-native='nodes-2'] > .lg-node[data-sc-style-node] > [data-testid='node-inner-wrapper'] {
+    background-color:transparent; }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
     [data-testid^='node-header-'],[data-testid^='node-body-'],[data-testid='advanced-inputs-button']) {
     background:transparent; }

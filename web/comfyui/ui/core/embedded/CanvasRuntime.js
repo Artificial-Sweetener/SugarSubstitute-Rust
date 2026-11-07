@@ -1936,6 +1936,7 @@ export {
   isCanvasMaskReference,
   isCanvasPixelRaster,
   isCanvasSurfaceGeometry,
+  negotiatesCanvasSurfaceBackdrop,
   negotiatesCanvasSurfaceComparison,
   negotiatesCanvasSurfaceInspection,
   prepareCanvasImagePatch,

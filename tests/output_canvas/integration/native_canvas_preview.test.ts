@@ -110,6 +110,28 @@ function fixture(supported = true, inputShown?: () => boolean) {
   };
 }
 
+test('commits a workflow Input document without offering its thumbnail or output preview', async () => {
+  const f = fixture(true, () => true);
+  const input = { ...f.item, file: { ...f.item.file, type: 'input' as const } };
+  f.presentation.update(previewGeometry, input, f.preview());
+  await settle();
+  f.respond(0, 'ready');
+  await settle();
+  f.respond(1);
+  await settle();
+  f.respond(2);
+  await settle();
+  expect(f.calls.map((call) => call.type)).toEqual([
+    'surface.prepare',
+    'surface.geometry',
+    'surface.commit',
+  ]);
+  expect(f.calls[1]).toMatchObject({ geometry: { visible: true } });
+  expect(f.visible.at(-1)).toBe(true);
+  expect(f.statuses.at(-1)?.state).toBe('ready');
+  expect(f.errors).toEqual([]);
+});
+
 /** Establish the existing final-selection contract without granting preview presentation. */
 async function commit(
   f: ReturnType<typeof fixture>,
@@ -179,6 +201,45 @@ async function transfer(
   await settle();
   return begin(f, preview.token);
 }
+
+test('a cancelled final replacement cannot make an unshown camera block the next live preview', async () => {
+  const f = fixture();
+  await commit(f);
+  f.presentation.update(previewGeometry, f.second, null);
+  expect(f.calls[5]?.type).toBe('surface.select');
+  const preview = f.preview(2);
+  f.presentation.update(previewGeometry, null, preview);
+  f.respond(5, 'cancelled');
+  await settle();
+  // Cancelling the native selection leaves no document camera to read until pixels arrive.
+  expect(f.calls).toHaveLength(6);
+  const blob = new NativePreviewBlob();
+  f.presentation.receive(preview, blob);
+  expect(f.calls[6]?.type).toBe('surface.preview.begin');
+  f.respond(6);
+  await settle();
+  blob.release();
+  await settle();
+  expect(f.calls[7]?.type).toBe('surface.preview.chunk');
+  f.respond(7);
+  await settle();
+  expect(f.calls[8]?.type).toBe('surface.preview.end');
+  f.respond(8);
+  await settle();
+  expect(f.calls).toHaveLength(9);
+  const lease = begin(f, preview.token);
+  observe(f, lease, {
+    type: 'preview',
+    token: preview.token,
+    leaseRevision: lease.revision,
+    viewport: previewViewport,
+  });
+  await settle();
+  expect(f.previews.at(-1)).toBe(true);
+  expect(f.viewports.at(-1)).toEqual(previewViewport);
+  expect(f.statuses.at(-1)?.state).toBe('ready');
+  expect(f.errors).toHaveLength(0);
+});
 
 test('requires an accepted watch before consuming bytes, while the final remains interactive', async () => {
   const f = fixture();

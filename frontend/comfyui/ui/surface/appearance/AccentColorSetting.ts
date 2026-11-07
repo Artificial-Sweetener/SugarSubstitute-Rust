@@ -21,10 +21,10 @@ export function createAccentColorSetting(
   documentRef: Document,
   color: string,
   save: (color: string) => void,
-): HTMLElement {
-  const row = documentRef.createElement('div');
+): HTMLFieldSetElement {
+  const row = documentRef.createElement('fieldset');
   row.className = 'sugarcubes-settings-row sc-accent-setting';
-  row.style.cssText = 'display:flex;align-items:center;gap:12px';
+  row.style.cssText = 'display:flex;align-items:center;gap:12px;border:0;padding:0;margin:0';
   const picker = documentRef.createElement('input');
   picker.type = 'color';
   picker.value = color;
@@ -56,4 +56,17 @@ export function createAccentColorSetting(
   reset.addEventListener('click', () => accept(DEFAULT_ACCENT_COLOR));
   row.append(picker, text, reset);
   return row;
+}
+
+/** Synchronize a mounted picker with its selected source without disturbing partial text edits. */
+export function updateAccentColorSetting(
+  row: HTMLFieldSetElement,
+  color: string,
+  disabled: boolean,
+): void {
+  const signature = `${color}:${disabled}`;
+  if (row.dataset.accentState === signature) return;
+  row.dataset.accentState = signature;
+  row.disabled = disabled;
+  for (const input of row.querySelectorAll('input')) input.value = color;
 }

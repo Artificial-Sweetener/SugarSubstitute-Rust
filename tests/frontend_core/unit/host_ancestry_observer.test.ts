@@ -74,3 +74,31 @@ test('accepts explicitly owned attributes without observing unrelated descendant
     parent.remove();
   }
 });
+
+test('attribute-only material observation ignores sibling mounts and retires with the owner', async () => {
+  const parent = document.createElement('section');
+  const surface = document.createElement('div');
+  parent.append(surface);
+  document.body.append(parent);
+  const changed = jest.fn();
+  const observer = new HostAncestryObserver(window, changed, ['data-sc-color-scheme']);
+  try {
+    observer.observeAttributes([surface, parent, document.body]);
+    const popup = document.createElement('aside');
+    document.body.append(popup);
+    parent.append(document.createElement('span'));
+    await Promise.resolve();
+    expect(changed).not.toHaveBeenCalled();
+    parent.dataset.scColorScheme = 'light';
+    await Promise.resolve();
+    expect(changed).toHaveBeenCalledTimes(1);
+    observer.disconnect();
+    parent.dataset.scColorScheme = 'dark';
+    await Promise.resolve();
+    expect(changed).toHaveBeenCalledTimes(1);
+    popup.remove();
+  } finally {
+    observer.disconnect();
+    parent.remove();
+  }
+});

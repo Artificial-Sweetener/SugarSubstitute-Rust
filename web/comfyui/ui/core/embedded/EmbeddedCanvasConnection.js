@@ -51,7 +51,7 @@ export class EmbeddedCanvasConnection {
     #refreshAgain = false;
     #surfaceDiscovered = false;
     #disposed = false;
-    /** Report settled discovery, including a refused, unavailable or failed first context read. */
+    /** Report the current discovery's completion, including unavailable or failed reads. */
     get surfaceDiscovered() {
         return this.#surfaceDiscovered;
     }
@@ -95,7 +95,7 @@ export class EmbeddedCanvasConnection {
             this.#refreshAgain = true;
             return;
         }
-        const pending = this.readContext().then(() => { }, (error) => {
+        const pending = this.#readContext(true).then(() => { }, (error) => {
             if (this.#client === client)
                 this.#report?.(error);
         });
@@ -114,16 +114,30 @@ export class EmbeddedCanvasConnection {
     readCanvas() {
         return this.#client?.readCanvas() ?? null;
     }
+    /** Revoke native grants and in-flight refreshes when the backend connection actually leaves. */
+    disconnected() {
+        this.#read = {};
+        this.#surfaceDiscovered = false;
+        this.#refreshAgain = false;
+        this.#refreshing = null;
+        this.#client?.withdrawSurface();
+        this.#window?.document.dispatchEvent(new Event('sugarcubes-canvas-discovered'));
+    }
     /** Capture a native document identity before preparing an image transfer. */
-    async readContext() {
+    readContext() {
+        return this.#readContext(false);
+    }
+    /** Fence current discovery progress separately from the active native surface grant. */
+    async #readContext(refresh) {
         const client = this.#client;
         if (!client)
             throw new Error('The native canvas is unavailable.');
         const read = {};
         this.#read = read;
+        this.#surfaceDiscovered = false;
         let context;
         try {
-            context = await client.readContext();
+            context = await (refresh ? client.refreshContext() : client.readContext());
         }
         finally {
             // Discovery concludes whether the host offered, refused or failed to describe a surface.

@@ -14,6 +14,9 @@ import {
   CanvasBatchPicker
 } from "./chunk-KQOAPFCP.js";
 import {
+  CanvasComparisonExit
+} from "./chunk-J2E7XMH3.js";
+import {
   defineComponent,
   h,
   onBeforeUnmount,
@@ -23,7 +26,6 @@ import {
 } from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasNavigationBar.ts
-var BACKDROP_BLUR_MARGIN = 24;
 var CanvasNavigationBar = defineComponent({
   name: "CanvasNavigationBar",
   props: {
@@ -31,20 +33,17 @@ var CanvasNavigationBar = defineComponent({
     capabilities: { type: Object, required: true },
     send: { type: Function, required: true },
     route: { type: Object, default: null },
-    chooseRoute: { type: Function, required: true },
-    backdrop: { type: Object, default: null }
+    chooseRoute: { type: Function, required: true }
   },
   /** Bind source navigation while preserving the selected batch position. */
   setup(props) {
     const strip = ref(null);
     const slider = ref(null);
     const collapsed = ref(false);
-    const backdrop = ref(null);
     let observer = null;
     let observedParent = null;
     let observedTabs = null;
     let observedStrip = null;
-    let layerElement = null;
     let labels = null;
     function tabs() {
       const element = slider.value?.$el;
@@ -62,10 +61,7 @@ var CanvasNavigationBar = defineComponent({
     }
     function observe() {
       if (typeof ResizeObserver === "undefined") return;
-      observer ??= new ResizeObserver(() => {
-        measure();
-        locate();
-      });
+      observer ??= new ResizeObserver(measure);
       if (strip.value !== observedStrip) {
         if (observedStrip) observer.unobserve(observedStrip);
         observedStrip = strip.value;
@@ -84,46 +80,10 @@ var CanvasNavigationBar = defineComponent({
         if (list) observer.observe(list);
       }
     }
-    let origin = null;
-    let placed = null;
-    function locate() {
-      const bar = strip.value;
-      if (!bar) return;
-      const bounds = bar.getBoundingClientRect();
-      origin = { left: bounds.left + bar.clientLeft, top: bounds.top + bar.clientTop };
-      placeBackdrop();
-    }
-    function placeBackdrop() {
-      const layer = backdrop.value?.firstElementChild ?? null;
-      const source = props.backdrop;
-      if (layer !== layerElement) {
-        layerElement = layer;
-        placed = null;
-      }
-      if (!(layer instanceof HTMLElement) || !source) return;
-      if (!origin) {
-        locate();
-        return;
-      }
-      const { left, top, width, height } = source.rect;
-      const x = left - origin.left + BACKDROP_BLUR_MARGIN;
-      const y = top - origin.top + BACKDROP_BLUR_MARGIN;
-      const next = {
-        url: source.url,
-        size: `${String(width)}px ${String(height)}px`,
-        position: `${String(x)}px ${String(y)}px`
-      };
-      if (placed?.url !== next.url)
-        layer.style.backgroundImage = `url(${JSON.stringify(next.url)})`;
-      if (placed?.size !== next.size) layer.style.backgroundSize = next.size;
-      if (placed?.position !== next.position) layer.style.backgroundPosition = next.position;
-      placed = next;
-    }
     onMounted(() => {
       observe();
       labels = strip.value?.textContent ?? null;
       measure();
-      locate();
     });
     onUpdated(() => {
       observe();
@@ -131,9 +91,7 @@ var CanvasNavigationBar = defineComponent({
       if (nextLabels !== labels) {
         labels = nextLabels;
         measure();
-        locate();
       }
-      placeBackdrop();
     });
     onBeforeUnmount(() => observer?.disconnect());
     function choose(index) {
@@ -151,45 +109,52 @@ var CanvasNavigationBar = defineComponent({
       const { snapshot, capabilities, route } = props;
       const outputs = route?.route !== "input" && capabilities.commands.includes("select-source") && (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1);
       const scenes = route?.route !== "input" && snapshot.scenes.length > 1;
-      if (!route?.inputAvailable && !outputs && !scenes) return null;
+      if (!route?.inputAvailable && !outputs && !scenes && !snapshot.view.comparison) return null;
       const selection = snapshot.view.selection;
       const source = snapshot.sources.find((value) => value.id === selection?.sourceId);
-      return h("div", { class: "sc-output-tabstrip sc-output-navigation", ref: strip }, [
-        props.backdrop ? h("span", { class: "sc-output-backdrop", ref: backdrop, "aria-hidden": "true" }, [
-          h("span", { class: "sc-output-backdrop-image" })
-        ]) : null,
-        route ? h(CanvasRoutePicker, { state: route, choose: props.chooseRoute }) : null,
-        scenes && capabilities.commands.includes("select-scene") ? h(CanvasScenePicker, {
-          scenes: snapshot.scenes,
-          scene: snapshot.view.scene,
-          send: props.send
-        }) : null,
-        outputs && capabilities.commands.includes("batch") ? h("div", { "data-sc-fixed-navigation": "true" }, [
-          h(CanvasBatchPicker, {
-            count: Math.max(0, ...snapshot.sources.map((value) => value.batchCount)),
-            grid: snapshot.view.mode === "overview",
-            includeGrid: Boolean(source?.batchCount) && capabilities.commands.includes("overview"),
-            selection,
-            label: "Output image",
+      return h(
+        "div",
+        {
+          class: "sc-output-tabstrip sc-output-navigation",
+          ref: strip,
+          "data-sc-canvas-backdrop": "navigation",
+          "data-sc-native-backdrop": snapshot.nativeBackdrop
+        },
+        [
+          snapshot.view.comparison ? h(CanvasComparisonExit, { send: props.send }) : null,
+          route ? h(CanvasRoutePicker, { state: route, choose: props.chooseRoute }) : null,
+          scenes && capabilities.commands.includes("select-scene") ? h(CanvasScenePicker, {
+            scenes: snapshot.scenes,
+            scene: snapshot.view.scene,
             send: props.send
-          })
-        ]) : null,
-        outputs && snapshot.sources.length > 1 ? h(CanvasSourceSlider, {
-          ref: slider,
-          sources: snapshot.sources,
-          selectedId: selection?.sourceId ?? null,
-          measuring: collapsed.value,
-          choose
-        }) : null,
-        outputs && collapsed.value ? h(CanvasSelectionPicker, {
-          sources: snapshot.sources,
-          selection,
-          label: "Output source",
-          preview: true,
-          includeBatch: false,
-          send: props.send
-        }) : null
-      ]);
+          }) : null,
+          outputs && capabilities.commands.includes("batch") ? h("div", { "data-sc-fixed-navigation": "true" }, [
+            h(CanvasBatchPicker, {
+              count: Math.max(0, ...snapshot.sources.map((value) => value.batchCount)),
+              grid: snapshot.view.mode === "overview",
+              includeGrid: Boolean(source?.batchCount) && capabilities.commands.includes("overview"),
+              selection,
+              label: "Output image",
+              send: props.send
+            })
+          ]) : null,
+          outputs && snapshot.sources.length > 1 ? h(CanvasSourceSlider, {
+            ref: slider,
+            sources: snapshot.sources,
+            selectedId: selection?.sourceId ?? null,
+            measuring: collapsed.value,
+            choose
+          }) : null,
+          outputs && collapsed.value ? h(CanvasSelectionPicker, {
+            sources: snapshot.sources,
+            selection,
+            label: "Output source",
+            preview: true,
+            includeBatch: false,
+            send: props.send
+          }) : null
+        ]
+      );
     };
   }
 });

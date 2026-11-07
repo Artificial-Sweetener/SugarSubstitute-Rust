@@ -46,6 +46,13 @@ export class HostAncestryObserver {
     for (const root of roots) this.#observer?.observe(root, { childList: true });
   }
 
+  /** Observe material attributes without treating unrelated sibling mounts as layout changes. */
+  observeAttributes(ancestors: readonly Element[]): void {
+    this.#observer?.disconnect();
+    for (const node of ancestors)
+      this.#observer?.observe(node, { attributes: true, attributeFilter: this.#attributes });
+  }
+
   /** Retire native observation with the surface. */
   disconnect(): void {
     this.#observer?.disconnect();

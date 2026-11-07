@@ -14,40 +14,55 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Choose who presents output pixels for this page: the native host or the browser renderer. */
+import type { CanvasDisplayPlan } from './CanvasDisplayPlan.js';
+import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 
 /** The presenter for output pixels; `pending` waits for a host's first native discovery. */
 export type OutputPresenter = 'native' | 'browser' | 'pending';
 
 /** Read-only facts the selection consumes; none of them grants canvas or transport authority. */
 export interface OutputPresenterPort {
-  /** The injected host asked to present output pixels itself. */
-  prefersNative(): boolean;
+  /** The identified desktop host owns image presentation, including unavailable states. */
+  requiresNative(): boolean;
   /** The currently negotiated native output surface, if any. */
   surface(): object | null;
-  /** The native canvas session has settled at least one context and surface discovery. */
+  /** The current native context and surface discovery has settled. */
   discovered(): boolean;
+  /** Request the existing browser media viewer for output content; native Input keeps this false. */
+  browserMedia?(): boolean;
 }
 
 /**
- * Fix the page's output presenter from the first conclusive native discovery.
+ * Keep desktop image presentation native throughout startup and connection changes.
  *
- * A negotiated surface selects native presentation. A host that prefers native presentation
- * keeps the browser renderer unloaded while its discovery is pending; when that discovery
- * settles without a surface (unsupported, unavailable or failed), the browser renderer is
- * selected silently. Either conclusive choice holds for the page lifetime, so a later context
- * refresh never loads the browser renderer beside a working native surface. Without a host
- * preference, the browser renderer presents until a surface is negotiated.
+ * A desktop page waits for discovery, then presents native pixels or native diagnostics. Its
+ * identity is available before discovery and never permits browser image fallback. Other hosts
+ * retain browser presentation until a native surface is negotiated.
  */
 export class OutputPresenterSelection {
-  #selected: 'native' | 'browser' | null = null;
+  #native = false;
 
   constructor(private readonly port: OutputPresenterPort) {}
 
-  /** Return the selected presenter, fixing it once native discovery is conclusive. */
+  /** Keep still images native and hand distinct media to its viewer after current discovery. */
   current(): OutputPresenter {
-    if (this.#selected) return this.#selected;
-    if (this.port.surface() !== null) return (this.#selected = 'native');
-    if (this.port.discovered()) return (this.#selected = 'browser');
-    return this.port.prefersNative() ? 'pending' : 'browser';
+    const available = this.port.surface() !== null;
+    if (available) this.#native = true;
+    this.#native ||= this.port.requiresNative();
+    if (!this.#native) return 'browser';
+    if (!available && !this.port.discovered()) return 'pending';
+    return this.port.browserMedia?.() ? 'browser' : 'native';
   }
+}
+
+/** Consume the existing display plan rather than introducing a second selection or grid policy. */
+export function canvasRequiresBrowserMedia(plan: CanvasDisplayPlan): boolean {
+  const media = (item: WorkflowOutputItem | null | undefined) => {
+    if (!item) return false;
+    return (
+      item.mediaKind === 'animated' || item.mediaKind === 'video' || item.mediaKind === 'model'
+    );
+  };
+  if (plan.view.mode === 'overview') return plan.grid.some((entry) => entry.items.some(media));
+  return !plan.preview && (media(plan.primary?.item) || media(plan.secondary?.item));
 }

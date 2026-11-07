@@ -35,12 +35,12 @@ export function ensureCanvasOverlayStyles(document: Document): void {
       background:var(--sc-output-glass);
       -webkit-backdrop-filter:blur(var(--p-toast-blur,10px)); backdrop-filter:blur(var(--p-toast-blur,10px)); }
     .sc-output-choice[data-stable="true"] .sc-output-segment { min-width:calc(var(--sc-choice-label-chars,6) * 1ch + 26px); }
-    .sc-output-backdrop { position:absolute; inset:0; z-index:-1; overflow:hidden; border-radius:inherit;
-      pointer-events:none; }
-    .sc-output-backdrop-image { position:absolute; inset:-24px; background-repeat:no-repeat;
-      filter:blur(var(--p-toast-blur,10px)); }
-    .sc-output-backdrop::after { content:""; position:absolute; inset:0; background:var(--sc-output-glass); }
+    .sc-output-tabstrip[data-sc-native-backdrop] {
+      background:linear-gradient(var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)),var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020))),Canvas;
+      -webkit-backdrop-filter:none; backdrop-filter:none; }
+    .sc-output-tabstrip[data-sc-native-backdrop="ready"] { background:var(--sc-output-glass); }
     .sc-output-selection-picker { display:flex; gap:4px; min-width:0; }
+    .sc-output-comparison-exit { flex-shrink:0; }
     .sc-output-tabs.sc-output-tabs-measure { position:absolute; visibility:hidden; pointer-events:none; width:max-content; }
     .sc-output-tabstrip.sc-output-compare-first { max-width:calc(50% - 12px); }
     .sc-output-tabstrip.sc-output-compare-second { left:auto; right:8px; max-width:calc(50% - 12px); }

@@ -18,12 +18,13 @@ import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/Ca
 import {
   negotiatesCanvasSurfaceComparison,
   negotiatesCanvasSurfaceInspection,
+  negotiatesCanvasSurfaceBackdrop,
 } from '../../core/embedded/CanvasRuntime.js';
 import type { CanvasCommand } from '../domain/CanvasViewPort.js';
 
 const CAMERA_COMMANDS = ['fit', 'native', 'zoom', 'pan'] as const;
 type CameraCommand = (typeof CAMERA_COMMANDS)[number];
-const COMPARISON_COMMANDS = ['comparison', 'select-comparison', 'swap', 'wipe'] as const;
+const COMPARISON_COMMANDS = ['select-comparison', 'swap', 'wipe'] as const;
 
 /** Rebuild a staged attachment when discovery changes its immutable command capabilities. */
 export function nativeCanvasRendererKey(host: CanvasSurfaceHost | null): string {
@@ -45,11 +46,17 @@ export function nativeCanvasInput(host: CanvasSurfaceHost | null): boolean {
   return host?.capabilities.input === true;
 }
 
+/** Admit native-frame material only through the negotiated geometry/frame acknowledgement contract. */
+export function nativeCanvasBackdrop(host: CanvasSurfaceHost | null): boolean {
+  return host !== null && negotiatesCanvasSurfaceBackdrop(host.capabilities);
+}
+
 /**
  * Advertise camera commands only with the viewport-state contract required by their shared
- * proxy, the shared comparison commands only with a negotiated pair-and-divider host, and the
+ * proxy, pair controls only with a negotiated pair-and-divider host, and the
  * overview grid only with a host that paints it. Linked inspection requires a host that
- * restores image-relative cameras.
+ * restores image-relative cameras. Comparison exit remains available during capability loss;
+ * shared action admission separately checks whether comparison can be entered.
  */
 export function nativeCanvasCommands(host: CanvasSurfaceHost | null): CanvasCommand['type'][] {
   const camera = host?.capabilities.viewportState
@@ -59,6 +66,7 @@ export function nativeCanvasCommands(host: CanvasSurfaceHost | null): CanvasComm
     : [];
   return [
     ...camera,
+    'comparison',
     ...(nativeCanvasComparison(host) ? COMPARISON_COMMANDS : []),
     ...(nativeCanvasOverview(host) ? (['overview'] as const) : []),
     ...(nativeCanvasInspection(host) ? (['link'] as const) : []),

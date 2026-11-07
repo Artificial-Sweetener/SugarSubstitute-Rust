@@ -16,6 +16,13 @@
 /** Adapt a native viewer's injected transport without importing its runtime or editor SDK. */
 import { isRecord } from '../../types/common.js';
 import { panelNavigation } from './BrowserPanelTransport.js';
+/** Identify Substitute presentation from its validated native panel identity. */
+export function isSubstituteHost(windowRef) {
+    const bridge = Reflect.get(windowRef, 'sugarcubesPanelHost');
+    return (isRecord(bridge) &&
+        bridge.host === 'ai.artificialsweetener.sugarsubstitute' &&
+        createNativePanelTransport(windowRef) !== null);
+}
 /** Read only the host's presentation preference, which grants no canvas or transport authority. */
 export function prefersNativeOutputSurface(windowRef) {
     const bridge = Reflect.get(windowRef, 'sugarcubesPanelHost');

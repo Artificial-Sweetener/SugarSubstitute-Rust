@@ -193,8 +193,8 @@ function canvasAnnouncement(
   current: CanvasViewSnapshot,
 ): string | null {
   const source = current.sources.find((entry) => entry.id === current.view.selection?.sourceId);
-  if (previous.view.selection?.sourceId !== current.view.selection?.sourceId)
-    return source?.label ?? 'Output source is unavailable.';
+  if (source && previous.view.selection?.sourceId !== current.view.selection?.sourceId)
+    return source.label;
   if (
     current.resource.state === 'error' &&
     (previous.resource.state !== 'error' || previous.resource.message !== current.resource.message)

@@ -81,9 +81,13 @@ export class EmbeddedPanelHost {
         this.options.report(error);
       }
     });
+    let connected = this.options.connected();
     this.#stopConnection =
-      this.options.subscribeConnection?.((connected) => {
-        if (connected) this.options.canvas?.refresh();
+      this.options.subscribeConnection?.((value) => {
+        if (connected === value) return;
+        connected = value;
+        if (value) this.options.canvas?.refresh();
+        else this.options.canvas?.disconnected();
       }) ?? null;
     const ready = (): void => {
       try {

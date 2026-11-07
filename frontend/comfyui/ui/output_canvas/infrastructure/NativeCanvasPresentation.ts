@@ -26,12 +26,15 @@ import {
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
-import {
-  IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS,
-  NativeCanvasPreview,
-} from './NativeCanvasPreview.js';
+import { NativeCanvasPreview } from './NativeCanvasPreview.js';
+import { nativeCanvasDiagnostics } from './NativeCanvasDiagnostics.js';
 import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
 import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
+import {
+  nativeMaterialGeometry,
+  nativeMaterialReady,
+  nativeMaterialRetention,
+} from './NativeCanvasMaterial.js';
 import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import type {
@@ -87,6 +90,8 @@ export interface NativeCanvasPresentationOptions {
    * the viewport commands then, whether or not an output is selected.
    */
   inputShown?(): boolean;
+  /** Republish material readiness after native geometry, frame commit or visibility changes. */
+  backdropChanged?(): void;
   /** Choose the camera an image selection restores when sent; without one it starts at Fit. */
   readonly inspection?: Parameters<typeof nativeCanvasSelection>[1];
   report(error: unknown): void;
@@ -111,6 +116,12 @@ export class NativeCanvasPresentation {
 
   /** Bind native presentation to the existing qualified view address. */
   constructor(private readonly options: NativeCanvasPresentationOptions) {}
+
+  /** Permit translucent chrome only over the current shown frame and its exact geometry ACK. */
+  backdropReady(geometry: CanvasSurfaceGeometry | null): boolean {
+    const binding = this.#binding && this.#owns(this.#binding) ? this.#binding : null;
+    return nativeMaterialReady(binding, this.#visible, geometry);
+  }
 
   /**
    * Reconcile only the selection, comparison, overview and geometry chosen by the view owners.
@@ -152,7 +163,6 @@ export class NativeCanvasPresentation {
       }
       this.#desired = null;
     }
-    const previewChanged = this.#preview?.update(preview) ?? false;
     const desired = nativeCanvasDesired(
       geometry,
       item,
@@ -160,7 +170,9 @@ export class NativeCanvasPresentation {
       host?.capabilities.overview ? overview : null,
       this.options.accepts(),
       preparing,
+      this.options.inputShown?.() ?? false,
     );
+    const previewChanged = this.#preview?.update(desired.input ? null : preview) ?? false;
     if (this.#desired?.key === desired.key) {
       // Focus and gesture occlusions change routing, never the presented allocation.
       const routing = JSON.stringify(this.#desired.geometry) !== JSON.stringify(geometry);
@@ -175,37 +187,25 @@ export class NativeCanvasPresentation {
       if (routing || divider || layout || previewChanged) this.#wake();
       return;
     }
-    const retainedFinal =
-      desired.previewable &&
-      this.#preview?.observing &&
-      this.#binding?.selectionRevision !== null &&
-      this.#binding?.geometry === JSON.stringify(geometry);
-    // Shown content whose allocation alone changes keeps its committed pixels: the host
-    // re-presents them at the new viewport, so the surface stays shown and ready meanwhile.
-    const resized =
-      this.#visible &&
-      this.#desired?.content === desired.content &&
-      this.#binding?.committed === true &&
-      desired.presentable &&
-      (desired.shown || (desired.previewable && this.#preview?.observing === true));
+    const material = nativeMaterialRetention({
+      binding: this.#binding,
+      previousContent: this.#desired?.content,
+      desired,
+      observing: this.#preview?.observing ?? false,
+      shown: this.#visible,
+    });
     this.#desired = desired;
-    if (!retainedFinal) this.options.viewport(null);
-    if (this.#viewport && !retainedFinal) this.#cancelViewport(this.#viewport);
+    if (!material.retainedFinal) this.options.viewport(null);
+    if (this.#viewport && !material.retainedFinal) this.#cancelViewport(this.#viewport);
     // A previous allocation can no longer be presented after the native window resizes.
     // Cancel its acknowledgement wait so the current geometry can reach the host.
-    if (this.#binding?.active?.dependsOnView && !retainedFinal)
+    if (this.#binding?.active?.dependsOnView && !material.retainedFinal)
       this.#binding.active.cancellation.cancel();
-    if (resized) {
+    if (material.resized) {
       this.#wake();
       return;
     }
-    // The native owner retains acknowledged pixels while a same-allocation replacement loads.
-    if (
-      (!desired.shown && !(desired.previewable && this.#preview?.observing)) ||
-      !this.#binding?.committed ||
-      this.#binding.geometry !== JSON.stringify(geometry)
-    )
-      this.#show(false);
+    if (!material.retainPixels) this.#show(false);
     this.options.status(
       nativeCanvasPendingStatus(desired, host !== null, () => !!this.options.surfacePending?.()),
     );
@@ -224,7 +224,7 @@ export class NativeCanvasPresentation {
 
   /** Expose only local encoded custody; native decoded pixels remain host-owned. */
   diagnostics() {
-    return this.#preview?.diagnostics() ?? IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS;
+    return nativeCanvasDiagnostics(this.#preview, this.#binding, this.#desired, this.#visible);
   }
 
   /** Report implemented live preview support independently of whether pixels have arrived. */
@@ -339,17 +339,21 @@ export class NativeCanvasPresentation {
           binding.prepared = true;
         }
         if (!this.#current(binding, desired)) continue;
-        const lastGeometry = desired.geometry ?? binding.lastGeometry;
-        if (!binding.prepared || !lastGeometry) continue;
-        const geometry =
-          desired.shown || (desired.previewable && this.#preview?.observing)
-            ? lastGeometry
-            : { ...lastGeometry, visible: false, clip: { x: 0, y: 0, width: 0, height: 0 } };
+        const geometry = nativeMaterialGeometry(
+          binding,
+          desired,
+          this.#preview?.observing ?? false,
+        );
+        if (!geometry) continue;
         const geometryKey = JSON.stringify(geometry);
         if (geometryKey !== binding.geometry) {
           const result = await this.#send(binding, { type: 'surface.geometry', geometry });
           if (!this.#owns(binding)) return;
           if (result.status !== 'applied') {
+            // A routing/layout wake may update this desired object while its geometry awaits a reply.
+            // Consume that queued update after cancellation instead of failing away its wake.
+            if (result.status === 'cancelled' && this.#dirty && this.#current(binding, desired))
+              continue;
             // Pixels kept shown through a resize cannot present at a rejected allocation.
             if (this.#current(binding, desired)) this.#show(false);
             this.#failed(desired, result);
@@ -357,6 +361,7 @@ export class NativeCanvasPresentation {
           }
           binding.geometry = geometryKey;
           binding.lastGeometry = geometry;
+          this.options.backdropChanged?.();
         }
         if (!this.#current(binding, desired)) continue;
         if (!desired.shown) {
@@ -401,6 +406,7 @@ export class NativeCanvasPresentation {
             continue;
           }
           binding.committed = true;
+          this.options.backdropChanged?.();
         }
         if (!this.#current(binding, desired)) continue;
         const wipe = nativeCanvasWipe(desired);
@@ -425,11 +431,13 @@ export class NativeCanvasPresentation {
         const intent = this.#viewport;
         if (intent && !intent.scope.current()) intent.complete(false);
         const admitted = this.#viewport;
+        // A watch can admit the next JPEG after a cancelled selection has removed its camera.
+        // Read an automatic preview camera only after the host acknowledges actual preview pixels.
         if (
           admitted ||
           ((desired.item ||
             (desired.previewable &&
-              this.#preview?.observing &&
+              this.#preview?.displayed &&
               binding.selectionRevision !== null)) &&
             binding.host.capabilities.viewportState &&
             binding.viewportKey !== desired.key)
@@ -586,6 +594,7 @@ export class NativeCanvasPresentation {
     if (visible === this.#visible) return;
     this.#visible = visible;
     this.options.visible(visible);
+    this.options.backdropChanged?.();
   }
 
   /** Observe the host's release acknowledgement before allowing another binding to prepare. */

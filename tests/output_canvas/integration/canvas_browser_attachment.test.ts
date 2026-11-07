@@ -277,6 +277,7 @@ describe('composed browser canvas attachment', () => {
           accepts,
           acceptsPreparation,
           nativeSurface: () => connection.surface,
+          surfacePending: () => !connection.surfaceDiscovered,
         });
         mounted.push(attachment);
         return attachment;
@@ -335,9 +336,7 @@ describe('composed browser canvas attachment', () => {
         physicalScale: 1,
         dimensions: state.dimensions,
       });
-      expect(f.errors).toEqual([
-        expect.objectContaining({ message: 'The native canvas is unavailable.' }),
-      ]);
+      expect(f.errors).toEqual([]);
     } finally {
       document.removeEventListener('sugarcubes-canvas-ready', primary.reconcile);
       primary.dispose();

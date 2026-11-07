@@ -36,8 +36,8 @@ const geometry: CanvasSurfaceGeometry = {
   focused: false,
 };
 const item = canvasCatalogFixture().entries[0]!.items[0]!;
-const shown = nativeCanvasDesired(geometry, item, null, null, true, false);
-const previewLane = nativeCanvasDesired(geometry, null, null, null, true, false);
+const shown = nativeCanvasDesired(geometry, item, null, null, true, false, false);
+const previewLane = nativeCanvasDesired(geometry, null, null, null, true, false, false);
 
 test('loads shown content only on an available or still-discovered host', () => {
   expect(nativeCanvasPendingStatus(shown, true, () => false)).toEqual({

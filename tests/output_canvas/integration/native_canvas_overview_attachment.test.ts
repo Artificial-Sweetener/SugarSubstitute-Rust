@@ -258,17 +258,19 @@ test('enters a multi-image batch as a natively painted grid with the browser con
   );
   expect(
     buttons.map((button) => button.querySelector('.sc-output-overview-cell-status')?.textContent),
-  ).toEqual(['', '', 'Select to view this image.', 'Select to open this media.']);
+  ).toEqual(['', '', '', 'Select to open this media.']);
   expect(buttons[3]?.querySelector('.sc-output-media-badge')?.textContent).toBe('Video');
   const expected = placements(f.catalog);
-  const [first, second] = f.catalog.entries[0]!.items;
+  const [first, second, temporary] = f.catalog.entries[0]!.items;
   const painted = f.overviews().at(-1)?.cells ?? [];
   expect(painted.map(({ itemId, file }) => ({ itemId, file }))).toEqual([
     { itemId: first!.id, file: first!.file },
     { itemId: second!.id, file: second!.file },
+    { itemId: temporary!.id, file: temporary!.file },
   ]);
   expectRect(painted[0]?.rect, expected[0]!);
   expectRect(painted[1]?.rect, expected[1]!);
+  expectRect(painted[2]?.rect, expected[2]!);
   expect(f.calls.map(({ type }) => type)).toEqual([
     'surface.prepare',
     'surface.geometry',
@@ -403,9 +405,12 @@ test('painted overview cells drag out their exact prepared file; other cells ref
   );
   cells[2]!.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
   await settle();
-  expect(drag).not.toHaveBeenCalledWith(temporary, expect.anything());
+  expect(drag).toHaveBeenCalledWith(temporary, expect.any(AbortSignal));
   expect(cells[0]!.draggable).toBe(false);
-  expect(dragStart(cells[2]!).event.defaultPrevented).toBe(true);
+  expect(cells[2]!.draggable).toBe(true);
+  const draggedTemporary = dragStart(cells[2]!);
+  expect(draggedTemporary.event.defaultPrevented).toBe(false);
+  expect(draggedTemporary.files.map((file) => file.name)).toEqual([temporary!.file.filename]);
   expect(dragStart(cells[3]!).event.defaultPrevented).toBe(true);
   expect(f.errors).toEqual([]);
 });
@@ -488,5 +493,46 @@ test('All paints one natively drawn cell per scene, and a cell opens its scene',
   expect(cells.map((cell) => cell.getAttribute('aria-label'))).toEqual(['Morning', 'Night']);
   cells[1]!.click();
   expect(f.views.read(f.view)).toMatchObject({ scene: 'night', follow: 'manual' });
+  expect(f.errors).toEqual([]);
+});
+
+/** Project real PreviewImage-style results through the same scene catalog as saved images. */
+function temporarySceneCatalog() {
+  const catalog = sceneCatalog();
+  const scenes = catalog.result.scenes;
+  if (!scenes) throw new Error('Missing scene run.');
+  const result: WorkflowResultSession = {
+    ...catalog.result,
+    scenes: {
+      ...scenes,
+      scenes: scenes.scenes.map((scene) => ({
+        ...scene,
+        outputs: scene.outputs.map((output) => ({
+          ...output,
+          items: output.items.map((item) => ({
+            ...item,
+            file: { ...item.file, type: 'temp' as const },
+          })),
+        })),
+      })),
+    },
+  };
+  return canvasSceneCatalog(result, catalog.sources, null, null);
+}
+
+test('All paints temporary image results through the native host', async () => {
+  const f = fixture({ overview: true }, {}, temporarySceneCatalog);
+  f.views.update(f.view, (state) => ({ ...state, mode: 'overview', scene: null }));
+  await f.dispatch({ type: 'select-scene', scene: null });
+  await f.drain();
+  expect(
+    f
+      .overviews()
+      .at(-1)
+      ?.cells.map((cell) => [cell.file.filename, cell.file.type]),
+  ).toEqual([
+    ['morning.png', 'temp'],
+    ['night.png', 'temp'],
+  ]);
   expect(f.errors).toEqual([]);
 });

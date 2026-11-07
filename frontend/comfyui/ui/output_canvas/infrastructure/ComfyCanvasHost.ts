@@ -17,8 +17,12 @@
 
 import type { ComfyWorkflowExecutionRuntime } from '../../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { resolveComfyRendererMode } from '../../core/ComfyRendererMode.js';
-import { prefersNativeOutputSurface } from '../../core/embedded/NativePanelTransport.js';
-import { OutputPresenterSelection } from '../application/OutputPresenterSelection.js';
+import { isSubstituteHost } from '../../core/embedded/NativePanelTransport.js';
+import {
+  OutputPresenterSelection,
+  canvasRequiresBrowserMedia,
+} from '../application/OutputPresenterSelection.js';
+import { canvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
 import { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
 import { CanvasSourceInventory } from '../application/CanvasSourceInventory.js';
 import { CanvasSelectionController } from '../application/CanvasSelectionController.js';
@@ -172,9 +176,26 @@ export class ComfyCanvasHost {
       options.presentation,
     );
     const presenter = new OutputPresenterSelection({
-      prefersNative: () => prefersNativeOutputSurface(window),
+      requiresNative: () => isSubstituteHost(window),
       surface: () => execution.canvases.surfaceHost('embedded-document'),
       discovered: () => execution.canvasSurfaceDiscovered,
+      browserMedia: () => {
+        if (options.route?.read()?.route === 'input') return false;
+        const view = this.#coordinator.active();
+        const catalog = view ? this.#coordinator.catalog(view) : null;
+        return (
+          !!view &&
+          !!catalog &&
+          canvasRequiresBrowserMedia(
+            canvasDisplayPlan(
+              views.read(view),
+              catalog,
+              selection.items(view, catalog),
+              selection.preview(view, catalog),
+            ),
+          )
+        );
+      },
     });
     const nativePresenter = (): boolean => presenter.current() !== 'browser';
     this.#primary = new CanvasPrimarySurface({
@@ -184,7 +205,9 @@ export class ComfyCanvasHost {
       coordinator: this.#coordinator,
       element: () => this.#workspace.canvas,
       renderer: () =>
-        `${resolveComfyRendererMode(app, null, document)}:${nativePresenter() ? nativeCanvasRendererKey(execution.canvases.surfaceHost('embedded-document')) : 'browser'}`,
+        `${resolveComfyRendererMode(app, null, document)}:${nativePresenter() ? `${nativeCanvasRendererKey(execution.canvases.surfaceHost('embedded-document'))}:${presenter.current()}` : 'browser'}`,
+      retireBeforeMount: (previous, next) =>
+        previous.endsWith(':browser') !== next.endsWith(':browser'),
       report,
       clock,
       mount: (element, address, _catalog, accepts, acceptsPreparation, recover) => {
@@ -315,6 +338,8 @@ export class ComfyCanvasHost {
       this.#imageActions.setup();
       this.#saving?.setup();
       this.#stops.push(this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
+      if (this.options.route)
+        this.#stops.push(this.options.route.subscribe(() => this.#primary.reconcile()));
       this.options.document.addEventListener(
         'sugarcubes-canvas-discovered',
         this.#canvasDiscovered,

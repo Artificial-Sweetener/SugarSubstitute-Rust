@@ -20,6 +20,7 @@ import type { CanvasCommand, CanvasViewSnapshot } from '../../domain/CanvasViewP
 import type { CanvasRouteId, CanvasRouteState } from '../../domain/CanvasRoute.js';
 import { CanvasRoutePicker } from './CanvasRoutePicker.js';
 import { CanvasSelectionPicker } from './CanvasSelectionPicker.js';
+import { CanvasComparisonExit } from './CanvasComparisonExit.js';
 
 /** Keep each reveal image's content navigation explicit and independently selectable; the first bar also chooses the canvas. */
 export const CanvasComparisonNavigation = defineComponent({
@@ -34,26 +35,43 @@ export const CanvasComparisonNavigation = defineComponent({
   setup(props) {
     return () =>
       h('div', { class: 'sc-output-comparison-navigation' }, [
-        h('div', { class: 'sc-output-tabstrip sc-output-compare-first' }, [
-          props.route
-            ? h(CanvasRoutePicker, { state: props.route, choose: props.chooseRoute })
-            : null,
-          h(CanvasSelectionPicker, {
-            sources: props.snapshot.sources,
-            selection: props.snapshot.view.selection,
-            label: 'First output',
-            send: props.send,
-          }),
-        ]),
-        h('div', { class: 'sc-output-tabstrip sc-output-compare-second' }, [
-          h(CanvasSelectionPicker, {
-            sources: props.snapshot.sources,
-            selection: props.snapshot.view.comparison?.secondary ?? null,
-            label: 'Comparison output',
-            secondary: true,
-            send: props.send,
-          }),
-        ]),
+        h(
+          'div',
+          {
+            class: 'sc-output-tabstrip sc-output-compare-first',
+            'data-sc-canvas-backdrop': 'first',
+            'data-sc-native-backdrop': props.snapshot.nativeBackdrop,
+          },
+          [
+            h(CanvasComparisonExit, { send: props.send }),
+            props.route
+              ? h(CanvasRoutePicker, { state: props.route, choose: props.chooseRoute })
+              : null,
+            h(CanvasSelectionPicker, {
+              sources: props.snapshot.sources,
+              selection: props.snapshot.view.selection,
+              label: 'First output',
+              send: props.send,
+            }),
+          ],
+        ),
+        h(
+          'div',
+          {
+            class: 'sc-output-tabstrip sc-output-compare-second',
+            'data-sc-canvas-backdrop': 'second',
+            'data-sc-native-backdrop': props.snapshot.nativeBackdrop,
+          },
+          [
+            h(CanvasSelectionPicker, {
+              sources: props.snapshot.sources,
+              selection: props.snapshot.view.comparison?.secondary ?? null,
+              label: 'Comparison output',
+              secondary: true,
+              send: props.send,
+            }),
+          ],
+        ),
       ]);
   },
 });

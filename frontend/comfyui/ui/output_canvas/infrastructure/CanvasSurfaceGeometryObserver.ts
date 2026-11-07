@@ -37,6 +37,19 @@ export interface CanvasSurfaceRouting {
   ): Pick<CanvasSurfaceGeometry, 'occlusions' | 'modal'>;
 }
 
+/** Contribute independently observed native material regions without granting input routing. */
+export interface CanvasSurfaceBackdrops {
+  /** Subscribe to material layout changes and return their owned teardown. */
+  observe(changed: () => void): () => void;
+  /** Withdraw previously measured material before allocation or density changes. */
+  invalidate(): void;
+  /** Read immutable viewport-relative CSS regions independently of gesture routing. */
+  read(
+    origin: CanvasSurfaceGeometry['origin'],
+    viewport: CanvasSurfaceGeometry['viewport'],
+  ): NonNullable<CanvasSurfaceGeometry['backdrops']>;
+}
+
 /** Coalesce layout, visibility, scrolling, and density changes within the attachment's document. */
 export class CanvasSurfaceGeometryObserver {
   readonly #resize: ResizeObserver | null;
@@ -56,6 +69,7 @@ export class CanvasSurfaceGeometryObserver {
     private readonly frames: CanvasFrameClock,
     private readonly changed: (geometry: CanvasSurfaceGeometry) => void,
     private readonly routing: CanvasSurfaceRouting | null = null,
+    private readonly backdrops: CanvasSurfaceBackdrops | null = null,
   ) {
     const document = element.ownerDocument;
     const window = document.defaultView;
@@ -70,25 +84,30 @@ export class CanvasSurfaceGeometryObserver {
     }, ['data-canvas-motion']);
     this.#observeAncestry();
     const schedule = () => this.#schedule();
-    window.addEventListener('resize', schedule);
-    window.addEventListener('scroll', schedule);
-    document.addEventListener('scroll', schedule, true);
-    document.addEventListener('visibilitychange', schedule);
-    window.visualViewport?.addEventListener('resize', schedule);
-    window.visualViewport?.addEventListener('scroll', schedule);
+    const layout = () => {
+      this.backdrops?.invalidate();
+      this.#schedule();
+    };
+    window.addEventListener('resize', layout);
+    window.addEventListener('scroll', layout);
+    document.addEventListener('scroll', layout, true);
+    document.addEventListener('visibilitychange', layout);
+    window.visualViewport?.addEventListener('resize', layout);
+    window.visualViewport?.addEventListener('scroll', layout);
     element.addEventListener('focusin', schedule);
     element.addEventListener('focusout', schedule);
     this.#stops.push(
-      () => window.removeEventListener('resize', schedule),
-      () => window.removeEventListener('scroll', schedule),
-      () => document.removeEventListener('scroll', schedule, true),
-      () => document.removeEventListener('visibilitychange', schedule),
-      () => window.visualViewport?.removeEventListener('resize', schedule),
-      () => window.visualViewport?.removeEventListener('scroll', schedule),
+      () => window.removeEventListener('resize', layout),
+      () => window.removeEventListener('scroll', layout),
+      () => document.removeEventListener('scroll', layout, true),
+      () => document.removeEventListener('visibilitychange', layout),
+      () => window.visualViewport?.removeEventListener('resize', layout),
+      () => window.visualViewport?.removeEventListener('scroll', layout),
       () => element.removeEventListener('focusin', schedule),
       () => element.removeEventListener('focusout', schedule),
     );
     if (routing) this.#stops.push(routing.observe(schedule));
+    if (backdrops) this.#stops.push(backdrops.observe(schedule));
     this.#density();
   }
 
@@ -117,6 +136,7 @@ export class CanvasSurfaceGeometryObserver {
       height: valid ? bounds.height : 0,
     });
     const routing = this.routing?.read(origin, viewport);
+    const backdrops = this.backdrops?.read(origin, viewport);
     return Object.freeze({
       coordinateSpace: 'client',
       units: 'css-pixels',
@@ -126,6 +146,9 @@ export class CanvasSurfaceGeometryObserver {
       physicalPixelsPerCssPixel: valid ? density : 1,
       visible: measured?.visible ?? false,
       focused: this.element.contains(document.activeElement),
+      ...(backdrops
+        ? { backdrops: Object.freeze(backdrops.map((region) => Object.freeze({ ...region }))) }
+        : {}),
       ...(routing
         ? {
             occlusions: Object.freeze(routing.occlusions?.map((rect) => Object.freeze(rect)) ?? []),
@@ -237,6 +260,7 @@ export class CanvasSurfaceGeometryObserver {
     if (!window?.matchMedia || this.#disposed) return;
     const query = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
     const changed = () => {
+      this.backdrops?.invalidate();
       this.#density();
       this.#schedule();
     };
