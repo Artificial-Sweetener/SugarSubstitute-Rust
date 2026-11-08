@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Derive the native presentation requested by the view owners, independent of host progress. */
+import { nativeCanvasItemId } from './NativeCanvasItemIdentity.js';
 /**
  * Qualify the selected output, optional B image or overview grid against drawable geometry.
  *
@@ -111,10 +112,15 @@ export function nativeCanvasSelection(desired, inspection) {
             : [item.id, item.file]),
         operation: {
             type: 'surface.select',
-            itemId: item.id,
+            itemId: nativeCanvasItemId(item.id),
             file: item.file,
             ...(comparison
-                ? { comparison: { itemId: comparison.item.id, file: comparison.item.file } }
+                ? {
+                    comparison: {
+                        itemId: nativeCanvasItemId(comparison.item.id),
+                        file: comparison.item.file,
+                    },
+                }
                 : {}),
             ...(restored ? { inspection: restored } : {}),
         },

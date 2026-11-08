@@ -17,6 +17,7 @@
 
 import { decodeCanvasCommandRequest } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasCommandDecoder.js';
 import type { CanvasCommand } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
+import { desktopOutputResultId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 import { canvasSnapshot } from '../support/CanvasPortFixture.js';
 
 const address = canvasSnapshot('first').address;
@@ -89,6 +90,25 @@ test.each<CanvasCommand>([
   { type: 'copy-media', target: 'primary', format: 'preferred' },
   { type: 'copy-media', target: 'secondary', format: 'jpeg' },
   { type: 'file-media', target: 'primary' },
+  {
+    type: 'reveal',
+    target: {
+      sessionId: 'workflow:acceptance',
+      generation: 1,
+      sourceId: 'source:7:42',
+      runOrder: 2,
+      itemId: desktopOutputResultId('3e0f2c6b-7a84-4691-9d4f-9730420bd2ca'),
+      batchIndex: 0,
+    },
+  },
+  {
+    type: 'copy-media',
+    target: {
+      sourceId: 'source:7:42',
+      itemId: desktopOutputResultId('3e0f2c6b-7a84-4691-9d4f-9730420bd2ca'),
+    },
+    format: 'png',
+  },
 ])('decodes a bounded supported intent %#', (command) => {
   const external = request({ ...command, extra: { untrusted: true } });
   const decoded = decodeCanvasCommandRequest(external, authority.origin, authority);

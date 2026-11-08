@@ -18,7 +18,10 @@ import {
   nativeCanvasDesired,
   nativeCanvasSelection,
 } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasDesired.js';
+import { desktopOutputResultId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
+import { isCanvasMessage } from '../../../integrations/shared/CanvasValidation.generated.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
+import { canvasSnapshot } from '../support/CanvasPortFixture.js';
 import { previewGeometry } from '../support/NativeCanvasPreviewFixture.js';
 
 const output = canvasCatalogFixture().entries[0]!.items[0]!;
@@ -85,4 +88,35 @@ test('the Input route presents its native document without selecting catalog out
     false,
   );
   expect(desired.content).not.toBe(outputDesired.content);
+});
+
+test('a restored desktop result and its comparison are selected under the host contract identity', () => {
+  const restored = { ...output, id: desktopOutputResultId('3e0f2c6b-7a84-4691-9d4f-9730420bd2ca') };
+  const partner = { ...output, id: desktopOutputResultId('f40b2275-22f4-4e44-a199-32a8bba728f2') };
+  const desired = nativeCanvasDesired(
+    previewGeometry,
+    restored,
+    { item: partner, orientation: 'vertical', split: 0.5 },
+    null,
+    true,
+    false,
+    false,
+  );
+  const operation = nativeCanvasSelection(desired)?.operation;
+  expect(operation).toMatchObject({
+    type: 'surface.select',
+    itemId: `result:${restored.id}`,
+    comparison: { itemId: `result:${partner.id}` },
+  });
+  expect(
+    isCanvasMessage({
+      protocol: 'sugarcubes.canvas',
+      version: 3,
+      session: 'panel-0123456789abcdef',
+      requestId: 1,
+      address: canvasSnapshot('restored').address,
+      revision: 1,
+      ...operation,
+    }),
+  ).toBe(true);
 });

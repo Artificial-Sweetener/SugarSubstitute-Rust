@@ -20,6 +20,7 @@ import type {
   OutputResultId,
   WorkflowSessionId,
 } from '../../execution/domain/ExecutionIdentity.js';
+import { sessionUuid } from '../../core/embedded/SessionRuntime.js';
 import { isRecord } from '../../types/common.js';
 import type {
   CanvasCapabilities,
@@ -223,12 +224,14 @@ function workflowIdentity(value: unknown): value is WorkflowSessionId {
   );
 }
 
-/** Bound an immutable result identity independently of its internal encoding. */
+/**
+ * Bound an immutable result identity independently of its internal encoding: a live job's `result:`
+ * identity, or the durable artifact UUID an image restored from a desktop session keeps.
+ */
 function resultIdentity(value: unknown): value is OutputResultId {
   return (
     typeof value === 'string' &&
-    value.startsWith('result:') &&
-    value.length > 7 &&
-    value.length <= 16384
+    ((value.startsWith('result:') && value.length > 7 && value.length <= 16384) ||
+      sessionUuid(value))
   );
 }
