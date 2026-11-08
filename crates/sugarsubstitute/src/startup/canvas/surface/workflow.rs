@@ -45,30 +45,23 @@ struct Held {
     replay: Option<replay::Selection>,
 }
 
-/// The output selection last offered, re-offered when the Output route has nothing parked.
+/// The output selection an attachment last offered, re-offered when the Output route has
+/// nothing parked. Its attachment owns it, so it ends with that attachment.
 #[derive(Clone)]
-struct OfferedOutput {
+pub(super) struct OfferedOutput {
     file: CanvasFileReference,
     compared: Option<CanvasFileReference>,
     correlation: Option<replay::Selection>,
 }
 
-/// Held workflow requests and the output the Output route returns to.
-#[derive(Default)]
-pub(super) struct Workflow {
-    held: VecDeque<Held>,
-    output: Option<OfferedOutput>,
-}
-
-impl Workflow {
-    /// Remember the output selection the Output route re-offers.
-    pub(super) fn offered(
-        &mut self,
+impl OfferedOutput {
+    /// Record a selection with the host-owned correlation that admitted its originals.
+    pub(super) fn new(
         file: &CanvasFileReference,
         compared: Option<&CanvasFileReference>,
         correlation: Option<(MainIdentity, Box<CanvasSurfaceRequest>, Arc<MemoryClaim>)>,
-    ) {
-        self.output = Some(OfferedOutput {
+    ) -> Self {
+        Self {
             file: file.clone(),
             compared: compared.cloned(),
             correlation: correlation.map(|(identity, request, memory)| replay::Selection {
@@ -76,26 +69,25 @@ impl Workflow {
                 request,
                 _memory: memory,
             }),
-        });
+        }
     }
+}
 
+/// Held workflow requests.
+#[derive(Default)]
+pub(super) struct Workflow {
+    held: VecDeque<Held>,
+}
+
+impl Workflow {
     /// Drop the held requests of a retired navigation with their lane credit.
     pub(super) fn retire(&mut self, identity: MainIdentity) {
         self.held.retain(|held| held.identity != identity);
-        if self
-            .output
-            .as_ref()
-            .and_then(|output| output.correlation.as_ref())
-            .is_some_and(|selection| selection.identity == identity)
-        {
-            self.output = None;
-        }
     }
 
     /// Drop every held request at close.
     pub(super) fn close(&mut self) {
         self.held.clear();
-        self.output = None;
     }
 }
 
@@ -123,11 +115,7 @@ impl NativeSurface {
                 let failure = failure(CanvasFailureStatus::Unavailable, "Too many requests wait");
                 return self.answer(identity, request.failure_reply(&failure)?, claim);
             }
-            let replay = if self.workflow.needs_replay(request.command()) {
-                self.workflow.output.as_ref().and_then(|output| output.correlation.clone())
-            } else {
-                None
-            };
+            let replay = self.required_replay(request.command());
             let held =
                 Held { identity, request, claim, storage, ticket: None, reply: None, replay };
             self.workflow.held.push_back(held);
@@ -145,7 +133,7 @@ impl NativeSurface {
         storage: CanvasNativeRequestStorage,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
-        if self.workflow.needs_replay(request.command()) {
+        if let Some(replay) = self.required_replay(request.command()) {
             if self.workflow.held.len() >= MAX_HELD {
                 let failure = failure(CanvasFailureStatus::Unavailable, "Too many requests wait");
                 return self.answer(identity, request.failure_reply(&failure)?, claim);
@@ -157,7 +145,7 @@ impl NativeSurface {
                 storage,
                 ticket: None,
                 reply: None,
-                replay: self.workflow.output.as_ref().and_then(|output| output.correlation.clone()),
+                replay: Some(replay),
             });
             return Ok(());
         }

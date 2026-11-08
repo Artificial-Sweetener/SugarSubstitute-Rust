@@ -4553,7 +4553,7 @@ rationale = "Owned temporary native archives qualify exact graph metadata associ
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/session_originals.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:057d8d2053ef14dce0a7c32de5f44876a50c8b7ce870746be94f8274a07e4193"
+source_sha256 = "sha256:dd0f0a5d7aa972d3d481bdbc77402b57a996c27f7e0231d749d7157d90ebef19"
 capabilities = ["std::fs::read"]
 disposition = "fixture"
 rationale = "Owned execution fixtures inspect exact retained originals while exercising current surface selection and revocable session bindings."

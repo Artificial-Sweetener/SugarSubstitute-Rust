@@ -73,10 +73,18 @@ fn activate(fixture: &mut Fixture, id: u64) -> Result<(), Box<dyn Error>> {
     )
 }
 
-/// Observe the original workflow request's typed terminal refusal.
-fn refused(fixture: &mut Fixture, id: u64) -> Result<(), Box<dyn Error>> {
-    let Some(DesktopStartupCommand::SendCanvasNative(reply)) = fixture.canvas.take_command() else {
-        return Err("Missing protected output route refusal".into());
+/// Deliver completions until the terminal `workflow.reply` of the original request arrives.
+fn workflow_reply(fixture: &mut Fixture, id: u64) -> Result<Value, Box<dyn Error>> {
+    let command = loop {
+        let observed = fixture.wake.revision();
+        fixture.pump()?;
+        if let Some(command) = fixture.canvas.take_command() {
+            break command;
+        }
+        fixture.wake.wait_after(observed)?;
+    };
+    let DesktopStartupCommand::SendCanvasNative(reply) = command else {
+        return Err("Missing workflow reply".into());
     };
     let value: Value = serde_json::from_slice(reply.payload())?;
     assert_eq!(reply.identity(), fixture.identity);
@@ -85,8 +93,47 @@ fn refused(fixture: &mut Fixture, id: u64) -> Result<(), Box<dyn Error>> {
     assert_eq!(value["session"], fixture.panel.as_str());
     assert_eq!(value["requestId"], id);
     assert_eq!(value["type"], "workflow.reply");
+    Ok(value)
+}
+
+/// Observe the original workflow request's typed terminal refusal.
+fn refused(fixture: &mut Fixture, id: u64) -> Result<(), Box<dyn Error>> {
+    let value = workflow_reply(fixture, id)?;
     assert_eq!(value["result"]["kind"], "failure");
     assert_eq!(value["result"]["status"], "unavailable");
+    Ok(())
+}
+
+/// Observe the Output route being accepted, with no error for the page to report.
+fn activated(fixture: &mut Fixture, id: u64) -> Result<(), Box<dyn Error>> {
+    let value = workflow_reply(fixture, id)?;
+    assert_eq!(value["result"], json!({"kind":"activated"}));
+    Ok(())
+}
+
+/// The address of the attachment a page stages after switching to another workflow.
+fn other_attachment() -> Value {
+    json!({
+        "sessionId":"canvas:other", "viewId":"view:one", "windowId":"window:one",
+        "attachmentId":"attachment:other", "generation":2
+    })
+}
+
+/// The page switching to another workflow: its canvas releases the committed attachment and
+/// stages a new one at a different address, which has offered no output yet.
+fn switch_attachment(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
+    fixture.send(110, "surface.release", json!({}))?;
+    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 110, "applied")?;
+    fixture.send(111, "surface.prepare", json!({"address":other_attachment()}))?;
+    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 111, "ready")
+}
+
+/// Revalidate a held route the way the workspace does when the original is intact.
+fn revalidate_intact(fixture: &mut Fixture, memory: &MemoryLease) -> Result<(), Box<dyn Error>> {
+    if let Some(replay) = fixture.canvas.output_replay() {
+        let source = retained(fixture, memory)?;
+        fixture.canvas.resume_output_replay(replay, Some(source))?;
+    }
     Ok(())
 }
 
@@ -185,5 +232,60 @@ fn cancelled_output_replay_releases_its_exact_held_request() -> Result<(), Box<d
     cancel_consumed(&mut fixture.canvas, fixture.identity)?;
     assert_eq!(cancellation.claimed_bytes(), 0);
     assert_eq!(fixture.accepted()?, previous);
+    fixture.finish_resident(memory)
+}
+
+#[test]
+fn output_route_of_a_new_attachment_has_no_released_selection_to_replay()
+-> Result<(), Box<dyn Error>> {
+    let (mut fixture, memory) = protected_fixture()?;
+    switch_attachment(&mut fixture)?;
+    activate(&mut fixture, 100)?;
+    revalidate_intact(&mut fixture, &memory)?;
+    activated(&mut fixture, 100)?;
+    assert!(fixture.canvas.output_replay().is_none());
+    fixture.finish_resident(memory)
+}
+
+#[test]
+fn held_output_route_follows_its_attachment_being_replaced() -> Result<(), Box<dyn Error>> {
+    let (mut fixture, memory) = protected_fixture()?;
+    activate(&mut fixture, 100)?;
+    assert!(fixture.canvas.output_replay().is_some());
+    switch_attachment(&mut fixture)?;
+    revalidate_intact(&mut fixture, &memory)?;
+    activated(&mut fixture, 100)?;
+    assert!(fixture.canvas.output_replay().is_none());
+    fixture.finish_resident(memory)
+}
+
+#[test]
+fn output_route_replays_the_selection_its_own_attachment_offered() -> Result<(), Box<dyn Error>> {
+    let (mut fixture, memory) = protected_fixture()?;
+    switch_attachment(&mut fixture)?;
+    fixture.send(
+        112,
+        "surface.geometry",
+        json!({"address":other_attachment(), "geometry":{
+            "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":10,"y":20},
+            "viewport":{"width":8,"height":8}, "clip":{"x":10,"y":20,"width":0,"height":0},
+            "physicalPixelsPerCssPixel":1, "visible":false, "focused":false
+        }}),
+    )?;
+    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 112, "applied")?;
+    fixture.canvas.set_session_source(Some(retained(&fixture, &memory)?));
+    fixture.advance(1_000);
+    fixture.send(
+        113,
+        "surface.select",
+        json!({"address":other_attachment(), "itemId":"result:wide.png",
+            "file":{"filename":"wide.png","subfolder":"","type":"output"}}),
+    )?;
+    fixture.canvas.set_session_source(None);
+    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 113, "applied")?;
+    activate(&mut fixture, 100)?;
+    assert!(fixture.canvas.output_replay().is_some(), "Output route skipped its own selection");
+    revalidate_intact(&mut fixture, &memory)?;
+    activated(&mut fixture, 100)?;
     fixture.finish_resident(memory)
 }

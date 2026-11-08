@@ -94,6 +94,9 @@ struct Binding {
     /// Filename leaf of the selected single output, which a drag-out exports; none for an
     /// overview or comparison selection.
     drag_name: Option<String>,
+    /// The output selection this attachment last offered. It ends with the attachment, so the
+    /// Output route of a later attachment never replays a selection made on another one.
+    offered: Option<workflow::OfferedOutput>,
 }
 
 impl Binding {

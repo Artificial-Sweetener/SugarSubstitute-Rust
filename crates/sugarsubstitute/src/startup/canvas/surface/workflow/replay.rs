@@ -19,13 +19,19 @@ pub(in crate::startup) struct OutputReplay {
     _memory: Arc<MemoryClaim>,
 }
 
-impl Workflow {
+impl NativeSurface {
+    /// The output the current attachment offered. A released or replaced attachment took its
+    /// offer with it, so an attachment that offered nothing has no output to show or replay.
+    pub(in crate::startup::canvas::surface) fn offered_output(&self) -> Option<&OfferedOutput> {
+        self.binding.as_ref()?.offered.as_ref()
+    }
+
     /// Descriptor rediscovery may change a path while these exact output UUIDs stay the same.
     pub(in crate::startup::canvas::surface) fn same_originals(
         &self,
         request: &CanvasSurfaceRequest,
     ) -> bool {
-        let Some(previous) = self.output.as_ref().and_then(|output| output.correlation.as_ref())
+        let Some(previous) = self.offered_output().and_then(|output| output.correlation.as_ref())
         else {
             return false;
         };
@@ -41,15 +47,21 @@ impl Workflow {
             _ => false,
         }
     }
-    /// Parked documents require the same current original decision as a new acquisition.
-    pub(super) fn needs_replay(&self, command: &CanvasWorkflowCommand) -> bool {
-        self.output.as_ref().is_some_and(|output| output.correlation.is_some())
-            && matches!(command, CanvasWorkflowCommand::Activate { route, surface, .. }
-                if !matches!((route, surface), (CanvasWorkflowRoute::Input, Some(_))))
-    }
-}
 
-impl NativeSurface {
+    /// Parked documents require the same current original decision as a new acquisition. Only
+    /// the current attachment's own selection can need it; an attachment that offered no
+    /// output shows the Output route without revalidating anything.
+    pub(super) fn required_replay(&self, command: &CanvasWorkflowCommand) -> Option<Selection> {
+        match command {
+            CanvasWorkflowCommand::Activate { route, surface, .. }
+                if !matches!((route, surface), (CanvasWorkflowRoute::Input, Some(_))) =>
+            {
+                self.offered_output()?.correlation.clone()
+            }
+            _ => None,
+        }
+    }
+
     /// Borrow an owned route only after native input restoration has settled.
     pub(in crate::startup::canvas) fn output_replay(
         &self,
@@ -84,11 +96,18 @@ impl NativeSurface {
             return Ok(());
         };
         let held = self.workflow.held.remove(index).ok_or("Held output route disappeared")?;
-        let current = self.workflow.output.as_ref().and_then(|output| output.correlation.as_ref());
+        let attached = self.binding.as_ref().is_some_and(|binding| {
+            binding.identity == replay.identity && binding.address == *replay.selection.address()
+        });
+        if !attached {
+            // The attachment that offered this selection was released or replaced. Its offer
+            // ended with it, so the route is admitted again against the current attachment.
+            self.workflow.held.insert(index, Held { replay: None, ..held });
+            return Ok(());
+        }
+        let current = self.offered_output().and_then(|output| output.correlation.as_ref());
         let admitted = current.is_some_and(|current| {
             current.identity == replay.identity && current.request == replay.selection
-        }) && self.binding.as_ref().is_some_and(|binding| {
-            binding.identity == replay.identity && binding.address == *replay.selection.address()
         }) && self.available(replay.identity)
             && source.as_ref().is_some_and(|source| !source.unavailable());
         if !admitted {
@@ -139,7 +158,7 @@ impl NativeSurface {
         identity: MainIdentity,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
-        let Some(output) = self.workflow.output.clone() else { return Ok(()) };
+        let Some(output) = self.offered_output().cloned() else { return Ok(()) };
         let (Some(target), Ok(compared_target)) = (
             super::super::operations::admitted_output(&output.file),
             output

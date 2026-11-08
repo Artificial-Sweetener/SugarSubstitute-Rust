@@ -150,7 +150,7 @@ impl NativeSurface {
                     .is_some_and(|source| source.retention_key().is_some());
                 let retention =
                     (compared.is_none() || verified).then(|| self.retention_key(identity, &target));
-                if self.workflow.same_originals(&request)
+                if self.same_originals(&request)
                     && let (Some(key), Some(hashes)) = (
                         retention.as_ref().and_then(Option::as_ref),
                         self.session_source.as_ref().and_then(|source| source.original_hashes()),
@@ -206,11 +206,12 @@ impl NativeSurface {
                         }
                     }
                 }
-                self.workflow.offered(
-                    &file,
-                    compared,
-                    correlation.map(|memory| (identity, request.clone(), memory)),
-                );
+                self.binding.as_mut().ok_or("Canvas binding disappeared")?.offered =
+                    Some(workflow::OfferedOutput::new(
+                        &file,
+                        compared,
+                        correlation.map(|memory| (identity, request.clone(), memory)),
+                    ));
                 session.frame_selection(inspection.map(|inspection| NavigationCommand::Frame {
                     center: inspection.center(),
                     span: inspection.span(),

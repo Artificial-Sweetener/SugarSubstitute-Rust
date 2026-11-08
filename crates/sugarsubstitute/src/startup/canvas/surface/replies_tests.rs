@@ -129,6 +129,7 @@ fn public_poll_frame_names_canvas_backend_refresh_overload() -> Result<(), Box<d
         presented: None,
         presented_input: false,
         drag_name: None,
+        offered: None,
     });
     surface.pending = Some(Pending {
         identity,
