@@ -22,6 +22,12 @@ impl Session {
         let Stage::Offered(document, resources) = &candidate.stage else {
             return None;
         };
+        if document
+            .pending_cpu_evidence
+            .is_none_or(|evidence| evidence.backdrop_generation != self.backdrops.generation)
+        {
+            return None;
+        }
         Some((document.cpu_frame()?, &resources.as_ref()?.presentation))
     }
 
@@ -62,6 +68,9 @@ impl Session {
         let work::DrawPixels::Cpu(projection) = &mut retained.drawing.pixels else {
             return Err("Preview requires CPU pixels".into());
         };
+        if retained.drawing.backdrop_generation != self.backdrops.generation {
+            return Ok(());
+        }
         if projection.target() != target {
             projection.reidentify_in_place(target)?;
         }
@@ -112,6 +121,8 @@ impl Session {
             document: drawing.document,
             source_revision: drawing.source_revision,
             overlay: drawing.overlay_generation,
+            backdrop_generation: drawing.backdrop_generation,
+            backdrop_active: drawing.backdrop_active,
         });
         document.native_verified = drawing.verified;
         self.frame_revision = next;
@@ -127,7 +138,8 @@ impl Session {
         self.preview.candidate.as_ref().is_some_and(|candidate| {
             !candidate.cancelled && candidate.owner_selection == self.selection
                 && matches!(&candidate.stage, Stage::Offered(document, _) if document.cpu_pending == Some(target)
-                    && document.pending_cpu_evidence.is_some_and(|evidence| evidence.target == target))
+                    && document.pending_cpu_evidence.is_some_and(|evidence| evidence.target == target
+                        && evidence.backdrop_generation == self.backdrops.generation))
         })
     }
 
@@ -239,7 +251,10 @@ impl Session {
             && !replacing
             && self.drawable
             && self.pacing.readiness(now)? == PresentationReadiness::Ready
-            && previous.document.display_evidence.is_some()
+            && previous
+                .document
+                .display_evidence
+                .is_some_and(|evidence| evidence.backdrop_generation == self.backdrops.generation)
             && previous
                 .document
                 .cpu_projection

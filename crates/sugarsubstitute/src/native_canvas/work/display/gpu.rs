@@ -16,15 +16,21 @@ struct VerificationSources<'a> {
 /// Never wait for the image-operation renderer lock while drawing a retained native image.
 /// Overlay pixels are drawn over the projection, which then always takes the projected path;
 /// proof-only verification compares canonical sampling and so skips overlaid frames.
+/// Immutable source/overlay/material facts consumed by one admitted GPU display job.
+pub(super) struct Input<'a> {
+    pub(super) frame: &'a GpuFrame,
+    pub(super) reference: Option<&'a CpuSurface>,
+    pub(super) underlay: Option<&'a GpuUnderlay>,
+    pub(super) view: ViewProjection,
+    pub(super) overlay: &'a [OverlayPixel],
+    pub(super) backdrops: DisplayBackdrops,
+}
 pub(super) fn prepare(
     resources: &Resources,
-    frame: &GpuFrame,
-    reference: Option<&CpuSurface>,
-    underlay: Option<&GpuUnderlay>,
-    view: ViewProjection,
-    overlay: &[OverlayPixel],
+    input: Input<'_>,
     context: &JobContext,
 ) -> Result<Option<NativeFrame>, WorkError> {
+    let Input { frame, reference, underlay, view, overlay, backdrops } = input;
     let samples = if view.source() != view.target() || underlay.is_some() || !overlay.is_empty() {
         Some(ProjectionSamples::new(view, context)?)
     } else {
@@ -33,29 +39,30 @@ pub(super) fn prepare(
     let underlay_samples =
         underlay.map(|underlay| ProjectionSamples::new(underlay.view, context)).transpose()?;
     let matte = resources.matte.pixel()?;
-    let mut verification = if resources.verify_native && overlay.is_empty() {
-        let native = match retry_gpu_readback(
-            || frame.image().readback_workspace(context),
-            || reclaim_gpu_cache(resources),
-        )? {
-            ReadbackOutcome::Complete(workspace) => workspace,
-            ReadbackOutcome::Deferred => return Ok(None),
-        };
-        let source = if samples.is_none() {
-            match retry_gpu_readback(
+    let mut verification =
+        if resources.verify_native && overlay.is_empty() && backdrops.plan.regions().is_empty() {
+            let native = match retry_gpu_readback(
                 || frame.image().readback_workspace(context),
                 || reclaim_gpu_cache(resources),
             )? {
-                ReadbackOutcome::Complete(workspace) => Some(workspace),
+                ReadbackOutcome::Complete(workspace) => workspace,
                 ReadbackOutcome::Deferred => return Ok(None),
-            }
+            };
+            let source = if samples.is_none() {
+                match retry_gpu_readback(
+                    || frame.image().readback_workspace(context),
+                    || reclaim_gpu_cache(resources),
+                )? {
+                    ReadbackOutcome::Complete(workspace) => Some(workspace),
+                    ReadbackOutcome::Deferred => return Ok(None),
+                }
+            } else {
+                None
+            };
+            Some(VerificationWorkspace { native, source })
         } else {
             None
         };
-        Some(VerificationWorkspace { native, source })
-    } else {
-        None
-    };
     let mut display = resources
         .display
         .lock()
@@ -69,10 +76,17 @@ pub(super) fn prepare(
                 underlay: underlay.zip(underlay_samples.as_ref()),
                 matte,
                 overlay,
+                backdrops,
+                retained: &resources.memory,
             };
             return target
                 .draw(&sources, context, || reclaim_gpu_cache(resources))
                 .map(|frame| frame.map(NativeFrame::Composition));
+        }
+        Some(DisplayTarget::Window(_)) if !backdrops.plan.regions().is_empty() => {
+            return Err(WorkError::invalid(
+                "Presentation backdrops require the embedded composition target",
+            ));
         }
         Some(DisplayTarget::Window(window)) => loop {
             let prepared = match (&samples, underlay, &underlay_samples) {

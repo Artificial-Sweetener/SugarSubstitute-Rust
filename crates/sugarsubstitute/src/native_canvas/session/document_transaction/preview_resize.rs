@@ -40,7 +40,12 @@ impl Session {
         let Stage::Offered(document, resources) = &mut candidate.stage else {
             return Ok(());
         };
-        if document.tools.navigation().viewport().surface() == extent || candidate.cancelled {
+        if (document.tools.navigation().viewport().surface() == extent
+            && document
+                .pending_cpu_evidence
+                .is_some_and(|evidence| evidence.backdrop_generation == self.backdrops.generation))
+            || candidate.cancelled
+        {
             return Ok(());
         }
         let target = document.cpu_pending.ok_or("Offered preview lost its target")?;
@@ -71,6 +76,8 @@ impl Session {
                 document: evidence.document,
                 source_revision: evidence.source_revision,
                 overlay_generation: evidence.overlay,
+                backdrop_generation: evidence.backdrop_generation,
+                backdrop_active: evidence.backdrop_active,
                 verified: document.native_verified,
             },
             reconstruction: shown.reconstruction,

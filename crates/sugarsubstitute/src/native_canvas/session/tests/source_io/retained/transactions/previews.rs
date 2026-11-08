@@ -4,6 +4,7 @@
 
 use super::*;
 use sugarsubstitute_canvas::{NavigationCommand, ZoomMode};
+mod backdrops;
 mod deadlines;
 mod large;
 mod wakes;

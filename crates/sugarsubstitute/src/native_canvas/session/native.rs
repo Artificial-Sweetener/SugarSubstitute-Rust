@@ -46,6 +46,7 @@ impl Session {
             || evidence.source_revision != self.selection
             || evidence.document.0 != scene.document.snapshot().identity()
             || evidence.view.surface() != self.document.tools.navigation().viewport().surface()
+            || evidence.backdrop_generation != self.backdrops.generation
         {
             return None;
         }
@@ -128,6 +129,16 @@ impl Lifetime for Session {
         Ok(())
     }
     fn expose(&mut self) {
+        #[cfg(all(windows, feature = "native-composition"))]
+        if matches!(self.presentation, attachment::Presentation::Composition)
+            && self.selected_frame().is_some_and(|(content, _)| {
+                !content.pending() && self.document.native_presented == Some(content.target())
+            })
+        {
+            // The compositor still owns these exact acknowledged pixels. Its redraw can copy
+            // them again; source, view, overlay and material changes retain independent demand.
+            return;
+        }
         if !self.closing
             && self.drawable
             && self.config.gpu.is_some()
@@ -394,6 +405,9 @@ impl Session {
         evidence: DisplayEvidence,
         native_acknowledged: bool,
     ) -> Result<(), Box<dyn Error>> {
+        if evidence.backdrop_generation != self.backdrops.generation {
+            return Err("Canvas display evidence has a stale backdrop generation".into());
+        }
         let scene =
             self.document.scene.as_ref().ok_or("Canvas display evidence has no document")?;
         let (key, snapshot) = self.document.shown().ok_or("Canvas display has no document")?;
@@ -410,6 +424,9 @@ impl Session {
             || !evidence.proves_complete(snapshot.extent())?
         {
             return Err("Canvas display evidence does not prove complete current coverage".into());
+        }
+        if native_acknowledged {
+            self.backdrops.presented = Some(evidence.backdrop_generation);
         }
         self.document.display_source = Some(evidence.source);
         self.document.display_view = Some(evidence.view);

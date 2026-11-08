@@ -98,6 +98,7 @@ impl Session {
             || evidence.source_revision != self.selection
             || evidence.document.0 != scene.document.snapshot().identity()
             || evidence.view.surface() != surface
+            || evidence.backdrop_generation != self.backdrops.generation
             || display.frame.texture().extent() != surface
         {
             return None;
@@ -130,8 +131,10 @@ impl Session {
         &mut self,
         target: FrameStamp,
     ) -> Result<(), Box<dyn Error>> {
-        if self.composition_pending.as_ref().is_none_or(|display| display.target != target)
-            || self.document.pending_gpu_evidence.is_none_or(|evidence| evidence.target != target)
+        if self.composition_pending.as_ref().is_none_or(|display| {
+            display.target != target
+                || display.frame.backdrop_generation() != self.backdrops.generation
+        }) || self.document.pending_gpu_evidence.is_none_or(|evidence| evidence.target != target)
         {
             return Err("Canvas received a foreign shared-frame acknowledgement".into());
         }
@@ -167,6 +170,11 @@ impl Session {
         evidence: DisplayEvidence,
         now: Duration,
     ) -> Result<(), Box<dyn Error>> {
+        if frame.backdrop_generation() != evidence.backdrop_generation
+            || evidence.backdrop_generation != self.backdrops.generation
+        {
+            return Err("Composition pixels have a stale backdrop generation".into());
+        }
         self.pacing.prepared(target, now)?;
         self.document.pending_gpu_evidence = Some(evidence);
         self.composition_pending = Some(CompositionDisplay { target, frame });

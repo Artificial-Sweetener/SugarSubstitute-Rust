@@ -38,6 +38,7 @@ pub(super) struct ReprojectTask {
     pub(super) ready: Option<Box<work::preview::ReadyPreview>>,
     pub(super) target: FrameStamp,
     pub(super) extent: sugarsubstitute_image_ops::Extent,
+    pub(super) backdrops: work::DisplayBackdrops,
 }
 impl CpuTask<work::preview::ReadyPreview, WorkError> for ReprojectTask {
     fn step(
@@ -48,7 +49,7 @@ impl CpuTask<work::preview::ReadyPreview, WorkError> for ReprojectTask {
             .ready
             .as_mut()
             .ok_or_else(|| WorkError::invalid("Preview refit already completed"))?;
-        ready.reproject(self.target, self.extent, context)?;
+        ready.reproject(self.target, self.extent, self.backdrops, context)?;
         Ok(CpuStep::Complete(
             *self.ready.take().ok_or_else(|| WorkError::invalid("Preview refit disappeared"))?,
         ))

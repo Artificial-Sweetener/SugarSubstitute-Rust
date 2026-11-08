@@ -3,6 +3,7 @@
 //! Coordinate the shared web surface with the current authorized canvas and backend.
 
 mod attachment;
+mod backdrops;
 mod capabilities;
 mod editing;
 #[cfg(test)]
@@ -67,6 +68,10 @@ struct Binding {
     revision: u64,
     placement: Option<CanvasPlacement>,
     allocation: Option<WebViewAllocation>,
+    /// Physical presentation regions for this attachment, retained through candidate rollback.
+    backdrops: Vec<sugarsubstitute_canvas_render::backdrop::BackdropRegion>,
+    /// Session-owned geometry/material generation that the next matching frame must present.
+    backdrop_generation: u64,
     /// Page-published web content above the viewport, in physical client pixels.
     occlusions: Vec<PhysicalRect>,
     /// A page modal blocks the whole viewport, so no native input region is published.

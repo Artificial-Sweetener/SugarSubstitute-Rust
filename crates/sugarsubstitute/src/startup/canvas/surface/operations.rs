@@ -42,7 +42,8 @@ impl NativeSurface {
                         Some(_) => occlusions(&geometry, allocation)?,
                         None => Vec::new(),
                     };
-                    Ok((projected, occluded))
+                    let backdrops = backdrops::project(&geometry, allocation)?;
+                    Ok((projected, occluded, backdrops))
                 }) {
                     Ok(value) => value,
                     Err(_) => {
@@ -54,7 +55,7 @@ impl NativeSurface {
                         );
                     }
                 };
-                let (projected, occlusions) = projected;
+                let (projected, occlusions, backdrops) = projected;
                 let preview_shown = self.has_shown_preview();
                 // A selection deferred while hidden keeps the one pending slot; its own reply
                 // proves presentation, so this geometry is answered as soon as it applies.
@@ -65,6 +66,8 @@ impl NativeSurface {
                 let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
                 binding.occlusions = occlusions;
                 binding.modal = geometry.modal();
+                binding.backdrop_generation = session.set_backdrops(backdrops.clone())?;
+                binding.backdrops = backdrops;
                 let viewport = match projected {
                     Some(projected) => Some(projected.viewport),
                     None if !binding.committed => match preparation_viewport(&geometry, allocation)
@@ -88,9 +91,12 @@ impl NativeSurface {
                 let wait = committed
                     && (binding.shows_document(session) || preview_shown)
                     && projected.is_some()
-                    && binding.presented.is_none_or(|previous| {
-                        Some(previous.placement) != projected || previous.allocation != allocation
-                    });
+                    && (session.presented_backdrop_generation()
+                        != Some(binding.backdrop_generation)
+                        || binding.presented.is_none_or(|previous| {
+                            Some(previous.placement) != projected
+                                || previous.allocation != allocation
+                        }));
                 if let Some(viewport) = viewport {
                     session.resize(Extent::new(viewport.width, viewport.height)?)?;
                     session.input(Input::Drawable(true))?;

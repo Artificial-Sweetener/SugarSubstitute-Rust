@@ -216,8 +216,17 @@ impl NativeSurface {
             .pending
             .as_ref()
             .is_some_and(|pending| matches!(pending.kind, PendingKind::Viewport { .. }));
+        let backdrop_pending = self.pending.as_ref().is_some_and(|pending| {
+            matches!(
+                pending.kind,
+                PendingKind::Geometry | PendingKind::Commit | PendingKind::Select
+            ) && self.binding.as_ref().is_some_and(|binding| {
+                session.presented_backdrop_generation() != Some(binding.backdrop_generation)
+            })
+        });
         if !preparing
             && !viewport
+            && !backdrop_pending
             && !self.pending.as_ref().is_some_and(|pending| {
                 matches!(pending.kind, PendingKind::Select) && !final_selected
             })

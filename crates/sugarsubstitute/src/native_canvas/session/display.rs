@@ -4,12 +4,14 @@
 use super::*;
 use sugarsubstitute_canvas::ViewProjection;
 mod admission;
+mod damage;
 
 /// Preserve the submitted frame identity independently of execution-lane replacement metadata.
 pub(super) struct Displaying {
     pub(super) target: FrameStamp,
     pub(super) document: work::DocumentKey,
     pub(super) source_revision: u64,
+    pub(super) backdrop_generation: u64,
     pub(super) job: OwnedJob<work::Draw, WorkError>,
 }
 
@@ -27,6 +29,8 @@ pub(super) struct DisplayEvidence {
     pub(super) source_revision: u64,
     /// Generation of the presentation overlay drawn into the frame; zero for none.
     pub(super) overlay: u64,
+    pub(super) backdrop_generation: u64,
+    pub(super) backdrop_active: bool,
 }
 
 #[cfg(not(feature = "native-composition"))]
@@ -56,6 +60,19 @@ impl Session {
         #[cfg(windows)]
         self.abandon_composition_frame(self.navigation_time())?;
         self.drawable = false;
+        if !self.backdrops.regions.is_empty() {
+            self.backdrops.generation = self
+                .backdrops
+                .generation
+                .checked_add(1)
+                .ok_or("Canvas backdrop generation exhausted")?;
+            self.backdrops.regions.clear();
+        }
+        self.backdrops.presented = None;
+        if let Some(displaying) = &self.displaying {
+            displaying.job.cancel();
+        }
+        self.resize_preview_candidate(self.document.tools.navigation().viewport().surface())?;
         Ok(())
     }
 
@@ -92,9 +109,18 @@ impl Session {
         Ok(())
     }
 
-    /// A pair generation is usable only for its exact native output extent.
+    /// Replace mismatched extents or storage lost when a completed display was discarded.
+    /// An admitted display owns its spare until its outcome is consumed; that borrow is valid.
     pub(super) fn needs_display_buffers(&self, extent: sugarsubstitute_image_ops::Extent) -> bool {
-        !self.gpu_document() && self.document.display_buffer_extent != Some(extent)
+        !self.gpu_document()
+            && (self.document.display_buffer_extent != Some(extent)
+                || (self.displaying.is_none()
+                    && !self
+                        .document
+                        .display_buffers
+                        .iter()
+                        .flatten()
+                        .any(|buffer| buffer.extent() == extent)))
     }
 
     /// Publish a complete pair generation without withdrawing the acknowledged old projection.
@@ -243,6 +269,7 @@ impl Session {
             source_revision,
             overlay: self.shown_overlay().cloned(),
             overlay_generation: self.shown_overlay_generation(),
+            backdrops: self.backdrops.snapshot(view.surface())?,
         };
         self.admit_display(input, mode, input_at, now)
     }
@@ -253,7 +280,7 @@ impl Session {
         else {
             return Ok(());
         };
-        let Displaying { target, document, source_revision, job } =
+        let Displaying { target, document, source_revision, backdrop_generation, job } =
             self.displaying.take().ok_or("Display execution identity was lost")?;
         Self::observe_terminal(&job, &completion.outcome);
         let now = self.navigation_time();
@@ -263,7 +290,8 @@ impl Session {
                 let matching = drawing.target == target
                     && drawing.source.surface == target.surface
                     && drawing.document == document
-                    && drawing.source_revision == source_revision;
+                    && drawing.source_revision == source_revision
+                    && drawing.backdrop_generation == backdrop_generation;
                 if !current_source {
                     self.pacing.abandoned(target, now)?;
                     let reusable = !self.closing
@@ -290,7 +318,8 @@ impl Session {
                     && self.loading.is_none()
                     && current_source
                     && drawing.view.surface()
-                        == self.document.tools.navigation().viewport().surface();
+                        == self.document.tools.navigation().viewport().surface()
+                    && drawing.backdrop_generation == self.backdrops.generation;
                 if !current {
                     self.pacing.abandoned(target, now)?;
                     if !self.closing
@@ -315,6 +344,8 @@ impl Session {
                     document: drawing.document,
                     source_revision: drawing.source_revision,
                     overlay: drawing.overlay_generation,
+                    backdrop_generation: drawing.backdrop_generation,
+                    backdrop_active: drawing.backdrop_active,
                 };
                 match drawing.pixels {
                     work::DrawPixels::Cpu(frame) => {
@@ -329,35 +360,7 @@ impl Session {
                                     .into(),
                             );
                         }
-                        // Overlay marks move independently of the projection, so a frame with
-                        // or after them uploads in full.
-                        let overlaid = drawing.overlay_generation != 0
-                            || self
-                                .document
-                                .display_evidence
-                                .is_some_and(|shown| shown.overlay != 0);
-                        let same_sources = !overlaid
-                            && self.document.display_source == Some(drawing.source)
-                            && self
-                                .document
-                                .display_evidence
-                                .and_then(|evidence| evidence.underlay)
-                                .map(|underlay| underlay.source)
-                                == drawing.underlay.map(|underlay| underlay.source);
-                        let (damage, base) = if same_sources {
-                            match (self.document.display_view, self.document.native_presented) {
-                                (Some(previous), Some(base)) => {
-                                    let damage = drawing.view.repair_from(previous)?;
-                                    let base = (damage.blit().is_some()
-                                        || damage.dirty().is_empty())
-                                    .then_some(base);
-                                    (damage, base)
-                                }
-                                _ => (DamagePlan::full(drawing.view.surface()), None),
-                            }
-                        } else {
-                            (DamagePlan::full(drawing.view.surface()), None)
-                        };
+                        let (damage, base) = self.cpu_display_damage(evidence)?;
                         self.document.projection_damage = Some(damage);
                         self.document.projection_base = base;
                         if let Some(previous) = self.document.cpu_projection.replace(frame) {
@@ -402,7 +405,12 @@ impl Session {
                 let restoring = self.restoring_document();
                 #[cfg(not(feature = "native-composition"))]
                 let restoring = false;
-                if self.closing || self.pending_open.is_some() || restoring || !current_source {
+                if self.closing
+                    || self.pending_open.is_some()
+                    || restoring
+                    || !current_source
+                    || backdrop_generation != self.backdrops.generation
+                {
                     tracing::debug!(operation="canvas_display_stopped", job_id=job.spec().id.get(), document_id=document.0, document_revision=document.1, source_revision, cause=%cause, "Canvas display reached a terminal outcome before replacement");
                 } else {
                     self.fail(cause);

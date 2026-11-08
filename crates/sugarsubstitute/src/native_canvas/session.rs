@@ -5,6 +5,7 @@
 pub(crate) mod acquisition;
 mod activity;
 mod attachment;
+mod backdrop;
 mod backing;
 #[cfg(feature = "native-composition")]
 mod camera;
@@ -291,6 +292,7 @@ pub(crate) struct Session {
     drawable: bool,
     wipe: Wipe,
     frame_revision: u64,
+    backdrops: backdrop::Backdrops,
     picker: bool,
     failed: Option<Box<dyn Error>>,
     closing: bool,
@@ -442,6 +444,7 @@ impl Session {
             drawable: true,
             wipe: Wipe { orientation: WipeOrientation::Vertical, split: 0.5 },
             frame_revision: 0,
+            backdrops: backdrop::Backdrops::default(),
             picker: false,
             failed: None,
             closing: false,

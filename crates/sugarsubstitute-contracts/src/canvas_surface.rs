@@ -3,6 +3,7 @@
 //! Validate untrusted shared canvas geometry independently of native surface authority.
 
 mod address;
+mod backdrop;
 mod camera;
 mod capabilities;
 mod file_reference;
@@ -18,6 +19,7 @@ mod viewport;
 mod wire;
 
 pub use address::{CanvasSurfaceAddress, CanvasSurfaceAddressError, MAX_SURFACE_ADDRESS_BYTES};
+pub use backdrop::CanvasSurfaceBackdrop;
 pub use camera::CanvasSurfaceCameraChange;
 pub use capabilities::{
     CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryRequest, CanvasSurfaceDiscoveryStatus,
@@ -53,6 +55,9 @@ pub const MAX_GEOMETRY_BYTES: usize = 16 * 1024;
 
 /// Maximum page-published occlusion rectangles in one geometry snapshot.
 pub const MAX_GEOMETRY_OCCLUSIONS: usize = 64;
+
+/// Maximum page-published frosted bars in one geometry snapshot.
+pub const MAX_GEOMETRY_BACKDROPS: usize = 2;
 
 /// A schema-valid geometry snapshot; it grants no navigation or host authority.
 #[derive(Clone, Debug, PartialEq)]
@@ -127,6 +132,16 @@ impl CanvasSurfaceGeometry {
     /// Return whether a modal dialog or overlay blocks the whole viewport; omitted means false.
     pub fn modal(&self) -> bool {
         self.0.modal.unwrap_or(false)
+    }
+
+    /// Return presentation-only bars in viewport-relative CSS pixels; omitted means no effect.
+    /// These values never modify authored image content or authorize native resources.
+    pub fn backdrops(&self) -> impl ExactSizeIterator<Item = CanvasSurfaceBackdrop> + '_ {
+        self.0.backdrops.as_deref().unwrap_or_default().iter().map(|bar| CanvasSurfaceBackdrop {
+            bounds: [bar.x, bar.y, bar.width, bar.height],
+            corner_radius: bar.corner_radius,
+            sigma: bar.sigma,
+        })
     }
 }
 

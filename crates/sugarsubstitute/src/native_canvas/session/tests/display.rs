@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Application publication labels actual completed display poses and rejects obsolete content.
 mod activity;
+#[cfg(feature = "native-composition")]
+mod backdrops;
 mod composite;
 mod presentation;
 mod source_fencing;
@@ -141,6 +143,8 @@ fn pending_draw_outcome(failure: bool, foreign_payload: bool) -> Result<Fixture,
         document: if foreign_payload { (identity.0 + 1, identity.1, identity.2) } else { identity },
         source_revision: 7,
         overlay_generation: 0,
+        backdrop_generation: 0,
+        backdrop_active: false,
         verified: true,
     });
     let job = client.submit_blocking_owned_input(
@@ -161,6 +165,7 @@ fn pending_draw_outcome(failure: bool, foreign_payload: bool) -> Result<Fixture,
         target,
         document: identity,
         source_revision: 7,
+        backdrop_generation: 0,
         job,
     });
     session.runtime = Some(runtime);
@@ -266,6 +271,8 @@ fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dy
         document: document_identity,
         source_revision,
         overlay: 0,
+        backdrop_generation: 0,
+        backdrop_active: false,
     });
     session.pacing.submitted(
         target,

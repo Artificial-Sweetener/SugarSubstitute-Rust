@@ -260,6 +260,8 @@ fn native_display_prepares_while_reconstruction_retains_the_cpu_interactive_slot
         document: previous.document,
         source_revision: previous.source_revision,
         overlay_generation: 0,
+        backdrop_generation: 0,
+        backdrop_active: false,
         verified: true,
     });
     let job = runtime.client.submit_blocking_owned_input(
@@ -275,6 +277,7 @@ fn native_display_prepares_while_reconstruction_retains_the_cpu_interactive_slot
         target,
         document: previous.document,
         source_revision: previous.source_revision,
+        backdrop_generation: previous.backdrop_generation,
         job,
     });
     consume(&mut fixture.session, &fixture.wake)?;

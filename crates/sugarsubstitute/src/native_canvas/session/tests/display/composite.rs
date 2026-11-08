@@ -67,6 +67,8 @@ fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box
         document: key,
         source_revision: 1,
         overlay: 0,
+        backdrop_generation: 0,
+        backdrop_active: false,
     });
     session.pacing.submitted(
         target,
@@ -160,6 +162,8 @@ fn composite_evidence_requires_complete_underlay_and_matching_output_camera()
         document: (1, 1, 0),
         source_revision: 7,
         overlay: 0,
+        backdrop_generation: 0,
+        backdrop_active: false,
     };
     assert!(evidence.proves_complete(document)?);
     assert!(!DisplayEvidence { underlay: None, ..evidence }.proves_complete(document)?);

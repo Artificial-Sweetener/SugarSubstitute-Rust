@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): 877e0757e25e931a04382616d727383b84778d70679ae1d8729fa6ceb113e0c4
+// Schema SHA-256 (LF): 066f625fd11d756acf0ba9a67121624ce322032fa3c6bfcdf8e782e99be1db96
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -15,14 +15,34 @@ pub(super) struct CanvasSurfaceCapabilities {
     pub(super) comparison: bool,
     pub(super) overview: bool,
     pub(super) input: bool,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) backdrop: Option<CanvasSurfaceBackdropSupport>,
 }
 impl CanvasSurfaceCapabilities {
     /// Reject values outside the exact schema-defined bounds.
     pub(super) fn valid(&self) -> bool {
-        (1..=2).contains(&self.schema)
+        (1..=3).contains(&self.schema)
             && valid_canvas_surface_capabilities_image_formats(&self.image_formats)
             && valid_canvas_surface_capabilities_viewport_commands(&self.viewport_commands)
             && valid_canvas_surface_capabilities_preview_formats(&self.preview_formats)
+            && self.backdrop.as_ref().is_none_or(CanvasSurfaceBackdropSupport::valid)
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceBackdropSupport data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceBackdropSupport {
+    pub(super) schema: u64,
+}
+impl CanvasSurfaceBackdropSupport {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        self.schema == 1
     }
 }
 
@@ -45,7 +65,7 @@ impl CanvasSurfaceCapabilitiesRequest {
             && valid_panel_session(&self.session)
             && (1..=2147483647).contains(&self.request_id)
             && self.r#type == "surface.capabilities.request"
-            && (1..=2).contains(&self.schema)
+            && (1..=3).contains(&self.schema)
     }
 }
 
@@ -206,6 +226,12 @@ pub(super) struct CanvasSurfaceGeometry {
         skip_serializing_if = "Option::is_none"
     )]
     pub(super) modal: Option<bool>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) backdrops: Option<Vec<CanvasSurfaceBackdrop>>,
 }
 impl CanvasSurfaceGeometry {
     /// Reject values outside the exact schema-defined bounds.
@@ -218,6 +244,32 @@ impl CanvasSurfaceGeometry {
             && (0.0..=64.0).contains(&self.physical_pixels_per_css_pixel)
             && self.physical_pixels_per_css_pixel > 0.0
             && valid_canvas_surface_geometry_occlusions(self.occlusions.as_deref())
+            && valid_canvas_surface_geometry_backdrops(self.backdrops.as_deref())
+    }
+}
+
+/// Schema-defined untrusted CanvasSurfaceBackdrop data; validation grants no host authority.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(super) struct CanvasSurfaceBackdrop {
+    pub(super) x: f64,
+    pub(super) y: f64,
+    pub(super) width: f64,
+    pub(super) height: f64,
+    pub(super) corner_radius: f64,
+    pub(super) sigma: f64,
+}
+impl CanvasSurfaceBackdrop {
+    /// Reject values outside the exact schema-defined bounds.
+    pub(super) fn valid(&self) -> bool {
+        (-1000000.0..=1000000.0).contains(&self.x)
+            && (-1000000.0..=1000000.0).contains(&self.y)
+            && (0.0..=1000000.0).contains(&self.width)
+            && self.width > 0.0
+            && (0.0..=1000000.0).contains(&self.height)
+            && self.height > 0.0
+            && (0.0..=1000000.0).contains(&self.corner_radius)
+            && (0.0..=64.0).contains(&self.sigma)
     }
 }
 
@@ -1064,6 +1116,10 @@ fn valid_surface_identity(value: &str, prefix: &str, maximum: usize) -> bool {
 
 fn valid_canvas_surface_geometry_occlusions(value: Option<&[CanvasSurfaceOcclusion]>) -> bool {
     value.is_none_or(|items| items.len() <= 64 && items.iter().all(CanvasSurfaceOcclusion::valid))
+}
+
+fn valid_canvas_surface_geometry_backdrops(value: Option<&[CanvasSurfaceBackdrop]>) -> bool {
+    value.is_none_or(|items| items.len() <= 2 && items.iter().all(CanvasSurfaceBackdrop::valid))
 }
 
 fn valid_canvas_surface_reply_status(value: &str) -> bool {

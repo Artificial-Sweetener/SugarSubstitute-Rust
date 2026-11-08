@@ -34,7 +34,9 @@ impl Session {
         let document = input.document;
         let source_revision = input.source_revision;
         let native = matches!(input.source, work::DrawSource::Gpu { .. });
-        let spec = self.display_spec(target, native)?;
+        let backdrop_generation = input.backdrops.generation;
+        let mut spec = self.display_spec(target, native)?;
+        spec.reservation_bytes = spec.reservation_bytes.max(input.backdrop_scratch_bytes()?);
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         let mut input = Some(input);
         let submitted = if native {
@@ -57,7 +59,13 @@ impl Session {
         match submitted {
             Ok(job) => {
                 self.pacing.submitted(target, mode, input_at, now)?;
-                self.displaying = Some(Displaying { target, document, source_revision, job });
+                self.displaying = Some(Displaying {
+                    target,
+                    document,
+                    source_revision,
+                    backdrop_generation,
+                    job,
+                });
                 self.frame_revision = target.generation.get();
                 self.expose_pending = false;
             }

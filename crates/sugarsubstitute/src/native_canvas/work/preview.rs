@@ -65,6 +65,7 @@ pub(in crate::native_canvas) struct PreparePreview {
     coverage: BackingCoverage,
     view: Viewport,
     display_target: FrameStamp,
+    backdrops: DisplayBackdrops,
     prepare: Option<Prepare>,
     drawing: Option<DrawInput>,
     backing: Option<Arc<CpuSurface>>,
@@ -118,7 +119,11 @@ impl PreparePreview {
         backing_target: FrameStamp,
         display_target: FrameStamp,
         display_extent: Extent,
+        backdrops: DisplayBackdrops,
     ) -> Result<Self, WorkError> {
+        if backdrops.plan.viewport() != display_extent {
+            return Err(WorkError::invalid("Preview backdrop belongs to another physical extent"));
+        }
         if scene.source_revision == 0
             || backing_target.surface != display_target.surface
             || backing_target.generation >= display_target.generation
@@ -164,6 +169,7 @@ impl PreparePreview {
             coverage,
             view,
             display_target,
+            backdrops,
             prepare: Some(prepare),
             drawing: None,
             backing: None,
@@ -205,6 +211,7 @@ impl PreparePreview {
             source_revision: packet.source_revision,
             overlay: None,
             overlay_generation: 0,
+            backdrops: self.backdrops,
         });
         self.backing = Some(backing);
         self.spare_buffer = Some(spare);

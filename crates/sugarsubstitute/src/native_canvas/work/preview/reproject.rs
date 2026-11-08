@@ -17,6 +17,7 @@ impl ReadyPreview {
         &mut self,
         target: FrameStamp,
         physical_extent: Extent,
+        backdrops: DisplayBackdrops,
         context: &JobContext,
     ) -> Result<(), WorkError> {
         check_control(context)?;
@@ -61,6 +62,7 @@ impl ReadyPreview {
             source_revision: self.drawing.source_revision,
             overlay: None,
             overlay_generation: 0,
+            backdrops,
         };
         let CpuStep::Complete(drawing) = input.step(context)? else {
             return Err(WorkError::invalid("Preview display projection did not complete its step"));

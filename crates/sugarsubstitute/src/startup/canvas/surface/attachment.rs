@@ -34,6 +34,8 @@ impl NativeSurface {
             revision: request.revision(),
             placement: None,
             allocation: None,
+            backdrops: Vec::new(),
+            backdrop_generation: 0,
             occlusions: Vec::new(),
             modal: false,
             selected: false,
@@ -69,6 +71,7 @@ impl NativeSurface {
             return Ok(());
         }
         self.binding = None;
+        session.set_backdrops(Vec::new())?;
         session.revoke_acquirer()?;
         session.revoke_presentation()?;
         session.forget_retained();
@@ -124,7 +127,10 @@ impl NativeSurface {
     }
 
     /// Resume presentation only when the preceding binding remains committed and visible.
-    pub(super) fn resume_document(&self, session: &mut Session) -> Result<(), Box<dyn Error>> {
+    pub(super) fn resume_document(&mut self, session: &mut Session) -> Result<(), Box<dyn Error>> {
+        if let Some(binding) = self.binding.as_mut() {
+            binding.backdrop_generation = session.set_backdrops(binding.backdrops.clone())?;
+        }
         session.input(Input::Drawable(
             self.binding
                 .as_ref()

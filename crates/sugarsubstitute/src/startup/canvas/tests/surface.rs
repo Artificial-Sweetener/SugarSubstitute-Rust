@@ -21,6 +21,7 @@ use sugarsubstitute_desktop::{
     },
 };
 
+mod backdrops;
 mod backend;
 mod cancellation;
 mod capture;

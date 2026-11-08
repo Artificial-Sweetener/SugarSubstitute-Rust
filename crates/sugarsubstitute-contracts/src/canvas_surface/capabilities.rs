@@ -5,13 +5,14 @@
 use super::{CanvasSurfaceMessageError, MAX_SURFACE_MESSAGE_BYTES, wire};
 use crate::panel::PanelSession;
 
-/// Schema-two surface behavior advertised by its runtime owner; empty fields mean unsupported.
+/// Surface behavior advertised by its runtime owner; empty fields mean unsupported.
 ///
 /// Callers publish only implemented runtime behavior. These values describe presentation
 /// capabilities and never authorize navigation, native handles, or attachment operations.
 /// Discovery schema one is decoded only to return an empty unsupported result with an
 /// upgrade diagnostic. Hosts and SugarCubes upgrade together; canvas envelope version three
 /// and presentation observation schema one retain their independent meanings.
+/// Discovery schema three adds native backdrop regions; schema-two replies omit that field.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CanvasSurfaceCapabilities {
     /// Admitted selected-image encodings, bounded to three entries by the shared schema.
@@ -29,6 +30,8 @@ pub struct CanvasSurfaceCapabilities {
     /// Whether the host routes pointer and wheel gestures against page-published occlusions.
     /// Only such a host accepts geometry occlusions and the modal flag.
     pub input: bool,
+    /// Whether schema-three clients can publish backdrop schema-one presentation regions.
+    pub backdrop: bool,
 }
 
 /// Selected-image encoding supported by a surface runtime.
@@ -153,6 +156,9 @@ impl CanvasSurfaceDiscoveryRequest {
         }
         let mut capabilities = capabilities.to_wire()?;
         capabilities.schema = self.schema;
+        if self.schema < 3 {
+            capabilities.backdrop = None;
+        }
         let value = wire::CanvasSurfaceCapabilitiesReply {
             protocol: "sugarcubes.canvas".into(),
             version: 3,
@@ -200,6 +206,7 @@ impl CanvasSurfaceCapabilities {
             comparison: self.comparison,
             overview: self.overview,
             input: self.input,
+            backdrop: self.backdrop.then_some(wire::CanvasSurfaceBackdropSupport { schema: 1 }),
         };
         if !value.valid() {
             return Err(CanvasSurfaceMessageError::Invalid);

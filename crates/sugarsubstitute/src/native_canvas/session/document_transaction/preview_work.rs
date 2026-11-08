@@ -150,7 +150,8 @@ impl Session {
             work::IMPORT_BYTES
         } else {
             patch
-                .checked_add(samples)
+                .checked_add(self.backdrops.snapshot(view)?.plan.cpu_scratch_bytes())
+                .and_then(|bytes| bytes.checked_add(samples))
                 .and_then(|bytes| bytes.checked_add(256 * 1024))
                 .ok_or("Preview reservation overflow")?
         };
@@ -196,7 +197,8 @@ impl Session {
             self.resources.as_ref().ok_or("Canvas preview resources are unavailable")?.clone();
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         let extent = self.document.tools.navigation().viewport().surface();
-        if matches!(&candidate.stage, Stage::Ready(Some(ready)) if ready.drawing.view.surface() == extent)
+        let backdrops = self.backdrops.snapshot(extent)?;
+        if matches!(&candidate.stage, Stage::Ready(Some(ready)) if ready.drawing.view.surface() == extent && ready.drawing.backdrop_generation == backdrops.generation)
         {
             return self.offer_ready_preview(candidate);
         }
@@ -256,17 +258,21 @@ impl Session {
                             target,
                             display_target,
                             extent,
+                            backdrops,
                         ))
                     })
                     .map(|job| Some(Stage::Preparing(Some(job))))
             }
             Stage::Ready(ready)
-                if ready.as_ref().is_some_and(|ready| ready.drawing.view.surface() != extent) =>
+                if ready.as_ref().is_some_and(|ready| {
+                    ready.drawing.view.surface() != extent
+                        || ready.drawing.backdrop_generation != backdrops.generation
+                }) =>
             {
                 runtime
                     .client
                     .submit_cpu_owned_input(&runtime.scope, spec, ready, move |ready, _| {
-                        ReprojectTask { ready: Some(ready), target, extent }
+                        ReprojectTask { ready: Some(ready), target, extent, backdrops }
                     })
                     .map(|job| Some(Stage::Preparing(Some(job))))
             }

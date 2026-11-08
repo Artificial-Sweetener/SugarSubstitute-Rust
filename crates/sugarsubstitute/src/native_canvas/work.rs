@@ -12,8 +12,8 @@ pub(super) mod preview;
 #[cfg(all(windows, feature = "native-composition"))]
 pub(super) use display::{CompositionFrame, CompositionTarget};
 pub(super) use display::{
-    CpuUnderlay, DisplayTarget, Draw, DrawInput, DrawPixels, DrawSource, GpuUnderlay, NativeFrame,
-    UnderlayEvidence,
+    CpuUnderlay, DisplayBackdrops, DisplayTarget, Draw, DrawInput, DrawPixels, DrawSource,
+    GpuUnderlay, NativeFrame, UnderlayEvidence,
 };
 use std::{
     path::PathBuf,

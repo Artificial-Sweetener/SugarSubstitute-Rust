@@ -129,6 +129,10 @@ impl Session {
     /// forced for it was dropped.
     pub(super) fn display_selection_pending(&self, selection: BackingSelection) -> bool {
         self.expose_pending
+            || self
+                .document
+                .display_evidence
+                .is_none_or(|shown| shown.backdrop_generation != self.backdrops.generation)
             || !self.display_shows_current_source()
             || self.document.display_evidence.map_or(0, |shown| shown.overlay)
                 != self.shown_overlay_generation()

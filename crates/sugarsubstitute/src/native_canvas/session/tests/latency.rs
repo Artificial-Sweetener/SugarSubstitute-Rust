@@ -62,6 +62,8 @@ fn first_image_latency_requires_matching_ack_and_is_recorded_only_once()
         document,
         source_revision: 7,
         overlay: 0,
+        backdrop_generation: 0,
+        backdrop_active: false,
     });
     session.pacing.submitted(first, PresentationMode::Projected, Duration::ZERO, Duration::ZERO)?;
     session.pacing.prepared(first, Duration::ZERO)?;
@@ -86,6 +88,8 @@ fn first_image_latency_requires_matching_ack_and_is_recorded_only_once()
         document,
         source_revision: 8,
         overlay: 0,
+        backdrop_generation: 0,
+        backdrop_active: false,
     });
     clock.0.store(100_000_000, std::sync::atomic::Ordering::SeqCst);
     session.pacing.submitted(

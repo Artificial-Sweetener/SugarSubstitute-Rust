@@ -52,6 +52,8 @@ pub(super) fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn 
         document: identity,
         source_revision: 7,
         overlay_generation: 0,
+        backdrop_generation: 0,
+        backdrop_active: false,
         verified: true,
     });
     let spec = session.spec(
@@ -78,6 +80,7 @@ pub(super) fn cpu_draw(attached: bool) -> Result<(Fixture, FrameStamp), Box<dyn 
         target,
         document: identity,
         source_revision: 7,
+        backdrop_generation: 0,
         job,
     });
     Ok((Fixture { session, clock, wake, view, source, _directory: directory }, target))

@@ -58,6 +58,7 @@ impl Session {
         #[cfg(feature = "native-composition")]
         let first_close = !self.closing;
         let cutoff = self.adopt_preview_retirement_cutoff(cutoff);
+        self.backdrops = backdrop::Backdrops::default();
         if self.shutdown_started
             && let Some(runtime) = &mut self.runtime
         {

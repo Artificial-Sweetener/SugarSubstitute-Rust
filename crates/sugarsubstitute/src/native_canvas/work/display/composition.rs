@@ -3,8 +3,9 @@
 //! Draw retained GPU backings into a ring of textures shared with the main-window composition.
 
 use super::*;
+use sugarsubstitute_canvas_render::{RenderError, backdrop::GpuBackdrop};
 use sugarsubstitute_desktop::canvas::{SharedCanvasTexture, SharedTextureFactory};
-use sugarsubstitute_image_gpu::{DisplayImage, DisplayMapping, SharedSurface, SharedTarget};
+use sugarsubstitute_image_gpu::{DisplayProjection, SharedSurface, SharedTarget};
 use sugarsubstitute_image_ops::Extent;
 
 /// Two textures let the composition keep copying the shown frame while the next one is drawn.
@@ -18,6 +19,9 @@ pub(super) struct Sources<'a> {
     pub(super) matte: Pixel,
     /// Presentation marks drawn over the projection.
     pub(super) overlay: &'a [OverlayPixel],
+    pub(super) backdrops: DisplayBackdrops,
+    /// Session-retained metadata admission, independent of the temporary display job.
+    pub(super) retained: &'a MemoryLease,
 }
 
 /// One exported composition texture and its Vulkan import.
@@ -35,14 +39,21 @@ pub(in crate::native_canvas) struct CompositionTarget {
     device: Arc<GpuDevice>,
     textures: SharedTextureFactory,
     slots: Vec<Slot>,
+    backdrops: Option<GpuBackdrop>,
 }
 
 /// A drawn shared texture whose Vulkan work has completed; the composition may copy it now.
 pub(in crate::native_canvas) struct CompositionFrame {
+    backdrop_generation: u64,
     texture: Arc<SharedCanvasTexture>,
 }
 
 impl CompositionFrame {
+    /// Effect material revision drawn into this exact completed shared texture.
+    pub(in crate::native_canvas) fn backdrop_generation(&self) -> u64 {
+        self.backdrop_generation
+    }
+
     /// Texture the composition copies for this frame.
     pub(in crate::native_canvas) fn texture(&self) -> &SharedCanvasTexture {
         &self.texture
@@ -65,6 +76,7 @@ impl CompositionTarget {
             device,
             textures,
             slots: Vec::with_capacity(RING),
+            backdrops: None,
         })
     }
 
@@ -92,23 +104,50 @@ impl CompositionTarget {
                 samples.gpu_mapping(sources.matte).map(|mapping| (underlay.frame.image(), mapping))
             })
             .transpose()?;
+        let source = DisplayProjection {
+            image: sources.frame.image(),
+            mapping: primary,
+            underlay,
+            overlay: sources.overlay,
+        };
         loop {
-            match render(
-                &mut self.surface,
-                &slot.target,
-                sources.frame.image(),
-                (primary, underlay),
-                sources.overlay,
-                context,
-            ) {
-                Err(cause) if cause.is_memory_pressure() => match reclaim()? {
+            let result = (|| -> Result<(), RenderError> {
+                if sources.backdrops.plan.regions().is_empty() {
+                    self.surface.draw_with_patches(&slot.target, source, &[], context)?;
+                    return Ok(());
+                }
+                if self.backdrops.is_none() {
+                    self.backdrops = Some(GpuBackdrop::new(
+                        self.device.clone(),
+                        sources.retained.clone(),
+                        context,
+                    )?);
+                }
+                let patches = self
+                    .backdrops
+                    .as_mut()
+                    .ok_or(RenderError::Invalid("GPU backdrop pipeline is unavailable"))?
+                    .prepare(&sources.backdrops.plan, source, context)?;
+                let mut layers = Vec::new();
+                layers
+                    .try_reserve_exact(patches.patches().len())
+                    .map_err(sugarsubstitute_image_ops::ImageError::from)?;
+                layers.extend(patches.patches().iter().map(|patch| patch.layer()));
+                self.surface.draw_with_patches(&slot.target, source, &layers, context)?;
+                Ok(())
+            })();
+            match result {
+                Err(RenderError::Gpu(cause)) if cause.is_memory_pressure() => match reclaim()? {
                     CacheReclaim::Progress => {}
                     CacheReclaim::Busy => return Ok(None),
                     CacheReclaim::Exhausted => return Err(cause.into()),
                 },
                 result => {
                     result?;
-                    return Ok(Some(CompositionFrame { texture: slot.texture.clone() }));
+                    return Ok(Some(CompositionFrame {
+                        texture: slot.texture.clone(),
+                        backdrop_generation: sources.backdrops.generation,
+                    }));
                 }
             }
         }
@@ -136,23 +175,5 @@ impl CompositionTarget {
         let target = SharedTarget::import(&self.device, &texture.handle(), context)?;
         self.slots.push(Slot { texture, target });
         Ok(Some(self.slots.len() - 1))
-    }
-}
-
-/// Draw with the same projection and underlay selection as native window presentation.
-fn render(
-    surface: &mut SharedSurface,
-    target: &SharedTarget,
-    image: &DisplayImage,
-    mappings: (Option<DisplayMapping<'_>>, Option<(&DisplayImage, DisplayMapping<'_>)>),
-    overlay: &[OverlayPixel],
-    context: &JobContext,
-) -> Result<(), GpuError> {
-    match mappings {
-        (Some(mapping), Some(underlay)) => {
-            surface.draw_composited(target, image, mapping, underlay, overlay, context)
-        }
-        (Some(mapping), None) => surface.draw_projected(target, image, mapping, overlay, context),
-        (None, _) => surface.draw(target, image, overlay, context),
     }
 }

@@ -20,6 +20,7 @@ fn candidate_reprojection_keeps_canonical_backing_and_commits_only_complete_fit_
                 stamp(9, 10)?,
                 stamp(9, 11)?,
                 Extent::new(96, 96)?,
+                DisplayBackdrops::empty(Extent::new(96, 96)?)?,
             )?);
         }
         let CpuStep::Complete(mut ready) = fixture
@@ -46,7 +47,12 @@ fn candidate_reprojection_keeps_canonical_backing_and_commits_only_complete_fit_
             })
             .ok_or_else(|| WorkError::invalid("Preview renderer missing"))?;
         let error = ready
-            .reproject(stamp(9, 12)?, Extent::new(128, 72)?, &context.bounded_until(context.now()))
+            .reproject(
+                stamp(9, 12)?,
+                Extent::new(128, 72)?,
+                DisplayBackdrops::empty(Extent::new(128, 72)?)?,
+                &context.bounded_until(context.now()),
+            )
             .err()
             .ok_or_else(|| WorkError::invalid("Expired resize succeeded"))?;
         assert!(matches!(
@@ -58,14 +64,24 @@ fn candidate_reprojection_keeps_canonical_backing_and_commits_only_complete_fit_
         let remaining = available(&ready.resources.memory)?;
         let pressure = ready.resources.memory.claim(remaining - 1024)?;
         let error = ready
-            .reproject(stamp(9, 12)?, Extent::new(16384, 16384)?, context)
+            .reproject(
+                stamp(9, 12)?,
+                Extent::new(16384, 16384)?,
+                DisplayBackdrops::empty(Extent::new(16384, 16384)?)?,
+                context,
+            )
             .err()
             .ok_or_else(|| WorkError::invalid("Over-budget resize succeeded"))?;
         assert!(contains_memory_error(&error));
         assert_eq!(ready.drawing.target, original_target);
         assert_eq!(ready.drawing.view, original_view);
         drop(pressure);
-        ready.reproject(stamp(9, 12)?, Extent::new(128, 72)?, context)?;
+        ready.reproject(
+            stamp(9, 12)?,
+            Extent::new(128, 72)?,
+            DisplayBackdrops::empty(Extent::new(128, 72)?)?,
+            context,
+        )?;
         assert!(Arc::ptr_eq(&ready.backing, &backing));
         assert_eq!(ready.backing.current(), Some(original_source));
         assert_eq!(ready.drawing.source, original_source);
@@ -78,8 +94,26 @@ fn candidate_reprojection_keeps_canonical_backing_and_commits_only_complete_fit_
         };
         assert_eq!(projection.pixels().len(), 128 * 72);
         assert_eq!(projection.pixels()[36 * 128 + 64], 0xff00ff00);
-        assert!(ready.reproject(stamp(9, 12)?, Extent::new(128, 72)?, context).is_err());
-        assert!(ready.reproject(stamp(8, 13)?, Extent::new(128, 72)?, context).is_err());
+        assert!(
+            ready
+                .reproject(
+                    stamp(9, 12)?,
+                    Extent::new(128, 72)?,
+                    DisplayBackdrops::empty(Extent::new(128, 72)?)?,
+                    context
+                )
+                .is_err()
+        );
+        assert!(
+            ready
+                .reproject(
+                    stamp(8, 13)?,
+                    Extent::new(128, 72)?,
+                    DisplayBackdrops::empty(Extent::new(128, 72)?)?,
+                    context
+                )
+                .is_err()
+        );
         let renderer_computed = ready
             .resources
             .engine

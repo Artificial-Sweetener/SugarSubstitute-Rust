@@ -123,6 +123,7 @@ fn discovery_preserves_each_typed_capability_without_enabling_others() -> Result
         comparison: true,
         overview: true,
         input: true,
+        backdrop: false,
     };
     let bytes = request()?.reply(
         CanvasSurfaceDiscoveryStatus::Available,
@@ -182,6 +183,7 @@ fn discovery_rejects_nonempty_failure_descriptors_and_oversized_lists() -> Resul
         CanvasSurfaceCapabilities { comparison: true, ..Default::default() },
         CanvasSurfaceCapabilities { overview: true, ..Default::default() },
         CanvasSurfaceCapabilities { input: true, ..Default::default() },
+        CanvasSurfaceCapabilities { backdrop: true, ..Default::default() },
     ];
     for status in [
         CanvasSurfaceDiscoveryStatus::Unsupported,
@@ -245,7 +247,7 @@ fn discovery_requires_exact_versions_and_unambiguous_request_fields() -> Result<
         ("version", json!(4)),
         ("version", json!(3.5)),
         ("schema", json!(0)),
-        ("schema", json!(3)),
+        ("schema", json!(4)),
         ("protocol", json!("different.canvas")),
         ("requestId", json!(-1)),
         ("address", json!({})),
@@ -278,5 +280,30 @@ fn discovery_message_session_is_the_request_session() -> Result<(), Box<dyn Erro
     let value = vectors()?.get("request").ok_or("Missing discovery request")?.clone();
     let message = CanvasSurfaceMessage::decode(&serde_json::to_vec(&value)?)?;
     assert_eq!(message.session(), request()?.session());
+    Ok(())
+}
+
+#[test]
+fn backdrop_support_is_negotiated_only_with_schema_three() -> Result<(), Box<dyn Error>> {
+    let capabilities = CanvasSurfaceCapabilities { backdrop: true, ..Default::default() };
+    for schema in [2, 3] {
+        let mut value = vectors()?["request"].clone();
+        value["schema"] = json!(schema);
+        let CanvasSurfaceMessage::Discovery(request) =
+            CanvasSurfaceMessage::decode(&serde_json::to_vec(&value)?)?
+        else {
+            return Err("Expected discovery request".into());
+        };
+        let bytes = request.reply(CanvasSurfaceDiscoveryStatus::Available, &capabilities, "")?;
+        let value: Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(value["capabilities"]["schema"], schema);
+        if schema == 3 {
+            assert_eq!(value["capabilities"]["backdrop"], json!({"schema": 1}));
+        } else {
+            assert!(value["capabilities"].get("backdrop").is_none());
+        }
+        let wire: wire::CanvasSurfaceCapabilitiesReply = serde_json::from_slice(&bytes)?;
+        assert!(wire.valid());
+    }
     Ok(())
 }

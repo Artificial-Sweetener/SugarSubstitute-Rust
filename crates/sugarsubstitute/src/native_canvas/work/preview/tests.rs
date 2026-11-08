@@ -75,6 +75,7 @@ fn interleaved_candidate_and_active_final_keep_separate_renderers_and_pixels()
                 stamp(1, 1)?,
                 stamp(1, 2)?,
                 Extent::new(96, 64)?,
+                DisplayBackdrops::empty(Extent::new(96, 64)?)?,
             )?;
             let mut active = preview.prepare.take().ok_or_else(|| {
                 WorkError::invalid("Fixture active preparation was not constructed")
@@ -87,6 +88,7 @@ fn interleaved_candidate_and_active_final_keep_separate_renderers_and_pixels()
                 stamp(2, 3)?,
                 stamp(2, 4)?,
                 Extent::new(96, 64)?,
+                DisplayBackdrops::empty(Extent::new(96, 64)?)?,
             )?;
             assert!(!Arc::ptr_eq(&resources.engine, &preview.resources.engine));
             fixture = Some((resources, active, preview));
@@ -159,6 +161,7 @@ fn large_portrait_candidate_uses_existing_backing_cap_and_physical_fit_camera()
             stamp(2, 1)?,
             stamp(2, 2)?,
             Extent::new(3840, 2160)?,
+            DisplayBackdrops::empty(Extent::new(3840, 2160)?)?,
         )?;
         assert_eq!(preview.coverage.viewport().surface(), Extent::new(651, 1024)?);
         assert_eq!(preview.view.surface(), Extent::new(3840, 2160)?);
@@ -192,6 +195,7 @@ fn candidate_retains_centered_fit_pixels_and_complete_identity_evidence()
                 stamp(9, 10)?,
                 stamp(9, 11)?,
                 Extent::new(96, 96)?,
+                DisplayBackdrops::empty(Extent::new(96, 96)?)?,
             )?);
         }
         match fixture
@@ -260,6 +264,7 @@ fn candidate_cancel_and_deadline_stop_before_more_allocation_and_retire_on_worke
             stamp(2, 1)?,
             stamp(2, 2)?,
             Extent::new(96, 96)?,
+            DisplayBackdrops::empty(Extent::new(96, 96)?)?,
         )?;
         assert!(matches!(preview.step(context)?, CpuStep::Yield));
         let admitted = available(&resources.memory)?;
@@ -302,6 +307,7 @@ fn candidate_budget_failure_preserves_admission_cause_and_active_engine()
             stamp(2, 1)?,
             stamp(2, 2)?,
             Extent::new(96, 96)?,
+            DisplayBackdrops::empty(Extent::new(96, 96)?)?,
         )?;
         let remaining = available(&resources.memory)?;
         let pressure = resources.memory.claim(remaining - 1024)?;
