@@ -5,6 +5,16 @@ use super::StartupBackend;
 use std::error::Error;
 use sugarsubstitute_desktop::{StartupChildFailure, StartupConsumeFailure, StartupConsumeStage};
 
+/// Retain a missing accepted-frame appearance at the publication boundary.
+pub(super) fn published_appearance<B: StartupBackend>(
+    appearance: Option<sugarsubstitute_splash::Appearance>,
+) -> Result<sugarsubstitute_splash::Appearance, Box<dyn Error>> {
+    observe::<B, _>(
+        StartupConsumeStage::AppearancePublication,
+        appearance.ok_or_else(|| "Published startup frame has no retained appearance".into()),
+    )
+}
+
 /// Enrich only an actual returned error, preserving its original Box and direct typed category.
 pub(super) fn observe<B: StartupBackend, T>(
     stage: StartupConsumeStage,

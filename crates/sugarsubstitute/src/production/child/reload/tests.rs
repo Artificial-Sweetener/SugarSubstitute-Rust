@@ -2,6 +2,61 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Actual child request/control ownership with external native observations and deterministic time.
 use super::*;
+
+/// Supply authenticated connection facts while preserving the actual child reload owner.
+fn connection_fixture(child: &mut ProductionChild, kind: ConnectionBudgetKind) -> Result<()> {
+    child.connection_budget = Some(ConnectionBudget::new(kind, Moment::from_nanos(0))?);
+    child.lease = Some(LeaseReference {
+        resource: ResourceId::new(1)?,
+        generation: ResourceGeneration::new(1)?,
+        lease: LeaseId::new(1)?,
+    });
+    Ok(())
+}
+
+#[test]
+fn attached_reload_retains_current_grant_without_a_managed_backend() -> Result<()> {
+    let (mut child, _owner, _) = super::super::test_support::child()?;
+    connection_fixture(&mut child, ConnectionBudgetKind::Attached)?;
+    let identity = child.identity;
+    assert_eq!(Some(child.reload_backend_lease(identity)?), child.lease);
+    let foreign = MainIdentity { navigation: Generation::new(2)?, ..identity };
+    assert!(child.reload_backend_lease(foreign).is_err());
+    child.lease = None;
+    assert!(child.reload_backend_lease(identity).is_err());
+    Ok(())
+}
+
+#[test]
+fn managed_reload_requires_healthy_binding_matching_the_current_grant() -> Result<()> {
+    let (mut child, _owner, _) = super::super::test_support::child()?;
+    connection_fixture(&mut child, ConnectionBudgetKind::Managed)?;
+    let identity = child.identity;
+    let lease = child.lease.ok_or("Fixture lease absent")?;
+    assert!(child.reload_backend_lease(identity).is_err());
+    let binding = crate::production_output::OutputBinding {
+        run: identity.run,
+        resource: ResourceKey {
+            owner: identity.run.owner,
+            id: lease.resource,
+            generation: lease.generation,
+        },
+        connection: ConnectionId::new(1)?,
+        lease,
+    };
+    child.running_backend = Some(backend::RunningBackendBinding::new(identity, binding)?);
+    assert_eq!(child.reload_backend_lease(identity)?, lease);
+    child.lease = Some(LeaseReference { lease: LeaseId::new(2)?, ..lease });
+    assert!(child.reload_backend_lease(identity).is_err());
+    child.lease = Some(lease);
+    child.running_backend.as_mut().ok_or("Fixture binding absent")?.unavailable(lease, false)?;
+    assert!(child.reload_backend_lease(identity).is_err());
+    child.connection_budget =
+        Some(ConnectionBudget::new(ConnectionBudgetKind::Attached, Moment::from_nanos(0))?);
+    assert!(child.reload_backend_lease(identity).is_err());
+    Ok(())
+}
+
 #[test]
 fn reload_requires_current_authorized_main_before_any_command_or_binding_change() -> Result<()> {
     let (mut child, owner, _) = super::super::test_support::child()?;

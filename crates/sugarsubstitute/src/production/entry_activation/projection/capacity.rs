@@ -13,6 +13,16 @@ fn mul(left: u64, right: u64) -> Result<u64, LifecycleRejection> {
 fn count(value: usize) -> Result<u64, LifecycleRejection> {
     u64::try_from(value).map_err(|_| LifecycleRejection::Overloaded)
 }
+/// Keep the selected user path within the existing field-construction allocation.
+pub(super) fn field_available(input: &ProjectionInput) -> Result<u64, LifecycleRejection> {
+    input
+        ._charge
+        .as_ref()
+        .ok_or(LifecycleRejection::WrongPhase)?
+        .bytes()
+        .checked_sub(count(input.user.capacity())?)
+        .ok_or(LifecycleRejection::Overloaded)
+}
 /// RawVec's pinned doubling/min-eight bound, including old/new allocation overlap.
 fn vector(elements: u64, width: u64) -> Result<u64, LifecycleRejection> {
     if elements == 0 {
@@ -108,12 +118,13 @@ pub(super) fn data(fields: &Fields, frontend: u64) -> Result<u64, Box<dyn Error 
 pub(super) fn funding(
     input: &mut ProjectionInput,
     fields: &Fields,
+    identity: &sugarsubstitute_contracts::installation::InstallationId,
 ) -> Result<
     (super::super::funding::ProjectionDataFunding, super::super::funding::ProjectionPolicyCredit),
     Box<dyn Error + Send + Sync>,
 > {
     let capture = count(input.capture_root.capacity())?;
-    let retained = add(fields.allocated_bytes, capture)?;
+    let retained = add(add(fields.allocated_bytes, capture)?, count(identity.allocated_bytes())?)?;
     // Copies preceding admission to capture/profile native owners. App target and
     // enrollment retention are included in actual policy preflight; its one
     // temporary ProfileId input copy is funded here before that input exists.
@@ -132,4 +143,28 @@ pub(super) fn funding(
         super::super::funding::ProjectionDataBytes { retained, future },
     )
     .map_err(|cause| Box::new(cause) as _)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sugarsubstitute_contracts::execution::{MemoryLease, MemoryRelease};
+    struct Release;
+    impl MemoryRelease for Release {
+        fn release(&self, _: u64) {}
+    }
+    #[test]
+    fn selected_user_path_retains_its_original_field_allocation() -> Result<(), Box<dyn Error>> {
+        let memory = MemoryLease::new(4096, Box::new(Release));
+        let mut input = ProjectionInput::without_request();
+        input._charge = Some(memory.claim(4096)?);
+        input.user.try_reserve_exact(4097)?;
+        assert!(matches!(field_available(&input), Err(LifecycleRejection::Overloaded)));
+        input.user = PathBuf::new();
+        assert_eq!(field_available(&input)?, 4096);
+        input.user.try_reserve_exact(128)?;
+        assert!(field_available(&input)? <= 4096 - 128);
+        assert!(memory.claim(1).is_err());
+        Ok(())
+    }
 }

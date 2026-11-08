@@ -30,9 +30,11 @@ impl Session {
         self.preview_shown()
             || self.document.scene.as_ref().is_none_or(|scene| scene.source.is_none())
             || (self.document.native_presented.is_some()
-                && self.document.display_evidence.is_some_and(|evidence| {
-                    evidence.view.surface() == extent && evidence.source_revision == self.selection
-                }))
+                && self.display_shows_current_source()
+                && self
+                    .document
+                    .display_evidence
+                    .is_some_and(|evidence| evidence.view.surface() == extent))
     }
 
     /// Preserve newer source selection while restoring the parked document's custody.

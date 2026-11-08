@@ -120,3 +120,90 @@ fn denied_retained_camera_preserves_the_current_document_and_pending_frame()
     assert!(cause.to_string().contains("owned by another operation"));
     Ok(())
 }
+
+/// Start a real pan capture after the selected source's accepted camera can pan.
+fn capture_selected_pan(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_canvas::{ToolButton, ToolInput, ToolModifiers};
+    let now = fixture.session.navigation_time();
+    fixture.session.document.tools.navigate(camera([0.5; 2]), now)?;
+    fixture.settle()?;
+    let now = fixture.session.navigation_time();
+    let document = &mut fixture.session.document;
+    let scene = document.scene.as_mut().map(|scene| &mut scene.document);
+    document.tools.input(
+        ToolInput::Button {
+            button: ToolButton::Primary,
+            pressed: true,
+            modifiers: ToolModifiers::NONE,
+        },
+        scene,
+        now,
+    )?;
+    assert!(document.tools.captured());
+    Ok(())
+}
+
+/// Exercise the same document-change handoff for ordinary Fit and explicit saved cameras.
+fn captured_selection_handoff(
+    parked: bool,
+    frame: Option<NavigationCommand>,
+) -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::retaining()?;
+    fixture.show([255, 0, 0], "a")?;
+    capture_selected_pan(&mut fixture)?;
+    let original = fixture.session.document.shown_key();
+    if parked {
+        fixture.show([0, 0, 255], "b")?;
+        assert!(
+            fixture
+                .session
+                .retained
+                .document(&key("a"))
+                .is_some_and(|document| document.tools.captured())
+        );
+    }
+    assert!(fixture.session.reselect_retained(&key("a"))?);
+    fixture.session.frame_selection(frame);
+    let intent = fixture.session.selection;
+    let settled = fixture.settle().map_err(|cause| cause.to_string());
+    let shown = fixture.session.document.shown_key();
+    let revision = fixture.session.document.scene.as_ref().map(|scene| scene.source_revision);
+    let captured = fixture.session.document.tools.captured();
+    let pending = fixture.session.selection_frame(intent);
+    let accepted = fixture.session.accepted_camera();
+    let retained_outgoing = !parked || fixture.session.retained.contains(&key("b"));
+    let closed = fixture.finish().map_err(|cause| cause.to_string());
+    assert!(settled.is_ok(), "Selection must use the document-change tool lifecycle: {settled:?}");
+    assert!(closed.is_ok(), "Selection teardown must observe success: {closed:?}");
+    assert_eq!(shown, original);
+    assert_eq!(revision, Some(intent));
+    assert!(!captured);
+    assert_eq!(pending, None);
+    assert!(retained_outgoing);
+    let accepted = accepted.ok_or("Selected source camera absent")?;
+    let surface = accepted.viewport.surface();
+    let center = accepted
+        .viewport
+        .document_at([f64::from(surface.width()) * 0.5, f64::from(surface.height()) * 0.5])?;
+    let expected = if frame.is_some() { [-3.25, 2.75] } else { [0.5; 2] };
+    assert!((center[0] - expected[0]).abs() < 1e-9 && (center[1] - expected[1]).abs() < 1e-9);
+    assert_eq!(accepted.viewport.zoom(), if frame.is_some() { 10.0 } else { 8.0 });
+    Ok(())
+}
+
+#[test]
+fn captured_parked_fit_selection_uses_document_change_cancellation() -> Result<(), Box<dyn Error>> {
+    captured_selection_handoff(true, None)
+}
+
+#[test]
+fn captured_current_selection_applies_the_frame_after_document_change_cancellation()
+-> Result<(), Box<dyn Error>> {
+    captured_selection_handoff(false, Some(camera([-3.25, 2.75])))
+}
+
+#[test]
+fn captured_parked_selection_applies_the_frame_after_document_change_cancellation()
+-> Result<(), Box<dyn Error>> {
+    captured_selection_handoff(true, Some(camera([-3.25, 2.75])))
+}

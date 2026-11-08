@@ -15,12 +15,23 @@ macro_rules! identity {
             /// # Errors
             /// Returns `Rejection::Identity` for noncanonical or incorrectly sized input.
             pub fn new(value: String) -> Result<Self, Rejection> {
+                Self::validate(&value)?;
+                Ok(Self(value))
+            }
+            /// Validate borrowed canonical text without allocating an identity or native authority.
+            /// # Errors
+            /// Returns `Rejection::Identity` for noncanonical or incorrectly sized input.
+            pub fn validate(value: &str) -> Result<(), Rejection> {
                 if value.len() != $length
                     || !value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
                 {
                     return Err(Rejection::Identity);
                 }
-                Ok(Self(value))
+                Ok(())
+            }
+            /// Return retained identifier storage for bounded host admission.
+            pub fn allocated_bytes(&self) -> usize {
+                self.0.capacity()
             }
             /// Borrow canonical identity text; this is not filesystem authority.
             pub fn as_str(&self) -> &str {

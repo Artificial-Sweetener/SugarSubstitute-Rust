@@ -53,6 +53,7 @@ use sugarsubstitute_desktop::{
 };
 use sugarsubstitute_image_io::CacheReuse;
 use sugarsubstitute_image_io::ImageSource;
+pub(in crate::startup) use workflow::OutputReplay;
 
 struct Context {
     identity: MainIdentity,
@@ -131,6 +132,7 @@ struct Pending {
     /// The last recorded reason a pending selection's or viewport request's reply condition
     /// was unmet.
     wait: crate::canvas_surface_diagnostic::Wait,
+    preparation: Option<crate::canvas_preparation_diagnostic::NativePreparationSnapshot>,
 }
 
 /// Build the host acquisition adapter for an overview of qualification fixture outputs.
@@ -144,6 +146,7 @@ pub(super) type FixtureAcquisition = Box<
 /// One native attachment and bounded replies for the current panel.
 pub(super) struct NativeSurface {
     backend: Option<crate::startup::CanvasBackend>,
+    pub(in crate::startup::canvas) session_source: Option<super::session_source::SessionSource>,
     #[cfg(test)]
     fixture_output: Option<PathBuf>,
     #[cfg(test)]
@@ -177,6 +180,7 @@ impl NativeSurface {
     pub(super) fn new() -> Self {
         Self {
             backend: None,
+            session_source: None,
             #[cfg(test)]
             fixture_output: None,
             #[cfg(test)]
@@ -384,6 +388,9 @@ impl NativeSurface {
         compared: Option<ComfyViewTarget>,
         session: &mut Session,
     ) -> Result<bool, Box<dyn Error>> {
+        if let Some(source) = self.session_source.take() {
+            return Self::offer_acquired(source.single()?, session);
+        }
         let backend = self
             .backend
             .filter(|backend| backend.identity == identity)
@@ -398,6 +405,9 @@ impl NativeSurface {
         selection: crate::native_canvas::session::OverviewSelection<ComfyViewTarget>,
         session: &mut Session,
     ) -> Result<bool, Box<dyn Error>> {
+        if let Some(source) = self.session_source.take() {
+            return Self::offer_acquired(source.overview(selection)?, session);
+        }
         let backend = self
             .backend
             .filter(|backend| backend.identity == identity)

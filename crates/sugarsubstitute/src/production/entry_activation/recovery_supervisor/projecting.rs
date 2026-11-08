@@ -33,6 +33,10 @@ impl RecoveryPreparation {
             let mut input = Some(ProjectionInput::restart(
                 resources.client.clone(),
                 root.capture_root.clone(),
+                sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                    &root.working_directory,
+                )
+                .user(),
                 super::super::projection::RestartProjection {
                     source: value.registered.clone(),
                     previous: self.previous,

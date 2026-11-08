@@ -204,6 +204,10 @@ impl PanelOwner {
                 "SugarCubes panel state changed");
         }
         let Some(message) = effects.send else { return Ok(()) };
+        if let PanelMessage::Configure { presentation, .. } = &message {
+            tracing::info!(operation="panel_accent_configure", identity=?self.identity,
+                accent=?presentation.accent_color(), "Configuring the frontend accent");
+        }
         let configuration = matches!(message, PanelMessage::Configure { .. });
         let command = PanelCommand::new(
             self.identity,

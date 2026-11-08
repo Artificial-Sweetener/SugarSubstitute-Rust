@@ -8,6 +8,32 @@
 use super::*;
 
 impl<B: StartupBackend> StartupHost<B> {
+    /// Retain the selected user storage and an independent session scope before execution starts.
+    #[cfg(feature = "native-composition")]
+    pub(crate) fn configure_workspace(
+        &mut self,
+        user: std::path::PathBuf,
+        spec: sugarsubstitute_contracts::execution::ScopeSpec,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.started
+            || self.workspace.is_some()
+            || self.canvas.is_some()
+            || !user.is_absolute()
+            || spec.deadline.is_some()
+            || spec.id <= self.scopes.child.id
+            || spec.id <= self.scopes.render.id
+        {
+            return Err("Workspace configuration is invalid or already active".into());
+        }
+        #[cfg(feature = "native-composition")]
+        if self.composition.as_ref().is_some_and(|owner| spec.id <= owner.scope_id()) {
+            return Err("Workspace scope precedes composition owner".into());
+        }
+        self.execution.reserve_workspace_capacity(workspace::CAPACITY)?;
+        self.workspace = Some(workspace::WorkspaceWork::new(user, spec, self.jobs.clone()));
+        Ok(())
+    }
+
     /// Retain one empty application canvas before the native startup lifetime begins.
     /// `anchor` is the installation root supplied by the parent; the runtime cache owner opens
     /// its schema-qualified scope below it and validates it on a worker.
@@ -29,6 +55,10 @@ impl<B: StartupBackend> StartupHost<B> {
         #[cfg(feature = "native-composition")]
         if self.composition.as_ref().is_some_and(|composition| scope.id <= composition.scope_id()) {
             return Err("Application canvas scope precedes composition execution".into());
+        }
+        #[cfg(feature = "native-composition")]
+        if self.workspace.as_ref().is_some_and(|owner| scope.id <= owner.scope_id()) {
+            return Err("Canvas scope precedes workspace execution".into());
         }
         if !anchor.is_absolute() {
             return Err("Application canvas cache anchor must be absolute".into());

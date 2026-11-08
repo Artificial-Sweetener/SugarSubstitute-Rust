@@ -381,7 +381,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/lifecycle_protocol/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4e1d66f9e33e6519bdbd2f907c549fb0a13fe6d1a5ddb3a26aaa789db4338e96"
+source_sha256 = "sha256:26d262171550fd4a64b6424126fdcb5df0c18fefa9acac8fae0067b628f98cac"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -1089,7 +1089,7 @@ rationale = "Verify that inherited delegated-tool log destinations are replaced 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/projection_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:cd6ddd0c22ea59bf3f1d13a2af3cf5c54a1c18a24e92c731ff15f5d57f8bced1"
+source_sha256 = "sha256:0a6d65ab6b53e898824606d65ebfe2a2db538f47d1b5b2ed3309c1627ffeae4e"
 disposition = "fixture"
 rationale = "Assert that production projection confines delegated pip log and temporary destinations while preserving the original captured environment; no diagnostic sink is created."
 
@@ -1099,3 +1099,10 @@ owner = "sugarsubstitute-image-gpu"
 source_sha256 = "sha256:fed4925b53666546bd4eeafa4fb812e8ac4175b704a68892a31c88aa0acb3f8b"
 disposition = "fixture"
 rationale = "The headless explicit-device material qualification reports crop, DAG and patch timing and CPU/GPU pixel agreement. It exercises production device-only projection and rounded composition with no window or application diagnostic sink."
+
+[[records]]
+path = "crates/sugarsubstitute/src/canvas_preparation_diagnostic/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:f92568d0b7d01b75e8826e1fab14255cf2d6d85fb33c77eea2cb64b895e7ebd3"
+disposition = "fixture"
+rationale = "Capture only isolated formatter output to prove fixed native preparation fields, unknown-state rejection and the unchanged 512-byte relay boundary."

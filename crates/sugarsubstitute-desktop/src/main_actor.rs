@@ -14,12 +14,15 @@ mod frame;
 #[cfg(feature = "native-composition")]
 mod hosting;
 mod panel;
+mod placement;
 mod probe_diagnostics;
 mod recovery;
 #[cfg(any(feature = "k1-native-qualification", test))]
 mod render_preview;
 mod retirement;
+mod session;
 mod timeout;
+mod window_lifecycle;
 use crate::{
     DesktopError, DesktopStartupObservation, MainWindowRequest, NativeMaterial,
     main_events::{Command, Events},
@@ -31,7 +34,6 @@ use crate::{
 use admission::Admission;
 use std::rc::Rc;
 use tao::{
-    event::WindowEvent,
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
     window::Window,
 };
@@ -86,6 +88,7 @@ pub(crate) struct MainActor {
     reused_environment:
         Option<webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Environment>,
     panel_bridge: Option<panel::bridge::Bridge>,
+    session: Option<session::Channel>,
     canvas_replies: panel::Replies,
     panel_messages: panel::HostMessages,
     panel_transport: panel::admission::Admission,
@@ -101,6 +104,7 @@ pub(crate) struct MainActor {
     navigations: u64,
     material: Option<NativeMaterial>,
     native_storage: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
+    placement: crate::main_placement::Observations,
     failure_observation: &'static str,
     probe_diagnostics: probe_diagnostics::ProbeDiagnostics,
     #[cfg(feature = "k1-native-qualification")]
@@ -172,6 +176,7 @@ impl MainActor {
             #[cfg(feature = "native-composition")]
             reused_environment: None,
             panel_bridge: None,
+            session: None,
             canvas_replies: panel::Replies::new(),
             panel_messages: panel::HostMessages::new(),
             panel_transport,
@@ -186,6 +191,7 @@ impl MainActor {
             navigations: 0,
             material: None,
             native_storage: Some(native_storage),
+            placement: crate::main_placement::Observations::default(),
             failure_observation: "None",
             probe_diagnostics: probe_diagnostics::ProbeDiagnostics::default(),
             #[cfg(feature = "k1-native-qualification")]
@@ -235,10 +241,12 @@ impl MainActor {
                     && self.stage != ConstructionStage::PausedEnvironment)
                 || self.events.as_ref().is_some_and(|events| events.remaining() != 0)
                 || self.panel_bridge_needs_progress()
+                || self.session.as_ref().is_some_and(session::Channel::needs_progress)
                 || self.canvas_reply_needs_progress()
                 || self.panel_message_needs_progress()
                 || self.panel_transport_needs_progress()
-                || self.preview_needs_progress())
+                || self.preview_needs_progress()
+                || self.placement.pending(self.revealed))
     }
     fn request(&self) -> Result<&MainWindowRequest, DesktopError> {
         self.request
@@ -323,6 +331,17 @@ impl MainActor {
         if self.stage != ConstructionStage::Live {
             return self.construct_step(target, proxy, title);
         }
+        if let Some(observation) = self.placement_step()? {
+            return Ok(Some(observation));
+        }
+        if let Some(session) = &mut self.session {
+            if !session.installed() && !session.install_step()? {
+                return Ok(None);
+            }
+            if let Some(observation) = session.step()? {
+                return Ok(Some(observation));
+            }
+        }
         if self.progress_panel_transport()? || self.progress_panel_messages()? {
             return Ok(None);
         }
@@ -404,93 +423,12 @@ impl MainActor {
 
     /// Return the current incomplete sample wake for the outer native event loop.
     pub(crate) fn next_probe_deadline(&self) -> Option<std::time::Instant> {
-        self.readiness.as_ref().and_then(MainReadiness::next_probe_deadline)
-    }
-
-    /// Reveal only after the application has accepted readiness and actual splash retirement.
-    pub(crate) fn reveal(
-        &mut self,
-        identity: crate::MainIdentity,
-    ) -> Result<DesktopStartupObservation, DesktopError> {
-        self.admission.frontend(identity)?;
-        if self.revealed || !self.readiness.as_ref().is_some_and(MainReadiness::ready) {
-            return Err(DesktopError::message(
-                "reveal_main",
-                "main readiness is missing or already revealed",
-            ));
-        }
-        self.view()?
-            .set_visible(true)
-            .map_err(|cause| DesktopError::new("show_main_view", cause))?;
-        self.window()?.set_visible(true);
-        self.window()?.set_focus();
-        self.view()?.focus().map_err(|cause| DesktopError::new("focus_main_view", cause))?;
-        // Native show/focus can resize the container before Tao delivers its queued resize event.
-        // Restore full-window browser bounds and raise retained caption peers before publication.
-        self.resize()?;
-        self.confirm_visible()?;
-        self.receivers()?.reveal_navigation();
-        self.revealed = true;
-        self.panel_transport
-            .synchronize(self.readiness.as_ref().and_then(MainReadiness::panel_context));
-        #[cfg(feature = "k1-native-qualification")]
-        tracing::info!(operation="main_revealed", identity=?identity,
-            "Actual ready Main reveal completed after splash retirement");
-        #[cfg(feature = "k1-native-qualification")]
-        crate::qualification_trace::progress(
-            crate::qualification_trace::Progress::MainRevealed,
-            identity,
-        );
-        Ok(DesktopStartupObservation::MainRevealed(identity))
-    }
-
-    /// Route only this actor's main window; caption/native controls share one owner.
-    pub(crate) fn window_event(
-        &mut self,
-        id: tao::window::WindowId,
-        event: &WindowEvent<'_>,
-    ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
-        if self.window.as_ref().is_none_or(|window| window.id() != id) {
-            return Ok(None);
-        }
-        if self.admission.closing() {
-            return Ok(None);
-        }
-        match event {
-            WindowEvent::CloseRequested | WindowEvent::Destroyed => {
-                return close_request::observe(self.revealed);
-            }
-            // Activation focuses this top-level window; a windowed browser takes it from here.
-            WindowEvent::Focused(true) => {
-                if let Some(focus) = &self.windowed_focus {
-                    focus.enter();
-                }
-            }
-            WindowEvent::Resized(_) => self.resize()?,
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.rescale(*scale_factor)?,
-            #[cfg(feature = "native-composition")]
-            WindowEvent::Moved(_) => self.composition_moved()?,
-            _ => {}
-        }
-        Ok(None)
-    }
-    /// Route caption actions through the same visibility and failure policy as native events.
-    pub(crate) fn activate(
-        &self,
-        id: u16,
-    ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
-        if self.admission.closing() {
-            return Ok(None);
-        }
-        match id {
-            1 => self.window()?.set_minimized(true),
-            2 => self.window()?.set_maximized(!self.window()?.is_maximized()),
-            3 => return close_request::observe(self.revealed),
-            _ => {
-                return Err(DesktopError::message("main_control", "unknown caption control"));
-            }
-        }
-        Ok(None)
+        self.readiness
+            .as_ref()
+            .and_then(MainReadiness::next_probe_deadline)
+            .into_iter()
+            .chain(self.session.as_ref().and_then(session::Channel::deadline))
+            .min()
     }
 }
 

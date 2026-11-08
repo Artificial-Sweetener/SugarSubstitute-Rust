@@ -116,13 +116,13 @@ impl Session {
             self.inputs.retiring.documents.push(document);
         }
         let routed = matches!(
-            self.inputs.route,
-            Some(route::Pending::Input { surface: pending, .. }) if pending != surface.identity
-        );
+            self.inputs.route.as_ref(),
+            Some(route::Pending::Input { surface: pending, .. }) if *pending != surface.identity
+        ) || matches!(self.inputs.route, Some(route::Pending::Original(_)));
         if self.document.input == Some(surface.identity) && !routed {
             self.inputs.route = Some(route::Pending::Output);
         }
-        if matches!(self.inputs.route, Some(route::Pending::Input { surface: pending, .. }) if pending == surface.identity)
+        if matches!(self.inputs.route.as_ref(), Some(route::Pending::Input { surface: pending, .. }) if *pending == surface.identity)
         {
             self.inputs.route = None;
         }

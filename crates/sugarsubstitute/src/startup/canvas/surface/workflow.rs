@@ -22,6 +22,8 @@ use sugarsubstitute_contracts::canvas_native::{
 use sugarsubstitute_contracts::canvas_surface::CanvasFileReference;
 use sugarsubstitute_desktop::{CanvasNativeReply, CanvasNativeRequestStorage};
 use sugarsubstitute_image_ops::Extent;
+mod replay;
+pub(in crate::startup) use replay::OutputReplay;
 /// Workflow requests that may wait for restored documents or for their input work.
 const MAX_HELD: usize = 16;
 /// The page's answer when input work fails for a reason other than a typed rejection.
@@ -40,6 +42,7 @@ struct Held {
     /// The input work it waits for; `None` while it waits for restored documents.
     ticket: Option<InputTicket>,
     reply: Option<InputReply>,
+    replay: Option<replay::Selection>,
 }
 
 /// The output selection last offered, re-offered when the Output route has nothing parked.
@@ -47,6 +50,7 @@ struct Held {
 struct OfferedOutput {
     file: CanvasFileReference,
     compared: Option<CanvasFileReference>,
+    correlation: Option<replay::Selection>,
 }
 
 /// Held workflow requests and the output the Output route returns to.
@@ -62,18 +66,36 @@ impl Workflow {
         &mut self,
         file: &CanvasFileReference,
         compared: Option<&CanvasFileReference>,
+        correlation: Option<(MainIdentity, Box<CanvasSurfaceRequest>, Arc<MemoryClaim>)>,
     ) {
-        self.output = Some(OfferedOutput { file: file.clone(), compared: compared.cloned() });
+        self.output = Some(OfferedOutput {
+            file: file.clone(),
+            compared: compared.cloned(),
+            correlation: correlation.map(|(identity, request, memory)| replay::Selection {
+                identity,
+                request,
+                _memory: memory,
+            }),
+        });
     }
 
     /// Drop the held requests of a retired navigation with their lane credit.
     pub(super) fn retire(&mut self, identity: MainIdentity) {
         self.held.retain(|held| held.identity != identity);
+        if self
+            .output
+            .as_ref()
+            .and_then(|output| output.correlation.as_ref())
+            .is_some_and(|selection| selection.identity == identity)
+        {
+            self.output = None;
+        }
     }
 
     /// Drop every held request at close.
     pub(super) fn close(&mut self) {
         self.held.clear();
+        self.output = None;
     }
 }
 
@@ -101,7 +123,13 @@ impl NativeSurface {
                 let failure = failure(CanvasFailureStatus::Unavailable, "Too many requests wait");
                 return self.answer(identity, request.failure_reply(&failure)?, claim);
             }
-            let held = Held { identity, request, claim, storage, ticket: None, reply: None };
+            let replay = if self.workflow.needs_replay(request.command()) {
+                self.workflow.output.as_ref().and_then(|output| output.correlation.clone())
+            } else {
+                None
+            };
+            let held =
+                Held { identity, request, claim, storage, ticket: None, reply: None, replay };
             self.workflow.held.push_back(held);
             return Ok(());
         }
@@ -117,6 +145,22 @@ impl NativeSurface {
         storage: CanvasNativeRequestStorage,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
+        if self.workflow.needs_replay(request.command()) {
+            if self.workflow.held.len() >= MAX_HELD {
+                let failure = failure(CanvasFailureStatus::Unavailable, "Too many requests wait");
+                return self.answer(identity, request.failure_reply(&failure)?, claim);
+            }
+            self.workflow.held.push_back(Held {
+                identity,
+                request,
+                claim,
+                storage,
+                ticket: None,
+                reply: None,
+                replay: self.workflow.output.as_ref().and_then(|output| output.correlation.clone()),
+            });
+            return Ok(());
+        }
         let outcome = match request.command() {
             CanvasWorkflowCommand::Sync { workflow, surfaces } => {
                 let specs = match self.surface_specs(identity, surfaces) {
@@ -173,7 +217,8 @@ impl NativeSurface {
         match outcome {
             Ok(Some(ticket)) => {
                 let ticket = Some(ticket);
-                let held = Held { identity, request, claim, storage, ticket, reply: None };
+                let held =
+                    Held { identity, request, claim, storage, ticket, reply: None, replay: None };
                 self.workflow.held.push_back(held);
                 Ok(())
             }
@@ -276,7 +321,11 @@ impl NativeSurface {
             self.answer_settled(held, payload, session)?;
         }
         while session.inputs_restored() && self.free_replies() > 0 {
-            let Some(index) = self.workflow.held.iter().position(|held| held.ticket.is_none())
+            let Some(index) = self
+                .workflow
+                .held
+                .iter()
+                .position(|held| held.ticket.is_none() && held.replay.is_none())
             else {
                 break;
             };
@@ -311,47 +360,6 @@ impl NativeSurface {
     /// Reply slots not yet occupied.
     pub(super) fn free_replies(&self) -> usize {
         self.replies.iter().filter(|slot| slot.is_none()).count()
-    }
-
-    /// Show the output selection again when the Output route had nothing parked behind the
-    /// input document.
-    fn offer_output_again(
-        &mut self,
-        identity: MainIdentity,
-        session: &mut Session,
-    ) -> Result<(), Box<dyn Error>> {
-        let Some(output) = self.workflow.output.clone() else { return Ok(()) };
-        let (Some(target), Ok(compared_target)) = (
-            super::operations::admitted_output(&output.file),
-            output
-                .compared
-                .as_ref()
-                .map(|file| super::operations::admitted_output(file).ok_or(()))
-                .transpose(),
-        ) else {
-            return Ok(());
-        };
-        let retention =
-            output.compared.is_none().then(|| self.retention_key(identity, &target)).flatten();
-        if let Some(key) = &retention
-            && session.reselect_retained(key)?
-        {
-            return Ok(());
-        }
-        let offered = self.offer_selection(
-            identity,
-            &output.file,
-            output.compared.as_ref(),
-            target,
-            compared_target,
-            session,
-        )?;
-        if offered == Some(true)
-            && let Some(key) = retention
-        {
-            session.retain_selection(key);
-        }
-        Ok(())
     }
 
     /// Translate a sync's surfaces into session specs with inert acquisition adapters. Every

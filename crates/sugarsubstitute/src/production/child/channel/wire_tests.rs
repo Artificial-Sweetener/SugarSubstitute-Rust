@@ -44,7 +44,10 @@ fn registered() -> Result<WireHandshake, Box<dyn Error>> {
     let count = FrameCodec::encode(
         &WireMessage {
             header: WireHeader { request: Some(request), ..header },
-            payload: WirePayload::Reply(ReplyOutcome::Acknowledged),
+            payload: WirePayload::Reply(ReplyOutcome::Registered {
+                backend_data_disposition:
+                    sugarsubstitute_contracts::configuration::BackendDataDisposition::External,
+            }),
         },
         &mut bytes,
     )?;

@@ -14,6 +14,7 @@
 //! the startup load and saves whatever is still unsaved as a final owned job bounded by the
 //! shutdown cutoff; a save that cannot finish by then leaves the previous archive intact.
 mod metadata;
+mod workspace;
 
 use super::*;
 use crate::input_documents::{
@@ -34,6 +35,7 @@ const POLICY: AutosavePolicy = AutosavePolicy {
 /// Startup restore and automatic saving of one session directory.
 pub(in crate::native_canvas::session) struct Persistence {
     store: InputDocumentStore,
+    source: Option<InputDocumentStore>,
     load: Load,
     autosave: Option<Autosave>,
     generation: u64,
@@ -49,6 +51,7 @@ enum FinalSave {
 }
 
 enum Load {
+    WaitingHost,
     Pending,
     Running(OwnedJob<Restored, StoreError>),
     Done,
@@ -73,15 +76,47 @@ impl Persistence {
 impl Session {
     /// Persist input documents in `store`'s session directory. Call before the canvas runtime
     /// starts; the archive loads once canvas storage is ready.
-    pub(crate) fn persist_inputs(&mut self, store: InputDocumentStore) {
+    pub(crate) fn persist_inputs(
+        &mut self,
+        store: InputDocumentStore,
+        plan: crate::input_documents::InputRestorePlan,
+    ) {
+        let waiting = matches!(plan, crate::input_documents::InputRestorePlan::AwaitingAssociation);
+        let source = match plan {
+            crate::input_documents::InputRestorePlan::Verified(source) => Some(source),
+            _ => None,
+        };
         self.inputs.persistence = Some(Persistence {
             store,
-            load: Load::Pending,
+            source,
+            load: if waiting { Load::WaitingHost } else { Load::Pending },
             autosave: None,
             generation: 0,
             signature: None,
             final_save: None,
         });
+    }
+    /// Resolve the existing host-association hold before admitting any workflow input sync.
+    /// # Errors
+    /// Refuses duplicate resolution or a second unresolved plan.
+    pub(crate) fn resolve_input_association(
+        &mut self,
+        plan: crate::input_documents::InputRestorePlan,
+    ) -> Result<(), Box<dyn Error>> {
+        let persistence =
+            self.inputs.persistence.as_mut().ok_or("Input persistence unavailable")?;
+        if !matches!(persistence.load, Load::WaitingHost) {
+            return Err("Input association is already resolved".into());
+        }
+        persistence.source = match plan {
+            crate::input_documents::InputRestorePlan::Current => None,
+            crate::input_documents::InputRestorePlan::Verified(source) => Some(source),
+            crate::input_documents::InputRestorePlan::AwaitingAssociation => {
+                return Err("Input association remains unresolved".into());
+            }
+        };
+        persistence.load = Load::Pending;
+        Ok(())
     }
 
     /// Whether archived documents, if any, are restored, so workflow syncs may proceed.
@@ -115,7 +150,12 @@ impl Session {
         )?;
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         let persistence = self.inputs.persistence.as_mut().ok_or("Input persistence vanished")?;
-        match persistence.store.submit_load(&runtime.client, &runtime.scope, spec, memory) {
+        match persistence.source.as_ref().unwrap_or(&persistence.store).submit_load(
+            &runtime.client,
+            &runtime.scope,
+            spec,
+            memory,
+        ) {
             Ok(job) => persistence.load = Load::Running(job),
             Err(cause) if activity::retryable(&cause) => {}
             Err(cause) => return Err(cause.into()),

@@ -9,7 +9,8 @@ pub(super) const NATIVE_BYTES: u64 = 512 * 1024;
 /// Reject an oversized compiled four-peer owner before the original metadata claim/native initialization.
 pub(super) fn check_storage() -> Result<(), DesktopError> {
     let required = Controls::storage_bytes(4)
-        .and_then(|controls| controls.checked_add(size_of::<MainActor>()));
+        .and_then(|controls| controls.checked_add(size_of::<MainActor>()))
+        .and_then(|bytes| bytes.checked_add(placement::STORAGE_BYTES as usize));
     if required.is_none_or(|bytes| bytes as u64 > NATIVE_BYTES) {
         return Err(DesktopError::message(
             "claim_main_native_metadata",

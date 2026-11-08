@@ -116,6 +116,9 @@ impl ParentLifecycle {
         }
         let reply = record.reply.ok_or(ParentError::WrongPhase)?;
         let payload = match reply {
+            Reply::Registered => ReplyOutcome::Registered {
+                backend_data_disposition: resources.backend_data_disposition,
+            },
             Reply::Acknowledged => ReplyOutcome::Acknowledged,
             Reply::Folder { identity, next } => {
                 ReplyOutcome::FolderChunkAccepted { identity, next_offset_units: next }
@@ -161,6 +164,9 @@ impl ParentLifecycle {
                     frontend: VersionLabel::new(source.frontend_version())?,
                     sugarcubes: VersionLabel::new(source.cube_version())?,
                     backend_peer: peer(readiness)?,
+                    backend_binding: resources.backend.backend_binding(lease.resource)?,
+                    installation: resources.installation.as_str(),
+                    backend_data_disposition: resources.backend_data_disposition,
                 })
             }
             Reply::Released => ReplyOutcome::Released,
@@ -178,6 +184,9 @@ impl ParentLifecycle {
                     frontend: VersionLabel::new(source.frontend_version())?,
                     sugarcubes: VersionLabel::new(source.cube_version())?,
                     backend_peer: peer(proof)?,
+                    backend_binding: resources.backend.backend_binding(lease.resource)?,
+                    installation: resources.installation.as_str(),
+                    backend_data_disposition: resources.backend_data_disposition,
                 })
             }
             Reply::Cancelled => ReplyOutcome::Cancelled,

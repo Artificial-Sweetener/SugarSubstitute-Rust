@@ -8,6 +8,7 @@ use super::{
     decode, encode, main_fields, reply,
 };
 use sugarsubstitute_contracts::{
+    configuration::BackendDataDisposition,
     lifecycle::RunKey,
     transcript::{MAX_BATCH_BYTES, OutputGap, OutputStream, StreamSequence},
 };
@@ -18,6 +19,10 @@ pub(super) fn write(
     writer: &mut Writer<'_>,
 ) -> Result<(), ProtocolError> {
     match value {
+        ReplyOutcome::Registered { backend_data_disposition } => {
+            writer.u8(17)?;
+            writer.u8(disposition_tag(backend_data_disposition))
+        }
         ReplyOutcome::Acknowledged => writer.u8(1),
         ReplyOutcome::Pending(lease) => {
             writer.u8(2)?;
@@ -31,7 +36,12 @@ pub(super) fn write(
             write_version(context.frontend, writer)?;
             write_version(context.sugarcubes, writer)?;
             writer.u32(context.backend_peer.process_id.get())?;
-            writer.u64(context.backend_peer.creation_time_100ns.get())
+            writer.u64(context.backend_peer.creation_time_100ns.get())?;
+            writer.put(context.backend_binding.as_bytes())?;
+            sugarsubstitute_contracts::installation::InstallationId::validate(context.installation)
+                .map_err(|_| ProtocolError::Identity)?;
+            writer.put(context.installation.as_bytes())?;
+            writer.u8(disposition_tag(context.backend_data_disposition()))
         }
         ReplyOutcome::Released => writer.u8(4),
         ReplyOutcome::Cancelled => writer.u8(6),
@@ -91,6 +101,7 @@ pub(super) fn read<'a>(
     run: RunKey,
 ) -> Result<ReplyOutcome<'a>, ProtocolError> {
     Ok(match input.u8()? {
+        17 => ReplyOutcome::Registered { backend_data_disposition: read_disposition(input)? },
         1 => ReplyOutcome::Acknowledged,
         2 => ReplyOutcome::Pending(decode::lease(input)?),
         3 => ReplyOutcome::Granted(GrantedContext {
@@ -100,6 +111,11 @@ pub(super) fn read<'a>(
             frontend: read_version(input)?,
             sugarcubes: read_version(input)?,
             backend_peer: read_backend_peer(input)?,
+            backend_binding: sugarsubstitute_contracts::lifecycle::BackendBindingDigest::from_bytes(
+                *input.array()?,
+            ),
+            installation: read_installation(input)?,
+            backend_data_disposition: read_disposition(input)?,
         }),
         4 => ReplyOutcome::Released,
         5 => ReplyOutcome::Reloaded(GrantedContext {
@@ -109,6 +125,11 @@ pub(super) fn read<'a>(
             frontend: read_version(input)?,
             sugarcubes: read_version(input)?,
             backend_peer: read_backend_peer(input)?,
+            backend_binding: sugarsubstitute_contracts::lifecycle::BackendBindingDigest::from_bytes(
+                *input.array()?,
+            ),
+            installation: read_installation(input)?,
+            backend_data_disposition: read_disposition(input)?,
         }),
         6 => ReplyOutcome::Cancelled,
         7 => ReplyOutcome::Failed(reply::failure(input.u8()?)?),
@@ -146,6 +167,21 @@ pub(super) fn read<'a>(
         },
         _ => return Err(ProtocolError::UnsupportedTag),
     })
+}
+/// Keep the wire grammar closed independently of the Rust enum layout.
+fn disposition_tag(value: BackendDataDisposition) -> u8 {
+    match value {
+        BackendDataDisposition::External => 1,
+        BackendDataDisposition::InstallationOwned => 2,
+    }
+}
+/// Missing or unknown policy never becomes installation-owned execution.
+fn read_disposition(input: &mut Reader<'_>) -> Result<BackendDataDisposition, ProtocolError> {
+    match input.u8()? {
+        1 => Ok(BackendDataDisposition::External),
+        2 => Ok(BackendDataDisposition::InstallationOwned),
+        _ => Err(ProtocolError::UnsupportedTag),
+    }
 }
 /// Validate the closed Main cohort count before any caller-owned output mutation.
 fn read_backend_peer(input: &mut Reader<'_>) -> Result<BackendPeer, ProtocolError> {
@@ -224,4 +260,11 @@ fn read_output<'a>(input: &mut Reader<'a>) -> Result<OutputDelivery<'a>, Protoco
     }
     let bytes = input.take(count)?;
     Ok(OutputDelivery { lease, delivery_id, stream, sequence, gap, end, bytes })
+}
+
+fn read_installation<'a>(input: &mut Reader<'a>) -> Result<&'a str, ProtocolError> {
+    let value = std::str::from_utf8(input.take(32)?).map_err(|_| ProtocolError::Identity)?;
+    sugarsubstitute_contracts::installation::InstallationId::validate(value)
+        .map_err(|_| ProtocolError::Identity)?;
+    Ok(value)
 }

@@ -240,6 +240,25 @@ impl WindowsResourceClaims {
         }
         Ok(&entry.proof.as_ref().ok_or(ClaimAdmissionError::Busy)?.configuration)
     }
+    /// Borrow the existing native backend identity hash after successful resolution.
+    ///
+    /// Root/interpreter aliases and casing share their actual native object identity. The
+    /// original account, exact arguments and port remain bound. This correlation value grants
+    /// no handles or process authority and must travel only with authenticated current facts.
+    /// # Errors
+    /// Rejects foreign, pending, failed or retired resolution tickets.
+    pub fn resolved_backend_binding(
+        &self,
+        ticket: &ResolutionTicket,
+    ) -> Result<sugarsubstitute_contracts::lifecycle::BackendBindingDigest, ClaimAdmissionError>
+    {
+        self.resolved_configuration(ticket)?;
+        let entry = self.resolutions[self.resolution_index(ticket)?]
+            .as_ref()
+            .ok_or(ClaimAdmissionError::Identity)?;
+        let proof = entry.proof.as_ref().ok_or(ClaimAdmissionError::Busy)?;
+        Ok(sugarsubstitute_contracts::lifecycle::BackendBindingDigest::from_bytes(proof.digest))
+    }
     fn resolution_index(&self, ticket: &ResolutionTicket) -> Result<usize, ClaimAdmissionError> {
         if !Arc::ptr_eq(&self.origin, &ticket.origin) {
             return Err(ClaimAdmissionError::Identity);

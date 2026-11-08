@@ -73,6 +73,48 @@ impl StartupBackend for ProductionChild {
         };
         current.then_some(backend)
     }
+    fn workspace_context(
+        &self,
+        prepared: &Self::Prepared,
+    ) -> BackendResult<Option<crate::startup::WorkspaceContext>> {
+        let Some(backend) = self.backend_binding else {
+            return Ok(None);
+        };
+        if self.shutdown.closing()
+            || self.lease.is_none()
+            || self.attempt.is_some()
+            || self
+                .running_backend
+                .as_ref()
+                .is_some_and(|running| running.reload_lease(self.identity).is_err())
+        {
+            return Ok(None);
+        }
+        let installation =
+            self.session_installation.clone().ok_or("Authenticated host correlation absent")?;
+        let origin =
+            prepared.session().connection_origin().ok_or("Authenticated frontend origin absent")?;
+        Ok(Some(crate::startup::WorkspaceContext {
+            identity: self.identity,
+            profile: prepared.session().configuration().profile().clone(),
+            installation,
+            backend,
+            origin,
+            peer: self.session_peer.ok_or("Authenticated listener peer absent")?,
+        }))
+    }
+    fn configure_workspace(
+        &mut self,
+        bootstrap: sugarsubstitute_desktop::SessionBootstrap,
+        placement: Option<sugarsubstitute_contracts::desktop_session::wire::SessionPlacement>,
+    ) -> BackendResult<()> {
+        if self.main.pending() || self.main.request_consumed {
+            return Err("Native main construction already admitted".into());
+        }
+        self.workspace_bootstrap = Some(bootstrap);
+        self.workspace_placement = placement;
+        Ok(())
+    }
     fn main_construction_pending(&self) -> bool {
         ProductionChild::main_construction_pending(self)
     }
@@ -106,6 +148,9 @@ impl StartupBackend for ProductionChild {
     }
     fn advance_reload(&mut self, prepared: &mut Self::Prepared) -> BackendResult<()> {
         ProductionChild::advance_reload(self, prepared)
+    }
+    fn begin_workspace_close(&mut self) -> BackendResult<ShutdownInitiation> {
+        ProductionChild::begin_workspace_close(self)
     }
     fn begin_shutdown(&mut self) -> BackendResult<ShutdownInitiation> {
         ProductionChild::begin_shutdown(self)

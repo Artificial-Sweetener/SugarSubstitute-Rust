@@ -4,6 +4,15 @@
 use super::*;
 use sugarsubstitute_contracts::execution::ScopeId;
 impl CoordinatorBackend {
+    /// Return only correlation retained from the existing admitted canonical target owner.
+    /// A matching digest never substitutes for current readiness, lease or native peer checks.
+    pub(crate) fn backend_binding(&self, key: ResourceKey) -> Result<BackendBindingDigest> {
+        let record =
+            self.records[self.index(key)?].as_ref().ok_or(LifecycleRejection::StaleIdentity)?;
+        record
+            .backend_binding
+            .ok_or_else(|| Box::new(LifecycleRejection::WrongPhase) as Box<dyn Error + Send + Sync>)
+    }
     pub(crate) fn cleanup_attempt(
         &mut self,
         binding: ClientBinding,

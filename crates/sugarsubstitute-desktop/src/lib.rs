@@ -41,6 +41,8 @@ mod main_downloads;
 mod main_environment;
 mod main_hosting;
 mod main_memory_contract;
+mod main_placement;
+pub use main_placement::MainPlacementObservation;
 #[cfg(target_os = "windows")]
 mod main_native_delivery;
 mod main_navigation;
@@ -55,6 +57,10 @@ mod main_readiness_storage;
 mod main_readiness_types;
 #[cfg(any(target_os = "windows", test))]
 mod main_reload;
+mod main_session_contract;
+#[cfg(any(windows, test))]
+mod main_session_ingress;
+mod main_session_media;
 mod main_surface_contract;
 /// Bounded observational development trace records; feature-off builds expose none.
 #[cfg(feature = "k1-native-qualification")]
@@ -188,6 +194,11 @@ pub use main_hosting::MainHosting;
 pub use main_memory_contract::{MemoryCommand, MemoryObservation};
 pub use main_panel_contract::{PanelCommand, PanelObservation};
 pub use main_panel_ingress_receipt::{PanelIngressReceipt, PanelIngressReceiptError};
+pub use main_session_contract::{SessionBootstrap, SessionCommand, SessionObservation};
+pub use main_session_media::{
+    MAX_MEDIA_BYTES, SessionMediaFailure, SessionMediaObservation, SessionMediaRange,
+    SessionMediaReply,
+};
 pub use main_surface_contract::{
     SurfaceObservation, SurfacePresentation, SurfaceReply, SurfaceReplyError,
 };

@@ -46,6 +46,90 @@ impl Drop for Parent {
     }
 }
 pub(super) struct Input(Handle);
+
+/// One immutable source together with every native ancestry pin that selected it.
+pub(super) struct RetainedInput {
+    file: Input,
+    parent: Parent,
+    failed_parent: Option<Arc<io::Error>>,
+}
+impl RetainedInput {
+    pub(super) fn open(
+        path: &Path,
+        memory: &sugarsubstitute_contracts::execution::MemoryLease,
+        context: &JobContext,
+    ) -> io::Result<Self> {
+        files::lexical(path)?;
+        let budget =
+            Budget::Protected(Arc::new(memory.claim(64 * 1024).map_err(io::Error::other)?));
+        let parent = effect(context, || {
+            Directory::open(
+                path.parent().ok_or_else(|| invalid("Retained source parent absent"))?,
+                false,
+            )
+        })?;
+        let parent = Parent { directory: Some(parent), budget: budget.clone() };
+        let file = effect(context, || {
+            std::fs::OpenOptions::new().read(true).share_mode(1).custom_flags(0x0020_0000).open(
+                parent
+                    .directory()?
+                    .path()
+                    .join(path.file_name().ok_or_else(|| invalid("Retained source leaf absent"))?),
+            )
+        })?;
+        let input = Input(Handle::new(HANDLE(file.into_raw_handle()), budget));
+        let mut result = Self { file: input, parent, failed_parent: None };
+        let validation = (|| {
+            use std::os::windows::fs::MetadataExt;
+            let file = result.file.0.borrow_file().map_err(io::Error::other)?;
+            let metadata = file.metadata()?;
+            if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 {
+                return Err(invalid(
+                    "Retained source must be an ordinary file without redirection",
+                ));
+            }
+            files::single_link(&file)?;
+            check(context)
+        })();
+        match validation {
+            Ok(()) => Ok(result),
+            Err(cause) => Err(retirement_error(cause, result.close())),
+        }
+    }
+    pub(super) fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        self.file.read(bytes)
+    }
+    pub(super) fn length(&mut self) -> io::Result<u64> {
+        self.file.length()
+    }
+    pub(super) fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.file.seek(position)
+    }
+    pub(super) fn close(&mut self) -> io::Result<()> {
+        if let Some(cause) = &self.failed_parent {
+            return Err(io::Error::other(ParentRetirement(cause.clone())));
+        }
+        self.file.close()?;
+        if let Err(cause) = self.parent.close() {
+            let cause = Arc::new(cause);
+            self.failed_parent = Some(cause.clone());
+            return Err(io::Error::other(ParentRetirement(cause)));
+        }
+        Ok(())
+    }
+}
+#[derive(Debug)]
+struct ParentRetirement(Arc<io::Error>);
+impl std::fmt::Display for ParentRetirement {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Retained artifact ancestry did not retire")
+    }
+}
+impl std::error::Error for ParentRetirement {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.0.as_ref())
+    }
+}
 impl Input {
     pub(super) fn open(path: &Path, context: &JobContext) -> io::Result<Self> {
         check(context)?;

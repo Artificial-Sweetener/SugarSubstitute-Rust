@@ -349,6 +349,7 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
         target: target.clone(),
         budget,
         resolved: None,
+        backend_binding: Some(BackendBindingDigest::from_bytes([7; 32])),
         ready_origin: None,
         ready_context: None,
         managed_exit: None,

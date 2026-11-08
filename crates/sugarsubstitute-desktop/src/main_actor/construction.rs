@@ -49,7 +49,10 @@ impl MainActor {
                         settings.logical_width,
                         settings.logical_height,
                     ))
-                    .with_min_inner_size(LogicalSize::new(304, 240))
+                    .with_min_inner_size(LogicalSize::new(
+                        crate::main_placement::MINIMUM_SIZE[0],
+                        crate::main_placement::MINIMUM_SIZE[1],
+                    ))
                     .with_decorations(false)
                     .with_resizable(true)
                     .with_transparent(true)
@@ -72,6 +75,7 @@ impl MainActor {
                     self.window()?.clone(),
                     self.request()?.settings().dark,
                 )?);
+                self.restore_placement()?;
                 self.material = self.presenter.as_ref().map(Presenter::material);
                 self.stage = ConstructionStage::Controls;
             }
@@ -256,12 +260,24 @@ impl MainActor {
                     self.attach_windowed_focus()?;
                 }
                 if self.receivers.is_none() {
+                    if self.session.is_none()
+                        && let Some(bootstrap) = self.request()?.session_bootstrap()
+                    {
+                        self.session = Some(super::session::Channel::new(
+                            self.identity(),
+                            bootstrap.clone(),
+                            self.view()?.webview(),
+                            self.events()?.clone(),
+                            self.request()?.storage_lease(),
+                        )?);
+                    }
                     self.receivers = Some(crate::windows_main_receivers::Receivers::new(
                         self.view()?.webview(),
                         self.events()?.clone(),
                         self.request()?.storage_lease(),
                         self.request()?.origin(),
                         self.bulk.clone(),
+                        self.session.as_ref().and_then(super::session::Channel::media),
                     )?);
                 } else if self
                     .receivers

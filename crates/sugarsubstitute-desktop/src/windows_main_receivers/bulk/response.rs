@@ -47,6 +47,55 @@ pub(super) fn missing(
     create(environment, None, 404, w!("Not Found"), PRIVATE)
 }
 
+/// Serve worker-verified bytes or exact HEAD metadata with no cache or cross-origin grant.
+pub(in crate::windows_main_receivers) fn media(
+    environment: &ICoreWebView2Environment,
+    response: Result<crate::main_session_media::MediaResponse, crate::SessionMediaFailure>,
+) -> Result<ICoreWebView2WebResourceResponse, DesktopError> {
+    use crate::{SessionMediaFailure, main_session_media::MediaResponse};
+    match response {
+        Ok(MediaResponse::Metadata { mime, bytes, animated }) => {
+            let headers = format!(
+                "Content-Type: {mime}\r\nContent-Length: {bytes}\r\nAccept-Ranges: bytes\r\nX-SugarSubstitute-Animated: {}\r\n{PRIVATE}",
+                u8::from(animated)
+            );
+            create(environment, None, 200, w!("OK"), &headers)
+        }
+        Ok(MediaResponse::Data(body)) => {
+            let length = body.bytes.len();
+            let mut headers = format!(
+                "Content-Type: {}\r\nContent-Length: {length}\r\nAccept-Ranges: bytes\r\n{PRIVATE}",
+                body.mime
+            );
+            let (status, reason) = if let Some((start, total)) = body.range {
+                let end = start
+                    .checked_add(length as u64)
+                    .and_then(|end| end.checked_sub(1))
+                    .ok_or_else(|| {
+                        DesktopError::message("session_media_response", "range arithmetic overflow")
+                    })?;
+                headers.push_str(&format!("\r\nContent-Range: bytes {start}-{end}/{total}"));
+                (206, w!("Partial Content"))
+            } else {
+                (200, w!("OK"))
+            };
+            let stream: IStream =
+                Body { bytes: body.bytes, position: AtomicU64::new(0), _claim: body.claim }.into();
+            create(environment, Some(&stream), status, reason, &headers)
+        }
+        Err(SessionMediaFailure::TooLarge) => {
+            create(environment, None, 413, w!("Content Too Large"), PRIVATE)
+        }
+        Err(SessionMediaFailure::Stale | SessionMediaFailure::Cancelled) => {
+            create(environment, None, 410, w!("Gone"), PRIVATE)
+        }
+        Err(SessionMediaFailure::Unavailable) => missing(environment),
+        Err(SessionMediaFailure::Failed) => {
+            create(environment, None, 500, w!("Internal Server Error"), PRIVATE)
+        }
+    }
+}
+
 fn create(
     environment: &ICoreWebView2Environment,
     content: Option<&IStream>,

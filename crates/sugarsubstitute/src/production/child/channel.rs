@@ -224,6 +224,14 @@ impl ChildChannel {
         self.admission.open() && self.exchange == Exchange::Application && self.peer.is_some()
     }
 
+    /// Observe parent-derived execution policy only after exact registration on the actual
+    /// authenticated native channel. Native storage and backend authority remain independent.
+    pub(super) fn backend_data_disposition(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::configuration::BackendDataDisposition> {
+        self.registered().then(|| self.handshake.as_ref()?.backend_data_disposition()).flatten()
+    }
+
     /// Borrow completed wire binding; neither method grants browser/backend readiness.
     pub(super) fn binding(&self) -> Option<&WireHandshake> {
         if !self.admission.open() {

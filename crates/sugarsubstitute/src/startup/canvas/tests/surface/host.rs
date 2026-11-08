@@ -151,6 +151,11 @@ impl Host {
         Ok(Self { fixture: Fixture::new()?, native: Compositor::default(), page_delay })
     }
 
+    /// Start from a prepared visible empty attachment, before any source or native pixels.
+    pub(super) fn empty() -> Result<Self, Box<dyn Error>> {
+        Ok(Self { fixture: Fixture::empty()?, native: Compositor::default(), page_delay: 0 })
+    }
+
     /// Start from a prepared visible attachment whose selections fetch from `backend`.
     pub(super) fn comfy(backend: crate::startup::CanvasBackend) -> Result<Self, Box<dyn Error>> {
         Ok(Self { fixture: Fixture::comfy(backend)?, native: Compositor::default(), page_delay: 0 })

@@ -40,6 +40,35 @@ impl Drop for Opaque {
 }
 
 #[test]
+fn newly_named_polling_boundaries_preserve_private_causes_without_callbacks()
+-> Result<(), Box<dyn Error>> {
+    for stage in [
+        StartupConsumeStage::FrontendReload,
+        StartupConsumeStage::CanvasBackendRefresh,
+        StartupConsumeStage::AppearancePublication,
+    ] {
+        let callbacks = Arc::new(AtomicUsize::new(0));
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let original = Box::new(Opaque { callbacks: callbacks.clone(), dropped: dropped.clone() });
+        let address = original.as_ref() as *const Opaque;
+        let error = observe::<ProductionChild, ()>(stage, Err(original))
+            .err()
+            .ok_or("Polling failure absent")?;
+        let retained = error.downcast_ref::<StartupConsumeFailure>().ok_or("Stage absent")?;
+        assert_eq!(retained.stage(), stage);
+        assert!(std::ptr::eq(
+            address,
+            retained.original().downcast_ref::<Opaque>().ok_or("Original absent")?
+        ));
+        assert_eq!(callbacks.load(Ordering::SeqCst), 0);
+        drop(error);
+        assert_eq!(dropped.load(Ordering::SeqCst), 1);
+        assert_eq!(callbacks.load(Ordering::SeqCst), 0);
+    }
+    Ok(())
+}
+
+#[test]
 fn actual_consume_error_transfer_keeps_first_stage_original_box_and_opaque_callbacks_inert()
 -> Result<(), Box<dyn Error>> {
     let callbacks = Arc::new(AtomicUsize::new(0));

@@ -14,6 +14,8 @@ pub mod viewer;
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod authority_clock;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
+mod canvas_preparation_diagnostic;
+#[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
 mod canvas_surface_diagnostic;
 mod capture;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
@@ -66,6 +68,7 @@ mod transcript_snapshot;
 pub mod updates;
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod worker_environment;
+pub mod workspace_session;
 pub use transcript_snapshot::{OutputSnapshot, SourceCustody};
 
 use std::{error::Error, process::ExitCode, time::Instant};

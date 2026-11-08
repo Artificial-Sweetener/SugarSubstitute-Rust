@@ -46,7 +46,11 @@ mod shutdown_origin;
 use crate::{job_sequence::JobSequence, preparation::PreparationDriver};
 #[cfg(all(windows, feature = "native-composition"))]
 pub use backend::CanvasBackend;
+#[cfg(windows)]
+pub use backend::WorkspaceContext;
 pub use backend::{BackendResult, PreparedStartup, StartupBackend};
+#[cfg(all(windows, feature = "native-composition"))]
+mod workspace;
 use execution::StartupExecution;
 use policy::StartupPolicy;
 pub use scopes::StartupScopes;
@@ -83,6 +87,8 @@ pub struct StartupHost<B: StartupBackend> {
     memory: Option<memory::MemoryGovernor>,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
+    #[cfg(all(windows, feature = "native-composition"))]
+    workspace: Option<workspace::WorkspaceWork>,
     policy: StartupPolicy,
     startup: Option<B::Prepared>,
     child: B,
@@ -153,6 +159,8 @@ impl<B: StartupBackend> StartupHost<B> {
             memory: None,
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
+            #[cfg(all(windows, feature = "native-composition"))]
+            workspace: None,
             policy: StartupPolicy::new(run, launch),
             startup: None,
             child,
@@ -229,11 +237,9 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
         if frame.is_some()
             && let Some(view) = &mut self.view
         {
-            let appearance = self
-                .preparation
-                .as_ref()
-                .and_then(PreparationDriver::published_appearance)
-                .ok_or("Published startup frame has no retained appearance")?;
+            let appearance =
+                self.preparation.as_ref().and_then(PreparationDriver::published_appearance);
+            let appearance = consume_diagnostic::published_appearance::<B>(appearance)?;
             view.publish_controls(appearance);
         }
         Ok(frame)
@@ -460,6 +466,12 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         }
         #[cfg(all(windows, feature = "native-composition"))]
         if let Some(command) = self.canvas.as_mut().and_then(canvas::EmbeddedCanvas::take_command) {
+            return Ok(Some(command));
+        }
+        #[cfg(all(windows, feature = "native-composition"))]
+        if let Some(workspace) = &mut self.workspace
+            && let Some(command) = workspace.next_command()?
+        {
             return Ok(Some(command));
         }
         self.child.take_command()

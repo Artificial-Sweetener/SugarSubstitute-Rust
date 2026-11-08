@@ -37,6 +37,8 @@ macro_rules! tokens {
     };
 }
 
+pub(crate) use tokens;
+
 tokens! {
     /// One step in a surface request's lifecycle.
     Stage {

@@ -84,6 +84,16 @@ macro_rules! foreign_tokens {
 /// observation's payload and grants no authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StartupObservationKind {
+    /// A dedicated workspace session message.
+    SessionMessage,
+    /// A retained session media request.
+    SessionMediaRequested,
+    /// Cancellation of an original native media request.
+    SessionMediaCancelled,
+    /// Native normal placement facts.
+    MainPlacementObserved,
+    /// A failed explicit placement capture.
+    MainPlacementCaptureFailed,
     /// Native window activity facts.
     NativeActivity,
     /// A processed UI challenge.
@@ -148,6 +158,11 @@ pub enum StartupCanvasMessageCause {
 }
 
 closed_tokens!(StartupObservationKind {
+    SessionMessage,
+    SessionMediaRequested,
+    SessionMediaCancelled,
+    MainPlacementObserved,
+    MainPlacementCaptureFailed,
     NativeActivity,
     UiChallengeProcessed,
     NativeRetired,
@@ -306,6 +321,9 @@ closed_tokens!(StartupConsumeStage {
     RenderDelivery,
     ChildDelivery,
     CanvasDelivery,
+    FrontendReload,
+    CanvasBackendRefresh,
+    AppearancePublication,
     StartupEvent,
     PolicyObservation,
     EffectRouting,

@@ -7,6 +7,9 @@ use crate::native_canvas::session::RetentionKey;
 use crate::native_canvas::session::SelectedOriginals;
 use sugarsubstitute_canvas::NavigationCommand;
 use sugarsubstitute_contracts::canvas_surface::CanvasFileReference;
+#[cfg(test)]
+#[path = "operations/session_originals.rs"]
+mod session_originals;
 
 impl NativeSurface {
     /// Apply an already-qualified operation through its authoritative session owner.
@@ -19,6 +22,16 @@ impl NativeSurface {
         operation: CanvasSurfaceOperation,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
+        if matches!(
+            operation,
+            CanvasSurfaceOperation::Select { .. } | CanvasSurfaceOperation::Overview(_)
+        ) && self
+            .session_source
+            .as_ref()
+            .is_some_and(super::super::session_source::SessionSource::unavailable)
+        {
+            return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
+        }
         match operation {
             CanvasSurfaceOperation::Prepare => Err("Canvas preparation was not admitted".into()),
             CanvasSurfaceOperation::Release => self.release(identity, request, claim, session),
@@ -116,6 +129,8 @@ impl NativeSurface {
                 }
             }
             CanvasSurfaceOperation::Select { file, comparison, inspection, .. } => {
+                let correlation =
+                    self.session_source.as_ref().map(|source| source.correlation_memory());
                 let compared = comparison.as_ref().map(|comparison| &comparison.file);
                 let drag_name = compared.is_none().then(|| output_leaf(&file));
                 let Some(target) = admitted_output(&file) else {
@@ -127,8 +142,29 @@ impl NativeSurface {
                     return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
                 };
                 self.fence_previews(session)?;
-                // Only a single output is retained; comparisons are always acquired again.
-                let retention = compared.is_none().then(|| self.retention_key(identity, &target));
+                // Verified keys also identify a comparison parked behind an input document;
+                // the document owner excludes comparisons from its evictable retention.
+                let verified = self
+                    .session_source
+                    .as_ref()
+                    .is_some_and(|source| source.retention_key().is_some());
+                let retention =
+                    (compared.is_none() || verified).then(|| self.retention_key(identity, &target));
+                if self.workflow.same_originals(&request)
+                    && let (Some(key), Some(hashes)) = (
+                        retention.as_ref().and_then(Option::as_ref),
+                        self.session_source.as_ref().and_then(|source| source.original_hashes()),
+                    )
+                    && let Err(cause) = session.retain_output_original(key, &hashes)
+                {
+                    tracing::warn!(operation="canvas_original_promotion_refused",request_id=request.request_id(),cause=%cause,"Authored output retained after original mismatch");
+                    return self.reply(
+                        identity,
+                        &request,
+                        CanvasSurfaceReplyStatus::Unavailable,
+                        claim,
+                    );
+                }
                 match retention.flatten() {
                     Some(key) if session.reselect_retained(&key)? => {
                         tracing::debug!(
@@ -170,7 +206,11 @@ impl NativeSurface {
                         }
                     }
                 }
-                self.workflow.offered(&file, compared);
+                self.workflow.offered(
+                    &file,
+                    compared,
+                    correlation.map(|memory| (identity, request.clone(), memory)),
+                );
                 session.frame_selection(inspection.map(|inspection| NavigationCommand::Frame {
                     center: inspection.center(),
                     span: inspection.span(),
@@ -253,6 +293,12 @@ impl NativeSurface {
         identity: MainIdentity,
         target: &ComfyViewTarget,
     ) -> Option<RetentionKey> {
+        if let Some(source) = &self.session_source {
+            let key = source.retention_key();
+            if key.is_some() || !source.live_retention() {
+                return key;
+            }
+        }
         #[cfg(test)]
         if self.fixture_output.is_some() {
             return Some(RetentionKey::new(&format!("fixture/{}", target.as_str())));

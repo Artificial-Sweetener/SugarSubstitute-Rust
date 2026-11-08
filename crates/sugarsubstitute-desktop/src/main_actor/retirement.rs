@@ -14,6 +14,10 @@ impl MainActor {
             return Err(DesktopError::message("retire_main", "main identity is stale or foreign"));
         }
         self.admission.close();
+        self.placement.close();
+        if let Some(session) = &mut self.session {
+            session.close();
+        }
         self.panel_transport.close();
         self.bulk.close();
         self.canvas_replies.clear();
@@ -47,6 +51,15 @@ impl MainActor {
     pub(super) fn retire_step(
         &mut self,
     ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+        if let Some(session) = &mut self.session {
+            if let Some(observation) = session.step()? {
+                return Ok(Some(observation));
+            }
+            if session.retire_step()? {
+                self.session = None;
+            }
+            return Ok(None);
+        }
         if let Some(bridge) = &mut self.panel_bridge {
             if bridge.retire_step()? {
                 self.panel_bridge = None;
@@ -164,6 +177,7 @@ impl Drop for MainActor {
             #[cfg(feature = "native-composition")]
             std::mem::forget(self.reused_environment.take());
             std::mem::forget(self.panel_bridge.take());
+            std::mem::forget(self.session.take());
             std::mem::forget(self.receivers.take());
             std::mem::forget(self.events.take());
             std::mem::forget(self.native_storage.take());

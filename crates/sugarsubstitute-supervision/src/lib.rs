@@ -59,6 +59,10 @@ pub use durable_storage::artifacts::{
     with_artifact_input, write_artifact,
 };
 #[cfg(windows)]
+pub use durable_storage::artifacts::{
+    ArtifactReadPermit, RetainedArtifactReader, new_artifact_identity,
+};
+#[cfg(windows)]
 mod environment;
 #[cfg(windows)]
 pub mod fixture_descendant;

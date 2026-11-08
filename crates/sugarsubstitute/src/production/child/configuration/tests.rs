@@ -20,6 +20,10 @@ use sugarsubstitute_contracts::{
 };
 type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
 
+fn external(view: EntryLaunchRequestView<'_>) -> Result<StartupConfiguration, ProjectionError> {
+    project(view, BackendDataDisposition::External)
+}
+
 struct Release(Arc<AtomicU64>);
 impl sugarsubstitute_contracts::execution::MemoryRelease for Release {
     fn release(&self, bytes: u64) {
@@ -51,7 +55,7 @@ fn view<'a>(
 fn attached_projection_preserves_explicit_origin_profile_and_presentation() -> TestResult {
     let directory = bytes("E:\\profile".encode_utf16());
     let origin = LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?;
-    let projected = project(view(EntryConnectionView::Attached(origin), path_view(&directory)?)?)?;
+    let projected = external(view(EntryConnectionView::Attached(origin), path_view(&directory)?)?)?;
     assert_eq!(projected.connection(), &ConnectionConfiguration::Attach(origin));
     let parent =
         crate::production::entry_activation::ProductionActivation::projected_target_for_test(view(
@@ -63,6 +67,18 @@ fn attached_projection_preserves_explicit_origin_profile_and_presentation() -> T
     );
     assert_eq!(projected.profile().as_str(), "Profile_1");
     assert_eq!(projected.presentation(), Presentation::new("ja", Theme::Light, true)?);
+    Ok(())
+}
+
+#[test]
+fn unsupported_owned_backend_policy_cannot_activate_migration() -> TestResult {
+    let root = bytes("E:\\profile".encode_utf16());
+    let origin = LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?;
+    let input = view(EntryConnectionView::Attached(origin), path_view(&root)?)?;
+    assert!(matches!(
+        project(input, BackendDataDisposition::InstallationOwned),
+        Err(ProjectionError::Disposition)
+    ));
     Ok(())
 }
 
@@ -84,7 +100,7 @@ fn managed_projection_preserves_raw_windows_units_and_exact_unicode_arguments() 
         arguments: EntryArgumentsView::from_encoded(&arguments, 1)?,
         port: NonZeroU16::new(8188).ok_or("Invalid test port")?,
     };
-    let projected = project(view(requested, path_view(&interpreter)?)?)?;
+    let projected = external(view(requested, path_view(&interpreter)?)?)?;
     let ConnectionConfiguration::Launch(launch) = projected.connection() else {
         return Err("Managed input changed connection mode".into());
     };
@@ -135,7 +151,7 @@ fn borrowed_shape_does_not_bypass_authoritative_relative_path_rejection() -> Tes
         port: NonZeroU16::new(8188).ok_or("Invalid test port")?,
     };
     assert!(matches!(
-        project(view(requested, path_view(&interpreter)?)?),
+        external(view(requested, path_view(&interpreter)?)?),
         Err(ProjectionError::Configuration(_))
     ));
     Ok(())
@@ -323,7 +339,7 @@ fn finite_projection_spec_rejects_startup_then_admits_original_lifecycle_convers
         let directory = bytes("E:\\profile".encode_utf16());
         let origin = LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?;
         let requested = view(EntryConnectionView::Attached(origin), path_view(&directory)?)?;
-        let configuration = project(requested)?;
+        let configuration = external(requested)?;
         let main = project_main(requested, context.memory())?;
         checkpoint(&context)?;
         Ok::<_, Box<dyn Error + Send + Sync>>((configuration, main, claim))
@@ -366,7 +382,7 @@ fn managed_parent_and_child_reject_protected_extras_without_rewriting_source() -
         };
         let original = view(requested, path_view(&interpreter)?)?;
         assert!(matches!(
-            project(original),
+            external(original),
             Err(ProjectionError::ManagedLaunch(
                 sugarsubstitute_comfy::launch::ManagedLaunchError::ProtectedOption
             ))
@@ -400,7 +416,7 @@ fn non_unicode_managed_script_root_keeps_original_units_on_projection_rejection(
     };
     let original = view(requested, path_view(&interpreter)?)?;
     assert!(matches!(
-        project(original),
+        external(original),
         Err(ProjectionError::ManagedLaunch(
             sugarsubstitute_comfy::launch::ManagedLaunchError::ArgumentShape
         ))

@@ -20,6 +20,9 @@ pub(crate) struct ParentResources<'a, 'b> {
     pub(crate) process: ProcessKey,
     pub(crate) profile: &'a mut WindowsProfileLease,
     pub(crate) requested_profile: &'a [u16],
+    pub(crate) installation: &'a sugarsubstitute_contracts::installation::InstallationId,
+    pub(crate) backend_data_disposition:
+        sugarsubstitute_contracts::configuration::BackendDataDisposition,
     pub(crate) target: &'a BackendTarget,
     /// The actual operation parent scope, independent of completed projection custody.
     /// Each submitted profile job has its retained finite frontend cutoff.
@@ -64,6 +67,7 @@ pub(super) enum ParentActivityFailureOrigin {
 
 #[derive(Clone, Copy)]
 pub(super) enum Reply {
+    Registered,
     Acknowledged,
     Folder {
         identity: MainIdentity,

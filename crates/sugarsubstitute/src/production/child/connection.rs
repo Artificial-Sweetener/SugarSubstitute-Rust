@@ -220,6 +220,20 @@ impl ProductionChild {
                     return Err("Startup event slots full before grant".into());
                 }
                 let (lease, origin) = (grant.lease, grant.origin);
+                if self.bootstrap.channel_mut().backend_data_disposition()
+                    != Some(grant.backend_data_disposition())
+                {
+                    return Err(
+                        "Granted backend execution policy differs from authenticated registration"
+                            .into(),
+                    );
+                }
+                self.backend_binding = Some(grant.backend_binding);
+                self.session_peer = Some(grant.backend_peer);
+                self.session_installation =
+                    Some(sugarsubstitute_contracts::installation::InstallationId::new(
+                        grant.installation.to_owned(),
+                    )?);
                 #[cfg(feature = "native-composition")]
                 let backend_peer = grant.backend_peer;
                 self.adopt_output(lease, true)?;

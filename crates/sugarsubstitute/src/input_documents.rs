@@ -17,8 +17,12 @@
 //! owner's blocking workers; [`Autosave`] coalesces bursts of document changes into one save.
 mod autosave;
 mod files;
+#[cfg(all(windows, feature = "native-composition"))]
+pub(crate) mod legacy;
 #[cfg(test)]
 mod tests;
+#[cfg(all(windows, feature = "native-composition"))]
+pub(crate) mod workspace;
 
 pub use autosave::{Autosave, AutosaveError, AutosavePolicy, AutosaveSchedule, SaveOutcome};
 
@@ -132,6 +136,18 @@ pub struct SaveReceipt {
 #[derive(Clone, Debug)]
 pub struct InputDocumentStore {
     directory: PathBuf,
+    expected: Option<[u8; 32]>,
+}
+/// Native input startup authority, resolved before workflow sync can replace retained documents.
+#[derive(Clone, Debug)]
+#[cfg(all(windows, feature = "native-composition"))]
+pub(crate) enum InputRestorePlan {
+    /// Load the selected namespace's existing current/previous archive normally.
+    Current,
+    /// Load an independently codec/fingerprint/metadata-validated immutable archive.
+    Verified(InputDocumentStore),
+    /// Hold workflow sync until the host associates the passive legacy archive or declines it.
+    AwaitingAssociation,
 }
 impl InputDocumentStore {
     /// Use `directory`, created by the first save when absent.
@@ -144,9 +160,31 @@ impl InputDocumentStore {
                 "Input-document directory must be absolute",
             )));
         }
-        Ok(Self { directory })
+        Ok(Self { directory, expected: None })
     }
 
+    #[cfg(all(windows, feature = "native-composition"))]
+    pub(crate) fn for_reference(
+        directory: PathBuf,
+        expected: [u8; 32],
+    ) -> Result<Self, StoreError> {
+        let mut store = Self::new(directory)?;
+        store.expected = Some(expected);
+        Ok(store)
+    }
+    pub(crate) fn load_worker(
+        &self,
+        memory: &MemoryLease,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<Restored, StoreError> {
+        let restored = files::load(&self.directory, memory, context)?;
+        if self.expected.is_some_and(|expected| {
+            restored.archive.as_ref().is_none_or(|(_, archive)| archive.fingerprint() != expected)
+        }) {
+            return Err(StoreError::Unverified);
+        }
+        Ok(restored)
+    }
     /// The session directory holding the archive files.
     pub fn directory(&self) -> &std::path::Path {
         &self.directory
@@ -181,9 +219,8 @@ impl InputDocumentStore {
         spec: JobSpec,
         memory: MemoryLease,
     ) -> Result<OwnedJob<Restored, StoreError>, AdmissionError> {
-        let directory = self.directory.clone();
-        execution
-            .submit_blocking(scope, spec, move |context| files::load(&directory, &memory, &context))
+        let store = self.clone();
+        execution.submit_blocking(scope, spec, move |context| store.load_worker(&memory, &context))
     }
 
     /// Submit an atomic save of `archive`. The encoding is decoded and compared with `archive`

@@ -6,6 +6,7 @@
 //! native custody belong to the lifecycle transport, not to this state machine.
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::{
+    configuration::BackendDataDisposition,
     execution::CounterDeadline,
     lifecycle::{ConnectionId, RequestId, RunKey},
 };
@@ -38,7 +39,7 @@ enum Phase {
     HelloAdmitted,
     Welcome(ConnectionId),
     RegisterAdmitted { connection: ConnectionId, request: RequestId },
-    Registered { connection: ConnectionId, request: RequestId },
+    Registered { connection: ConnectionId, request: RequestId, disposition: BackendDataDisposition },
 }
 
 /// Retain only immutable wire facts; no constructor establishes native readiness.
@@ -114,11 +115,23 @@ impl WireHandshake {
         if frame.header != self.header(Some(connection), Some(request)) {
             return Err(HandshakeError::Identity);
         }
-        if !matches!(frame.payload, DecodedPayload::Reply(ReplyOutcome::Acknowledged)) {
+        let DecodedPayload::Reply(ReplyOutcome::Registered { backend_data_disposition }) =
+            frame.payload
+        else {
             return Err(HandshakeError::Payload);
-        }
-        self.phase = Phase::Registered { connection, request };
+        };
+        self.phase =
+            Phase::Registered { connection, request, disposition: backend_data_disposition };
         Ok(())
+    }
+
+    /// Borrow only the exact policy carried by the matching Register response. Authentication
+    /// remains with the composing native channel; there is no pre-registration fallback.
+    pub(super) const fn backend_data_disposition(&self) -> Option<BackendDataDisposition> {
+        match self.phase {
+            Phase::Registered { disposition, .. } => Some(disposition),
+            _ => None,
+        }
     }
 
     /// Return the assigned connection only after its exact Register acknowledgement.

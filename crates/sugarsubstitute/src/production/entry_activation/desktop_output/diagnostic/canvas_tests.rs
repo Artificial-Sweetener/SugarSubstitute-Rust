@@ -35,3 +35,32 @@ fn canvas_records_survive_chunking_and_leave_the_shared_phase_cap_intact() {
     assert_eq!(canvas, usize::from(CANVAS_RECORDS));
     assert_eq!(readiness, 30);
 }
+
+#[test]
+fn preparation_snapshot_crosses_chunked_parent_relay_under_the_canvas_budget() {
+    const PREPARATION: &[u8] = b"INFO sugarsubstitute::canvas_preparation_diagnostic: operation=\"canvas_preparation_snapshot\" schema=1 request_id=25 intent=8 current=8 phase=Rendering flags=513 scene_source=8 buffers=0 render_id=42 render=Running display_id=0 display=None pacer=Ready\n";
+    for split in 1..PREPARATION.len() {
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, &PREPARATION[..split], |v| seen.push(v));
+        assert!(seen.is_empty());
+        owner.feed(OutputStream::Stderr, 2, false, false, &PREPARATION[split..], |v| seen.push(v));
+        assert!(
+            matches!(seen.as_slice(), [Observation::CanvasPreparation(record)] if record.request_id == 25 && record.snapshot.render_id == 42)
+        );
+    }
+    let mut owner = Diagnostic::new();
+    let mut count = 0;
+    for sequence in 1..=u64::from(CANVAS_RECORDS) + 1 {
+        owner.feed(OutputStream::Stderr, sequence, false, false, PREPARATION, |_| count += 1);
+    }
+    owner.feed(OutputStream::Stderr, u64::from(CANVAS_RECORDS) + 2, false, false, LINE, |_| {
+        count += 1
+    });
+    assert_eq!(count, CANVAS_RECORDS);
+    let mut seen = Vec::new();
+    owner.feed(OutputStream::Stderr, u64::from(CANVAS_RECORDS) + 3, false, false, READINESS, |v| {
+        seen.push(v)
+    });
+    assert!(matches!(seen.as_slice(), [Observation::Readiness(_)]));
+}

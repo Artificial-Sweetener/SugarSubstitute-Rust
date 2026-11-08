@@ -244,8 +244,8 @@ fn resize_withdraws_an_offered_target_and_final_preparation_observes_preview_ret
         Extent::new(12, 8)?
     );
     let empty = fixture.stage_document()?;
-    fixture.session.promote_empty_document(empty)?;
-    assert!(fixture.session.promote_empty_document(empty).is_err());
+    assert!(fixture.session.try_promote_empty_document(empty)?);
+    assert!(fixture.session.try_promote_empty_document(empty).is_err());
     let _directory = fixture.finish()?;
     Ok(())
 }

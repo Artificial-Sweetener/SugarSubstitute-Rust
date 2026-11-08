@@ -75,6 +75,7 @@ pub(super) fn creator(
         target: target.clone(),
         budget,
         resolved: None,
+        backend_binding: Some(BackendBindingDigest::from_bytes([7; 32])),
         ready_origin: None,
         ready_context: None,
         managed_exit: None,

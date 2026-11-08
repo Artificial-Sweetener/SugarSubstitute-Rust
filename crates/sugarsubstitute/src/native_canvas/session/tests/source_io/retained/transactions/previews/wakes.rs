@@ -4,6 +4,26 @@
 
 use super::*;
 
+#[cfg(feature = "native-composition")]
+#[test]
+fn cancelling_a_selection_keeps_the_acknowledged_predecessor_available_for_preview()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::start(true)?;
+    let final_frame = fixture.colored_frame([255, 0, 0])?;
+    fixture.session.did_present_cpu(final_frame)?;
+    fixture.session.cancel_selection()?;
+    assert!(fixture.session.display_shows_current_source());
+    let evidence = fixture.session.document.display_evidence.ok_or("Display evidence absent")?;
+    assert_ne!(evidence.source_revision, fixture.session.selection);
+    let token = fixture.preview([0, 0, 255])?;
+    let target = fixture.offered_preview(token)?;
+    fixture.session.did_present_cpu(target)?;
+    assert_eq!(fixture.session.preview_status(token), PreviewStatus::Presented(target));
+    fixture.withdraw_preview_and_wait()?;
+    let _directory = fixture.finish()?;
+    Ok(())
+}
+
 #[test]
 fn a_refused_preview_offer_requests_one_poll_then_retries_on_actual_capacity_release()
 -> Result<(), Box<dyn Error>> {

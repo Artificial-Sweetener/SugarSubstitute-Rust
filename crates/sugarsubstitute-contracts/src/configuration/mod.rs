@@ -28,6 +28,19 @@ pub const MAX_ARGUMENT_BYTES: usize = 4096;
 /// Maximum combined UTF-8 byte length of launch arguments.
 pub const MAX_TOTAL_ARGUMENT_BYTES: usize = 64 * 1024;
 
+/// Parent-authenticated backend execution policy, separate from native storage authority.
+///
+/// The parent derives this value from retained installation/provisioning ownership. Receiving
+/// this inert value grants no directory, process or installation authority. Configuration,
+/// environment, arguments and frontend presentation cannot establish installation ownership.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackendDataDisposition {
+    /// Keep the selected external backend's ordinary bootstrap and storage semantics.
+    External,
+    /// Validate the preserved installation-owned model selection before executing ComfyUI.
+    InstallationOwned,
+}
+
 /// Select the appearance shared by graphics, text and native material.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Theme {

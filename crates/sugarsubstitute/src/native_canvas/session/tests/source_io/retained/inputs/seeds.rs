@@ -168,7 +168,10 @@ impl Fixture {
     fn persisted(anchor: Option<&Path>) -> Result<Self, Box<dyn Error>> {
         let (mut session, clock, directory) = session()?;
         let root = anchor.unwrap_or(directory.path()).join("input-canvas");
-        session.persist_inputs(InputDocumentStore::new(root)?);
+        session.persist_inputs(
+            InputDocumentStore::new(root)?,
+            crate::input_documents::InputRestorePlan::Current,
+        );
         let mut fixture = Self::launch(session, clock, directory, false, RETAINED_DOCUMENT_BYTES)?;
         fixture.poll_until("the restored input documents", false, Session::inputs_restored)?;
         // Autosave takes its baseline on the poll after the restore; later syncs are changes.
@@ -406,7 +409,7 @@ fn after_a_restart_an_opened_workflow_seeds_its_regions_and_painted_regions_keep
         let opened = second.show_while_seeding(OPENED, "regions", &gate)?;
         assert_ne!(opened, restored.document);
         let (token, seeded) = second.seed_while_prepared(OPENED, ticket, &gate)?;
-        second.session.promote_empty_document(token)?;
+        assert!(second.session.try_promote_empty_document(token)?);
         second.settle_inputs()?;
         assert_seeded(&second, &seeded, "after the attachment committed")?;
         let snapshot = second.snapshot(restored.document)?;

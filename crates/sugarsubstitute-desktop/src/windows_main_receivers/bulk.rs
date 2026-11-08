@@ -14,7 +14,8 @@
 //! the method class and the `Origin` relation, never the URL, token or body. No request under
 //! the prefix reaches the network.
 
-mod response;
+mod media;
+pub(super) mod response;
 
 use super::*;
 use crate::bulk_channel_diagnostic::{self, Method};
@@ -53,12 +54,28 @@ pub(super) struct BulkChannel {
     handler: Option<i64>,
     filtered: bool,
     uncertain: bool,
+    media: Option<Rc<super::session_media::Media>>,
+    media_filter: Option<HSTRING>,
+    media_filtered: bool,
 }
 
 impl BulkChannel {
-    pub(super) fn new(transfers: Rc<Transfers>) -> Self {
+    pub(super) fn new(
+        transfers: Rc<Transfers>,
+        media: Option<Rc<super::session_media::Media>>,
+    ) -> Self {
         let filter = HSTRING::from(transfers.endpoint().filter());
-        Self { transfers, filter, handler: None, filtered: false, uncertain: false }
+        let media_filter = media.as_ref().map(|media| HSTRING::from(media.filter()));
+        Self {
+            transfers,
+            filter,
+            handler: None,
+            filtered: false,
+            uncertain: false,
+            media,
+            media_filter,
+            media_filtered: false,
+        }
     }
 
     /// Install the handler before the filter, one native registration per call.
@@ -75,7 +92,13 @@ impl BulkChannel {
         }
         if self.handler.is_none() {
             let environment = environment(core)?;
-            let handler = handler(events.clone(), self.transfers.clone(), environment);
+            let handler = handler(
+                events.clone(),
+                self.transfers.clone(),
+                environment,
+                core.clone(),
+                self.media.clone(),
+            );
             let mut token = 0;
             // SAFETY: The retained core and handler belong to this UI apartment; the token is
             // adopted before the status so a partial registration still retires.
@@ -101,13 +124,41 @@ impl BulkChannel {
             result.map_err(|cause| DesktopError::new("install_bulk_filter", cause))?;
             return Ok(false);
         }
+        if !self.media_filtered
+            && let Some(filter) = &self.media_filter
+        {
+            // SAFETY: The exact immutable media-family filter stays retained through its removal.
+            let result = unsafe {
+                core.AddWebResourceRequestedFilter(filter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)
+            };
+            self.media_filtered = true;
+            result.map_err(|cause| DesktopError::new("install_session_media_filter", cause))?;
+            return Ok(false);
+        }
         Ok(true)
     }
 
     /// Remove the filter before the handler, one native removal per call.
     pub(super) fn retire_step(&mut self, core: &ICoreWebView2) -> Result<bool, DesktopError> {
         self.transfers.close();
+        if let Some(media) = &self.media {
+            media.close();
+            if !media.retired() {
+                return Ok(false);
+            }
+        }
         if self.uncertain {
+            return Ok(false);
+        }
+        if self.media_filtered
+            && let Some(filter) = &self.media_filter
+        {
+            // SAFETY: Remove the exact known filter from its creating-thread native core.
+            unsafe {
+                core.RemoveWebResourceRequestedFilter(filter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)
+            }
+            .map_err(|cause| DesktopError::new("remove_session_media_filter", cause))?;
+            self.media_filtered = false;
             return Ok(false);
         }
         if self.filtered {
@@ -164,6 +215,8 @@ fn handler(
     events: Rc<Events>,
     transfers: Rc<Transfers>,
     environment: ICoreWebView2Environment,
+    core: ICoreWebView2,
+    media: Option<Rc<super::session_media::Media>>,
 ) -> ICoreWebView2WebResourceRequestedEventHandler {
     WebResourceRequestedEventHandler::create(Box::new(move |_, args| {
         let _callback = events.callback();
@@ -174,11 +227,15 @@ fn handler(
             ));
             return Ok(());
         };
-        let response = serve(&environment, &transfers, &args).or_else(|cause| {
-            events.fail(cause);
-            response::missing(&environment)
-        });
+        let response =
+            serve(&environment, &transfers, media.as_deref(), &core, &args).or_else(|cause| {
+                events.fail(cause);
+                response::missing(&environment).map(Answer::Response)
+            });
         let answered = response.and_then(|response| {
+            let Answer::Response(response) = response else {
+                return Ok(());
+            };
             // SAFETY: The live callback arguments take this response on their own UI thread.
             unsafe { args.SetResponse(&response) }
                 .map_err(|cause| DesktopError::new("respond_bulk_channel", cause))
@@ -189,14 +246,20 @@ fn handler(
         Ok(())
     }))
 }
+enum Answer {
+    Response(ICoreWebView2WebResourceResponse),
+    Deferred,
+}
 
 /// Choose the response for one request; page-controlled mismatches are 404s, native failures
 /// are errors the caller still answers with a 404.
 fn serve(
     environment: &ICoreWebView2Environment,
     transfers: &Transfers,
+    media: Option<&super::session_media::Media>,
+    core: &ICoreWebView2,
     args: &ICoreWebView2WebResourceRequestedEventArgs,
-) -> Result<ICoreWebView2WebResourceResponse, DesktopError> {
+) -> Result<Answer, DesktopError> {
     let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL;
     // SAFETY: Live callback arguments with a writable scalar output on this UI thread.
     unsafe { args.ResourceContext(&mut context) }
@@ -206,13 +269,32 @@ fn serve(
     let status = unsafe { (args.vtable().Request)(args.as_raw(), &mut raw) };
     let request: ICoreWebView2WebResourceRequest = adopt(raw, status, "bulk_request")?;
     // SAFETY: Each getter writes one CoTaskMem string owned by `native_text` on this UI thread.
-    let uri = ascii(&native_text(|output| unsafe { request.Uri(output) })?);
+    let uri = ascii_bounded::<{ crate::main_session_media::route::MAX_URI_BYTES }>(&native_text(
+        |output| unsafe { request.Uri(output) },
+    )?);
     // SAFETY: As above, for the request method.
     let method = ascii(&native_text(|output| unsafe { request.Method(output) })?);
     let mut raw = std::ptr::null_mut();
     // SAFETY: Live request with a writable output; adopted before the status.
     let status = unsafe { (request.vtable().Headers)(request.as_raw(), &mut raw) };
     let headers: ICoreWebView2HttpRequestHeaders = adopt(raw, status, "bulk_request_headers")?;
+    if let Some(media) = media
+        && let Some(uri) = &uri
+        && media.matches_family(uri.as_str())
+    {
+        return media::serve(
+            media,
+            media::Resource {
+                core,
+                environment,
+                args,
+                uri: uri.as_str(),
+                method: method.as_ref().map(Ascii::as_str),
+                headers: &headers,
+                context,
+            },
+        );
+    }
     let origin = origin_header(&headers)?;
     let request_view = Request {
         context: classify_context(context),
@@ -251,6 +333,7 @@ fn serve(
         },
         Err(miss) => refuse(miss),
     }
+    .map(Answer::Response)
 }
 
 /// Classify WebView2's resource context for the endpoint's script-request check.
@@ -308,12 +391,12 @@ fn read(
 }
 
 /// Fixed ASCII storage for one short native string; nothing is allocated in the callback.
-struct Ascii {
-    bytes: [u8; MAX_TEXT_UNITS],
+struct Ascii<const N: usize = MAX_TEXT_UNITS> {
+    bytes: [u8; N],
     len: usize,
 }
 
-impl Ascii {
+impl<const N: usize> Ascii<N> {
     fn as_str(&self) -> &str {
         std::str::from_utf8(&self.bytes[..self.len]).unwrap_or_default()
     }
@@ -335,8 +418,11 @@ fn native_text(
 
 /// Copy a short ASCII string; longer or non-ASCII text cannot match and is `None`.
 fn ascii(text: &NativeString) -> Option<Ascii> {
-    let mut copy = Ascii { bytes: [0; MAX_TEXT_UNITS], len: 0 };
-    for index in 0..=MAX_TEXT_UNITS {
+    ascii_bounded(text)
+}
+fn ascii_bounded<const N: usize>(text: &NativeString) -> Option<Ascii<N>> {
+    let mut copy = Ascii { bytes: [0; N], len: 0 };
+    for index in 0..=N {
         // SAFETY: The string is NUL-terminated; the scan stops at its terminator and never
         // reads past the first unit beyond the fixed bound.
         let unit = unsafe { text.0.as_ptr().add(index).read() };

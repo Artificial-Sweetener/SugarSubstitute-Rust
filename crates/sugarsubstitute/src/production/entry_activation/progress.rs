@@ -404,6 +404,9 @@ pub(super) fn with_parent<T>(
         process,
         profile: &mut start.profile,
         requested_profile: &value.profile_units,
+        installation: &value.session_installation,
+        backend_data_disposition:
+            sugarsubstitute_contracts::configuration::BackendDataDisposition::External,
         target: &value.target,
         finite,
         backend_commands_open,

@@ -186,6 +186,18 @@ impl StartupPolicy {
         observation: &DesktopStartupObservation,
     ) -> bool {
         match observation {
+            DesktopStartupObservation::SessionMessage(observed) => {
+                session.is_some_and(|session| observed.identity() == self.identity(session))
+            }
+            DesktopStartupObservation::SessionMediaRequested(observed) => {
+                session.is_some_and(|session| observed.identity() == self.identity(session))
+            }
+            DesktopStartupObservation::SessionMediaCancelled { identity, .. } => {
+                session.is_some_and(|session| *identity == self.identity(session))
+            }
+            DesktopStartupObservation::MainPlacementObserved(observed) => {
+                session.is_some_and(|session| observed.identity == self.identity(session))
+            }
             DesktopStartupObservation::PanelMessage(observed) => {
                 session.is_some_and(|session| observed.identity() == self.identity(session))
             }
@@ -214,6 +226,7 @@ impl StartupPolicy {
                 session.is_some_and(|session| *launch == session.launch())
             }
             DesktopStartupObservation::EnvironmentPrepared { identity, .. }
+            | DesktopStartupObservation::MainPlacementCaptureFailed { identity, .. }
             | DesktopStartupObservation::ControllerPrepared { identity, .. }
             | DesktopStartupObservation::NavigationStarted(identity)
             | DesktopStartupObservation::BrowserProcesses { identity, .. }

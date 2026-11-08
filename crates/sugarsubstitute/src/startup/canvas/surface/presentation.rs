@@ -263,7 +263,9 @@ impl NativeSurface {
         if pending.identity == identity && matches!(pending.kind, PendingKind::EmptyCommit) {
             let binding = self.binding.as_mut().ok_or("Empty canvas binding disappeared")?;
             if let Some(token) = binding.document {
-                session.promote_empty_document(token)?;
+                if !session.try_promote_empty_document(token)? {
+                    return Ok(());
+                }
                 binding.document = None;
             }
             self.retained = None;

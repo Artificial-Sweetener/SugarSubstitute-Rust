@@ -28,6 +28,25 @@ pub struct CanvasBackend {
     pub peer: sugarsubstitute_supervision::lifecycle_protocol::BackendPeer,
 }
 
+/// Parent-authenticated correlation available before main construction. A host receives this
+/// only through its already authenticated current grant; filesystem and backend I/O remain
+/// independently admitted by their owners.
+#[cfg(windows)]
+#[derive(Clone)]
+pub struct WorkspaceContext {
+    /// Current native main lifetime.
+    pub identity: MainIdentity,
+    /// Exact existing selected profile.
+    pub profile: sugarsubstitute_contracts::configuration::ProfileId,
+    /// Existing installed or protected source-host correlation.
+    pub installation: sugarsubstitute_contracts::installation::InstallationId,
+    /// Existing admitted target's canonical correlation.
+    pub backend: BackendBindingDigest,
+    /// Authenticated served origin.
+    pub origin: sugarsubstitute_contracts::configuration::LoopbackOrigin,
+    /// Current authenticated listener matching facts, checked natively on every transfer.
+    pub peer: sugarsubstitute_supervision::lifecycle_protocol::BackendPeer,
+}
 /// Keep policy together with its platform-owned authentication and allocation guards.
 pub trait PreparedStartup {
     /// Borrow shared startup policy without detaching native custody.
@@ -82,6 +101,19 @@ pub trait StartupBackend {
     /// Borrow the current authenticated grant; managed backend outages fence this capability.
     #[cfg(all(windows, feature = "native-composition"))]
     fn canvas_backend(&self, identity: MainIdentity) -> Option<CanvasBackend>;
+    /// Borrow current authenticated correlation before loading durable workspace state.
+    #[cfg(windows)]
+    fn workspace_context(
+        &self,
+        prepared: &Self::Prepared,
+    ) -> BackendResult<Option<WorkspaceContext>>;
+    /// Supply trusted bootstrap and verified placement before native main construction.
+    #[cfg(windows)]
+    fn configure_workspace(
+        &mut self,
+        bootstrap: sugarsubstitute_desktop::SessionBootstrap,
+        placement: Option<sugarsubstitute_contracts::desktop_session::wire::SessionPlacement>,
+    ) -> BackendResult<()>;
     /// Report whether main-window construction still owns native input or jobs.
     fn main_construction_pending(&self) -> bool;
     /// Borrow immutable text while the complete source guard remains alive.
@@ -106,6 +138,8 @@ pub trait StartupBackend {
     ) -> BackendResult<()>;
     /// Advance current frontend replacement while preserving the same configuration guard.
     fn advance_reload(&mut self, prepared: &mut Self::Prepared) -> BackendResult<()>;
+    /// Start only the existing capture measurement while retaining the current page for final workspace capture.
+    fn begin_workspace_close(&mut self) -> BackendResult<ShutdownInitiation>;
     /// Request capture shutdown without substituting a new measurement for pending evidence.
     fn begin_shutdown(&mut self) -> BackendResult<ShutdownInitiation>;
     /// Borrow the original shutdown transaction without sampling or renewing its cutoff.

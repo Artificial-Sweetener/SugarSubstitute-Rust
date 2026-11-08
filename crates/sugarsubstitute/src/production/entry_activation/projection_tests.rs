@@ -121,7 +121,9 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     let mut input = ProjectionInput::without_request();
     input.capture_root = capture;
     input._charge = Some(claim);
-    let (data, policy) = capacity::funding(&mut input, &projected)?;
+    let installation =
+        sugarsubstitute_contracts::installation::InstallationId::new("a".repeat(32))?;
+    let (data, policy) = capacity::funding(&mut input, &projected, &installation)?;
     assert!(input._charge.is_none());
     assert!(policy.bytes() > 0 && policy.bytes() < available);
     assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);

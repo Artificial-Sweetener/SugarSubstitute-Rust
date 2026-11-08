@@ -14,6 +14,8 @@ use std::{
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
 mod input;
+#[cfg(windows)]
+mod retained;
 type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
 #[derive(Default)]
 pub(super) struct TestClock(AtomicU64);

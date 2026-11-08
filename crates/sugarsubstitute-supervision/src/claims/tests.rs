@@ -98,9 +98,20 @@ fn exact_resolution_ticket_cannot_be_recreated_by_another_claim_owner() -> TestR
     harness.initialize()?;
     let ticket = harness.resolve()?;
     assert!(harness.claims.resolved_configuration(&ticket).is_ok());
+    let digest = harness.claims.resolved_backend_binding(&ticket)?;
+    let proof = harness.claims.resolutions[harness.claims.resolution_index(&ticket)?]
+        .as_ref()
+        .and_then(|entry| entry.proof.as_ref())
+        .ok_or("Missing native identity proof")?;
+    assert_eq!(digest.as_bytes(), &proof.digest);
     let other = WindowsResourceClaims::new()?;
     assert!(matches!(other.resolved_configuration(&ticket), Err(ClaimAdmissionError::Identity)));
+    assert!(matches!(other.resolved_backend_binding(&ticket), Err(ClaimAdmissionError::Identity)));
     harness.retire(&ticket)?;
+    assert!(matches!(
+        harness.claims.resolved_backend_binding(&ticket),
+        Err(ClaimAdmissionError::Identity)
+    ));
     harness.close(0)?;
     Ok(())
 }

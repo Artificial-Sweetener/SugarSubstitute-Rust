@@ -197,6 +197,9 @@ fn reloaded_context_has_exact_new_identity_origin_versions_and_rejects_lease_onl
         frontend: VersionLabel::new("1.47.11")?,
         sugarcubes: VersionLabel::new("0.15.3")?,
         backend_peer: extensions::context()?.backend_peer,
+        backend_binding: extensions::context()?.backend_binding,
+        installation: extensions::context()?.installation,
+        backend_data_disposition: extensions::context()?.backend_data_disposition(),
     };
     let bytes = encoded(WirePayload::Reply(ReplyOutcome::Reloaded(context)))?;
     assert_eq!(bytes[HEADER_BYTES], 5);

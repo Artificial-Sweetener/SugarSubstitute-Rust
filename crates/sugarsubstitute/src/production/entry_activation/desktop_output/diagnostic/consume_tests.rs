@@ -6,6 +6,21 @@ use super::*;
 use sugarsubstitute_contracts::transcript::OutputStream;
 const LINE: &str = "operation=\"desktop_failure_transition\" boundary=PollFrame kind=Other consume_stage=ChildDelivery category=Bootstrap(Transport)";
 #[test]
+fn poll_frame_boundary_stages_roundtrip_only_exact_closed_tokens() {
+    for stage in [Stage::FrontendReload, Stage::CanvasBackendRefresh, Stage::AppearancePublication]
+    {
+        let line = LINE.replace("ChildDelivery", stage.token());
+        assert_eq!(
+            parse_failure(line.as_bytes()).and_then(|f| f.consume).map(|v| v.stage),
+            Some(stage)
+        );
+        for token in [stage.token().to_ascii_lowercase(), format!("{}Extra", stage.token())] {
+            assert!(parse_failure(LINE.replace("ChildDelivery", &token).as_bytes()).is_none());
+        }
+    }
+}
+
+#[test]
 fn consumer_failure_grammar_rejects_foreign_observation_fields_unknown_categories_duplicates_and_oversize()
  {
     let actual = parse_failure(LINE.as_bytes()).and_then(|f| f.consume);

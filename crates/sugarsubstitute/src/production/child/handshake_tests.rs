@@ -74,7 +74,11 @@ fn original_run_counter_and_assigned_connection_survive_complete_exchange() -> T
     assert_eq!(binding.connection(), None);
     assert_eq!(binding.register_header(RequestId::new(23)?)?, reply_header()?);
     binding.register_admitted(RequestId::new(23)?)?;
-    registered(&mut binding, reply_header()?, ReplyOutcome::Acknowledged)?;
+    registered(
+        &mut binding,
+        reply_header()?,
+        ReplyOutcome::Registered { backend_data_disposition: BackendDataDisposition::External },
+    )?;
     assert_eq!(binding.connection(), Some(ConnectionId::new(19)?));
     assert_eq!(binding.run(), run()?);
     Ok(())
@@ -154,10 +158,19 @@ fn acknowledgement_requires_actual_register_admission() -> TestResult {
     let mut binding = handshake()?;
     binding.hello_admitted()?;
     welcome(&mut binding, welcome_header()?, 100)?;
-    let bytes = encoded(reply_header()?, WirePayload::Reply(ReplyOutcome::Acknowledged))?;
+    let bytes = encoded(
+        reply_header()?,
+        WirePayload::Reply(ReplyOutcome::Registered {
+            backend_data_disposition: BackendDataDisposition::External,
+        }),
+    )?;
     assert_eq!(binding.registered(&FrameCodec::decode(&bytes)?), Err(HandshakeError::Order));
     binding.register_admitted(RequestId::new(23)?)?;
-    registered(&mut binding, reply_header()?, ReplyOutcome::Acknowledged)?;
+    registered(
+        &mut binding,
+        reply_header()?,
+        ReplyOutcome::Registered { backend_data_disposition: BackendDataDisposition::External },
+    )?;
     Ok(())
 }
 
@@ -172,10 +185,19 @@ fn acknowledgement_rejects_changed_run_connection_request_and_deadline() -> Test
             2 => header.request = Some(RequestId::new(24)?),
             _ => header.deadline_qpc = 501,
         }
-        let bytes = encoded(header, WirePayload::Reply(ReplyOutcome::Acknowledged))?;
+        let bytes = encoded(
+            header,
+            WirePayload::Reply(ReplyOutcome::Registered {
+                backend_data_disposition: BackendDataDisposition::External,
+            }),
+        )?;
         assert_eq!(binding.registered(&FrameCodec::decode(&bytes)?), Err(HandshakeError::Identity));
         assert_eq!(binding.connection(), None);
-        registered(&mut binding, reply_header()?, ReplyOutcome::Acknowledged)?;
+        registered(
+            &mut binding,
+            reply_header()?,
+            ReplyOutcome::Registered { backend_data_disposition: BackendDataDisposition::External },
+        )?;
     }
     Ok(())
 }
@@ -186,16 +208,50 @@ fn unsuccessful_register_does_not_publish_connection() -> TestResult {
     let bytes = encoded(reply_header()?, WirePayload::Reply(ReplyOutcome::Cancelled))?;
     assert_eq!(binding.registered(&FrameCodec::decode(&bytes)?), Err(HandshakeError::Payload));
     assert_eq!(binding.connection(), None);
-    registered(&mut binding, reply_header()?, ReplyOutcome::Acknowledged)?;
+    registered(
+        &mut binding,
+        reply_header()?,
+        ReplyOutcome::Registered { backend_data_disposition: BackendDataDisposition::External },
+    )?;
     Ok(())
 }
 
 #[test]
 fn repeated_acknowledgement_preserves_registered_connection() -> TestResult {
     let mut binding = pending_register()?;
-    registered(&mut binding, reply_header()?, ReplyOutcome::Acknowledged)?;
-    let bytes = encoded(reply_header()?, WirePayload::Reply(ReplyOutcome::Acknowledged))?;
+    registered(
+        &mut binding,
+        reply_header()?,
+        ReplyOutcome::Registered { backend_data_disposition: BackendDataDisposition::External },
+    )?;
+    let bytes = encoded(
+        reply_header()?,
+        WirePayload::Reply(ReplyOutcome::Registered {
+            backend_data_disposition: BackendDataDisposition::External,
+        }),
+    )?;
     assert_eq!(binding.registered(&FrameCodec::decode(&bytes)?), Err(HandshakeError::Order));
     assert_eq!(binding.connection(), Some(ConnectionId::new(19)?));
+    Ok(())
+}
+
+#[test]
+fn registration_requires_explicit_policy_and_preserves_both_native_dispositions() -> TestResult {
+    for disposition in [BackendDataDisposition::External, BackendDataDisposition::InstallationOwned]
+    {
+        let mut binding = pending_register()?;
+        assert_eq!(binding.backend_data_disposition(), None);
+        let legacy = encoded(reply_header()?, WirePayload::Reply(ReplyOutcome::Acknowledged))?;
+        assert_eq!(binding.registered(&FrameCodec::decode(&legacy)?), Err(HandshakeError::Payload));
+        assert_eq!(binding.backend_data_disposition(), None);
+        assert_eq!(binding.connection(), None);
+        registered(
+            &mut binding,
+            reply_header()?,
+            ReplyOutcome::Registered { backend_data_disposition: disposition },
+        )?;
+        assert_eq!(binding.backend_data_disposition(), Some(disposition));
+        assert_eq!(binding.connection(), Some(ConnectionId::new(19)?));
+    }
     Ok(())
 }

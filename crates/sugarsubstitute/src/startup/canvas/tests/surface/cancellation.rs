@@ -4,6 +4,52 @@
 
 use super::*;
 
+#[test]
+fn empty_commit_waits_for_cancelled_acquisition_retirement_after_native_hide()
+-> Result<(), Box<dyn Error>> {
+    use host::{Host, geometry, select};
+    use viewport::fixture::Execution;
+
+    let mut host = Host::empty()?;
+    let gate = host.gate("wide.png", false);
+    let result = (|| -> Result<(), Box<dyn Error>> {
+        host.send(1, 3, "surface.select", select("wide.png"))?;
+        host.pump_until("the original acquisition entering its worker", |_| gate.entered())?;
+        assert_eq!(host.cancel(3)?.as_deref(), Some("cancelled"));
+        assert!(gate.cancelled());
+        assert!(!gate.returned(), "The non-cooperative acquisition escaped its gate");
+
+        host.send(1, 4, "surface.geometry", geometry(96, 48, true))?;
+        host.fixture.take(4, "applied")?;
+        host.send(1, 5, "surface.commit", json!({}))?;
+        assert!(matches!(host.fixture.canvas.presentation(), MainCanvasPresentation::Hide));
+        let before = host.fixture.canvas.session.as_ref().map(Session::native_preparation_snapshot);
+        let identity = host.fixture.identity;
+        host.fixture.canvas.hidden(identity).map_err(|cause| {
+            format!("Empty commit failed before acquisition retirement: {cause}; {before:?}")
+        })?;
+        assert!(
+            host.fixture.canvas.take_command().is_none(),
+            "Empty commit replied while its cancelled acquisition remained in flight: {before:?}"
+        );
+        assert!(!gate.returned());
+
+        gate.release();
+        host.expect(5, "applied")?;
+        assert!(gate.returned(), "Empty commit applied before its acquisition returned");
+        assert_eq!(host.fixture.canvas.session.as_ref().map(Session::source_loading), Some(false));
+        host.quiesce()?;
+        assert_eq!(host.fixture.execution()?, Execution::Idle);
+        assert!(host.fixture.canvas.take_command().is_none(), "Empty commit replied twice");
+        assert_eq!(host.shown(), None);
+        drop(host.fixture.memory.claim(host.fixture.memory.bytes())?);
+        Ok(())
+    })();
+    gate.release();
+    let finished = host.finish();
+    result.and(finished)
+}
+
 /// Construct the inert application owner without starting workers or opening storage.
 pub(super) fn waiting_canvas() -> Result<EmbeddedCanvas, Box<dyn Error>> {
     let mut canvas = EmbeddedCanvas::new(

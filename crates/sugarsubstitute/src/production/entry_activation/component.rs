@@ -221,6 +221,10 @@ impl EntryActivation for ProfileComponent {
                 &self.installation,
             )
             .capture_root(),
+            sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                &self.installation,
+            )
+            .user(),
             resources.client.clone(),
             run,
             resources.authority.running_installation(),

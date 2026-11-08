@@ -10,6 +10,7 @@ mod bulk;
 mod completion;
 mod downloads;
 mod navigation;
+pub(crate) mod session_media;
 use crate::{
     DesktopError,
     main_events::{Command, Events, Kind},
@@ -47,7 +48,7 @@ struct Subscription {
 mod source_tests;
 
 /// Own a returned CoTaskMem string immediately, including failed native getters.
-pub(super) struct NativeString(pub(super) PWSTR);
+pub(crate) struct NativeString(pub(crate) PWSTR);
 impl Drop for NativeString {
     fn drop(&mut self) {
         // SAFETY: The getter transfers CoTaskMem ownership, including a partial failure output.
@@ -76,13 +77,14 @@ impl Receivers {
         lease: &MemoryLease,
         origin: sugarsubstitute_contracts::configuration::LoopbackOrigin,
         transfers: Rc<crate::main_bulk::Transfers>,
+        media: Option<Rc<session_media::Media>>,
     ) -> Result<Self, DesktopError> {
         let claim =
             lease.claim(65536).map_err(|cause| DesktopError::new("claim_main_receivers", cause))?;
         let mut owner = Self {
             subscriptions: Vec::new(),
             navigation: navigation::Navigation::new(origin),
-            bulk: bulk::BulkChannel::new(transfers),
+            bulk: bulk::BulkChannel::new(transfers, media),
             downloads: downloads::Owner::new(origin)?,
             operations: completion::Operations::new(events.clone())?,
             events,

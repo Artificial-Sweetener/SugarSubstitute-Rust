@@ -113,6 +113,10 @@ pub struct MainWindowRequest {
     profile_directory: PathBuf,
     versions: ServedFrontendVersions,
     settings: MainWindowSettings,
+    session_bootstrap: Option<crate::SessionBootstrap>,
+    session_storage: Option<MemoryClaim>,
+    initial_placement: Option<sugarsubstitute_contracts::desktop_session::wire::SessionPlacement>,
+    placement_storage: Option<MemoryClaim>,
     lease: MemoryLease,
     metadata: MemoryClaim,
 }
@@ -122,8 +126,11 @@ impl MainWindowRequest {
     pub const KNOWN_STORAGE_BYTES: u64 = 4 * 1024 * 1024;
     /// In-flight bulk panel transfer partition, in bytes: one 96 MiB message per direction.
     pub const BULK_TRANSFER_BYTES: u64 = 192 * 1024 * 1024;
+    /// Independent eight-message session ingress/DTO partition, in bytes.
+    pub const SESSION_STORAGE_BYTES: u64 = 24 * 1024 * 1024;
     /// Complete reservation a main lifetime requires: observer storage plus bulk transfers.
-    pub const RESERVATION_BYTES: u64 = Self::KNOWN_STORAGE_BYTES + Self::BULK_TRANSFER_BYTES;
+    pub const RESERVATION_BYTES: u64 =
+        Self::KNOWN_STORAGE_BYTES + Self::BULK_TRANSFER_BYTES + Self::SESSION_STORAGE_BYTES;
     /// Maximum retained profile-path allocation, in platform encoded bytes.
     pub const PROFILE_PATH_BYTES: usize = 128 * 1024;
 
@@ -193,6 +200,10 @@ impl MainWindowRequest {
             profile_directory,
             versions,
             settings,
+            session_bootstrap: None,
+            session_storage: None,
+            initial_placement: None,
+            placement_storage: None,
             lease,
             metadata,
         })
@@ -222,6 +233,68 @@ impl MainWindowRequest {
     pub fn settings(&self) -> MainWindowSettings {
         self.settings
     }
+    /// Retain admitted normal outer placement before the native window is constructed.
+    /// This supplies data only; the desktop validates current monitors on its creating thread.
+    ///
+    /// # Errors
+    /// Rejects malformed placement, oversized retained monitor allocation or insufficient credit.
+    pub fn set_initial_placement(
+        &mut self,
+        placement: Option<sugarsubstitute_contracts::desktop_session::wire::SessionPlacement>,
+    ) -> Result<(), MainRequestError> {
+        let storage = if let Some(value) = &placement {
+            sugarsubstitute_contracts::desktop_session::validate_placement(value)
+                .map_err(|_| MainRequestError::Placement)?;
+            if value.monitor.capacity() > 1024 {
+                return Err(MainRequestError::Placement);
+            }
+            Some(
+                self.lease
+                    .claim(value.monitor.capacity() as u64)
+                    .map_err(MainRequestError::MetadataBudget)?,
+            )
+        } else {
+            None
+        };
+        self.initial_placement = placement;
+        self.placement_storage = storage;
+        Ok(())
+    }
+    /// Borrow saved normal outer placement without granting access to native monitors or handles.
+    pub fn initial_placement(
+        &self,
+    ) -> Option<&sugarsubstitute_contracts::desktop_session::wire::SessionPlacement> {
+        self.initial_placement.as_ref()
+    }
+    /// Install host-selected session identity before any browser construction/navigation.
+    /// The native channel compares every page message against this immutable bootstrap.
+    /// # Errors
+    /// Refuses foreign profile/origin or metadata that the original reservation cannot fund.
+    pub fn set_session_bootstrap(
+        &mut self,
+        bootstrap: Option<crate::SessionBootstrap>,
+    ) -> Result<(), MainRequestError> {
+        if bootstrap.as_ref().is_some_and(|value| {
+            value.origin() != self.origin || value.scope().profile != self.profile.as_str()
+        }) {
+            return Err(MainRequestError::SessionBootstrap);
+        }
+        let storage = bootstrap
+            .as_ref()
+            .map(|value| {
+                self.lease
+                    .claim((value.allocated_bytes() + size_of::<crate::SessionBootstrap>()) as u64)
+            })
+            .transpose()
+            .map_err(MainRequestError::MetadataBudget)?;
+        self.session_bootstrap = bootstrap;
+        self.session_storage = storage;
+        Ok(())
+    }
+    /// Borrow independently selected session identity; absence disables the native session lane.
+    pub fn session_bootstrap(&self) -> Option<&crate::SessionBootstrap> {
+        self.session_bootstrap.as_ref()
+    }
     /// Borrow retained byte credit for explicit bounded storage claims.
     /// Claiming bytes does not submit work or grant native privileges.
     pub fn storage_lease(&self) -> &MemoryLease {
@@ -231,6 +304,8 @@ impl MainWindowRequest {
     /// The value excludes opaque browser allocations and grants no admission.
     pub fn allocated_metadata_bytes(&self) -> u64 {
         self.metadata.bytes()
+            + self.session_storage.as_ref().map_or(0, MemoryClaim::bytes)
+            + self.placement_storage.as_ref().map_or(0, MemoryClaim::bytes)
     }
 }
 
@@ -239,6 +314,8 @@ impl MainWindowRequest {
 pub enum MainRequestError {
     /// Initial logical dimensions are empty or exceed the project bound.
     Dimensions,
+    /// Saved native placement or retained monitor storage is invalid.
+    Placement,
     /// A native accessible label is empty, oversized or NUL-bearing.
     CaptionLabel,
     /// A version observation exceeds its owned-data bound.
@@ -251,6 +328,8 @@ pub enum MainRequestError {
     InsufficientMemory,
     /// Actual retained metadata cannot fit within the shared existing credit.
     MetadataBudget(MemoryClaimError),
+    /// Session bootstrap differs from the actual requested profile or origin.
+    SessionBootstrap,
 }
 impl fmt::Display for MainRequestError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -295,8 +374,20 @@ pub enum DesktopStartupCommand {
     RetireSplash(LaunchId),
     /// Reveal an already usable main host after actual splash retirement.
     RevealMain(MainIdentity),
+    /// Sample final placement on the creating thread while the exact native peer remains alive.
+    /// The application retains this peer until its bounded save terminates, then requests close.
+    CaptureMainPlacement {
+        /// Exact current native lifetime; foreign and retired identities cannot capture.
+        identity: MainIdentity,
+        /// Positive application request identity, echoed in the terminal observation.
+        capture_id: std::num::NonZeroU64,
+    },
     /// Deliver a bounded host-direction panel message to the current top document.
     SendPanel(crate::PanelCommand),
+    /// Deliver one bounded workspace operation through its independent session lane.
+    SendSession(crate::SessionCommand),
+    /// Complete an exact retained-media deferral on its creating native UI thread.
+    SendSessionMedia(crate::SessionMediaReply),
     /// Deliver the latest memory allowance to the current top document; newer ones replace it.
     SendMemory(crate::MemoryCommand),
     /// Report the current browser environment's processes as [`DesktopStartupObservation::BrowserProcesses`].
@@ -377,6 +468,17 @@ pub enum MainReloadReason {
 
 /// Transfer native facts to the authoritative application StartupSession.
 pub enum DesktopStartupObservation {
+    /// Actual native normal bounds; changes coalesce independently of session publication.
+    MainPlacementObserved(crate::MainPlacementObservation),
+    /// Placement sampling failed without retiring the live native peer or replacing durable state.
+    MainPlacementCaptureFailed {
+        /// Exact lifetime addressed by the original application request.
+        identity: MainIdentity,
+        /// Original positive application capture request.
+        capture_id: Option<std::num::NonZeroU64>,
+        /// Preserved getter/admission cause; this is not a successful empty capture.
+        cause: crate::DesktopError,
+    },
     /// Actual native eligibility from owned windows and acknowledged native suspension.
     NativeActivity {
         /// Exact retained desktop run; page state supplies no native evidence.
@@ -423,6 +525,17 @@ pub enum DesktopStartupObservation {
     MainRevealed(MainIdentity),
     /// A bounded panel message from the current native top-document context.
     PanelMessage(crate::PanelObservation),
+    /// A bounded workspace message from this current independently bootstrapped native page.
+    SessionMessage(crate::SessionObservation),
+    /// A retained-media GET awaiting execution-owned identity validation and encoded bytes.
+    SessionMediaRequested(crate::SessionMediaObservation),
+    /// The native media deadline/page lifetime expired; the application cancels and observes work.
+    SessionMediaCancelled {
+        /// Actual current main lifetime that owned the request.
+        identity: MainIdentity,
+        /// Original native per-lifetime request identity.
+        request_id: std::num::NonZeroU64,
+    },
     /// A bounded memory report from the current native top-document context.
     MemoryMessage(crate::MemoryObservation),
     /// The processes the current browser environment runs, for the memory budget's footprint.

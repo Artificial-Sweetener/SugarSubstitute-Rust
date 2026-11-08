@@ -225,6 +225,7 @@ impl DesktopOutput {
                             "Observed desktop consumption of its authenticated readiness reply");
                     }
                     diagnostic::Observation::Canvas(record) => record.relay(self.run),
+                    diagnostic::Observation::CanvasPreparation(record) => record.relay(self.run),
                     diagnostic::Observation::Bulk(record) => {
                         diagnostic::bulk::relay(self.run, record);
                     }

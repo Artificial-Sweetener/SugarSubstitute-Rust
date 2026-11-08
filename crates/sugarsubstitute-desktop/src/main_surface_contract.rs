@@ -104,7 +104,7 @@ impl SurfaceObservation {
 
     /// Borrow the untrusted operation before projecting its geometry against the native view.
     #[cfg(feature = "native-composition")]
-    pub(crate) fn message(&self) -> &CanvasSurfaceMessage {
+    pub fn message(&self) -> &CanvasSurfaceMessage {
         &self.message
     }
 

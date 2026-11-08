@@ -145,6 +145,10 @@ impl ProductionActivation {
         let mut input = Some(ProjectionInput::restart(
             resources.client.clone(),
             self.capture_root.clone(),
+            sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                &self.working_directory,
+            )
+            .user(),
             projection::RestartProjection {
                 source: value.registered.clone(),
                 previous,

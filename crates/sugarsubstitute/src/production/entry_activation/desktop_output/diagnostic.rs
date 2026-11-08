@@ -74,6 +74,7 @@ pub(super) enum Observation {
     Probe(sugarsubstitute_desktop::frontend_probe_diagnostic::Record),
     Readiness(crate::production::startup_readiness_diagnostic::Record),
     Canvas(crate::canvas_surface_diagnostic::Record),
+    CanvasPreparation(crate::canvas_preparation_diagnostic::Record),
     Bulk(sugarsubstitute_desktop::bulk_channel_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
@@ -163,6 +164,13 @@ impl Diagnostic {
                         if self.canvas_emitted < CANVAS_RECORDS {
                             self.canvas_emitted += 1;
                             emit(Observation::Canvas(record));
+                        }
+                    } else if let Some(record) = crate::canvas_preparation_diagnostic::Record::parse(
+                        &self.bytes[..self.length],
+                    ) {
+                        if self.canvas_emitted < CANVAS_RECORDS {
+                            self.canvas_emitted += 1;
+                            emit(Observation::CanvasPreparation(record));
                         }
                     } else if let Some(record) =
                         sugarsubstitute_desktop::bulk_channel_diagnostic::Record::parse(

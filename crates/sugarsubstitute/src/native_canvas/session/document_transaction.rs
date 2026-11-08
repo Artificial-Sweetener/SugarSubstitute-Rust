@@ -105,13 +105,22 @@ impl Session {
 
     /// Promote an empty staged attachment after the desktop acknowledged hiding its native peer.
     /// The composing adapter owns that acknowledgement; an empty attachment has no pixel target.
+    /// Return `false` while original acquisition, rendering or retirement work still owns custody.
+    /// Its existing completion wake permits another attempt without renewing any deadline.
     ///
     /// # Errors
-    /// Rejects foreign/canceled tokens, authored content, retained pixels or unobserved work.
-    pub(crate) fn promote_empty_document(
+    /// Rejects foreign/canceled tokens, authored content or retained pixels.
+    pub(crate) fn try_promote_empty_document(
         &mut self,
         token: DocumentToken,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<bool, Box<dyn Error>> {
+        let transaction = self.document_transaction.as_ref().ok_or("No staged document")?;
+        if transaction.token != token || transaction.phase != Phase::Preparing {
+            return Err("Empty document promotion does not own the candidate".into());
+        }
+        if !self.document_work_settled() {
+            return Ok(false);
+        }
         let empty = self.document.scene.as_ref().is_none_or(|scene| {
             scene.source.is_none()
                 && scene.original.is_none()
@@ -124,15 +133,12 @@ impl Session {
             && self.document.navigation_gpu_front.is_none()
             && self.document.cpu_projection.is_none()
             && self.document.native_presented.is_none();
-        if !empty || !self.document_work_settled() {
+        if !empty {
             return Err("Empty document promotion retains content or pending work".into());
         }
         let transaction = self.document_transaction.as_mut().ok_or("No staged document")?;
-        if transaction.token != token || transaction.phase != Phase::Preparing {
-            return Err("Empty document promotion does not own the candidate".into());
-        }
         transaction.phase = Phase::Promoted;
-        Ok(())
+        Ok(true)
     }
 
     /// Fence a candidate and request restoration after its actual worker outcomes are observed.

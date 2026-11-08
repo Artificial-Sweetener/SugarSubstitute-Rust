@@ -25,7 +25,11 @@ use sugarsubstitute_image_ops::Extent;
 #[cfg(feature = "native-composition")]
 mod comfy_source;
 #[cfg(feature = "native-composition")]
+pub(in crate::startup) mod session_source;
+#[cfg(feature = "native-composition")]
 mod surface;
+#[cfg(feature = "native-composition")]
+pub(in crate::startup) use surface::OutputReplay;
 #[cfg(feature = "native-composition")]
 pub(super) use surface::RoutedInput;
 #[cfg(test)]
@@ -54,6 +58,10 @@ pub(super) struct EmbeddedCanvas {
     scope: ScopeSpec,
     funding: CanvasFunding,
     session: Option<Session>,
+    #[cfg(feature = "native-composition")]
+    input_directory: Option<PathBuf>,
+    #[cfg(feature = "native-composition")]
+    input_plan: crate::input_documents::InputRestorePlan,
     /// The memory budget's latest retained-document limit, applied to every session.
     #[cfg(feature = "native-composition")]
     retained_limit: Option<u64>,
@@ -67,6 +75,75 @@ pub(super) struct EmbeddedCanvas {
 }
 
 impl EmbeddedCanvas {
+    #[cfg(feature = "native-composition")]
+    pub(super) fn set_session_source(&mut self, source: Option<session_source::SessionSource>) {
+        self.surface.session_source = source;
+    }
+
+    /// Expose only the exact held route's original Select correlation to the root classifier.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn output_replay(&self) -> Option<OutputReplay> {
+        self.surface.output_replay(self.session.as_ref()?)
+    }
+
+    /// Resume a held route with the independently current native-original decision.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn resume_output_replay(
+        &mut self,
+        replay: OutputReplay,
+        source: Option<session_source::SessionSource>,
+    ) -> Result<(), Box<dyn Error>> {
+        let session = self.session.as_mut().ok_or("Native output route has no session")?;
+        self.surface.resume_output_replay(replay, source, session)
+    }
+
+    #[cfg(feature = "native-composition")]
+    pub(super) fn workspace_inputs(
+        &self,
+    ) -> Result<Option<crate::input_documents::workspace::WorkspaceInputs>, Box<dyn Error>> {
+        self.session
+            .as_ref()
+            .map_or(Ok(None), |session| session.workspace_inputs().map_err(Into::into))
+    }
+    #[cfg(feature = "native-composition")]
+    pub(super) fn workspace_input_generation(&self) -> Option<u64> {
+        self.session.as_ref().and_then(Session::workspace_input_generation)
+    }
+    #[cfg(feature = "native-composition")]
+    pub(super) fn select_input_directory(
+        &mut self,
+        directory: PathBuf,
+        plan: crate::input_documents::InputRestorePlan,
+    ) -> Result<crate::input_documents::InputRestorePlan, Box<dyn Error>> {
+        if self.session.is_some() {
+            if self.input_directory.as_ref() != Some(&directory) {
+                return Err("Active native input namespace changed".into());
+            }
+            return Ok(self.input_plan.clone());
+        }
+        if !directory.is_absolute() {
+            return Err("Workspace input directory is relative".into());
+        }
+        self.input_directory = Some(directory);
+        self.input_plan = plan;
+        Ok(self.input_plan.clone())
+    }
+    #[cfg(feature = "native-composition")]
+    pub(super) fn resolve_input_association(
+        &mut self,
+        plan: crate::input_documents::InputRestorePlan,
+    ) -> Result<(), Box<dyn Error>> {
+        if !matches!(self.input_plan, crate::input_documents::InputRestorePlan::AwaitingAssociation)
+        {
+            return Err("Native input association is already resolved".into());
+        }
+        if let Some(session) = &mut self.session {
+            session.resolve_input_association(plan.clone())?;
+        }
+        self.input_plan = plan;
+        Ok(())
+    }
+
     /// Keep configuration inert until the accepted main window is revealed.
     #[cfg(any(feature = "windows-native-host", test))]
     pub(super) fn new(
@@ -89,6 +166,10 @@ impl EmbeddedCanvas {
             scope,
             funding,
             session: None,
+            #[cfg(feature = "native-composition")]
+            input_directory: None,
+            #[cfg(feature = "native-composition")]
+            input_plan: crate::input_documents::InputRestorePlan::Current,
             #[cfg(feature = "native-composition")]
             retained_limit: None,
             cutoff: None,
@@ -193,13 +274,18 @@ impl EmbeddedCanvas {
             session.input(Input::DisplayRefresh(hertz))?;
         }
         #[cfg(feature = "native-composition")]
-        session.persist_inputs(crate::input_documents::InputDocumentStore::new(
-            sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
-                &self.anchor,
-            )
-            .user()
-            .join(INPUT_DOCUMENTS),
-        )?);
+        session.persist_inputs(
+            crate::input_documents::InputDocumentStore::new(
+                self.input_directory.clone().unwrap_or_else(|| {
+                    sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                        &self.anchor,
+                    )
+                    .user()
+                    .join(INPUT_DOCUMENTS)
+                }),
+            )?,
+            self.input_plan.clone(),
+        );
         self.session = Some(session);
         let runtime = Runtime::shared(client, self.scope)?;
         self.session.as_mut().ok_or("Application canvas disappeared")?.start_runtime(runtime)

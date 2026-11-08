@@ -111,6 +111,7 @@ struct Backend {
     target: BackendTarget,
     budget: ConnectionBudget,
     resolved: Option<sugarsubstitute_contracts::configuration::LaunchConfiguration>,
+    backend_binding: Option<BackendBindingDigest>,
     ready_origin: Option<LoopbackOrigin>,
     ready_context: Option<BackendReadyMetadata>,
     managed_exit: Option<(ProcessKey, u32)>,

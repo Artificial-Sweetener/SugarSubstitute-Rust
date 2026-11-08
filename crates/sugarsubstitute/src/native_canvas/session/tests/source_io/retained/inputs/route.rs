@@ -4,6 +4,9 @@
 
 use super::*;
 use crate::native_canvas::session::inputs::InputRejection;
+mod originals;
+
+mod pending_frames;
 
 /// Retained-document storage for the small documents these tests render.
 const FUNDED: u64 = 8 * 1024 * 1024;

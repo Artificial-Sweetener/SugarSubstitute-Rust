@@ -50,11 +50,22 @@ impl<B: StartupBackend> StartupHost<B> {
         let canvas = super::delivery::resolve(canvas, composition);
         let frame = super::consume_diagnostic::delivery::<B, _>(render, child, canvas)?;
         if let Some(prepared) = &mut self.startup {
-            self.child.advance_reload(prepared)?;
+            observed_consume::<B, _>(
+                ConsumeStage::FrontendReload,
+                self.child.advance_reload(prepared),
+            )?;
         }
         self.deliver_startup_events()?;
         #[cfg(all(windows, feature = "native-composition"))]
-        self.refresh_canvas_backend()?;
+        self.advance_workspace()?;
+        if self.closing {
+            self.advance_shutdown_budget()?;
+        }
+        #[cfg(all(windows, feature = "native-composition"))]
+        {
+            let refreshed = self.refresh_canvas_backend();
+            observed_consume::<B, _>(ConsumeStage::CanvasBackendRefresh, refreshed)?;
+        }
         if let Some(view) = &mut self.view {
             if let Some(startup) = &self.startup {
                 view.phase(startup.session().phase());
@@ -121,6 +132,16 @@ impl<B: StartupBackend> StartupHost<B> {
     pub(super) fn route(&mut self, route: StartupRoute) -> Result<(), Box<dyn Error>> {
         match route {
             StartupRoute::Native(observation) => {
+                #[cfg(all(windows, feature = "native-composition"))]
+                let observation = if let Some(workspace) = &mut self.workspace {
+                    let Some(observation) = workspace.observe(observation, self.clock.now())?
+                    else {
+                        return Ok(());
+                    };
+                    observation
+                } else {
+                    observation
+                };
                 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
                 let Some(observation) = self.observe_memory(observation)? else {
                     return Ok(());
@@ -155,7 +176,23 @@ impl<B: StartupBackend> StartupHost<B> {
                                 let canvas =
                                     self.canvas.as_mut().ok_or("Application canvas disappeared")?;
                                 canvas.backend(backend)?;
-                                canvas.surface(identity, message, allocation, claim)?;
+                                let source = match self
+                                    .workspace
+                                    .as_ref()
+                                    .map(|workspace| workspace.native_source(&message, backend))
+                                    .transpose()
+                                {
+                                    Ok(source) => source.flatten(),
+                                    Err(cause) => {
+                                        tracing::warn!(operation="workspace_native_source_refused",identity=?identity,cause=%cause,"Native original unavailable; prior canvas retained");
+                                        canvas.refuse_surface(identity, message, claim)?;
+                                        return Ok(());
+                                    }
+                                };
+                                canvas.set_session_source(source);
+                                let result = canvas.surface(identity, message, allocation, claim);
+                                canvas.set_session_source(None);
+                                result?;
                             } else {
                                 self.canvas
                                     .as_mut()
@@ -200,6 +237,7 @@ impl<B: StartupBackend> StartupHost<B> {
                                     self.canvas.as_mut().ok_or("Application canvas disappeared")?;
                                 canvas.backend(backend)?;
                                 canvas.native(identity, request, claim, storage)?;
+                                self.advance_native_output_replays()?;
                             } else {
                                 self.canvas
                                     .as_mut()
@@ -229,6 +267,19 @@ impl<B: StartupBackend> StartupHost<B> {
             StartupRoute::Close => self.close_owned()?,
             StartupRoute::None => {}
             StartupRoute::Effect(effect) => match effect {
+                #[cfg(all(windows, feature = "native-composition"))]
+                effect @ StartupEffect::LoadFrontend { .. } if self.workspace.is_some() => {
+                    let prepared = self.startup.as_ref().ok_or("Actual startup custody absent")?;
+                    let context = self
+                        .child
+                        .workspace_context(prepared)?
+                        .ok_or("Authenticated workspace context absent")?;
+                    self.workspace.as_mut().ok_or("Workspace owner disappeared")?.begin(
+                        context,
+                        effect,
+                        self.clock.now(),
+                    )?;
+                }
                 StartupEffect::RetireSplash { launch } => self.commands.retire_splash(launch)?,
                 StartupEffect::RevealMain { .. } => {
                     let startup = self
@@ -325,6 +376,13 @@ impl<B: StartupBackend> StartupHost<B> {
                 memory.retire_page(identity);
                 return Ok(Some(DesktopStartupObservation::MainRetired(identity)));
             }
+            DesktopStartupObservation::MainReloadRequested { identity, reason } => {
+                memory.retire_page(identity);
+                return Ok(Some(DesktopStartupObservation::MainReloadRequested {
+                    identity,
+                    reason,
+                }));
+            }
             other => return Ok(Some(other)),
         }
         Ok(None)
@@ -338,9 +396,14 @@ impl<B: StartupBackend> StartupHost<B> {
             self.composition.as_ref().and_then(composition::CompositionWork::deadline);
         #[cfg(not(all(windows, feature = "native-composition")))]
         let composition = None;
+        #[cfg(all(windows, feature = "native-composition"))]
+        let workspace = self.workspace.as_ref().and_then(workspace::WorkspaceWork::deadline);
+        #[cfg(not(all(windows, feature = "native-composition")))]
+        let workspace = None;
         self.next_deadline = child
             .into_iter()
             .chain(composition)
+            .chain(workspace)
             .min()
             .map(|at| self.clock.instant_for(at))
             .transpose()?;

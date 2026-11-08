@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bound caller-selected inputs and staged outputs without acquiring application ownership.
 mod input;
+#[cfg(windows)]
+mod retained;
 pub use input::{ArtifactInput, with_artifact_input};
+#[cfg(windows)]
+pub use retained::{ArtifactReadPermit, RetainedArtifactReader};
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -26,6 +30,25 @@ pub enum ArtifactPublication {
     CreateOnly,
     /// Replace the selected leaf atomically after its complete stage is flushed and closed.
     ReplaceSelected,
+}
+
+/// Allocate a canonical lowercase UUID on an admitted Windows storage worker.
+/// This creates correlation only; it grants no installation, file or process authority.
+/// # Errors
+/// Preserves original cancellation/deadline and operating-system generation failures.
+#[cfg(windows)]
+pub fn new_artifact_identity(context: &JobContext) -> io::Result<String> {
+    check(context)?;
+    let value = super::staging::identity()?;
+    check(context)?;
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        &value[..8],
+        &value[8..12],
+        &value[12..16],
+        &value[16..20],
+        &value[20..]
+    ))
 }
 
 /// Bounded input bytes coupled to their actual original execution allocation.

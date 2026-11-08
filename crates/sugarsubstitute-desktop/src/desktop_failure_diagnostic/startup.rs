@@ -34,6 +34,13 @@ impl Error for ObservationFailure {
 pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> StartupObservationKind {
     use StartupObservationKind as Kind;
     match observation {
+        DesktopStartupObservation::SessionMessage(_) => Kind::SessionMessage,
+        DesktopStartupObservation::SessionMediaRequested(_) => Kind::SessionMediaRequested,
+        DesktopStartupObservation::SessionMediaCancelled { .. } => Kind::SessionMediaCancelled,
+        DesktopStartupObservation::MainPlacementObserved(_) => Kind::MainPlacementObserved,
+        DesktopStartupObservation::MainPlacementCaptureFailed { .. } => {
+            Kind::MainPlacementCaptureFailed
+        }
         DesktopStartupObservation::NativeActivity { .. } => Kind::NativeActivity,
         DesktopStartupObservation::UiChallengeProcessed(_) => Kind::UiChallengeProcessed,
         DesktopStartupObservation::NativeRetired(_) => Kind::NativeRetired,

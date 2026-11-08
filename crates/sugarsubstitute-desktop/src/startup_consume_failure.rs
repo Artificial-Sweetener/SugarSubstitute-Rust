@@ -20,6 +20,12 @@ pub enum StartupConsumeStage {
     ChildDelivery,
     /// The application-owned canvas could not advance its retained work.
     CanvasDelivery,
+    /// Advancing the retained frontend replacement failed.
+    FrontendReload,
+    /// Refreshing the canvas's current authenticated backend failed.
+    CanvasBackendRefresh,
+    /// An accepted startup frame lacked its retained control appearance.
+    AppearancePublication,
     /// The actual child could not transfer its retained startup event.
     StartupEvent,
     /// Application policy rejected the actual startup event.

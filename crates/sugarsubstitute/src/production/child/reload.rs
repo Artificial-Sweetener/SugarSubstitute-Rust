@@ -3,7 +3,7 @@
 //! Replace one current native frontend through actual retirement and the same retained backend lease.
 use super::*;
 use std::time::Duration;
-use sugarsubstitute_application::startup::StartupPhase;
+use sugarsubstitute_application::startup::{ConnectionBudgetKind, StartupPhase};
 use sugarsubstitute_supervision::lifecycle_protocol::{
     DecodedPayload, FrameCodec, ReplyOutcome, WireMessage, WirePayload,
 };
@@ -39,6 +39,30 @@ impl FrontendReload {
     }
 }
 impl ProductionChild {
+    /// Retain the authenticated current lease; attached servers have no managed output owner.
+    fn reload_backend_lease(&self, identity: MainIdentity) -> Result<LeaseReference> {
+        if identity != self.identity {
+            return Err("Frontend reload belongs to another Main".into());
+        }
+        let lease = self.lease.ok_or("Current backend lease absent")?;
+        match self.connection_budget.ok_or("Current connection budget absent")?.kind() {
+            ConnectionBudgetKind::Attached if self.running_backend.is_none() => Ok(lease),
+            ConnectionBudgetKind::Managed => {
+                let current = self
+                    .running_backend
+                    .as_ref()
+                    .ok_or("Running managed backend absent")?
+                    .reload_lease(identity)?;
+                if current != lease {
+                    return Err("Running managed backend lease differs from current grant".into());
+                }
+                Ok(lease)
+            }
+            ConnectionBudgetKind::Attached => {
+                Err("Attached frontend has a managed backend binding".into())
+            }
+        }
+    }
     /// Coalesce this exact native request without closing the backend/output/capture owners.
     pub(super) fn request_reload(&mut self, identity: MainIdentity) -> Result<()> {
         if self.shutdown.closing() {
@@ -59,11 +83,7 @@ impl ProductionChild {
         {
             return Err("Frontend reload requires the actual current running Main".into());
         }
-        let lease = self
-            .running_backend
-            .as_ref()
-            .ok_or("Running backend absent")?
-            .reload_lease(identity)?;
+        let lease = self.reload_backend_lease(identity)?;
         let next = MainIdentity {
             run: identity.run,
             launch: LaunchId::new(identity.launch.get().checked_add(1).ok_or("Launch exhausted")?)?,
@@ -164,17 +184,19 @@ impl ProductionChild {
             if !self.shutdown.main_retired || !self.shutdown.main_retirement_ack {
                 return Ok(());
             }
-            let (previous, next) = (reload.previous, reload.next);
+            let (previous, next, lease) = (reload.previous, reload.next, reload.lease);
+            if self.reload_backend_lease(previous)? != lease {
+                return Err("Frontend reload backend lease changed during retirement".into());
+            }
             let mut input = self.main.take_reusable_input()?;
             if let Err(cause) = prepared.restore_main_input(&mut input) {
                 self.main.restore_reusable_input(&mut input)?;
                 return Err(cause);
             }
             prepared.session_mut().reload_frontend(next.launch, next.navigation)?;
-            self.running_backend
-                .as_mut()
-                .ok_or("Running backend absent")?
-                .reload_main(previous, next)?;
+            if let Some(running) = &mut self.running_backend {
+                running.reload_main(previous, next)?;
+            }
             self.panel_deliveries.clear();
             self.identity = next;
             self.phase = Some(prepared.session().phase());
@@ -220,10 +242,18 @@ impl ProductionChild {
             || context.identity != next
             || context.lease != lease
             || Some(context.origin) != prepared.session().connection_origin()
+            || Some(context.backend_binding) != self.backend_binding
+            || self.bootstrap.channel_mut().backend_data_disposition()
+                != Some(context.backend_data_disposition())
+            || self
+                .session_installation
+                .as_ref()
+                .is_none_or(|identity| identity.as_str() != context.installation)
         {
             return Err("Reload authorization changed identity, lease or origin".into());
         }
         let origin = context.origin;
+        self.session_peer = Some(context.backend_peer);
         #[cfg(feature = "native-composition")]
         {
             self.canvas_backend = Some(crate::startup::CanvasBackend {

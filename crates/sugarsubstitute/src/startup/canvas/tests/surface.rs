@@ -42,6 +42,7 @@ mod reattachment;
 mod rebuild;
 mod replacement;
 mod reselection;
+mod session_originals;
 mod temporary;
 mod viewport;
 

@@ -75,6 +75,7 @@ pub(super) struct ProjectionInput {
     restart: Option<RestartProjection>,
     snapshot: Option<PreparedStartupSnapshot>,
     capture_root: PathBuf,
+    user: PathBuf,
     installation: Option<Arc<RunningApplication>>,
     cause: ProjectionCause,
     post: Option<ControlFailure>,
@@ -84,6 +85,7 @@ impl ProjectionInput {
     pub(super) fn new(
         request: AuthenticatedEntryLaunch,
         capture_root: PathBuf,
+        user: PathBuf,
         client: ExecutionClient,
         run: sugarsubstitute_contracts::lifecycle::RunKey,
         installation: Option<Arc<RunningApplication>>,
@@ -95,6 +97,7 @@ impl ProjectionInput {
             restart: None,
             snapshot: None,
             capture_root,
+            user,
             installation,
             cause: ProjectionCause::NotStarted,
             post: None,
@@ -111,6 +114,7 @@ impl ProjectionInput {
             restart: None,
             snapshot: None,
             capture_root: PathBuf::new(),
+            user: PathBuf::new(),
             installation: None,
             cause: ProjectionCause::NotStarted,
             post: None,
@@ -133,6 +137,7 @@ pub(super) struct ProjectedEntry {
     pub(super) requested_profile: PathBuf,
     pub(super) profile_units: Vec<u16>,
     pub(super) profile: ProfileId,
+    pub(super) session_installation: sugarsubstitute_contracts::installation::InstallationId,
     pub(super) locale: LocaleId,
     pub(super) target: BackendTarget,
     pub(super) frontend: Option<FrontendInstallationInput>,
@@ -266,13 +271,26 @@ pub(super) fn project(
         .and_then(|()| request.view().map_err(|cause| Box::new(cause) as _))
         .and_then(|view| {
             LaunchConfiguration::validate_path(&input.input().capture_root)?;
-            fields(view, &input.input().capture_root, bytes, |configuration| {
-                match &input.input().installation {
+            fields(
+                view,
+                &input.input().capture_root,
+                capacity::field_available(input.input())?,
+                |configuration| match &input.input().installation {
                     Some(installation) => installation
                         .backend_storage(configuration.root(), &context)
                         .map_err(|cause| Box::new(cause) as _),
                     None => Ok(BackendStorage::External),
-                }
+                },
+            )
+            .and_then(|fields| {
+                let identity =
+                    sugarsubstitute_supervision::session_identity::session_host_identity(
+                        &input.input().user,
+                        &fields.profile,
+                        input.input().installation.as_deref(),
+                        &context,
+                    )?;
+                Ok((fields, identity))
             })
         });
     // The same preclaimed slot adopts the primary before any lazy provider.
@@ -284,7 +302,7 @@ pub(super) fn project(
         }
     };
     let post = check(&context, received, until).err();
-    let fields = match (projected, post) {
+    let (fields, session_installation) = match (projected, post) {
         (Some(fields), None) => fields,
         (Some(_), Some(cause)) => {
             input.input_mut().cause = ProjectionCause::Operation(Box::new(cause));
@@ -318,14 +336,15 @@ pub(super) fn project(
             return Err(ProjectionFailure { retained: input });
         }
     };
-    let (charge, policy_credit) = match capacity::funding(input.input_mut(), &fields) {
-        Ok(funding) => funding,
-        Err(cause) => {
-            input.input_mut().snapshot = Some(snapshot);
-            input.input_mut().cause = ProjectionCause::Operation(cause);
-            return Err(ProjectionFailure { retained: input });
-        }
-    };
+    let (charge, policy_credit) =
+        match capacity::funding(input.input_mut(), &fields, &session_installation) {
+            Ok(funding) => funding,
+            Err(cause) => {
+                input.input_mut().snapshot = Some(snapshot);
+                input.input_mut().cause = ProjectionCause::Operation(cause);
+                return Err(ProjectionFailure { retained: input });
+            }
+        };
     Ok(ProjectedEntry {
         snapshot: Some(snapshot),
         registered,
@@ -336,6 +355,7 @@ pub(super) fn project(
         requested_profile: fields.requested_profile,
         profile_units: fields.profile_units,
         profile: fields.profile,
+        session_installation,
         locale: fields.locale,
         target: fields.target,
         frontend: Some(fields.frontend),

@@ -119,7 +119,7 @@ pub(super) fn return_to_selection_camera(
     now: Duration,
 ) -> Result<(), Box<dyn Error>> {
     match frame {
-        Some(frame) => apply_selection_frame(tools, frame, now),
+        Some(frame) => start_at_selection_camera(tools, content, Some(frame), now),
         None if tools.navigation().zoom_mode() != sugarsubstitute_canvas::ZoomMode::Fit => {
             start_at_selection_camera(tools, content, None, now)
         }

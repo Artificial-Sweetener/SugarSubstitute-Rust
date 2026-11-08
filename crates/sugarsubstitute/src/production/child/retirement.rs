@@ -198,6 +198,10 @@ impl ProductionChild {
     /// Latch capture cleanup first; absent capture permits the composing content's original clock.
     /// # Errors
     /// Keeps clock/counter failures and actual partial capture/source custody unchanged.
+    pub(in crate::production) fn begin_workspace_close(&mut self) -> Result<ShutdownInitiation> {
+        self.bootstrap.close_initialization();
+        self.shutdown.observe_capture(self.bootstrap.capture_cleanup_snapshot())
+    }
     pub(in crate::production) fn begin_shutdown(&mut self) -> Result<ShutdownInitiation> {
         if self.shutdown.intent.is_none() {
             self.shutdown.intent = Some(self.completion_intent());

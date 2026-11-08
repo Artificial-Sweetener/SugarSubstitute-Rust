@@ -13,8 +13,8 @@ use std::{
 use sugarsubstitute_application::startup::StartupSession;
 use sugarsubstitute_contracts::{
     configuration::{
-        ConfigurationError, ConnectionConfiguration, LaunchConfiguration, ProfileId,
-        StartupConfiguration,
+        BackendDataDisposition, ConfigurationError, ConnectionConfiguration, LaunchConfiguration,
+        ProfileId, StartupConfiguration,
     },
     coordinator_entry::{EntryConnectionView, EntryLaunchRequestView, EntryWindowsPathView},
     execution::{
@@ -160,6 +160,7 @@ pub(super) enum ProjectionError {
     Memory(MemoryClaimError),
     Cancelled,
     Deadline,
+    Disposition,
 }
 impl fmt::Display for ProjectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -174,7 +175,7 @@ impl Error for ProjectionError {
             Self::ManagedLaunch(cause) => Some(cause),
             Self::Capacity(cause) => Some(cause),
             Self::Memory(cause) => Some(cause),
-            Self::Cancelled | Self::Deadline => None,
+            Self::Cancelled | Self::Deadline | Self::Disposition => None,
         }
     }
 }
@@ -191,6 +192,7 @@ pub(super) fn submit(
     scope: &Scope,
     id: JobId,
     source: AuthenticatedStartupSnapshot,
+    disposition: BackendDataDisposition,
     original: Moment,
 ) -> Result<OwnedJob<PreparedChildConfiguration, ChildConfigurationFailure>, AdmissionError> {
     client.submit_blocking(scope, request(id, original), move |context| {
@@ -199,7 +201,7 @@ pub(super) fn submit(
             let claim =
                 context.memory().claim(PROJECTION_BYTES).map_err(ProjectionError::Memory)?;
             let view = source.view().map_err(ProjectionError::Source)?;
-            let configuration = project(view)?;
+            let configuration = project(view, disposition)?;
             let main = project_main(view, context.memory())?;
             checkpoint(&context)?;
             Ok::<_, ProjectionError>((configuration, main, claim))
@@ -238,9 +240,20 @@ fn checkpoint(context: &JobContext) -> Result<(), ProjectionError> {
     Ok(())
 }
 
-fn project(view: EntryLaunchRequestView<'_>) -> Result<StartupConfiguration, ProjectionError> {
+fn project(
+    view: EntryLaunchRequestView<'_>,
+    disposition: BackendDataDisposition,
+) -> Result<StartupConfiguration, ProjectionError> {
+    if disposition != BackendDataDisposition::External {
+        return Err(ProjectionError::Disposition);
+    }
     let connection = match view.connection() {
-        EntryConnectionView::Attached(origin) => ConnectionConfiguration::Attach(origin),
+        EntryConnectionView::Attached(origin)
+            if disposition == BackendDataDisposition::External =>
+        {
+            ConnectionConfiguration::Attach(origin)
+        }
+        EntryConnectionView::Attached(_) => return Err(ProjectionError::Disposition),
         EntryConnectionView::Managed { root, interpreter, arguments, port } => {
             let root = path(root)?;
             let interpreter = path(interpreter)?;

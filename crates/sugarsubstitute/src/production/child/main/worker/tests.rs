@@ -54,6 +54,8 @@ fn absent_grant_is_worker_state_failure_and_retains_actual_projected_input()
                 close: "close",
             },
         },
+        session_bootstrap: None,
+        placement: None,
         original,
         reloading: false,
     });

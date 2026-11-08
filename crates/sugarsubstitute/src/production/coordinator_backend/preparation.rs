@@ -137,11 +137,18 @@ impl CoordinatorBackend {
                 .map(LaunchEnvironment::try_copy)
                 .transpose()?,
         };
+        let backend_binding = match &target {
+            BackendTarget::Attached(origin) => {
+                Some(crate::workspace_session::attached_binding(*origin))
+            }
+            BackendTarget::Managed(_) => None,
+        };
         self.records[at] = Some(Backend {
             key,
             target,
             budget,
             resolved: None,
+            backend_binding,
             ready_origin: None,
             ready_context: None,
             managed_exit: None,

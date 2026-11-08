@@ -435,6 +435,8 @@ fn qualification_capture_kind_cannot_grant_startup_policy_and_retains_original_c
 #[cfg(all(windows, feature = "windows-native-host"))]
 #[path = "child_routing_tests.rs"]
 mod child_routing_tests;
+#[path = "placement_tests.rs"]
+mod placement_tests;
 
 #[test]
 fn native_reload_routes_only_current_main_and_whole_close_fences_replacement_intent() -> TestResult

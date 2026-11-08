@@ -23,7 +23,8 @@ impl NativeSurface {
         kind: PendingKind,
     ) {
         Record { pending: waiting(kind), ..record(Stage::Pending, &request) }.emit();
-        self.pending = Some(Pending { identity, request, claim, kind, wait: Wait::None });
+        self.pending =
+            Some(Pending { identity, request, claim, kind, wait: Wait::None, preparation: None });
     }
 
     /// Record why the pending selection still has no reply, once per change of reason.
@@ -33,6 +34,19 @@ impl NativeSurface {
             return;
         }
         let wait = selection_wait(binding, session);
+        let preparation = (wait == Wait::Preparing).then(|| session.native_preparation_snapshot());
+        if let Some(snapshot) = preparation
+            && pending.preparation != preparation
+        {
+            crate::canvas_preparation_diagnostic::Record {
+                request_id: pending.request.request_id(),
+                intent: binding.source_intent_revision.unwrap_or(0),
+                current: session.source_intent_revision(),
+                snapshot,
+            }
+            .emit();
+        }
+        pending.preparation = preparation;
         if wait == pending.wait {
             return;
         }

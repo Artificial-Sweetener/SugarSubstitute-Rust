@@ -111,6 +111,12 @@ pub(crate) struct ProductionChild {
     /// Latest operating-system accent, presented to every new SugarCubes page.
     system_accent: Option<sugarsubstitute_contracts::appearance::AccentColor>,
     running_backend: Option<backend::RunningBackendBinding>,
+    /// Parent-authenticated canonical selection correlation; native grants remain independent.
+    backend_binding: Option<BackendBindingDigest>,
+    session_peer: Option<sugarsubstitute_supervision::lifecycle_protocol::BackendPeer>,
+    session_installation: Option<sugarsubstitute_contracts::installation::InstallationId>,
+    workspace_bootstrap: Option<sugarsubstitute_desktop::SessionBootstrap>,
+    workspace_placement: Option<sugarsubstitute_contracts::desktop_session::wire::SessionPlacement>,
     #[cfg(feature = "native-composition")]
     canvas_backend: Option<crate::startup::CanvasBackend>,
     snapshot: Option<OutputSnapshot>,
@@ -182,6 +188,11 @@ impl ProductionChild {
             panel_owner_admission_warned: false,
             system_accent: None,
             running_backend: None,
+            backend_binding: None,
+            session_peer: None,
+            session_installation: None,
+            workspace_bootstrap: None,
+            workspace_placement: None,
             #[cfg(feature = "native-composition")]
             canvas_backend: None,
             snapshot: None,

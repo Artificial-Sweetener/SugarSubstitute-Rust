@@ -328,6 +328,10 @@ impl EntryActivation for ProductionActivation {
         let mut input = Some(ProjectionInput::new(
             frame,
             self.capture_root.clone(),
+            sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                &self.working_directory,
+            )
+            .user(),
             resources.client.clone(),
             run,
             resources.authority.running_installation(),

@@ -7,7 +7,7 @@ use std::{
     num::{NonZeroU32, NonZeroU64},
 };
 use sugarsubstitute_contracts::{
-    configuration::LoopbackOrigin,
+    configuration::{BackendDataDisposition, LoopbackOrigin},
     startup::{MainIdentity, validate_frontend_version},
 };
 
@@ -58,6 +58,20 @@ pub struct GrantedContext<'a> {
     pub sugarcubes: VersionLabel<'a>,
     /// Claimed verified backend peer; native connection qualification remains independent.
     pub backend_peer: BackendPeer,
+    /// Existing canonical backend identity correlation, independently authenticated by the
+    /// native channel. It grants no backend I/O or process authority.
+    pub backend_binding: sugarsubstitute_contracts::lifecycle::BackendBindingDigest,
+    /// Canonical correlation retained by the parent installation/source-host owner. The native
+    /// transport authenticates its provenance; matching text grants no installation authority.
+    pub installation: &'a str,
+    /// Parent-native-derived execution policy. This inert data grants no storage authority.
+    pub backend_data_disposition: BackendDataDisposition,
+}
+impl GrantedContext<'_> {
+    /// Return the explicit parent-derived policy; no path or environment can substitute it.
+    pub const fn backend_data_disposition(&self) -> BackendDataDisposition {
+        self.backend_data_disposition
+    }
 }
 /// Identify the native stage without serializing its original cause.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

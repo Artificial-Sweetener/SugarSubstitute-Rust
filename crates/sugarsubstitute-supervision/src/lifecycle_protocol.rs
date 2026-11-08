@@ -2,9 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 11 uses little-endian integers and a fixed 104-byte header. Kind21
+//! Wire version 13 uses little-endian integers and a fixed 104-byte header. Kind21
 //! reports the policy-accepted native main reveal after frontend readiness. The parent
 //! rechecks its retained profile/browser authorization before accepting that observation.
+//! Registration reply tag17 carries explicit parent-derived backend execution policy before
+//! child configuration projection. Granted/Reloaded repeat that same closed policy. Receiving
+//! these inert facts never grants installation, backend or filesystem custody.
 //! Earlier wire versions are rejected; all processes in a launch use the same distribution.
 //! Managed
 //! Acquire/Retry headers bound admission; accepted requests await the owned backend
@@ -45,10 +48,15 @@
 //! NativeActivity carries positive u64 revision/u8 activity (1 active,2 inactive,
 //! 3 native-acknowledged suspension claim); OutputPull carries lease/u64 prior
 //! consumed delivery (0 absent). Decoding alone authenticates none of these facts.
-//! Reply tags 1..16 are documented on `ReplyOutcome`. Granted tag3 includes lease,
+//! Reply tags 1..17 are documented on `ReplyOutcome`. Granted tag3 includes lease,
 //! main identity, u8 loopback host/u16 port, two u8-counted ASCII version labels,
 //! and the verified listener's u32 PID and u64 creation time in 100 ns units.
 //! Reloaded tag5 carries the same context after fresh source inspection/HTTP verification.
+//! Both grant forms end with the canonical backend identity SHA256 (32 raw bytes),
+//! installation/source correlation (32 lowercase ASCII hex bytes), then one policy byte
+//! (1 external, 2 installation-owned). These are matching/execution data only. Registered
+//! tag17 carries just that policy byte before child configuration projection; subsequent
+//! grants repeat it. Missing, unknown and earlier-version contexts are rejected.
 //! Version6 lease-only reload replies are rejected by all coordinated native peers.
 //! Labels satisfy the shared readiness grammar and contain at most64 bytes.
 //! OutputDelivery carries lease/u64 delivery/u8 stream/u64 stream sequence/u8 gap
@@ -81,7 +89,7 @@
 //! a stale original lease gains no release or reload authority. Web reload remains with
 //! the frontend owner. These copied wire facts grant no retry, current readiness,
 //! native adoption or teardown proof.
-//! Only schema11 is accepted; parent and captured child deploy together.
+//! Only schema13 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
 mod decode;
@@ -113,7 +121,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 11;
+pub const WIRE_VERSION: u16 = 13;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

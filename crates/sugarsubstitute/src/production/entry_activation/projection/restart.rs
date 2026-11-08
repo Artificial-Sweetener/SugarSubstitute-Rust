@@ -16,6 +16,7 @@ impl ProjectionInput {
     pub(in crate::production::entry_activation) fn restart(
         client: ExecutionClient,
         capture_root: PathBuf,
+        user: PathBuf,
         restart: RestartProjection,
         installation: Option<Arc<RunningApplication>>,
     ) -> Self {
@@ -26,6 +27,7 @@ impl ProjectionInput {
             run: Some(restart.run),
             restart: Some(restart),
             capture_root,
+            user,
             installation,
             cause: ProjectionCause::NotStarted,
             post: None,
@@ -40,8 +42,7 @@ pub(super) fn project(
     let result = (|| -> Result<_, Box<dyn Error + Send + Sync>> {
         let data = input.input().restart.as_ref().ok_or("Registered restart input missing")?;
         check(&context, data.original.started(), data.original.until())?;
-        let available =
-            input.input()._charge.as_ref().ok_or("Original data claim missing")?.bytes();
+        let available = capacity::field_available(input.input())?;
         let fields =
             fields(data.source.view()?, &input.input().capture_root, available, |configuration| {
                 match &input.input().installation {
@@ -51,6 +52,13 @@ pub(super) fn project(
                     None => Ok(BackendStorage::External),
                 }
             })?;
+        let session_installation =
+            sugarsubstitute_supervision::session_identity::session_host_identity(
+                &input.input().user,
+                &fields.profile,
+                input.input().installation.as_deref(),
+                &context,
+            )?;
         let client =
             input.input().client.as_ref().ok_or("Actual restart execution owner missing")?;
         let snapshot = client.restart_startup_snapshot(
@@ -61,9 +69,9 @@ pub(super) fn project(
             &context,
         )?;
         check(&context, data.original.started(), data.original.until())?;
-        Ok((fields, snapshot))
+        Ok((fields, snapshot, session_installation))
     })();
-    let (fields, snapshot) = match result {
+    let (fields, snapshot, session_installation) = match result {
         Ok(value) => value,
         Err(cause) => {
             input.input_mut().cause = ProjectionCause::Operation(cause);
@@ -74,15 +82,16 @@ pub(super) fn project(
         input.input_mut().snapshot = Some(snapshot);
         return Err(ProjectionFailure { retained: input });
     };
-    let (charge, policy_credit) = match capacity::funding(input.input_mut(), &fields) {
-        Ok(funding) => funding,
-        Err(cause) => {
-            input.input_mut().snapshot = Some(snapshot);
-            input.input_mut().restart = Some(data);
-            input.input_mut().cause = ProjectionCause::Operation(cause);
-            return Err(ProjectionFailure { retained: input });
-        }
-    };
+    let (charge, policy_credit) =
+        match capacity::funding(input.input_mut(), &fields, &session_installation) {
+            Ok(funding) => funding,
+            Err(cause) => {
+                input.input_mut().snapshot = Some(snapshot);
+                input.input_mut().restart = Some(data);
+                input.input_mut().cause = ProjectionCause::Operation(cause);
+                return Err(ProjectionFailure { retained: input });
+            }
+        };
     Ok(ProjectedEntry {
         locale: fields.locale,
         snapshot: Some(snapshot),
@@ -94,6 +103,7 @@ pub(super) fn project(
         requested_profile: fields.requested_profile,
         profile_units: fields.profile_units,
         profile: fields.profile,
+        session_installation,
         target: fields.target,
         frontend: Some(fields.frontend),
         backend_environment: fields.backend_environment,

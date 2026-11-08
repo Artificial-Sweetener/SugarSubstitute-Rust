@@ -56,6 +56,9 @@ pub(super) struct MainConstruction {
     pub(super) header: WireHeader,
     pub(super) origin: sugarsubstitute_contracts::configuration::LoopbackOrigin,
     pub(super) settings: MainWindowSettings,
+    pub(super) session_bootstrap: Option<sugarsubstitute_desktop::SessionBootstrap>,
+    pub(super) placement:
+        Option<sugarsubstitute_contracts::desktop_session::wire::SessionPlacement>,
     pub(super) original: Moment,
     pub(super) reloading: bool,
 }
@@ -86,6 +89,8 @@ pub(super) fn submit(
                 header,
                 origin,
                 settings,
+                session_bootstrap,
+                placement,
                 original,
                 reloading,
             } = construction;
@@ -125,7 +130,7 @@ pub(super) fn submit(
                     copy(grant.sugarcubes.as_str())?,
                 )
                 .map_err(MainError::Request)?;
-                let request = Box::new(
+                let mut request = Box::new(
                     MainWindowRequest::new(
                         identity,
                         origin,
@@ -137,6 +142,8 @@ pub(super) fn submit(
                     )
                     .map_err(MainError::Request)?,
                 );
+                request.set_session_bootstrap(session_bootstrap).map_err(MainError::Request)?;
+                request.set_initial_placement(placement).map_err(MainError::Request)?;
                 drop(temporary);
                 check(&context, original)?;
                 let profile = ProfileTransaction::new(request, original, &context)

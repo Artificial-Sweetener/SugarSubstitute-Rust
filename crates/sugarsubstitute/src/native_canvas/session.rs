@@ -39,6 +39,8 @@ mod host_graphics;
 pub(crate) mod inputs;
 mod native;
 mod preparation;
+#[cfg(feature = "native-composition")]
+mod preparation_snapshot;
 mod presentation;
 mod proof;
 #[cfg(feature = "native-composition")]

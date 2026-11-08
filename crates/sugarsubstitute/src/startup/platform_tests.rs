@@ -7,9 +7,9 @@ use sugarsubstitute_contracts::{configuration::*, execution::*, lifecycle::*, st
 use sugarsubstitute_desktop::{StartupCaptureState, StartupCauseCode};
 use sugarsubstitute_execution::ExecutionClient;
 
-struct Prepared {
-    session: StartupSession,
-    released: bool,
+pub(super) struct Prepared {
+    pub(super) session: StartupSession,
+    pub(super) released: bool,
 }
 impl PreparedStartup for Prepared {
     fn session(&self) -> &StartupSession {
@@ -23,18 +23,22 @@ impl PreparedStartup for Prepared {
     }
 }
 #[derive(Default)]
-struct Platform {
-    budget: Option<ShutdownBudget>,
+pub(super) struct Platform {
+    pub(in crate::startup) budget: Option<ShutdownBudget>,
+    pub(in crate::startup) shutdown_requests: Vec<ShutdownBudget>,
+    pub(in crate::startup) shutdown_starts: usize,
     retired: bool,
     finished: bool,
     effects: Vec<&'static str>,
     revealed: Vec<MainIdentity>,
     accents: Vec<Option<sugarsubstitute_contracts::appearance::AccentColor>>,
+    pub(in crate::startup) start_allowed: bool,
+    reload_failure: Option<Box<dyn Error>>,
 }
 impl StartupBackend for Platform {
     type Prepared = Prepared;
     fn start(&mut self, _: &ExecutionClient, _: Scope, _: &JobSequence) -> BackendResult<()> {
-        Err("unused native startup boundary".into())
+        if self.start_allowed { Ok(()) } else { Err("unused native startup boundary".into()) }
     }
     fn consume(&mut self, _: &CompletionBatch, _: Option<&Prepared>) -> BackendResult<()> {
         Ok(())
@@ -89,6 +93,21 @@ impl StartupBackend for Platform {
     fn canvas_backend(&self, _: MainIdentity) -> Option<crate::startup::CanvasBackend> {
         None
     }
+    #[cfg(windows)]
+    fn workspace_context(
+        &self,
+        _: &Self::Prepared,
+    ) -> BackendResult<Option<super::WorkspaceContext>> {
+        Ok(None)
+    }
+    #[cfg(windows)]
+    fn configure_workspace(
+        &mut self,
+        _: sugarsubstitute_desktop::SessionBootstrap,
+        _: Option<sugarsubstitute_contracts::desktop_session::wire::SessionPlacement>,
+    ) -> BackendResult<()> {
+        Ok(())
+    }
     fn main_construction_pending(&self) -> bool {
         false
     }
@@ -117,9 +136,13 @@ impl StartupBackend for Platform {
         Err("retry must remain fenced".into())
     }
     fn advance_reload(&mut self, _: &mut Prepared) -> BackendResult<()> {
-        Ok(())
+        self.reload_failure.take().map_or(Ok(()), Err)
+    }
+    fn begin_workspace_close(&mut self) -> BackendResult<ShutdownInitiation> {
+        Ok(self.budget.map_or(ShutdownInitiation::NoCapture, ShutdownInitiation::Captured))
     }
     fn begin_shutdown(&mut self) -> BackendResult<ShutdownInitiation> {
+        self.shutdown_starts += 1;
         Ok(self.budget.map_or(ShutdownInitiation::NoCapture, ShutdownInitiation::Captured))
     }
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
@@ -130,6 +153,7 @@ impl StartupBackend for Platform {
             return Err("renewed shutdown budget".into());
         }
         self.budget = Some(budget);
+        self.shutdown_requests.push(budget);
         Ok(())
     }
     fn poll_shutdown(&mut self) -> BackendResult<bool> {
@@ -225,7 +249,7 @@ fn host_reports_main_reveal_only_after_frontend_readiness_and_never_after_close(
     }
     Ok(())
 }
-fn host() -> BackendResult<StartupHost<Platform>> {
+pub(super) fn host() -> BackendResult<StartupHost<Platform>> {
     let run = policy::tests::test_run()?;
     StartupHost::new(
         run,
@@ -239,6 +263,9 @@ fn host() -> BackendResult<StartupHost<Platform>> {
         },
     )
 }
+
+#[path = "platform_tests/consume.rs"]
+pub(super) mod consume;
 
 #[cfg(windows)]
 #[test]

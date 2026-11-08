@@ -1070,7 +1070,7 @@ rationale = "Durable filesystem owner: Anchor Unix artifact effects to retained 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/artifacts/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:585036724dce7cfe5cbb8dae984b2fa6fc755ae30ee46f5e0fe6d4e868dabc59"
+source_sha256 = "sha256:6c9a696fc91048fb1d8efd9fd122b0e4764d09ed61a1159dbb4f1c42830a2fa7"
 capabilities = ["std::fs::hard_link", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Exercise selected artifacts with real execution, files, bounded allocation and original expiry. Native access and its adversarial qualification remain within this owner."
@@ -1078,7 +1078,7 @@ rationale = "Durable filesystem owner: Exercise selected artifacts with real exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/artifacts/windows.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:7476ce650061330e34f6892a59e5c2a372cb3f14dac94908d14aa7c325a85288"
+source_sha256 = "sha256:e67d3e3fcc594673ea73f6c1ac27dfcccb151cc6111386f8457dd2f6c9ddff25"
 capabilities = ["assert! restricted capability fragments", "method metadata", "method sync_all", "std::fs::File::open", "std::fs::OpenOptions::new", "std::fs::create_dir", "std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Retain Windows artifact ancestry and observe actual file closure before publication. Native access and its adversarial qualification remain within this owner."
@@ -4351,7 +4351,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:086a5998fe374ed8b5bbd80ce3c8d54aebb9284865e99e322a2a4a814c5b77ac"
+source_sha256 = "sha256:f0ef2f686691948e90340b4fdeb745fa6371866d13df5dbadf0f8cddad14ea10"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
@@ -4399,7 +4399,7 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:096d9835db749377a570d91c90410546cfe1f1df39676552059b905120e5b289"
+source_sha256 = "sha256:a280d18d24a0cdb256305273bbd1798c69f5580a7a7e6789e20c2ab3d10d3042"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."
@@ -4487,7 +4487,7 @@ rationale = "The fixture retains its temporary directory and cache resources thr
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained/transactions/previews/wakes.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:c2491aa5c00ec2520cbfce01e16acb34be47702e2f62bc8f483e6a99f8a3628b"
+source_sha256 = "sha256:ae2a5c0bfed86c11b32e15ee0d9dfc0f8df8f9da64d85234426e43ae56686eb6"
 capabilities = ["std::fs::File::create"]
 disposition = "fixture"
 rationale = "A bounded storage worker writes a synthetic PNG inside the owned fixture directory; retained admission forces refusal until an observed retirement completion proves preview progress without unrelated input."
@@ -4503,8 +4503,8 @@ rationale = "An isolated temporary cache root and explicit target-existence chec
 [[records]]
 path = "crates/sugarsubstitute/src/input_documents/tests/storage.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:a5c15f168ff7713fb79e75ae6f936bc4e76402af2ba275ed349c7a5def093795"
-capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+source_sha256 = "sha256:4688b92a4eb3cb637fe408734ddb6ed24c0a60f315c452981a60d9116e4e50a7"
+capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary session directories let real execution jobs save, damage, hold and reload input-document archives, proving atomic replacement, recovery copies, rejection evidence and preserved unknown files without user data."
 
@@ -4533,3 +4533,67 @@ source_sha256 = "sha256:042b4da8ef07f5d6d512d1f503ef2310603e6af20dda5cd75d851948
 capabilities = ["assert! restricted capability fragments", "std::fs::create_dir", "std::fs::hard_link", "std::fs::read", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Construct and deliberately corrupt isolated persisted/native provenance, observe original bytes, and qualify retained directory/file custody and fail-closed storage selection. Actual runtime acquisition stays with the durable-storage owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/artifacts/tests/retained.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:dcff4cdc83dc5f54833e650b6c44ead3e3decc1d294457066d9b6c6f9dcc33f3"
+capabilities = ["assert! restricted capability fragments", "std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
+disposition = "implementation"
+rationale = "Owned temporary artifacts qualify immutable pinned readers, write/replacement rejection, fresh job controls and exact checked retirement."
+
+[[records]]
+path = "crates/sugarsubstitute/src/input_documents/tests/storage/legacy.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:b12ce0ad8378ff85beb00fc9a99ac3071b723bab57ebac0ad05aee81bdc6281f"
+capabilities = ["std::fs::read", "std::fs::write"]
+disposition = "fixture"
+rationale = "Owned temporary native archives qualify exact graph metadata association, immutable codec receipts, changed scope rejection and preservation of unmatched originals."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/session_originals.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:057d8d2053ef14dce0a7c32de5f44876a50c8b7ce870746be94f8274a07e4193"
+capabilities = ["std::fs::read"]
+disposition = "fixture"
+rationale = "Owned execution fixtures inspect exact retained originals while exercising current surface selection and revocable session bindings."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/workspace/media/reader/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:4a7b6a77ca426e06589d2270dc889ccbbca7a89acb33ea3f6e60cf570f51518d"
+capabilities = ["assert! restricted capability fragments", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary media qualify one verified immutable reader, range boundaries, fresh worker controls and retained handle retirement."
+
+[[records]]
+path = "crates/sugarsubstitute/src/workspace_session/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:2875d360287704542b68ce158742108d5b5f9a9ebc52fee7325b4888da9e135b"
+capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary profile and workspace roots qualify the actual session store through real admitted execution jobs."
+
+[[records]]
+path = "crates/sugarsubstitute/src/workspace_session/tests/profiles.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:8403c6092049a1bedae6dd56258dbf05c8f8453255cc805ee6f04ffddb652894"
+capabilities = ["std::fs::copy", "std::fs::create_dir_all", "std::fs::read", "std::fs::write"]
+disposition = "fixture"
+rationale = "Owned temporary profile records qualify stable namespaces, aggregate authoritative asset reservations, foreign scope rejection and preserved invalid originals."
+
+[[records]]
+path = "crates/sugarsubstitute/src/workspace_session/tests/storage.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:25ad1868fcafa9e634447bd1c6fa41f87a0c879659d42101da4be01d99c50348"
+capabilities = ["method set_len", "std::fs::OpenOptions::new", "std::fs::metadata", "std::fs::read", "std::fs::remove_file", "std::fs::write"]
+disposition = "fixture"
+rationale = "Owned temporary checkpoint files qualify atomic publication, exact digest and bounds rejection, missing-current recovery and preserved previous/rejected originals."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:3a009b42965243edce82db250d56f0a48d82dde00ecb2d95d946a160ba6c99df"
+capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."

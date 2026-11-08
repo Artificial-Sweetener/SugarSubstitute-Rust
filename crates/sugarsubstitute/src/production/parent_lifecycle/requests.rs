@@ -135,7 +135,7 @@ impl ParentLifecycle {
                 return Err(ParentError::WrongPhase.into());
             }
             self.register(resources)?;
-            self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+            self.requests.get_mut(index)?.reply = Some(Reply::Registered);
             return Ok(true);
         }
         let binding = self.binding()?;

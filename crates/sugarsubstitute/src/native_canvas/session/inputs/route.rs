@@ -11,13 +11,19 @@ use super::*;
 use sugarsubstitute_canvas::Document;
 
 /// The route change waiting for the current document's work to settle.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum Pending {
     Input { surface: InputDocumentId, target: Option<LayerId> },
     Output,
+    Original(RetentionKey),
 }
 
 impl Session {
+    /// Observe a queued input/output route without granting or changing document custody.
+    pub(in crate::native_canvas::session) fn input_route_pending(&self) -> bool {
+        self.inputs.route.is_some()
+    }
+
     /// Show `surface`'s document on the Input route with `mask` as the editing tools' target.
     /// The swap completes on a later poll once the outgoing document's work has settled and
     /// the surface's document has loaded; a newer route request replaces it. The shown document
@@ -62,6 +68,66 @@ impl Session {
         self.inputs.parked_output.is_some()
     }
 
+    /// Whether actual current/parked pixels came from this host-qualified original identity.
+    pub(crate) fn output_original_matches(&self, key: &RetentionKey) -> bool {
+        let document = if self.input_shown() {
+            self.inputs.parked_output.as_deref()
+        } else {
+            Some(self.document.as_ref())
+        };
+        document.is_some_and(|document| {
+            document.retention.as_ref() == Some(key) && document.scene.is_some()
+        })
+    }
+
+    /// Promote the same actual immutable originals to the host's verified retention identity.
+    /// Keeps the authored document, undo history, tools, camera and native backings intact.
+    /// # Errors
+    /// Refuses a present original whose decoder-computed full SHA differs from the receipt;
+    /// neither the document nor its retention identity changes on refusal. No I/O is performed.
+    pub(crate) fn retain_output_original(
+        &mut self,
+        key: &RetentionKey,
+        expected: &[[u8; 32]],
+    ) -> Result<bool, Box<dyn Error>> {
+        let document = if self.input_shown() {
+            self.inputs.parked_output.as_deref_mut()
+        } else {
+            Some(self.document.as_mut())
+        };
+        let Some(document) = document else {
+            return Ok(false);
+        };
+        let Some(scene) = &document.scene else {
+            return Ok(false);
+        };
+        let Some(source) = &scene.source else {
+            return Ok(false);
+        };
+        let primary = source.descriptor().original_hash();
+        let compared =
+            scene.compared.as_ref().map(|compared| compared.source.descriptor().original_hash());
+        if !scene.placed.is_empty()
+            || expected.first() != Some(&primary)
+            || match compared {
+                Some(compared) => expected.len() != 2 || expected.get(1) != Some(&compared),
+                None => expected.len() != 1,
+            }
+        {
+            return Err(Box::new(InputRejection::Unavailable(
+                "The parked output original changed",
+            )));
+        }
+        document.retention = Some(key.clone());
+        Ok(true)
+    }
+
+    /// Return to an exact original only after its independently admitted load has parked it.
+    /// An older parked output stays hidden while the requested original is acquired.
+    pub(crate) fn show_output_original(&mut self, key: RetentionKey) {
+        self.inputs.route = self.input_shown().then_some(Pending::Original(key));
+    }
+
     /// Complete a pending route change once the current document can move. Returns `true`
     /// while ordinary document admission must wait for the outgoing document's work.
     ///
@@ -70,7 +136,7 @@ impl Session {
     pub(in crate::native_canvas::session) fn advance_input_route(
         &mut self,
     ) -> Result<bool, Box<dyn Error>> {
-        let Some(pending) = self.inputs.route else {
+        let Some(pending) = self.inputs.route.clone() else {
             return Ok(false);
         };
         if self.document_suspended
@@ -81,14 +147,14 @@ impl Session {
         {
             return Ok(false);
         }
-        match pending {
+        match &pending {
             Pending::Input { surface, target } => {
-                if self.document.input == Some(surface) {
-                    self.document.tools.set_target(target);
+                if self.document.input == Some(*surface) {
+                    self.document.tools.set_target(*target);
                     self.inputs.route = None;
                     return Ok(false);
                 }
-                match self.inputs.by_identity(surface) {
+                match self.inputs.by_identity(*surface) {
                     None => {
                         self.inputs.route = None;
                         return Ok(false);
@@ -97,11 +163,12 @@ impl Session {
                     Some(_) => {}
                 }
             }
-            Pending::Output if !self.input_shown() => {
+            Pending::Output | Pending::Original(_) if !self.input_shown() => {
                 self.inputs.route = None;
                 return Ok(false);
             }
-            Pending::Output => {}
+            Pending::Original(key) if !self.output_original_matches(key) => return Ok(false),
+            Pending::Output | Pending::Original(_) => {}
         }
         if !self.document_parkable() {
             self.fence_document_work()?;
@@ -110,13 +177,13 @@ impl Session {
         let Some(intent) = self.supersede_pending_source()? else {
             return Ok(true);
         };
-        let incoming = match pending {
+        let incoming = match &pending {
             Pending::Input { surface, .. } => self
                 .inputs
-                .by_identity_mut(surface)
+                .by_identity_mut(*surface)
                 .and_then(|record| record.document.take())
                 .ok_or("Input document vanished")?,
-            Pending::Output => match self.inputs.parked_output.take() {
+            Pending::Output | Pending::Original(_) => match self.inputs.parked_output.take() {
                 Some(document) => document,
                 None => self.empty_output(intent)?,
             },

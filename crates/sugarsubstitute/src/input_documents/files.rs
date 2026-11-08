@@ -45,10 +45,7 @@ pub(super) fn load(
         [(ArchiveFile::Current, CURRENT_ARCHIVE), (ArchiveFile::Previous, PREVIOUS_ARCHIVE)]
     {
         let Some(bytes) = read(&directory.join(name), context)? else {
-            if file == ArchiveFile::Current {
-                return Ok(Restored { archive: None, rejected });
-            }
-            break;
+            continue;
         };
         let decoded =
             bytes.and_then(|(bytes, _claim)| InputDocumentArchive::decode(&bytes, memory, context));
@@ -122,6 +119,42 @@ pub(super) fn save(
 
 /// Archive bytes with the job memory claim that funds them.
 type Charged = (Vec<u8>, MemoryClaim);
+
+/// Retain one content-addressed native snapshot without replacing an existing original.
+#[cfg(all(windows, feature = "native-composition"))]
+pub(super) fn retain(
+    directory: &Path,
+    archive: &InputDocumentArchive,
+    context: &JobContext,
+) -> Result<SaveReceipt, StoreError> {
+    let current = directory.join(CURRENT_ARCHIVE);
+    if let Some(bytes) = read(&current, context)? {
+        let (bytes, _claim) = bytes?;
+        let existing = InputDocumentArchive::decode(&bytes, context.memory(), context)?;
+        if existing != *archive {
+            return Err(StoreError::Unverified);
+        }
+        return Ok(SaveReceipt {
+            bytes: bytes.len() as u64,
+            kept_previous: false,
+            evidence: vec![],
+        });
+    }
+    let (bytes, _claim) = archive.encode(context)?;
+    if InputDocumentArchive::decode(&bytes, context.memory(), context)? != *archive {
+        return Err(StoreError::Unverified);
+    }
+    write_artifact(
+        &current,
+        true,
+        ArtifactPublication::CreateOnly,
+        bytes.len().max(1),
+        context,
+        |output| output.write_all(&bytes),
+    )
+    .map_err(artifact)?;
+    Ok(SaveReceipt { bytes: bytes.len() as u64, kept_previous: false, evidence: vec![] })
+}
 
 /// Read one archive file whole; `None` when absent, `Some(Err)` when larger than any archive.
 fn read(

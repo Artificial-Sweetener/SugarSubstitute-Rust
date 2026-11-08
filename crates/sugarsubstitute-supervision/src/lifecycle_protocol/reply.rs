@@ -9,6 +9,12 @@ use sugarsubstitute_contracts::startup::MainIdentity;
 /// Bounded wire disposition; native causes and actual cleanup ownership stay local.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ReplyOutcome<'a> {
+    /// Tag17: exact authenticated Register completed with parent-derived execution policy.
+    /// This precedes configuration projection and grants no backend or storage authority.
+    Registered {
+        /// Explicit policy observed by the native parent before child construction.
+        backend_data_disposition: sugarsubstitute_contracts::configuration::BackendDataDisposition,
+    },
     /// Tag 1: the requested finite logical operation was acknowledged.
     Acknowledged,
     /// Tag2: nonfinal original Acquire progress reserving output access only.

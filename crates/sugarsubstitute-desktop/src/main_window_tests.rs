@@ -96,6 +96,54 @@ fn native_request_owns_existing_credit_without_granting_profile_or_process_autho
     assert_eq!(released.load(Ordering::SeqCst), MainWindowRequest::RESERVATION_BYTES);
     Ok(())
 }
+
+#[test]
+fn native_placement_request_retains_valid_state_and_releases_replaced_monitor_credit() -> Result {
+    use sugarsubstitute_contracts::desktop_session::wire::{SessionPlacement, SessionRect};
+    let released = Arc::new(AtomicU64::new(0));
+    let mut request =
+        request(settings(), absolute(), MainWindowRequest::RESERVATION_BYTES, released)??;
+    let initial_bytes = request.allocated_metadata_bytes();
+    assert!(request.initial_placement().is_none());
+    let placement = SessionPlacement {
+        version: 1,
+        bounds: SessionRect { x: -1800.0, y: 100.0, width: 1000.0, height: 700.0 },
+        maximized: true,
+        monitor: "display-left".into(),
+        work_area: SessionRect { x: -1920.0, y: 0.0, width: 1920.0, height: 1040.0 },
+        dpi: 96.0,
+    };
+    let remaining = MainWindowRequest::RESERVATION_BYTES - initial_bytes;
+    let occupied = request.storage_lease().claim(remaining)?;
+    assert!(matches!(
+        request.set_initial_placement(Some(placement.clone())),
+        Err(MainRequestError::MetadataBudget(_))
+    ));
+    assert!(request.initial_placement().is_none());
+    drop(occupied);
+    request.set_initial_placement(Some(placement.clone()))?;
+    assert_eq!(request.initial_placement(), Some(&placement));
+    assert!(request.allocated_metadata_bytes() > initial_bytes);
+    let mut invalid = placement.clone();
+    invalid.monitor = "invalid\0monitor".into();
+    assert!(matches!(
+        request.set_initial_placement(Some(invalid)),
+        Err(MainRequestError::Placement)
+    ));
+    assert_eq!(request.initial_placement(), Some(&placement));
+    let mut oversized = placement.clone();
+    oversized.monitor.reserve_exact(2048);
+    assert!(matches!(
+        request.set_initial_placement(Some(oversized)),
+        Err(MainRequestError::Placement)
+    ));
+    assert_eq!(request.initial_placement(), Some(&placement));
+    request.set_initial_placement(None)?;
+    assert!(request.initial_placement().is_none());
+    assert_eq!(request.allocated_metadata_bytes(), initial_bytes);
+    assert_eq!(request.storage_lease().claim(remaining)?.bytes(), remaining);
+    Ok(())
+}
 #[test]
 fn invalid_size_label_path_or_credit_rejects_before_native_effect() -> Result {
     for dimension in [0, 8193, u32::MAX] {

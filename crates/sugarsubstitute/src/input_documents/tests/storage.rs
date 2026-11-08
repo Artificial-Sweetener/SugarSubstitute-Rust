@@ -22,6 +22,8 @@ use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_image_ops::{AssetId, Coverage, Extent, FULL_COVERAGE, Region};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
+#[cfg(feature = "native-composition")]
+mod legacy;
 
 struct FixedClock;
 impl Clock for FixedClock {
@@ -153,6 +155,14 @@ impl Fixture {
     /// One document with a locked base image, a painted mask and a selection; `shade`
     /// distinguishes otherwise identical content.
     fn archive(&self, shade: u16, metadata: &[u8]) -> TestResult<InputDocumentArchive> {
+        self.archive_named("workflow/7", shade, metadata)
+    }
+    fn archive_named(
+        &self,
+        key: &str,
+        shade: u16,
+        metadata: &[u8],
+    ) -> TestResult<InputDocumentArchive> {
         let extent = Extent::new(300, 200)?;
         let mut document = Document::new(1, extent, &self.memory)?;
         let base =
@@ -171,9 +181,8 @@ impl Fixture {
         let selection = Coverage::new(extent, FULL_COVERAGE, &self.memory)?;
         document.apply(DocumentEdit::Select(Some(selection)))?;
         let reference = SourceReference::new(br#"{"filename":"base.png","type":"input"}"#)?;
-        let document = ArchivedDocument::capture("workflow/7", &document.snapshot(), |_| {
-            Some(reference.clone())
-        })?;
+        let document =
+            ArchivedDocument::capture(key, &document.snapshot(), |_| Some(reference.clone()))?;
         Ok(InputDocumentArchive::new(vec![document], metadata)?)
     }
 }
@@ -375,5 +384,25 @@ fn a_close_flush_saves_at_once_and_one_past_its_cutoff_keeps_the_previous_archiv
     }
     assert!(autosave.dirty(), "the unsaved change stays unsaved");
     assert_eq!(restored(&fixture.load()?), Some((ArchiveFile::Current, &first)));
+    Ok(())
+}
+
+#[test]
+fn missing_current_input_archive_recovers_verified_previous_without_rewriting_originals()
+-> TestResult {
+    let fixture = Fixture::new()?;
+    let first = fixture.archive(1, b"first")?;
+    fixture.save(&first)??;
+    fixture.save(&fixture.archive(2, b"second")?)??;
+    let previous = std::fs::read(fixture.path(PREVIOUS_ARCHIVE))?;
+    std::fs::remove_file(fixture.path(CURRENT_ARCHIVE))?;
+    let loaded = fixture.load()?;
+    let (file, archive) =
+        loaded.archive.as_ref().ok_or("Verified previous archive was not restored")?;
+    assert_eq!(*file, ArchiveFile::Previous);
+    assert_eq!(archive.fingerprint(), first.fingerprint());
+    assert!(archive == &first);
+    assert_eq!(std::fs::read(fixture.path(PREVIOUS_ARCHIVE))?, previous);
+    assert!(!fixture.path(CURRENT_ARCHIVE).exists());
     Ok(())
 }

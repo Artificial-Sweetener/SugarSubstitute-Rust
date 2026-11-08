@@ -23,6 +23,11 @@ pub(super) struct StartupExecution {
     owner: Option<ExecutionOwner>,
     started: bool,
     memory_capacity: Option<NonZeroU64>,
+    #[cfg(all(
+        windows,
+        any(feature = "windows-native-host", feature = "native-composition", test)
+    ))]
+    workspace_bytes: u64,
     shutdown_until: Option<Moment>,
     shutting_down: bool,
 }
@@ -34,6 +39,11 @@ impl StartupExecution {
             owner: None,
             started: false,
             memory_capacity: None,
+            #[cfg(all(
+                windows,
+                any(feature = "windows-native-host", feature = "native-composition", test)
+            ))]
+            workspace_bytes: 0,
             shutdown_until: None,
             shutting_down: false,
         }
@@ -48,8 +58,23 @@ impl StartupExecution {
         if self.started {
             return Err("Canvas capacity must be selected before execution starts".into());
         }
-        let capacity = APPLICATION_WORKING_BYTES.saturating_add(canvas_bytes);
+        let capacity = APPLICATION_WORKING_BYTES
+            .saturating_add(canvas_bytes)
+            .saturating_add(self.workspace_bytes);
         self.memory_capacity = Some(NonZeroU64::new(capacity).ok_or("Invalid canvas capacity")?);
+        Ok(())
+    }
+    #[cfg(all(windows, feature = "native-composition"))]
+    pub(super) fn reserve_workspace_capacity(&mut self, bytes: u64) -> Result<(), Box<dyn Error>> {
+        if self.started || self.workspace_bytes != 0 {
+            return Err("Workspace capacity already selected".into());
+        }
+        self.workspace_bytes = bytes;
+        let original = self.memory_capacity.map_or(256 * 1024 * 1024, NonZeroU64::get);
+        self.memory_capacity = Some(
+            NonZeroU64::new(original.checked_add(bytes).ok_or("Workspace admission overflow")?)
+                .ok_or("Workspace admission empty")?,
+        );
         Ok(())
     }
     /// Start at most once, even if construction or subsequent owner setup fails.

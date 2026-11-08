@@ -41,6 +41,11 @@ pub(super) fn drain(
             return Err(DesktopError::message("startup_command", "startup admission is closed"));
         }
         match command {
+            DesktopStartupCommand::CaptureMainPlacement { identity, capture_id } => {
+                main_operation(session, content, |owner| {
+                    Ok(Some(owner.capture_placement(identity, capture_id)))
+                })?;
+            }
             DesktopStartupCommand::ProcessUiChallenge(key) => {
                 activity(session, content)?;
                 if let Some(observation) =
@@ -160,6 +165,16 @@ pub(super) fn drain(
             }
             DesktopStartupCommand::SendPanel(command) => {
                 main_operation(session, content, |owner| owner.send_panel(command).map(|()| None))?;
+            }
+            DesktopStartupCommand::SendSession(command) => {
+                main_operation(session, content, |owner| {
+                    owner.send_session(command).map(|()| None)
+                })?;
+            }
+            DesktopStartupCommand::SendSessionMedia(reply) => {
+                main_operation(session, content, |owner| {
+                    owner.send_session_media(reply).map(|()| None)
+                })?;
             }
             DesktopStartupCommand::SendMemory(command) => {
                 main_operation(session, content, |owner| {

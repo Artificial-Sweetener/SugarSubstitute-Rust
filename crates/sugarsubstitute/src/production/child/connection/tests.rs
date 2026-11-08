@@ -44,7 +44,10 @@ fn requests() -> std::result::Result<ClientRequests, Box<dyn Error>> {
     let count = FrameCodec::encode(
         &WireMessage {
             header: WireHeader { request: Some(request), ..header },
-            payload: WirePayload::Reply(ReplyOutcome::Acknowledged),
+            payload: WirePayload::Reply(ReplyOutcome::Registered {
+                backend_data_disposition:
+                    sugarsubstitute_contracts::configuration::BackendDataDisposition::External,
+            }),
         },
         &mut bytes,
     )?;
@@ -109,6 +112,10 @@ fn activity_ack_before_acquire_grant_keeps_original_owner_and_cutoffs()
                 origin: LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?,
                 frontend: VersionLabel::new("1.0")?,
                 sugarcubes: VersionLabel::new("1.0")?,
+                backend_binding: BackendBindingDigest::from_bytes([7; 32]),
+                installation: "11111111111111111111111111111111",
+                backend_data_disposition:
+                    sugarsubstitute_contracts::configuration::BackendDataDisposition::External,
                 backend_peer: BackendPeer {
                     process_id: std::num::NonZeroU32::new(47).ok_or("zero PID")?,
                     creation_time_100ns: std::num::NonZeroU64::new(53)

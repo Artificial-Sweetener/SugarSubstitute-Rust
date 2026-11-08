@@ -63,6 +63,8 @@ impl CoordinatorBackend {
                         record.resolution.as_ref().ok_or(LifecycleRejection::StaleIdentity)?;
                     let resolved =
                         resources.authority.claims().resolved_configuration(ticket)?.clone();
+                    record.backend_binding =
+                        Some(resources.authority.claims().resolved_backend_binding(ticket)?);
                     record.campaign = ReadinessCampaign::new(
                         BackendTarget::Managed(resolved.clone()),
                         record.budget,

@@ -189,6 +189,8 @@ impl ProductionChild {
             header,
             origin,
             settings,
+            session_bootstrap: self.workspace_bootstrap.take(),
+            placement: self.workspace_placement.take(),
             original: budget.until(),
             reloading: self.reload.as_ref().is_some_and(|r| r.granted()),
         });
