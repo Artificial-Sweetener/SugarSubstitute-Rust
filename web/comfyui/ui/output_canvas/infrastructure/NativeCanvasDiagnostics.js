@@ -1,5 +1,14 @@
+import { nativeCanvasBackdrop } from './NativeCanvasCapabilities.js';
 import { nativeMaterialReady } from './NativeCanvasMaterial.js';
 import { IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS, } from './NativeCanvasPreview.js';
+/** Record the native offer an attachment was constructed against, for later material diagnostics. */
+export function nativeConstructorSurface(host) {
+    return Object.freeze({
+        available: host !== null,
+        schema: host?.capabilities.schema ?? null,
+        backdrop: nativeCanvasBackdrop(host),
+    });
+}
 /** Copy only the bounded material allocation; routing and cancellation objects stay private. */
 export function nativeMaterialGeometrySnapshot(geometry) {
     return (geometry &&

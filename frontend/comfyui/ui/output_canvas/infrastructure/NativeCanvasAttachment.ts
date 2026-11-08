@@ -57,7 +57,10 @@ import {
 import { NativeCanvasInspection } from './NativeCanvasInspection.js';
 import { NativeCanvasOcclusions } from './NativeCanvasOcclusions.js';
 import { NativeCanvasBackdrops } from './NativeCanvasBackdrops.js';
-import { nativeMaterialGeometrySnapshot } from './NativeCanvasDiagnostics.js';
+import {
+  nativeConstructorSurface,
+  nativeMaterialGeometrySnapshot,
+} from './NativeCanvasDiagnostics.js';
 import { NativeCanvasPendingReveal } from './NativeCanvasPendingReveal.js';
 import { nativeCanvasAddressed, type NativeCanvasComparison } from './NativeCanvasDesired.js';
 import { NativeCanvasOverview } from './NativeCanvasOverview.js';
@@ -104,6 +107,7 @@ export class NativeCanvasAttachment {
   readonly #stopCamera: () => void;
   readonly #keyboard: CanvasViewportKeyboard;
   readonly #stopFocusRequests: () => void;
+  readonly #stopRoute: () => void;
   /** Fixed per attachment; changed host capabilities rebuild the attachment. */
   readonly #comparison: boolean;
   /** Present only for a host that paints overview cells; fixed like the comparison flag. */
@@ -118,11 +122,7 @@ export class NativeCanvasAttachment {
   #presentation: NativeCanvasPresentationStatus = { state: 'empty', message: '' };
   #ready = false;
   #disposed = false;
-  readonly #constructorSurface: {
-    readonly available: boolean;
-    readonly schema: number | null;
-    readonly backdrop: boolean;
-  };
+  readonly #constructorSurface: ReturnType<typeof nativeConstructorSurface>;
   /** Preparation passed its deadline and has not completed since; `#stallKey` names its request. */
   #stalled = false;
   #stallKey: string | null = null;
@@ -155,11 +155,7 @@ export class NativeCanvasAttachment {
     const editing = document.createElement('div');
     element.append(this.viewport, overlay, editing);
     const host = options.nativeSurface();
-    this.#constructorSurface = Object.freeze({
-      available: host !== null,
-      schema: host?.capabilities.schema ?? null,
-      backdrop: nativeCanvasBackdrop(host),
-    });
+    this.#constructorSurface = nativeConstructorSurface(host);
     this.#overview =
       host && nativeCanvasOverview(host)
         ? new NativeCanvasOverview(element, {
@@ -279,7 +275,7 @@ export class NativeCanvasAttachment {
             this.#catalog,
           ),
         ),
-      inputShown: () => options.route?.read()?.route === 'input',
+      inputShown: () => this.#inputShown(),
       report: (error) => options.report(error, null),
     });
     this.#inspection = new NativeCanvasInspection({
@@ -307,6 +303,8 @@ export class NativeCanvasAttachment {
     this.#keyboard = new CanvasViewportKeyboard(this.viewport, this.port, options.report);
     this.viewport.addEventListener('pointerdown', this.#focusViewport);
     this.#stopFocusRequests = options.route?.subscribeFocus(this.#takeFocus) ?? (() => {});
+    // The Input route withdraws the Output preview, which otherwise locks the viewer controls.
+    this.#stopRoute = options.route?.subscribe(() => this.refresh()) ?? (() => {});
     this.#readiness = new NativeCanvasReadiness(options.clock, () => {
       this.#stalled = true;
       this.#stallKey = this.#requestKey();
@@ -318,6 +316,7 @@ export class NativeCanvasAttachment {
       () => this.#reveal.drop(),
       () => this.viewport.removeEventListener('pointerdown', this.#focusViewport),
       this.#stopFocusRequests,
+      this.#stopRoute,
       () => this.#native.dispose(),
       () => this.#inspection.dispose(),
       this.#stopCamera,
@@ -473,6 +472,7 @@ export class NativeCanvasAttachment {
     this.#reveal.drop();
     this.viewport.removeEventListener('pointerdown', this.#focusViewport);
     this.#stopFocusRequests();
+    this.#stopRoute();
     this.#stopView();
     this.#stopTransfer();
     this.#status.dispose();
@@ -495,6 +495,11 @@ export class NativeCanvasAttachment {
   async #dispatchReveal(target: CanvasRevealTarget): Promise<boolean> {
     const request = this.port.createRequest({ type: 'reveal', target }, this.port.read().revision);
     return (await this.port.dispatch(request)).status === 'applied';
+  }
+
+  /** Whether the route shows the Input document, whose camera then takes the viewer keys. */
+  #inputShown(): boolean {
+    return this.options.route?.read()?.route === 'input';
   }
 
   /** Give discrete viewer keys focus; the host routes native pointer gestures itself. */
@@ -593,6 +598,7 @@ export class NativeCanvasAttachment {
         : this.#backdrops?.current && this.#native?.backdropReady(this.#surface)
           ? 'ready'
           : 'pending',
+      input: this.#inputShown(),
     });
   }
 }

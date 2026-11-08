@@ -20,6 +20,10 @@ import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/a
 import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
 import { CanvasInspectionStore } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasInspectionStore.js';
 import { canvasOutputCatalog } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOutputCatalog.js';
+import type {
+  CanvasRoutePort,
+  CanvasRouteState,
+} from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasRoute.js';
 import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.js';
 import type { WorkflowPreview } from '../../../frontend/comfyui/ui/execution/domain/WorkflowPreview.js';
 import type { CanvasCatalogSnapshot } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasCatalog.js';
@@ -43,7 +47,7 @@ afterEach(async () => {
 });
 
 /** Mount real selection/view/overlay owners with deterministic external geometry and native replies. */
-function fixture(firstPreview = false, staged = false) {
+function fixture(firstPreview = false, staged = false, route?: CanvasRoutePort) {
   jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     x: 0,
     y: 0,
@@ -105,6 +109,7 @@ function fixture(firstPreview = false, staged = false) {
     acceptsPreparation: () => staged && views.acceptsPreparation(address),
     nativeSurface: () => host.host,
     connected: () => true,
+    ...(route ? { route } : {}),
     report: (error) => errors.push(error),
   });
   surface.port.updateSurface(address, previewGeometry);
@@ -242,3 +247,90 @@ test('refuses sibling preparation and old workflow-generation preview bytes befo
   f.generation();
   expect(f.surface.wants(f.preview.sessionId, 1, f.preview.sourceId)).toBe(false);
 });
+
+test.each([
+  { key: '+', type: 'zoom' },
+  { key: 'ArrowRight', type: 'pan' },
+] as const)(
+  'Input admits the $key key after withdrawing an Output live preview',
+  async ({ key, type }) => {
+    let state: CanvasRouteState = {
+      route: 'output',
+      inputAvailable: true,
+      labels: { input: 'Input', output: 'Output', group: 'Canvas route' },
+    };
+    const listeners = new Set<() => void>();
+    const route: CanvasRoutePort = {
+      read: () => state,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      choose: (value) => {
+        state = { ...state, route: value };
+        for (const listener of listeners) listener();
+      },
+      subscribeFocus: () => () => {},
+    };
+    const f = fixture(true, false, route);
+    await commit(f, true);
+    const blob = new NativePreviewBlob();
+    f.surface.receive(f.preview, blob);
+    f.respond(3);
+    await settle();
+    blob.release();
+    await settle();
+    f.respond(4);
+    await settle();
+    f.respond(5);
+    await settle();
+    const begin = f.calls[3];
+    if (begin?.type !== 'surface.preview.begin') throw new Error('Preview begin is missing.');
+    f.emit({
+      address: f.address,
+      sequence: 1,
+      token: f.preview.token,
+      leaseRevision: begin.revision,
+      status: 'presented',
+      displayed: {
+        type: 'preview',
+        token: f.preview.token,
+        leaseRevision: begin.revision,
+        viewport: previewViewport,
+      },
+      message: '',
+    });
+    const press = () =>
+      f.surface.viewport.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
+    const offset = f.calls.length;
+    expect(f.surface.port.read().preview).toBe(true);
+    press();
+    expect(f.calls).toHaveLength(offset);
+    route.choose('input');
+    await settle();
+    expect(f.calls[offset]).toMatchObject({ type: 'surface.preview.withdraw' });
+    expect(f.surface.port.read().preview).toBe(false);
+    expect(f.surface.wants(f.preview.sessionId, 0, f.preview.sourceId)).toBe(false);
+    const dispatch = jest.spyOn(f.surface.port, 'dispatch');
+    press();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    // The preview withdrawal must finish before the queued Input camera command reaches the host.
+    expect(f.calls).toHaveLength(offset + 1);
+    f.respond(offset);
+    await settle();
+    expect(f.calls[offset + 1]).toMatchObject({
+      type: 'surface.viewport.request',
+      command: { type },
+    });
+    f.respond(offset + 1, 'applied', finalViewport);
+    await settle();
+    expect(f.surface.port.read().zoom?.mode).toBe('native');
+    expect(f.calls.slice(offset).map((call) => call.type)).toEqual([
+      'surface.preview.withdraw',
+      'surface.viewport.request',
+    ]);
+    expect(f.errors).toEqual([]);
+  },
+);

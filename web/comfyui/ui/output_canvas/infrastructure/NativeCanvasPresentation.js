@@ -17,7 +17,7 @@
 import { sendNativeCanvasOperation, releaseNativeCanvasBinding, createNativeCanvasBinding, } from './NativeCanvasBinding.js';
 import { NativeCanvasPreview } from './NativeCanvasPreview.js';
 import { nativeCanvasDiagnostics } from './NativeCanvasDiagnostics.js';
-import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
+import { NativeCanvasViewportIntent, viewportRejection } from './NativeCanvasViewportIntent.js';
 import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
 import { nativeMaterialGeometry, nativeMaterialReady, nativeMaterialRetention, } from './NativeCanvasMaterial.js';
 import { nativeCanvasDesired, nativeCanvasNavigable, nativeCanvasOverviewKey, nativeCanvasSelection, nativeCanvasWipe, nativeCanvasWipeKey, } from './NativeCanvasDesired.js';
@@ -122,10 +122,12 @@ export class NativeCanvasPresentation {
     }
     /** Refuse preview bytes until a committed, observed binding owns the logical interest. */
     wants() {
-        return this.#preview?.wants() ?? false;
+        return !this.options.inputShown?.() && (this.#preview?.wants() ?? false);
     }
     /** Forward immutable encoded bytes without constructing a second renderer or mutation queue. */
     receive(preview, blob) {
+        if (this.options.inputShown?.())
+            return;
         this.#preview?.receive(preview, blob);
     }
     /** Expose only local encoded custody; native decoded pixels remain host-owned. */
@@ -193,7 +195,7 @@ export class NativeCanvasPresentation {
         this.#start();
     }
     #start() {
-        if (this.#running || this.#retirement || !this.#binding || !this.#desired || this.#disposed)
+        if (this.#running || this.#retirement || !this.#binding || !this.#desired)
             return;
         this.#running = true;
         void this.#run().finally(() => {
@@ -367,16 +369,21 @@ export class NativeCanvasPresentation {
                             admitted?.complete(true);
                         }
                         else {
-                            const recoverUnavailable = admitted !== null && current && result.status === 'unavailable';
                             const presentation = this.#preview?.pendingPresentation;
+                            const claimed = !!(this.#preview?.preparing || this.#preview?.displayed);
+                            const rejection = viewportRejection(result.status, !!admitted, current, claimed);
                             if (current && result.status === 'stale' && presentation)
                                 this.#viewportRecovery = { binding, desired, presentation };
+                            if (rejection.settled)
+                                binding.viewportKey = desired.key;
                             admitted?.complete(false);
-                            if (admitted &&
-                                this.#current(binding, desired) &&
-                                (!current || result.status === 'cancelled' || recoverUnavailable))
+                            if (rejection.retry && this.#current(binding, desired))
                                 this.#dirty = true;
-                            if (current && result.status !== 'cancelled' && !recoverUnavailable)
+                            if (rejection.parked) {
+                                this.#failedIntent();
+                                this.#desired = null;
+                            }
+                            else if (rejection.failed)
                                 this.#failed(desired, result);
                             continue;
                         }
@@ -439,10 +446,7 @@ export class NativeCanvasPresentation {
         }
         if (binding.active?.type === 'surface.viewport.request')
             binding.active.cancellation.cancel();
-        if (this.#viewport) {
-            this.#cancelViewport(this.#viewport);
-            this.#viewport.complete(false);
-        }
+        this.#viewport?.complete(false);
         this.options.preview(display?.type === 'preview');
         this.options.viewport(display && 'viewport' in display ? display.viewport : null);
         if (display) {

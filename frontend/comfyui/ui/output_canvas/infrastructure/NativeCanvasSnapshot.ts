@@ -47,8 +47,14 @@ export interface NativeCanvasSnapshotState {
   readonly presentation: NativeCanvasPresentationStatus;
   /** The host's camera for the presented pixels, including B's size while a pair is shown. */
   readonly viewport: CanvasSurfaceViewportState | null;
+  /** Whether accepted Output live preview pixels are shown on this surface. */
   readonly preview: boolean;
   readonly previewAvailable: boolean;
+  /**
+   * Whether the Input route shows its document here. The Output preview is then not on screen, so
+   * it locks no viewer control.
+   */
+  readonly input: boolean;
   /** Whether the host negotiated A/B pair selection and divider placement. */
   readonly comparison: boolean;
   /** Whether the host paints the overview grid's cells. */
@@ -116,7 +122,7 @@ export function nativeCanvasSnapshot(state: NativeCanvasSnapshotState): CanvasVi
         ? {}
         : { photoshopAllAvailable: state.photoshopAllAvailable }),
       comparisonAvailable: state.comparison && canvasComparisonAvailable(state.catalog),
-      preview: state.preview,
+      preview: state.preview && !state.input,
       resource,
       secondaryResource: comparison
         ? canvasSecondaryResource(plan, plan.secondary?.item ? presented : undefined)

@@ -28,7 +28,7 @@ import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js'
 import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
 import { NativeCanvasPreview } from './NativeCanvasPreview.js';
 import { nativeCanvasDiagnostics } from './NativeCanvasDiagnostics.js';
-import { NativeCanvasViewportIntent } from './NativeCanvasViewportIntent.js';
+import { NativeCanvasViewportIntent, viewportRejection } from './NativeCanvasViewportIntent.js';
 import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
 import {
   nativeMaterialGeometry,
@@ -87,7 +87,8 @@ export interface NativeCanvasPresentationOptions {
   preview(value: boolean): void;
   /**
    * Report whether the host shows the Input route's document on this surface. Its camera takes
-   * the viewport commands then, whether or not an output is selected.
+   * the viewport commands then, whether or not an output is selected, and the Output live preview
+   * is withdrawn and admits no bytes until the Output route returns.
    */
   inputShown?(): boolean;
   /** Republish material readiness after native geometry, frame commit or visibility changes. */
@@ -214,11 +215,12 @@ export class NativeCanvasPresentation {
 
   /** Refuse preview bytes until a committed, observed binding owns the logical interest. */
   wants(): boolean {
-    return this.#preview?.wants() ?? false;
+    return !this.options.inputShown?.() && (this.#preview?.wants() ?? false);
   }
 
   /** Forward immutable encoded bytes without constructing a second renderer or mutation queue. */
   receive(preview: WorkflowPreview, blob: Blob): void {
+    if (this.options.inputShown?.()) return;
     this.#preview?.receive(preview, blob);
   }
 
@@ -299,8 +301,7 @@ export class NativeCanvasPresentation {
   }
 
   #start(): void {
-    if (this.#running || this.#retirement || !this.#binding || !this.#desired || this.#disposed)
-      return;
+    if (this.#running || this.#retirement || !this.#binding || !this.#desired) return;
     this.#running = true;
     void this.#run().finally(() => {
       this.#running = false;
@@ -462,20 +463,18 @@ export class NativeCanvasPresentation {
               this.options.viewport(result.viewport);
               admitted?.complete(true);
             } else {
-              const recoverUnavailable =
-                admitted !== null && current && result.status === 'unavailable';
               const presentation = this.#preview?.pendingPresentation;
+              const claimed = !!(this.#preview?.preparing || this.#preview?.displayed);
+              const rejection = viewportRejection(result.status, !!admitted, current, claimed);
               if (current && result.status === 'stale' && presentation)
                 this.#viewportRecovery = { binding, desired, presentation };
+              if (rejection.settled) binding.viewportKey = desired.key;
               admitted?.complete(false);
-              if (
-                admitted &&
-                this.#current(binding, desired) &&
-                (!current || result.status === 'cancelled' || recoverUnavailable)
-              )
-                this.#dirty = true;
-              if (current && result.status !== 'cancelled' && !recoverUnavailable)
-                this.#failed(desired, result);
+              if (rejection.retry && this.#current(binding, desired)) this.#dirty = true;
+              if (rejection.parked) {
+                this.#failedIntent();
+                this.#desired = null;
+              } else if (rejection.failed) this.#failed(desired, result);
               continue;
             }
           } catch (error: unknown) {
@@ -546,10 +545,7 @@ export class NativeCanvasPresentation {
       this.#viewportRecovery = null;
     }
     if (binding.active?.type === 'surface.viewport.request') binding.active.cancellation.cancel();
-    if (this.#viewport) {
-      this.#cancelViewport(this.#viewport);
-      this.#viewport.complete(false);
-    }
+    this.#viewport?.complete(false);
     this.options.preview(display?.type === 'preview');
     this.options.viewport(display && 'viewport' in display ? display.viewport : null);
     if (display) {
