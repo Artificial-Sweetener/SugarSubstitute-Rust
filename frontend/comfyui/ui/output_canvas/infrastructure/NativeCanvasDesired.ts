@@ -26,6 +26,7 @@ import type {
   CanvasSurfaceViewportCommand,
 } from '../../../../../integrations/contracts/CanvasSurface.js';
 import type { NativeCanvasOperation } from './NativeCanvasBinding.js';
+import { nativeCanvasItemId } from './NativeCanvasItemIdentity.js';
 
 /** Pair the resolved B image with the divider chosen by the selection owner. */
 export interface NativeCanvasComparison {
@@ -202,10 +203,15 @@ export function nativeCanvasSelection(
     ),
     operation: {
       type: 'surface.select',
-      itemId: item.id,
+      itemId: nativeCanvasItemId(item.id),
       file: item.file,
       ...(comparison
-        ? { comparison: { itemId: comparison.item.id, file: comparison.item.file } }
+        ? {
+            comparison: {
+              itemId: nativeCanvasItemId(comparison.item.id),
+              file: comparison.item.file,
+            },
+          }
         : {}),
       ...(restored ? { inspection: restored } : {}),
     },

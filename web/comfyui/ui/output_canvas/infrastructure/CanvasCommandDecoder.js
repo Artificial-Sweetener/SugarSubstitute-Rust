@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate versioned external intents against an explicitly authorized attachment. */
+import { sessionUuid } from '../../core/embedded/SessionRuntime.js';
 import { isRecord } from '../../types/common.js';
 import { authorizeCanvasMessage } from './CanvasMessageAuthority.js';
 /** Reject wrong origins, versions, generations, capabilities, and malformed parameters. */
@@ -185,10 +186,12 @@ function workflowIdentity(value) {
         value.length > 9 &&
         value.length <= 4096);
 }
-/** Bound an immutable result identity independently of its internal encoding. */
+/**
+ * Bound an immutable result identity independently of its internal encoding: a live job's `result:`
+ * identity, or the durable artifact UUID an image restored from a desktop session keeps.
+ */
 function resultIdentity(value) {
     return (typeof value === 'string' &&
-        value.startsWith('result:') &&
-        value.length > 7 &&
-        value.length <= 16384);
+        ((value.startsWith('result:') && value.length > 7 && value.length <= 16384) ||
+            sessionUuid(value)));
 }

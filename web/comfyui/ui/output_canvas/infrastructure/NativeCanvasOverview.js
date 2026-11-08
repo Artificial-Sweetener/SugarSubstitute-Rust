@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Lay out the shared overview grid over cells that the native host paints. */
 import { fittingCanvasSurfaceOverviewCells } from '../../core/embedded/CanvasRuntime.js';
+import { nativeCanvasItemId } from './NativeCanvasItemIdentity.js';
 import { canvasBatchGridCatalog } from '../application/CanvasContentSelection.js';
 import { CanvasOverviewGrid, } from '../presentation/CanvasOverviewGrid.js';
 import { CanvasOutputDrag, } from '../presentation/CanvasOutputDrag.js';
@@ -31,7 +32,7 @@ function paintable(item, capabilities) {
     const filename = item.file.filename.toLowerCase();
     return (item.mediaKind === 'image' &&
         (item.file.type === 'output' || item.file.type === 'temp') &&
-        Array.from(item.id).length <= MAX_OVERVIEW_ITEM_ID &&
+        Array.from(nativeCanvasItemId(item.id)).length <= MAX_OVERVIEW_ITEM_ID &&
         capabilities.imageFormats.some((format) => FORMAT_EXTENSIONS[format].some((extension) => filename.endsWith(extension))));
 }
 /**
@@ -130,7 +131,8 @@ export class NativeCanvasOverview {
     }
     /** Find a currently painted image cell's item by identity. */
     #paintedItem(id) {
-        if (!this.#cells.some((cell) => cell.itemId === id))
+        const wire = nativeCanvasItemId(id);
+        if (!this.#cells.some((cell) => cell.itemId === wire))
             return null;
         const item = this.#grid.cellElements.find(({ cell }) => cell.item?.id === id)?.cell.item;
         return item?.mediaKind === 'image' ? item : null;
@@ -151,14 +153,14 @@ export class NativeCanvasOverview {
             if (!rect)
                 continue;
             identities.add(item.id);
-            candidates.push(Object.freeze({ itemId: item.id, file: item.file, rect }));
+            candidates.push(Object.freeze({ itemId: nativeCanvasItemId(item.id), file: item.file, rect }));
         }
         const painted = fittingCanvasSurfaceOverviewCells(this.options.address, candidates);
         const shown = new Set(painted.map((cell) => cell.itemId));
         for (const { cell, status } of cells) {
             const item = cell.item;
             status.textContent =
-                item && shown.has(item.id)
+                item && shown.has(nativeCanvasItemId(item.id))
                     ? ''
                     : !item
                         ? 'This batch image is unavailable.'

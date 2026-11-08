@@ -35,8 +35,10 @@ import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/Canv
 import type { CanvasCommand } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
 import type { CanvasSurfaceGeometry } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
 import {
+  desktopOutputResultId,
   promptId,
   workflowSessionId,
+  type OutputResultId,
 } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 import type { WorkflowOutputItem } from '../../../frontend/comfyui/ui/execution/domain/WorkflowOutput.js';
 import type { WorkflowResultSession } from '../../../frontend/comfyui/ui/execution/domain/WorkflowResultSession.js';
@@ -44,6 +46,7 @@ import type {
   CanvasSurfaceCapabilities,
   CanvasSurfaceCommand,
 } from '../../../integrations/contracts/CanvasSurface.js';
+import { isCanvasMessage } from '../../../integrations/shared/CanvasValidation.generated.js';
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { canvasSources } from '../support/CanvasCatalogFixture.js';
@@ -72,7 +75,10 @@ const surfaceGeometry: CanvasSurfaceGeometry = {
 };
 
 /** One source with two saved PNGs, a temporary PNG and a video. */
-function batchCatalog() {
+function batchCatalog(
+  identify: (batchIndex: number) => OutputResultId = (batchIndex) =>
+    `result:overview-${batchIndex}`,
+) {
   const [source] = canvasSources();
   if (!source) throw new Error('Missing source.');
   const context = {
@@ -97,7 +103,7 @@ function batchCatalog() {
     ['ComfyUI_2.png', 'temp', 'image'],
     ['ComfyUI_3.mp4', 'output', 'video'],
   ].map(([filename, type, mediaKind], batchIndex) => ({
-    id: `result:overview-${batchIndex}`,
+    id: identify(batchIndex),
     provenance,
     batchIndex,
     file: { filename: filename!, subfolder: '', type: type as 'output' | 'temp' },
@@ -277,6 +283,30 @@ test('enters a multi-image batch as a natively painted grid with the browser con
     'surface.overview',
     'surface.commit',
   ]);
+  expect(f.errors).toEqual([]);
+});
+
+test('a restored desktop result is painted under the host contract identity so the overview is a valid request', async () => {
+  const uuids = [0, 1, 2, 3].map((index) =>
+    desktopOutputResultId(`3e0f2c6b-7a84-4691-9d4f-97304200000${index}`),
+  );
+  const f = fixture({ overview: true }, {}, () => batchCatalog((index) => uuids[index]!));
+  await f.drain();
+  const painted = f.overviews().at(-1);
+  expect(painted?.cells.map(({ itemId }) => itemId)).toEqual(
+    uuids.slice(0, 3).map((id) => `result:${id}`),
+  );
+  expect(
+    isCanvasMessage({
+      protocol: 'sugarcubes.canvas',
+      version: 3,
+      session: 'panel-0123456789abcdef',
+      requestId: 1,
+      address: f.address,
+      revision: 1,
+      ...painted,
+    }),
+  ).toBe(true);
   expect(f.errors).toEqual([]);
 });
 
