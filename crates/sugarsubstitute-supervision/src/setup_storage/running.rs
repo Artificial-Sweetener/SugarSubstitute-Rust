@@ -104,26 +104,8 @@ pub fn retain_running_generation(
     };
     let root = releases.parent().ok_or_else(|| invalid("Installation root is absent"))?;
     let directory = Directory::open(root, false)?;
-    match super::ownership::read(&directory) {
-        Ok(_) => {}
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-            if inherited.is_some() {
-                return Err(invalid("Inherited launch installation ownership is missing"));
-            }
-            let state = super::ownership::state_path(&directory);
-            for path in [
-                state.join(super::selection::DIRECTORY),
-                state.join(super::selection::NAMESPACE_MARKER),
-            ] {
-                match crate::durable_storage::files::inspect(path, context) {
-                    Err(missing) if missing.kind() == io::ErrorKind::NotFound => {}
-                    Err(cause) => return Err(cause),
-                    Ok(_) => return Err(invalid("Installation ownership marker is missing")),
-                }
-            }
-            return Ok(None);
-        }
-        Err(cause) => return Err(cause),
+    if !super::ownership::running_present(&directory, inherited.is_some(), context)? {
+        return Ok(None);
     }
     let Some(store) = SelectionStore::existing(root, context).map_err(io::Error::other)? else {
         if inherited.is_some() {

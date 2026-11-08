@@ -38,9 +38,17 @@ fn request(
     package: PathBuf,
     environment: Vec<u16>,
 ) -> Result<EntryLaunchRequest, Box<dyn Error>> {
+    request_with_profile(connection, package, environment, "Profile_1")
+}
+fn request_with_profile(
+    connection: ConnectionConfiguration,
+    package: PathBuf,
+    environment: Vec<u16>,
+    profile: &str,
+) -> Result<EntryLaunchRequest, Box<dyn Error>> {
     let configuration = StartupConfiguration::new(
         connection,
-        ProfileId::new("Profile_1".into())?,
+        ProfileId::new(profile.into())?,
         Presentation::new("en", Theme::Light, false)?,
     );
     Ok(EntryLaunchRequest::new(
@@ -235,7 +243,7 @@ fn retained_staging_changes_only_header_on_fresh_challenge() -> Result<(), Box<d
 #[test]
 fn exact_maximum_combined_frame_decodes_and_one_more_unit_preserves_output()
 -> Result<(), Box<dyn Error>> {
-    let baseline = request(attached()?, path(), vec![0, 0])?;
+    let baseline = request_with_profile(attached()?, path(), vec![0, 0], "Profile_12")?;
     let length = encoded_length(&header()?, &Payload::Launch(&baseline))?;
     assert_eq!((MAX_ENTRY_FRAME_BYTES - length) % 2, 0);
     let units = 2 + (MAX_ENTRY_FRAME_BYTES - length) / 2;
@@ -246,14 +254,15 @@ fn exact_maximum_combined_frame_decodes_and_one_more_unit_preserves_output()
         block.extend([0, 0]);
         block
     };
-    let exact = request(attached()?, path(), environment(units))?;
+    let exact = request_with_profile(attached()?, path(), environment(units), "Profile_12")?;
     let mut output = vec![0xa5; MAX_ENTRY_FRAME_BYTES];
     assert_eq!(encode(&mut output, &header()?, Payload::Launch(&exact))?, MAX_ENTRY_FRAME_BYTES);
     let DecodedPayload::Launch(view) = decode(&output)?.payload else {
         return Err("expected exact maximum launch".into());
     };
     assert_eq!(view.environment().units().count(), units);
-    let excessive = request(attached()?, path(), environment(units + 1))?;
+    let excessive =
+        request_with_profile(attached()?, path(), environment(units + 1), "Profile_12")?;
     output.fill(0xa5);
     assert!(matches!(stage_launch(&mut output, &excessive), Err(EntryTransportError::Capacity)));
     assert!(output.iter().all(|byte| *byte == 0xa5));

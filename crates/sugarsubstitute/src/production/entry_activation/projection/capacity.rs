@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bound pure field construction before allocating, then record actual retained bytes.
 use super::*;
+use std::{os::windows::ffi::OsStrExt, path::Path};
+use sugarsubstitute_contracts::coordinator_entry::{EntryConnectionView, EntryWindowsPathView};
 use sugarsubstitute_contracts::lifecycle::LifecycleRejection;
 
 fn add(left: u64, right: u64) -> Result<u64, LifecycleRejection> {
@@ -42,10 +44,15 @@ pub(super) fn preflight(
     view: EntryLaunchRequestView<'_>,
     capture: &PathBuf,
     available: u64,
+    settled_profile: Option<&Path>,
 ) -> Result<(), LifecycleRejection> {
     let mut bytes = count(capture.capacity())?;
     // Desktop storage overrides can fill a native block even for an empty captured snapshot.
     bytes = add(bytes, 256 * 1024)?;
+    if let Some(profile) = settled_profile {
+        let units = count(profile.as_os_str().encode_wide().count())?;
+        bytes = add(bytes, add(mul(units, 4)?, vector(mul(units, 3)?, 1)?)?)?;
+    }
     bytes = add(bytes, path_peak(view.profile_directory())?)?;
     bytes = add(bytes, mul(count(view.profile_directory().unit_len())?, 2)?)?;
     bytes = add(bytes, count(view.profile().len())?)?;
@@ -75,7 +82,7 @@ pub(super) fn preflight(
             vector(
                 add(
                     count(arguments.len())?,
-                    sugarsubstitute_comfy::launch::MANAGED_PREFIX_ARGUMENTS as u64,
+                    sugarsubstitute_comfy::launch::MAX_MANAGED_PREFIX_ARGUMENTS as u64,
                 )?,
                 size_of::<String>() as u64,
             )?,

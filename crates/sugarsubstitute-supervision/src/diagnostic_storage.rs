@@ -8,6 +8,9 @@
 mod access;
 pub mod operational;
 use access::StateAccess;
+pub(crate) use operational::import_original as import_original_operational_history;
+#[cfg(test)]
+pub(crate) use operational::seed_earlier_history;
 mod activation;
 mod allocation;
 pub use allocation::*;

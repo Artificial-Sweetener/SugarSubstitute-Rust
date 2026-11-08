@@ -3,6 +3,13 @@
 //! Project one registered startup specification under its admitted finite allocation.
 #[path = "projection/capacity.rs"]
 mod capacity;
+#[path = "projection/failure.rs"]
+mod failure;
+#[path = "projection/fields.rs"]
+mod fields;
+use failure::ProjectionCause;
+pub(super) use failure::{ControlFailure, ProjectionFailure, check, return_unused_source};
+use fields::Fields;
 #[path = "projection/receiving.rs"]
 mod receiving;
 #[path = "projection/restart.rs"]
@@ -14,15 +21,10 @@ mod retirement_tests;
 #[cfg(test)]
 #[path = "projection_tests.rs"]
 mod tests;
-use std::{
-    error::Error, ffi::OsString, fmt, os::windows::ffi::OsStringExt, path::PathBuf, sync::Arc,
-};
+use std::{error::Error, path::PathBuf, sync::Arc};
 use sugarsubstitute_contracts::{
-    configuration::{LaunchConfiguration, LocaleId, ProfileId},
-    coordinator_entry::{
-        EntryConnectionId, EntryConnectionView, EntryLaunchRequestView, EntryRequestId,
-        EntryWindowsPathView,
-    },
+    configuration::{BackendDataDisposition, LaunchConfiguration, LocaleId, ProfileId},
+    coordinator_entry::{EntryConnectionId, EntryLaunchRequestView, EntryRequestId},
     execution::{JobContext, JobOutcome, MemoryClaim, MemoryClaimError, Moment},
     lifecycle::BackendTarget,
 };
@@ -33,7 +35,7 @@ use sugarsubstitute_execution::{
 use sugarsubstitute_supervision::{
     LaunchEnvironment,
     installed_frontend::FrontendInstallationInput,
-    setup_storage::{BackendStorage, RunningApplication},
+    setup_storage::{BackendStorage, RunningApplication, SourceLaunchSettlement},
 };
 
 /// Bound known projection buffers; the original frame keeps its own native loan.
@@ -77,6 +79,7 @@ pub(super) struct ProjectionInput {
     capture_root: PathBuf,
     user: PathBuf,
     installation: Option<Arc<RunningApplication>>,
+    source: Option<Arc<SourceLaunchSettlement>>,
     cause: ProjectionCause,
     post: Option<ControlFailure>,
     _charge: Option<MemoryClaim>,
@@ -99,6 +102,7 @@ impl ProjectionInput {
             capture_root,
             user,
             installation,
+            source: None,
             cause: ProjectionCause::NotStarted,
             post: None,
             _charge: None,
@@ -116,6 +120,7 @@ impl ProjectionInput {
             capture_root: PathBuf::new(),
             user: PathBuf::new(),
             installation: None,
+            source: None,
             cause: ProjectionCause::NotStarted,
             post: None,
             _charge: None,
@@ -124,10 +129,35 @@ impl ProjectionInput {
     pub(super) fn rejected_request(self) -> Option<AuthenticatedEntryLaunch> {
         self.request
     }
+    pub(super) fn authenticated_request(&self) -> Option<&AuthenticatedEntryLaunch> {
+        self.request.as_ref()
+    }
+    pub(super) fn run_key(&self) -> Option<sugarsubstitute_contracts::lifecycle::RunKey> {
+        self.run
+    }
+    pub(super) fn original_until(&self) -> Option<Moment> {
+        self.request.as_ref().map(AuthenticatedEntryLaunch::until)
+    }
+    pub(super) fn release_request(&mut self) {
+        drop(self.request.take());
+    }
+    pub(super) fn retain_source(&mut self, source: Arc<SourceLaunchSettlement>) {
+        self.source = Some(source);
+    }
+    pub(super) fn observed_source_terminal(&mut self) -> Result<(), Box<dyn Error>> {
+        let source = self
+            .source
+            .as_mut()
+            .and_then(Arc::get_mut)
+            .ok_or("Source settlement terminal has no unique retained owner")?;
+        source.observed_settlement_terminal()?;
+        Ok(())
+    }
 }
 /// Keep all projected data and the original snapshot ahead of its retained charge.
 /// Paths remain lexical; frontend, claims and profile owners perform actual trust checks.
 pub(super) struct ProjectedEntry {
+    pub(super) source: Option<Arc<SourceLaunchSettlement>>,
     pub(super) snapshot: Option<PreparedStartupSnapshot>,
     pub(super) registered: RegisteredStartupSource,
     pub(super) until: Moment,
@@ -142,90 +172,10 @@ pub(super) struct ProjectedEntry {
     pub(super) target: BackendTarget,
     pub(super) frontend: Option<FrontendInstallationInput>,
     pub(super) backend_environment: Option<LaunchEnvironment>,
+    pub(super) backend_data_disposition: BackendDataDisposition,
     pub(super) desktop_environment: Option<LaunchEnvironment>,
     pub(super) policy_credit: Option<super::funding::ProjectionPolicyCredit>,
     _charge: super::funding::ProjectionDataFunding,
-}
-
-/// Preserve the original failure and frame through late cancellation or rejection.
-pub(super) struct ProjectionFailure {
-    retained: ChargedBlockingInput<ProjectionInput>,
-}
-/// Return a completed, unlaunched request's passive connection loan during
-/// shutdown. The complete outcome, first error, controls, metadata and original
-/// charges remain with the caller. This proves no transport/native settlement.
-/// An admitted captured session owns its transferred source and is excluded.
-pub(super) fn return_unused_source(outcome: &mut JobOutcome<ProjectedEntry, ProjectionFailure>) {
-    match outcome {
-        JobOutcome::Success(value) => drop(value.snapshot.take()),
-        JobOutcome::Failure(failure) => {
-            let input = failure.retained.input_mut();
-            drop(input.request.take());
-            drop(input.snapshot.take());
-        }
-        _ => {}
-    }
-}
-
-enum ProjectionCause {
-    NotStarted,
-    Claim(MemoryClaimError),
-    Funding(sugarsubstitute_contracts::lifecycle::LifecycleRejection),
-    Operation(Box<dyn Error + Send + Sync>),
-}
-impl ProjectionCause {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::NotStarted => None,
-            Self::Claim(cause) => Some(cause),
-            Self::Funding(cause) => Some(cause),
-            Self::Operation(cause) => Some(cause.as_ref()),
-        }
-    }
-}
-impl fmt::Debug for ProjectionFailure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EntryProjectionFailure")
-            .field("post_control", &self.retained.input().post)
-            .field("original_retained", &self.retained.input().request.is_some())
-            .finish_non_exhaustive()
-    }
-}
-impl fmt::Display for ProjectionFailure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Authenticated entry preparation failed")
-    }
-}
-impl Error for ProjectionFailure {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.retained.input().cause.source()
-    }
-}
-#[derive(Debug)]
-pub(super) enum ControlFailure {
-    Cancelled,
-    Expired,
-    ClockRegression,
-}
-impl fmt::Display for ControlFailure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Entry projection control: {self:?}")
-    }
-}
-impl Error for ControlFailure {}
-fn check(context: &JobContext, received: Moment, until: Moment) -> Result<(), ControlFailure> {
-    let now = context.now();
-    if context.cancellation_requested() {
-        return Err(ControlFailure::Cancelled);
-    }
-    if now < received {
-        return Err(ControlFailure::ClockRegression);
-    }
-    if now >= until || context.deadline().is_none_or(|deadline| now >= deadline || deadline > until)
-    {
-        return Err(ControlFailure::Expired);
-    }
-    Ok(())
 }
 
 /// Execute only from the existing typed finite worker after its real admission.
@@ -270,11 +220,17 @@ pub(super) fn project(
         .map_err(|cause| Box::new(cause) as _)
         .and_then(|()| request.view().map_err(|cause| Box::new(cause) as _))
         .and_then(|view| {
+            validate_source(
+                view,
+                input.input().source.as_deref(),
+                input.input().installation.is_some(),
+            )?;
             LaunchConfiguration::validate_path(&input.input().capture_root)?;
-            fields(
+            fields::project(
                 view,
                 &input.input().capture_root,
                 capacity::field_available(input.input())?,
+                input.input().source.as_ref().and_then(|source| source.profile_directory()),
                 |configuration| match &input.input().installation {
                     Some(installation) => installation
                         .backend_storage(configuration.root(), &context)
@@ -283,13 +239,7 @@ pub(super) fn project(
                 },
             )
             .and_then(|fields| {
-                let identity =
-                    sugarsubstitute_supervision::session_identity::session_host_identity(
-                        &input.input().user,
-                        &fields.profile,
-                        input.input().installation.as_deref(),
-                        &context,
-                    )?;
+                let identity = host_identity(input.input(), &fields.profile, &context)?;
                 Ok((fields, identity))
             })
         });
@@ -315,7 +265,7 @@ pub(super) fn project(
             return Err(ProjectionFailure { retained: input });
         }
     };
-    let snapshot = match request.into_startup_snapshot() {
+    let mut snapshot = match request.into_startup_snapshot() {
         Ok(snapshot) => snapshot,
         Err(rejected) => {
             input.input_mut().cause = ProjectionCause::Operation(Box::new(rejected.error));
@@ -325,7 +275,9 @@ pub(super) fn project(
         }
     };
     let registered = match (&input.input().client, input.input().run) {
-        (Some(client), Some(run)) => client.register_startup_source(&snapshot, &context, run),
+        (Some(client), Some(run)) => {
+            client.register_startup_source(&mut snapshot, &context, run, &fields.requested_profile)
+        }
         _ => Err(sugarsubstitute_contracts::execution::AdmissionError::InvalidCaptureAdmission),
     };
     let registered = match registered {
@@ -346,6 +298,7 @@ pub(super) fn project(
             }
         };
     Ok(ProjectedEntry {
+        source: input.input_mut().source.take(),
         snapshot: Some(snapshot),
         registered,
         until,
@@ -360,21 +313,28 @@ pub(super) fn project(
         target: fields.target,
         frontend: Some(fields.frontend),
         backend_environment: fields.backend_environment,
+        backend_data_disposition: fields.backend_data_disposition,
         desktop_environment: Some(fields.desktop_environment),
         policy_credit: Some(policy_credit),
         _charge: charge,
     })
 }
-struct Fields {
-    allocated_bytes: u64,
-    requested_profile: PathBuf,
-    profile_units: Vec<u16>,
-    profile: ProfileId,
-    locale: LocaleId,
-    target: BackendTarget,
-    frontend: FrontendInstallationInput,
-    backend_environment: Option<LaunchEnvironment>,
-    desktop_environment: LaunchEnvironment,
+/// Inert reference bytes never substitute for the native settlement retained by this run.
+fn validate_source(
+    view: EntryLaunchRequestView<'_>,
+    source: Option<&SourceLaunchSettlement>,
+    installed: bool,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    match (installed, source, view.originals()) {
+        (true, None, None) => Ok(()),
+        (false, Some(source), Some(reference))
+            if source.originals_reference() == Some(reference)
+                && source.profile_directory().is_some() =>
+        {
+            Ok(())
+        }
+        _ => Err("Entry originals and retained installed/source settlement disagree".into()),
+    }
 }
 #[cfg(test)]
 impl super::ProductionActivation {
@@ -382,93 +342,30 @@ impl super::ProductionActivation {
     pub(in crate::production) fn projected_target_for_test(
         view: EntryLaunchRequestView<'_>,
     ) -> Result<BackendTarget, Box<dyn Error + Send + Sync>> {
-        Ok(fields(view, &PathBuf::new(), u64::MAX, |_| Ok(BackendStorage::External))?.target)
+        Ok(fields::project(view, &PathBuf::new(), u64::MAX, None, |_| {
+            Ok(BackendStorage::External)
+        })?
+        .target)
     }
 }
-fn fields<'storage>(
-    view: EntryLaunchRequestView<'_>,
-    capture: &PathBuf,
-    available: u64,
-    backend_storage: impl FnOnce(
-        &LaunchConfiguration,
-    ) -> Result<BackendStorage<'storage>, Box<dyn Error + Send + Sync>>,
-) -> Result<Fields, Box<dyn Error + Send + Sync>> {
-    capacity::preflight(view, capture, available)?;
-    let profile_units = collect_units(view.profile_directory())?;
-    let requested_profile = PathBuf::from(OsString::from_wide(&profile_units));
-    LaunchConfiguration::validate_path(&requested_profile)?;
-    let profile = ProfileId::new(copy_string(view.profile())?)?;
-    let frontend = view.frontend();
-    let frontend_paths = [
-        path(frontend.package_directory())?,
-        path(frontend.metadata_file())?,
-        path(frontend.cube_directory())?,
-        path(frontend.backend_script())?,
-    ];
-    let frontend_bytes = capacity::frontend(&frontend_paths)?;
-    let [package, metadata, cube, script] = frontend_paths;
-    let frontend = FrontendInstallationInput::new(package, metadata, cube, script)?;
-    let target = match view.connection() {
-        EntryConnectionView::Attached(origin) => BackendTarget::Attached(origin),
-        EntryConnectionView::Managed { root, interpreter, arguments, port } => {
-            let mut owned = Vec::new();
-            owned.try_reserve_exact(arguments.len())?;
-            for argument in arguments.iter() {
-                owned.push(copy_string(argument)?);
-            }
-            let requested =
-                LaunchConfiguration::new(path(root)?, path(interpreter)?, owned, port.get())?;
-            // Schema-one arguments are extras. Resolve identity from the sole
-            // Comfy owner's complete command, while the original data claim is held.
-            BackendTarget::Managed(sugarsubstitute_comfy::launch::effective_managed_launch(
-                &requested,
-            )?)
-        }
-    };
-    let mut environment = Vec::new();
-    environment.try_reserve_exact(view.environment().unit_len())?;
-    environment.extend(view.environment().units());
-    let storage = requested_profile.parent().ok_or("Profile storage parent missing")?;
-    let desktop_environment = LaunchEnvironment::for_local_storage(&environment, storage)?;
-    let backend_environment = match &target {
-        BackendTarget::Managed(configuration) => Some(LaunchEnvironment::for_managed_backend(
-            &environment,
-            configuration,
-            backend_storage(configuration)?,
-        )?),
-        BackendTarget::Attached(_) => None,
-    };
-    let mut fields = Fields {
-        allocated_bytes: 0,
-        requested_profile,
-        profile_units,
+/// Resolve the protected session owner for this projection and require any settled source
+/// launch to name the same host, so source data can never be adopted by another installation.
+fn host_identity(
+    input: &ProjectionInput,
+    profile: &ProfileId,
+    context: &JobContext,
+) -> std::io::Result<sugarsubstitute_contracts::installation::InstallationId> {
+    let identity = sugarsubstitute_supervision::session_identity::session_host_identity(
+        &input.user,
         profile,
-        locale: view.presentation().locale(),
-        target,
-        frontend,
-        backend_environment,
-        desktop_environment,
-    };
-    fields.allocated_bytes = capacity::data(&fields, frontend_bytes)?;
-    Ok(fields)
-}
-fn copy_string(value: &str) -> Result<String, std::collections::TryReserveError> {
-    let mut result = String::new();
-    result.try_reserve_exact(value.len())?;
-    result.push_str(value);
-    Ok(result)
-}
-fn collect_units(
-    value: EntryWindowsPathView<'_>,
-) -> Result<Vec<u16>, std::collections::TryReserveError> {
-    let mut units = Vec::new();
-    units.try_reserve_exact(value.unit_len())?;
-    units.extend(value.units());
-    Ok(units)
-}
-fn path(value: EntryWindowsPathView<'_>) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
-    let units = collect_units(value)?;
-    let result = PathBuf::from(OsString::from_wide(&units));
-    LaunchConfiguration::validate_path(&result)?;
-    Ok(result)
+        input.installation.as_deref(),
+        context,
+    )?;
+    if input.source.as_ref().is_some_and(|source| source.source_correlation() != Some(&identity)) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Settled source correlation differs from the protected session owner",
+        ));
+    }
+    Ok(identity)
 }

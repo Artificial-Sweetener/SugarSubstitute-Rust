@@ -98,7 +98,8 @@ impl ProfileComponent {
         Ok(())
     }
     pub(super) fn retire(&mut self, resources: &mut EntryResources<'_>) -> Result<bool> {
-        if self.projection.is_some() {
+        if self.projection.is_some() || self.source.as_ref().is_some_and(|source| !source.settled())
+        {
             return Ok(false);
         }
         let budget = self.shutdown.ok_or("Original component cleanup budget absent")?;

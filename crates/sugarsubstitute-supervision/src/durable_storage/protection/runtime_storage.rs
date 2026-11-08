@@ -3,6 +3,19 @@
 //! Resolve installation-local account runtime storage within admitted durable operations.
 use super::*;
 impl Protection {
+    /// Read the actual primary account's earlier runtime location without creating it.
+    /// The caller must verify each existing feature namespace before importing any data.
+    pub(crate) fn historical_runtime(
+        &mut self,
+        context: &JobContext,
+    ) -> io::Result<std::path::PathBuf> {
+        check(context)?;
+        let path =
+            account::runtime_base::historical(&mut self.handles, self.budget.clone(), &self.sid)
+                .map_err(io::Error::other)?;
+        check(context)?;
+        Ok(path.join("SugarSubstitute").join("runtime"))
+    }
     /// Resolve a feature-owned runtime child `<base>\runtime\<leaf>` through observed native names.
     ///
     /// `base` is an installation root named by the configuration layout owner; records never

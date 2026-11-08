@@ -32,6 +32,8 @@ use sugarsubstitute_execution::{
 mod admission;
 mod completion;
 mod recovery;
+mod source_data;
+pub use source_data::EntrySourceDataAdmission;
 #[cfg(test)]
 mod tests;
 

@@ -5,6 +5,8 @@ mod activation;
 pub(in crate::setup_storage) mod admission;
 mod candidate;
 pub(in crate::setup_storage) mod generation;
+mod integration;
+pub use integration::{IntegrationRequest, IntegrationStorage};
 mod records;
 mod reservation;
 mod resume;

@@ -3,6 +3,7 @@
 //! Check exact Windows units and authoritative lexical validation in the funded projection.
 use super::*;
 use std::os::windows::ffi::OsStrExt;
+use sugarsubstitute_contracts::coordinator_entry::{EntryConnectionView, EntryWindowsPathView};
 fn bytes(units: &[u16]) -> Vec<u8> {
     units.iter().flat_map(|unit| unit.to_le_bytes()).collect()
 }
@@ -10,7 +11,7 @@ fn bytes(units: &[u16]) -> Vec<u8> {
 fn projection_preserves_unpaired_profile_path_units() -> Result<(), Box<dyn Error + Send + Sync>> {
     let original = [69, 58, 92, 0xd800, 97, 0xdc01];
     let raw = bytes(&original);
-    let projected = path(EntryWindowsPathView::from_le_bytes(&raw)?)?;
+    let projected = fields::path(EntryWindowsPathView::from_le_bytes(&raw)?)?;
     assert_eq!(projected.as_os_str().encode_wide().collect::<Vec<_>>(), original);
     Ok(())
 }
@@ -19,7 +20,7 @@ fn projection_rejects_relative_and_parent_traversal_without_rewriting()
 -> Result<(), Box<dyn Error + Send + Sync>> {
     for value in ["profile", r"E:\parent\..\profile"] {
         let raw = bytes(&value.encode_utf16().collect::<Vec<_>>());
-        assert!(path(EntryWindowsPathView::from_le_bytes(&raw)?).is_err());
+        assert!(fields::path(EntryWindowsPathView::from_le_bytes(&raw)?).is_err());
     }
     Ok(())
 }
@@ -30,7 +31,7 @@ fn projection_path_exact_unit_bound_survives_owned_conversion()
         vec![u16::from(b'x'); sugarsubstitute_contracts::coordinator_entry::MAX_ENTRY_PATH_UNITS];
     units[..3].copy_from_slice(&[69, 58, 92]);
     let raw = bytes(&units);
-    let projected = path(EntryWindowsPathView::from_le_bytes(&raw)?)?;
+    let projected = fields::path(EntryWindowsPathView::from_le_bytes(&raw)?)?;
     assert_eq!(projected.as_os_str().encode_wide().collect::<Vec<_>>(), units);
     Ok(())
 }
@@ -64,6 +65,22 @@ fn managed_view<'a>(
     )?)
 }
 
+#[test]
+fn originals_matching_data_never_bypasses_missing_native_source_or_installed_custody()
+-> Result<(), Box<dyn Error + Send + Sync>> {
+    let root = bytes(&r"E:\comfyui".encode_utf16().collect::<Vec<_>>());
+    let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
+    let view = managed_view(&root, &interpreter, &[], 0, "en")?;
+    assert!(validate_source(view, None, false).is_err());
+    assert!(validate_source(view, None, true).is_ok());
+    let referenced = view.with_originals(
+        sugarsubstitute_contracts::coordinator_entry::EntryOriginalsReference::new([7; 32])?,
+    );
+    assert!(validate_source(referenced, None, false).is_err());
+    assert!(validate_source(referenced, None, true).is_err());
+    Ok(())
+}
+
 /// Empty schema-one extras still yield the complete Python/Comfy command before identity resolution.
 #[test]
 fn parent_projection_composes_complete_managed_command_from_empty_extras()
@@ -79,7 +96,8 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     assert!(available < PROJECTION_BYTES);
     assert_eq!(claim.bytes(), available);
     assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);
-    let projected = fields(original, &capture, available, |_| Ok(BackendStorage::External))?;
+    let projected =
+        fields::project(original, &capture, available, None, |_| Ok(BackendStorage::External))?;
     let BackendTarget::Managed(launch) = &projected.target else {
         return Err("Managed target changed mode".into());
     };
@@ -148,10 +166,11 @@ fn parent_projection_rejects_effective_command_overflow_without_changing_extra_s
         arguments.extend_from_slice(b"--cpu");
     }
     let original = managed_view(&root, &interpreter, &arguments, 58, "en")?;
-    let cause = fields(
+    let cause = fields::project(
         original,
         &PathBuf::new(),
         projection_data_bytes().ok_or("Joined projection partition underflow")?,
+        None,
         |_| Ok(BackendStorage::External),
     )
     .err()
@@ -185,10 +204,11 @@ fn configured_japanese_locale_reaches_production_report_view_work_without_web_co
     let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
     let original =
         managed_view(&root, &interpreter, &[], 0, "ja").map_err(|cause| cause as Box<dyn Error>)?;
-    let projected = fields(
+    let projected = fields::project(
         original,
         &PathBuf::new(),
         projection_data_bytes().ok_or("Joined projection partition underflow")?,
+        None,
         |_| Ok(BackendStorage::External),
     )
     .map_err(|cause| cause as Box<dyn Error>)?;

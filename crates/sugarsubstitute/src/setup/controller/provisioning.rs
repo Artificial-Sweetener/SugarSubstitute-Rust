@@ -114,6 +114,7 @@ impl Controller {
         if event != "completed" {
             self.install_id = None;
             self.prepared = None;
+            self.integration = None;
             self.diagnostic(message(&value["data"])?)?;
             presentation::failure(&mut value["data"], &self.locale, event == "cancelled")?;
             return self.emit(
@@ -127,12 +128,16 @@ impl Controller {
         }
         if matches!(pending.purpose, Purpose::Provision) {
             let runtime: RuntimePaths = serde_json::from_value(value["data"].clone())?;
-            let mut input = serde_json::to_value(runtime)?;
-            input["models"] =
-                json!(self.selection.as_ref().ok_or("Installation choices absent")?.models);
-            self.forward(pending.id, "integrate", input, Purpose::Integrate)
+            let prepared = self.prepared.take().ok_or("Prepared installation missing")?;
+            self.submit(StorageWork::Prepare, move |context| {
+                let integration = prepared.integration(runtime, &context)?;
+                Ok(StorageResult::Integration(prepared, Box::new(integration)))
+            })
         } else if matches!(pending.purpose, Purpose::Integrate) {
             let runtime: RuntimePaths = serde_json::from_value(value["data"].clone())?;
+            let integration =
+                self.integration.take().ok_or("Native integration custody missing")?;
+            integration.validate_result(&runtime)?;
             let prepared = self.prepared.take().ok_or("Prepared installation missing")?;
             self.complete_candidate(prepared, runtime)
         } else {

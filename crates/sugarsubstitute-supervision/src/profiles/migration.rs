@@ -38,8 +38,8 @@ pub(super) fn preserve(state: &mut NativeState, context: &JobContext) -> Result<
         HeldFile::acquire_into(
             ExclusionOpen::CreateOrOpen,
             &mut state.migration_file,
-            NativeName::Ordinary(folder.join(".sugarsubstitute-profile-v1.original.claim")),
-            NativeName::Ordinary(folder.join(".sugarsubstitute-profile-v1.original.record")),
+            NativeName::Ordinary(folder.join(crate::profiles::locations::ORIGINAL_CLAIM)),
+            NativeName::Ordinary(folder.join(crate::profiles::locations::ORIGINAL_RECORD)),
             NativeSid::Ordinary(sid.to_vec()),
             budget.clone(),
             &mut NativePhase::ordinary(&budget)?,

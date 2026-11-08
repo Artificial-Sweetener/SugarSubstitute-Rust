@@ -19,6 +19,8 @@ mod autosave;
 mod files;
 #[cfg(all(windows, feature = "native-composition"))]
 pub(crate) mod legacy;
+#[cfg(all(windows, feature = "windows-native-host"))]
+pub(crate) use files::classify_migration_source;
 #[cfg(test)]
 mod tests;
 #[cfg(all(windows, feature = "native-composition"))]

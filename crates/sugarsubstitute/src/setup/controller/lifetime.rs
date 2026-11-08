@@ -98,6 +98,7 @@ impl Controller {
             owner.finish_shutdown()?;
         }
         self.prepared = None;
+        self.integration = None;
         self.installed = None;
         self.relaunch = None;
         self.launch_failure = None;

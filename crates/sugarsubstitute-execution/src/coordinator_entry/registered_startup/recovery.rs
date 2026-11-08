@@ -142,7 +142,7 @@ impl RegisteredRecoveryGrant {
         EntryTransportError,
     > {
         let owner = self.owner.as_ref().ok_or(EntryTransportError::InvalidPhase)?;
-        protocol::launch_payload::decode(owner.registered.body())
+        owner.registered.source.view()
     }
     /// Bind this genuine Root grant to one actually running finite owner on its own Core.
     /// # Errors

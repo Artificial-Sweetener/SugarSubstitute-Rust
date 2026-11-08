@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain bounded invocation payloads and borrow exact decoded Windows units.
 
+mod originals;
 mod owned;
+pub use originals::EntryOriginalsReference;
 pub use owned::{EntryLaunchParts, EntryLaunchRequest, MAX_ENTRY_REQUEST_ALLOCATION_BYTES};
 
 use super::EntryShapeError;
@@ -278,6 +280,7 @@ pub struct EntryLaunchRequestView<'a> {
     presentation: Presentation,
     environment: EntryEnvironmentView<'a>,
     canvas_renderer: EntryCanvasRendererView<'a>,
+    originals: Option<EntryOriginalsReference>,
 }
 impl<'a> EntryLaunchRequestView<'a> {
     /// Compose bounded slices and validate the profile through its authoritative owner.
@@ -300,6 +303,7 @@ impl<'a> EntryLaunchRequestView<'a> {
             presentation,
             environment,
             canvas_renderer: EntryCanvasRendererView::Absent,
+            originals: None,
         })
     }
     /// Attach the stored canvas renderer preference.
@@ -319,6 +323,16 @@ impl<'a> EntryLaunchRequestView<'a> {
     /// Return the stored canvas renderer preference.
     pub const fn canvas_renderer(self) -> EntryCanvasRendererView<'a> {
         self.canvas_renderer
+    }
+    /// Attach inert matching data for separately retained passive original bytes.
+    /// This performs no native admission and cannot authorize a supplied path or migration.
+    pub const fn with_originals(mut self, reference: EntryOriginalsReference) -> Self {
+        self.originals = Some(reference);
+        self
+    }
+    /// Observe the fixed original-snapshot commitment without acquiring file custody.
+    pub const fn originals(self) -> Option<EntryOriginalsReference> {
+        self.originals
     }
     /// Return exact original requested connection mode.
     pub const fn connection(self) -> EntryConnectionView<'a> {

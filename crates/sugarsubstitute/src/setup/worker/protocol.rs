@@ -11,10 +11,12 @@ pub(super) enum CacheEvent {
     MetadataFull,
     Other,
 }
-/// Cache protocol two requires native downloads; protocol-one hosts must reject its worker.
-/// The packaged host and worker must agree before any provisioning command can start.
+/// Integration readiness envelope two makes either mismatched host/worker fail before commands.
+/// Authentication, cache/record/download operations and ordinary responses keep envelope one;
+/// their independent schemas do not change when model integration gains an admitted storage base.
 pub(super) fn cache_event(value: &serde_json::Value) -> Result<CacheEvent> {
-    if value["version"] != 1 {
+    let version = if value["event"] == "ready" { 2 } else { 1 };
+    if value["version"] != version {
         return Err("Unsupported provisioning response".into());
     }
     match value["event"].as_str() {
@@ -23,11 +25,14 @@ pub(super) fn cache_event(value: &serde_json::Value) -> Result<CacheEvent> {
                 && value["data"]["storageProtocol"] == 1
                 && value["data"]["metadataProtocol"] == 1
                 && value["data"]["downloadsProtocol"] == 1
-                && value["data"]["textProtocol"] == 1 =>
+                && value["data"]["textProtocol"] == 1
+                && value["data"]["integrationProtocol"] == 2 =>
         {
             Ok(CacheEvent::Ready)
         }
-        Some("ready") => Err("Unsupported provisioning storage/cache/text protocol".into()),
+        Some("ready") => {
+            Err("Unsupported provisioning storage/cache/text/integration protocol".into())
+        }
         Some("cache_pressure") => match value["data"]["namespace"].as_str() {
             Some("downloads") => Ok(CacheEvent::DownloadsFull),
             Some("metadata") => Ok(CacheEvent::MetadataFull),
@@ -42,18 +47,19 @@ mod tests {
     use serde_json::json;
     #[test]
     fn legacy_and_unknown_cache_protocols_are_rejected_before_worker_readiness() {
-        let valid = json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1,"textProtocol":1});
+        let valid = json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1,"textProtocol":1,"integrationProtocol":2});
         for (field, version) in [
             ("cacheProtocol", 2),
             ("storageProtocol", 1),
             ("metadataProtocol", 1),
             ("downloadsProtocol", 1),
             ("textProtocol", 1),
+            ("integrationProtocol", 2),
         ] {
             let mut missing = valid.clone();
             assert!(missing.as_object_mut().is_some_and(|object| object.remove(field).is_some()));
             assert!(
-                cache_event(&json!({"version":1,"event":"ready","data":missing})).is_err(),
+                cache_event(&json!({"version":2,"event":"ready","data":missing})).is_err(),
                 "accepted missing {field}"
             );
             for invalid in [
@@ -66,23 +72,31 @@ mod tests {
                 let mut data = valid.clone();
                 data[field] = invalid;
                 assert!(
-                    cache_event(&json!({"version":1,"event":"ready","data":data})).is_err(),
+                    cache_event(&json!({"version":2,"event":"ready","data":data})).is_err(),
                     "accepted invalid {field}"
                 );
             }
         }
         let mut legacy = valid;
+        legacy["integrationProtocol"] = json!(1);
+        assert!(cache_event(&json!({"version":2,"event":"ready","data":legacy})).is_err());
+        legacy["integrationProtocol"] = json!(2);
         legacy["cacheProtocol"] = json!(1);
-        assert!(cache_event(&json!({"version":1,"event":"ready","data":legacy})).is_err());
+        assert!(cache_event(&json!({"version":2,"event":"ready","data":legacy})).is_err());
     }
     #[test]
     fn current_native_grant_protocol_admits_the_matching_worker() -> Result<()> {
         assert_eq!(
             cache_event(
-                &json!({"version":1,"event":"ready","data":{"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1,"textProtocol":1}})
+                &json!({"version":2,"event":"ready","data":{"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1,"textProtocol":1,"integrationProtocol":2}})
             )?,
             CacheEvent::Ready
         );
+        // Earlier hosts require envelope one, so this version-two readiness cannot accidentally
+        // admit a new worker there. Conversely the current host refuses an old readiness envelope
+        // even if a peer adds an integration capability without changing its contract.
+        assert!(cache_event(&json!({"version":1,"event":"ready","data":{"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1,"textProtocol":1,"integrationProtocol":2}})).is_err());
+        assert!(cache_event(&json!({"version":1,"event":"ready","data":{"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1,"textProtocol":1}})).is_err());
         Ok(())
     }
     #[test]

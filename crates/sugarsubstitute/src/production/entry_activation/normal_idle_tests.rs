@@ -139,6 +139,7 @@ fn normal_idle_empty_queued_projection_and_retained_failure_never_issue_normal_c
     assert!(owner.shutdown_budget().is_none());
     let request = actual_request(1, 10)?;
     owner.pending[0] = Some(PendingProjection {
+        source: None,
         restart: false,
         qualification: Default::default(),
         run: request.run(),

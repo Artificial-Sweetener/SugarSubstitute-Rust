@@ -150,6 +150,7 @@ impl ProductionActivation {
             )
             .user(),
             projection::RestartProjection {
+                source_custody: value.source.clone(),
                 source: value.registered.clone(),
                 previous,
                 run,
@@ -190,6 +191,7 @@ impl ProductionActivation {
             navigation: Generation::new(1)?,
             connection,
             job: Some(job),
+            source: None,
             completion: None,
             restart: true,
         });

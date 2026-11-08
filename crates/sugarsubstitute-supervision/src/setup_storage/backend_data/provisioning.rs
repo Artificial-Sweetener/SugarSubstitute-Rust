@@ -6,7 +6,7 @@ use crate::durable_storage::files;
 use serde_json::Value;
 
 /// The installer worker's native-record protocol owns these schema-one receipts.
-pub(super) fn verify(
+pub(in crate::setup_storage) fn verify(
     root: &Path,
     source: &Directory,
     context: &JobContext,

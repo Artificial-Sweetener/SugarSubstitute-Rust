@@ -17,6 +17,7 @@ pub(crate) struct ClaimAdmissionLifetime {
     pub(crate) admission: Arc<AtomicBool>,
 }
 
+#[derive(Clone)]
 pub(crate) struct RetainedCoordinatorProof {
     owner: CoordinatorKey,
     execution: ExecutionId,

@@ -25,8 +25,6 @@ mod entry_bootstrap;
 mod entry_failure;
 #[path = "production/entry_runner.rs"]
 mod entry_runner;
-#[path = "production/options.rs"]
-mod options;
 #[path = "production/parent_lifecycle.rs"]
 mod parent_lifecycle;
 #[path = "production/qualification.rs"]

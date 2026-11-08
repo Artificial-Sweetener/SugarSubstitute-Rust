@@ -40,9 +40,20 @@ test('unknown operations, fields and download authority are rejected', () => {
   ]) assert.throws(() => parseCommand(value))
 })
 
-test('integration accepts only the verified runtime paths without package or command authority', () => {
-  const runtime = { directory: 'E:\\ComfyUI', python: 'E:\\Python\\python.exe', frontend: 'E:\\frontend', metadata: 'E:\\METADATA', models: 'E:\\Models' }
+test('integration version two requires the native-admitted storage base separately from source', () => {
+  const runtime = { version: 2, directory: 'E:\\ComfyUI', python: 'E:\\Python\\python.exe', frontend: 'E:\\frontend', metadata: 'E:\\METADATA', models: 'E:\\Models', storageBase: 'D:\\SugarSubstitute\\user\\comfy-data' }
   assert.deepEqual(parseCommand(command('integrate', runtime)).input, runtime)
+  for (const field of Object.keys(runtime)) {
+    const missing = { ...runtime }; delete missing[field]
+    assert.throws(() => parseCommand(command('integrate', missing)))
+  }
+  for (const version of [undefined, 0, 1, 3, '2', null, false]) {
+    assert.throws(() => parseCommand(command('integrate', { ...runtime, version })))
+  }
+  for (const storageBase of ['', '\0', 7, {}, 'x'.repeat(4097)]) {
+    assert.throws(() => parseCommand(command('integrate', { ...runtime, storageBase })))
+  }
+  assert.throws(() => parseCommand(command('integrate', { ...runtime, owned: true })))
 })
 
 test('unterminated and oversized frames fail without unbounded buffering', () => {

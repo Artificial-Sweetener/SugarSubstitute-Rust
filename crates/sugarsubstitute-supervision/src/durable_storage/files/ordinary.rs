@@ -17,6 +17,8 @@ pub(crate) enum ExistingAccess {
     ReplaceableRead,
     /// Read a shared lease and update its retention metadata without granting data writes.
     SharedMetadata,
+    /// Inspect a closed legacy writer without acquiring data-write access or creating a lock.
+    ExclusiveRead,
     /// Retain exclusive read/write custody for a feature-authorized reusable record stage.
     Exclusive,
 }
@@ -47,6 +49,9 @@ impl Directory {
             }
             ExistingAccess::Exclusive => {
                 options.read(true).write(true).share_mode(0);
+            }
+            ExistingAccess::ExclusiveRead => {
+                options.read(true).share_mode(0);
             }
         }
         options.custom_flags(OPEN_REPARSE_POINT);

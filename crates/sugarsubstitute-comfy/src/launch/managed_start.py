@@ -66,9 +66,3 @@ def observe_desktop():
 threading.Thread(target=observe_desktop, name="SugarSubstitute shutdown", daemon=True).start()
 try:
     prepare_custom_nodes()
-    runpy.run_path(sys.argv[0], run_name="__main__")
-except KeyboardInterrupt:
-    # Closing the splash during imports is an ordinary cancelled startup.
-    pass
-finally:
-    finished.set()

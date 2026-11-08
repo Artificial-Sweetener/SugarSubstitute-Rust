@@ -38,6 +38,7 @@ impl RecoveryPreparation {
                 )
                 .user(),
                 super::super::projection::RestartProjection {
+                    source_custody: value.source.clone(),
                     source: value.registered.clone(),
                     previous: self.previous,
                     run: self.identity.run,

@@ -154,6 +154,7 @@ impl CapturedEntryEnvironment {
         cube: PathBuf,
         script: PathBuf,
         profile_directory: PathBuf,
+        originals: Option<sugarsubstitute_contracts::coordinator_entry::EntryOriginalsReference>,
     ) -> Result<EntryRequestInput, EntryEnvironmentFailure> {
         let Self { units, owner } = self;
         if let Err(cause) = owner.check_publication() {
@@ -167,7 +168,11 @@ impl CapturedEntryEnvironment {
             script,
             profile_directory,
             units,
-        );
+        )
+        .map(|request| match originals {
+            Some(reference) => request.with_originals(reference),
+            None => request,
+        });
         match request {
             Ok(request) => Ok(EntryRequestInput {
                 request: Box::new(request),

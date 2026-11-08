@@ -42,8 +42,8 @@ pub(super) fn acquire(
         return Err(ClaimError::invalid("profile_folder_capacity"));
     }
     state.folder = Some(units);
-    let record_path = folder.join(".sugarsubstitute-profile-v1.record");
-    let exclusion_path = folder.join(".sugarsubstitute-profile-v1.claim");
+    let record_path = folder.join(crate::profiles::locations::RECORD);
+    let exclusion_path = folder.join(crate::profiles::locations::CLAIM);
     check(context)?;
     let budget = Budget::Protected(
         state.memory.as_ref().ok_or_else(|| ClaimError::invalid("profile_memory"))?.clone(),

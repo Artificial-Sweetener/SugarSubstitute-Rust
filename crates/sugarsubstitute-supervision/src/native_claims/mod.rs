@@ -8,6 +8,7 @@ pub(crate) mod backend_custody;
 mod backend_file;
 mod backend_recovery;
 pub(crate) mod files;
+pub(crate) mod historical;
 mod paths;
 mod records;
 use crate::durable_storage::protected::exclusion::HeldFile;

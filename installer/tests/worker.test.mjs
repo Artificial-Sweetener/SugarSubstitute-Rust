@@ -77,7 +77,7 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
       if (!next.value.trim()) continue
       const frame = JSON.parse(next.value)
       observed.push({ event: frame.event, id: frame.id })
-      assert.equal(frame.version, 1)
+      assert.equal(frame.version, frame.event === 'ready' ? 2 : 1)
       if (frame.event === 'metadata') {
         assert.ok(['read', 'abort'].includes(frame.data.operation.op))
         socket.write(JSON.stringify({ version: 1, id: frame.id, operation: 'metadata_reply', input: {
@@ -95,11 +95,14 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   assert.equal(JSON.parse(authentication.value).token, token)
   phase = 'readiness'
   const ready = await nextTerminal('ready')
+  assert.equal(ready.version, 2)
   assert.equal(ready.data.cacheProtocol, 2)
   assert.equal(ready.data.storageProtocol, 1)
   assert.equal(ready.data.metadataProtocol, 1)
   assert.equal(ready.data.downloadsProtocol, 1)
   assert.equal(ready.data.textProtocol, 1)
+  assert.equal(ready.data.integrationProtocol, 2)
+  assert.deepEqual(await fs.readdir(workspace), ['downloads', 'metadata', 'runtime'])
   assert.match(ready.data.upstreamRevision, /^[a-f0-9]{40}$/)
   assert.deepEqual(ready.data.operations, ['options', 'inspect', 'provision', 'integrate', 'cancel'])
   phase = 'unissued provisioning request rejection'

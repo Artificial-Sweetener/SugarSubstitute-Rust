@@ -31,14 +31,14 @@ rationale = "Process-global supported subscriber and original diagnostic failure
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5fcaaf60aa1a733958fc8ec184a69a668e797459f807bdd09def1de3ef9cc6f7"
+source_sha256 = "sha256:27b748fc51c323e25990e6cc73a82a2a02776f5f33b5c46e6e1f79c86459e535"
 disposition = "storage"
 rationale = "Bounded operational pages and export through shared protected durable storage, separate from preserved incident records. Under exclusive writer custody it retires only verified page stages abandoned by interrupted writers."
 
 [[records]]
 path = "installer/worker/main.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:595c2bbbe1fe43d859e25c3501f288a83e80ec6942b2a627766cdc3c05c98814"
+source_sha256 = "sha256:3831fd0e9cf0d8c8a1b9c144e92b38aa86b3eb16771ec8194944739a8a0658bc"
 disposition = "routing"
 rationale = "Upstream console bridge routes untrusted worker output through bounded local projection and authenticated framing."
 
@@ -234,7 +234,7 @@ rationale = "Bounded Python metadata subprocess returns structured stdout to its
 [[records]]
 path = "installer/worker/integration.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
+source_sha256 = "sha256:ca64cbbe04fb4e4f8e2a9ba0c8e4fb91952b8d2d65a6e7db5e9f2ed5ccd03e83"
 disposition = "capture"
 rationale = "Upstream subprocess stdout and stderr are consumed as untrusted progress through the supported worker diagnostic lane."
 
@@ -577,7 +577,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/launch/test_managed.py"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:27fe8625c930a2f72798aaa8c8d0ab9c97f4c38d47cc7481195cd9fd8f22d471"
+source_sha256 = "sha256:a1a38b606afb14c4f712feab2bcc61bbda2134113df0f35a2ae387d1433bf30a"
 disposition = "fixture"
 rationale = "The managed-launch test child prints readiness and cleanup markers into captured pipes so the harness can prove owned process termination."
 
@@ -696,7 +696,7 @@ rationale = "Dependency-inspection tests decode the isolated Python child's stdo
 [[records]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5c18126447bfe6376dd1636a3e0a4fa3e75006d84ca10e28cfcb6f8a604337fb"
+source_sha256 = "sha256:27ba7ba8a3528bc216c68e8df9bd80aa131c120d51056fe888ed9531d96f620b"
 disposition = "fixture"
 rationale = "Worker lifecycle tests retain a bounded stderr tail and consume child stdout while checking authenticated events and actual family retirement."
 
@@ -1022,7 +1022,6 @@ source_sha256 = "sha256:d12211caedd13feb0bbe6b7ae3108f6b92860c689e541d94539e1692
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
-
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/display.rs"
 owner = "sugarsubstitute-image-gpu"
@@ -1089,10 +1088,16 @@ rationale = "Verify that inherited delegated-tool log destinations are replaced 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/projection_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:0a6d65ab6b53e898824606d65ebfe2a2db538f47d1b5b2ed3309c1627ffeae4e"
+source_sha256 = "sha256:04b127375bc38b72bc0a35507260588611737f5d1c5a97dd8f17546baae8e004"
 disposition = "fixture"
 rationale = "Assert that production projection confines delegated pip log and temporary destinations while preserving the original captured environment; no diagnostic sink is created."
 
+[[records]]
+path = "installer/tests/model-root.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:2227fd686de624ef4fb7af5a1e2b8ab022e183933ec685a50acf1a0b6cfd0c79"
+rationale = "Model-root adapter tests capture the isolated SugarCubes child stderr and a TAP report to assert refusals; product diagnostics still use the existing authenticated worker route."
+disposition = "fixture"
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification/backdrop.rs"
 owner = "sugarsubstitute-image-gpu"

@@ -83,8 +83,8 @@ impl ProfileRegistration {
             let result = HeldFile::acquire_into(
                 ExclusionOpen::Existing(self.claim_identity),
                 &mut self.writer,
-                NativeName::Ordinary(path.join(".sugarsubstitute-profile-v1.claim")),
-                NativeName::Ordinary(path.join(".sugarsubstitute-profile-v1.record")),
+                NativeName::Ordinary(path.join(crate::profiles::locations::CLAIM)),
+                NativeName::Ordinary(path.join(crate::profiles::locations::RECORD)),
                 NativeSid::Ordinary(self.sid.clone()),
                 budget.clone(),
                 &mut NativePhase::ordinary(&budget)?,
@@ -245,8 +245,8 @@ impl ProfileRegistration {
         HeldFile::acquire_into(
             ExclusionOpen::CreateOrOpen,
             &mut self.custody,
-            NativeName::Ordinary(path.join(".sugarsubstitute-profile-v2.custody")),
-            NativeName::Ordinary(path.join(".sugarsubstitute-profile-v1.record")),
+            NativeName::Ordinary(path.join(crate::profiles::locations::CUSTODY)),
+            NativeName::Ordinary(path.join(crate::profiles::locations::RECORD)),
             NativeSid::Ordinary(self.sid.clone()),
             budget.clone(),
             &mut NativePhase::ordinary(&budget)?,

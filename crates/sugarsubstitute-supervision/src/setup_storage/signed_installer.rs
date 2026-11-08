@@ -176,6 +176,17 @@ pub struct SignedPreparation {
     offer: AuthenticatedOffer,
 }
 impl SignedPreparation {
+    /// Retain verified fresh backend storage across the matched version-two integration command.
+    /// Reserve `SIGNED_PREPARATION_RESERVATION_BYTES` on an admitted native worker.
+    /// # Errors
+    /// Rejects changed/contradictory backend provenance before integration effects.
+    pub fn integration(
+        &self,
+        runtime: RuntimePaths,
+        context: &JobContext,
+    ) -> io::Result<super::IntegrationStorage> {
+        self.prepared.integration(runtime, context)
+    }
     /// Saved runtime for update/repair; its absence means fresh provisioning is required.
     pub fn maintenance_runtime(&self) -> Option<&RuntimePaths> {
         self.prepared.maintenance_runtime()

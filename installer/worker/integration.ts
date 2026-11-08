@@ -28,8 +28,8 @@ function run(command: string, args: string[], cwd: string, signal: AbortSignal):
 }
 
 /** Read an existing node's own requirements, or the authenticated bundled node when installing it. */
-export async function integrate(input: Runtime & { models: string }, signal: AbortSignal, send: Send): Promise<Runtime> {
-  const { models, ...runtime } = input
+export async function integrate(input: Runtime & { version: 2; models: string; storageBase: string }, signal: AbortSignal, send: Send): Promise<Runtime> {
+  const { version: _version, models, storageBase, ...runtime } = input
   const existing = path.join(runtime.directory, 'custom_nodes', 'SugarCubes', 'pyproject.toml')
   let project = existing
   try { await fs.access(existing) } catch (cause) {
@@ -57,7 +57,7 @@ export async function integrate(input: Runtime & { models: string }, signal: Abo
     if ((await inspect()).length) throw new Error('SugarCubes dependencies did not pass verification')
   }
   signal.throwIfAborted()
-  await run(runtime.python, ['-B', '-c', configureModelRoot, path.dirname(project), runtime.directory, models],
+  await run(runtime.python, ['-B', '-c', configureModelRoot, path.dirname(project), storageBase, models],
     runtime.directory, signal)
   send('progress', { phase: 'integration', percent: 100, statusCode: 'sugarCubesReady' })
   return runtime

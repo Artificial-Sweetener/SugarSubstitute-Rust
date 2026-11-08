@@ -324,13 +324,13 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "installer/worker/integration.ts"
-source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
+source_sha256 = "sha256:ca64cbbe04fb4e4f8e2a9ba0c8e4fb91952b8d2d65a6e7db5e9f2ed5ccd03e83"
 kind = "presentation"
 rationale = "SugarCubes dependency preparation emits only the closed checkingSugarCubes, installingSugarCubes and sugarCubesReady product codes; errors remain diagnostic causes."
 
 [[records]]
 path = "installer/worker/main.ts"
-source_sha256 = "sha256:595c2bbbe1fe43d859e25c3501f288a83e80ec6942b2a627766cdc3c05c98814"
+source_sha256 = "sha256:3831fd0e9cf0d8c8a1b9c144e92b38aa86b3eb16771ec8194944739a8a0658bc"
 kind = "presentation"
 rationale = "Authenticated worker dispatch reports original error evidence and closed failure statusCode. The host validates textProtocol before readiness and resolves product feedback through its catalog."
 

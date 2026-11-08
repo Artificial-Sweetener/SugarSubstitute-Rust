@@ -35,7 +35,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs",
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
 ]
-source_sha256 = "sha256:8e0ae06d91152335b3b3024dc9b3b3d1afaea5ac87f62c15e4da3fa15db912b2"
+source_sha256 = "sha256:fd8b884801df80e17c4ed99c291c7736e4be501863d17eae0104ef1c3da7c9d4"
 namespace = "update-downloads-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -74,7 +74,7 @@ recovery = "Durable native family bindings preserve live and unknown output acro
 id = "setup-packed-payloads"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/bundle.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_package.rs", "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed/footer.rs", "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed/extract.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/canonical.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/entries.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/entries/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/control.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/source.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/manifest.rs"]
-source_sha256 = "sha256:b1565b3daeeb4bd23a0523b1d738e6e4970b741cf60d9b337adf941d553d0e18"
+source_sha256 = "sha256:4dae9924fce8844cadc87fcbf3fc0b2a880d07e74896aee96dac534c4ac1138a"
 namespace = "payloads-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -173,7 +173,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
     "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/readers.rs",
 ]
-source_sha256 = "sha256:8b84fecbebadfcf4dd209b2a593584d25e21a20abacf085ae0c527590eb22695"
+source_sha256 = "sha256:6edc85baa7d04104aae5033610e1921ecd2096f135225e6c57ba3fa0aa75799e"
 namespace = "runtime-cache-v1"
 storage_schema = 1
 compatibility_epoch = 1

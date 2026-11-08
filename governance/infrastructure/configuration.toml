@@ -7,17 +7,31 @@ owner = "sugarsubstitute-configuration"
 # ComfyUI, SugarCubes, Python/package-manager, Electron and Crashpad setting ownership.
 
 [[records]]
-path = "crates/sugarsubstitute-comfy/src/launch/managed.py"
+path = "crates/sugarsubstitute-comfy/src/launch/managed_start.py"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:3b7738ad6504d1b8686b870cd5461cad1c597fc6a47440f58204564f19ca7901"
+source_sha256 = "sha256:2a7707880fe5ba7d88ee874354153e5ff7a91c4ca4b136d7445e5a7f5f88ac0f"
 capabilities = ["arguments"]
-rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
+rationale = "The external and owned launch converters consume the same captured backend arguments and preserve the existing private shutdown channel."
+
+[[records]]
+path = "crates/sugarsubstitute-comfy/src/launch/managed_owned.py"
+owner = "sugarsubstitute-comfy"
+source_sha256 = "sha256:b0ead686f84a9c3ea3bef385e1eefdca81e7936f1e91c608b6b11d09197534b7"
+capabilities = ["arguments", "external"]
+rationale = "Only native-verified installation-owned data selects this fragment; the public SugarCubes owner validates preserved model intent at the actual Comfy base before main."
+
+[[records]]
+path = "crates/sugarsubstitute-comfy/src/launch/managed_finish.py"
+owner = "sugarsubstitute-comfy"
+source_sha256 = "sha256:dd136ac7ce44a3c8a8addb6bedfa7ed30ba1f520ecb8faf1f9df8552b2f031b8"
+capabilities = ["arguments"]
+rationale = "The shared backend launcher executes the exact selected main script with normal Python shutdown handling."
 
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/launch/test_managed.py"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:27fe8625c930a2f72798aaa8c8d0ab9c97f4c38d47cc7481195cd9fd8f22d471"
-capabilities = ["arguments", "environment"]
+source_sha256 = "sha256:a1a38b606afb14c4f712feab2bcc61bbda2134113df0f35a2ae387d1433bf30a"
+capabilities = ["arguments", "environment", "external"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
@@ -275,7 +289,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/production/dispatch.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:90816163fbcd766fb378f411418884f47800dc3afc0c6645c1657e0cd73db8b4"
+source_sha256 = "sha256:f87f738555feb3a083ed0eb69246a620e35926bfef3bd986e6c5770bfd643f9e"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -352,14 +366,14 @@ rationale = "The embedded inspector decodes SugarCubes-owned Python package meta
 [[records]]
 path = "installer/worker/integration.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
+source_sha256 = "sha256:ca64cbbe04fb4e4f8e2a9ba0c8e4fb91952b8d2d65a6e7db5e9f2ed5ccd03e83"
 capabilities = ["environment", "external"]
 rationale = "The existing bounded process boundary inherits the filtered worker environment and sets Python bytecode policy; Python/package-manager configuration and SugarCubes model-root persistence remain at their supported owners."
 
 [[records]]
 path = "installer/worker/model-root.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3ca42359cb48f696a5052240f6ad203289b23a2b8c9b631499c598d472d25261"
+source_sha256 = "sha256:2dcc36a5870c364a7da72c2d2055ec5b67b7b652f2f3bdb3d801b1fff26a2428"
 capabilities = ["arguments", "external"]
 rationale = "SugarCubes MODEL_ROOT_API_VERSION=1 owns model-root schema and persistence. This adapter invokes its public configuration API and preserves selected model paths."
 
@@ -618,7 +632,7 @@ rationale = "Native record-port tests select their explicit artifact root and fa
 [[records]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5c18126447bfe6376dd1636a3e0a4fa3e75006d84ca10e28cfcb6f8a604337fb"
+source_sha256 = "sha256:27ba7ba8a3528bc216c68e8df9bd80aa131c120d51056fe888ed9531d96f620b"
 capabilities = ["environment"]
 rationale = "Packaged Node worker tests select the built worker, sanitize its child launch environment and verify the original runtime storage grant."
 
@@ -936,3 +950,31 @@ owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:d460c21f3025978229748a1b3a4d2cd5af9a23b12a81fb8051bdf7e3b4649a1d"
 capabilities = ["arguments"]
 rationale = "Accept an optional source fixture path to prove regressions against the prior transport implementation."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/user_data/invocation/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:0e0738b33633ab0d01dbafb00388feb12b6fdabfa569453a0c36c19fc41d9b2d"
+capabilities = ["document"]
+rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/user_data/tests/originals.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:bf5f382a9bb184ca1a8fd3ba37dc10a86ca83d111e9fcf349721c112978a53b9"
+capabilities = ["document"]
+rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/user_data/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:4179eba2adea4cedf347bc074f660d2aa1dd7a6b70c17507a04c87dee541b657"
+capabilities = ["document"]
+rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
+
+[[records]]
+path = "installer/tests/model-root.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:2227fd686de624ef4fb7af5a1e2b8ab022e183933ec685a50acf1a0b6cfd0c79"
+capabilities = ["environment", "external"]
+rationale = "Fixture for the SugarCubes-owned model-root configuration adapter: it launches the actual public API through the filtered worker environment against isolated roots and asserts that selected model paths are preserved."

@@ -7,11 +7,26 @@ use windows::Win32::{
     System::{
         JobObjects::{IsProcessInJob, JobObjectBasicProcessIdList, QueryInformationJobObject},
         Threading::{
-            GetProcessId, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-            PROCESS_SYNCHRONIZE,
+            GetCurrentProcess, GetProcessId, GetProcessTimes, OpenProcess,
+            PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
         },
     },
 };
+
+/// Query current-process matching facts without enrolling claims or creating a family.
+/// The borrowed pseudo-handle is never exposed, closed or used for process control.
+pub(crate) fn current_identity(
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> Result<Identity, RegistryError> {
+    crate::durable_storage::check(context)
+        .map_err(|cause| RegistryError::new("invocation_process_control", cause))?;
+    // SAFETY: The OS current-process pseudo-handle is borrowed for synchronous queries only.
+    let process = unsafe { GetCurrentProcess() };
+    identity_checked(process, &mut || {
+        crate::durable_storage::check(context)
+            .map_err(|cause| RegistryError::new("invocation_process_control", cause))
+    })
+}
 
 pub(super) fn identity(process: HANDLE) -> Result<Identity, RegistryError> {
     identity_checked(process, &mut || Ok(()))

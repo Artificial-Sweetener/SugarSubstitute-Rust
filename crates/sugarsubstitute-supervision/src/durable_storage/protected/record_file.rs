@@ -18,6 +18,8 @@ pub(crate) use native::random;
 pub(crate) use publication::{PublicationAuthority, PublicationBinding, Stage, publish};
 pub(crate) use retirement::{PublicationRetirement, retire_publication};
 pub(crate) use streaming::StreamingPort;
+pub(crate) use streaming::WRITER_LEAF as DIAGNOSTIC_WRITER_LEAF;
+pub(crate) use streaming::inventory::entry_class as diagnostic_entry_class;
 pub(crate) use streaming::layout::binding as diagnostic_object_binding;
 pub(crate) use streaming::layout::object_payload_group as diagnostic_payload_group_digest;
 pub(crate) use streaming::layout::subject as diagnostic_subject_digest;

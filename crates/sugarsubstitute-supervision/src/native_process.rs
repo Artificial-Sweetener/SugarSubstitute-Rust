@@ -297,6 +297,7 @@ mod diagnostic;
 mod inheritance;
 mod lifecycle;
 mod membership;
+pub(crate) use membership::current_identity;
 mod recovery_carrier;
 
 mod recovery_child;

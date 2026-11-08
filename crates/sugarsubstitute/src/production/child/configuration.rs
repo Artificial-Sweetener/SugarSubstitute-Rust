@@ -244,9 +244,6 @@ fn project(
     view: EntryLaunchRequestView<'_>,
     disposition: BackendDataDisposition,
 ) -> Result<StartupConfiguration, ProjectionError> {
-    if disposition != BackendDataDisposition::External {
-        return Err(ProjectionError::Disposition);
-    }
     let connection = match view.connection() {
         EntryConnectionView::Attached(origin)
             if disposition == BackendDataDisposition::External =>
@@ -267,8 +264,12 @@ fn project(
             // Match the independently projected parent's semantic target using
             // the same sole option owner; the original projection claim covers both values.
             ConnectionConfiguration::Launch(
-                sugarsubstitute_comfy::launch::effective_managed_launch(&requested)
-                    .map_err(ProjectionError::ManagedLaunch)?,
+                sugarsubstitute_comfy::launch::effective_managed_launch(
+                    &requested,
+                    disposition,
+                    &path(view.frontend().cube_directory())?,
+                )
+                .map_err(ProjectionError::ManagedLaunch)?,
             )
         }
     };

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own exact invocation inputs and measure retained capacity before adapter admission.
 
-use super::{EntryShapeError, validate_environment, validate_path_units};
+use super::{EntryOriginalsReference, EntryShapeError, validate_environment, validate_path_units};
 use crate::configuration::{ConnectionConfiguration, LaunchConfiguration, StartupConfiguration};
 use std::{
     fmt,
@@ -34,6 +34,8 @@ pub struct EntryLaunchParts {
     pub profile_directory: PathBuf,
     /// Exact original Windows environment snapshot including double NUL.
     pub environment: Vec<u16>,
+    /// Fixed passive-snapshot commitment; raw files and native custody stay with their owner.
+    pub originals: Option<EntryOriginalsReference>,
 }
 impl EntryLaunchRequest {
     /// Retain explicit inputs and bound every actual dynamic allocation capacity.
@@ -61,6 +63,7 @@ impl EntryLaunchRequest {
             script,
             profile_directory,
             environment,
+            originals: None,
         };
         let mut retained = 0_u64;
         for path in
@@ -121,6 +124,16 @@ impl EntryLaunchRequest {
     /// Borrow exact snapshot units including the original double terminator.
     pub fn environment(&self) -> &[u16] {
         &self.parts.environment
+    }
+    /// Attach a complete passive snapshot's inert commitment without retaining dynamic bytes.
+    /// The native producer/receiver separately own publication, authentication and file custody.
+    pub const fn with_originals(mut self, reference: EntryOriginalsReference) -> Self {
+        self.parts.originals = Some(reference);
+        self
+    }
+    /// Observe fixed matching data without opening original files or granting path authority.
+    pub const fn originals(&self) -> Option<EntryOriginalsReference> {
+        self.parts.originals
     }
     /// Return checked retained dynamic capacity in bytes, excluding fixed Self storage.
     pub const fn retained_bytes(&self) -> u64 {

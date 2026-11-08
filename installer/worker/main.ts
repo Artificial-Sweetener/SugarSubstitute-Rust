@@ -3,7 +3,7 @@
 /** Headless upstream worker. The Rust host owns its process family and visible window. */
 import { diagnosticMessage, diagnostic, bindDiagnostics } from './diagnostics.mjs'
 import { createConnection, type Socket } from 'node:net'
-import { Decoder, VERSION } from './protocol.mjs'
+import { Decoder, VERSION, INTEGRATION_VERSION } from './protocol.mjs'
 import { options } from './selection'
 import { inspect, provision } from './provision'
 import { integrate } from './integration'
@@ -25,7 +25,8 @@ let active: { id: string; control: AbortController } | undefined
 let closing = false
 
 function write(id: string | null, event: string, data: unknown): void {
-  const bytes = JSON.stringify({ version: VERSION, id, sequence: ++sequence, event, data }) + '\n'
+  const version = event === 'ready' ? INTEGRATION_VERSION : VERSION
+  const bytes = JSON.stringify({ version, id, sequence: ++sequence, event, data }) + '\n'
   if (Buffer.byteLength(bytes) > 65536) throw new Error('Provisioning event exceeds protocol bound')
   if (!transport || transport.destroyed) return
   if (transport.writableLength > 1024 * 1024) {
@@ -140,7 +141,7 @@ async function connect(): Promise<void> {
   socket.on('connect', () => {
     connectProxyHost(write)
     socket.write(JSON.stringify({ version: VERSION, event: 'authenticate', token }) + '\n')
-    send(null, 'ready', { cacheProtocol: 2, storageProtocol: 1, metadataProtocol: 1, downloadsProtocol: 1, textProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
+    send(null, 'ready', { cacheProtocol: 2, storageProtocol: 1, metadataProtocol: 1, downloadsProtocol: 1, textProtocol: 1, integrationProtocol: INTEGRATION_VERSION, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
   })
   socket.on('data', (chunk: Buffer) => {
     try {
