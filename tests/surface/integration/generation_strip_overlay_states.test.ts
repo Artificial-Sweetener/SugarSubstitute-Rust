@@ -15,7 +15,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Pin the generation actions to Substitute's own painting: the segments sit transparent on the
+ * Pin the generation actions, history button included, to Substitute's own painting: the segments sit transparent on the
  * accent, hover adds white alpha 30 and pressed adds black alpha 32 (titlebar_buttons.py,
  * GenerationTitleBarSegmentButton._apply_theme_palette), in both themes and for every accent.
  */
@@ -96,8 +96,10 @@ describe('Chromium generation action overlays', () => {
           <button class="sc-generation-action" data-action="cancel" aria-label="Cancel generation"><span class="sc-generation-glyph"></span></button>
           <button class="sc-generation-action" data-action="generate" aria-label="Generate"><span class="sc-generation-glyph"></span></button>
           <button class="sc-generation-action" data-action="skip" aria-label="Skip generation"><span class="sc-generation-glyph"></span></button>
+          <span class="sc-generation-queue-slot"></span>
         </div>
       </div>
+      <button data-sc-generation-queue aria-label="Generation queue" style="--sc-queue-left:186px;--sc-queue-top:0px"><span class="sc-generation-queue-glyph"></span></button>
     </body></html>`);
     await page.addScriptTag({ content: output.outputFiles[0]!.text, type: 'module' });
     await page.waitForFunction(() => Reflect.get(globalThis, 'accentInstalled') === true);
@@ -108,7 +110,10 @@ describe('Chromium generation action overlays', () => {
     await browser?.close();
   });
 
-  const selectors = ['cancel', 'generate', 'skip'].map((name) => `[data-action="${name}"]`);
+  const selectors = [
+    ...['cancel', 'generate', 'skip'].map((name) => `[data-action="${name}"]`),
+    'button[data-sc-generation-queue]',
+  ];
 
   /** Read the pixel the user sees at the top-left of one action, clear of dividers and glyphs. */
   async function paintedFill(selector: string): Promise<Rgb> {

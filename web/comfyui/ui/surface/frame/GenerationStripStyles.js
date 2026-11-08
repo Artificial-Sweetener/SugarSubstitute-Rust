@@ -59,8 +59,8 @@ export const generationStripCss = `
   :root[data-sc-substitute-frame] button[data-sc-generation-queue] > :not(.sc-generation-queue-glyph,.sc-generation-queue-badge) { display:none!important; }
   :root[data-sc-substitute-frame] button[data-sc-generation-queue]::before { content:''; position:absolute; left:0; top:5px; bottom:5px;
     width:1px; background:rgba(0,0,0,.322); }
-  :root[data-sc-substitute-frame] button[data-sc-generation-queue]:hover { background:var(--sc-accent-hover)!important; }
-  :root[data-sc-substitute-frame] button[data-sc-generation-queue]:active { background:var(--sc-accent-pressed)!important; color:var(--sc-accent-foreground-pressed)!important; }
+  :root[data-sc-substitute-frame] button[data-sc-generation-queue]:hover { background-image:linear-gradient(rgba(255,255,255,.118),rgba(255,255,255,.118))!important; }
+  :root[data-sc-substitute-frame] button[data-sc-generation-queue]:active { background-image:linear-gradient(rgba(0,0,0,.125),rgba(0,0,0,.125))!important; }
   .sc-generation-queue-glyph { display:block; width:16px; height:16px; background:currentColor; mask:var(--sc-queue-glyph) center/contain no-repeat; pointer-events:none; }
   .sc-generation-queue-badge { position:absolute; right:3px; bottom:2px; min-width:12px; height:12px; padding:0 3px; border-radius:6px;
     background:black; color:var(--sc-accent-color); font:700 8px/12px var(--sc-font-family); pointer-events:none; }
