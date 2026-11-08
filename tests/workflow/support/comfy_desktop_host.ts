@@ -19,15 +19,19 @@ export interface HostWorkflow {
   filename: string;
   size: number;
   readonly isTemporary: boolean;
+  readonly isLoaded: boolean;
+  isLoading: boolean;
   isModified: boolean;
-  content: string;
-  originalContent: string;
+  content: string | null;
+  originalContent: string | null;
   changeTracker: {
     activeState: object;
     initialState: object;
     ds: { scale: number; offset: number[] };
   } | null;
   updatePath(path: string): void;
+  load(): Promise<HostWorkflow>;
+  unload(): void;
 }
 
 /** Model the exposed workflow store and actual load reset/baseline behavior at the Comfy boundary. */
@@ -36,6 +40,11 @@ export function comfyDesktopHostBoundary() {
   let key = 0;
   const workspaceListeners = new Set<() => void>();
   const listeners = new Set<() => void>();
+  const files = new Map<string, string>();
+  let loadGate: Promise<void> = Promise.resolve();
+  let trackerGate: Promise<void> = Promise.resolve();
+  const failingLoads = new Set<string>();
+  const loadedPaths: string[] = [];
   const workflow = {
     openWorkflows: [] as HostWorkflow[],
     activeWorkflow: null as HostWorkflow | null,
@@ -43,25 +52,25 @@ export function comfyDesktopHostBoundary() {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    /** Model a workflow the store lists from the user's saved files without having read its content. */
+    createSaved(path: string): HostWorkflow {
+      const content = files.get(path);
+      if (content === undefined) throw new Error(`Missing saved workflow file: ${path}`);
+      return hostWorkflow(
+        path,
+        path.replace(/^workflows\//, '').replace(/\.json$/, ''),
+        content.length,
+      );
+    },
     createNewTemporary(name: string, state: object): HostWorkflow {
-      return {
-        path: `workflows/${name}-${++key}.json`,
-        filename: name,
-        size: -1,
-        get isTemporary() {
-          return this.size === -1;
-        },
-        isModified: false,
-        content: JSON.stringify(state),
-        originalContent: JSON.stringify(state),
-        changeTracker: null,
-        updatePath(path: string) {
-          this.path = path;
-        },
-      };
+      const created = hostWorkflow(`workflows/${name}-${++key}.json`, name, -1);
+      created.content = JSON.stringify(state);
+      created.originalContent = created.content;
+      return created;
     },
     async closeWorkflow(target: HostWorkflow) {
       this.openWorkflows = this.openWorkflows.filter((item) => item !== target);
+      if (!target.isTemporary) target.unload();
       for (const listener of listeners) listener();
     },
     attachWorkflow(target: HostWorkflow, at: number) {
@@ -116,9 +125,105 @@ export function comfyDesktopHostBoundary() {
       for (const listener of listeners) listener();
     },
   };
+  /** Create a Comfy-shaped workflow whose `load` reads the saved file only when first requested. */
+  function hostWorkflow(path: string, filename: string, size: number): HostWorkflow {
+    return {
+      path,
+      filename,
+      size,
+      get isTemporary() {
+        return this.size === -1;
+      },
+      get isLoaded() {
+        return this.changeTracker !== null;
+      },
+      isLoading: false,
+      isModified: false,
+      content: null,
+      originalContent: null,
+      changeTracker: null,
+      updatePath(next: string) {
+        this.path = next;
+      },
+      async load() {
+        if (this.changeTracker) return this;
+        this.isLoading = true;
+        await loadGate;
+        if (failingLoads.has(this.path)) {
+          this.isLoading = false;
+          throw new Error(`Failed to load workflow: ${this.path}`);
+        }
+        if (this.originalContent === null) {
+          const content = files.get(this.path);
+          if (content === undefined) throw new Error(`Missing saved workflow file: ${this.path}`);
+          this.content = content;
+          this.originalContent = content;
+        }
+        this.isLoading = false;
+        for (const listener of listeners) listener();
+        // Comfy imports its change tracker after the file arrives: content is readable before the tracker exists.
+        await trackerGate;
+        loadedPaths.push(this.path);
+        const initial = JSON.parse(this.originalContent ?? '{}') as object;
+        this.changeTracker = {
+          activeState: copyGraph(initial),
+          initialState: initial,
+          ds: { scale: 1, offset: [0, 0] },
+        };
+        for (const listener of listeners) listener();
+        return this;
+      },
+      unload() {
+        this.changeTracker = null;
+        this.content = null;
+        this.originalContent = null;
+      },
+    };
+  }
   return {
     app,
     workflow,
+    /** Register a saved workflow file in the user's workflow directory. */
+    save: (path: string, state: object) => {
+      files.set(path, JSON.stringify(state));
+    },
+    /** Open a saved workflow as Comfy's tab restoration does: listed and open, content unread. */
+    openInBackground: (path: string): HostWorkflow => {
+      const created = workflow.createSaved(path);
+      workflow.openWorkflows.push(created);
+      for (const listener of listeners) listener();
+      return created;
+    },
+    /** Open a saved workflow as the workflow store does: the tab opens before its content is read. */
+    open: async (path: string): Promise<HostWorkflow> => {
+      const created =
+        workflow.openWorkflows.find((item) => item.path === path) ?? workflow.createSaved(path);
+      if (!workflow.openWorkflows.includes(created)) workflow.openWorkflows.push(created);
+      for (const listener of listeners) listener();
+      const loaded = await created.load();
+      await app.loadGraphData(loaded.changeTracker?.activeState ?? {}, true, true, loaded);
+      return loaded;
+    },
+    /** Hold every saved-workflow tracker construction, after its content arrived, until released. */
+    holdTrackers: (): (() => void) => {
+      let release: () => void = () => {};
+      trackerGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return release;
+    },
+    /** Hold every saved-workflow read until the returned release is called. */
+    holdLoads: (): (() => void) => {
+      let release: () => void = () => {};
+      loadGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return release;
+    },
+    failLoad: (path: string) => {
+      failingLoads.add(path);
+    },
+    loaded: () => [...loadedPaths],
     committed: () => {
       app.extensionManager.spinner = false;
       for (const listener of workspaceListeners) listener();

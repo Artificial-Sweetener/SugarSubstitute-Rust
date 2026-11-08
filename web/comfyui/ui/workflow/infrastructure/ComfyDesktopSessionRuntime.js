@@ -8,6 +8,7 @@ import { DesktopWorkspaceBindings } from '../application/DesktopWorkspaceBinding
 import { DesktopStartupIntent } from '../application/DesktopStartupIntent.js';
 import { DesktopSessionRefusal, } from '../domain/DesktopSession.js';
 import { ComfyDesktopDocuments } from './ComfyDesktopDocuments.js';
+import { ComfyDesktopDocumentReading } from './ComfyDesktopDocumentReading.js';
 import { ComfyDesktopReadiness } from './ComfyDesktopReadiness.js';
 import { ComfyDesktopCapture } from './ComfyDesktopCapture.js';
 import { ComfyDesktopMaterialization } from './ComfyDesktopMaterialization.js';
@@ -16,6 +17,7 @@ export class ComfyDesktopSessionRuntime {
     options;
     bindings;
     #documents;
+    #reading;
     #readiness;
     #identities;
     #submissions = new WorkflowSubmissionSnapshots();
@@ -29,6 +31,7 @@ export class ComfyDesktopSessionRuntime {
     #graph = null;
     #acknowledged = null;
     #refreshing = false;
+    #graphLoading = false;
     #disposed = false;
     #available = true;
     #intent = new DesktopStartupIntent();
@@ -42,6 +45,14 @@ export class ComfyDesktopSessionRuntime {
             app: options.app,
             sessions: options.execution.sessions,
             adapter: options.execution.workflowDocuments,
+        });
+        this.#reading = new ComfyDesktopDocumentReading({
+            documents: this.#documents,
+            settled: () => {
+                this.#refresh(true);
+                this.bindings.changed();
+            },
+            report: options.report,
         });
         this.#readiness = new ComfyDesktopReadiness(options.app, options.execution.sessions);
         this.#capture = new ComfyDesktopCapture({
@@ -91,12 +102,15 @@ export class ComfyDesktopSessionRuntime {
             }
             this.#intent.workflow(this.#contextSignature(), execution.sessions.read().loading, this.#materialization.active());
             this.#refresh(true);
+            this.#readBackgroundTabs(execution.sessions.read().loading);
         }), execution.results.subscribe(() => this.#refresh(false)), execution.subscribeGeneration((event) => this.#generation(event)), execution.bindDocumentRevision((session) => {
             this.#refresh(true);
             return this.bindings.binding(session).graphRevision;
         }), this.#readiness.subscribe(() => {
-            if (this.#readiness.read().committed)
+            if (this.#readiness.read().committed) {
                 this.#intent.committed(this.#contextSignature());
+                this.#reading.request();
+            }
             this.#refresh(true);
             this.bindings.changed();
         }), canvas.subscribe(() => this.#refresh(false)), presentation.subscribe(() => this.#refresh(false)));
@@ -136,6 +150,7 @@ export class ComfyDesktopSessionRuntime {
                 sessions.active !== null &&
                 !this.#materialization.active() &&
                 this.#intent.captureAllowed() &&
+                this.bindings.observes(sessions) &&
                 this.#available &&
                 !this.#disposed,
             workflowPersistence: state.workflowPersistence,
@@ -188,6 +203,7 @@ export class ComfyDesktopSessionRuntime {
             stop();
         this.#graph?.dispose();
         this.#graph = null;
+        this.#reading.dispose();
         this.#documents.dispose();
         this.#readiness.dispose();
         this.#submissions.dispose();
@@ -196,6 +212,16 @@ export class ComfyDesktopSessionRuntime {
         this.#input.clear();
         this.#assets.clear();
         this.#graphViews.clear();
+    }
+    /**
+     * Comfy reads every tab it opens itself and then loads its graph, so an unread tab that remains once a
+     * graph load settles is a background tab; only then is it read here, never racing Comfy's own read.
+     */
+    #readBackgroundTabs(loading) {
+        const settled = this.#graphLoading && !loading;
+        this.#graphLoading = loading;
+        if (settled && this.#readiness.read().committed)
+            this.#reading.request();
     }
     /** Record accepted ownership before early final replay; restored receipts never enter this execution path. */
     #generation(event) {
@@ -252,6 +278,8 @@ export class ComfyDesktopSessionRuntime {
                 if (!bindings.some((binding) => binding.entryId === id))
                     this.#input.delete(id);
             if (!this.#readiness.read().committed || snapshot.loading)
+                return;
+            if (this.#reading.pending())
                 return;
             const observe = (session, owner, signature) => {
                 if (prime)
