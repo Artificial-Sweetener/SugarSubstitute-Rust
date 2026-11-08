@@ -45,6 +45,12 @@ export const desktopFrameCss = `
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
     [data-testid^='node-header-'],[data-testid^='node-body-'],[data-testid='advanced-inputs-button']) {
     background:transparent; }
+  /* The host presents Comfy's own style: the masonry card is the one place its fill is painted. */
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='comfy'] .sugarcubes-cube-face__node-card {
+    background:var(--sc-desktop-card-wash); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='comfy'] .sugarcubes-cube-face__node-card :is(
+    .lg-node,[data-testid='node-inner-wrapper'],[data-testid^='node-header-'],[data-testid^='node-body-'],
+    [data-testid='advanced-inputs-button']) { background:transparent; }
   [data-sc-desktop-frame-host] { border:0 !important; box-shadow:none !important; }
   [data-sc-desktop-frame-host] .sc-substitute-frame { app-region:drag; }
   [data-sc-desktop-frame-host] .sc-substitute-frame :is(
