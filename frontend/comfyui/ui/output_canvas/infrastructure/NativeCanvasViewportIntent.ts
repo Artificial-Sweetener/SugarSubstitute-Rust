@@ -14,7 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Settle one scoped viewport intent without owning a native operation queue or transport. */
-import type { CanvasSurfaceViewportCommand } from '../../../../../integrations/contracts/CanvasSurface.js';
+import type {
+  CanvasSurfaceResult,
+  CanvasSurfaceViewportCommand,
+} from '../../../../../integrations/contracts/CanvasSurface.js';
 import type { CanvasOperationScope } from '../domain/CanvasViewPort.js';
 
 /** Keep promise settlement and abort-listener custody independent of native stream sequencing. */
@@ -55,4 +58,44 @@ export class NativeCanvasViewportIntent {
   readonly #cancel = (): void => {
     this.cancel(this);
   };
+}
+
+/** Name what the presentation owner does after the host refuses one viewport request. */
+export interface NativeCanvasViewportRejection {
+  /** Keep the shown pixels and read the camera now shown instead of failing the command. */
+  readonly recover: boolean;
+  /** Dirty the stream again so an admitted command is retried, recovered or reconciled. */
+  readonly retry: boolean;
+  /** A superseded read leaves the newer gesture's settled camera to report itself. */
+  readonly settled: boolean;
+  /** Preview ownership settles this camera through its correlated display observation. */
+  readonly parked: boolean;
+  /** Publish the refusal as a presentation failure. */
+  readonly failed: boolean;
+}
+
+/**
+ * Classify a refused viewport request.
+ *
+ * A stale answer while no preview transfer or pixels claim the surface means a newer camera, such
+ * as a wheel gesture, replaced the destination: the pixels stay, the superseded command did not
+ * apply, and one read reports the camera now shown. A host that could not apply a command is
+ * recovered the same way. While a preview owns the camera, a stale answer is parked without a
+ * failure because the preview's display observation settles it.
+ */
+export function viewportRejection(
+  status: CanvasSurfaceResult['status'],
+  admitted: boolean,
+  current: boolean,
+  previewOwnsCamera: boolean,
+): NativeCanvasViewportRejection {
+  const superseded = status === 'stale';
+  const recover = admitted && (status === 'unavailable' || (superseded && !previewOwnsCamera));
+  return Object.freeze({
+    recover,
+    retry: admitted && (!current || status === 'cancelled' || recover),
+    settled: current && superseded && !previewOwnsCamera && !admitted,
+    parked: current && superseded && previewOwnsCamera,
+    failed: current && status !== 'cancelled' && !recover && !superseded,
+  });
 }

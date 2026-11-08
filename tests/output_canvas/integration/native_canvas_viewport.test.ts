@@ -448,7 +448,7 @@ test('an unavailable viewport mutation preserves accepted pixels and recovers wi
   expect(f.errors).toEqual([]);
 });
 
-for (const status of ['unavailable', 'error', 'stale'] as const) {
+for (const status of ['unavailable', 'error'] as const) {
   test(`a ${status} recovery read fails closed without retrying the mutation or read`, async () => {
     const f = fixture();
     await prepare(f);
@@ -465,14 +465,54 @@ for (const status of ['unavailable', 'error', 'stale'] as const) {
   });
 }
 
-test('a stale viewport mutation remains fail-closed and does not start a speculative read', async () => {
+test.each([
+  { type: 'zoom', factor: 1.25 },
+  { type: 'pan', x: 0.2, y: 0, units: 'viewport' },
+] as const)(
+  'a $type command a newer camera superseded is not a failure and reads the replacing camera',
+  async (command) => {
+    const f = fixture();
+    await prepare(f);
+    const operation = f.presentation.viewport(command, scope().scope);
+    f.respond(5, { status: 'stale', message: '' });
+    expect(await operation).toBe(false);
+    await settle();
+    expect(f.calls[6]).toMatchObject({
+      type: 'surface.viewport.request',
+      command: { type: 'read' },
+    });
+    expect(f.statuses.at(-1)?.state).toBe('ready');
+    expect(f.visible).toEqual([true]);
+    const wheeled = { ...native, mode: 'custom' as const, physicalScale: 1.4 };
+    f.respond(6, { status: 'applied', message: '', viewport: wheeled });
+    await settle();
+    expect(f.states.at(-1)).toEqual(wheeled);
+    expect(f.calls).toHaveLength(7);
+    expect(f.errors).toEqual([]);
+  },
+);
+
+test('a recovery read a wheel gesture superseded keeps the surface ready and shows the gesture camera', async () => {
   const f = fixture();
   await prepare(f);
-  const operation = f.presentation.viewport({ type: 'native' }, scope().scope);
-  f.respond(5, { status: 'stale', message: '' });
+  const selection = f.calls.find((call) => call.type === 'surface.select');
+  if (!selection || !('revision' in selection)) throw new Error('Selection request is missing.');
+  const operation = f.presentation.viewport({ type: 'zoom', factor: 1.25 }, scope().scope);
+  f.respond(5, { status: 'unavailable', message: '' });
   expect(await operation).toBe(false);
   await settle();
-  expect(f.calls).toHaveLength(6);
-  expect(f.states.at(-1)).toBeNull();
-  expect(f.statuses.at(-1)?.state).toBe('unavailable');
+  expect(f.calls[6]).toMatchObject({ type: 'surface.viewport.request', command: { type: 'read' } });
+  f.respond(6, { status: 'stale', message: '' });
+  await settle();
+  await settle();
+  expect(f.calls).toHaveLength(7);
+  expect(f.statuses.at(-1)?.state).toBe('ready');
+  const wheeled = { ...native, mode: 'custom' as const, physicalScale: 1.6 };
+  f.presentation.settled(selection.revision, wheeled);
+  expect(f.states.at(-1)).toEqual(wheeled);
+  const next = f.presentation.viewport({ type: 'fit' }, scope().scope);
+  expect(f.calls[7]).toMatchObject({ type: 'surface.viewport.request', command: { type: 'fit' } });
+  f.respond(7, { status: 'applied', message: '', viewport: fitted });
+  expect(await next).toBe(true);
+  expect(f.errors).toEqual([]);
 });

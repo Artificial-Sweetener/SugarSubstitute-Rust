@@ -69,7 +69,7 @@ export function nativeCanvasSnapshot(state) {
             ? {}
             : { photoshopAllAvailable: state.photoshopAllAvailable }),
         comparisonAvailable: state.comparison && canvasComparisonAvailable(state.catalog),
-        preview: state.preview,
+        preview: state.preview && !state.input,
         resource,
         secondaryResource: comparison
             ? canvasSecondaryResource(plan, plan.secondary?.item ? presented : undefined)

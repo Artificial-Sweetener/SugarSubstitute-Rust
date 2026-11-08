@@ -376,7 +376,7 @@ test('a stale final-camera reply before preview presentation preserves visibilit
   f.respond(8, 'stale');
   await settle();
   expect(await navigation).toBe(false);
-  expect(f.statuses.at(-1)?.state).toBe('unavailable');
+  expect(f.statuses.at(-1)?.state).toBe('ready');
   expect(f.calls).toHaveLength(9);
   expect(await f.presentation.viewport({ type: 'native' }, f.scope())).toBe(false);
   observe(
@@ -528,7 +528,7 @@ test('a transfer without an applied end cannot recover a stale camera through a 
   f.respond(6, 'stale');
   await settle();
   expect(await navigation).toBe(false);
-  expect(f.statuses.at(-1)?.state).toBe('unavailable');
+  expect(f.statuses.at(-1)?.state).toBe('ready');
   expect(f.calls).toHaveLength(7);
   observe(f, lease, {
     type: 'preview',
@@ -1086,5 +1086,74 @@ test('moves the shown Input document camera while the Output route has no result
   input = false;
   expect(await f.presentation.viewport({ type: 'zoom', factor: 1.25 }, f.scope())).toBe(false);
   expect(f.calls).toHaveLength(offset + 2);
+  expect(f.errors).toEqual([]);
+});
+
+test('the Input route withdraws the Output live preview and admits no preview bytes until Output returns', async () => {
+  let input = false;
+  const f = fixture(true, () => input);
+  await commit(f);
+  const lease = await transfer(f);
+  observe(f, lease, {
+    type: 'preview',
+    token: lease.preview.token,
+    leaseRevision: lease.revision,
+    viewport: previewViewport,
+  });
+  await settle();
+  expect(f.previews.at(-1)).toBe(true);
+  input = true;
+  const offset = f.calls.length;
+  f.presentation.update(previewGeometry, f.item, f.preview(2));
+  await settle();
+  expect(f.calls[offset]).toMatchObject({ type: 'surface.preview.withdraw' });
+  expect(f.presentation.wants()).toBe(false);
+  f.presentation.receive(f.preview(2), new NativePreviewBlob());
+  await settle();
+  expect(f.calls.slice(offset).some((call) => call.type === 'surface.preview.begin')).toBe(false);
+  f.respond(offset);
+  const selection = f.calls.find((call) => call.type === 'surface.select')!;
+  observe(
+    f,
+    lease,
+    { type: 'final', selectionRevision: selection.revision, viewport: finalViewport },
+    'cancelled',
+    2,
+  );
+  await settle();
+  const zoom = f.presentation.viewport({ type: 'zoom', factor: 1.25 }, f.scope());
+  expect(f.calls[offset + 1]).toMatchObject({
+    type: 'surface.viewport.request',
+    command: { type: 'zoom' },
+  });
+  f.respond(offset + 1, 'applied', finalViewport);
+  expect(await zoom).toBe(true);
+  expect(f.previews.at(-1)).toBe(false);
+  input = false;
+  f.presentation.update(previewGeometry, f.item, f.preview(2));
+  expect(f.presentation.wants()).toBe(true);
+  expect(f.errors).toEqual([]);
+});
+
+test('a display observation settles a viewport intent still waiting to be sent', async () => {
+  const f = fixture();
+  await commit(f);
+  const blob = new NativePreviewBlob();
+  f.presentation.update(previewGeometry, f.item, f.preview());
+  f.presentation.receive(f.preview(), blob);
+  await settle();
+  const lease = begin(f);
+  // The unanswered begin holds the operation stream, so the zoom waits unsent behind it.
+  const zoom = f.presentation.viewport({ type: 'zoom', factor: 1.25 }, f.scope());
+  expect(() =>
+    observe(f, lease, {
+      type: 'preview',
+      token: lease.preview.token,
+      leaseRevision: lease.revision,
+      viewport: previewViewport,
+    }),
+  ).not.toThrow();
+  expect(await zoom).toBe(false);
+  await settle();
   expect(f.errors).toEqual([]);
 });

@@ -38,3 +38,23 @@ export class NativeCanvasViewportIntent {
         this.cancel(this);
     };
 }
+/**
+ * Classify a refused viewport request.
+ *
+ * A stale answer while no preview transfer or pixels claim the surface means a newer camera, such
+ * as a wheel gesture, replaced the destination: the pixels stay, the superseded command did not
+ * apply, and one read reports the camera now shown. A host that could not apply a command is
+ * recovered the same way. While a preview owns the camera, a stale answer is parked without a
+ * failure because the preview's display observation settles it.
+ */
+export function viewportRejection(status, admitted, current, previewOwnsCamera) {
+    const superseded = status === 'stale';
+    const recover = admitted && (status === 'unavailable' || (superseded && !previewOwnsCamera));
+    return Object.freeze({
+        recover,
+        retry: admitted && (!current || status === 'cancelled' || recover),
+        settled: current && superseded && !previewOwnsCamera && !admitted,
+        parked: current && superseded && previewOwnsCamera,
+        failed: current && status !== 'cancelled' && !recover && !superseded,
+    });
+}

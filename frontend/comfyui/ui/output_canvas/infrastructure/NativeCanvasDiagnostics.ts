@@ -14,14 +14,25 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Snapshot existing native presentation facts without observing DOM or granting host access. */
+import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/CanvasSurface.js';
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import type { NativeCanvasBinding } from './NativeCanvasBinding.js';
 import type { NativeCanvasDesired } from './NativeCanvasDesired.js';
+import { nativeCanvasBackdrop } from './NativeCanvasCapabilities.js';
 import { nativeMaterialReady } from './NativeCanvasMaterial.js';
 import {
   IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS,
   type NativeCanvasPreview,
 } from './NativeCanvasPreview.js';
+
+/** Record the native offer an attachment was constructed against, for later material diagnostics. */
+export function nativeConstructorSurface(host: CanvasSurfaceHost | null) {
+  return Object.freeze({
+    available: host !== null,
+    schema: host?.capabilities.schema ?? null,
+    backdrop: nativeCanvasBackdrop(host),
+  });
+}
 
 /** Copy only the bounded material allocation; routing and cancellation objects stay private. */
 export function nativeMaterialGeometrySnapshot(geometry: CanvasSurfaceGeometry | null) {
