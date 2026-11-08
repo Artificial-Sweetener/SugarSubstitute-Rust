@@ -19,6 +19,7 @@ impl PreparedViewContent {
 const SNAPSHOT_HEAP_BYTES: usize = 2 * BuildIdentity::MAX_BYTES
     + 2 * FileLabel::MAX_BYTES
     + SymbolName::MAX_BYTES
+    + HostFailureFact::MAX_BYTES
     + size_of::<[Option<AttachmentFacts>; MAX_ATTACHMENTS]>();
 const _: () = assert!(
     size_of::<PreparedReportView>()
@@ -93,11 +94,12 @@ impl ReportingOperation {
         let stored =
             StoredIncidentSummary::new(current.summary().clone(), current.payload_revision())?;
         let evictions = current.evictions();
+        let fault = self.host_failure.as_ref().map(RedactedTextChunk::from_host_failure);
         let view = ReportView::format(
             stored.summary(),
             binding,
             evictions,
-            &[],
+            fault.as_slice(),
             locale,
             context.memory(),
             root_capture_degraded,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Format an explicit allowlist of owned facts without arbitrary errors, arguments or environment.
-use super::IncidentStoreError;
+use super::{HostFailureFact, IncidentStoreError};
 use sugarsubstitute_contracts::incident::{
     CaptureEvidence, ExitAttribution, FailureEvidence, IncidentError, IncidentStage,
 };
@@ -49,8 +49,14 @@ pub struct RedactedTextChunk {
     bytes: Vec<u8>,
     original_bytes: u64,
     omitted_bytes: u64,
+    host_failure: bool,
 }
 impl RedactedTextChunk {
+    /// Format one validated host failure without reserving a complete general-purpose tail.
+    pub fn from_host_failure(fact: &HostFailureFact) -> Self {
+        let bytes = fact.to_string().into_bytes();
+        Self { original_bytes: bytes.len() as u64, bytes, omitted_bytes: 0, host_failure: true }
+    }
     /// Format 1..=2048 typed facts while retaining explicit generated-source omission counts.
     /// # Errors
     /// Rejects empty or oversized fact inventories. No clock, native path or error is sampled.
@@ -77,11 +83,20 @@ impl RedactedTextChunk {
         if truncated {
             bytes.extend_from_slice(OMITTED);
         }
-        Ok(Self { bytes, original_bytes, omitted_bytes: original_bytes - retained_source })
+        Ok(Self {
+            bytes,
+            original_bytes,
+            omitted_bytes: original_bytes - retained_source,
+            host_failure: false,
+        })
     }
     /// Borrow actual UTF-8 bytes, including any explicit omission marker.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
+    }
+    /// Whether this appendix was generated from a validated recorded host failure.
+    pub const fn contains_host_failure(&self) -> bool {
+        self.host_failure
     }
     /// Return total generated allowlist source bytes before bounded omission.
     pub const fn original_bytes(&self) -> u64 {

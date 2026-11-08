@@ -6,6 +6,8 @@ mod snapshot;
 #[path = "tests/support.rs"]
 pub(in crate::production) mod support;
 use super::*;
+#[path = "tests/host_failure.rs"]
+mod host_failure;
 #[path = "tests/passive.rs"]
 mod passive;
 #[path = "tests/restoration.rs"]

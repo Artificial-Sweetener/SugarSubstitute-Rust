@@ -119,6 +119,7 @@ pub(in crate::production) struct ReportingOperation {
     repository: Option<IncidentRepository>,
     opening: Option<DiagnosticStoreOpening>,
     loaded: Option<CommittedIncident>,
+    host_failure: Option<HostFailureFact>,
     view: Option<Box<PreparedViewContent>>,
     view_request: Option<(ReportBinding, &'static str, bool)>,
     original_deadline: Option<Moment>,
@@ -140,6 +141,7 @@ impl ReportingOperation {
             repository: None,
             opening: None,
             loaded: None,
+            host_failure: None,
             view: None,
             view_request: None,
             original_deadline: None,
@@ -280,6 +282,7 @@ impl ReportingOperation {
         if current.summary().revision() != binding.revision() {
             return Err(ReportingCause::Store(IncidentStoreError::StaleRevision));
         }
+        self.host_failure = repository.read_host_failure(current, context)?;
         self.view_request = Some((binding, locale, root_capture_degraded));
         self.original_deadline = context.deadline();
         Ok(())

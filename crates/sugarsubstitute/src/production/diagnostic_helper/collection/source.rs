@@ -54,6 +54,7 @@ pub(super) struct Source {
 }
 const _: () = assert!(
     size_of::<Shared>()
+        + sugarsubstitute_crash::incident::HostFailureFact::MAX_HEAP_BYTES
         + size_of::<CollectionOperation>()
         + size_of::<super::service::CollectionService>()
         + 2 * size_of::<usize>()

@@ -38,6 +38,7 @@ pub(super) struct DesktopOutput {
     closing: bool,
     run: RunKey,
     diagnostic: diagnostic::Diagnostic,
+    main_failure: Option<diagnostic::MainFailure>,
 }
 #[derive(Debug)]
 enum Issue {
@@ -95,6 +96,7 @@ impl DesktopOutput {
             closing: false,
             run,
             diagnostic: diagnostic::Diagnostic::new(),
+            main_failure: None,
         }
     }
     /// Replace only external I/O; the execution worker and byte reservation remain production owners.
@@ -195,6 +197,7 @@ impl DesktopOutput {
             if actual.run() != self.run {
                 return Err(WindowsOutputError::ForeignIdentity);
             }
+            let first_main_failure = &mut self.main_failure;
             self.diagnostic.feed(actual.stream(),actual.sequence().get(),actual.gap().is_some(),actual.end(),actual.bytes(),|observed| {
                 match observed {
                     #[cfg(feature = "k1-native-qualification")]
@@ -249,6 +252,7 @@ impl DesktopOutput {
                             "Observed owned child's closed connection progress");
                     }
                     diagnostic::Observation::MainFailure(failure) => {
+                        first_main_failure.get_or_insert(failure);
                         if let Some(timeout) = failure.timeout {
                             tracing::warn!(operation="desktop_child_main_failure",run=?self.run,
                                 launch=failure.launch,navigation=failure.navigation,
@@ -263,6 +267,11 @@ impl DesktopOutput {
                             code=?failure.code,
                             "Observed original main failure within its owned desktop output");
                     }
+                    diagnostic::Observation::MainRetirement(retirement) => {
+                        tracing::info!(operation="desktop_child_main_retirement",run=?self.run,
+                            launch=retirement.launch,navigation=retirement.navigation,reason=?retirement.reason,
+                            "Observed the original native frontend retirement reason");
+                    }
                 }
             });
             // Return the sole real delivery slot before taking another batch.
@@ -270,6 +279,20 @@ impl DesktopOutput {
         }
         Ok(())
     }
+    /// Copy the first authenticated host failure for the same Run's stored incident appendix.
+    #[expect(
+        clippy::result_large_err,
+        reason = "Keep the bounded incident cause inline in its admitted collection owner"
+    )]
+    pub(super) fn host_failure(
+        &self,
+    ) -> std::result::Result<
+        Option<sugarsubstitute_crash::incident::HostFailureFact>,
+        sugarsubstitute_crash::incident::IncidentStoreError,
+    > {
+        self.main_failure.map(diagnostic::MainFailure::incident_fact).transpose()
+    }
+
     /// Borrow undrained observations or original failure while native retirement remains independent.
     pub(super) fn normal_close_pending(&self) -> bool {
         let actual = self.session.control.snapshot();

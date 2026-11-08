@@ -12,7 +12,7 @@ use crate::production::incident_host::{CollectionSources, HostIssue};
 use material::FailurePreparation;
 use sugarsubstitute_application::{incident::*, supervision::FailedDesktopFact};
 use sugarsubstitute_contracts::{execution::Moment, incident::*};
-use sugarsubstitute_crash::FinishedCaptureSource;
+use sugarsubstitute_crash::{FinishedCaptureSource, incident::HostFailureFact};
 use sugarsubstitute_supervision::diagnostic_storage::ProtectedDiagnosticWriteRequest;
 
 /// Keep the exact original native exit, finite preparation, source loans and first cause.
@@ -25,6 +25,7 @@ pub(super) struct IncidentCollection {
     scope: Option<IncidentOperationScope>,
     request: Option<ProtectedDiagnosticWriteRequest>,
     capture: Option<FinishedCaptureSource>,
+    host_failure: Option<HostFailureFact>,
     installed: bool,
     submitted: bool,
     cleanup_until: Option<Moment>,
@@ -45,6 +46,7 @@ impl IncidentCollection {
             scope: None,
             request: None,
             capture: None,
+            host_failure: None,
             installed: false,
             submitted: false,
             cleanup_until: None,
@@ -197,6 +199,12 @@ fn advance(
         record.collection.observe(fact, resources.client.now()?)?;
     }
     let collection = &mut record.collection;
+    if !collection.installed
+        && collection.host_failure.is_none()
+        && let Some(output) = record.start.as_ref().and_then(|start| start.output.as_ref())
+    {
+        collection.host_failure = output.host_failure()?;
+    }
     if collection.first.is_some() && !collection.installed {
         return Ok(());
     }
@@ -303,6 +311,7 @@ fn advance(
                 request: &mut collection.request,
                 capture: &mut collection.capture,
                 occurred: material.context.at(),
+                host_failure: &mut collection.host_failure,
             },
         );
         if collection.request.is_none() && collection.capture.is_none() {

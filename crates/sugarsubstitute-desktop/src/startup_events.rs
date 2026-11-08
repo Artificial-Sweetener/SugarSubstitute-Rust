@@ -333,16 +333,25 @@ fn fail_main(
     content: &mut impl StartupWindowContent,
     cause: DesktopError,
 ) -> Result<(), DesktopError> {
+    let first = !session.main_failures_reported;
     let owner = main(session)?;
     let identity = owner.identity();
     let observation = owner.failure_observation();
-    owner.close(identity)?;
+    if first {
+        cause.observe_main_failure(identity, observation);
+    }
+    if let Err(close) = owner.close(identity) {
+        let mut original = Some(cause);
+        DesktopError::retain_first(&mut original, close);
+        return Err(original.ok_or_else(|| {
+            DesktopError::message("close_failed_main", "original main failure is absent")
+        })?);
+    }
     if session.main_failures_reported {
         session.retain(cause);
         Ok(())
     } else {
         session.main_failures_reported = true;
-        cause.observe_main_failure(identity, observation);
         session.observe(
             content,
             DesktopStartupObservation::Failed {

@@ -150,7 +150,7 @@ rationale = "Only the inline test module selects a local supported formatter to 
 [[records]]
 path = "crates/sugarsubstitute/src/production/diagnostic_helper/reporting/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:609ed1fe09d44716ba6a065e082813046b35d5bb1b58813765267060f3a7d99d"
+source_sha256 = "sha256:c961861ecd0c499b7618e11fd8f07bfde0a23f2d13ff917de585546f5320a014"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 

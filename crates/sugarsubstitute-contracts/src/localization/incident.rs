@@ -60,6 +60,8 @@ pub struct ReportMessages {
     pub ack_failed: &'static str,
     /// Unexplained termination mechanism.
     pub unexplained: &'static str,
+    /// An authenticated host error was retained independently of native crash capture.
+    pub host_failed: &'static str,
     /// Accepted startup failure mechanism.
     pub startup_failed: &'static str,
     /// Observed Rust panic mechanism.
@@ -106,7 +108,7 @@ pub struct ReportMessages {
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 61] {
+    pub fn labels(&self) -> [&'static str; 62] {
         [
             self.title,
             self.explanation,
@@ -130,6 +132,7 @@ impl ReportMessages {
             self.export_failed,
             self.ack_failed,
             self.unexplained,
+            self.host_failed,
             self.startup_failed,
             self.panic,
             self.abort,

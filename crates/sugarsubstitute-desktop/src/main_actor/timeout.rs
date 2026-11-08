@@ -12,6 +12,16 @@ impl MainActor {
         if identity != self.identity() {
             return Err(DesktopError::message("retire_main", "main identity differs"));
         }
+        if self.admission.closing() {
+            return Ok(());
+        }
+        tracing::info!(
+            operation = "main_retirement_requested",
+            launch = identity.launch.get(),
+            navigation = identity.navigation.get(),
+            reason = ?reason,
+            "Current native Main retirement requested before admission closes"
+        );
         if reason == crate::MainRetirementReason::FrontendTimeout
             && self.admission.timeout_diagnostic_allowed(identity)?
         {

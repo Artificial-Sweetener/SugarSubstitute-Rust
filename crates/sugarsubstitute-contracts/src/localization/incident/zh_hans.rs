@@ -26,6 +26,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     export_failed: "无法导出报告。",
     ack_failed: "无法保存关闭确认。事件仍待处理。",
     unexplained: "原因不明的终止",
+    host_failed: "应用程序报告了错误",
     startup_failed: "启动失败",
     panic: "Rust 恐慌",
     abort: "中止",

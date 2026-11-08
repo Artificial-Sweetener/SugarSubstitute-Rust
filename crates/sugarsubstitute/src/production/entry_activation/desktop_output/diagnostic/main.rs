@@ -26,6 +26,41 @@ pub(in super::super) struct MainFailure {
     pub(in super::super) code: Code,
     pub(in super::super) timeout: Option<Timeout>,
 }
+impl MainFailure {
+    /// Copy only authenticated closed identifiers and direct codes into incident evidence.
+    #[expect(
+        clippy::result_large_err,
+        reason = "Keep the bounded incident cause inline in its admitted collection owner"
+    )]
+    pub(in super::super) fn incident_fact(
+        self,
+    ) -> Result<
+        sugarsubstitute_crash::incident::HostFailureFact,
+        sugarsubstitute_crash::incident::IncidentStoreError,
+    > {
+        use sugarsubstitute_crash::incident::{HostFailureCategory as Category, HostFailureFact};
+        let (category, detail, native) = match self.code {
+            Code::Hresult(value) => (Category::Hresult, None, Some(value)),
+            Code::Os(value) => (Category::Os, None, Some(value)),
+            Code::Io(value) => (Category::Io, Some(value), None),
+            Code::Readiness(value) => (Category::Readiness, Some(value), None),
+            Code::JsonIo => (Category::JsonIo, None, None),
+            Code::JsonSyntax => (Category::JsonSyntax, None, None),
+            Code::JsonData => (Category::JsonData, None, None),
+            Code::JsonEof => (Category::JsonEof, None, None),
+            Code::Opaque => (Category::Opaque, None, None),
+        };
+        HostFailureFact::new(
+            self.operation,
+            self.observation,
+            category,
+            detail,
+            native,
+            self.launch,
+            self.navigation,
+        )
+    }
+}
 
 /// Only sealed stored readiness facts; zero is never an issued operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -257,7 +292,7 @@ fn known(value: &str, accepted: &'static [&'static str]) -> Option<&'static str>
     accepted.iter().copied().find(|candidate| *candidate == value)
 }
 /// Require canonical nonzero decimal identities before carrying inert numeric facts.
-fn identity(value: &str) -> Option<u64> {
+pub(super) fn identity(value: &str) -> Option<u64> {
     if value.starts_with('0') || !value.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }

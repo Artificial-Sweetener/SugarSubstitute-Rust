@@ -26,6 +26,7 @@ pub static JA: ReportMessages = ReportMessages {
     export_failed: "レポートをエクスポートできませんでした。",
     ack_failed: "終了確認を保存できませんでした。インシデントは未処理のままです。",
     unexplained: "原因不明の終了",
+    host_failed: "アプリケーションがエラーを報告しました",
     startup_failed: "起動失敗",
     panic: "Rust パニック",
     abort: "中止",

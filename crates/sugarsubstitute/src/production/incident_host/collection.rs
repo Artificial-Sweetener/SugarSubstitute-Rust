@@ -3,13 +3,14 @@
 //! Move the exact funded coordinator command into one real original collection worker.
 use super::super::diagnostic_helper::collection::CollectionInput;
 use super::*;
-use sugarsubstitute_crash::FinishedCaptureSource;
+use sugarsubstitute_crash::{FinishedCaptureSource, incident::HostFailureFact};
 use sugarsubstitute_supervision::diagnostic_storage::ProtectedDiagnosticWriteRequest;
 /// Borrow the genuine retained sources and separately injected occurrence timestamp.
 pub(in crate::production) struct CollectionSources<'a> {
     pub(in crate::production) request: &'a mut Option<ProtectedDiagnosticWriteRequest>,
     pub(in crate::production) capture: &'a mut Option<FinishedCaptureSource>,
     pub(in crate::production) occurred: IncidentUtc,
+    pub(in crate::production) host_failure: &'a mut Option<HostFailureFact>,
 }
 impl IncidentHost {
     /// Borrow exact checked restoration of passive input that never entered native work.
@@ -123,7 +124,7 @@ impl IncidentHost {
         until: Moment,
         sources: CollectionSources<'_>,
     ) -> Result<(), HostIssue> {
-        let CollectionSources { request, capture, occurred } = sources;
+        let CollectionSources { request, capture, occurred, host_failure } = sources;
         if self.closing {
             return Err(HostIssue::Closed);
         }
@@ -153,6 +154,7 @@ impl IncidentHost {
             scope: *original,
             seed: seed.clone(),
             occurred,
+            host_failure: host_failure.take(),
         });
         let effect = state.state.effects[index].take();
         let submitted =
@@ -160,6 +162,7 @@ impl IncidentHost {
         if let Some(input) = input {
             *request = Some(input.request);
             *capture = Some(input.capture);
+            *host_failure = input.host_failure;
             if let Some(state) = &mut policy.state {
                 state.state.effects[index] = effect;
             }

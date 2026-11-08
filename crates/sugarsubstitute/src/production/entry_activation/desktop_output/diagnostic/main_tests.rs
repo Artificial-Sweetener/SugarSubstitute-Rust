@@ -8,6 +8,21 @@ use sugarsubstitute_contracts::transcript::OutputStream;
 const LINE: &str = "operation=\"main_failure_transition\" failed_operation=\"decode_main_observation\" launch=1 navigation=1 observation=Frame code=JsonData";
 
 #[test]
+fn authenticated_main_failure_becomes_bounded_incident_evidence()
+-> Result<(), Box<dyn std::error::Error>> {
+    let line = LINE
+        .replace("decode_main_observation", "main_frontend_effect")
+        .replace("JsonData", "Io(Io)");
+    let failure = parse(line.as_bytes()).ok_or("Closed failure missing")?;
+    let fact = failure.incident_fact()?;
+    let text = fact.to_string();
+    assert!(text.contains("operation=main_frontend_effect"));
+    assert!(text.contains("category=Io detail=Io"));
+    assert_eq!(sugarsubstitute_crash::incident::HostFailureFact::decode(text.as_bytes())?, fact);
+    Ok(())
+}
+
+#[test]
 fn native_canvas_and_composition_failures_accept_only_exact_operations_and_closed_codes() {
     for (operation, code, expected) in [
         ("commit_canvas_frame", "Hresult(-2147467259)", Code::Hresult(-2147467259)),

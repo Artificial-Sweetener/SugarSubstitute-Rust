@@ -251,6 +251,7 @@ impl IncidentRepository {
             .ok_or(IncidentStoreError::RecoveryConflict)
     }
     /// Publish one bounded allowlist-generated text attachment without raw sensitive input.
+    /// Returns the exact activated facts for the same summary's attachment inventory.
     /// # Errors
     /// Repeated kinds, dump kinds, overload and uncertain activation preserve custody.
     pub fn append_text(
@@ -259,7 +260,7 @@ impl IncidentRepository {
         kind: AttachmentKind,
         chunk: RedactedTextChunk,
         context: &JobContext,
-    ) -> Result<(), IncidentStoreError> {
+    ) -> Result<AttachmentFacts, IncidentStoreError> {
         let pending = self.pending(ticket)?;
         let bytes = pending
             .payloads
@@ -285,6 +286,13 @@ impl IncidentRepository {
             &original,
         )?;
         let pending = self.pending.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
+        let fact = AttachmentFacts::new(
+            kind,
+            chunk.as_bytes().len() as u64,
+            chunk.original_bytes(),
+            chunk.omitted_bytes(),
+            actual.facts().sha256(),
+        )?;
         pending.payloads.push((
             kind,
             chunk.as_bytes().len() as u64,
@@ -292,7 +300,7 @@ impl IncidentRepository {
             chunk.omitted_bytes(),
             actual,
         ));
-        Ok(())
+        Ok(fact)
     }
     /// Activate the exact summary only after every referenced payload is actually verified.
     /// # Errors

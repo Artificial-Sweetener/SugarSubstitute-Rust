@@ -26,6 +26,7 @@ pub static ES: ReportMessages = ReportMessages {
     export_failed: "No se pudo exportar el informe.",
     ack_failed: "No se pudo guardar el cierre. El incidente sigue pendiente.",
     unexplained: "Terminación sin explicación",
+    host_failed: "La aplicación informó de un error",
     startup_failed: "Error de inicio",
     panic: "Pánico de Rust",
     abort: "Aborto",

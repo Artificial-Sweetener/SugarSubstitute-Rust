@@ -120,6 +120,10 @@ pub use codec_summary::{
 };
 pub use error::{IncidentStoreError, IncidentStoreFailureCode};
 pub use evidence::{IncidentLogCode, RedactedDiagnosticFact, RedactedTextChunk};
+mod host_failure;
+pub use host_failure::{HostFailureCategory, HostFailureFact};
+#[cfg(windows)]
+mod host_failure_read;
 
 #[cfg(test)]
 mod tests;

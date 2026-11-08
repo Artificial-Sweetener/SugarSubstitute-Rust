@@ -7,6 +7,8 @@ mod codec_allocation;
 mod codec_parse;
 mod codec_writer;
 #[cfg(windows)]
+mod host_failure;
+#[cfg(windows)]
 mod initialization;
 mod migration;
 #[cfg(windows)]

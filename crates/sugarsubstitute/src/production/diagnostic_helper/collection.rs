@@ -9,6 +9,8 @@ use sugarsubstitute_supervision::diagnostic_storage::*;
 
 #[path = "collection/diagnostic.rs"]
 mod diagnostic;
+#[path = "collection/publication.rs"]
+mod publication;
 use diagnostic::CollectionStage;
 
 /// Consume only the original coordinator-issued collection command and genuine namespace source.
@@ -18,6 +20,7 @@ pub(in crate::production) struct CollectionInput {
     pub(in crate::production) scope: IncidentOperationScope,
     pub(in crate::production) seed: IncidentSeed,
     pub(in crate::production) occurred: IncidentUtc,
+    pub(in crate::production) host_failure: Option<HostFailureFact>,
 }
 /// Keep every partial output and genuine cause before releasing any original claim.
 pub(in crate::production) struct CollectionOperation {
@@ -115,97 +118,26 @@ impl CollectionOperation {
         let report = self.report.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
         self.stage = CollectionStage::OpenCapture;
         let capture = report.open(input.seed.key(), input.seed.build(), None, context)?;
-        let bytes = match capture {
+        let dump_bytes = match capture {
             CaptureEvidence::Finished(_) => {
                 report.dump().ok_or(IncidentStoreError::MissingPayload)?.1
             }
             CaptureEvidence::Unavailable(_) => 0,
             CaptureEvidence::Awaiting => return Err(IncidentStoreError::RecoveryConflict),
         };
-        let headroom = if bytes == 0 {
-            131072
-        } else {
-            self.stage = CollectionStage::PrepareDisposition;
-            report.prepare_disposition(context)?;
-            report.publication_headroom().ok_or(IncidentStoreError::RecoveryConflict)?
-        };
-        self.stage = CollectionStage::Preflight;
-        let preflight = repository.preflight_publication(
-            input.seed,
-            ExpectedSummary::Absent,
-            IncidentPublicationDemand::new(bytes, usize::from(bytes != 0), 1, headroom)?,
-            input.occurred,
+        self.publish_evidence(
+            publication::CollectionEvidence {
+                seed: input.seed,
+                scope: input.scope,
+                occurred: input.occurred,
+                capture,
+                dump_bytes,
+                host_failure: input.host_failure,
+            },
+            coordinator,
+            effects,
             context,
-        )?;
-        self.stage = CollectionStage::BeginPublish;
-        self.ticket =
-            Some(repository.begin_publish(preflight, input.scope.operation().id(), context)?);
-        let ticket = self.ticket.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
-        let payload = if bytes == 0 {
-            PayloadDisposition::Unavailable
-        } else {
-            self.stage = CollectionStage::CopyPayload;
-            let fact = repository.append_finished(ticket, report, context)?;
-            PayloadDisposition::Retained(AttachmentInventory::new(&[fact])?)
-        };
-        self.stage = CollectionStage::ObserveEvidence;
-        let produced = coordinator
-            .observe(IncidentServiceObservation::EvidenceCollected {
-                scope: input.scope,
-                evidence: CollectedIncidentEvidence::new(
-                    input.occurred,
-                    capture,
-                    payload,
-                    SymbolOutcome::NotRequested,
-                ),
-            })
-            .map_err(|cause| {
-                self.decision = Some(cause);
-                IncidentStoreError::RecoveryConflict
-            })?;
-        for (slot, effect) in effects.iter_mut().zip(produced) {
-            *slot = Some(effect);
-        }
-        let slot = effects
-            .iter_mut()
-            .find(|slot| slot.is_some())
-            .ok_or(IncidentStoreError::RecoveryConflict)?;
-        let Some(IncidentEffect::PublishSummary { scope, summary }) = slot.as_ref() else {
-            return Err(IncidentStoreError::RecoveryConflict);
-        };
-        if *scope != input.scope {
-            return Err(IncidentStoreError::RecoveryConflict);
-        }
-        // The coordinator owns the exact expected content; storage independently verifies all files.
-        self.stage = CollectionStage::Commit;
-        self.committed = Some(repository.commit(ticket, summary.clone(), context)?);
-        *slot = None;
-        let committed = self.committed.as_ref().ok_or(IncidentStoreError::RecoveryConflict)?;
-        if bytes != 0 {
-            self.stage = CollectionStage::PublishJournal;
-            repository.publish_capture_journal(report, committed, context)?;
-            self.stage = CollectionStage::SettleJournal;
-            repository.settle_capture_journal(report, context)?;
-            self.source_settled = report.disposition_settled();
-        }
-        if effects.iter().any(Option::is_some) {
-            return Err(IncidentStoreError::RecoveryConflict);
-        }
-        self.stage = CollectionStage::ObserveCommitted;
-        let produced = coordinator
-            .observe(IncidentServiceObservation::SummaryCommitted {
-                scope: input.scope,
-                summary: committed.summary().clone(),
-            })
-            .map_err(|cause| {
-                self.decision = Some(cause);
-                IncidentStoreError::RecoveryConflict
-            })?;
-        for (slot, effect) in effects.iter_mut().zip(produced) {
-            *slot = Some(effect);
-        }
-        self.stage = CollectionStage::Committed;
-        Ok(())
+        )
     }
     /// Checked native token/source then repository cleanup on the genuine original close-only job.
     pub(super) fn retire(&mut self, client: &ExecutionClient, context: &JobContext) -> bool {

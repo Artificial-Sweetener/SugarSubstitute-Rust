@@ -21,6 +21,7 @@ pub(super) struct Source {
 }
 /// Bound replacement overlap, the one sealed result move/box, all control and allocation metadata.
 pub(super) const REPORT_SOURCE_PEAK_BYTES: usize = 2 * size_of::<Shared>()
+    + HostFailureFact::MAX_HEAP_BYTES
     + size_of::<ReportingOperation>()
     + 6 * size_of::<usize>()
     + size_of::<ReportingService>()

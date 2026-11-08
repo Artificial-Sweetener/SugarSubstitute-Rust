@@ -26,6 +26,7 @@ pub static KO: ReportMessages = ReportMessages {
     export_failed: "보고서를 내보낼 수 없습니다.",
     ack_failed: "닫기 확인을 저장할 수 없습니다. 사고는 대기 상태로 유지됩니다.",
     unexplained: "원인 불명의 종료",
+    host_failed: "애플리케이션에서 오류를 보고했습니다",
     startup_failed: "시작 실패",
     panic: "Rust 패닉",
     abort: "중단",

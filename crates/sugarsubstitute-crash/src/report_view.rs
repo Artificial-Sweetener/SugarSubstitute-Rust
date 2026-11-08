@@ -56,7 +56,13 @@ impl ReportView {
             .map_err(ReportViewError::Credit)?;
         let labels = messages(locale).report;
         let mut writer = Writer::new(Self::MAX_BYTES, labels.omitted)?;
-        write_facts(&mut writer, summary, evictions, labels);
+        write_facts(
+            &mut writer,
+            summary,
+            evictions,
+            labels,
+            tails.iter().any(RedactedTextChunk::contains_host_failure),
+        );
         if root_capture_degraded {
             writer.line(labels.recovery_capture_degraded);
         }
@@ -85,6 +91,7 @@ fn write_facts(
     summary: &IncidentSummary,
     evictions: SummaryEvictions,
     l: &ReportMessages,
+    host_failure: bool,
 ) {
     w.line(l.title);
     w.line(l.explanation);
@@ -97,7 +104,9 @@ fn write_facts(
         ExitAttribution::CaptureOnly => w.line(l.exit_unobserved),
     }
     match summary.facts().failure() {
-        FailureEvidence::Unexplained => w.line(l.unexplained),
+        FailureEvidence::Unexplained => {
+            w.line(if host_failure { l.host_failed } else { l.unexplained })
+        }
         FailureEvidence::Startup(code) => {
             w.named(l.startup_failed, format_args!("{}", l.startup_failure[startup_reason(code)]))
         }
@@ -159,7 +168,19 @@ fn write_facts(
                 ));
             }
         }
-        SymbolOutcome::NotRequested => w.named(l.symbols, format_args!("{}", l.pending)),
+        SymbolOutcome::NotRequested => w.named(
+            l.symbols,
+            format_args!(
+                "{}",
+                if host_failure
+                    && matches!(summary.facts().capture(), CaptureEvidence::Unavailable(_))
+                {
+                    l.unavailable
+                } else {
+                    l.pending
+                }
+            ),
+        ),
     }
     w.named(
         l.evictions,

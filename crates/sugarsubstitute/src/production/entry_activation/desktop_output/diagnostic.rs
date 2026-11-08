@@ -15,6 +15,8 @@ pub(super) mod failure;
 use failure::parse as parse_failure;
 #[path = "diagnostic/main.rs"]
 mod main;
+#[path = "diagnostic/main_retirement.rs"]
+mod main_retirement;
 #[path = "diagnostic/startup.rs"]
 mod startup;
 pub(super) use main::MainFailure;
@@ -67,6 +69,7 @@ pub(super) enum Observation {
     Connection(Connection),
     Close(crate::close_diagnostic::CloseTrace),
     MainFailure(MainFailure),
+    MainRetirement(main_retirement::MainRetirement),
     Transport(crate::production::child_transport_diagnostic::Record),
     Probe(sugarsubstitute_desktop::frontend_probe_diagnostic::Record),
     Readiness(crate::production::startup_readiness_diagnostic::Record),
@@ -87,6 +90,7 @@ pub(super) struct Diagnostic {
     emitted: u8,
     failure_seen: bool,
     main_failure_seen: bool,
+    retirements_emitted: u8,
     probe_emitted: u8,
     probe_timeout_seen: bool,
     canvas_emitted: u16,
@@ -109,6 +113,7 @@ impl Diagnostic {
             emitted: 0,
             failure_seen: false,
             main_failure_seen: false,
+            retirements_emitted: 0,
             probe_emitted: 0,
             probe_timeout_seen: false,
             canvas_emitted: 0,
@@ -196,6 +201,13 @@ impl Diagnostic {
                         if self.emitted < 30 {
                             self.emitted += 1;
                             emit(Observation::Close(close));
+                        }
+                    } else if let Some(retirement) =
+                        main_retirement::parse(&self.bytes[..self.length])
+                    {
+                        if self.retirements_emitted < 16 {
+                            self.retirements_emitted += 1;
+                            emit(Observation::MainRetirement(retirement));
                         }
                     } else if let Some(failure) = main::parse(&self.bytes[..self.length]) {
                         if !self.main_failure_seen && self.emitted < 32 {

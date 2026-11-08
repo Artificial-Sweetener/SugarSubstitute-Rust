@@ -26,6 +26,7 @@ pub static EN: ReportMessages = ReportMessages {
     export_failed: "Could not export the report.",
     ack_failed: "Could not save dismissal. The incident remains pending.",
     unexplained: "Unexplained termination",
+    host_failed: "The application reported a failure",
     startup_failed: "Startup failed",
     panic: "Rust panic",
     abort: "Abort",
