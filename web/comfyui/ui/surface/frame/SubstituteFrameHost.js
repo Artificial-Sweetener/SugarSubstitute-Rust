@@ -71,12 +71,13 @@ export class SubstituteFrameHost {
         if (this.#disposed)
             throw new Error('The SugarCubes frame lifetime has ended.');
         this.#desktop.configure(configuration);
-        this.mode.setDesktop(true);
-        this.#reconcile();
         const receipt = this.#desktop.read();
         if (!receipt)
             throw new Error('Desktop frame configuration was not retained.');
-        return receipt;
+        this.options.hostColorScheme.follow(receipt.darkTheme);
+        this.mode.setDesktop(true);
+        this.#reconcile();
+        return this.#desktop.read() ?? receipt;
     }
     /** Read accepted desktop presentation without changing DOM, preferences, or workflow state. */
     readDesktopFrame() {
@@ -104,6 +105,7 @@ export class SubstituteFrameHost {
         this.#disposed = true;
         this.#unmount();
         this.#desktop.dispose();
+        this.options.hostColorScheme.release();
         this.mode.setDesktop(false);
         this.#presence?.disconnect();
         for (const stop of this.#stops.splice(0))
@@ -159,8 +161,9 @@ export class SubstituteFrameHost {
             this.#view?.update(this.#adapter?.read(this.options.sessions.read().open) ?? [], (id) => this.options.activity.unread(id));
             this.#palette();
             this.#refreshProgress();
-            if (this.#desktop.read()?.mounted)
-                this.#graphBackdrop.attach(this.options.app);
+            const desktop = this.#desktop.read();
+            if (desktop?.mounted)
+                this.#graphBackdrop.attach(this.options.app, desktop.darkTheme);
             else
                 this.#graphBackdrop.detach();
         }

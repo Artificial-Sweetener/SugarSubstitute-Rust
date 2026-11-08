@@ -74,6 +74,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     app: options.app,
     document: options.document,
     palette: appearance.palette,
+    hostColorScheme: appearance.hostColorScheme,
     sessions: options.sessions,
     activity: options.activity,
     progress: options.progress,

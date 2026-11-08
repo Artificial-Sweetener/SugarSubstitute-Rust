@@ -60,7 +60,7 @@ describe.each([
           const line = DARK ? [53,53,53,255] : [220,220,220,255];
           const context = canvas.getContext('2d');
           const tile = context.createImageData(4,1);
-          tile.data.set(translucentGridPixels(new Uint8ClampedArray([...field,...field,...field,...line])));
+          tile.data.set(translucentGridPixels(new Uint8ClampedArray([...field,...field,...field,...line]), DARK));
           context.putImageData(tile,400,350);
         });
         globalThis.washInstalled = true;

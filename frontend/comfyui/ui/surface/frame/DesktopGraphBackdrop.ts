@@ -21,8 +21,8 @@ const CLEAR_COLOR = 'clear_background_color';
 const GRID_IMAGE = 'background_image';
 const GRID_PATTERN = '_pattern';
 
-/** Turn one palette grid tile into a translucent tile; rejects undecodable images. */
-export type GridTileDeriver = (source: string) => Promise<string>;
+/** Turn one palette grid tile into a translucent tile for the given theme; rejects undecodable images. */
+export type GridTileDeriver = (source: string, darkTheme: boolean) => Promise<string>;
 
 export interface DesktopGraphBackdropOptions {
   readonly deriveGrid: GridTileDeriver;
@@ -35,11 +35,25 @@ interface ComfyBackground {
 }
 
 /**
- * Re-express an opaque grid tile as lines alone: each pixel becomes white or black with the alpha
- * that reproduces its original color over the tile's dominant field color, so the field itself
- * becomes fully transparent and line contrast survives over any wash.
+ * Opacity of the strongest grid line before LiteGraph fades the whole grid with zoom (it draws the
+ * tile at half this strength at the default zoom). At that zoom a major line then differs from the
+ * wash by roughly 40 of 255 levels on either theme's body wash and a minor line by two thirds of
+ * that: clearly visible without competing with nodes.
  */
-export function translucentGridPixels(pixels: Uint8ClampedArray): Uint8ClampedArray {
+export const GRID_LINE_PEAK_ALPHA = 0.36;
+
+/**
+ * Re-express an opaque grid tile as lines alone: the tile's dominant field color becomes fully
+ * transparent, so the wash painted beneath the canvas carries Mica, and every other pixel becomes
+ * ink in proportion to how far it departs from the field. The ink is white on the dark wash and
+ * black on the light wash, whichever way the palette's own lines depart from its field: the dark
+ * palette draws lines darker than its field, the light palette lighter, and neither stays visible
+ * on a translucent wash. The strongest line pixel receives {@link GRID_LINE_PEAK_ALPHA}.
+ */
+export function translucentGridPixels(
+  pixels: Uint8ClampedArray,
+  darkTheme: boolean,
+): Uint8ClampedArray {
   const at = (index: number): number => pixels[index] ?? 0;
   const counts = new Map<number, number>();
   for (let index = 0; index + 3 < pixels.length; index += 4) {
@@ -54,26 +68,29 @@ export function translucentGridPixels(pixels: Uint8ClampedArray): Uint8ClampedAr
       fieldCount = count;
     }
   const base = [(field >> 16) & 255, (field >> 8) & 255, field & 255] as const;
-  const output = new Uint8ClampedArray(pixels.length);
+  const departures = new Float32Array(pixels.length / 4);
+  let strongest = 0;
   for (let index = 0; index + 3 < pixels.length; index += 4) {
-    let lighter = 0;
-    let darker = 0;
+    let departure = 0;
     base.forEach((fieldChannel, channel) => {
-      const delta = at(index + channel) - fieldChannel;
-      if (delta > 0) lighter = Math.max(lighter, delta / Math.max(1, 255 - fieldChannel));
-      else darker = Math.max(darker, -delta / Math.max(1, fieldChannel));
+      departure = Math.max(departure, Math.abs(at(index + channel) - fieldChannel));
     });
-    const white = lighter >= darker;
-    const alpha = (white ? lighter : darker) * (at(index + 3) / 255);
-    output[index] = output[index + 1] = output[index + 2] = white ? 255 : 0;
-    output[index + 3] = Math.round(alpha * 255);
+    departures[index / 4] = departure;
+    strongest = Math.max(strongest, departure);
+  }
+  const output = new Uint8ClampedArray(pixels.length);
+  const ink = darkTheme ? 255 : 0;
+  for (let index = 0; index + 3 < pixels.length; index += 4) {
+    const strength = strongest === 0 ? 0 : (departures[index / 4] ?? 0) / strongest;
+    output[index] = output[index + 1] = output[index + 2] = ink;
+    output[index + 3] = Math.round(strength * GRID_LINE_PEAK_ALPHA * (at(index + 3) / 255) * 255);
   }
   return output;
 }
 
 /** Decode a grid tile in the page and encode its translucent replacement as a PNG data URL. */
 export function browserGridTileDeriver(document: Document): GridTileDeriver {
-  return (source) =>
+  return (source, darkTheme) =>
     new Promise<string>((resolve, reject) => {
       const image = new Image();
       image.addEventListener('error', () => reject(new Error('Comfy grid tile did not decode.')));
@@ -88,7 +105,7 @@ export function browserGridTileDeriver(document: Document): GridTileDeriver {
         }
         context.drawImage(image, 0, 0);
         const tile = context.getImageData(0, 0, canvas.width, canvas.height);
-        tile.data.set(translucentGridPixels(tile.data));
+        tile.data.set(translucentGridPixels(tile.data, darkTheme));
         context.putImageData(tile, 0, 0);
         resolve(canvas.toDataURL('image/png'));
       });
@@ -107,15 +124,23 @@ export class DesktopGraphBackdrop {
   #comfy: ComfyBackground = { clear: undefined, image: undefined };
   #grids = new Map<string, string>();
   #pending = new Set<string>();
+  #dark = true;
 
   constructor(private readonly options: DesktopGraphBackdropOptions) {}
 
-  /** Bind the current Comfy canvas once; repeated calls with the same canvas are idempotent. */
-  attach(app: unknown): void {
+  /**
+   * Bind the current Comfy canvas once; repeated calls with the same canvas are idempotent. The
+   * theme chooses the grid ink and may change between calls, which rebuilds the presented grid.
+   */
+  attach(app: unknown, darkTheme: boolean): void {
     const canvas = isRecord(app) && isRecord(app.canvas) ? app.canvas : null;
-    if (canvas === this.#canvas) return;
+    if (canvas === this.#canvas) {
+      if (canvas) this.#follow(darkTheme);
+      return;
+    }
     this.detach();
     if (!canvas) return;
+    this.#dark = darkTheme;
     this.#canvas = canvas;
     this.#comfy = { clear: canvas[CLEAR_COLOR], image: canvas[GRID_IMAGE] };
     Object.defineProperty(canvas, CLEAR_COLOR, {
@@ -157,24 +182,41 @@ export class DesktopGraphBackdrop {
     this.#redrawCanvas(canvas);
   }
 
+  /** Adopt a changed theme and redraw once the grid inked for it is ready. */
+  #follow(darkTheme: boolean): void {
+    if (darkTheme === this.#dark) return;
+    this.#dark = darkTheme;
+    this.#prepare(this.#comfy.image);
+    this.#redraw();
+  }
+
+  /** Cache derived tiles per theme, since the same palette tile is inked differently by each. */
+  #key(source: string, darkTheme: boolean): string {
+    return `${darkTheme ? 'dark' : 'light'}:${source}`;
+  }
+
   /** Show only a derived translucent tile; Comfy's opaque tile would hide the wash. */
   #presentedGrid(): string | null {
     const source = this.#comfy.image;
-    return typeof source === 'string' ? (this.#grids.get(source) ?? null) : null;
+    return typeof source === 'string'
+      ? (this.#grids.get(this.#key(source, this.#dark)) ?? null)
+      : null;
   }
 
   #prepare(source: unknown): void {
-    if (typeof source !== 'string' || !source || this.#grids.has(source)) return;
-    if (this.#pending.has(source)) return;
-    this.#pending.add(source);
-    this.options.deriveGrid(source).then(
+    if (typeof source !== 'string' || !source) return;
+    const dark = this.#dark;
+    const key = this.#key(source, dark);
+    if (this.#grids.has(key) || this.#pending.has(key)) return;
+    this.#pending.add(key);
+    this.options.deriveGrid(source, dark).then(
       (grid) => {
-        this.#pending.delete(source);
-        this.#grids.set(source, grid);
-        if (this.#comfy.image === source) this.#redraw();
+        this.#pending.delete(key);
+        this.#grids.set(key, grid);
+        if (this.#comfy.image === source && this.#dark === dark) this.#redraw();
       },
       (error: unknown) => {
-        this.#pending.delete(source);
+        this.#pending.delete(key);
         this.options.report(error);
       },
     );
