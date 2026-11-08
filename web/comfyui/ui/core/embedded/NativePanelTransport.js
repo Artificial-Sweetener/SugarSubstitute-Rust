@@ -16,6 +16,7 @@
 /** Adapt a native viewer's injected transport without importing its runtime or editor SDK. */
 import { isRecord } from '../../types/common.js';
 import { panelNavigation } from './BrowserPanelTransport.js';
+import { NativePanelSendQueue } from './NativePanelSendQueue.js';
 /** Identify Substitute presentation from its validated native panel identity. */
 export function isSubstituteHost(windowRef) {
     const bridge = Reflect.get(windowRef, 'sugarcubesPanelHost');
@@ -60,16 +61,32 @@ export function createNativePanelTransport(windowRef) {
         return null;
     const send = bridge.send;
     const subscribe = bridge.subscribe;
+    const outbound = new NativePanelSendQueue({
+        send: (message) => {
+            send.call(bridge, message);
+        },
+        later: (callback, milliseconds) => {
+            const timer = windowRef.setTimeout(callback, milliseconds);
+            return () => windowRef.clearTimeout(timer);
+        },
+    });
     return {
         session: identity.session,
         preferencePolicy: preferencePolicy ?? 'host',
         memoryBudget: true,
         ...(outputSurfacePreference ? { outputSurfacePreference } : {}),
         send: (message) => {
-            send.call(bridge, message);
+            outbound.send(message);
         },
         subscribe: (receive) => {
-            const stop = subscribe.call(bridge, receive);
+            const stop = subscribe.call(bridge, (value) => {
+                try {
+                    receive(value);
+                }
+                finally {
+                    outbound.progressed();
+                }
+            });
             if (typeof stop !== 'function')
                 throw new Error('Invalid native panel subscription.');
             return () => {
