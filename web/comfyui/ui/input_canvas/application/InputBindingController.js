@@ -110,15 +110,17 @@ export class InputBindingController {
             this.#listeners.delete(listener);
         };
     }
-    /** Restore persisted sources or apply the loader-specific source default after canvas authentication. */
-    initialize() {
-        if (this.#disposed)
+    /** Restore sources after authentication; automatic callers revalidate admission before loading and publishing. */
+    initialize(current = () => true) {
+        if (this.#disposed || !current())
             return Promise.resolve();
         if (this.#loading)
             return this.#loading;
         const generation = this.#generation;
         this.#loading = Promise.resolve()
             .then(async () => {
+            if (!current())
+                return;
             const canvas = this.host();
             if (canvas !== this.#canvas) {
                 this.#stopCanvas?.();
@@ -132,8 +134,10 @@ export class InputBindingController {
                 }
             }
             await this.#refreshContext();
+            if (this.#disposed || generation !== this.#generation || !current())
+                return;
             const saved = await this.port.load();
-            if (this.#disposed || generation !== this.#generation)
+            if (this.#disposed || generation !== this.#generation || !current())
                 return;
             if (saved)
                 this.#save(saved);

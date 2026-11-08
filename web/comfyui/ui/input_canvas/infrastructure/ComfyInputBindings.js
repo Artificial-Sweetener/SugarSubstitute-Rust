@@ -39,8 +39,9 @@ export class ComfyInputBindings {
             return current;
         const binding = createComfyInputBinding(node, loader, this.ports);
         owner.bindings.set(loader.field, binding);
-        binding.adoptFiles();
-        void binding.initialize();
+        if (this.#selectable(node, loader.field, binding))
+            binding.adoptFiles();
+        void this.#initialize(node, loader.field, binding);
         return binding;
     }
     /** Restore selectable sources through Comfy's loaded-node lifecycle, including unconfigured loaders. */
@@ -73,7 +74,16 @@ export class ComfyInputBindings {
     }
     /** Negotiate newly authenticated source capabilities for exact known loader instances. */
     async ready() {
-        await Promise.all([...this.#nodes.values()].flatMap((owner) => [...owner.bindings.values()].map((binding) => binding.initialize())));
+        await Promise.all([...this.#nodes].flatMap(([node, owner]) => [...owner.bindings].map(([field, binding]) => this.#initialize(node, field, binding))));
+    }
+    /** Recheck native topology across automatic restoration's asynchronous boundaries. */
+    #initialize(node, field, binding) {
+        return binding.initialize(() => this.#selectable(node, field, binding));
+    }
+    /** Admit only the current exact binding while its native field remains selectable. */
+    #selectable(node, field, binding) {
+        return (this.#nodes.get(node)?.bindings.get(field) === binding &&
+            !isComfyInputSourceLinked(node, field));
     }
     /** Restore only callbacks still owned by the retiring node instance. */
     #release(node) {
