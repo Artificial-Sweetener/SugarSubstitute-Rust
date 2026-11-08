@@ -3,6 +3,8 @@
 //! Read the actual primary account's historical location without provisioning a known folder.
 use super::*;
 use std::{ffi::OsString, os::windows::ffi::OsStringExt};
+#[cfg(feature = "qualification-historical-root")]
+mod qualification;
 use windows::{
     Win32::{
         System::Com::CoTaskMemFree,
@@ -47,6 +49,10 @@ pub(crate) fn resolve(
     )?;
     if account.sid.bytes()? != expected_sid {
         return Err(phase.invalid("historical_account_changed"));
+    }
+    #[cfg(feature = "qualification-historical-root")]
+    if let Some(path) = qualification::stand_in(&mut phase)? {
+        return Ok(path);
     }
     let mut output = ShellPath(PWSTR::null());
     phase.check()?;

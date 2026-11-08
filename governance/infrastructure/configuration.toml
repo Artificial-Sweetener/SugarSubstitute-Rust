@@ -978,3 +978,10 @@ owner = "sugarsubstitute"
 source_sha256 = "sha256:2227fd686de624ef4fb7af5a1e2b8ab022e183933ec685a50acf1a0b6cfd0c79"
 capabilities = ["environment", "external"]
 rationale = "Fixture for the SugarCubes-owned model-root configuration adapter: it launches the actual public API through the filtered worker environment against isolated roots and asserts that selected model paths are preserved."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/account/runtime_base/historical/qualification.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:340c6b65203d8f55dce02c7a781204914408589789be8f40df2404b70a57e3cd"
+capabilities = ["environment"]
+rationale = "Compiled only by the qualification-historical-root proof feature: a headless proof names an owned stand-in for the account profile folder through one environment variable, so a proof never reads the account own data. Production builds exclude it and never consult environment text for migration sources."

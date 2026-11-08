@@ -11,6 +11,9 @@ publish.workspace = true
 [features]
 boundary-fixtures = ["sugarsubstitute-networking/boundary-fixtures"]
 local-k1-symbol-trust = []
+# Proof builds only: a headless proof names an owned stand-in for the account's earlier profile
+# folder, so it never reads or changes the account's own data. Never part of a shipped build.
+qualification-historical-root = []
 k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification"]
 local-update-qualification = ["sugarsubstitute-update/boundary-fixtures"]
 
