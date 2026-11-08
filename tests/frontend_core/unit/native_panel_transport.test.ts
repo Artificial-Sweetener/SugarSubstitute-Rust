@@ -405,3 +405,125 @@ test('saved-preference hosts still offer their system accent as the default acce
   owner?.dispose();
   expect(hostAccent.read()).toBeNull();
 });
+
+/** A bridge that queues at most eight canvas requests and refuses the rest as the native host does. */
+function boundedBridge() {
+  const queued: { requestId: number; type: string }[] = [];
+  const delivered: string[] = [];
+  const listeners = new Set<(value: unknown) => void>();
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    send: (message: { protocol: string; requestId?: number; type: string }) => {
+      if (message.protocol === 'sugarcubes.canvas' && message.type !== 'cancel') {
+        if (queued.length >= 8)
+          throw new TypeError('', { cause: { code: 'panel.transport.capacity' } });
+        queued.push({ requestId: message.requestId ?? 0, type: message.type });
+      }
+      delivered.push(`${message.type}:${message.requestId ?? '-'}`);
+    },
+    subscribe: (listener: (value: unknown) => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  });
+  return {
+    delivered,
+    queued,
+    /** The host finishes its oldest request: capacity frees and its reply reaches the page. */
+    reply(): void {
+      const done = queued.shift();
+      for (const listener of listeners) listener({ type: 'reply', requestId: done?.requestId });
+    },
+    /** The host frees capacity with no message for the page. */
+    free(): void {
+      queued.shift();
+    },
+  };
+}
+
+/** Compose a canvas protocol message the bridge admits on its request lane. */
+function canvasRequest(requestId: number, type = 'surface.geometry') {
+  return { protocol: 'sugarcubes.canvas', version: 3, session, requestId, type } as const;
+}
+
+test('canvas requests beyond the bridge window are held and delivered in order as the host replies', () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  const bridge = boundedBridge();
+  const transport = createNativePanelTransport(window);
+  if (!transport) throw new Error('Missing native transport.');
+  const replies: unknown[] = [];
+  transport.subscribe((value) => replies.push(value));
+  for (let id = 1; id <= 12; id++)
+    expect(() => transport.send(canvasRequest(id) as never)).not.toThrow();
+  expect(bridge.delivered).toEqual(
+    Array.from({ length: 8 }, (_, index) => `surface.geometry:${index + 1}`),
+  );
+  for (let id = 9; id <= 12; id++) bridge.reply();
+  expect(bridge.delivered.slice(8)).toEqual(
+    Array.from({ length: 4 }, (_, index) => `surface.geometry:${index + 9}`),
+  );
+  expect(replies).toHaveLength(4);
+});
+
+test('a cancellation never overtakes the held request it cancels, and control messages are not delayed', () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  const bridge = boundedBridge();
+  const transport = createNativePanelTransport(window);
+  if (!transport) throw new Error('Missing native transport.');
+  transport.subscribe(() => undefined);
+  for (let id = 1; id <= 9; id++) transport.send(canvasRequest(id) as never);
+  transport.send(canvasRequest(9, 'cancel') as never);
+  transport.send({ protocol: 'sugarcubes.panel', version: 3, session, type: 'pong' } as never);
+  expect(bridge.delivered.at(-1)).toBe('pong:-');
+  expect(bridge.delivered).not.toContain('cancel:9');
+  bridge.reply();
+  expect(bridge.delivered.slice(-2)).toEqual(['surface.geometry:9', 'cancel:9']);
+});
+
+test('held requests retry on their own when the host frees capacity without a message for the page', () => {
+  jest.useFakeTimers();
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  const bridge = boundedBridge();
+  const transport = createNativePanelTransport(window);
+  if (!transport) throw new Error('Missing native transport.');
+  for (let id = 1; id <= 9; id++) transport.send(canvasRequest(id) as never);
+  expect(bridge.delivered).toHaveLength(8);
+  bridge.free();
+  jest.advanceTimersByTime(25);
+  expect(bridge.delivered.at(-1)).toBe('surface.geometry:9');
+});
+
+test('a bridge failure other than capacity is raised, never swallowed or retried', () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  let closed = false;
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    send: () => {
+      if (closed) throw new TypeError('', { cause: { code: 'panel.transport.closed' } });
+    },
+    subscribe: () => () => undefined,
+  });
+  const transport = createNativePanelTransport(window);
+  if (!transport) throw new Error('Missing native transport.');
+  transport.send(canvasRequest(1) as never);
+  closed = true;
+  expect(() => transport.send(canvasRequest(2) as never)).toThrow(TypeError);
+});
