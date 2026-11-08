@@ -99,3 +99,23 @@ test('empty repeated commitment does not create dirty observations and reused UU
   expect(() => bindings.synchronize(sessions.read())).toThrow('reused');
   expect(bindings.fence()).toEqual(empty);
 });
+
+test('a fence describes a complete workspace only once every occurrence has every owner observed', () => {
+  const sessions = new WorkflowSessionStore();
+  const bindings = new DesktopWorkspaceBindings(webview, identities());
+  sessions.synchronize([a, b], a.sessionId);
+  bindings.synchronize(sessions.read());
+  expect(bindings.observes(sessions.read())).toBe(false);
+  for (const owner of ['graph', 'source', 'navigation'] as const)
+    bindings.observe(a.sessionId, owner, 'seen');
+  expect(bindings.observes(sessions.read())).toBe(false);
+  bindings.prime(b.sessionId, 'graph', 'seen');
+  bindings.prime(b.sessionId, 'source', 'seen');
+  expect(bindings.observes(sessions.read())).toBe(false);
+  bindings.prime(b.sessionId, 'navigation', 'seen');
+  expect(bindings.observes(sessions.read())).toBe(true);
+  const load = sessions.beginLoad('replace');
+  sessions.completeLoad(load, true);
+  bindings.synchronize(sessions.read());
+  expect(bindings.observes(sessions.read())).toBe(false);
+});

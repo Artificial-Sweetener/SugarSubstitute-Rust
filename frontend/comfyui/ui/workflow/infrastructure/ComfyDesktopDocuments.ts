@@ -87,6 +87,35 @@ export class ComfyDesktopDocuments {
     this.#stop = null;
   }
 
+  /**
+   * List open workflows whose document Comfy has not read yet: a saved tab restored in the
+   * background or opened but still awaiting its file hold neither a tracked graph nor content.
+   * They are a normal transient state of Comfy's tab lifecycle, not a capture failure.
+   */
+  unread(): readonly WorkflowSessionContext[] {
+    const snapshot = this.options.sessions.read();
+    return snapshot.open.filter(
+      (context) =>
+        context.sessionId !== snapshot.active?.sessionId &&
+        !readable(this.options.adapter.readHostWorkflow(context.sessionId)),
+    );
+  }
+
+  /** Whether Comfy is itself fetching this workflow's file; a second load would race its change tracker. */
+  isBeingRead(context: WorkflowSessionContext): boolean {
+    const workflow = this.options.adapter.readHostWorkflow(context.sessionId);
+    return isRecord(workflow) && workflow.isLoading === true;
+  }
+
+  /** Ask Comfy to read one saved workflow through its own load, without activating the tab or loading its graph. */
+  async read(context: WorkflowSessionContext): Promise<void> {
+    const workflow = this.options.adapter.readHostWorkflow(context.sessionId);
+    if (!isRecord(workflow)) throw new Error('Comfy workflow occurrence is unavailable.');
+    await invoke(workflow, 'load');
+    if (!readable(workflow))
+      throw new Error('Comfy did not provide the workflow document after loading it.');
+  }
+
   /** Capture the active root graph or the explicitly named inactive tracker/content, never a peer's graph. */
   capture(context: WorkflowSessionContext, graphRevision: number): SessionDocument {
     const snapshot = this.options.sessions.read();
@@ -109,6 +138,11 @@ export class ComfyDesktopDocuments {
     let graph: unknown = tracker?.activeState;
     if (active) graph = invoke(root, 'serialize');
     else if (!isRecord(graph)) graph = parseGraph(workflow.content);
+    if (!isRecord(graph))
+      throw new DesktopSessionRefusal(
+        'not-committed',
+        'Comfy has not read this workflow document yet.',
+      );
     const graphJson = encodeGraph(graph);
     const baseline = tracker?.initialState ?? parseGraph(workflow.originalContent);
     const baselineGraphJson = baseline === null ? null : encodeGraph(baseline);
@@ -230,6 +264,16 @@ export class ComfyDesktopDocuments {
         'Comfy desktop materialization was superseded by another graph load.',
       );
   }
+}
+
+/** A workflow exposes its document through a tracked graph or serialized content once Comfy has read it. */
+function readable(workflow: unknown): boolean {
+  if (!isRecord(workflow)) return false;
+  const tracker = workflow.changeTracker;
+  return (
+    (isRecord(tracker) && isRecord(tracker.activeState)) ||
+    (typeof workflow.content === 'string' && workflow.content.length > 0)
+  );
 }
 
 /** Call a qualified exposed method with its owning receiver. */

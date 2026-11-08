@@ -35,7 +35,10 @@ import type {
 import type { SettingsWorkspaceRoute } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceRoute.js';
 
 /** Keep the behavior under test actual while controlling only host, clock, bytes and UUID generation. */
-export async function desktopRuntimeFixture(settingsRoute?: SettingsWorkspaceRoute) {
+export async function desktopRuntimeFixture(
+  settingsRoute?: SettingsWorkspaceRoute,
+  firstIdentity = 500,
+) {
   const shared = desktopSessionFixture();
   const host = comfyDesktopHostBoundary();
   const graph = { nodes: [{ id: 7, type: 'SaveImage', title: 'Final' }], extra: {} };
@@ -51,7 +54,7 @@ export async function desktopRuntimeFixture(settingsRoute?: SettingsWorkspaceRou
       throw new Error('Unexpected history request.');
     },
   });
-  let sequence = 500;
+  let sequence = firstIdentity;
   const nextId = () => `00000000-0000-4000-8000-${(++sequence).toString(16).padStart(12, '0')}`;
   const execution = new ComfyWorkflowExecutionRuntime({
     app: host.app,

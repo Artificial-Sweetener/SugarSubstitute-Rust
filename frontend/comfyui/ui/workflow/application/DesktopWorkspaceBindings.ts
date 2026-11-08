@@ -26,6 +26,9 @@ import type {
   WorkflowSessionSnapshot,
 } from '../../execution/domain/WorkflowSession.js';
 
+/** The semantic owners whose revisions a complete fence reports for each occurrence. */
+const OBSERVED_OWNERS = 3;
+
 interface Occurrence {
   readonly entryId: string;
   context: WorkflowSessionContext;
@@ -146,6 +149,17 @@ export class DesktopWorkspaceBindings {
     signature: string,
   ): void {
     this.#require(session).signatures.set(owner, signature);
+  }
+
+  /**
+   * Whether every open occurrence has had graph, source and navigation each observed. A fence taken earlier
+   * describes an incomplete workspace whose revisions will still move without any outside cause, so it must
+   * never be published as committed.
+   */
+  observes(snapshot: WorkflowSessionSnapshot): boolean {
+    return snapshot.open.every(
+      (context) => this.#entries.get(context.sessionId)?.signatures.size === OBSERVED_OWNERS,
+    );
   }
 
   /** Return a detached binding; consumers cannot mutate accepted runtime or revision facts. */
