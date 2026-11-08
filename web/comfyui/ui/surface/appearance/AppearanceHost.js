@@ -29,6 +29,7 @@ import { NATIVE_PRESENTATION_READY_EVENT } from '../NativePresentationReady.js';
 import { NativeCardGraphGeometry } from './NativeCardGraphGeometry.js';
 import { AppearanceState } from './AppearanceState.js';
 import { AccentThemeHost } from './AccentThemeHost.js';
+import { HostColorPalette } from './HostColorPalette.js';
 import { CubeIconAppearanceHost } from './CubeIconAppearanceHost.js';
 import { ensureOwnedControlAppearanceStyles } from './OwnedControlAppearanceStyles.js';
 import { refreshCubeTitleOpticalAlignment } from '../CubeTitleOpticalDomAlignment.js';
@@ -50,6 +51,7 @@ export class AppearanceHost {
     #scrollbars;
     #style;
     #accent;
+    #hostPalette;
     #iconAppearance;
     #presence = null;
     #palette;
@@ -71,9 +73,14 @@ export class AppearanceHost {
     get palette() {
         return this.#accent;
     }
+    /** Let the desktop frame apply its host theme to Comfy's palette through this appearance owner. */
+    get hostColorScheme() {
+        return this.#hostPalette;
+    }
     /** Prepare observers without altering styles until the user opts in. */
     constructor(options) {
         this.#options = options;
+        this.#hostPalette = new HostColorPalette(options.document, options.app, options.reportError);
         this.#accent = new AccentThemeHost(options.document, options.app, options.reportError, options.embedded, options.hostAccent);
         this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
         this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);
@@ -150,6 +157,7 @@ export class AppearanceHost {
         if (this.#disposed)
             return;
         this.#disposed = true;
+        this.#hostPalette.release();
         this.#accent.dispose();
         this.#iconAppearance.dispose();
         this.#deactivate();
@@ -222,6 +230,7 @@ export class AppearanceHost {
     }
     /** Publish accepted surface brightness without remounting themed controls. */
     #refreshPalette() {
+        this.#hostPalette.reconcile();
         const dark = readOwnedDarkTheme(this.#options.document);
         this.state.update(this.#active && this.#nativeCards ? this.#selectedStyle : 'comfy', dark);
         if (!this.#active)

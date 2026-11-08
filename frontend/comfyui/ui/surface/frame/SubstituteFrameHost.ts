@@ -16,6 +16,7 @@
 /** Bind reversible host frame mounts to the existing workflow, mode and palette authorities. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import type { AccentThemeHost } from '../appearance/AccentThemeHost.js';
+import type { HostColorScheme } from '../appearance/HostColorPalette.js';
 import { InputModal } from '../../dialogs/InputModal.js';
 import { subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import type { WorkflowSessionStore } from '../../execution/application/WorkflowSessionStore.js';
@@ -39,6 +40,8 @@ export interface SubstituteFrameHostOptions {
   readonly document: Document;
   readonly app: unknown;
   readonly palette: Pick<AccentThemeHost, 'theme' | 'subscribe'>;
+  /** Applies the connected host's theme to Comfy's own palette for this document. */
+  readonly hostColorScheme: HostColorScheme;
   readonly sessions: WorkflowSessionStore;
   readonly activity: WorkflowOutputActivity;
   readonly progress: Pick<WorkflowProgressStore, 'read' | 'subscribe'>;
@@ -89,11 +92,12 @@ export class SubstituteFrameHost {
   configureDesktopFrame(configuration: unknown): DesktopFrameReceipt {
     if (this.#disposed) throw new Error('The SugarCubes frame lifetime has ended.');
     this.#desktop.configure(configuration);
-    this.mode.setDesktop(true);
-    this.#reconcile();
     const receipt = this.#desktop.read();
     if (!receipt) throw new Error('Desktop frame configuration was not retained.');
-    return receipt;
+    this.options.hostColorScheme.follow(receipt.darkTheme);
+    this.mode.setDesktop(true);
+    this.#reconcile();
+    return this.#desktop.read() ?? receipt;
   }
 
   /** Read accepted desktop presentation without changing DOM, preferences, or workflow state. */
@@ -137,6 +141,7 @@ export class SubstituteFrameHost {
     this.#disposed = true;
     this.#unmount();
     this.#desktop.dispose();
+    this.options.hostColorScheme.release();
     this.mode.setDesktop(false);
     this.#presence?.disconnect();
     for (const stop of this.#stops.splice(0)) stop();
@@ -199,7 +204,8 @@ export class SubstituteFrameHost {
       );
       this.#palette();
       this.#refreshProgress();
-      if (this.#desktop.read()?.mounted) this.#graphBackdrop.attach(this.options.app);
+      const desktop = this.#desktop.read();
+      if (desktop?.mounted) this.#graphBackdrop.attach(this.options.app, desktop.darkTheme);
       else this.#graphBackdrop.detach();
     } catch (error: unknown) {
       this.options.report(error);

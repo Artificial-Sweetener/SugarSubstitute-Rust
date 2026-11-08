@@ -97,10 +97,12 @@ test('mode restores host presentation and preserves native controls, graph, and 
     ui: { settings: { addSetting: () => undefined, getSettingValue: () => false } },
   };
   const report = jest.fn();
+  const hostColorScheme = { follow: jest.fn(), release: jest.fn() };
   const host = new SubstituteFrameHost({
     document,
     app,
     sessions,
+    hostColorScheme,
     activity: new WorkflowOutputActivity(),
     progress: {
       read: () => ({ visible: false, workflow: 0, sampler: 0 }),
@@ -217,6 +219,21 @@ test('mode restores host presentation and preserves native controls, graph, and 
     darkTheme: true,
   });
   expect(configured.mounted).toBe(true);
+  expect(hostColorScheme.follow).toHaveBeenLastCalledWith(true);
+  host.configureDesktopFrame({
+    schemaVersion: 1,
+    captionWidth: 138,
+    titlebarHeight: 34,
+    darkTheme: false,
+  });
+  expect(hostColorScheme.follow).toHaveBeenLastCalledWith(false);
+  host.configureDesktopFrame({
+    schemaVersion: 1,
+    captionWidth: 138,
+    titlebarHeight: 34,
+    darkTheme: true,
+  });
+  expect(hostColorScheme.follow).toHaveBeenCalledTimes(3);
   expect(outer.hasAttribute('data-sc-desktop-frame-host')).toBe(true);
   const desktopFrame = document.querySelector('.sc-substitute-frame');
   host.mode.setEnabled(false);
@@ -227,7 +244,9 @@ test('mode restores host presentation and preserves native controls, graph, and 
   expect(outer.style.getPropertyValue('--sc-native-caption-width')).toBe('138px');
   expect(app.graph).toBe(graph);
   expect(report).not.toHaveBeenCalled();
+  expect(hostColorScheme.release).not.toHaveBeenCalled();
   host.dispose();
+  expect(hostColorScheme.release).toHaveBeenCalledTimes(1);
   expect(host.readDesktopFrame()).toBeNull();
   expect(document.documentElement.hasAttribute('data-sc-desktop-frame-surface')).toBe(false);
 });
