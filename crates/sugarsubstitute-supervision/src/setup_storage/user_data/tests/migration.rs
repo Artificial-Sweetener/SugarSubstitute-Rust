@@ -7,6 +7,7 @@ use crate::{
     setup_storage::test_worker::{self, TestResult},
 };
 use std::{collections::BTreeMap, path::PathBuf};
+use sugarsubstitute_contracts::lifecycle::NamespaceId;
 
 /// Every file below `root` with its exact bytes, for before/after comparisons.
 fn bytes_below(root: &Path) -> io::Result<BTreeMap<PathBuf, Vec<u8>>> {
@@ -58,7 +59,7 @@ fn earlier_account_and_installation_history_migrate_into_user_and_nothing_else_c
         runtime::settle_sources(
             &installation.root,
             association,
-            vec![],
+            vec![NamespaceId::new([7; 32])],
             &account_runtime,
             context,
         )?;
@@ -91,7 +92,7 @@ fn earlier_account_and_installation_history_migrate_into_user_and_nothing_else_c
         runtime::settle_sources(
             &installation.root,
             association,
-            vec![],
+            vec![NamespaceId::new([7; 32])],
             Path::new(r"Z:\no\such\profile"),
             context,
         )?;

@@ -4537,7 +4537,7 @@ rationale = "Construct and deliberately corrupt isolated persisted/native proven
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/imports.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:e39d0c8d3fd5792a44f8279b8158736130446abe0df85a95be95580fa6186dd4"
+source_sha256 = "sha256:eb65858c97ee14f33b8a514c6b4e271aa8e545f31c3c4c3271d99c7900a2b134"
 capabilities = ["std::fs::File"]
 disposition = "implementation"
 rationale = "Closed-source copy-first transactions, native ancestry confinement, exact installation binding and atomic complete metadata publication. Originals and interrupted attempts remain intact."
@@ -4562,7 +4562,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/imports/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a6d0accfcc9fc0fddcb3ee7f9e29592cb9080078dbc0a336379c49df88c73e52"
+source_sha256 = "sha256:eea9ceaa8ee6ac54eaecc1123b342d566573a62350e5fb7f8a313163cc1241cc"
 capabilities = ["std::fs::create_dir", "std::fs::hard_link", "std::fs::metadata", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::TempDir"]
 disposition = "implementation"
 rationale = "Isolated protected source/destination trees and deterministic durable-phase expiration qualify exact-byte preservation, restart, mutable activation and fail-closed import ownership. Enumeration observation failures remain explicit test failures."
@@ -4900,7 +4900,7 @@ disposition = "fixture"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/user_data/tests/migration.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c3e7fad1cda99677f40f512f4f2d9c09fd572b313983472fbf0818c14b5efdec"
+source_sha256 = "sha256:5717ca4c06f2cb8f264ddf5d771bdcb313eae78cd69560f989d4aac265f5c888"
 capabilities = ["std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 rationale = "Native fixture setup, deliberate corruption or observation for: Earlier account history and input archives migrate into the user folder while every original stays byte-identical. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 disposition = "fixture"

@@ -7,6 +7,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+mod absent;
 mod association;
 mod bounds;
 mod cancellation;

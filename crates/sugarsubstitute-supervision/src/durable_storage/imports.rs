@@ -225,6 +225,9 @@ fn records(installation: &Directory, create: bool, context: &JobContext) -> io::
         user_paths::create_parents(installation, &path, context)
     } else {
         let (_parent, path) = user_paths::parent(installation, &path, context)?;
+        // Nothing was ever recorded when the folder is absent. Report that as a plain NotFound
+        // here; inside the protected owner it would surface as an opaque native failure.
+        drop(Directory::open(&path, false)?);
         protection::with(context, |owner| {
             owner.directory(&path, super::protected::directories::Mode::Existing, context)?;
             Directory::open(&path, false)?.resolved()
