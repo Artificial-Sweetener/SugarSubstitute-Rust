@@ -247,24 +247,34 @@ impl Fixture {
         pump(&mut self.canvas, &self.client)
     }
 
-    /// Observe real worker progress before advancing injected presentation cadence.
+    /// Wait for real worker progress, and advance injected presentation cadence only while no
+    /// admitted work remains. A running worker is awaited even when another completion is still
+    /// held back (for example by the backing that worker borrows), so a starved worker can only
+    /// delay the test, never spend its iterations or its injected time.
     pub(in crate::startup::canvas::tests::surface) fn wait_preview_progress(
         &self,
         observed: u64,
     ) -> Result<(), Box<dyn Error>> {
-        let progress = self.owner.poll_shutdown()?;
-        let terminal = progress.unresolved_jobs.iter().any(|job| {
-            !job.acknowledged
-                && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
-        });
-        if progress.running + progress.queued > 0 && !terminal {
-            self.wake.wait_after(observed);
-        } else if self.canvas.next_deadline().is_some() {
-            self.advance(100);
-        } else if !terminal {
-            return Err("Preview has no worker or presentation deadline to advance".into());
+        match self.execution()? {
+            Execution::Running => self.wake.wait_after(observed),
+            Execution::Delivering | Execution::Idle if self.canvas.next_deadline().is_some() => {
+                self.advance(100);
+            }
+            Execution::Delivering => {}
+            Execution::Idle => {
+                return Err(format!(
+                    "Preview has no worker or presentation deadline to advance; {}",
+                    self.preparation_state()
+                )
+                .into());
+            }
         }
         Ok(())
+    }
+
+    /// Describe the session's frame, display and pacing custody for a stall diagnostic.
+    fn preparation_state(&self) -> String {
+        format!("{:?}", self.canvas.session.as_ref().map(Session::native_preparation_snapshot))
     }
 
     /// Classify actual execution progress that can still arrive without new host input.
@@ -383,7 +393,12 @@ impl Fixture {
                 format!("{cause}; last row {:x?}", last.get(..80).unwrap_or_default())
             })?;
         }
-        Err(format!("Native pixels never settled; last row {:x?}", last.get(..80)).into())
+        Err(format!(
+            "Native pixels never settled; last row {:x?}; {}",
+            last.get(..80),
+            self.preparation_state()
+        )
+        .into())
     }
     pub(in crate::startup::canvas::tests::surface) fn accepted(
         &self,
