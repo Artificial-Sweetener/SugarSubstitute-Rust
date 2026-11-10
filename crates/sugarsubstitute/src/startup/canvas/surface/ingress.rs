@@ -32,6 +32,8 @@ impl NativeSurface {
                 context.request.envelope().cancelled_reply()?,
                 context.claim,
             )?))?;
+        } else if self.cancel_deferred(identity, request_id)? {
+            // The held candidate was answered `cancelled`; no session work was ever admitted.
         } else if self.pending.as_ref().is_some_and(|pending| {
             pending.identity == identity && pending.request.request_id() == request_id
         }) {

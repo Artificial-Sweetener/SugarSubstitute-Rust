@@ -19,7 +19,7 @@ pub use assets::AssetInventory;
 pub use baseline::CheckpointBaseline;
 #[cfg(all(windows, any(feature = "native-composition", test)))]
 pub(crate) use driver::NativeOriginalResolution;
-pub use driver::{DriverEvent, WorkspaceDriver};
+pub use driver::{DriverEvent, RestoreFailure, WorkspaceDriver};
 pub use namespace::NamespaceIndex;
 pub use outbound::EncodedMaterialization;
 #[cfg(windows)]

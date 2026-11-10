@@ -19,11 +19,11 @@ struct Release;
 impl MemoryRelease for Release {
     fn release(&self, _: u64) {}
 }
-struct Fixture {
-    host: StartupHost<Platform>,
+pub(super) struct Fixture {
+    pub(super) host: StartupHost<Platform>,
     checkpoint: SessionCheckpoint,
     _directory: tempfile::TempDir,
-    wake: Arc<Wake>,
+    pub(super) wake: Arc<Wake>,
     store: WorkspaceStore,
 }
 /// Deliver completions until the job has its typed terminal outcome, then take it.
@@ -35,7 +35,7 @@ fn terminal<T, E>(
     Ok(wake.completion(client, &mut job)?.outcome)
 }
 impl Fixture {
-    fn new(persistence: bool) -> TestResult<Self> {
+    pub(super) fn new(persistence: bool) -> TestResult<Self> {
         let vectors: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../../third_party/sugarcubes-session/session_vectors.json"
         ))?;

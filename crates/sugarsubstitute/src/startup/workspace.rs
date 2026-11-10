@@ -7,12 +7,15 @@ mod integration;
 mod jobs;
 mod media;
 mod observations;
+#[cfg(test)]
+mod open_tests;
 mod publication;
 #[cfg(feature = "native-composition")]
 mod sources;
 use super::*;
 use crate::workspace_session::{
-    self, DriverEvent, OpenedProfile, ProfileStore, StoreError, WorkspaceDriver, WorkspaceStore,
+    self, DriverEvent, OpenedProfile, ProfileStore, RestoreFailure, StoreError, WorkspaceDriver,
+    WorkspaceStore,
 };
 use std::{collections::VecDeque, path::PathBuf, sync::Mutex};
 use sugarsubstitute_application::workspace_session::CaptureTicket;
@@ -29,6 +32,8 @@ use sugarsubstitute_execution::ExecutionClient;
 pub(super) const CAPACITY: u64 = 5 * 1024 * 1024 * 1024;
 const DRIVER_BYTES: u64 = WorkspaceDriver::reservation_bytes();
 const DELIVERY_BYTES: u64 = 24 * 1024 * 1024;
+/// How long the load job may run once admitted.
+const LOAD_ALLOWANCE: Duration = Duration::from_secs(30);
 const LOAD_BYTES: u64 = WorkspaceStore::reservation_bytes()
     + ProfileStore::reservation_bytes()
     + DRIVER_BYTES
@@ -73,7 +78,7 @@ pub(super) struct WorkspaceWork {
     scope: Option<Scope>,
     context: Option<WorkspaceContext>,
     deferred: Option<StartupEffect>,
-    pending_open: Option<(WorkspaceContext, StartupEffect, Moment)>,
+    pending_open: Option<(WorkspaceContext, StartupEffect)>,
     load: Option<OwnedJob<Loaded, StoreError>>,
     profile: Option<Arc<Mutex<OpenedProfile>>>,
     input_directory: Option<PathBuf>,
@@ -149,11 +154,13 @@ impl WorkspaceWork {
         self.client = Some(client);
         Ok(())
     }
+    /// Queue the workspace open. It starts once the previous workspace's workers have each
+    /// reached an observed terminal outcome; waiting for them has no cutoff, so a slow
+    /// predecessor delays the open instead of failing it.
     pub(super) fn begin(
         &mut self,
         context: WorkspaceContext,
         effect: StartupEffect,
-        now: Moment,
     ) -> Result<(), Box<dyn Error>> {
         if self.closing.is_some()
             || self.pending_open.is_some()
@@ -162,14 +169,16 @@ impl WorkspaceWork {
         {
             return Err("Workspace main load already owns its original operation".into());
         }
-        self.pending_open = Some((context, effect, now.checked_add(Duration::from_secs(30))?));
+        self.pending_open = Some((context, effect));
         Ok(())
     }
+    /// Submit the load. Profile and checkpoint storage requires an original job deadline, so the
+    /// load keeps its allowance, measured from admission rather than from the request.
     fn open(
         &mut self,
         context: WorkspaceContext,
         effect: StartupEffect,
-        until: Moment,
+        now: Moment,
     ) -> Result<(), Box<dyn Error>> {
         self.messages.clear();
         self.media = media::MediaWork::new();
@@ -192,7 +201,7 @@ impl WorkspaceWork {
         let origin = context.origin;
         let user = self.user.clone();
         let preloader = self.media.preloader();
-        let spec = self.job(LOAD_BYTES, until)?;
+        let spec = self.job(LOAD_BYTES, Some(now.checked_add(LOAD_ALLOWANCE)?))?;
         let client = self.client.as_ref().ok_or("Workspace execution absent")?;
         let scope = self.scope.as_ref().ok_or("Workspace scope absent")?;
         self.load = Some(client.submit_blocking(scope,spec,move |job| {
@@ -223,12 +232,12 @@ impl WorkspaceWork {
         self.deferred = Some(effect);
         Ok(())
     }
-    fn job(&self, bytes: u64, until: Moment) -> Result<JobSpec, Box<dyn Error>> {
+    fn job(&self, bytes: u64, until: Option<Moment>) -> Result<JobSpec, Box<dyn Error>> {
         Ok(JobSpec {
             id: self.jobs.allocate()?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
-            deadline: Some(until),
+            deadline: until,
             reservation_bytes: bytes,
             replacement: None,
         })
@@ -296,7 +305,6 @@ impl WorkspaceWork {
                 self.driver.as_ref().filter(|_| !self.retired).and_then(WorkspaceDriver::deadline),
             )
             .chain(self.closing.filter(|_| !self.retired))
-            .chain(self.pending_open.as_ref().map(|(_, _, until)| *until))
             .min()
     }
     pub(super) fn close_ready(&self, now: Moment) -> bool {

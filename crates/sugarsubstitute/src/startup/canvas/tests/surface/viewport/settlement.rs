@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Every viewport request reaches one terminal reply, whatever keeps its camera from settling:
-//! a display that no longer shows the current source draws again, a camera that cannot be
-//! presented is answered `unavailable` once its settle budget ends, and a newer destination
-//! answers it `stale`. A request answered that way never wedges the requests after it.
+//! Every viewport request reaches one terminal reply, and only an observed event decides which:
+//! a display that no longer shows the current source draws again, a camera that cannot yet be
+//! presented waits however long that takes and applies once it can, a newer destination answers it
+//! `stale`, and the attachment's release answers it `unavailable`. No elapsed time answers it.
 
 use super::fixture::Execution;
 use super::*;
-use crate::canvas_surface_diagnostic::{Stage, Wait};
+use crate::canvas_surface_diagnostic::{Stage, Status, Wait};
 use crate::startup::canvas::tests::surface::capture::DiagnosticLines;
 use sugarsubstitute_desktop::canvas::{Input, Lifetime, MainCanvasGesture, MainCanvasInput};
 
@@ -95,30 +95,50 @@ fn a_read_settles_after_the_display_described_another_document() -> Result<(), B
     fixture.finish()
 }
 
-/// A presenter that never acknowledges the zoomed frame cannot settle the camera; the request is
-/// answered `unavailable` once its settle budget ends, the expiry records what it waited for,
-/// and the next request settles once the frame is acknowledged.
+/// Advance injected time by `seconds` while the canvas keeps pumping, requiring that none of the
+/// requests `ids` is answered after any second.
+fn stay_pending(fixture: &mut Fixture, ids: &[u64], seconds: u64) -> Result<(), Box<dyn Error>> {
+    for _ in 0..seconds {
+        fixture.advance(1_000);
+        fixture.pump()?;
+        while let Some(command) = fixture.canvas.take_command() {
+            if let DesktopStartupCommand::SendSurface(reply) = command {
+                let value: Value = serde_json::from_slice(reply.payload())?;
+                assert!(
+                    !ids.iter().any(|id| value["requestId"] == *id),
+                    "a request was answered early: {value}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A presenter that has not yet acknowledged the zoomed frame leaves the request pending, past
+/// what the retired ten second budget allowed. The wait is recorded, never judged a failure, and the acknowledgement settles the
+/// very request that waited.
 #[test]
-fn a_camera_whose_frame_is_never_acknowledged_is_answered_and_does_not_wedge_the_next()
--> Result<(), Box<dyn Error>> {
+fn a_camera_whose_frame_is_acknowledged_late_waits_and_then_applies() -> Result<(), Box<dyn Error>>
+{
     let mut fixture = Fixture::new()?;
     fixture.commit(4)?;
     let lines = DiagnosticLines::default();
     let capture = lines.observe();
     fixture.viewport(5, json!({"type":"zoom","factor":2.0}))?;
-    assert_eq!(answer(&mut fixture, 5, false)?["status"], "unavailable");
+    // Well past the retired ten second settle budget without the presenter's acknowledgement.
+    stay_pending(&mut fixture, &[5], 25)?;
+    assert_eq!(answer(&mut fixture, 5, true)?["status"], "applied");
     drop(capture);
     let records = lines.requests(5)?;
-    let expired = records
-        .iter()
-        .find(|record| record.stage == Stage::Expired)
-        .ok_or("The expiry was not recorded")?;
-    assert_eq!(expired.wait, Wait::Presenting);
     assert!(
         records
             .iter()
             .any(|record| record.stage == Stage::Waiting && record.wait == Wait::Presenting),
-        "the wait reason is recorded before the expiry: {records:?}"
+        "the wait reason is recorded: {records:?}"
+    );
+    assert!(
+        records.iter().all(|record| record.status != Status::Unavailable),
+        "no unavailable verdict was recorded: {records:?}"
     );
     fixture.viewport(6, json!({"type":"read"}))?;
     let reply = answer(&mut fixture, 6, true)?;
@@ -126,10 +146,10 @@ fn a_camera_whose_frame_is_never_acknowledged_is_answered_and_does_not_wedge_the
     fixture.finish()
 }
 
-/// A canvas that is not drawable cannot present the zoomed camera; the request is answered
-/// `unavailable` once its settle budget ends, and the camera settles once it is drawable again.
+/// A canvas that is not drawable cannot present the zoomed camera. The request waits, hidden, for
+/// as long as that lasts, and settles itself once the canvas is drawable again.
 #[test]
-fn a_camera_on_a_canvas_that_cannot_draw_is_answered_and_does_not_wedge_the_next()
+fn a_camera_on_a_canvas_that_cannot_draw_waits_and_applies_once_it_can()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     fixture.commit(4)?;
@@ -137,16 +157,31 @@ fn a_camera_on_a_canvas_that_cannot_draw_is_answered_and_does_not_wedge_the_next
     let lines = DiagnosticLines::default();
     let capture = lines.observe();
     fixture.viewport(5, json!({"type":"zoom","factor":2.0}))?;
-    assert_eq!(answer(&mut fixture, 5, true)?["status"], "unavailable");
+    stay_pending(&mut fixture, &[5], 25)?;
+    Lifetime::input(session(&mut fixture)?, Input::Drawable(true))?;
+    assert_eq!(answer(&mut fixture, 5, true)?["status"], "applied");
     drop(capture);
     let waits: Vec<_> =
         lines.requests(5)?.iter().map(|record| (record.stage, record.wait)).collect();
     assert!(waits.contains(&(Stage::Waiting, Wait::Hidden)), "{waits:?}");
-    assert!(waits.contains(&(Stage::Expired, Wait::Hidden)), "{waits:?}");
-    Lifetime::input(session(&mut fixture)?, Input::Drawable(true))?;
     fixture.viewport(6, json!({"type":"read"}))?;
     let reply = answer(&mut fixture, 6, true)?;
     snapshot(&reply, 6, "custom", 0.5, [320, 160]);
+    fixture.finish()
+}
+
+/// The page releasing the attachment is an observed event that ends the wait: the pending request
+/// is answered `unavailable`, ahead of the release itself.
+#[test]
+fn a_pending_camera_is_answered_when_its_attachment_is_released() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    Lifetime::input(session(&mut fixture)?, Input::Drawable(false))?;
+    fixture.viewport(5, json!({"type":"zoom","factor":2.0}))?;
+    stay_pending(&mut fixture, &[5], 25)?;
+    fixture.send(6, "surface.release", json!({}))?;
+    assert_eq!(answer(&mut fixture, 5, false)?["status"], "unavailable");
+    assert_eq!(answer(&mut fixture, 6, false)?["status"], "applied");
     fixture.finish()
 }
 
@@ -163,5 +198,31 @@ fn a_camera_replaced_by_a_newer_gesture_is_answered_stale() -> Result<(), Box<dy
     assert_eq!(answer(&mut fixture, 5, true)?["status"], "stale");
     fixture.viewport(6, json!({"type":"read"}))?;
     assert_eq!(answer(&mut fixture, 6, true)?["status"], "applied");
+    fixture.finish()
+}
+
+/// The attachment a page stages while a camera request on the committed attachment still waits.
+fn other_attachment() -> Value {
+    json!({
+        "sessionId":"canvas:other", "viewId":"view:one", "windowId":"window:one",
+        "attachmentId":"attachment:other", "generation":2
+    })
+}
+
+/// A candidate arriving while a camera request waits is early, not unavailable: it is held behind
+/// that request, neither answered nor failed however long the wait, and prepared once it ends.
+#[test]
+fn a_candidate_prepared_behind_a_waiting_camera_is_held_and_then_prepared()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    fixture.viewport(5, json!({"type":"zoom","factor":2.0}))?;
+    stay_pending(&mut fixture, &[5], 5)?;
+    fixture.send(6, "surface.prepare", json!({"address":other_attachment()}))?;
+    stay_pending(&mut fixture, &[5, 6], 25)?;
+    assert_eq!(answer(&mut fixture, 5, true)?["status"], "applied");
+    assert_eq!(answer(&mut fixture, 6, true)?["status"], "ready");
+    fixture.send(7, "surface.release", json!({"address":other_attachment()}))?;
+    assert_eq!(answer(&mut fixture, 7, true)?["status"], "applied");
     fixture.finish()
 }

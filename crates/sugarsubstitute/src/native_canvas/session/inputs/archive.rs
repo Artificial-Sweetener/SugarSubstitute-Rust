@@ -26,11 +26,8 @@ use sugarsubstitute_canvas::{
 };
 
 /// Debounce of automatic saves.
-const POLICY: AutosavePolicy = AutosavePolicy {
-    quiet: Duration::from_secs(2),
-    longest: Duration::from_secs(10),
-    timeout: Duration::from_secs(60),
-};
+const POLICY: AutosavePolicy =
+    AutosavePolicy { quiet: Duration::from_secs(2), longest: Duration::from_secs(10) };
 
 /// Startup restore and automatic saving of one session directory.
 pub(in crate::native_canvas::session) struct Persistence {
@@ -141,11 +138,10 @@ impl Session {
             return Ok(());
         }
         let memory = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.memory.clone();
-        let spec = self.spec(
+        let spec = self.event_spec(
             Operation::Infrastructure,
             JobClass::InfrastructureOrdinary,
             InputDocumentStore::load_reservation(),
-            Duration::from_secs(60),
             None,
         )?;
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;

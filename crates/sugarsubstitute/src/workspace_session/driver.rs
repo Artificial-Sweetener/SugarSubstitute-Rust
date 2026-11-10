@@ -10,6 +10,7 @@ mod tests;
 use super::*;
 use identity::Identities;
 use outbound::Outbound;
+pub use restoration::RestoreFailure;
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 use sugarsubstitute_application::workspace_session::{
     CaptureTicket, DurableCheckpoint, WorkspaceSession,
@@ -54,7 +55,6 @@ struct Restore {
     transfer: String,
     checkpoint: String,
     revision: u64,
-    deadline: Moment,
     bindings: Option<Vec<SessionBinding>>,
     fence: SessionFence,
     sent: bool,
@@ -218,13 +218,13 @@ impl WorkspaceDriver {
         self.outbound = Some(Outbound::new(request.into(), transfer.into(), encoded));
         Ok(())
     }
-    /// Borrow the earliest original protocol or autosave cutoff for the existing native pump.
+    /// Borrow the earliest original capture or autosave cutoff for the existing native pump. A
+    /// startup restore has none: it ends on an observed event, never on elapsed time.
     pub fn deadline(&self) -> Option<Moment> {
         self.policy
             .deadline()
             .filter(|_| self.encoding.is_none())
             .into_iter()
-            .chain(self.restore.as_ref().map(|value| value.deadline))
             .chain(self.capture.as_ref().map(|value| value.deadline))
             .min()
     }
@@ -232,6 +232,8 @@ impl WorkspaceDriver {
     /// # Errors
     /// Preserves the application's original cutoff and refusal; never renews a shutdown budget.
     pub fn begin_close(&mut self, now: Moment, cutoff: Moment) -> Result<(), StoreError> {
+        // A restore still waiting on its page ends with the application, not before it.
+        self.abandon_restore(&RestoreFailure::Shutdown)?;
         self.close_cutoff = Some(self.close_cutoff.map_or(cutoff, |previous| previous.min(cutoff)));
         self.policy.begin_close(now, cutoff).map_err(application)
     }

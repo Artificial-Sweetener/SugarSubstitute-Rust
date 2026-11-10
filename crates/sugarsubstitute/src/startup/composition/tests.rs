@@ -72,7 +72,7 @@ fn identity(navigation: u64) -> Result<MainIdentity, Box<dyn Error>> {
     })
 }
 
-/// A saturated reservation is retried with a new job identity, without changing its deadline.
+/// A saturated reservation is retried with a new job identity, however long admission takes.
 #[test]
 fn retained_wait_survives_busy_admission_and_main_shutdown() -> Result<(), Box<dyn Error>> {
     let wake = Arc::new(Wake::default());
@@ -118,8 +118,11 @@ fn retained_wait_survives_busy_admission_and_main_shutdown() -> Result<(), Box<d
     assert!(work.offer(main, &mut input, Moment::from_nanos(0), None)?);
     assert!(input.is_none());
     assert!(work.pending.is_some());
-    let original_deadline = work.deadline();
+    assert_eq!(work.deadline(), None, "a wait has no cutoff of its own before shutdown");
     assert!(!fence.completed());
+    // Two hours of injected time pass while admission stays saturated: nothing expires.
+    work.advance(Moment::from_nanos(7_200_000_000_000))?;
+    assert!(work.pending.is_some() && !fence.failed());
     drop(held);
 
     let later = JobSpec { id: jobs.allocate()?, reservation_bytes: 64 * 1024, ..blocker };
@@ -132,8 +135,8 @@ fn retained_wait_survives_busy_admission_and_main_shutdown() -> Result<(), Box<d
     drop(later_completion);
     drop(later_job);
     work.advance(Moment::from_nanos(0))?;
-    assert_eq!(original_deadline, Some(Moment::from_nanos(30_000_000_000)));
-    assert_eq!(work.active.as_ref().ok_or("Wait was not admitted")?.job.spec().id.get(), 4);
+    // The retry at two hours consumed one identity; admission then used the next.
+    assert_eq!(work.active.as_ref().ok_or("Wait was not admitted")?.job.spec().id.get(), 5);
     work.close();
     assert!(!work.settled(Moment::from_nanos(0))?);
     assert!(work.main_retired(identity(2)?).is_err());
@@ -184,7 +187,7 @@ fn expired_running_wait_keeps_its_main_until_actual_completion() -> Result<(), B
     work.active = Some(Active {
         fence: fence.clone(),
         job,
-        deadline: Moment::from_nanos(10),
+        deadline: Some(Moment::from_nanos(10)),
         expiry_reported: false,
     });
     hold.wait_entered();
@@ -202,6 +205,67 @@ fn expired_running_wait_keeps_its_main_until_actual_completion() -> Result<(), B
     settle(&wake, &client, &mut work, Moment::from_nanos(10))?;
     work.finish(Moment::from_nanos(10))?;
     wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(10_000_000_000))?;
+    Ok(())
+}
+
+/// A compositor that is slow to commit delays the wait; with no cutoff it is neither expired nor
+/// reported as a failure.
+#[test]
+fn a_slow_compositor_wait_without_a_cutoff_completes_without_an_error() -> Result<(), Box<dyn Error>>
+{
+    const LATER: Moment = Moment::from_nanos(7_200_000_000_000);
+    let wake = Arc::new(Wake::default());
+    let clock = Arc::new(TestClock::default());
+    let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let client = owner.client();
+    let jobs = JobSequence::new();
+    let mut work =
+        CompositionWork::new(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, jobs.clone());
+    work.start(client.clone())?;
+    let main = identity(1)?;
+    work.register(main)?;
+    let (fence, input) = CompositionFence::fixture();
+    let mut input = Some(input);
+    let hold = Arc::new(Gate::default());
+    let release = hold.guard();
+    let worker = hold.clone();
+    let spec = JobSpec {
+        id: jobs.allocate()?,
+        operation: Operation::Infrastructure,
+        class: JobClass::InfrastructureLifecycle,
+        deadline: None,
+        reservation_bytes: 64 * 1024,
+        replacement: None,
+    };
+    let job = client.submit_blocking_owned_input(
+        work.scope.as_ref().ok_or("Scope absent")?,
+        spec,
+        &mut input,
+        move |input, context| {
+            worker.hold();
+            input.wait(&context)
+        },
+    )?;
+    work.active =
+        Some(Active { fence: fence.clone(), job, deadline: None, expiry_reported: false });
+    hold.wait_entered();
+    clock.0.store(LATER.as_nanos(), Ordering::SeqCst);
+    work.advance(LATER)?;
+    assert!(!fence.completed() && !fence.failed(), "a slow wait is not a failure");
+    assert_eq!(work.deadline(), None);
+    work.close();
+    assert!(!work.settled(LATER)?);
+    drop(release);
+    advance_until_idle(&wake, &client, &mut work, LATER)?;
+    assert!(fence.completed(), "the released wait completed without an error");
+    work.main_retired(main)?;
+    settle(&wake, &client, &mut work, LATER)?;
+    work.finish(LATER)?;
+    wake.finish_shutdown(
+        &mut owner,
+        &client,
+        Moment::from_nanos(LATER.as_nanos() + 10_000_000_000),
+    )?;
     Ok(())
 }
 
@@ -246,7 +310,7 @@ fn replacement_waits_for_terminal_outcome_after_native_retirement() -> Result<()
     work.active = Some(Active {
         fence: fence.clone(),
         job,
-        deadline: Moment::from_nanos(30),
+        deadline: Some(Moment::from_nanos(30)),
         expiry_reported: false,
     });
     hold.wait_entered();
@@ -276,8 +340,11 @@ fn expired_wait_cannot_retire_the_registered_main() -> Result<(), Box<dyn Error>
     let main = identity(1)?;
     work.main = Some(main);
     let (fence, input) = CompositionFence::fixture();
-    work.pending =
-        Some(Pending { input: Some(input), fence: fence.clone(), deadline: Moment::from_nanos(1) });
+    work.pending = Some(Pending {
+        input: Some(input),
+        fence: fence.clone(),
+        deadline: Some(Moment::from_nanos(1)),
+    });
     assert!(work.advance(Moment::from_nanos(1)).is_err());
     assert!(fence.failed());
     assert!(!fence.completed());

@@ -75,7 +75,7 @@ impl Session {
         if input.is_none() {
             return Ok(true);
         }
-        let cutoff = self.retirement_cutoff()?;
+        let cutoff = self.disposal_cutoff();
         let value = Retired {
             _preview: Some(PreviewRetired { _bytes: input.take(), ..Default::default() }),
             ..Default::default()
@@ -83,7 +83,7 @@ impl Session {
         self.preview.poll_requested = true;
         self.retire(value)?;
         if self.retirement_deadline.is_none() {
-            self.retirement_deadline = Some(cutoff);
+            self.retirement_deadline = cutoff;
         }
         Ok(true)
     }
@@ -99,7 +99,6 @@ impl Session {
         if input.is_none() {
             return Ok(true);
         }
-        self.retirement_cutoff()?;
         self.preview.poll_requested = true;
         self.retire(Retired {
             _preview: Some(PreviewRetired { _original: input.take(), ..Default::default() }),

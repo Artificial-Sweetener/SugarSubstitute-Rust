@@ -2,14 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep native GPU queue locks and driver calls on owned workers, with receipt-only UI handoff.
 use super::*;
-use sugarsubstitute_contracts::execution::Moment;
 use sugarsubstitute_execution::OwnedInputError;
 
-/// One validated frame awaiting admission, retaining its original deadline and native custody.
+/// One validated frame awaiting admission, retaining its native custody.
 pub(super) struct PendingPresentation {
     pub(super) target: FrameStamp,
     pub(super) frame: WindowFrame,
-    pub(super) deadline: Moment,
     pub(super) frame_period: Duration,
 }
 
@@ -89,14 +87,14 @@ impl Session {
             return Ok(());
         };
         let target = pending.target;
-        let mut spec = self.spec(
+        // A driver that is slow to accept the frame delays it; only the frame's own result, an
+        // observed failure or its replacement ends the wait.
+        let spec = self.event_spec(
             Operation::Infrastructure,
             JobClass::InfrastructureOrdinary,
             64 * 1024,
-            Duration::from_secs(30),
             None,
         )?;
-        spec.deadline = Some(pending.deadline);
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         match runtime.client.submit_blocking_owned_input(
             &runtime.scope,

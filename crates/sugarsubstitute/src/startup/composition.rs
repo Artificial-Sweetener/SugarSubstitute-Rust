@@ -3,7 +3,7 @@
 //! Retain compositor waits in the application's existing execution lifetime.
 
 use crate::job_sequence::JobSequence;
-use std::{error::Error, io, time::Duration};
+use std::{error::Error, io};
 use sugarsubstitute_contracts::{
     execution::{
         AdmissionError, ExecutionPort, JobClass, JobOutcome, JobSpec, Moment, Operation, OwnedJob,
@@ -14,16 +14,18 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::canvas::{CompositionFence, CompositionFenceError, CompositionWait};
 use sugarsubstitute_execution::{ExecutionClient, OwnedInputError};
 
+/// A wait ends when the compositor completes it; only the shutdown cutoff, once a close began,
+/// bounds it, so a compositor that is slow under load delays the wait instead of failing it.
 struct Pending {
     input: Option<CompositionWait>,
     fence: CompositionFence,
-    deadline: Moment,
+    deadline: Option<Moment>,
 }
 
 struct Active {
     fence: CompositionFence,
     job: OwnedJob<(), CompositionFenceError>,
-    deadline: Moment,
+    deadline: Option<Moment>,
     expiry_reported: bool,
 }
 
@@ -105,11 +107,9 @@ impl CompositionWork {
         if self.pending.is_some() || self.active.is_some() {
             return Ok(false);
         }
-        let deadline = now.checked_add(Duration::from_secs(30))?;
-        let deadline = cutoff.map_or(deadline, |cutoff| cutoff.min(deadline));
         let input = input.take().ok_or("Composition wait input absent")?;
         let fence = input.fence();
-        self.pending = Some(Pending { input: Some(input), fence, deadline });
+        self.pending = Some(Pending { input: Some(input), fence, deadline: cutoff });
         self.advance(now)?;
         Ok(true)
     }
@@ -141,13 +141,13 @@ impl CompositionWork {
         if let Some(active) = &mut self.active
             && !active.expiry_reported
             && !active.fence.completed()
-            && now >= active.deadline
+            && active.deadline.is_some_and(|deadline| now >= deadline)
         {
             active.expiry_reported = true;
             return Err(io::Error::from(io::ErrorKind::TimedOut).into());
         }
         let Some(pending) = &mut self.pending else { return Ok(()) };
-        if now >= pending.deadline {
+        if pending.deadline.is_some_and(|deadline| now >= deadline) {
             pending.fence.terminal_without_completion();
             return Err(io::Error::from(io::ErrorKind::TimedOut).into());
         }
@@ -164,7 +164,7 @@ impl CompositionWork {
             id,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureLifecycle,
-            deadline: Some(pending.deadline),
+            deadline: pending.deadline,
             reservation_bytes: 64 * 1024,
             replacement: None,
         };
@@ -198,11 +198,11 @@ impl CompositionWork {
 
     /// Return the retained admission cutoff without inventing a periodic timer.
     pub(super) fn deadline(&self) -> Option<Moment> {
-        self.pending.as_ref().map(|pending| pending.deadline).or_else(|| {
+        self.pending.as_ref().and_then(|pending| pending.deadline).or_else(|| {
             self.active
                 .as_ref()
                 .filter(|active| !active.expiry_reported)
-                .map(|active| active.deadline)
+                .and_then(|active| active.deadline)
         })
     }
 
@@ -240,10 +240,11 @@ impl CompositionWork {
     /// Preserve the original shutdown cutoff for a wait still awaiting admission.
     pub(super) fn tighten(&mut self, cutoff: Moment) {
         if let Some(pending) = &mut self.pending {
-            pending.deadline = pending.deadline.min(cutoff);
+            pending.deadline =
+                Some(pending.deadline.map_or(cutoff, |deadline| deadline.min(cutoff)));
         }
         if let Some(active) = &mut self.active {
-            active.deadline = active.deadline.min(cutoff);
+            active.deadline = Some(active.deadline.map_or(cutoff, |deadline| deadline.min(cutoff)));
         }
     }
 

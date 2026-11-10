@@ -519,8 +519,7 @@ impl EmbeddedCanvas {
         {
             let preview = self.surface.preview_deadline(self.clock.now());
             let editing = self.surface.editing_deadline(self.clock.now());
-            let viewport = self.surface.viewport_deadline(self.clock.now());
-            [native, preview, editing, viewport].into_iter().flatten().min()
+            [native, preview, editing].into_iter().flatten().min()
         }
         #[cfg(not(feature = "native-composition"))]
         native

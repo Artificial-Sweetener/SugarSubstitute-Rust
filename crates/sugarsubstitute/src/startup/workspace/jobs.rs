@@ -16,12 +16,8 @@ impl WorkspaceWork {
             && self.media.settled()
             && self.retirements.try_lock().is_ok_and(|owners| owners.is_empty())
         {
-            let (context, effect, until) =
-                self.pending_open.take().ok_or("Workspace open disappeared")?;
-            if now >= until {
-                return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
-            }
-            self.open(context, effect, until)?;
+            let (context, effect) = self.pending_open.take().ok_or("Workspace open disappeared")?;
+            self.open(context, effect, now)?;
         }
         if let Some(job) = &mut self.load
             && let Some(completion) = job.try_take_completion()
@@ -140,13 +136,13 @@ impl WorkspaceWork {
                         tracing::warn!(operation="workspace_encode",cause=%cause,"Workspace replay failed; original checkpoint protected");
                         let driver = self.driver.as_mut().ok_or("Workspace driver absent")?;
                         driver.encoding_stopped(&request, &transfer)?;
-                        driver.restore_failed(&request)?;
+                        driver.restore_failed(&request, &RestoreFailure::Encoding)?;
                     }
                     outcome => {
                         tracing::warn!(operation="workspace_encode",outcome=?outcome.kind(),"Workspace replay stopped; original checkpoint protected");
                         let driver = self.driver.as_mut().ok_or("Workspace driver absent")?;
                         driver.encoding_stopped(&request, &transfer)?;
-                        driver.restore_failed(&request)?;
+                        driver.restore_failed(&request, &RestoreFailure::Encoding)?;
                     }
                 }
             }
@@ -230,12 +226,18 @@ impl WorkspaceWork {
         let Some(event) = self.pending.as_ref() else {
             return Ok(());
         };
-        let until = self
-            .driver
-            .as_ref()
-            .and_then(WorkspaceDriver::deadline)
-            .ok_or("Workspace operation has no original cutoff")?;
-        if now >= until {
+        // A restore encoding has no cutoff of its own: only cancellation at shutdown ends it early.
+        // A capture decoding keeps its original cutoff.
+        let until = match event {
+            DriverEvent::EncodeRestore { .. } => None,
+            DriverEvent::DecodeCapture { .. } => Some(
+                self.driver
+                    .as_ref()
+                    .and_then(WorkspaceDriver::deadline)
+                    .ok_or("Workspace operation has no original cutoff")?,
+            ),
+        };
+        if until.is_some_and(|until| now >= until) {
             return Ok(());
         }
         let spec = self.job(WorkspaceStore::reservation_bytes(), until)?;

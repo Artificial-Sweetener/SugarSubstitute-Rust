@@ -37,6 +37,7 @@ mod gpu;
 mod host_graphics;
 #[cfg(feature = "native-composition")]
 pub(crate) mod inputs;
+mod job_spec;
 mod native;
 mod preparation;
 #[cfg(feature = "native-composition")]
@@ -150,6 +151,10 @@ struct Retired {
     _update: Option<Box<sugarsubstitute_canvas_render::PreparedUpdate>>,
     #[cfg(test)]
     _fixture_memory: Option<MemoryLease>,
+    /// A payload whose disposal a test holds open, standing in for a driver that is slow to
+    /// release its resources.
+    #[cfg(test)]
+    _fixture_hold: Option<Box<dyn std::any::Any + Send>>,
 }
 /// The original admitted request and its quality remain paired through cancellation acknowledgement.
 struct Rendering {
@@ -457,24 +462,6 @@ impl Session {
             last_prepare: Duration::ZERO,
             last_stats: Default::default(),
             last_surface_work: Default::default(),
-        })
-    }
-    /// Bind work to one original deadline and the same sole job identity sequence.
-    fn spec(
-        &self,
-        operation: Operation,
-        class: JobClass,
-        bytes: u64,
-        duration: Duration,
-        replacement: Option<ReplacementKey>,
-    ) -> Result<JobSpec, Box<dyn Error>> {
-        Ok(JobSpec {
-            id: self.sequence.allocate()?,
-            operation,
-            class,
-            deadline: Some(self.clock.now().checked_add(duration)?),
-            reservation_bytes: bytes,
-            replacement,
         })
     }
     /// Adopt one original error without destroying the currently displayed image.

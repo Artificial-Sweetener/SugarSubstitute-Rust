@@ -238,11 +238,10 @@ impl Session {
         let reservation =
             rasters.saturating_mul(4).saturating_add(sums).saturating_add(WORKING_BYTES);
         let memory = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.memory.clone();
-        let spec = self.spec(
+        let spec = self.event_spec(
             Operation::Infrastructure,
             JobClass::InfrastructureOrdinary,
             reservation,
-            Duration::from_secs(120),
             None,
         )?;
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;

@@ -93,7 +93,7 @@ impl WorkspaceWork {
                 sugarsubstitute_comfy::output_media::OUTPUT_TRANSFER_BYTES + 8 * 1024 * 1024,
             )
             .ok_or("Workspace transfer admission overflow")?;
-        let spec = self.job(bytes, until)?;
+        let spec = self.job(bytes, Some(until))?;
         let ticket = input.ticket.clone();
         let directory =
             self.input_directory.clone().ok_or("Workspace native archive directory absent")?;
@@ -169,7 +169,7 @@ impl WorkspaceWork {
         }
         let until = self.retirement_until.unwrap_or(now.checked_add(Duration::from_secs(15))?);
         let mut spec =
-            self.job(sugarsubstitute_comfy::output_media::OUTPUT_TRANSFER_BYTES, until)?;
+            self.job(sugarsubstitute_comfy::output_media::OUTPUT_TRANSFER_BYTES, Some(until))?;
         spec.class = JobClass::InfrastructureLifecycle;
         let retirements = self.retirements.clone();
         self.retirement_job =

@@ -10,6 +10,7 @@ use crate::{
 };
 use std::{
     error::Error, num::NonZeroUsize, os::windows::fs::OpenOptionsExt, path::PathBuf, sync::Arc,
+    time::Duration,
 };
 use sugarsubstitute_canvas::{
     ArchivedDocument, Document, DocumentEdit, Layer, LayerContent, LayerId, MaskAppearance,
@@ -23,10 +24,10 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 #[cfg(feature = "native-composition")]
 mod legacy;
 
-struct FixedClock;
+struct FixedClock(Moment);
 impl Clock for FixedClock {
     fn now(&self) -> Moment {
-        Moment::from_nanos(0)
+        self.0
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
@@ -39,6 +40,7 @@ impl MemoryRelease for NoRelease {
 }
 
 struct Fixture {
+    now: Moment,
     wake: Arc<Wake>,
     client: ExecutionClient,
     scope: Scope,
@@ -50,8 +52,13 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> TestResult<Self> {
+        Self::with_clock(Moment::from_nanos(0))
+    }
+
+    /// Run execution on a clock that already reads `now`, as on a host that has been up for long.
+    fn with_clock(now: Moment) -> TestResult<Self> {
         let wake = Arc::new(Wake::default());
-        let owner = ExecutionOwner::new(Arc::new(FixedClock), wake.clone())?;
+        let owner = ExecutionOwner::new(Arc::new(FixedClock(now)), wake.clone())?;
         let client = owner.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -59,6 +66,7 @@ impl Fixture {
         let store = InputDocumentStore::new(directory.path().join("session"))?;
         let memory = MemoryLease::new(64 * 1024 * 1024, Box::new(NoRelease));
         Ok(Self {
+            now,
             wake,
             client,
             scope,
@@ -75,7 +83,7 @@ impl Fixture {
             id: self.jobs.allocate()?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
-            deadline: Some(Moment::from_nanos(60_000_000_000)),
+            deadline: Some(self.now.checked_add(Duration::from_secs(60))?),
             reservation_bytes: bytes,
             replacement: None,
         })
@@ -107,7 +115,11 @@ impl Fixture {
     }
 
     fn load(&self) -> TestResult<Restored> {
-        let spec = self.spec(InputDocumentStore::load_reservation())?;
+        self.load_with(self.spec(InputDocumentStore::load_reservation())?)
+    }
+
+    /// Load under `spec`, such as one with no cutoff.
+    fn load_with(&self, spec: JobSpec) -> TestResult<Restored> {
         let job = self.store.submit_load(&self.client, &self.scope, spec, self.memory.clone())?;
         match self.outcome(job)? {
             JobOutcome::Success(restored) => Ok(restored),
@@ -320,6 +332,25 @@ fn autosave_coalesces_changes_and_skips_content_already_on_disk() -> TestResult 
     let outcome = fixture.settle(|| Ok(autosave.observe(at(1_850))?))?;
     assert!(matches!(outcome, SaveOutcome::Saved(SaveReceipt { kept_previous: true, .. })));
     assert_eq!(restored(&fixture.load()?), Some((ArchiveFile::Current, &second)));
+    Ok(())
+}
+
+#[test]
+fn an_ordinary_save_never_stops_because_the_host_clock_ran_on() -> TestResult {
+    // Two hours past any fixed bound a save could have been given when its change was made.
+    let fixture = Fixture::with_clock(Moment::from_nanos(7_200_000_000_000))?;
+    let mut autosave = Autosave::new(fixture.store.clone(), POLICY, 0, None);
+    let content = fixture.archive(1, b"first")?;
+    autosave.changed(1, at(0))?;
+    let captured = content.clone();
+    autosave.poll(at(600), &fixture.client, &fixture.scope, &fixture.jobs, || Ok(captured))?;
+    assert!(autosave.saving());
+    let outcome = fixture.settle(|| Ok(autosave.observe(at(650))?))?;
+    assert!(matches!(outcome, SaveOutcome::Saved(_)), "{outcome:?}");
+    assert!(!autosave.dirty());
+    // Restoring it needs no cutoff either.
+    let uncut = JobSpec { deadline: None, ..fixture.spec(InputDocumentStore::load_reservation())? };
+    assert_eq!(restored(&fixture.load_with(uncut)?), Some((ArchiveFile::Current, &content)));
     Ok(())
 }
 

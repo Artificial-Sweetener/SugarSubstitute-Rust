@@ -42,7 +42,6 @@ impl WorkspaceDriver {
                     transfer: transfer.clone(),
                     checkpoint: checkpoint.id.clone(),
                     revision: checkpoint.revision,
-                    deadline: now.checked_add(Duration::from_secs(30)).map_err(io::Error::other)?,
                     bindings: None,
                     fence: self.policy.fence().clone(),
                     sent: false,
@@ -73,9 +72,16 @@ impl WorkspaceDriver {
         }
         if let SessionOperation::Error { failure } = &message.operation
             && self.owns_restore(&message.request_id)
-            && (failure.code == "stale" || failure.code == "cancelled")
         {
-            self.cancel_restore()?;
+            if failure.code == "stale" || failure.code == "cancelled" {
+                self.cancel_restore()?;
+                return Ok(None);
+            }
+            // The page observed that it cannot materialize the saved workspace.
+            self.abandon_restore(&RestoreFailure::Refused {
+                code: failure.code.clone(),
+                retryable: failure.retryable,
+            })?;
             return Ok(None);
         }
         if let SessionOperation::Acknowledged { checkpoint_id, revision, phase, bindings } =
@@ -241,12 +247,6 @@ impl WorkspaceDriver {
             self.policy.finished(&capture.ticket, false, now).map_err(application)?;
             let request = self.identities.next()?;
             self.queue(request, SessionOperation::Cancel { target_request_id: capture.request })?;
-        }
-        if self.restore.as_ref().is_some_and(|restore| now >= restore.deadline) {
-            let request = self.restore.as_ref().ok_or(SessionError::Stale)?.request.clone();
-            self.restore_failed(&request)?;
-            tracing::warn!(operation="workspace_materialize",request_id=%request,"Original materialization deadline expired; saved workspace protected");
-            return Ok(());
         }
         if self.capture.is_some()
             || self.encoding.is_some()

@@ -371,7 +371,8 @@ fn log_fallback(reason: SharedTextureFallback, selected: Option<&AdapterDescript
     }
 }
 
-/// Observe cancellation and the original deadline before and after blocking native calls.
+/// Observe cancellation and the original deadline, when the job has one, before and after
+/// blocking native calls. A job without a deadline waits for the driver however long it takes.
 pub(super) fn checkpoint(context: &JobContext) -> Result<(), CanvasGraphicsError> {
     if context.cancellation_requested() {
         return Err(CanvasGraphicsError::new(
@@ -379,7 +380,7 @@ pub(super) fn checkpoint(context: &JobContext) -> Result<(), CanvasGraphicsError
             io::Error::from(io::ErrorKind::Interrupted),
         ));
     }
-    if context.deadline().is_none_or(|deadline| context.now() >= deadline) {
+    if context.deadline().is_some_and(|deadline| context.now() >= deadline) {
         return Err(CanvasGraphicsError::new(
             "prepare_canvas_graphics",
             io::Error::from(io::ErrorKind::TimedOut),

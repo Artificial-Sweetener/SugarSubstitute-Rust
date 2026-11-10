@@ -15,11 +15,10 @@ impl Session {
         let memory =
             self.resources.as_ref().ok_or("Canvas admission is unavailable")?.memory.clone();
         let request = self.config.gpu.ok_or("Canvas GPU selection is unavailable")?;
-        let spec = self.spec(
+        let spec = self.event_spec(
             Operation::Infrastructure,
             JobClass::IoOrdinary,
             2 * 1024 * 1024,
-            Duration::from_secs(30),
             None,
         )?;
         match runtime.client.submit_async(&runtime.scope, spec, move |context| async move {

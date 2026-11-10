@@ -124,7 +124,9 @@ impl CompositionWait {
 
     /// Wait on the admitted worker for this device's previous commit to be processed.
     /// A later commit may also be covered, but never makes an earlier completion unsafe.
-    /// Cancellation cannot interrupt the native call; its actual return remains owned.
+    /// Cancellation cannot interrupt the native call; its actual return remains owned. A job
+    /// without a deadline waits for the compositor however long it takes; one whose deadline
+    /// passed before entry never starts the call.
     ///
     /// # Errors
     /// Preserves admission lifetime failures and the original DirectComposition error.
@@ -140,7 +142,7 @@ impl CompositionWait {
         let fixture = false;
         let result = if context.cancellation_requested() {
             Err(CompositionFenceError::Cancelled)
-        } else if context.deadline().is_none_or(|deadline| context.now() >= deadline) {
+        } else if context.deadline().is_some_and(|deadline| context.now() >= deadline) {
             Err(CompositionFenceError::Deadline)
         } else if fixture {
             Ok(())
