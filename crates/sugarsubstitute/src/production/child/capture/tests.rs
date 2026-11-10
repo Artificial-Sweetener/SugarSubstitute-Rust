@@ -137,8 +137,9 @@ fn source_run_execution_generation_and_job_must_all_match() -> TestResult {
 }
 #[test]
 fn actual_non_symbol_completion_keeps_original_metadata_without_symbol_ledger() -> TestResult {
+    use crate::completion_wake::Wake;
     use sugarsubstitute_contracts::execution::{
-        Clock, CompletionWake, ExecutionError, ExecutionPort, Moment, ScopeSpec, WaitFuture,
+        Clock, ExecutionPort, Moment, ScopeSpec, WaitFuture,
     };
     /// Fake only the external clock; execution owns the real record and completion.
     struct ClockBoundary;
@@ -150,28 +151,7 @@ fn actual_non_symbol_completion_keeps_original_metadata_without_symbol_ledger() 
             Box::pin(std::future::pending())
         }
     }
-    /// Coalesce actual completion wakes at the test's external observation boundary.
-    struct WakeBoundary {
-        notified: std::sync::Mutex<bool>,
-        changed: std::sync::Condvar,
-    }
-    impl CompletionWake for WakeBoundary {
-        fn wake(&self) -> Result<(), ExecutionError> {
-            let mut notified = self.notified.lock().map_err(|_| {
-                ExecutionError::new(
-                    Operation::NativeLifecycle,
-                    Box::new(std::io::Error::other("Capture test observation poisoned")),
-                )
-            })?;
-            *notified = true;
-            self.changed.notify_one();
-            Ok(())
-        }
-    }
-    let wake = Arc::new(WakeBoundary {
-        notified: std::sync::Mutex::new(false),
-        changed: std::sync::Condvar::new(),
-    });
+    let wake = Arc::new(Wake::default());
     let owner =
         sugarsubstitute_execution::ExecutionOwner::new(Arc::new(ClockBoundary), wake.clone())?;
     let client = owner.client();
@@ -199,35 +179,18 @@ fn actual_non_symbol_completion_keeps_original_metadata_without_symbol_ledger() 
         }
         Ok(())
     })?;
-    let until = std::time::Instant::now()
-        .checked_add(std::time::Duration::from_secs(10))
-        .ok_or("Capture test observation cutoff overflow")?;
-    let mut completed = loop {
-        let batch = client.drain_completions(std::num::NonZeroUsize::MIN)?;
+    let mut completed = wake.until(|| {
+        let batch = match client.drain_completions(std::num::NonZeroUsize::MAX) {
+            Ok(batch) => batch,
+            Err(cause) => return Some(Err::<_, Box<dyn Error>>(cause.into())),
+        };
         for notice in batch.notifications {
-            actual.notice(notice)?;
-        }
-        if actual.noticed()
-            && let Some(value) = job.try_take_completion()
-        {
-            break value;
-        }
-        let mut notified = wake.notified.lock().map_err(|_| "Capture test observation poisoned")?;
-        while !*notified {
-            let remaining = until
-                .checked_duration_since(std::time::Instant::now())
-                .ok_or("Capture completion did not publish")?;
-            let (next, timed) = wake
-                .changed
-                .wait_timeout(notified, remaining)
-                .map_err(|_| "Capture test observation poisoned")?;
-            notified = next;
-            if timed.timed_out() && !*notified {
-                return Err("Capture completion did not publish".into());
+            if let Err(cause) = actual.notice(notice) {
+                return Some(Err(cause.into()));
             }
         }
-        *notified = false;
-    };
+        if actual.noticed() { job.try_take_completion().map(Ok) } else { None }
+    })?;
     assert!(completed.native_handles.is_none());
     assert_eq!(completed.memory.bytes(), 4_194_304);
     assert!(actual.completion(&completed));

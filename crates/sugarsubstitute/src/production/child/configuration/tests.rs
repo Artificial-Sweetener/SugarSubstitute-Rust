@@ -2,21 +2,19 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Test exact input projection; borrowed wire shape creates no native authority.
 use super::*;
+use crate::completion_wake::Wake;
 use std::{
     num::NonZeroU16,
     os::windows::ffi::OsStrExt,
     sync::{
-        Arc, Condvar, Mutex,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
 };
 use sugarsubstitute_contracts::{
     configuration::{LoopbackOrigin, Presentation, Theme},
     coordinator_entry::{EntryArgumentsView, EntryEnvironmentView, EntryFrontendView},
-    execution::{
-        Clock, CompletionWake, ExecutionError, JobCompletion, JobOutcome, ScopeId, ScopeSpec,
-        TerminalKind, WaitFuture,
-    },
+    execution::{Clock, JobCompletion, JobOutcome, ScopeId, ScopeSpec, TerminalKind, WaitFuture},
 };
 type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
 
@@ -208,30 +206,6 @@ impl Clock for FrozenClock {
         Box::pin(std::future::pending())
     }
 }
-/// Coalesce actual wake revisions without introducing another scheduler or channel.
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other("Configuration test observer poisoned")),
-            )
-        })?;
-        *revision = revision.checked_add(1).ok_or_else(|| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other("Configuration test observer exhausted")),
-            )
-        })?;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
 /// Share the same real execution boundary for these two finite preparation owners.
 pub(in crate::production::child) struct Rig {
     pub(in crate::production::child) owner: sugarsubstitute_execution::ExecutionOwner,
@@ -261,33 +235,18 @@ impl Rig {
         job: &mut OwnedJob<T, E>,
     ) -> Result<JobCompletion<T, E>, Box<dyn Error + Send + Sync>> {
         let mut noticed = false;
-        let until = std::time::Instant::now()
-            .checked_add(std::time::Duration::from_secs(10))
-            .ok_or("Configuration test observation cutoff overflow")?;
-        loop {
-            let before = *self.wake.revision.lock().map_err(|_| "Wake poisoned")?;
-            let batch = self.client.drain_completions(std::num::NonZeroUsize::MIN)?;
+        self.wake.until(|| {
+            let batch = match self.client.drain_completions(std::num::NonZeroUsize::MAX) {
+                Ok(batch) => batch,
+                Err(cause) => return Some(Err::<_, Box<dyn Error + Send + Sync>>(cause.into())),
+            };
             for notice in batch.notifications {
                 if (notice.scope_id, notice.job_id) == (job.scope_id(), job.spec().id) {
                     noticed = true;
                 }
             }
-            if noticed && let Some(completed) = job.try_take_completion() {
-                return Ok(completed);
-            }
-            let revision = self.wake.revision.lock().map_err(|_| "Wake poisoned")?;
-            let remaining = until
-                .checked_duration_since(std::time::Instant::now())
-                .ok_or("Actual worker completion absent")?;
-            let (next, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(revision, remaining, |revision| *revision == before)
-                .map_err(|_| "Wake wait poisoned")?;
-            if timeout.timed_out() && *next == before {
-                return Err("Actual worker completion absent".into());
-            }
-        }
+            if noticed { job.try_take_completion().map(Ok) } else { None }
+        })
     }
 }
 /// Construct only inert requested data using the actual worker's original memory.

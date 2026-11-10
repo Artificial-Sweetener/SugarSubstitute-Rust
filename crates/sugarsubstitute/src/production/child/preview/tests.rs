@@ -374,27 +374,9 @@ fn admitted_exact_retirement_cancels_requested_main_but_foreign_and_early_retry_
     Ok(())
 }
 
-#[derive(Default)]
-struct NoticeWake {
-    notified: std::sync::Mutex<bool>,
-    changed: std::sync::Condvar,
-}
-impl CompletionWake for NoticeWake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut notified = self.notified.lock().map_err(|cause| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other(cause.to_string())),
-            )
-        })?;
-        *notified = true;
-        self.changed.notify_one();
-        Ok(())
-    }
-}
 #[test]
 fn mismatched_notice_retains_real_panicked_worker_terminal_and_original_credit() -> TestResult {
-    let wake = Arc::new(NoticeWake::default());
+    let wake = Arc::new(crate::completion_wake::Wake::default());
     let runtime = ExecutionOwner::new(Arc::new(Fixed), wake.clone())?;
     let client = runtime.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -412,27 +394,17 @@ fn mismatched_notice_retains_real_panicked_worker_terminal_and_original_credit()
     })?;
     let mut owner = preview()?;
     owner.job = Some(job);
-    let batch = loop {
-        let mut notified =
-            wake.notified.lock().map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        while !*notified {
-            notified = wake
-                .changed
-                .wait(notified)
-                .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        }
-        *notified = false;
-        drop(notified);
-        let batch =
-            client.drain_completions(std::num::NonZeroUsize::new(32).ok_or("Drain bound")?)?;
-        if batch
+    let batch = wake.until(|| {
+        let batch = match client.drain_completions(std::num::NonZeroUsize::MAX) {
+            Ok(batch) => batch,
+            Err(cause) => return Some(Err::<_, Box<dyn Error>>(cause.into())),
+        };
+        batch
             .notifications
             .iter()
             .any(|notice| notice.scope_id == scope.id() && notice.job_id == spec.id)
-        {
-            break batch;
-        }
-    };
+            .then_some(Ok(batch))
+    })?;
     owner.capture(&batch);
     assert_eq!(owner.notice.as_ref().map(|notice| notice.kind), Some(TerminalKind::Panicked));
     owner.notice.as_mut().ok_or("Real notice missing")?.kind = TerminalKind::Success;
