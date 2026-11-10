@@ -242,10 +242,10 @@ export class WorkflowMasonryView {
         return this.#sections;
     }
     /** Reserve rail space through ordinary layout so native controls animate rather than remount. */
-    setStackWidth(width) {
+    setStackWidth(width, motion) {
         if (!Number.isFinite(width) || width < 0)
             throw new TypeError('Cube stack width must be finite and nonnegative.');
-        this.#stackInset.set(this.element, this.#content, width, () => this.#requestLayout());
+        this.#stackInset.set(this.element, this.#content, width, motion, () => this.#requestLayout());
     }
     /** Preview an exact section permutation through existing compositor motion without editing workflow state. */
     previewCubeOrder(sectionIds) {

@@ -31,6 +31,7 @@ import {
 } from './WorkflowMasonrySectionView.js';
 import { SurfaceMotion, type SurfacePlacement } from '../motion/SurfaceMotion.js';
 import { MasonryStackInsetMotion } from './MasonryStackInsetMotion.js';
+import type { InsetMotion } from '../appearance/TransformMotion.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import { prepareNativePresentation } from '../NativePresentationReady.js';
 import { whenPromptEditorsPresented } from '../../prompt_editor/PromptEditorSurface.js';
@@ -281,10 +282,10 @@ export class WorkflowMasonryView {
   }
 
   /** Reserve rail space through ordinary layout so native controls animate rather than remount. */
-  setStackWidth(width: number): void {
+  setStackWidth(width: number, motion: InsetMotion): void {
     if (!Number.isFinite(width) || width < 0)
       throw new TypeError('Cube stack width must be finite and nonnegative.');
-    this.#stackInset.set(this.element, this.#content, width, () => this.#requestLayout());
+    this.#stackInset.set(this.element, this.#content, width, motion, () => this.#requestLayout());
   }
 
   /** Preview an exact section permutation through existing compositor motion without editing workflow state. */

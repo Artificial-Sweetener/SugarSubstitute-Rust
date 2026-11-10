@@ -14,9 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Fade only the stack's material aperture, retaining controls and the surrounding body wash. */
+import { inOutCubicKeyframes, transformMotion } from '../appearance/TransformMotion.js';
+
 const OPACITY = '--sc-stack-wash-opacity';
 const WIDTH = '--sc-stack-material-width';
-const DURATION_MS = 220;
 
 /** One painted aperture: the faded wash opacity over the rail's live width in CSS pixels. */
 interface MaterialFrame {
@@ -64,26 +65,12 @@ export class CubeStackMaterialMotion {
       view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     )
       return;
-    const frame = (progress: number): Record<string, string> => ({
-      [OPACITY]: String(start.opacity + (target.opacity - start.opacity) * progress),
-      [WIDTH]: `${String(start.width + (target.width - start.width) * progress)}px`,
-    });
-    // Each half has linear x and cubic y, reproducing Qt InOutCubic without a Bezier approximation.
     const animation = element.animate(
-      [
-        {
-          ...frame(0),
-          offset: 0,
-          easing: 'cubic-bezier(0.3333333333333333,0,0.6666666666666666,0)',
-        },
-        {
-          ...frame(0.5),
-          offset: 0.5,
-          easing: 'cubic-bezier(0.3333333333333333,1,0.6666666666666666,1)',
-        },
-        { ...frame(1), offset: 1 },
-      ],
-      { duration: DURATION_MS },
+      inOutCubicKeyframes((progress) => ({
+        [OPACITY]: String(start.opacity + (target.opacity - start.opacity) * progress),
+        [WIDTH]: `${String(start.width + (target.width - start.width) * progress)}px`,
+      })),
+      { duration: transformMotion.duration },
     );
     this.#animation = animation;
     void Promise.allSettled([animation.finished]).then((results) => {

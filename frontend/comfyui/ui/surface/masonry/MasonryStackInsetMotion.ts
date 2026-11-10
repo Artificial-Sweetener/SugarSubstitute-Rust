@@ -15,14 +15,30 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Animate the content's inset on the compositor after committing one settled layout destination. */
 import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
+import {
+  inOutCubicKeyframes,
+  transformMotion,
+  type InsetMotion,
+} from '../appearance/TransformMotion.js';
 
 /** Retain and interrupt one horizontal rail-reservation effect without frame-by-frame packing. */
 export class MasonryStackInsetMotion {
   #animation: Animation | null = null;
   #width: number | null = null;
 
-  /** Commit rail space once and animate the retained content from its painted location. */
-  set(element: HTMLElement, content: HTMLElement, width: number, layout: () => void): void {
+  /**
+   * Commit rail space once and animate the retained content from its painted location.
+   *
+   * `transform` travel moves the cards on the stack's own frame, as Substitute's editor followed
+   * the stack's animated width; `surface` travel keeps the shared surface curve.
+   */
+  set(
+    element: HTMLElement,
+    content: HTMLElement,
+    width: number,
+    motion: InsetMotion,
+    layout: () => void,
+  ): void {
     if (this.#width === width) return;
     const initial = this.#width === null;
     const animated =
@@ -38,10 +54,18 @@ export class MasonryStackInsetMotion {
     if (!animated) return;
     const delta = before - content.getBoundingClientRect().left;
     if (Math.abs(delta) < 0.5) return;
-    const animation = content.animate(
-      [{ transform: `translateX(${String(delta)}px)` }, { transform: 'translateX(0px)' }],
-      { duration: surfaceMotion.duration, easing: surfaceMotion.easing },
-    );
+    const animation =
+      motion === 'transform'
+        ? content.animate(
+            inOutCubicKeyframes((progress) => ({
+              transform: `translateX(${String(delta * (1 - progress))}px)`,
+            })),
+            { duration: transformMotion.duration },
+          )
+        : content.animate(
+            [{ transform: `translateX(${String(delta)}px)` }, { transform: 'translateX(0px)' }],
+            { duration: surfaceMotion.duration, easing: surfaceMotion.easing },
+          );
     this.#animation = animation;
     void Promise.allSettled([animation.finished]).then(() => {
       if (this.#animation === animation) {

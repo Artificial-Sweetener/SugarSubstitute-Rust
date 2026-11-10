@@ -33,6 +33,7 @@ import { CubeStackScrollSelection } from './CubeStackScrollSelection.js';
 import { CubeStackDrawerMotion } from './CubeStackDrawerMotion.js';
 import { CubeStackMaterialMotion } from './CubeStackMaterialMotion.js';
 import { CubeStackWheelRouting } from './CubeStackWheelRouting.js';
+import type { InsetMotion } from '../appearance/TransformMotion.js';
 import type {
   CubeStackViewActions,
   CubeStackViewState,
@@ -50,7 +51,7 @@ export interface CubeStackSurface {
   readonly sections: readonly WorkflowMasonrySection[];
   previewCubeOrder(order: readonly string[] | null): void;
   setCubeOrder(order: readonly string[]): void;
-  setStackWidth(width: number): void;
+  setStackWidth(width: number, motion: InsetMotion): void;
   scrollToSection(id: string): void;
 }
 
@@ -102,6 +103,7 @@ export class CubeStackHost {
   #disposed = false;
   readonly #frameListeners = new Set<() => void>();
   #frameSignature = '';
+  #reservedWidth = 0;
 
   /** Compose typed intent handlers while preference and graph services keep their own authority. */
   constructor(options: CubeStackHostOptions) {
@@ -253,7 +255,7 @@ export class CubeStackHost {
     }
     if (!this.#stackVisible()) {
       this.#view?.previewCubeOrder(null);
-      this.#view?.setStackWidth(0);
+      this.#reserveWidth(0);
       if (!this.#motion?.canAnimate) this.#unmount();
       else {
         const element = this.#element;
@@ -290,7 +292,7 @@ export class CubeStackHost {
       this.#motion = new CubeStackDrawerMotion(this.#element);
       this.#mounted.setInteractive(false);
     }
-    view.setStackWidth(
+    this.#reserveWidth(
       cubeStackReservedWidth(state.compact, state.packed, this.#options.frame?.enabled === true),
     );
     this.#material?.set(
@@ -398,6 +400,14 @@ export class CubeStackHost {
     return completed;
   }
 
+  /** In Substitute, cards travel on the stack's density frame; showing and hiding follow the drawer. */
+  #reserveWidth(width: number): void {
+    const densityTravel =
+      this.#options.frame?.enabled === true && this.#reservedWidth > 0 && width > 0;
+    this.#reservedWidth = width;
+    this.#view?.setStackWidth(width, densityTravel ? 'transform' : 'surface');
+  }
+
   /** Remove owned presentation while retaining preferences for the next eligible masonry surface. */
   #unmount(): void {
     this.#material?.dispose();
@@ -407,7 +417,7 @@ export class CubeStackHost {
     this.#motion?.dispose();
     this.#motion = null;
     this.#view?.previewCubeOrder(null);
-    this.#view?.setStackWidth(0);
+    this.#reserveWidth(0);
     this.#mounted?.dispose();
     this.#mounted = null;
     this.#element?.remove();
