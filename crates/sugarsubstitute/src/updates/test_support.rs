@@ -4,32 +4,12 @@
 use std::{
     error::Error,
     io,
-    sync::{
-        Condvar, Mutex,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::{Duration, Instant},
+    sync::atomic::{AtomicU64, Ordering},
 };
-use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, Moment, Operation, WaitFuture,
-};
+use sugarsubstitute_contracts::execution::{Clock, Moment, WaitFuture};
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-#[derive(Default)]
-pub(crate) struct Wake(Mutex<u64>, Condvar);
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut revision = self.0.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(io::Error::other("Update test wake poisoned")),
-            )
-        })?;
-        *revision += 1;
-        self.1.notify_all();
-        Ok(())
-    }
-}
+pub(crate) use crate::completion_wake::Wake;
 #[derive(Default)]
 pub(crate) struct Manual(pub(crate) AtomicU64);
 impl Clock for Manual {
@@ -40,50 +20,9 @@ impl Clock for Manual {
         Moment::from_nanos(self.0.load(Ordering::SeqCst))
     }
 }
-/// Wait only on actual adapter notifications, with a bounded external observer cutoff.
+/// Re-examine `step` after each actual adapter notification until it reports completion.
 pub(crate) fn observe(wake: &Wake, mut step: impl FnMut() -> Result<bool>) -> Result<()> {
-    observe_until(wake, &mut step, true)
-}
-
-/// Active work must produce its own notification. Unlike closing-thread observation, a final
-/// deadman poll must not conceal a missing wake that would strand the native event loop.
-pub(crate) fn observe_notifications(
-    wake: &Wake,
-    mut step: impl FnMut() -> Result<bool>,
-) -> Result<()> {
-    observe_until(wake, &mut step, false)
-}
-
-/// Preserve wake revisions across each poll; only shutdown observation permits a final deadman poll.
-fn observe_until(
-    wake: &Wake,
-    step: &mut impl FnMut() -> Result<bool>,
-    final_poll: bool,
-) -> Result<()> {
-    let until = Instant::now() + Duration::from_secs(20);
-    loop {
-        let revision = *wake.0.lock().map_err(|_| "Update wake poisoned")?;
-        if step()? {
-            return Ok(());
-        }
-        let remaining =
-            until.checked_duration_since(Instant::now()).ok_or("Update observer expired")?;
-        let (guard, timeout) = wake
-            .1
-            .wait_timeout_while(
-                wake.0.lock().map_err(|_| "Update wake poisoned")?,
-                remaining,
-                |current| *current == revision,
-            )
-            .map_err(|_| "Update wake poisoned")?;
-        drop(guard);
-        if timeout.timed_out() {
-            if final_poll && step()? {
-                return Ok(());
-            }
-            return Err("Update observer expired".into());
-        }
-    }
+    wake.until(|| step().map(|done| done.then_some(())).transpose())
 }
 
 /// Lexically valid input with no verified preparation role; native preparation admission rejects it.
@@ -122,7 +61,7 @@ pub(crate) fn retain_capacity(
         |context| Ok::<_, io::Error>(context.memory().clone()),
     )?;
     let mut retained = None;
-    observe_notifications(wake, || {
+    observe(wake, || {
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         if let Some(done) = job.try_take_completion() {
             let JobOutcome::Success(memory) = done.outcome else {

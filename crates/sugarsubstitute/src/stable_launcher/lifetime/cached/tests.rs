@@ -6,7 +6,7 @@ use super::super::{
     tests::{finish, fixture},
 };
 use super::*;
-use crate::updates::test_support::{observe_notifications, retain_capacity};
+use crate::updates::test_support::{observe, retain_capacity};
 
 #[test]
 fn capacity_deferral_preserves_startup_until_actual_release_wakes_admission() -> Result<()> {
@@ -29,7 +29,7 @@ fn capacity_deferral_preserves_startup_until_actual_release_wakes_admission() ->
     assert!(cached.failure.is_none());
     assert!(matches!(launcher.choice, Choice::Cache));
     drop(held);
-    observe_notifications(&wake, || {
+    observe(&wake, || {
         launcher.advance_cached()?;
         Ok(launcher.cached.as_ref().is_some_and(|cached| cached.worker.pending()))
     })?;

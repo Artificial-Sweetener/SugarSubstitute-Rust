@@ -157,14 +157,15 @@ fn repeated_close_preserves_the_application_budget_and_campaign_cutoff() -> Test
     let campaign = parent.until;
     let budget = ShutdownBudget::new(clock.now())?;
     parent.close(Some(budget)).map_err(|cause| cause as Box<dyn Error>)?;
-    let wake_at = parent.next_deadline();
+    // Compare the retained wake instants: `next_deadline` also filters them by real elapsed time.
+    let wakes = (parent.grace_wake, parent.settle_wake);
     clock.0.store(1_000_000_000, Ordering::SeqCst);
     parent
         .close(Some(ShutdownBudget::new(clock.now())?))
         .map_err(|cause| cause as Box<dyn Error>)?;
     assert_eq!(parent.shutdown, Some(budget));
     assert_eq!(parent.until, campaign);
-    assert_eq!(parent.next_deadline(), wake_at);
+    assert_eq!((parent.grace_wake, parent.settle_wake), wakes);
     finish(&mut parent, &mut owner, &wake, &JobSequence::new())
 }
 

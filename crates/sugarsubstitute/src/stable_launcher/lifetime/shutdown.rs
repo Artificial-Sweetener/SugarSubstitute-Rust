@@ -41,8 +41,7 @@ impl Launcher {
             return Ok(false);
         }
         let until = self.cleanup_until.ok_or("Launcher cleanup cutoff absent")?;
-        let expired =
-            self.clock.now() >= until || self.wake_at.is_some_and(|wake| Instant::now() >= wake);
+        let expired = self.clock.now() >= until;
         if expired && !self.stopping {
             self.stop_execution(until);
         }

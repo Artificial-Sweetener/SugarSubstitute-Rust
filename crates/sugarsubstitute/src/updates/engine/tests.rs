@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Real execution and rejected native admission verify campaign/cleanup ownership without child creation.
 use super::*;
-use crate::updates::test_support::{Manual, Wake, observe, observe_notifications, untrusted_input};
+use crate::updates::test_support::{Manual, Wake, observe, untrusted_input};
 use std::{num::NonZeroUsize, sync::atomic::Ordering, time::Duration};
 use sugarsubstitute_execution::ExecutionOwner;
 
@@ -110,7 +110,7 @@ fn rejected_preparation_role_reports_failure_then_retires_without_application_ow
     assert!(!parent.borrows_application());
     assert!(!parent.settled());
     let wake = h.wake.clone();
-    observe_notifications(&wake, || match h.step() {
+    observe(&wake, || match h.step() {
         Ok(()) => Ok(false),
         Err(cause) => {
             assert!(
