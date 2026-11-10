@@ -141,11 +141,8 @@ impl WorkspaceDriver {
             self.restored.as_ref()?.checkpoint.as_ref().map(|(_, checkpoint)| checkpoint)?;
         let fence = self.policy.fence();
         if fence.revision <= restore.fence.revision
-            || fence.bindings.len() != checkpoint.entries.len()
-            || fence.bindings.iter().any(|fresh| {
-                !checkpoint.entries.iter().any(|entry| entry.id == fresh.entry_id)
-                    || restore.fence.bindings.iter().any(|prior| same_runtime(prior, fresh))
-            })
+            || !checkpoint.entries.iter().any(|entry| entry.id == binding.entry_id)
+            || restore.fence.bindings.iter().any(|prior| same_runtime(prior, binding))
         {
             return None;
         }

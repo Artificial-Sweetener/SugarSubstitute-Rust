@@ -4,6 +4,7 @@
 mod capture;
 mod close;
 mod media;
+mod tabs;
 use super::*;
 use sugarsubstitute_contracts::execution::MemoryRelease;
 type TestResult = Result<(), Box<dyn Error>>;

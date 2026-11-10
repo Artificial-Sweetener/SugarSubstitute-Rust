@@ -111,7 +111,9 @@ impl WorkspaceDriver {
                     || !restore.sent
                     || checkpoint_id != &restore.checkpoint
                     || *revision != restore.revision
-                    || bindings.len() != checkpoint.entries.len()
+                    // Comfy owns the tabs: the page binds only the entries whose tabs Comfy
+                    // reopened, so the bindings are a subset of the checkpoint's entries.
+                    || bindings.len() > checkpoint.entries.len()
                     || bindings.iter().any(|binding| {
                         !checkpoint.entries.iter().any(|entry| entry.id == binding.entry_id)
                             || restore
@@ -205,8 +207,8 @@ impl WorkspaceDriver {
             return Ok(());
         };
         let current = self.policy.fence().clone();
+        // Tabs Comfy restored without a checkpoint entry are live beside the restored ones.
         if !self.policy.committed()
-            || bindings.len() != current.bindings.len()
             || !bindings.iter().all(|binding| {
                 current.bindings.iter().any(|live| {
                     same_runtime(binding, live)
@@ -227,7 +229,7 @@ impl WorkspaceDriver {
                 checkpoint_id: restore.checkpoint,
                 revision: restore.revision,
                 phase: "restored".into(),
-                bindings: current.bindings.clone(),
+                bindings: self.media_bindings.clone(),
             },
         )
     }
