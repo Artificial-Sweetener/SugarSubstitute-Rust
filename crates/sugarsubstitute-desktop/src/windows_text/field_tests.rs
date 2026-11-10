@@ -182,6 +182,70 @@ fn qualify() -> TestResult {
     result
 }
 
+/// Count routed events whose operation reports an unsupported native text notification.
+struct UnsupportedNotifications(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+impl tracing::Subscriber for UnsupportedNotifications {
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+    fn event(&self, event: &tracing::Event<'_>) {
+        struct Operation(bool);
+        impl tracing::field::Visit for Operation {
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                self.0 |= field.name() == "operation" && value == "console_native_notification";
+            }
+            fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
+        }
+        let mut operation = Operation(false);
+        event.record(&mut operation);
+        if operation.0 {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    fn enter(&self, _: &tracing::span::Id) {}
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+/// Gaining and losing focus are ordinary text notifications, never reported as unsupported.
+#[test]
+fn native_field_focus_changes_are_supported_text_notifications() -> TestResult {
+    crate::windows_test_desktop::run(
+        concat!(module_path!(), "::native_field_focus_changes_are_supported_text_notifications"),
+        || {
+            let mut apartment = UiApartment::enter()?;
+            let mut fields = Fields::default();
+            let unsupported = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let dispatch = tracing::Dispatch::new(UnsupportedNotifications(unsupported.clone()));
+            let result = tracing::dispatcher::with_default(&dispatch, || -> TestResult {
+                fields.open()?;
+                let first = fields.engines.first().ok_or("first field absent")?;
+                let second = fields.engines.get(1).ok_or("second field absent")?;
+                for engine in [first, second, first] {
+                    // SAFETY: Focus moves only between the two retained private-desktop children.
+                    unsafe {
+                        let _previous = SetFocus(Some(engine.state.hwnd));
+                    }
+                    // SAFETY: The native focus query observes only this current test thread.
+                    assert_eq!(unsafe { GetFocus() }, engine.state.hwnd);
+                    engine.check()?;
+                }
+                Ok(())
+            });
+            fields.close()?;
+            // SAFETY: All fixture windows, text documents and callbacks have completed checked retirement.
+            unsafe { apartment.release_after_teardown() }?;
+            result?;
+            assert_eq!(unsupported.load(std::sync::atomic::Ordering::SeqCst), 0);
+            Ok(())
+        },
+    )
+}
+
 #[test]
 fn native_field_updates_preserve_edits_selection_and_undo() -> TestResult {
     crate::windows_test_desktop::run(

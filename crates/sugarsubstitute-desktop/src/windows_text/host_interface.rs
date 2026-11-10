@@ -329,7 +329,7 @@ impl ITextHost_Impl for TextHost_Impl {
         }
         match notification {
             EN_CHANGE | EN_UPDATE | EN_SELCHANGE | EN_REQUESTRESIZE | EN_HSCROLL | EN_VSCROLL
-            | EN_MAXTEXT => {
+            | EN_MAXTEXT | EN_SETFOCUS | EN_KILLFOCUS => {
                 self.state.invalidate();
                 Ok(())
             }

@@ -29,6 +29,13 @@ disposition = "routing"
 rationale = "Process-global supported subscriber and original diagnostic failure health."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:94613da0d89b2109b607e5d9d3ea688246c41538f3671539f9a082c2c400211d"
+disposition = "fixture"
+rationale = "An isolated counting subscriber observes focus changes on private-desktop text fields to prove focus notifications are supported, without routing or persisting any event; runtime diagnostics are unchanged."
+
+[[records]]
 path = "crates/sugarsubstitute/src/diagnostics/cause_chain_tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:83892b295defaac5c4be8524c1e1f6d4b18c91de57f8fbbe4e944d12efad9f0f"

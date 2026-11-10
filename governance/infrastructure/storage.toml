@@ -4149,7 +4149,7 @@ rationale = "Exercise the actual system RichEdit accessibility interface on an i
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:1d9f4c609df8adfb0aaf511c252d8bfd6d61bbfc432c9c95a96b32394f4c3a96"
+source_sha256 = "sha256:94613da0d89b2109b607e5d9d3ea688246c41538f3671539f9a082c2c400211d"
 capabilities = ["LoadLibraryExW", "windows::Win32::System::LibraryLoader::LoadLibraryExW"]
 disposition = "fixture"
 rationale = "Load the system text implementation for real isolated editable-field focus, Unicode, input and teardown regression tests."
