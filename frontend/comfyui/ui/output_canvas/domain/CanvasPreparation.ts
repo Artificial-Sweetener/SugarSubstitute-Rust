@@ -13,27 +13,31 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Distinguish a recoverable preparation deadline from other attachment failures. */
+/** Name the only two ways a native attachment's preparation can end without becoming ready. */
 
 /**
- * A surface whose host did not finish preparing within its deadline.
+ * A surface whose host reported that it cannot present, or whose transport to the host failed.
  *
- * The host may still be working (for example under load), so the attachment owner can retry
- * with a fresh attachment instead of treating the surface as permanently failed.
+ * This is an observed failure, never a verdict reached because the host took long: a host that is
+ * merely slow leaves its attachment loading, with no outcome at all.
  */
-export class CanvasPreparationTimeout extends Error {
-  /** Name the elapsed deadline for diagnostics. */
-  constructor(message = 'Native canvas preparation timed out.') {
-    super(message);
-    this.name = 'CanvasPreparationTimeout';
-  }
-}
-
-/** Keep a native surface's diagnostic chrome visible when its host cannot prepare pixels. */
 export class CanvasPreparationUnavailable extends Error {
   /** Preserve the native owner's actionable failure message. */
   constructor(message: string) {
     super(message);
     this.name = 'CanvasPreparationUnavailable';
+  }
+}
+
+/**
+ * An attachment that was released (for example by a workflow switch) before its host answered.
+ *
+ * It carries no user-visible failure: the host's late answer is simply no longer wanted.
+ */
+export class CanvasPreparationReleased extends Error {
+  /** Name the cause for diagnostics. */
+  constructor() {
+    super('Native canvas attachment was released before preparation completed.');
+    this.name = 'CanvasPreparationReleased';
   }
 }

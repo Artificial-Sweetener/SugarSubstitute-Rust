@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove a startup overview whose native acquisition times out re-attaches and is shown. */
+/** Prove a startup overview that is slow in native acquisition waits for the host instead of failing. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { CanvasPrimarySurface } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasPrimarySurface.js';
 import { NativeCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasAttachment.js';
@@ -125,11 +125,10 @@ function fixture() {
     window: windowId('native-overview-recovery'),
     views,
     coordinator,
-    clock,
     element: () => element,
     renderer: () => renderer,
     report: (error) => errors.push(error),
-    mount: (root, address, _catalog, accepts, acceptsPreparation, recover) => {
+    mount: (root, address, _catalog, accepts, acceptsPreparation) => {
       const attachment = new NativeCanvasAttachment(root, {
         address,
         clock,
@@ -143,7 +142,6 @@ function fixture() {
         nativeSurface: () => host,
         connected: () => true,
         report: (error) => errors.push(error),
-        recover,
       });
       attachments.push(attachment);
       return attachment;
@@ -189,11 +187,12 @@ function fixture() {
   };
 }
 
-test('a startup overview that times out in host acquisition re-attaches and is shown', async () => {
+test('a startup overview that is slow in host acquisition keeps the outdated attachment and then shows it', async () => {
   const f = fixture();
   f.primary.setup();
   await f.drain();
-  expect(f.attachments[0]!.port.read().view.mode).toBe('overview');
+  const outdated = f.attachments[0]!;
+  expect(outdated.port.read().view.mode).toBe('overview');
   // Discovery replaces the renderer; the staged overview candidate stalls in acquisition.
   f.discover();
   await settle();
@@ -201,19 +200,21 @@ test('a startup overview that times out in host acquisition re-attaches and is s
   f.acquiring.add(candidate);
   await f.drain();
   expect(f.calls.at(-1)).toMatchObject({ type: 'surface.overview' });
-  f.clock.advance(5000);
+  // However long the host spends acquiring, nothing fails and nothing is re-attached.
+  for (let minute = 0; minute < 120; minute++) {
+    f.clock.advance(60_000);
+    await f.drain();
+  }
+  expect(f.errors).toEqual([]);
+  expect(f.prepares()).toHaveLength(2);
+  expect(f.attachments).toHaveLength(2);
+  expect(f.primary.diagnostics().address).toEqual(outdated.port.read().address);
+  // The host finishes acquiring; the staged overview replaces the outdated attachment.
+  f.acquiring.delete(candidate);
   await f.drain();
-  // The timed-out candidate replaces the outdated attachment and shows its loading state.
-  const stalled = f.attachments[1]!;
-  expect(f.primary.diagnostics().address).toEqual(stalled.port.read().address);
-  expect(stalled.port.read().resource.state).not.toBe('unavailable');
-  // The backoff re-attaches afresh, and the host now answers the overview.
-  f.clock.advance(1000);
-  await f.drain();
-  const fresh = f.attachments.at(-1)!;
-  expect(fresh).not.toBe(stalled);
-  expect(f.prepares().at(-1)!.address.attachmentId).toBe(fresh.port.read().address.attachmentId);
+  const fresh = f.attachments[1]!;
   expect(f.primary.diagnostics().address).toEqual(fresh.port.read().address);
+  expect(f.prepares().at(-1)!.address.attachmentId).toBe(fresh.port.read().address.attachmentId);
   const shown = f.calls.filter(
     (call) =>
       call.type === 'surface.overview' &&
@@ -224,31 +225,10 @@ test('a startup overview that times out in host acquisition re-attaches and is s
   expect(fresh.viewport.classList.contains('sc-output-native')).toBe(true);
   expect(
     f.calls.some(
-      (call) => call.type === 'surface.release' && call.address.attachmentId === candidate,
+      (call) =>
+        call.type === 'surface.release' &&
+        call.address.attachmentId === outdated.port.read().address.attachmentId,
     ),
   ).toBe(true);
-  expect(f.clock.pending).toBe(0);
-});
-
-test('an overview that never leaves acquisition ends in the preparation error', async () => {
-  const f = fixture();
-  f.primary.setup();
-  await f.drain();
-  f.discover();
-  for (const delay of [0, 5000, 1000, 5000, 2000, 5000, 4000, 5000]) {
-    f.clock.advance(delay);
-    await settle();
-    for (const prepare of f.prepares()) f.acquiring.add(prepare.address.attachmentId);
-    await f.drain();
-  }
-  const current = f.attachments.find(
-    (attachment) =>
-      attachment.port.read().address.attachmentId === f.primary.diagnostics().address?.attachmentId,
-  )!;
-  expect(current).not.toBe(f.attachments[0]);
-  expect(current.port.read().resource).toMatchObject({
-    state: 'error',
-    message: 'The native canvas could not be prepared.',
-  });
-  expect(f.clock.pending).toBe(0);
+  expect(f.errors).toEqual([]);
 });

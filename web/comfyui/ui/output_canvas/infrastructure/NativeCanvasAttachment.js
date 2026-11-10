@@ -78,9 +78,6 @@ export class NativeCanvasAttachment {
     #ready = false;
     #disposed = false;
     #constructorSurface;
-    /** Preparation passed its deadline and has not completed since; `#stallKey` names its request. */
-    #stalled = false;
-    #stallKey = null;
     /** Mount shared controls without constructing browser loaders, image layers, or decoders. */
     constructor(element, options) {
         this.element = element;
@@ -184,10 +181,7 @@ export class NativeCanvasAttachment {
                     this.#publish();
             },
             acceptsPreparation: () => !this.#disposed && options.acceptsPreparation(),
-            prepared: () => {
-                this.#stalled = false;
-                this.#readiness.complete();
-            },
+            prepared: () => this.#readiness.complete(),
             host: options.nativeSurface,
             surfacePending: () => this.options.surfacePending?.() ?? false,
             accepts: () => !this.#disposed && options.accepts(),
@@ -242,10 +236,7 @@ export class NativeCanvasAttachment {
         this.#stopFocusRequests = options.route?.subscribeFocus(this.#takeFocus) ?? (() => { });
         // The Input route withdraws the Output preview, which otherwise locks the viewer controls.
         this.#stopRoute = options.route?.subscribe(() => this.refresh()) ?? (() => { });
-        this.#readiness = new NativeCanvasReadiness(options.clock, () => {
-            this.#stalled = true;
-            this.#stallKey = this.#requestKey();
-        });
+        this.#readiness = new NativeCanvasReadiness();
         this.ready = this.#readiness.ready;
         const cleanup = [
             () => this.#readiness.dispose(),
@@ -338,19 +329,6 @@ export class NativeCanvasAttachment {
         this.#status.changed(true);
         if (this.options.accepts())
             this.#reveal.apply();
-        this.#recoverOnChange();
-    }
-    /** Report a preparation that passed its deadline and has not completed since. */
-    stalled() {
-        return this.#stalled && !this.#disposed;
-    }
-    /** Show the load error once the owner stops retrying a stalled preparation. */
-    preparationFailed() {
-        if (this.#disposed)
-            return;
-        this.#presentation = { state: 'error', message: 'The native canvas could not be prepared.' };
-        if (this.#ready)
-            this.#status.changed(true);
     }
     /** Admit bytes only for this visible, committed view's authoritative source/run interest. */
     wants(session, generation, source) {
@@ -441,21 +419,6 @@ export class NativeCanvasAttachment {
         this.#publish();
     }
     /** Forward qualified geometry without constructing a browser drawing surface. */
-    /** Identify the stalled request: the selected output and the presented allocation. */
-    #requestKey() {
-        const surface = this.#surface && { ...this.#surface, focused: false };
-        return JSON.stringify([
-            this.#plan.primary?.item?.id ?? null,
-            surface && { ...surface, occlusions: undefined, modal: undefined },
-        ]);
-    }
-    /** A later selection or geometry change after a stalled preparation always attaches afresh. */
-    #recoverOnChange() {
-        if (!this.stalled() || this.#stallKey === this.#requestKey())
-            return;
-        this.#stallKey = this.#requestKey();
-        this.options.recover?.();
-    }
     #resize(surface) {
         // Unchanged measurements (e.g. a remeasure after the attachment's own render) are idle.
         if (this.#surface && JSON.stringify(this.#surface) === JSON.stringify(surface))
@@ -464,7 +427,6 @@ export class NativeCanvasAttachment {
         this.#overview?.resize();
         this.#editing.geometryChanged();
         this.#present();
-        this.#recoverOnChange();
     }
     /**
      * Hand the current plan's A, optional B and divider, or its overview cells in their place, to

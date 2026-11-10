@@ -61,8 +61,6 @@ function fixture(initialRenderer = 'browser') {
   }[] = [];
   const report = jest.fn<(error: unknown) => void>();
   const primary = new CanvasPrimarySurface({
-    // Retries of timed-out preparation are not exercised here.
-    clock: { later: () => () => {} },
     document,
     window: windowId('primary'),
     views,
@@ -331,19 +329,23 @@ test('reports failed release and does not mount over uncertain native custody', 
   }
 });
 
-test('routes a reveal to the preparing candidate until a surface is committed for the view', async () => {
-  const f = fixture('native');
+test('routes a reveal to the shown surface until its preparing replacement commits', async () => {
+  const f = fixture();
   try {
-    const candidate = f.attachments[0]!;
-    expect(f.primary.diagnostics().address).toBeNull();
+    const shown = f.attachments[0]!;
+    f.renderer('native');
+    const candidate = f.attachments[1]!;
+    // The replacement waits for its host while the shown attachment keeps the view.
+    expect(f.primary.diagnostics().address).toEqual(shown.address);
     expect(candidate.acceptsPreparation()).toBe(true);
     expect(await f.primary.destination(f.view)?.reveal(f.target)).toBe(true);
-    expect(candidate.reveal).toHaveBeenCalledWith(f.target);
+    expect(shown.reveal).toHaveBeenCalledWith(f.target);
+    expect(candidate.reveal).not.toHaveBeenCalled();
     f.resolve();
     await Promise.resolve();
     expect(f.primary.diagnostics().address).toEqual(candidate.address);
     await f.primary.destination(f.view)?.reveal(f.target);
-    expect(candidate.reveal).toHaveBeenCalledTimes(2);
+    expect(candidate.reveal).toHaveBeenCalledTimes(1);
     f.deactivate();
     expect(f.primary.destination(f.view)).toBeNull();
     expect(f.report).not.toHaveBeenCalled();

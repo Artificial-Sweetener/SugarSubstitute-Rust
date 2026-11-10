@@ -125,7 +125,6 @@ function fixture(webp = false) {
     views,
     coordinator,
     window: windowId('media'),
-    clock,
     element: () => root,
     renderer: () => presenter.current(),
     retireBeforeMount: (previous, next) => (previous === 'browser') !== (next === 'browser'),

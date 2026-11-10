@@ -13,54 +13,54 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Bound one native attachment's preparation and settle disposal before its registry lease retires. */
-import { CanvasPreparationTimeout } from '../domain/CanvasPreparation.js';
-/** Observe real host readiness once, retaining failure for the attachment transaction owner. */
+/** Settle one native attachment's preparation from observed host events only, never from elapsed time. */
+import { CanvasPreparationReleased, } from '../domain/CanvasPreparation.js';
+/** Observe real host readiness once, retaining the first observed outcome for the attachment owner. */
 export class NativeCanvasReadiness {
     ready;
-    #complete = null;
-    #fail = null;
-    #stop = null;
-    /**
-     * Use the existing injected clock and the native host's five-second preparation bound.
-     *
-     * @param expired Called when the deadline passes, before readiness rejects with a
-     *   `CanvasPreparationTimeout` the attachment transaction owner may recover from.
-     */
-    constructor(clock, expired = () => { }) {
+    #outcome = { state: 'pending' };
+    #resolve = null;
+    #reject = null;
+    /** Open one pending preparation; only the host's reply, its failure or a release ends it. */
+    constructor() {
         this.ready = new Promise((resolve, reject) => {
-            this.#complete = resolve;
-            this.#fail = reject;
+            this.#resolve = resolve;
+            this.#reject = reject;
         });
         // Constructor failure may prevent the attachment owner from receiving this promise.
         // Keep the original promise rejected for that owner's normal observation path.
         void this.ready.catch(() => { });
-        this.#stop = clock.later(5000, () => {
-            expired();
-            this.fail(new CanvasPreparationTimeout());
-        });
+    }
+    /** The preparation's current outcome; `pending` until the host answers or the attachment ends. */
+    get outcome() {
+        return this.#outcome;
     }
     /** Complete only after the native host acknowledges preparation of the requested content. */
     complete() {
-        const complete = this.#complete;
-        this.#clear();
-        complete?.();
+        if (this.#outcome.state !== 'pending')
+            return;
+        this.#outcome = { state: 'ready' };
+        this.#settle().resolve?.();
     }
-    /** Preserve the first preparation failure; later callbacks cannot change the outcome. */
-    fail(error) {
-        const fail = this.#fail;
-        this.#clear();
-        fail?.(error);
+    /** Preserve the first observed failure; later callbacks cannot change the outcome. */
+    fail(failure) {
+        if (this.#outcome.state !== 'pending')
+            return;
+        this.#outcome = { state: 'failed', failure };
+        this.#settle().reject?.(failure);
     }
     /** Cancel a staged attachment even when the native host never answered. */
     dispose() {
-        this.fail(new Error('Native canvas attachment was released before preparation completed.'));
+        if (this.#outcome.state !== 'pending')
+            return;
+        this.#outcome = { state: 'released' };
+        this.#settle().reject?.(new CanvasPreparationReleased());
     }
-    /** Release the single deadline and both outcome callbacks at the terminal transition. */
-    #clear() {
-        this.#stop?.();
-        this.#stop = null;
-        this.#complete = null;
-        this.#fail = null;
+    /** Hand out the one-shot callbacks and drop them, so a settled preparation retains nothing. */
+    #settle() {
+        const callbacks = { resolve: this.#resolve, reject: this.#reject };
+        this.#resolve = null;
+        this.#reject = null;
+        return callbacks;
     }
 }

@@ -51,6 +51,7 @@ export function nativePreviewHost(preview = true) {
   const calls: CanvasSurfaceCommand[] = [];
   const pending: {
     resolve(result: CanvasSurfaceResult): void;
+    reject(error: Error): void;
     cancelled: boolean;
     settled: boolean;
   }[] = [];
@@ -85,7 +86,7 @@ export function nativePreviewHost(preview = true) {
     },
     execute: (command, cancellation) => {
       calls.push(command);
-      return new Promise<CanvasSurfaceResult>((resolve) => {
+      return new Promise<CanvasSurfaceResult>((resolve, reject) => {
         const record = {
           cancelled: false,
           settled: false,
@@ -93,6 +94,11 @@ export function nativePreviewHost(preview = true) {
             record.settled = true;
             unsubscribe?.();
             resolve(result);
+          },
+          reject: (error: Error) => {
+            record.settled = true;
+            unsubscribe?.();
+            reject(error);
           },
         };
         const unsubscribe = cancellation?.subscribe(() => {
@@ -111,6 +117,10 @@ export function nativePreviewHost(preview = true) {
     listeners,
     emit: (change: CanvasSurfacePresentationChange) => {
       for (const listener of listeners) listener(change);
+    },
+    /** Fail one ticket the way a closed transport does, with no host reply. */
+    fail: (index: number, error: Error) => {
+      pending[index]!.reject(error);
     },
     respond: (
       index: number,

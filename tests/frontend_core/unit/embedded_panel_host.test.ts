@@ -589,3 +589,77 @@ test('a disposed embedded canvas refuses reconnection and cannot restart request
   expect(f.listeners.size).toBe(0);
   expect(f.report).not.toHaveBeenCalled();
 });
+
+/** A host busy under load answers late; waiting is the only policy that never misjudges it as failed. */
+test('waits for a slow host to describe its surface instead of failing discovery on a deadline', async () => {
+  jest.useFakeTimers();
+  const listeners = new Set<(value: unknown) => void>();
+  const sent: CanvasMessage[] = [];
+  const errors: unknown[] = [];
+  const canvas = new EmbeddedCanvasConnection();
+  try {
+    canvas.connect(
+      {
+        session,
+        send: (message) => {
+          if (message.protocol !== 'sugarcubes.canvas') throw new Error('Unexpected protocol.');
+          sent.push(message);
+          if (message.type === 'context.request')
+            for (const receive of listeners)
+              receive({
+                ...message,
+                type: 'context.reply',
+                context: {
+                  canvas: {
+                    id: 'native',
+                    label: 'Native',
+                    capabilities: {
+                      displayOutput: true,
+                      insertImageLayer: false,
+                      positionImageLayer: false,
+                    },
+                  },
+                  document: null,
+                },
+              });
+        },
+        subscribe: (receive) => {
+          listeners.add(receive);
+          return () => {
+            listeners.delete(receive);
+          };
+        },
+      },
+      window,
+      (error) => errors.push(error),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    const request = sent.find(({ type }) => type === 'surface.capabilities.request');
+    if (request?.type !== 'surface.capabilities.request')
+      throw new Error('Missing discovery request.');
+    // Ten minutes of silence from a busy host neither fails discovery nor reports an error.
+    jest.advanceTimersByTime(10 * 60_000);
+    await Promise.resolve();
+    expect(errors).toEqual([]);
+    expect(canvas.surfaceDiscovered).toBe(false);
+    for (const receive of listeners)
+      receive({
+        protocol: request.protocol,
+        version: request.version,
+        session: request.session,
+        requestId: request.requestId,
+        type: 'surface.capabilities.reply',
+        status: 'available',
+        capabilities: selectedPngCapabilities,
+        message: '',
+      });
+    for (let turn = 0; turn < 16; turn++) await Promise.resolve();
+    expect(errors).toEqual([]);
+    expect(canvas.surface).not.toBeNull();
+    expect(canvas.surfaceDiscovered).toBe(true);
+  } finally {
+    jest.useRealTimers();
+    canvas.dispose();
+  }
+});
