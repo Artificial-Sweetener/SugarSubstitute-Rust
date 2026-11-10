@@ -102,10 +102,12 @@ impl SourceAcquirer for Gate {
         let mut state = self.state.lock().map_err(|_| io::Error::other("Gate state poisoned"))?;
         state.entered = true;
         self.wake.wake().map_err(io::Error::other)?;
-        let mut state = self
-            .changed
-            .wait_while(state, |state| !state.released && !self.stopped(state))
-            .map_err(|_| io::Error::other("Gate state poisoned"))?;
+        let mut state = crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the test to release the gated acquisition or the canvas to stop it".to_owned(),
+            |state| !state.released && !self.stopped(state),
+        );
         state.returned = true;
         self.wake.wake().map_err(io::Error::other)?;
         if self.stopped(&state) {

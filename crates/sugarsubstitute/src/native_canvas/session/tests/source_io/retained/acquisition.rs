@@ -78,10 +78,12 @@ impl SourceAcquirer for BlockingSource {
         let mut state = self.state.lock().map_err(|_| io::Error::other("Source state poisoned"))?;
         state.entered = true;
         self.changed.notify_all();
-        while !state.cancelled {
-            state =
-                self.changed.wait(state).map_err(|_| io::Error::other("Source state poisoned"))?;
-        }
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the canvas to cancel the blocked source".to_owned(),
+            |state| !state.cancelled,
+        ));
         Err(io::ErrorKind::Interrupted.into())
     }
 
@@ -212,12 +214,12 @@ fn revoked_source_waits_for_real_job_completion_and_worker_retirement() -> Resul
         }
     }
     let state = owner.state.lock().map_err(|_| "Source state poisoned")?;
-    drop(
-        owner
-            .changed
-            .wait_while(state, |state| !state.entered)
-            .map_err(|_| "Source state poisoned")?,
-    );
+    drop(crate::completion_wake::wait_while_watched(
+        &owner.changed,
+        state,
+        || "the blocked source acquisition to start".to_owned(),
+        |state| !state.entered,
+    ));
     let selection = fixture.session.selection;
     fixture.session.revoke_acquirer()?;
     assert!(fixture.session.selection > selection);

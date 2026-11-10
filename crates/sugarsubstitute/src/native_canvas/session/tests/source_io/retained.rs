@@ -36,19 +36,23 @@ impl DisposalGate {
         let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.0 = true;
         self.changed.notify_all();
-        while !state.1 {
-            state = self.changed.wait(state).unwrap_or_else(std::sync::PoisonError::into_inner);
-        }
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the test to release the held source disposal".to_owned(),
+            |state| !state.1,
+        ));
     }
 
     /// Wait for the worker's published entry rather than inferring it from elapsed time.
     fn wait_until_entered(&self) {
         let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(
-            self.changed
-                .wait_while(state, |state| !state.0)
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the source disposal worker to enter".to_owned(),
+            |state| !state.0,
+        ));
     }
 
     /// Permit the worker to dispose of its original payload; repeated release is harmless.

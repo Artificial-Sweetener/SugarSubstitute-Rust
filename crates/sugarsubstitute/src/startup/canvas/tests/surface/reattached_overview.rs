@@ -57,11 +57,12 @@ impl Latch {
             wake.wake().map_err(std::io::Error::other)?;
         }
         let guard = self.open.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(
-            self.changed
-                .wait_while(guard, |open| !*open)
-                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
-        );
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            guard,
+            || "the test to open a held lane".to_owned(),
+            |open| !*open,
+        ));
         Ok(())
     }
 }

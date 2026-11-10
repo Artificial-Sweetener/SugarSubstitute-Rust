@@ -80,19 +80,23 @@ impl HeldWork {
         let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.entered = true;
         self.changed.notify_all();
-        while !state.released {
-            state = self.changed.wait(state).unwrap_or_else(std::sync::PoisonError::into_inner);
-        }
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the test to release the held canvas work".to_owned(),
+            |state| !state.released,
+        ));
     }
 
     /// Wait for the actual worker entry, which the entering worker publishes under the same lock.
     fn wait_until_entered(&self) {
         let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(
-            self.changed
-                .wait_while(state, |state| !state.entered)
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "held canvas work to enter".to_owned(),
+            |state| !state.entered,
+        ));
     }
 
     /// Allow the same already-started blocking task to return.

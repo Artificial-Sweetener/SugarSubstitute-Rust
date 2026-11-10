@@ -31,6 +31,8 @@ mod demo;
 mod descendant_fixture;
 mod diagnostics;
 mod native_entry;
+#[cfg(test)]
+mod paused_clock;
 pub use native_entry::{NativeEntry, unavailable_native_entry};
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod failure_details;

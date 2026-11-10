@@ -41,11 +41,12 @@ impl HeldSource {
 
     /// Wait until a storage worker actually entered the acquisition.
     fn wait_entered(&self) {
-        drop(
-            self.changed
-                .wait_while(self.state(), |state| !state.entered)
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            self.state(),
+            || "the held acquisition to start".to_owned(),
+            |state| !state.entered,
+        ));
     }
 }
 
@@ -63,10 +64,12 @@ impl SourceAcquirer for HeldSource {
         let mut state = self.state.lock().map_err(|_| io::Error::other("Held state poisoned"))?;
         state.entered = true;
         self.changed.notify_all();
-        while !state.cancelled {
-            state =
-                self.changed.wait(state).map_err(|_| io::Error::other("Held state poisoned"))?;
-        }
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the canvas to cancel the held acquisition".to_owned(),
+            |state| !state.cancelled,
+        ));
         Err(io::ErrorKind::Interrupted.into())
     }
 

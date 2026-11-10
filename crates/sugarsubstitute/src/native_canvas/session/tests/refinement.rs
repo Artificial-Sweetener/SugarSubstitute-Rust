@@ -56,11 +56,12 @@ impl CpuTask<Packet, WorkError> for PreparationBoundary {
             .state
             .lock()
             .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
-        let state = self
-            .0
-            .changed
-            .wait_while(state, |state| !state.open)
-            .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
+        let state = crate::completion_wake::wait_while_watched(
+            &self.0.changed,
+            state,
+            || "the test to open the held preparation boundary".to_owned(),
+            |state| !state.open,
+        );
         if state.fail {
             Err(WorkError::invalid("Preparation boundary failure"))
         } else {

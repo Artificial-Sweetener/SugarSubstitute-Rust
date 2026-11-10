@@ -21,11 +21,12 @@ struct Gate {
 impl Gate {
     fn wait_entered(&self) {
         let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(
-            self.changed
-                .wait_while(state, |state| !state.entered)
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "a native presentation to be entered".to_owned(),
+            |state| !state.entered,
+        ));
     }
 
     fn present(&self, target: FrameStamp) -> Result<GpuPresentation, WorkError> {
@@ -35,11 +36,12 @@ impl Gate {
             .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
         state.entered = true;
         self.changed.notify_all();
-        drop(
-            self.changed
-                .wait_while(state, |state| !state.released)
-                .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?,
-        );
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the test to release the held native present".to_owned(),
+            |state| !state.released,
+        ));
         Ok(GpuPresentation { target, receipt: WindowPresentation { needs_follow_up: true } })
     }
 

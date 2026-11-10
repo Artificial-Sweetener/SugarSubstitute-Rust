@@ -46,11 +46,12 @@ impl GatedFile {
     /// Wait until an import job is acquiring the file.
     fn wait_entered(&self) {
         let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        drop(
-            self.changed
-                .wait_while(state, |state| !state.entered)
-                .unwrap_or_else(PoisonError::into_inner),
-        );
+        drop(crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the seed file to be acquired".to_owned(),
+            |state| !state.entered,
+        ));
     }
 
     /// Let the acquisition finish; opening an open gate again is harmless.
@@ -75,10 +76,12 @@ impl SourceAcquirer for GatedFile {
         let mut state = self.state.lock().map_err(|_| io::Error::other("Gate state poisoned"))?;
         state.entered = true;
         self.changed.notify_all();
-        while !state.open && !state.cancelled {
-            state =
-                self.changed.wait(state).map_err(|_| io::Error::other("Gate state poisoned"))?;
-        }
+        let mut state = crate::completion_wake::wait_while_watched(
+            &self.changed,
+            state,
+            || "the seed gate to open or the canvas to cancel it".to_owned(),
+            |state| !state.open && !state.cancelled,
+        );
         state.settled = true;
         if state.cancelled {
             return Err(io::ErrorKind::Interrupted.into());
