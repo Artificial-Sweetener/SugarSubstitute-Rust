@@ -41,8 +41,9 @@ impl Session {
             native_close: false,
         })
     }
-    /// Join the actual installer execution tree with a dedicated renderer. Scope 1 is storage,
-    /// 2 is provisioning, 3 is its transport; surface 1 belongs to the native transcript.
+    /// Join the actual installer execution tree with a dedicated renderer. Its scope is
+    /// numbered by creation order with every other installer scope; surface 1 belongs to the
+    /// native transcript.
     pub(super) fn start(&mut self, controller: &Controller) -> Result<()> {
         if self.started() || self.navigation.flow.is_closing() || controller.closing {
             return Err("Native installer session already started or closing".into());
@@ -54,8 +55,7 @@ impl Session {
         )?;
         let client = controller.client.as_ref().ok_or("Installer execution absent")?;
         let parent = controller.scope.as_ref().ok_or("Installer root scope absent")?;
-        let scope = client
-            .create_scope(ScopeSpec { id: ScopeId::new(4)?, deadline: None }, Some(parent))?;
+        let scope = controller.create_scope(Some(parent))?;
         self.driver = Some(Driver::new(
             client.clone(),
             scope,

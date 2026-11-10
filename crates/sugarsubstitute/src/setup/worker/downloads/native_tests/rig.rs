@@ -4,7 +4,7 @@
 use super::*;
 use std::{num::NonZeroUsize, sync::Condvar, time::Instant};
 use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, JobCompletion, WaitFuture,
+    Clock, CompletionWake, ExecutionError, JobCompletion, ScopeId, WaitFuture,
 };
 use sugarsubstitute_execution::ExecutionOwner;
 

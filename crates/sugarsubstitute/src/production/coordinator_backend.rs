@@ -51,8 +51,9 @@ mod recovery_tests;
 #[path = "coordinator_backend/tests.rs"]
 pub(crate) mod tests;
 
-use super::{coordinator_authority::CoordinatorAuthority, scope_sequence::ScopeSequence};
+use super::coordinator_authority::CoordinatorAuthority;
 use crate::job_sequence::JobSequence;
+use crate::scope_sequence::ScopeSequence;
 use std::error::Error;
 use sugarsubstitute_application::{
     startup::{ConnectionBudget, ConnectionBudgetKind},

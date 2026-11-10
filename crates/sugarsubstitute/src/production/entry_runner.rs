@@ -22,9 +22,10 @@ pub(crate) mod tests;
 mod updates;
 use super::{
     coordinator_authority::CoordinatorAuthority, dispatch::ProductionCommand,
-    entry::ProductionEntryIntake, entry_bootstrap::EntryBootstrap, scope_sequence::ScopeSequence,
+    entry::ProductionEntryIntake, entry_bootstrap::EntryBootstrap,
 };
 use crate::job_sequence::JobSequence;
+use crate::scope_sequence::ScopeSequence;
 use std::{
     error::Error,
     fmt,

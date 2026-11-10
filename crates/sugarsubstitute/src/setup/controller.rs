@@ -16,13 +16,12 @@ pub(super) mod managed_qualification;
 pub(super) mod qualification;
 mod requests;
 use super::worker::Worker;
-use crate::job_sequence::JobSequence;
+use crate::{job_sequence::JobSequence, scope_sequence::ScopeSequence};
 pub(super) use native::qualification as window_qualification;
 use serde_json::{Value, json};
 use std::{collections::VecDeque, error::Error, io, path::PathBuf, sync::Arc};
 use sugarsubstitute_contracts::execution::{
-    ExecutionPort, JobClass, JobContext, JobOutcome, JobSpec, Operation, OwnedJob, Scope, ScopeId,
-    ScopeSpec,
+    ExecutionPort, JobClass, JobContext, JobOutcome, JobSpec, Operation, OwnedJob, Scope,
 };
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 use sugarsubstitute_supervision::{
@@ -60,6 +59,7 @@ pub(super) struct Controller {
     client: Option<ExecutionClient>,
     scope: Option<Scope>,
     jobs: JobSequence,
+    scopes: ScopeSequence,
     storage: Option<StorageJob>,
     bundle: Option<Arc<VerifiedBundle>>,
     cache: Option<setup_storage::cache::RuntimeCache>,
@@ -97,6 +97,7 @@ impl Controller {
             client: None,
             scope: None,
             jobs: JobSequence::new(),
+            scopes: ScopeSequence::new(),
             storage: None,
             bundle: None,
             cache: None,

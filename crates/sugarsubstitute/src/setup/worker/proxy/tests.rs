@@ -3,7 +3,7 @@
 //! Observe admitted lookup completion, output overload and repeated close without losing custody.
 use super::*;
 use std::{num::NonZeroUsize, sync::Condvar, time::Instant};
-use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionError};
+use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionError, ScopeId};
 use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
 
 #[test]

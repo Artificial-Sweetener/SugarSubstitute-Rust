@@ -3,11 +3,39 @@
 //! Observe actual family and execution settlement before releasing installer custody.
 use super::*;
 use std::{num::NonZeroUsize, time::Duration};
-use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionPort, ScopeId, ScopeSpec,
-};
+use sugarsubstitute_contracts::execution::{Clock, CompletionWake, ExecutionPort, ScopeSpec};
 
 impl Controller {
+    /// Construct the single installer execution owner with the signed import funded beside its
+    /// standing capacity.
+    ///
+    /// The import is admitted while the verified package, native transcript and provisioning
+    /// worker keep their own claims; without this addition an attached or managed installation
+    /// was refused at import with the standing capacity already spoken for.
+    /// # Errors
+    /// Preserves runtime and thread creation failures from the execution owner.
+    pub(super) fn execution_owner(
+        clock: Arc<MonotonicClock>,
+        wake: Arc<dyn CompletionWake>,
+    ) -> Result<ExecutionOwner> {
+        Ok(ExecutionOwner::with_additional_memory(
+            clock,
+            wake,
+            setup_storage::SIGNED_INSTALLER_RESERVATION_BYTES,
+        )?)
+    }
+    /// Create the next installer scope below `parent`, numbered by creation order.
+    ///
+    /// The executor accepts only advancing scope identities, while the user's choices decide
+    /// whether the provisioning worker's scopes follow or precede the native session's. Every
+    /// installer scope therefore draws from this one sequence instead of a fixed number.
+    /// # Errors
+    /// Rejects an absent execution client and preserves identity and admission failures.
+    pub(super) fn create_scope(&self, parent: Option<&Scope>) -> Result<Scope> {
+        let client = self.client.as_ref().ok_or("Installer execution absent")?;
+        Ok(client
+            .create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, parent)?)
+    }
     /// Admit the current native transcript placement without waiting for preparation.
     pub(super) fn console_layout(
         &mut self,
@@ -28,11 +56,9 @@ impl Controller {
         if self.owner.is_some() || self.closing {
             return Err("Installer cannot start twice".into());
         }
-        self.owner = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
-        let client = self.owner.as_ref().ok_or("Installer execution missing")?.client();
-        self.scope =
-            Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
-        self.client = Some(client);
+        self.owner = Some(Self::execution_owner(self.clock.clone(), wake)?);
+        self.client = Some(self.owner.as_ref().ok_or("Installer execution missing")?.client());
+        self.scope = Some(self.create_scope(None)?);
         self.console = Some(super::super::console::Output::new()?);
         let root = self.bundle_root.clone();
         let workspace = self.workspace.clone();

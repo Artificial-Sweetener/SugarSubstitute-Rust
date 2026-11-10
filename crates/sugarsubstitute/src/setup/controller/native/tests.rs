@@ -117,11 +117,9 @@ fn real_native_installer_navigates_and_applies_picker_without_browser() -> Resul
 pub(super) fn start(native: &mut Native, wake: Arc<dyn CompletionWake>) -> Result<()> {
     let backend = &mut native.controller;
     let owner = ExecutionOwner::new(backend.clock.clone(), wake)?;
-    let client = owner.client();
-    backend.scope =
-        Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
-    backend.client = Some(client);
+    backend.client = Some(owner.client());
     backend.owner = Some(owner);
+    backend.scope = Some(backend.create_scope(None)?);
     backend.console = Some(crate::setup::console::Output::new()?);
     native.session.start(backend)
 }

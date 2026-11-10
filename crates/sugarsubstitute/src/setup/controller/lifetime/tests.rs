@@ -27,12 +27,10 @@ impl CompletionWake for Wake {
 fn fixture() -> Result<(Controller, Arc<Wake>)> {
     let wake = Arc::new(Wake::default());
     let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
-    let owner = ExecutionOwner::new(controller.clock.clone(), wake.clone())?;
-    let client = owner.client();
-    controller.scope =
-        Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
+    let owner = Controller::execution_owner(controller.clock.clone(), wake.clone())?;
+    controller.client = Some(owner.client());
     controller.owner = Some(owner);
-    controller.client = Some(client);
+    controller.scope = Some(controller.create_scope(None)?);
     controller.relaunch =
         Some(ApplicationLaunch::new(sugarsubstitute_supervision::WindowsLaunchCommand::from_os(
             std::path::Path::new(r"E:\unopened\app.exe"),
@@ -69,6 +67,53 @@ fn observe(wake: &Wake, mut step: impl FnMut() -> Result<bool>) -> Result<()> {
             return Err("Cleanup observer expired".into());
         }
     }
+}
+
+/// Bytes the native transcript, verified package and provisioning worker retained beside the
+/// signed import in a real attached installation (measured when the import was refused).
+const RETAINED_BESIDE_IMPORT_BYTES: u64 = 87_055_414;
+
+#[test]
+fn installer_execution_admits_the_signed_import_beside_its_retained_custody() -> Result<()> {
+    let (mut controller, wake) = fixture()?;
+    controller.relaunch = None;
+    let client = controller.client.clone().ok_or("Installer execution absent")?;
+    let scope = controller.scope.as_ref().ok_or("Installer scope absent")?;
+    let spec = |bytes| -> Result<JobSpec> {
+        Ok(JobSpec {
+            id: controller.jobs.allocate()?,
+            operation: Operation::Infrastructure,
+            class: JobClass::InfrastructureOrdinary,
+            deadline: Some(client.now()?.checked_add(Duration::from_secs(60))?),
+            reservation_bytes: bytes,
+            replacement: None,
+        })
+    };
+    // The earlier custody stays charged through its retained completion, as it did when the
+    // import was refused.
+    let mut holder =
+        client.submit_blocking(scope, spec(RETAINED_BESIDE_IMPORT_BYTES)?, |context| {
+            Ok::<_, io::Error>(context)
+        })?;
+    let mut retained = None;
+    observe(&wake, || {
+        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+        retained = retained.take().or_else(|| holder.try_take_completion());
+        Ok(retained.is_some())
+    })?;
+    let mut import = client.submit_blocking(
+        scope,
+        spec(setup_storage::SIGNED_INSTALLER_RESERVATION_BYTES)?,
+        |_| Ok::<(), io::Error>(()),
+    )?;
+    observe(&wake, || {
+        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+        Ok(import.try_take_completion().is_some())
+    })?;
+    drop(retained);
+    controller.close()?;
+    observe(&wake, || controller.settled())?;
+    controller.finish()
 }
 
 #[test]

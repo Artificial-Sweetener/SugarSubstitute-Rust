@@ -8,13 +8,13 @@ mod process;
 mod protocol;
 mod proxy;
 mod records;
-use crate::job_sequence::JobSequence;
+use crate::{job_sequence::JobSequence, scope_sequence::ScopeSequence};
 use cache_jobs::CacheFinish;
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 use sugarsubstitute_contracts::{
     execution::{
         CompletionBatch, ExecutionPort, JobClass, JobOutcome, JobSpec, Moment, Operation, OwnedJob,
-        Scope, ScopeId, ScopeSpec,
+        Scope, ScopeSpec,
     },
     lifecycle::{
         CoordinatorEpoch, CoordinatorKey, NamespaceId, ProcessKey, ShutdownBudget, ShutdownId,
@@ -41,6 +41,7 @@ pub(super) struct Worker {
     client: ExecutionClient,
     scope: Scope,
     jobs: JobSequence,
+    scopes: ScopeSequence,
     proxies: proxy::Proxies,
     bundle: Arc<sugarsubstitute_supervision::setup_storage::VerifiedBundle>,
     cache: sugarsubstitute_supervision::setup_storage::cache::RuntimeCache,
@@ -70,6 +71,7 @@ impl Worker {
         client: ExecutionClient,
         scope: Scope,
         jobs: JobSequence,
+        scopes: ScopeSequence,
         bundle: Arc<sugarsubstitute_supervision::setup_storage::VerifiedBundle>,
         cache: sugarsubstitute_supervision::setup_storage::cache::RuntimeCache,
         workspace: PathBuf,
@@ -116,6 +118,7 @@ impl Worker {
             client,
             scope,
             jobs,
+            scopes,
             proxies: proxy::Proxies::default(),
             bundle,
             cache,
