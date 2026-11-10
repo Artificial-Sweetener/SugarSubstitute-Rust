@@ -34,7 +34,8 @@ fn geometry_material_changes_wait_for_matching_native_acceptance() -> Result<(),
             .ok_or("Native receipt missing")?;
         fixture.send(id, "surface.geometry", geometry(sigma))?;
         assert!(fixture.canvas.take_command().is_none());
-        assert!(fixture.canvas.presented(previous).is_err());
+        // The previous frame predates the new material, so its late acknowledgement resolves nothing.
+        fixture.canvas.presented(previous)?;
         assert!(
             fixture.canvas.take_command().is_none(),
             "Previous frame acknowledged new material"

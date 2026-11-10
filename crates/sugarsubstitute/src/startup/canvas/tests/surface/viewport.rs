@@ -168,7 +168,7 @@ fn resize_and_source_retirement_fence_shared_camera_waiters_and_their_old_frames
         .resize(sugarsubstitute_image_ops::Extent::new(100, 50)?)?;
     fixture.pump()?;
     fixture.take(5, "stale")?;
-    assert!(fixture.canvas.presented(old_frame).is_err());
+    fixture.canvas.presented(old_frame)?;
     fixture.geometry(6, 100, 50)?;
     fixture.complete(6)?;
     fixture.viewport(7, json!({"type":"read"}))?;
@@ -178,7 +178,7 @@ fn resize_and_source_retirement_fence_shared_camera_waiters_and_their_old_frames
     fixture.canvas.session.as_mut().ok_or("Session absent")?.cancel_selection()?;
     fixture.pump()?;
     fixture.take(8, "stale")?;
-    assert!(fixture.canvas.presented(retained.frame).is_err());
+    fixture.canvas.presented(retained.frame)?;
     let MainCanvasPresentation::Retain(frame) = fixture.canvas.presentation() else {
         return Err("Source retirement released acknowledged native pixels".into());
     };

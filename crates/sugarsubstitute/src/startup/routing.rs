@@ -171,7 +171,8 @@ impl<B: StartupBackend> StartupHost<B> {
                         {
                             let allocation = observed.allocation();
                             let (identity, message, lease, claim) = observed.into_parts();
-                            if self.child.admits_canvas(identity, &lease) {
+                            let admission = self.child.canvas_admission(identity, &lease);
+                            if admission.is_ok() {
                                 let backend = self.child.canvas_backend(identity);
                                 let canvas =
                                     self.canvas.as_mut().ok_or("Application canvas disappeared")?;
@@ -193,7 +194,10 @@ impl<B: StartupBackend> StartupHost<B> {
                                 let result = canvas.surface(identity, message, allocation, claim);
                                 canvas.set_session_source(None);
                                 result?;
-                            } else {
+                            } else if let Err(reason) = admission {
+                                tracing::warn!(operation = "canvas_request_refused", lane = "surface",
+                                    reason = reason.name(), identity = ?identity,
+                                    "A canvas request was refused");
                                 self.canvas
                                     .as_mut()
                                     .ok_or("Application canvas disappeared")?
@@ -231,18 +235,22 @@ impl<B: StartupBackend> StartupHost<B> {
                             if grants_native_canvas(accepts, observed.hosting()) =>
                         {
                             let (identity, request, lease, claim, storage) = observed.into_parts();
-                            if self.child.admits_canvas(identity, &lease) {
+                            let admission = self.child.canvas_admission(identity, &lease);
+                            if admission.is_ok() {
                                 let backend = self.child.canvas_backend(identity);
                                 let canvas =
                                     self.canvas.as_mut().ok_or("Application canvas disappeared")?;
                                 canvas.backend(backend)?;
                                 canvas.native(identity, request, claim, storage)?;
                                 self.advance_native_output_replays()?;
-                            } else {
+                            } else if let Err(reason) = admission {
+                                tracing::warn!(operation = "canvas_request_refused", lane = "native",
+                                    reason = reason.name(), identity = ?identity,
+                                    "A canvas request was refused");
                                 self.canvas
                                     .as_mut()
                                     .ok_or("Application canvas disappeared")?
-                                    .refuse_native(identity, &request, claim)?;
+                                    .refuse_native(identity, &request, claim, reason)?;
                                 #[cfg(feature = "k1-native-qualification")]
                                 sugarsubstitute_desktop::qualification_trace::progress(
                                     sugarsubstitute_desktop::qualification_trace::Progress::CanvasContextRejected,

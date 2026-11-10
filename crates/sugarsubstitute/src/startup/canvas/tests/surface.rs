@@ -30,6 +30,7 @@ mod cancellation;
 mod capture;
 mod comparison;
 mod failure;
+mod frame_acknowledgement;
 mod gate;
 mod hidden_selection;
 mod host;
@@ -313,7 +314,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     assert_eq!(retained.target, first_stamp);
     assert_eq!(retained.identity, identity);
     assert_eq!(retained.allocation, allocation);
-    assert!(canvas.presented(first_stamp).is_err());
+    canvas.presented(first_stamp)?;
     assert!(canvas.take_command().is_none());
     loop {
         let revision = wake.revision();

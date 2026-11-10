@@ -305,3 +305,5 @@ pub(crate) use recovery_child::close_recovery_input;
 
 #[cfg(test)]
 pub(crate) mod cache_fixture;
+#[cfg(test)]
+mod creation_tests;

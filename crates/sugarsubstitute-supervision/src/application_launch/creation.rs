@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Explicit inheritance for an independent application Root, with owned attribute storage.
 use super::LaunchCustody;
-use crate::{ClaimError, WindowsLaunchBuffers};
+use crate::{ClaimError, WindowsLaunchBuffers, creation_error_mode::with_image_errors_reported};
 use std::{mem::size_of, os::windows::io::AsRawHandle};
 use windows::{
     Win32::{Foundation::HANDLE, System::Threading::*},
@@ -138,22 +138,26 @@ fn create_native(
     } else {
         startup.StartupInfo.cb = size_of::<STARTUPINFOW>() as u32;
     }
-    // SAFETY: exact validated command buffers, current-directory buffer, original inherited
-    // selection, optional containment Job and heap attribute list remain live through this call.
-    // The caller adopts every output before resuming a suspended activation engine.
-    unsafe {
-        CreateProcessW(
-            PCWSTR(command.application_name.as_ptr()),
-            Some(PWSTR(command.command_line.as_mut_ptr())),
-            None,
-            None,
-            !inherited.is_empty(),
-            flags,
-            None,
-            PCWSTR(command.working_directory.as_ptr()),
-            &startup.StartupInfo,
-            process,
-        )
-    }
+    // A damaged or non-PE image must come back as the creation error, never as a modal dialog.
+    with_image_errors_reported(|| {
+        // SAFETY: exact validated command buffers, current-directory buffer, original inherited
+        // selection, optional containment Job and heap attribute list remain live through this
+        // call. The caller adopts every output before resuming a suspended activation engine.
+        unsafe {
+            CreateProcessW(
+                PCWSTR(command.application_name.as_ptr()),
+                Some(PWSTR(command.command_line.as_mut_ptr())),
+                None,
+                None,
+                !inherited.is_empty(),
+                flags,
+                None,
+                PCWSTR(command.working_directory.as_ptr()),
+                &startup.StartupInfo,
+                process,
+            )
+        }
+    })
+    .map_err(|cause| ClaimError::new("application_launch_error_mode", cause))?
     .map_err(|cause| ClaimError::new("application_launch_create", cause))
 }

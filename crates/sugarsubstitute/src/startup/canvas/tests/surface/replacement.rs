@@ -34,7 +34,7 @@ impl Replacement<'_> {
         self.canvas.surface(self.identity, cancellation, None, self.memory.claim(64 * 1024)?)?;
         reply(self.canvas, 401, "cancelled")?;
         cancel_consumed(self.canvas, self.identity)?;
-        assert!(self.canvas.presented(cancelled).is_err());
+        self.canvas.presented(cancelled)?;
         self.retained(blue)?;
         self.send(400, 402, "surface.prepare", json!({}))?;
         wait_reply(self.canvas, self.client, self.wake, 402, "ready")?;
@@ -103,7 +103,7 @@ impl Replacement<'_> {
             }))?;
             wait_reply(self.canvas, self.client, self.wake, base + 2, status)?;
             self.retained(current)?;
-            assert!(self.canvas.presented(current).is_err());
+            self.canvas.presented(current)?;
             self.send(base, base + 3, "surface.release", json!({}))?;
             wait_reply(self.canvas, self.client, self.wake, base + 3, "applied")?;
             let frame = prepared_frame(self.canvas).ok_or("Restored native frame is absent")?;

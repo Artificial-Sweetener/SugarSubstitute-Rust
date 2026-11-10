@@ -113,7 +113,8 @@ impl Session {
 
     /// Acknowledge the exact selected frame after the composition committed it.
     /// # Errors
-    /// Rejects foreign, stale and duplicate acknowledgements.
+    /// Answers a foreign acknowledgement with [`Unaccepted::Ignored`] and a frame that cannot
+    /// become accepted evidence with [`Unaccepted::Rejected`], both before custody changes.
     pub(crate) fn did_present_selected(
         &mut self,
         target: FrameStamp,
@@ -126,23 +127,28 @@ impl Session {
 
     /// Commit shared-frame evidence once the composition copied and committed its texture.
     /// # Errors
-    /// Rejects foreign, stale and duplicate acknowledgements.
+    /// Answers a foreign acknowledgement with [`Unaccepted::Ignored`] and a frame that cannot
+    /// become accepted evidence with [`Unaccepted::Rejected`], both before custody changes.
     pub(crate) fn did_present_composition(
         &mut self,
         target: FrameStamp,
     ) -> Result<(), Box<dyn Error>> {
-        if self.composition_pending.as_ref().is_none_or(|display| {
-            display.target != target
-                || display.frame.backdrop_generation() != self.backdrops.generation
-        }) || self.document.pending_gpu_evidence.is_none_or(|evidence| evidence.target != target)
-        {
-            return Err("Canvas received a foreign shared-frame acknowledgement".into());
+        let Some(display) =
+            self.composition_pending.as_ref().filter(|display| display.target == target)
+        else {
+            return Err(Unaccepted::Ignored(Ignored::Foreign).into());
+        };
+        if display.frame.backdrop_generation() != self.backdrops.generation {
+            return Err(Unaccepted::rejected(Rejection::StaleBackdrop).into());
         }
         let evidence = self
             .document
             .pending_gpu_evidence
-            .take()
-            .ok_or("Canvas shared-frame evidence is unavailable")?;
+            .filter(|evidence| evidence.target == target)
+            .ok_or_else(|| Unaccepted::rejected(Rejection::MissingEvidence))?;
+        // Judge before any custody changes, so a rejected frame leaves its evidence and pacing slot intact.
+        self.judge_display(evidence)?;
+        self.document.pending_gpu_evidence = None;
         self.pacing.native_accepted(target, self.navigation_time())?;
         self.composition_shown = self.composition_pending.take();
         self.accept_display(evidence, true)?;

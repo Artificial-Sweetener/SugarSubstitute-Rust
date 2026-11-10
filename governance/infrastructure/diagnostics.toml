@@ -220,7 +220,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/capture.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:8fbb9b06352433084e9da0d186786e3e035a9d7b605731b14eef4e97c37c5119"
+source_sha256 = "sha256:927c820515328fb9b21137006c80187a326e9e3286bfa72b11ed50b1229f8953"
 disposition = "fixture"
 rationale = "Canvas surface tests capture the application formatter's output on their own thread, with a second never-installed registrar keeping shared callsite interest stable under parallel tests; runtime construction is unchanged."
 

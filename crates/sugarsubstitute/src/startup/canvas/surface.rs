@@ -20,6 +20,7 @@ mod operations;
 mod overview;
 mod presentation;
 mod preview;
+mod rejection;
 #[cfg(test)]
 #[path = "surface/replies_tests.rs"]
 mod replies_tests;
@@ -74,6 +75,8 @@ struct Binding {
     backdrops: Vec<sugarsubstitute_canvas_render::backdrop::BackdropRegion>,
     /// Session-owned geometry/material generation that the next matching frame must present.
     backdrop_generation: u64,
+    /// Frames rejected in a row since this attachment last had a frame accepted.
+    rejected_frames: u8,
     /// Page-published web content above the viewport, in physical client pixels.
     occlusions: Vec<PhysicalRect>,
     /// A page modal blocks the whole viewport, so no native input region is published.
@@ -159,6 +162,8 @@ pub(super) struct NativeSurface {
         Vec<(String, Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>)>,
     binding: Option<Binding>,
     retained: Option<Binding>,
+    /// The last frame the session rejected; its pixels are never shown again.
+    rejected: Option<FrameStamp>,
     restoring: bool,
     pending: Option<Pending>,
     /// A candidate's preparation held, at most one, while another request owns native mutation.
@@ -193,6 +198,7 @@ impl NativeSurface {
             fixture_acquirers: Vec::new(),
             binding: None,
             retained: None,
+            rejected: None,
             restoring: false,
             pending: None,
             deferred: None,

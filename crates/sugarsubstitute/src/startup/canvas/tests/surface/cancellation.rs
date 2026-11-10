@@ -229,7 +229,12 @@ fn queued_context_terminal_survives_matching_cancel_without_a_duplicate_ordinary
     let identity = identity()?;
     let panel = PanelSession::for_main(identity)?;
     let memory = MemoryLease::new(128 * 1024, Box::new(Release));
-    canvas.refuse_native(identity, &context(&panel, 11)?, memory.claim(64 * 1024)?)?;
+    canvas.refuse_native(
+        identity,
+        &context(&panel, 11)?,
+        memory.claim(64 * 1024)?,
+        crate::startup::CanvasRefusal::PanelNotConfigured,
+    )?;
     canvas.surface(identity, cancel(&panel, 11)?, None, memory.claim(64 * 1024)?)?;
     let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
         return Err("Cancellation displaced the queued context terminal".into());
@@ -294,8 +299,18 @@ fn retirement_removes_old_queued_terminals_and_receipts_and_preserves_new_fifo_c
     let panel = PanelSession::for_main(current)?;
     let old_credit = MemoryLease::new(128 * 1024, Box::new(Release));
     let current_credit = MemoryLease::new(128 * 1024, Box::new(Release));
-    canvas.refuse_native(old, &context(&old_panel, 11)?, old_credit.claim(64 * 1024)?)?;
-    canvas.refuse_native(current, &context(&panel, 12)?, current_credit.claim(64 * 1024)?)?;
+    canvas.refuse_native(
+        old,
+        &context(&old_panel, 11)?,
+        old_credit.claim(64 * 1024)?,
+        crate::startup::CanvasRefusal::OtherNavigation,
+    )?;
+    canvas.refuse_native(
+        current,
+        &context(&panel, 12)?,
+        current_credit.claim(64 * 1024)?,
+        crate::startup::CanvasRefusal::PanelNotConfigured,
+    )?;
     canvas.surface(old, cancel(&old_panel, 11)?, None, old_credit.claim(64 * 1024)?)?;
     canvas.surface(current, cancel(&panel, 12)?, None, current_credit.claim(64 * 1024)?)?;
     assert!(old_credit.claim(1).is_err());

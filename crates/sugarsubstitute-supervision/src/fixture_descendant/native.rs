@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain every native output through actual attribute deletion and checked handle closure.
 use super::*;
+use crate::creation_error_mode::with_image_errors_reported;
 use std::{
     mem::{size_of, size_of_val},
     os::windows::io::AsRawHandle,
@@ -140,25 +141,29 @@ impl Lease for NativeLease {
         if context.cancellation_requested() {
             return Err(RegistryError::invalid("fixture_descendant_before_create"));
         }
-        // SAFETY: exact validated self-EXE/cwd/argv/empty environment remain live. Only the
-        // selected four events or three stdio duplicates inherit. Parent Jobs are inherited.
-        let result = unsafe {
-            CreateProcessW(
-                PCWSTR(input.command.application_name.as_ptr()),
-                Some(PWSTR(input.command.command_line.as_mut_ptr())),
-                None,
-                None,
-                true,
-                EXTENDED_STARTUPINFO_PRESENT
-                    | CREATE_SUSPENDED
-                    | CREATE_UNICODE_ENVIRONMENT
-                    | CREATE_NO_WINDOW,
-                Some(environment.as_ptr().cast()),
-                PCWSTR(input.command.working_directory.as_ptr()),
-                &startup.StartupInfo,
-                &mut output,
-            )
-        };
+        // A damaged or non-PE image must come back as the creation error, never as a modal dialog.
+        let result = with_image_errors_reported(|| {
+            // SAFETY: exact validated self-EXE/cwd/argv/empty environment remain live. Only the
+            // selected four events or three stdio duplicates inherit. Parent Jobs are inherited.
+            unsafe {
+                CreateProcessW(
+                    PCWSTR(input.command.application_name.as_ptr()),
+                    Some(PWSTR(input.command.command_line.as_mut_ptr())),
+                    None,
+                    None,
+                    true,
+                    EXTENDED_STARTUPINFO_PRESENT
+                        | CREATE_SUSPENDED
+                        | CREATE_UNICODE_ENVIRONMENT
+                        | CREATE_NO_WINDOW,
+                    Some(environment.as_ptr().cast()),
+                    PCWSTR(input.command.working_directory.as_ptr()),
+                    &startup.StartupInfo,
+                    &mut output,
+                )
+            }
+        })
+        .map_err(|cause| RegistryError::new("fixture_descendant_error_mode", cause))?;
         if !output.hProcess.is_invalid() {
             self.process = Some(output.hProcess.0 as usize);
         }

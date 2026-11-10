@@ -45,10 +45,12 @@ impl StartupBackend for ProductionChild {
         self.adopt_system_accent(accent)
     }
     #[cfg(feature = "native-composition")]
-    fn admits_canvas(&self, identity: MainIdentity, lease: &MemoryLease) -> bool {
-        !self.shutdown.closing()
-            && self.identity == identity
-            && self.panel.as_ref().is_some_and(|panel| panel.admits_canvas(identity, lease))
+    fn canvas_admission(
+        &self,
+        identity: MainIdentity,
+        lease: &MemoryLease,
+    ) -> std::result::Result<(), crate::startup::CanvasRefusal> {
+        self.admission(identity, lease)
     }
     #[cfg(feature = "native-composition")]
     fn canvas_backend(&self, identity: MainIdentity) -> Option<crate::startup::CanvasBackend> {

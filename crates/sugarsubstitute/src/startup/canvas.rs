@@ -409,15 +409,17 @@ impl EmbeddedCanvas {
         self.surface.refuse(identity, message, claim, self.session.as_mut())
     }
 
-    /// Answer a native request the current page has no canvas authority for as unavailable.
+    /// Answer a native request the current page has no canvas authority for as unavailable,
+    /// naming `reason` in its developer detail.
     #[cfg(feature = "native-composition")]
     pub(super) fn refuse_native(
         &mut self,
         identity: sugarsubstitute_contracts::startup::MainIdentity,
         request: &sugarsubstitute_contracts::canvas_native::CanvasNativeRequest,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
+        reason: super::CanvasRefusal,
     ) -> Result<(), Box<dyn Error>> {
-        self.surface.refuse_native(identity, request, claim)
+        self.surface.refuse_native(identity, request, claim, reason)
     }
 
     /// Transfer a correlated native canvas or surface reply with its admitted allocation.

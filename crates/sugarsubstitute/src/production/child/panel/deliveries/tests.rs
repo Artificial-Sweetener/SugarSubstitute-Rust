@@ -12,6 +12,11 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
+/// The refusal every fallback native reply carries in these lane tests.
+fn unavailable() -> CanvasFailure {
+    CanvasFailure::new(sugarsubstitute_contracts::canvas_native::CanvasFailureStatus::Unavailable)
+}
+
 struct Release(Arc<AtomicU64>);
 impl MemoryRelease for Release {
     fn release(&self, bytes: u64) {
@@ -253,6 +258,7 @@ fn canvas_context_reports_only_the_currently_implemented_display_capabilities() 
         &request,
         &lease,
         lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
+        &unavailable(),
     )?;
     let Some(DesktopStartupCommand::SendCanvasNative(reply)) = deliveries.take_command(identity)
     else {
@@ -300,6 +306,7 @@ fn every_other_native_family_is_refused_as_unavailable_with_its_own_reply() -> R
             &request,
             &lease,
             lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
+            &unavailable(),
         )?;
         let Some(DesktopStartupCommand::SendCanvasNative(reply)) =
             deliveries.take_command(identity)
@@ -335,6 +342,7 @@ fn canvas_context_rejects_foreign_navigation_and_memory_custody() -> Result<()> 
                 &context_request(&session)?,
                 &lease,
                 lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
+                &unavailable(),
             )
             .is_err()
     );
@@ -345,6 +353,7 @@ fn canvas_context_rejects_foreign_navigation_and_memory_custody() -> Result<()> 
                 &context_request(&session)?,
                 &other,
                 other.claim(CanvasNativeReply::STORAGE_BYTES)?,
+                &unavailable(),
             )
             .is_err()
     );
@@ -355,6 +364,7 @@ fn canvas_context_rejects_foreign_navigation_and_memory_custody() -> Result<()> 
                 &context_request(&PanelSession::for_main(foreign)?)?,
                 &lease,
                 lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
+                &unavailable(),
             )
             .is_err()
     );

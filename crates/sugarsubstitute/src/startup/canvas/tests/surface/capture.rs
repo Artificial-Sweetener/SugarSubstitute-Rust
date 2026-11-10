@@ -49,6 +49,11 @@ impl DiagnosticLines {
         DiagnosticCapture { _subscriber: subscriber, _callsite_registry: callsite_registry }
     }
 
+    /// Whether any captured line carries `operation`.
+    pub(super) fn contains_operation(&self, operation: &str) -> Result<bool, Box<dyn Error>> {
+        Ok(self.text()?.contains(&format!("operation=\"{operation}\"")))
+    }
+
     /// The captured text.
     fn text(&self) -> Result<String, Box<dyn Error>> {
         let bytes = self.0.lock().map_err(|_| "Diagnostic lines poisoned")?.clone();

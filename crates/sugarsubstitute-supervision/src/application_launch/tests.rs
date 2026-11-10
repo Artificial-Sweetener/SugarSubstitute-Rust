@@ -3,6 +3,7 @@
 //! Actual windowless creation and checked native close failure survive discarded worker results.
 use super::*;
 mod containment;
+mod image_errors;
 use crate::setup_storage::test_worker::{self as worker, TestResult};
 use windows::Win32::{
     Foundation::{

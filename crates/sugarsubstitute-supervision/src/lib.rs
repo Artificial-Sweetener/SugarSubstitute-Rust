@@ -50,6 +50,9 @@ pub mod committed_reader;
 #[cfg(windows)]
 pub mod coordinator_entry;
 #[cfg(windows)]
+#[allow(unsafe_code)]
+mod creation_error_mode;
+#[cfg(windows)]
 pub mod diagnostic_storage;
 #[cfg(any(windows, unix))]
 mod durable_storage;

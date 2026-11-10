@@ -28,6 +28,68 @@ pub struct CanvasBackend {
     pub peer: sugarsubstitute_supervision::lifecycle_protocol::BackendPeer,
 }
 
+/// Why the child cannot admit a page's canvas request right now.
+///
+/// Each cause names the fact that failed, so a refused request is answered with an actionable
+/// reason instead of an empty failure.
+#[cfg(feature = "native-composition")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanvasRefusal {
+    /// The application is closing.
+    Closing,
+    /// The request belongs to a page navigation that is no longer the current one.
+    OtherNavigation,
+    /// The request carries storage that is not the current page's.
+    OtherLifetime,
+    /// The page's panel handshake has not completed, so it holds no canvas authority yet.
+    PanelNotConfigured,
+    /// The page's panel handshake failed, so it holds no canvas authority.
+    PanelFailed,
+    /// The application is not running, or the page is not composition-hosted.
+    NativeCanvasNotGranted,
+}
+
+#[cfg(feature = "native-composition")]
+impl CanvasRefusal {
+    /// Closed diagnostic name, free of paths and content.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Closing => "closing",
+            Self::OtherNavigation => "other_navigation",
+            Self::OtherLifetime => "other_lifetime",
+            Self::PanelNotConfigured => "panel_not_configured",
+            Self::PanelFailed => "panel_failed",
+            Self::NativeCanvasNotGranted => "native_canvas_not_granted",
+        }
+    }
+
+    /// The typed `unavailable` failure that carries this reason as its developer detail.
+    pub fn failure(self) -> sugarsubstitute_contracts::canvas_native::CanvasFailure {
+        use sugarsubstitute_contracts::canvas_native::{
+            CanvasFailure, CanvasFailureMessage, CanvasFailureStatus,
+        };
+        let bare = CanvasFailure::new(CanvasFailureStatus::Unavailable);
+        CanvasFailure {
+            message: CanvasFailureMessage::new(self.detail()).unwrap_or(bare.message),
+            status: CanvasFailureStatus::Unavailable,
+        }
+    }
+
+    /// The reason in words for the page's developer detail.
+    pub const fn detail(self) -> &'static str {
+        match self {
+            Self::Closing => "The application is closing",
+            Self::OtherNavigation => "The request belongs to an earlier page navigation",
+            Self::OtherLifetime => "The request does not belong to the current page's storage",
+            Self::PanelNotConfigured => "The page's panel handshake has not completed",
+            Self::PanelFailed => "The page's panel handshake failed",
+            Self::NativeCanvasNotGranted => {
+                "The application is not running or the page is not composition-hosted"
+            }
+        }
+    }
+}
+
 /// Parent-authenticated correlation available before main construction. A host receives this
 /// only through its already authenticated current grant; filesystem and backend I/O remain
 /// independently admitted by their owners.
@@ -95,9 +157,16 @@ pub trait StartupBackend {
         &mut self,
         accent: Option<sugarsubstitute_contracts::appearance::AccentColor>,
     ) -> BackendResult<()>;
-    /// Check that a canvas message belongs to the current admitted panel and allocation.
+    /// Admit a canvas message only when it belongs to the current admitted panel and allocation.
+    ///
+    /// # Errors
+    /// Names the first fact that fails, in the order the application checks them.
     #[cfg(feature = "native-composition")]
-    fn admits_canvas(&self, identity: MainIdentity, lease: &MemoryLease) -> bool;
+    fn canvas_admission(
+        &self,
+        identity: MainIdentity,
+        lease: &MemoryLease,
+    ) -> Result<(), CanvasRefusal>;
     /// Borrow the current authenticated grant; managed backend outages fence this capability.
     #[cfg(all(windows, feature = "native-composition"))]
     fn canvas_backend(&self, identity: MainIdentity) -> Option<CanvasBackend>;

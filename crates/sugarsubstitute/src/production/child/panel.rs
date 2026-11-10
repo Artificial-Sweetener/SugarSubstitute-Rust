@@ -42,9 +42,26 @@ impl PanelOwner {
     }
 
     /// Check the current navigation and its original admitted native allocation.
+    ///
+    /// # Errors
+    /// Names whether the navigation, the allocation or the handshake outcome fails.
     #[cfg(feature = "native-composition")]
-    pub(super) fn admits_canvas(&self, identity: MainIdentity, lease: &MemoryLease) -> bool {
-        self.same_lifetime(identity, lease) && self.policy.state() != PanelState::Failed
+    pub(super) fn admission(
+        &self,
+        identity: MainIdentity,
+        lease: &MemoryLease,
+    ) -> std::result::Result<(), crate::startup::CanvasRefusal> {
+        use crate::startup::CanvasRefusal;
+        if self.identity != identity {
+            return Err(CanvasRefusal::OtherNavigation);
+        }
+        if !self.lease.same_reservation(lease) {
+            return Err(CanvasRefusal::OtherLifetime);
+        }
+        if self.policy.state() == PanelState::Failed {
+            return Err(CanvasRefusal::PanelFailed);
+        }
+        Ok(())
     }
 
     /// Claim the persistent state before constructing the navigation-bound panel policy.

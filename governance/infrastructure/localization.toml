@@ -420,7 +420,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:ff64974287ed8e77f84a4b42eeef9ad49d97a841cdaef76e4fed6231b4108906"
+source_sha256 = "sha256:45f7c0840d483a7503056f21f29d43a5560cac9d472ddc38cdac125689742493"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 

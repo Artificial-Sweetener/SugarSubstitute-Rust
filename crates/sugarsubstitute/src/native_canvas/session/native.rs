@@ -103,21 +103,28 @@ impl Lifetime for Session {
             }
             return Ok(());
         }
-        if self.document.cpu_pending != Some(target) {
-            return Err("Canvas received a foreign CPU presentation acknowledgement".into());
+        // An offered preview that is not acknowledgeable was drawn for a backdrop that has changed.
+        #[cfg(feature = "native-composition")]
+        if self.preview_frame_offered(target) {
+            return Err(Unaccepted::rejected(Rejection::StaleBackdrop).into());
         }
-        let frame =
-            self.document.cpu_projection.as_ref().ok_or("CPU projection custody is unavailable")?;
+        if self.document.cpu_pending != Some(target) {
+            return Err(Unaccepted::Ignored(Ignored::Foreign).into());
+        }
+        let missing = || Unaccepted::rejected(Rejection::MissingEvidence);
+        let frame = self.document.cpu_projection.as_ref().ok_or_else(missing)?;
         let (source, view) = (frame.source(), frame.view().target());
         let evidence = self
             .document
             .pending_cpu_evidence
-            .take()
             .filter(|evidence| evidence.target == target)
-            .ok_or("Canvas CPU presentation evidence is unavailable")?;
+            .ok_or_else(missing)?;
         if evidence.source != source || evidence.view != view {
-            return Err("Canvas CPU presentation evidence differs from projection custody".into());
+            return Err(Unaccepted::rejected(Rejection::Evidence).into());
         }
+        // Judge before any custody changes, so a rejected frame leaves its evidence and pacing slot intact.
+        self.judge_display(evidence)?;
+        self.document.pending_cpu_evidence = None;
         self.pacing.native_accepted(target, self.navigation_time())?;
         self.document.cpu_pending = None;
         self.accept_display(evidence, true)?;
@@ -405,25 +412,10 @@ impl Session {
         evidence: DisplayEvidence,
         native_acknowledged: bool,
     ) -> Result<(), Box<dyn Error>> {
-        if evidence.backdrop_generation != self.backdrops.generation {
-            return Err("Canvas display evidence has a stale backdrop generation".into());
-        }
-        let scene =
-            self.document.scene.as_ref().ok_or("Canvas display evidence has no document")?;
-        let (key, snapshot) = self.document.shown().ok_or("Canvas display has no document")?;
-        if evidence.document != key
-            && evidence.document.0 == key.0
-            && evidence.source_revision == scene.source_revision
-        {
+        if !self.judge_display(evidence)? {
             // An earlier revision or gesture step reached the screen after a newer one was
             // published; it proves nothing about the current content, which the next frame shows.
             return Ok(());
-        }
-        if evidence.document != key
-            || evidence.source_revision != scene.source_revision
-            || !evidence.proves_complete(snapshot.extent())?
-        {
-            return Err("Canvas display evidence does not prove complete current coverage".into());
         }
         if native_acknowledged {
             self.backdrops.presented = Some(evidence.backdrop_generation);
