@@ -2,14 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the Parent consumer with actual registry and profile execution jobs.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec,
-    Operation, Scope, ScopeId, ScopeSpec, WaitFuture,
+    Clock, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec, Operation, Scope, ScopeId,
+    ScopeSpec, WaitFuture,
 };
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::{WindowsProcessRegistry, profiles::PROFILE_OPERATION_BYTES};
@@ -22,18 +19,6 @@ impl Clock for ClockBoundary {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 pub(in crate::production::parent_lifecycle) struct Fixture {
@@ -57,23 +42,13 @@ impl Fixture {
         &self,
         job: JobId,
     ) -> TestResult<CompletionBatch> {
-        loop {
-            let prior = *self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let batch =
-                self.client.drain_completions(NonZeroUsize::new(32).ok_or("Drain bound")?)?;
-            if batch.notifications.iter().any(|notice| notice.job_id == job) {
-                return Ok(batch);
-            }
-            let guard = self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, Duration::from_secs(10), |value| *value == prior)
-                .map_err(|_| "Original completion wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("Original profile job did not notify".into());
-            }
-        }
+        self.wake.until(|| {
+            let batch = match self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31)) {
+                Ok(batch) => batch,
+                Err(cause) => return Some(Err::<_, Box<dyn Error + Send + Sync>>(cause.into())),
+            };
+            batch.notifications.iter().any(|notice| notice.job_id == job).then_some(Ok(batch))
+        })
     }
     pub(in crate::production::parent_lifecycle) fn finish(&mut self) -> TestResult {
         drop(self.owner.take().ok_or("Original execution owner absent")?);
@@ -84,26 +59,13 @@ impl Fixture {
         &self,
         bytes: u64,
     ) -> TestResult {
-        let until = std::time::Instant::now() + Duration::from_secs(10);
-        loop {
-            let prior = *self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if self.scope.snapshot().reserved_bytes <= bytes {
-                return Ok(());
+        self.wake.until(|| {
+            if let Err(cause) = self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))
+            {
+                return Some(Err::<(), Box<dyn Error + Send + Sync>>(cause.into()));
             }
-            let remaining = until
-                .checked_duration_since(std::time::Instant::now())
-                .ok_or("Original capacity wake absent")?;
-            let guard = self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, remaining, |value| *value == prior)
-                .map_err(|_| "Original capacity wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("Original capacity wake absent".into());
-            }
-        }
+            (self.scope.snapshot().reserved_bytes <= bytes).then_some(Ok(()))
+        })
     }
 }
 fn spec(id: u64, bytes: u64) -> TestResult<JobSpec> {

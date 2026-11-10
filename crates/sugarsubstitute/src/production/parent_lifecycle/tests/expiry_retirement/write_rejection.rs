@@ -3,6 +3,7 @@
 //! Drive the actual connected native control with a deterministic post-preflight clock cutoff.
 use super::super::super::types::WritePurpose;
 use super::*;
+use crate::completion_wake::Wake;
 use sha2::{Digest, Sha256};
 use std::{
     num::NonZeroUsize,
@@ -84,7 +85,7 @@ fn actual_control_returns_original_never_issued_buffer_after_parent_precheck_cut
     acq.observe_backend(h, outcome)?;
     acq.reply(h, Reply::Failed(LifecycleFailureCode::Preparation))?;
     parent.requests.get_mut(index)?.reply = Some(Reply::Failed(LifecycleFailureCode::Preparation));
-    let wake = Arc::new(super::super::ownership::Wake::default());
+    let wake = Arc::new(Wake::default());
     let clock = Arc::new(BoundaryClock::default());
     let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();
@@ -97,6 +98,7 @@ fn actual_control_returns_original_never_issued_buffer_after_parent_precheck_cut
         Moment::from_nanos(1_000_000_000_000),
     )?;
     let bootstrap = loop {
+        let observed = wake.revision();
         client.drain_completions(NonZeroUsize::MIN.saturating_add(63))?;
         if let Some(bootstrap) = server.control.take_bootstrap()? {
             break bootstrap;
@@ -108,7 +110,7 @@ fn actual_control_returns_original_never_issued_buffer_after_parent_precheck_cut
             )
             .into());
         }
-        wake.wait().map_err(|cause| format!("Original server bootstrap preparation: {cause}"))?;
+        wake.wait_after(observed);
     };
     let permit = client.reserve_lifecycle_pipe_client(
         &scope,
@@ -121,6 +123,7 @@ fn actual_control_returns_original_never_issued_buffer_after_parent_precheck_cut
     let mut peer = permit.bind(token).ok_or("Permit lost")?;
     let mut connected = false;
     loop {
+        let observed = wake.revision();
         client.drain_completions(NonZeroUsize::MIN.saturating_add(63))?;
         while let Some(observation) = peer.control.take_observation() {
             connected |= matches!(observation, LifecyclePipeObservation::Connected);
@@ -142,7 +145,7 @@ fn actual_control_returns_original_never_issued_buffer_after_parent_precheck_cut
             )
             .into());
         }
-        wake.wait().map_err(|cause| format!("Original native connection: {cause}"))?;
+        wake.wait_after(observed);
     }
     clock.0.store(179_999_999_999, Ordering::Release);
     assert_eq!(parent.next_live_reply(clock.now()).map_err(|e| e as Box<dyn Error>)?, Some(index));
@@ -224,7 +227,7 @@ fn actual_control_returns_original_never_issued_buffer_after_parent_precheck_cut
 fn terminal(
     client: &sugarsubstitute_execution::ExecutionClient,
     session: &mut LifecyclePipeSession,
-    wake: &super::super::ownership::Wake,
+    wake: &Wake,
 ) -> Result<
     sugarsubstitute_contracts::execution::JobCompletion<
         sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeReport,
@@ -232,11 +235,12 @@ fn terminal(
     >,
 > {
     loop {
+        let observed = wake.revision();
         client.drain_completions(NonZeroUsize::MIN.saturating_add(63))?;
         if let Some(terminal) = session.completion.try_take_completion() {
             return Ok(terminal);
         }
-        wake.wait().map_err(|cause| format!("Original checked native terminal: {cause}"))?;
+        wake.wait_after(observed);
     }
 }
 

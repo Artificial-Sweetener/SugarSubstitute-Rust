@@ -2,16 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Construct actor storage through an actual admitted job; matching facts grant no IPC authority.
 use super::{ParentLifecycle, Result, identity};
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::{
     configuration::ProfileId,
     execution::{
-        Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec,
-        Moment, Operation, ScopeId, ScopeSpec, WaitFuture,
+        Clock, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec, Moment, Operation, ScopeId,
+        ScopeSpec, WaitFuture,
     },
     lifecycle::{ConnectionId, LeaseId, LeaseKey, ResourceGeneration, ResourceId, ResourceKey},
 };
@@ -26,39 +23,6 @@ impl Clock for FixedClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-pub(super) struct Wake {
-    ready: Mutex<bool>,
-    changed: Condvar,
-}
-impl Wake {
-    pub(super) fn wait(&self) -> Result<()> {
-        let ready = self.ready.lock().map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        let (mut ready, timeout) = self
-            .changed
-            .wait_timeout_while(ready, Duration::from_secs(10), |ready| !*ready)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && !*ready {
-            return Err("Actual completion wake did not arrive".into());
-        }
-        *ready = false;
-        Ok(())
-    }
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut ready = self.ready.lock().map_err(|cause| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other(cause.to_string())),
-            )
-        })?;
-        *ready = true;
-        self.changed.notify_one();
-        Ok(())
-    }
-}
-
 #[test]
 fn original_actor_charge_outlives_job_and_frontend_wait_keeps_original_cutoff() -> Result<()> {
     let wake = Arc::new(Wake::default());
@@ -78,10 +42,11 @@ fn original_actor_charge_outlives_job_and_frontend_wait_keeps_original_cutoff() 
         |context| context.memory().claim(ParentLifecycle::storage_bytes()),
     )?;
     let completion = loop {
+        let observed = wake.revision();
         if let Some(completion) = job.try_take_completion() {
             break completion;
         }
-        wake.wait()?;
+        wake.wait_after(observed);
         let batch =
             client.drain_completions(NonZeroUsize::new(32).ok_or("Invalid batch bound")?)?;
         for notice in batch.notifications {

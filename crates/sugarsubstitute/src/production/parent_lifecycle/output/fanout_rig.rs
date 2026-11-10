@@ -2,10 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Real execution and Parent request storage; only external output reads/close are substituted.
 use super::*;
-use std::{
-    sync::{Arc, Condvar, Mutex},
-    time::{Duration, Instant},
-};
+use crate::completion_wake::Wake;
+use std::sync::Arc;
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 #[derive(Default)]
@@ -16,18 +14,6 @@ impl sugarsubstitute_contracts::execution::Clock for Clock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 pub(super) struct Rig {
@@ -46,29 +32,17 @@ impl Rig {
         Ok(Self { client, native, wake, execution })
     }
     pub(super) fn until(&self, mut ready: impl FnMut() -> TestResult<bool>) -> TestResult<()> {
-        let until = Instant::now() + Duration::from_secs(10);
-        loop {
-            let before =
-                *self.wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if ready()? {
-                return Ok(());
+        self.wake.until(|| {
+            if let Err(cause) = self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))
+            {
+                return Some(Err(cause.into()));
             }
-            let remaining = until
-                .checked_duration_since(Instant::now())
-                .ok_or("Output fixture did not wake")?;
-            let guard =
-                self.wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, remaining, |value| *value == before)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            drop(guard);
-            if timeout.timed_out() {
-                return Err("Output fixture did not wake".into());
+            match ready() {
+                Ok(true) => Some(Ok(())),
+                Ok(false) => None,
+                Err(cause) => Some(Err(cause)),
             }
-        }
+        })
     }
     pub(super) fn joined(self) {
         drop(self.execution);
