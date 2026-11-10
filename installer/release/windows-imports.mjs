@@ -15,6 +15,9 @@ const systemLibraries = new Set([
   'combase.dll', 'uiautomationcore.dll', 'dwrite.dll', 'imm32.dll', 'd2d1.dll',
   'shell32.dll', 'shlwapi.dll', 'rstrtmgr.dll', 'iphlpapi.dll', 'bcrypt.dll',
   'powrprof.dll', 'version.dll',
+  // Native canvas composition: Direct3D 11, DXGI, DirectComposition, process status, WinRT and shell scaling API sets.
+  'd3d11.dll', 'dxgi.dll', 'dcomp.dll', 'psapi.dll',
+  'api-ms-win-core-winrt-l1-1-0.dll', 'api-ms-win-shcore-scaling-l1-1-1.dll',
   // Node uses Windows certificate, crash diagnostic and user-profile APIs.
   'crypt32.dll', 'dbghelp.dll', 'userenv.dll',
   'api-ms-win-core-synch-l1-2-0.dll',

@@ -346,7 +346,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "installer/release/windows-imports.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:34a0749ae2523c30a5e4726d01952d34fbdab4aee9e84120ef6a42a23f1d09a6"
+source_sha256 = "sha256:620b0819b11d5fbedbc5759fb376f50b1be90376fef281a507750a43e13c5c1d"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 

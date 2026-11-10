@@ -384,7 +384,7 @@ rationale = "PE import/forwarder fixtures deliberately use the symbol identity F
 
 [[records]]
 path = "installer/release/windows-imports.test.mjs"
-source_sha256 = "sha256:e8aed8c11ec764ec86b7a7bbddaeb002625ed43519e7ca456712f6e284195354"
+source_sha256 = "sha256:1d110af3b9170c386a42ee3a66990c1f3c2523774af01e5243e44396046aa554"
 kind = "fixture"
 rationale = "PE import/forwarder fixtures deliberately use the symbol identity Function; this is technical executable metadata, not a JavaScript constructor or product copy."
 
