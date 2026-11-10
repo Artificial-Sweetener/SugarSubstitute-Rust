@@ -71,7 +71,7 @@ pub(crate) fn run<T: Send + 'static>(
     kind: Kind,
     work: impl FnOnce(JobContext) -> std::result::Result<T, WorkError> + Send + 'static,
 ) -> Result<T> {
-    let mut lifetime = Lifetime::new(kind, work)?;
+    let mut lifetime = Lifetime::new(kind, MonotonicClock::new(), work)?;
     #[cfg(windows)]
     let native = sugarsubstitute_desktop::run_headless(&mut lifetime)
         .map_err(|cause| Box::new(cause) as Box<dyn Error>);
@@ -103,7 +103,8 @@ impl Error for Failure {
 
 type Producer<T> = Box<dyn FnOnce(JobContext) -> std::result::Result<T, WorkError> + Send>;
 struct Lifetime<T> {
-    clock: Arc<MonotonicClock>,
+    clock: Arc<dyn Clock>,
+    /// Native pump wake for the original deadline; expiry is decided on `clock` against `until`.
     deadline: Instant,
     until: Moment,
     bytes: u64,
@@ -119,9 +120,9 @@ struct Lifetime<T> {
 impl<T: Send + 'static> Lifetime<T> {
     fn new(
         kind: Kind,
+        clock: Arc<dyn Clock>,
         producer: impl FnOnce(JobContext) -> std::result::Result<T, WorkError> + Send + 'static,
     ) -> Result<Self> {
-        let clock = MonotonicClock::new();
         let duration = kind.duration();
         let deadline = Instant::now().checked_add(duration).ok_or("Artifact deadline overflow")?;
         let until = clock.now().checked_add(duration)?;
@@ -158,7 +159,7 @@ impl<T: Send + 'static> Lifetime<T> {
         if self.result.is_some() {
             return Ok(HeadlessStep::Shutdown);
         }
-        if !self.expiry_observed && Instant::now() >= self.deadline {
+        if !self.expiry_observed && self.clock.now() >= self.until {
             self.expiry_observed = true;
             if let Some(job) = &self.job {
                 job.cancel();
