@@ -255,7 +255,8 @@ fn environment_bytes(variables: usize, units: usize) -> Vec<u8> {
 }
 
 /// Project a managed launch the way an installed host sends it: long installation paths, one
-/// ComfyUI beside them, and the caller's real environment. Returns the unused policy quota.
+/// ComfyUI beside them, the output folder setup chose as its argument, the profile folder an
+/// earlier launch settled, and the caller's real environment. Returns the unused policy quota.
 fn project_installed_managed(environment: &[u8]) -> Result<u64, Box<dyn Error + Send + Sync>> {
     use sugarsubstitute_contracts::{
         configuration::{Presentation, Theme},
@@ -269,11 +270,16 @@ fn project_installed_managed(environment: &[u8]) -> Result<u64, Box<dyn Error + 
     let root = EntryWindowsPathView::from_le_bytes(&root)?;
     let interpreter = EntryWindowsPathView::from_le_bytes(&interpreter)?;
     let profile = EntryWindowsPathView::from_le_bytes(&profile)?;
+    let mut arguments = Vec::new();
+    for argument in ["--output-directory".to_owned(), format!(r"{install}\..\outputs")] {
+        arguments.extend_from_slice(&u32::try_from(argument.len())?.to_le_bytes());
+        arguments.extend_from_slice(argument.as_bytes());
+    }
     let view = EntryLaunchRequestView::new(
         EntryConnectionView::Managed {
             root,
             interpreter,
-            arguments: EntryArgumentsView::from_encoded(&[], 0)?,
+            arguments: EntryArgumentsView::from_encoded(&arguments, 2)?,
             port: std::num::NonZeroU16::new(8188).ok_or("Invalid port")?,
         },
         EntryFrontendView::new(root, root, root, root),
@@ -284,8 +290,10 @@ fn project_installed_managed(environment: &[u8]) -> Result<u64, Box<dyn Error + 
     )?;
     let capture = PathBuf::from(format!(r"{install}\user\capture"));
     let available = projection_data_bytes().ok_or("Joined projection partition underflow")?;
-    let projected =
-        fields::project(view, &capture, available, None, |_| Ok(BackendStorage::External))?;
+    let settled = PathBuf::from(format!(r"{install}\user\desktop-data\profile\Profile_1"));
+    let projected = fields::project(view, &capture, available, Some(&settled), |_| {
+        Ok(BackendStorage::External)
+    })?;
     let (claim, _scope) = super::super::funding::tests::admitted(PROJECTION_BYTES, available)?;
     let mut input = ProjectionInput::without_request();
     input.capture_root = capture;

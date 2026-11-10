@@ -1095,7 +1095,7 @@ rationale = "Verify that inherited delegated-tool log destinations are replaced 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/projection_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:fc94b33d567e8ac310f4ab3c46bc6fe4191805a86eb862050995bde4616c5eb3"
+source_sha256 = "sha256:77b8323a9d1604dc19bd016c2e418eddb1c1bd3bc6afa314e3a7db19e2114fda"
 disposition = "fixture"
 rationale = "Assert that production projection confines delegated pip log and temporary destinations while preserving the original captured environment; no diagnostic sink is created."
 
