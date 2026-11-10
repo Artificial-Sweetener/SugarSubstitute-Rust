@@ -386,3 +386,21 @@ fn a_writer_held_past_any_elapsed_time_delays_the_batch_without_failing_diagnost
     assert_eq!(state.published, ["operation=held_writer\n"]);
     Ok(())
 }
+
+#[test]
+fn a_writer_held_through_shutdown_loses_the_last_batch_without_failing_the_process()
+-> Result<(), Box<dyn Error>> {
+    let sink = Arc::new(HeldWriter::default());
+    let health = DiagnosticHealth::fixture();
+    let service = Service::start(health.clone(), sink.clone(), PausedClock::new())?;
+    let queue = service.queue();
+    queue.push("operation=held_at_close\n".into());
+    sink.busy_at_or_after(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
+    // Another process keeps the writer through this process's whole close: the shutdown cutoff
+    // has passed while the batch still waits behind it.
+    queue.stop(sugarsubstitute_contracts::execution::Moment::from_nanos(0));
+    service.finish(&health);
+    health.check()?;
+    assert!(sink.state.lock().map_err(|_| "Fixture state poisoned")?.published.is_empty());
+    Ok(())
+}

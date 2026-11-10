@@ -94,14 +94,14 @@ rationale = "Supported bounded field formatter applies the shared contract befor
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service/batches.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:d7100b15ab37cb97e5bfb10bf6167f91e7ceabccac0fcf3d4d1a84d5e8632c75"
+source_sha256 = "sha256:0e9f03eb1fec03f18f8de3cb1ed4487aeb4b479bcaca5f739d2d27a9f29dcc68"
 disposition = "routing"
 rationale = "Native sink calls suppress recursive executor events within source-preserving bounded publication attempts."
 
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3a5e1e24499015bfc59bacef706ce83e7923957a464f8e873f26237197ea0c94"
+source_sha256 = "sha256:557a228cd86b6e35dd921bc3f734bac33543eb2f28afc644c25641be6983d311"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 

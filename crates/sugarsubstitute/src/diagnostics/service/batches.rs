@@ -63,7 +63,12 @@ pub(super) async fn publish(
     let mut first_busy = None;
     let mut input = Some(batch);
     'attempt: loop {
-        if context.cancellation_requested() || context.now() >= effective_deadline() {
+        // A batch the shutdown cutoff overtakes, behind another process's writer or a slow write, is
+        // lost history, not a failure of this process: the application's own outcome decides its exit.
+        if !context.cancellation_requested() && context.now() >= effective_deadline() {
+            return Ok(());
+        }
+        if context.cancellation_requested() {
             return Err(match first_busy {
                 Some(cause) => io::Error::new(io::ErrorKind::TimedOut, ContentionDeadline(cause)),
                 None => {
@@ -136,6 +141,11 @@ pub(super) async fn publish(
                             continue 'attempt;
                         }
                         return Err(cause);
+                    }
+                    _ if !context.cancellation_requested()
+                        && context.now() >= effective_deadline() =>
+                    {
+                        return Ok(());
                     }
                     other => {
                         return Err(first_busy.map_or_else(
