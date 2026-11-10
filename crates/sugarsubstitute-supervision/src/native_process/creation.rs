@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Create an explicit suspended child already associated with its owned Job.
 use super::*;
+use crate::creation_error_mode::with_image_errors_reported;
 use std::{
     mem::{size_of, size_of_val},
     os::windows::io::FromRawHandle,
@@ -129,22 +130,26 @@ impl WindowsPort {
         family.configure_stdio(&mut startup.StartupInfo);
         let mut process = PROCESS_INFORMATION::default();
         family.check_native()?;
-        // SAFETY: Validated explicit argv, cwd and environment live through the call.
-        // The exact HANDLE_LIST pins remain live through attribute deletion.
-        let created = unsafe {
-            CreateProcessW(
-                PCWSTR(input.command.application_name.as_ptr()),
-                Some(PWSTR(input.command.command_line.as_mut_ptr())),
-                None,
-                None,
-                inherited,
-                creation_flags(family.backend_custody.is_some()),
-                Some(input.environment.as_utf16().as_ptr().cast()),
-                PCWSTR(input.command.working_directory.as_ptr()),
-                &startup.StartupInfo,
-                &mut process,
-            )
-        };
+        // A damaged or non-PE image must come back as the creation error, never as a modal dialog.
+        let created = with_image_errors_reported(|| {
+            // SAFETY: Validated explicit argv, cwd and environment live through the call.
+            // The exact HANDLE_LIST pins remain live through attribute deletion.
+            unsafe {
+                CreateProcessW(
+                    PCWSTR(input.command.application_name.as_ptr()),
+                    Some(PWSTR(input.command.command_line.as_mut_ptr())),
+                    None,
+                    None,
+                    inherited,
+                    creation_flags(family.backend_custody.is_some()),
+                    Some(input.environment.as_utf16().as_ptr().cast()),
+                    PCWSTR(input.command.working_directory.as_ptr()),
+                    &startup.StartupInfo,
+                    &mut process,
+                )
+            }
+        })
+        .map_err(|cause| RegistryError::new("creation_error_mode", cause))?;
         if !process.hProcess.is_invalid() {
             family.members[0] = Some(Member {
                 handle: Some(process.hProcess.0 as usize),

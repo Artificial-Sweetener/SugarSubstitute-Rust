@@ -91,7 +91,7 @@ owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:0fceaa734dbf9e7f6cba510639158bf23daeba3ab21fb266ac60f4dab5171ba9"
+source_sha256 = "sha256:02e604b643a4ebf55111bd5e6071aec8ea267092e2f533261279f087588e86c4"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -99,7 +99,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:0fceaa734dbf9e7f6cba510639158bf23daeba3ab21fb266ac60f4dab5171ba9"
+source_sha256 = "sha256:02e604b643a4ebf55111bd5e6071aec8ea267092e2f533261279f087588e86c4"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -107,7 +107,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:0fceaa734dbf9e7f6cba510639158bf23daeba3ab21fb266ac60f4dab5171ba9"
+source_sha256 = "sha256:02e604b643a4ebf55111bd5e6071aec8ea267092e2f533261279f087588e86c4"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -969,6 +969,14 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Actual hidden fixture processes qualify Windows job lifetime and nested creation semantics. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/tests/image_errors.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:827046fd7740128caf29cf84e28061e5809ea402aeb2ca73a97978c4b4a4ec2a"
+capabilities = ["std::fs::File::open", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: An image Windows cannot run is a typed creation error, never a blocking hard-error dialog. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/updater/tests.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:2c77d2bc22387772a040660706853b6b5d0eab1e7e40da8c72ea3a16cdd4d3d9"
@@ -1550,6 +1558,14 @@ rationale = "Original native object identity, admitted buffers, sharing and reti
 boundary = "native_custody"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/native_process/creation_tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:b78a6f0b19711171ce1eaa5a4f24c0f3c69fa0d368f5a0d7d95bd39533e11dbc"
+capabilities = ["std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Root creation reports an image Windows cannot run as its creation failure, never as a dialog. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/profiles/migration/tests.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:481a82990e751db793742d314ae8fffbdafd0181d74eeb1cbc333bdfe94fa1a8"
@@ -1948,6 +1964,7 @@ source_sha256 = "sha256:acb0cbcf14cb2a1d28aedfd49643bb55faddc228134adebd21bb1968
 capabilities = ["std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise installation ownership, root adoption and the earlier-layout state move. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests.rs"
 owner = "sugarsubstitute-supervision"
