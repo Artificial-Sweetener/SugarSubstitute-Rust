@@ -233,22 +233,28 @@ impl Fixture {
     }
 
     /// Observe real worker progress before advancing injected presentation cadence.
+    ///
+    /// Admitted work owes a wake, even while another terminal outcome stays untaken, so the caller
+    /// blocks on it instead of polling: polling would spend its turns while a slow worker has yet
+    /// to run. Injected time advances only for a reported deadline once no work is admitted, and
+    /// an untaken terminal outcome with no deadline owes its delivery wake.
     pub(in crate::startup::canvas::tests::surface) fn wait_preview_progress(
         &self,
         observed: u64,
     ) -> Result<(), Box<dyn Error>> {
-        let progress = self.owner.poll_shutdown()?;
-        let terminal = progress.unresolved_jobs.iter().any(|job| {
-            !job.acknowledged
-                && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
-        });
-        if progress.running + progress.queued > 0 && !terminal {
+        let execution = self.execution()?;
+        if execution == Execution::Running {
             self.wake.wait_after(observed).map_err(|cause| {
-                format!("Preview worker progress stopped: {cause}; {progress:?}")
+                format!(
+                    "Preview worker progress stopped: {cause}; {:?}",
+                    self.owner.poll_shutdown()
+                )
             })?;
         } else if self.canvas.next_deadline().is_some() {
             self.advance(100);
-        } else if !terminal {
+        } else if execution == Execution::Delivering {
+            self.wake.wait_after(observed)?;
+        } else {
             return Err("Preview has no worker or presentation deadline to advance".into());
         }
         Ok(())
