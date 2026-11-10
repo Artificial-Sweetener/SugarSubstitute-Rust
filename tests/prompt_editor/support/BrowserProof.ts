@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise real prompt mounting and renderer-specific surfaces in an isolated browser document. */
+import { EditorView } from '@codemirror/view';
 import { CubePromptEditorHost } from '../../../frontend/comfyui/ui/prompt_editor/CubePromptEditorHost.js';
 import { CubePromptTextareaScope } from '../../../frontend/comfyui/ui/surface/CubePromptTextareaScope.js';
 import { ComfyLiteGraphCubeDomWidgetHost } from '../../../frontend/comfyui/ui/surface/ComfyLiteGraphCubeDomWidgetHost.js';
@@ -45,6 +46,7 @@ export interface PromptBrowserProof {
   axes(transform: string): { readonly x: number; readonly y: number } | null;
   annotateNativeField(): void;
   theme(style: VisualStyle, dark: boolean): void;
+  selection(): { readonly anchor: number; readonly head: number } | null;
   read(): {
     source: unknown;
     callbacks: number;
@@ -302,6 +304,12 @@ window.promptBrowserProof = {
     } finally {
       node.remove();
     }
+  },
+  /** Observe the mounted editor's public main selection in logical source offsets. */
+  selection() {
+    const content = document.querySelector<HTMLElement>('[data-sc-prompt-editor] .cm-content');
+    const range = content && EditorView.findFromDOM(content)?.state.selection.main;
+    return range ? { anchor: range.anchor, head: range.head } : null;
   },
   /** Return host-side evidence; no private CodeMirror state is exposed. */
   read: () => ({
