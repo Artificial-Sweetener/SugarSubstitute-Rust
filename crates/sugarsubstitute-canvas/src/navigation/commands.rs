@@ -5,6 +5,14 @@
 use super::*;
 
 impl Navigation {
+    /// Whether `accepted` is a camera this navigation can be parked at: content is loaded and the
+    /// camera was accepted on the same physical bounds. [`Self::freeze_at`] rejects every other
+    /// camera, so a caller holding display evidence that may predate this navigation's content or
+    /// bounds asks first.
+    pub fn accepts_camera(&self, accepted: Viewport) -> bool {
+        self.content.is_some() && accepted.surface() == self.view.surface()
+    }
+
     /// Stop gestures and motion at a camera already accepted by the presentation owner.
     /// The caller qualifies this camera against the current document and source before use.
     /// Coordinates are document pixels and scale is physical pixels per document pixel.
@@ -14,7 +22,7 @@ impl Navigation {
     /// # Errors
     /// Rejects absent content, foreign physical bounds or backward time without mutation.
     pub fn freeze_at(&mut self, accepted: Viewport, now: Duration) -> Result<(), CanvasError> {
-        if self.content.is_none() || accepted.surface() != self.view.surface() {
+        if !self.accepts_camera(accepted) {
             return Err(CanvasError::Invalid("Accepted camera does not match navigation content"));
         }
         let mut next = *self;

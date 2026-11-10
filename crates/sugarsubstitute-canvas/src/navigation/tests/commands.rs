@@ -46,6 +46,16 @@ fn freezing_preserves_completed_modes_and_rejects_foreign_geometry_and_time() ->
     Ok(())
 }
 
+#[test]
+fn only_loaded_navigation_on_the_same_bounds_accepts_a_camera() -> TestResult {
+    let nav = navigation()?;
+    assert!(nav.accepts_camera(nav.viewport()));
+    assert!(!nav.accepts_camera(Viewport::new(Extent::new(12, 13)?)?));
+    let empty = Navigation::new(nav.viewport());
+    assert!(!empty.accepts_camera(nav.viewport()));
+    Ok(())
+}
+
 fn target(outcome: NavigationCommandOutcome) -> Result<Viewport, CanvasError> {
     match outcome {
         NavigationCommandOutcome::Applied { target } => Ok(target),

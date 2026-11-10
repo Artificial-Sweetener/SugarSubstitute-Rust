@@ -34,6 +34,7 @@ mod input;
 mod inputs;
 mod inspection;
 mod jpeg;
+mod live_preview_route;
 mod native;
 mod overview;
 mod preview;

@@ -4351,7 +4351,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:f0ef2f686691948e90340b4fdeb745fa6371866d13df5dbadf0f8cddad14ea10"
+source_sha256 = "sha256:82f84ce4251ce26215e960af22f6f140c7ba2d725dfbacae2b5f8cbf4d6dd4dd"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."

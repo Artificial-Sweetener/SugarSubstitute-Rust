@@ -166,8 +166,11 @@ impl Session {
             _ => return Err("Preview acceptance lost its pixels".into()),
         };
         let now = self.navigation_time();
+        // A document without navigation content has no camera to park, such as the empty Output
+        // document that took over the screen's display evidence from an Input document.
         if self.preview.parked.is_none()
             && let Some(evidence) = self.document.display_evidence
+            && self.document.tools.navigation().accepts_camera(evidence.view)
         {
             self.document.tools.freeze_at(
                 evidence.view,
