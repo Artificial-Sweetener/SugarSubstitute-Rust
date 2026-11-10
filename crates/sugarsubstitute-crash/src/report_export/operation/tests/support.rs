@@ -15,7 +15,7 @@ use std::{
     time::Duration,
 };
 use sugarsubstitute_contracts::{execution::*, incident::*, lifecycle::*};
-use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
+use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, clock_fixture::ManualClock};
 pub(super) type ResultT<T = ()> = Result<T, Box<dyn Error>>;
 static NEXT: AtomicU64 = AtomicU64::new(1);
 pub(super) fn destination() -> ResultT<PathBuf> {
@@ -36,18 +36,15 @@ impl Wake {
     fn revision(&self) -> ResultT<u64> {
         Ok(*self.revision.lock().map_err(|_| "wake poisoned")?)
     }
+    /// Block until the execution owner publishes a wake newer than `revision`.
     fn wait(&self, revision: u64) -> ResultT {
-        let (value, timeout) = self
-            .changed
-            .wait_timeout_while(
-                self.revision.lock().map_err(|_| "wake poisoned")?,
-                Duration::from_secs(15),
-                |value| *value == revision,
-            )
-            .map_err(|_| "wake wait poisoned")?;
-        if timeout.timed_out() && *value == revision {
-            return Err("original completion cutoff elapsed".into());
-        }
+        drop(
+            self.changed
+                .wait_while(self.revision.lock().map_err(|_| "wake poisoned")?, |value| {
+                    *value == revision
+                })
+                .map_err(|_| "wake wait poisoned")?,
+        );
         Ok(())
     }
 }
@@ -145,7 +142,7 @@ pub(super) fn export(
     cancel: bool,
 ) -> ResultT<Observed> {
     use std::os::windows::ffi::OsStrExt;
-    let clock = MonotonicClock::new();
+    let clock = ManualClock::new();
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();

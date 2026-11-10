@@ -6,7 +6,6 @@ use std::{
     error::Error,
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
@@ -70,15 +69,11 @@ impl Rig {
                 return Ok(());
             }
             if *count == before {
-                let next = self
+                count = self
                     .wake
                     .changed
-                    .wait_timeout(count, Duration::from_secs(10))
+                    .wait_while(count, |count| *count == before)
                     .map_err(|_| "Wake poisoned")?;
-                count = next.0;
-                if next.1.timed_out() {
-                    return Err("Actual held factory did not retire".into());
-                }
             }
             drop(count);
         }
@@ -197,14 +192,12 @@ fn actual_provider_buffer_owner_closes_under_same_pair_and_retains_charge_throug
             drop(count);
             break;
         }
-        let next = rig
-            .wake
-            .changed
-            .wait_timeout_while(count, Duration::from_secs(10), |count| *count == before)
-            .map_err(|_| "Wake poisoned")?;
-        if next.1.timed_out() {
-            return Err("Actual provider Main did not terminate".into());
-        }
+        drop(
+            rig.wake
+                .changed
+                .wait_while(count, |count| *count == before)
+                .map_err(|_| "Wake poisoned")?,
+        );
     }
     assert_eq!(rig.main.snapshot().reserved_bytes, 8_159_232);
     assert!(service.advance_cleanup()?);

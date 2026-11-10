@@ -35,7 +35,7 @@ owner = "sugarsubstitute-crash"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:1e6bc75440cb284d1a7d0db3ee41acbddc746c1395c57c140717505b32657c3c"
+source_sha256 = "sha256:6301f1c169bd6cab74a383dc1452c9dca176dcf2ebd4813fe8f16a31e7e1efb0"
 rationale = "Native OS adapter bindings for sugarsubstitute-crash; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -191,7 +191,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Act
 [[records]]
 path = "crates/sugarsubstitute-crash/src/report_export/operation/tests/support.rs"
 owner = "sugarsubstitute-crash"
-source_sha256 = "sha256:33301373bf34e681d213dabbd6c025c9689318a71dde66dc6313f79602af7f44"
+source_sha256 = "sha256:43a4dbf1117c27d2a0bcca13295697708097397d28cfad96a5938cd88c852e62"
 capabilities = ["std::fs::create_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify actual receiving files through central finite main/cleanup workers. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -199,7 +199,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Qua
 [[records]]
 path = "crates/sugarsubstitute-crash/src/report_export/operation/tests/support/native_probe.rs"
 owner = "sugarsubstitute-crash"
-source_sha256 = "sha256:8171fb45ff5bf344f78f5e9fe01c206de75e1ef26ca25b7b0c711b2b9859fde3"
+source_sha256 = "sha256:6d4950d928580925e3d9a0535f46c6784cc549966e6534270598cc195a726903"
 capabilities = ["std::fs::metadata", "std::fs::set_permissions"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Observe a real predecessor mutation between pinned open and no-replace activation. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

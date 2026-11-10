@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
-use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
+use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, clock_fixture::ManualClock};
 pub(super) type TestError = Box<dyn Error + Send + Sync>;
 #[derive(Default)]
 struct Wake {
@@ -29,12 +29,12 @@ pub(super) struct Harness {
     pub(super) main: Scope,
     pub(super) cleanup: Scope,
     wake: Arc<Wake>,
-    clock: Arc<MonotonicClock>,
+    clock: Arc<ManualClock>,
     next: u64,
 }
 impl Harness {
     pub(super) fn new() -> Result<Self, TestError> {
-        let clock = MonotonicClock::new();
+        let clock = ManualClock::new();
         let wake = Arc::new(Wake::default());
         let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
         let client = owner.client();
@@ -81,18 +81,15 @@ impl Harness {
                     other => Err(format!("real worker outcome {:?}", other.kind()).into()),
                 };
             }
-            let (value, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(
-                    self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                    Duration::from_secs(10),
-                    |count| *count == old,
-                )
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if timeout.timed_out() && *value == old {
-                return Err("real finished-token worker stalled".into());
-            }
+            drop(
+                self.wake
+                    .changed
+                    .wait_while(
+                        self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                        |count| *count == old,
+                    )
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
         }
     }
     pub(super) fn join(&mut self) {

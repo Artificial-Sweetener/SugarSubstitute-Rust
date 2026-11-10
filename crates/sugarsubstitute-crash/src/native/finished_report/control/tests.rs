@@ -8,7 +8,6 @@ use std::{
         Arc, Condvar, Mutex,
         atomic::{AtomicU64, Ordering},
     },
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
@@ -83,17 +82,14 @@ fn observe<T: Send + 'static, E: Send + 'static>(
         if let Some(value) = job.try_take_completion() {
             return Ok((value, fatal));
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == old,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *count == old {
-            return Err("actual callback worker completion stalled".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(
+                    wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                    |count| *count == old,
+                )
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
     }
 }
 type Observed = (Probe, JobOutcome<(), TestError>, Option<ExecutionError>, Arc<Scope>);

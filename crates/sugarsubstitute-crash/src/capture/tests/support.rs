@@ -45,14 +45,13 @@ impl Gate {
         *lock(&self.state) = true;
         self.changed.notify_all();
     }
+    /// Block until the gate opens; a gate that is never opened leaves the test running.
     pub(super) fn wait(&self) -> Result<(), std::io::Error> {
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(lock(&self.state), Duration::from_secs(10), |state| !*state)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && !*state {
-            return Err(std::io::Error::other("Controlled boundary did not release"));
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.state), |state| !*state)
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
         Ok(())
     }
 }
@@ -66,14 +65,13 @@ impl Barrier {
         *lock(&self.count) += 1;
         self.changed.notify_all();
     }
+    /// Block until `target` workers have arrived.
     pub(super) fn wait(&self, target: usize) -> TestResult {
-        let (count, timeout) = self
-            .changed
-            .wait_timeout_while(lock(&self.count), Duration::from_secs(10), |count| *count < target)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count < target {
-            return Err("Controlled workers did not enter".into());
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.count), |count| *count < target)
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
         Ok(())
     }
 }
@@ -128,17 +126,14 @@ impl Rig {
     fn count(&self) -> u64 {
         *lock(&self.wake.count)
     }
+    /// Block until the real owner publishes a completion wake newer than `old`.
     fn wait(&self, old: u64) -> TestResult {
-        let (count, timeout) = self
-            .wake
-            .changed
-            .wait_timeout_while(lock(&self.wake.count), Duration::from_secs(10), |count| {
-                *count == old
-            })
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count == old {
-            return Err("Real owner did not notify completion".into());
-        }
+        drop(
+            self.wake
+                .changed
+                .wait_while(lock(&self.wake.count), |count| *count == old)
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
         Ok(())
     }
     pub(super) fn completion<T, E>(

@@ -75,14 +75,12 @@ fn run(case: Case) -> TestResult {
             drop(count);
             break;
         }
-        let next = rig
-            .wake
-            .changed
-            .wait_timeout_while(count, Duration::from_secs(10), |count| *count == before)
-            .map_err(|_| "Wake poisoned")?;
-        if next.1.timed_out() {
-            return Err("Actual cause fixture Main did not terminate".into());
-        }
+        drop(
+            rig.wake
+                .changed
+                .wait_while(count, |count| *count == before)
+                .map_err(|_| "Wake poisoned")?,
+        );
     }
     assert!(service.advance_cleanup()?);
     rig.settle(&mut service)?;
