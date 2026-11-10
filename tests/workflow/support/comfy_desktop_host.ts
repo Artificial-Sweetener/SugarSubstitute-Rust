@@ -204,6 +204,41 @@ export function comfyDesktopHostBoundary() {
       await app.loadGraphData(loaded.changeTracker?.activeState ?? {}, true, true, loaded);
       return loaded;
     },
+    /**
+     * Reopen tabs as Comfy restores them from its own persistence at startup, in place of its
+     * default tab: each tab carries its own document, and only the active one is loaded.
+     */
+    reopen: async (
+      documents: readonly {
+        readonly name: string;
+        readonly path: string | null;
+        readonly temporary: boolean;
+        readonly graphJson: string;
+        readonly baselineGraphJson: string | null;
+      }[],
+      active: number,
+    ): Promise<HostWorkflow[]> => {
+      workflow.openWorkflows = [];
+      workflow.activeWorkflow = null;
+      const reopened = documents.map((value) => {
+        const created = value.temporary
+          ? hostWorkflow(`workflows/${value.name}.json`, value.name, -1)
+          : hostWorkflow(
+              value.path ?? `workflows/${value.name}.json`,
+              value.name,
+              value.graphJson.length,
+            );
+        created.content = value.graphJson;
+        created.originalContent = value.baselineGraphJson ?? value.graphJson;
+        workflow.openWorkflows.push(created);
+        return created;
+      });
+      for (const listener of listeners) listener();
+      const shown = reopened[active];
+      if (!shown) throw new Error('Reopened active tab is unavailable.');
+      await app.loadGraphData(JSON.parse(shown.content ?? '{}') as object, true, true, shown);
+      return reopened;
+    },
     /** Hold every saved-workflow tracker construction, after its content arrived, until released. */
     holdTrackers: (): (() => void) => {
       let release: () => void = () => {};
