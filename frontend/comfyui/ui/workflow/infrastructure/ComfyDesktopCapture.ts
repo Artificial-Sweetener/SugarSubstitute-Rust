@@ -17,6 +17,7 @@
 import { desktopCheckpointError, utf8Bytes } from '../../core/embedded/SessionRuntime.js';
 import type {
   SessionAsset,
+  SessionBinding,
   SessionCheckpoint,
   SessionEntry,
   SessionInput,
@@ -92,6 +93,13 @@ export class ComfyDesktopCapture {
         cancellation,
       );
       this.options.assertCurrent(cancellation);
+      // Results arriving while receipts were awaited can advance this workflow past the captured
+      // document; the capture then describes no single moment and is retried, not refused.
+      if (!sameBinding(this.options.bindings.binding(context.sessionId), binding))
+        throw new DesktopSessionRefusal(
+          'stale',
+          'Desktop workflow changed while its checkpoint was captured.',
+        );
       const route =
         readComfyWorkflowInputState(JSON.parse(document.graphJson) as unknown)?.route ?? 'output';
       const view = this.options.canvas.capture(
@@ -190,4 +198,16 @@ function requestedTemporaryAsset(output: SessionOutput): SessionAsset {
     extension,
     media: output.media,
   });
+}
+
+/** Whether a workflow still sits at the exact revisions a capture started from. */
+function sameBinding(left: SessionBinding, right: SessionBinding): boolean {
+  return (
+    left.entryId === right.entryId &&
+    left.runtimeSession === right.runtimeSession &&
+    left.generation === right.generation &&
+    left.graphRevision === right.graphRevision &&
+    left.sourceRevision === right.sourceRevision &&
+    left.navigationRevision === right.navigationRevision
+  );
 }

@@ -176,11 +176,13 @@ export class DesktopSessionClient {
         await this.#execute(value);
     } catch (cause: unknown) {
       this.#transfer.cancel(value.requestId);
-      const captureLoading =
+      // A capture refused because Comfy is still loading or the workspace moved on is retried by the
+      // host on its next schedule; neither is a failure the user needs to see.
+      const captureRetried =
         operation.kind === 'capture' &&
         cause instanceof DesktopSessionRefusal &&
-        cause.code === 'not-committed';
-      if (!captureLoading) this.options.report(cause);
+        (cause.code === 'not-committed' || cause.code === 'stale');
+      if (!captureRetried) this.options.report(cause);
       await this.#error(
         value.requestId,
         cause instanceof DesktopSessionRefusal ? cause.code : 'invalid',
