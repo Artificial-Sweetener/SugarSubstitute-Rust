@@ -70,13 +70,16 @@ export interface CanvasClientPort {
   later(milliseconds: number, callback: () => void): () => void;
   report(error: unknown): void;
   /**
-   * Let canvas discovery and surface presentation requests wait for the host without a deadline.
+   * Let every request wait for the host's own reply without a deadline.
    *
-   * Set it only for a transport whose peer's loss is observed directly, such as the embedded native
-   * bridge, where the host owns this page and a slow host is merely busy decoding or rendering.
-   * A transport that can only infer a silent peer's death from elapsed time leaves it unset.
+   * Set it only for a transport that settles every admitted request itself and observes its
+   * peer's loss directly, such as the embedded native bridge: the host owns this page, answers
+   * each request once, and the bridge fails whatever is still queued when the connection ends.
+   * That bridge admits one request at a time, so a deadline there would measure the wait behind
+   * a slow surface preparation rather than the host. A transport that can only infer a silent
+   * peer's death from elapsed time leaves it unset.
    */
-  readonly awaitsPresentation?: boolean;
+  readonly settlesRequests?: boolean;
 }
 interface Pending {
   readonly type:
@@ -345,7 +348,7 @@ export class CanvasClient implements CanvasLayerHost {
       };
     }
   }
-  /** Register reply ownership before synchronous transports can answer, and bound every request. */
+  /** Register reply ownership before a synchronous transport answers; bound only unsettled transports. */
   #request(
     request: Request,
     reply: Pending['type'],
@@ -372,7 +375,7 @@ export class CanvasClient implements CanvasLayerHost {
         this.#cancel(requestId);
       };
       this.#pending.set(requestId, { type: reply, accept: resolve, reject, stop, cancel });
-      if (!this.#awaitsHost(request))
+      if (this.port.settlesRequests !== true)
         stopDeadline = this.port.later(30000, () => {
           this.#pending.delete(requestId);
           stop();
@@ -455,13 +458,6 @@ export class CanvasClient implements CanvasLayerHost {
         );
       }
     });
-  }
-  /** Whether this request waits for the host's own reply instead of a client-side deadline. */
-  #awaitsHost(request: Request): boolean {
-    return (
-      this.port.awaitsPresentation === true &&
-      (request.type === 'context.request' || request.type.startsWith('surface.'))
-    );
   }
   /** Signal cancellation without inventing a new mutation identity. */
   #cancel(requestId: number): void {

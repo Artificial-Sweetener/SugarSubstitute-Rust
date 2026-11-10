@@ -21,6 +21,7 @@ import { CanvasCancellation } from '../../../integrations/shared/CanvasCancellat
 import type {
   CanvasMessage,
   CanvasContext,
+  CanvasSourceContext,
 } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 import { connectCanvasSurface, negotiatedSurface } from '../support/canvas_surface.js';
 
@@ -46,7 +47,7 @@ const address = {
 } as const;
 
 /** Admit messages synchronously and retain explicit host replies and deterministic deadline callbacks. */
-function fixture(onSend: (message: CanvasMessage) => void = () => {}, awaitsPresentation = false) {
+function fixture(onSend: (message: CanvasMessage) => void = () => {}, settlesRequests = false) {
   const sent: CanvasMessage[] = [];
   const deadlines: { callback(): void; stop: ReturnType<typeof jest.fn<() => void>> }[] = [];
   const active = new Set<() => void>();
@@ -65,7 +66,7 @@ function fixture(onSend: (message: CanvasMessage) => void = () => {}, awaitsPres
       return stop;
     },
     report,
-    ...(awaitsPresentation ? { awaitsPresentation } : {}),
+    ...(settlesRequests ? { settlesRequests } : {}),
   });
   return {
     client,
@@ -259,7 +260,7 @@ test('a typed cancellation reply retires a bridge-held surface request without a
   f.client.dispose();
 });
 
-describe('a transport whose peer loss is observed directly', () => {
+describe('a transport that settles every request itself', () => {
   test('waits for context discovery and surface replies without a deadline, however slow the host', async () => {
     const f = fixture(() => {}, true);
     await connectCanvasSurface(f.client, f.sent);
@@ -319,17 +320,51 @@ describe('a transport whose peer loss is observed directly', () => {
     expect(f.sent.at(-1)).toMatchObject({ type: 'cancel' });
   });
 
-  test('still bounds requests that are not canvas discovery or presentation', async () => {
+  test('waits behind a slow surface request for source and insertion replies without a deadline', async () => {
     const f = fixture(() => {}, true);
+    // The native lane admits one request at a time, so a source query queued behind a surface
+    // request the host is still preparing would otherwise time out while only waiting its turn.
+    const context = f.client.sources.execute({ type: 'context' });
     const insertion = f.client.insertImage({
       image: new Uint8Array([1]),
       format: 'png',
       name: 'x',
       position: 'center',
     } as unknown as Parameters<CanvasClient['insertImage']>[0]);
-    const rejected = expect(insertion).rejects.toThrow('timed out');
-    expect(f.deadlines).toHaveLength(1);
-    f.expire(0);
-    await rejected;
+    await Promise.resolve();
+    expect(f.deadlines).toHaveLength(0);
+    const [sourceRequest, insertRequest] = f.sent;
+    if (sourceRequest?.type !== 'source.request' || insertRequest?.type !== 'image.insert')
+      throw new Error('Missing queued requests.');
+    const reply = { protocol: sourceRequest.protocol, version: sourceRequest.version, session };
+    const sourceContext: CanvasSourceContext = {
+      observesChanges: true,
+      kind: 'context',
+      supported: true,
+      document: { id: 'doc', geometryRevision: 'geometry', width: 10, height: 20 },
+      revision: '1',
+      targets: ['composition'],
+      layers: [],
+      currentLayerId: null,
+    };
+    const refused = expect(insertion).rejects.toThrow('The canvas is not ready');
+    expect(
+      f.client.receive({
+        ...reply,
+        requestId: sourceRequest.requestId,
+        type: 'source.reply',
+        result: sourceContext,
+      }),
+    ).toBe(true);
+    f.client.receive({
+      ...reply,
+      requestId: insertRequest.requestId,
+      type: 'error.reply',
+      failure: { status: 'unavailable', message: 'The canvas is not ready' },
+    });
+    await expect(context).resolves.toEqual(sourceContext);
+    await refused;
+    expect(f.report).not.toHaveBeenCalled();
+    f.client.dispose();
   });
 });

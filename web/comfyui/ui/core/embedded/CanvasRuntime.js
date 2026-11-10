@@ -1338,7 +1338,7 @@ var CanvasClient = class {
       };
     }
   }
-  /** Register reply ownership before synchronous transports can answer, and bound every request. */
+  /** Register reply ownership before a synchronous transport answers; bound only unsettled transports. */
   #request(request, reply, cancellation) {
     if (this.#disposed) return Promise.reject(new Error("Canvas connection closed."));
     if (this.#next === 2147483647)
@@ -1363,7 +1363,7 @@ var CanvasClient = class {
         this.#cancel(requestId);
       };
       this.#pending.set(requestId, { type: reply, accept: resolve, reject, stop, cancel });
-      if (!this.#awaitsHost(request))
+      if (this.port.settlesRequests !== true)
         stopDeadline = this.port.later(3e4, () => {
           this.#pending.delete(requestId);
           stop();
@@ -1429,10 +1429,6 @@ var CanvasClient = class {
         );
       }
     });
-  }
-  /** Whether this request waits for the host's own reply instead of a client-side deadline. */
-  #awaitsHost(request) {
-    return this.port.awaitsPresentation === true && (request.type === "context.request" || request.type.startsWith("surface."));
   }
   /** Signal cancellation without inventing a new mutation identity. */
   #cancel(requestId) {
