@@ -4,7 +4,7 @@
 
 use super::*;
 use sugarsubstitute_contracts::{
-    canvas_native::{CanvasFailure, CanvasFailureStatus, CanvasNativeRequest},
+    canvas_native::{CanvasFailure, CanvasNativeRequest},
     canvas_surface::{
         CanvasSurfaceCapabilities, CanvasSurfaceDiscoveryStatus, CanvasSurfaceMessage,
         CanvasSurfaceReplyStatus,
@@ -164,11 +164,11 @@ impl Deliveries {
         request: &CanvasNativeRequest,
         lease: &MemoryLease,
         claim: MemoryClaim,
+        unavailable: &CanvasFailure,
     ) -> Result<()> {
         self.bind(identity, lease)?;
         self.check_ordinary()?;
-        let unavailable = CanvasFailure::new(CanvasFailureStatus::Unavailable);
-        let reply = CanvasNativeReply::new(identity, request.refusal_reply(&unavailable)?, claim)?;
+        let reply = CanvasNativeReply::new(identity, request.refusal_reply(unavailable)?, claim)?;
         self.ordinary = Some(Ordinary::Native(reply));
         Ok(())
     }

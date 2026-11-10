@@ -10,8 +10,7 @@
 
 use super::*;
 use sugarsubstitute_contracts::canvas_native::{
-    CanvasFailure, CanvasFailureStatus, CanvasNativeCapabilities, CanvasNativeReplyPayload,
-    CanvasNativeRequest,
+    CanvasNativeCapabilities, CanvasNativeReplyPayload, CanvasNativeRequest,
 };
 use sugarsubstitute_desktop::CanvasNativeRequestStorage;
 
@@ -58,18 +57,18 @@ impl NativeSurface {
     }
 
     /// Answer a request the current page has no canvas authority for: an empty display-only
-    /// context, or an `unavailable` failure for every other family.
+    /// context, or an `unavailable` failure for every other family that names `reason`.
     pub(in crate::startup::canvas) fn refuse_native(
         &mut self,
         identity: MainIdentity,
         request: &CanvasNativeRequest,
         claim: MemoryClaim,
+        reason: crate::startup::CanvasRefusal,
     ) -> Result<(), Box<dyn Error>> {
         if self.closed {
             return Ok(());
         }
-        let failure = CanvasFailure::new(CanvasFailureStatus::Unavailable);
-        self.answer(identity, request.refusal_reply(&failure)?, claim)
+        self.answer(identity, request.refusal_reply(&reason.failure())?, claim)
     }
 
     /// Queue one small encoded reply with the request's lane credit.

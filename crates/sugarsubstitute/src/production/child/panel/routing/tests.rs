@@ -187,3 +187,76 @@ fn policy_processing_finishes_before_control_credit_is_returned_and_duplicate_ad
     assert!(lease.claim(2 * bytes).is_ok());
     Ok(())
 }
+
+fn workflow_activation(identity: MainIdentity) -> Result<CanvasNativeRequest> {
+    Ok(CanvasNativeRequest::decode(&serde_json::to_vec(&serde_json::json!({
+        "protocol":"sugarcubes.canvas", "version":3,
+        "session":PanelSession::for_main(identity)?.as_str(),
+        "requestId":12, "type":"workflow.request",
+        "command":{"type":"activate", "workflow":"workflow-a", "route":"output",
+            "surface":null, "mask":null}
+    }))?)?)
+}
+
+/// A panel whose handshake already timed out.
+fn failed_panel(identity: MainIdentity, lease: &MemoryLease) -> Result<PanelOwner> {
+    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
+        .ok_or("Panel owner was not admitted")?;
+    panel.tick(Moment::from_nanos(30_000_000_000))?;
+    assert_eq!(panel.policy.state(), PanelState::Failed);
+    Ok(panel)
+}
+
+#[test]
+fn a_refused_workflow_request_tells_the_page_why_it_holds_no_canvas_authority() -> Result<()> {
+    use crate::startup::CanvasRefusal;
+    for (failed, reason) in
+        [(false, CanvasRefusal::PanelNotConfigured), (true, CanvasRefusal::PanelFailed)]
+    {
+        let (mut child, _owner, _clock) = crate::production::child::test_support::child()?;
+        let identity = child.identity;
+        let lease =
+            MemoryLease::new(OWNER_BYTES + CanvasNativeReply::STORAGE_BYTES, Box::new(Release));
+        if failed {
+            child.panel = Some(failed_panel(identity, &lease)?);
+        }
+        child.receive_native_request(
+            identity,
+            &workflow_activation(identity)?,
+            lease.clone(),
+            lease.claim(CanvasNativeReply::STORAGE_BYTES)?,
+        )?;
+        let Some(DesktopStartupCommand::SendCanvasNative(reply)) = child.take_command()? else {
+            return Err("Current unavailable workflow request was silently dropped".into());
+        };
+        let value: serde_json::Value = serde_json::from_slice(reply.payload())?;
+        assert_eq!(value["requestId"], 12);
+        assert_eq!(value["result"]["status"], "unavailable");
+        let message = value["result"]["message"].as_str().ok_or("Refusal message absent")?;
+        assert!(!message.is_empty(), "The page got a bare error toast with no reason");
+        assert_eq!(message, reason.detail());
+    }
+    Ok(())
+}
+
+#[test]
+fn canvas_admission_names_the_first_fact_that_fails() -> Result<()> {
+    use crate::startup::CanvasRefusal;
+    let (mut child, _owner, _clock) = crate::production::child::test_support::child()?;
+    let identity = child.identity;
+    let lease = MemoryLease::new(2 * OWNER_BYTES, Box::new(Release));
+    assert_eq!(child.admission(identity, &lease), Err(CanvasRefusal::PanelNotConfigured));
+    child.panel = Some(
+        PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
+            .ok_or("Panel owner was not admitted")?,
+    );
+    assert_eq!(child.admission(identity, &lease), Ok(()));
+    let later =
+        MainIdentity { navigation: Generation::new(identity.navigation.get() + 1)?, ..identity };
+    assert_eq!(child.admission(later, &lease), Err(CanvasRefusal::OtherNavigation));
+    let other = MemoryLease::new(OWNER_BYTES, Box::new(Release));
+    assert_eq!(child.admission(identity, &other), Err(CanvasRefusal::OtherLifetime));
+    child.panel = Some(failed_panel(identity, &lease)?);
+    assert_eq!(child.admission(identity, &lease), Err(CanvasRefusal::PanelFailed));
+    Ok(())
+}

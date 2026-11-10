@@ -81,14 +81,27 @@ fn refused_families_answer_unavailable_and_a_closed_canvas_stays_silent()
     let identity = identity()?;
     let panel = PanelSession::for_main(identity)?;
     let memory = MemoryLease::new(64 * 1024, Box::new(Release));
-    for (request, reply_type) in families(&panel)? {
-        canvas.refuse_native(identity, &request, memory.claim(64 * 1024)?)?;
-        let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
-            return Err("The refused request was not answered".into());
-        };
-        let value: Value = serde_json::from_slice(reply.payload())?;
-        assert_eq!(value["type"], reply_type);
-        assert_eq!(value["result"]["status"], "unavailable");
+    use crate::startup::CanvasRefusal;
+    let reasons = [
+        CanvasRefusal::Closing,
+        CanvasRefusal::OtherNavigation,
+        CanvasRefusal::OtherLifetime,
+        CanvasRefusal::PanelNotConfigured,
+        CanvasRefusal::PanelFailed,
+        CanvasRefusal::NativeCanvasNotGranted,
+    ];
+    for reason in reasons {
+        for (request, reply_type) in families(&panel)? {
+            canvas.refuse_native(identity, &request, memory.claim(64 * 1024)?, reason)?;
+            let Some(DesktopStartupCommand::SendCanvasNative(reply)) = canvas.take_command() else {
+                return Err("The refused request was not answered".into());
+            };
+            let value: Value = serde_json::from_slice(reply.payload())?;
+            assert_eq!(value["type"], reply_type);
+            assert_eq!(value["result"]["status"], "unavailable");
+            // A refusal tells the page why; an empty failure left only a bare error toast.
+            assert_eq!(value["result"]["message"], reason.detail(), "{reason:?}");
+        }
     }
     canvas.surface.close(None)?;
     for (request, _) in families(&panel)? {

@@ -86,8 +86,12 @@ impl StartupBackend for Platform {
         Ok(())
     }
     #[cfg(feature = "native-composition")]
-    fn admits_canvas(&self, _: MainIdentity, _: &MemoryLease) -> bool {
-        false
+    fn canvas_admission(
+        &self,
+        _: MainIdentity,
+        _: &MemoryLease,
+    ) -> Result<(), crate::startup::CanvasRefusal> {
+        Err(crate::startup::CanvasRefusal::PanelNotConfigured)
     }
     #[cfg(all(windows, feature = "native-composition"))]
     fn canvas_backend(&self, _: MainIdentity) -> Option<crate::startup::CanvasBackend> {

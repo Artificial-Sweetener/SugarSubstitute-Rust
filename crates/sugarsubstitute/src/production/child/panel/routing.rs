@@ -116,6 +116,26 @@ impl ProductionChild {
         self.receive_native_request(identity, &request, lease, claim)
     }
 
+    /// Admit a canvas request only for the current navigation, its storage and a configured panel.
+    ///
+    /// # Errors
+    /// Names the first fact that fails, so a refusal can tell the page why.
+    #[cfg(feature = "native-composition")]
+    pub(in crate::production::child) fn admission(
+        &self,
+        identity: MainIdentity,
+        lease: &MemoryLease,
+    ) -> std::result::Result<(), crate::startup::CanvasRefusal> {
+        use crate::startup::CanvasRefusal;
+        if self.shutdown.closing() {
+            return Err(CanvasRefusal::Closing);
+        }
+        if self.identity != identity {
+            return Err(CanvasRefusal::OtherNavigation);
+        }
+        self.panel.as_ref().ok_or(CanvasRefusal::PanelNotConfigured)?.admission(identity, lease)
+    }
+
     /// Consume an attributed native request without replacing its original response admission.
     fn receive_native_request(
         &mut self,
@@ -128,7 +148,19 @@ impl ProductionChild {
             return Ok(());
         }
         self.bind_panel_delivery(identity, &lease)?;
-        self.panel_deliveries.native(identity, request, &lease, claim)
+        // The application routed this request here: either the page does not hold canvas
+        // authority, or the application is not running it for a composition-hosted page.
+        #[cfg(feature = "native-composition")]
+        let unavailable = self
+            .admission(identity, &lease)
+            .err()
+            .unwrap_or(crate::startup::CanvasRefusal::NativeCanvasNotGranted)
+            .failure();
+        #[cfg(not(feature = "native-composition"))]
+        let unavailable = sugarsubstitute_contracts::canvas_native::CanvasFailure::new(
+            sugarsubstitute_contracts::canvas_native::CanvasFailureStatus::Unavailable,
+        );
+        self.panel_deliveries.native(identity, request, &lease, claim, &unavailable)
     }
 
     /// A retired or foreign peer cannot bind delivery resources for the current page.

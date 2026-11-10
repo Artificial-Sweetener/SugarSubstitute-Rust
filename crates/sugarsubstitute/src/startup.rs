@@ -46,6 +46,8 @@ mod shutdown_origin;
 use crate::{job_sequence::JobSequence, preparation::PreparationDriver};
 #[cfg(all(windows, feature = "native-composition"))]
 pub use backend::CanvasBackend;
+#[cfg(feature = "native-composition")]
+pub use backend::CanvasRefusal;
 #[cfg(windows)]
 pub use backend::WorkspaceContext;
 pub use backend::{BackendResult, PreparedStartup, StartupBackend};
