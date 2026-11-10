@@ -174,6 +174,7 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 
 - Run `npm run check:changed` before reporting success for local work. It selects quality profiles and behavioral proofs from the same authoritative ownership and consumer subscriptions.
 - `npm run check` is the non-mutating repository quality gate. It runs strict TypeScript checking, strict mypy checking, formatting validation, linting, standards audits, architecture governance, automated tests, and build-output verification.
+- Python checks run in the interpreter on `PATH`, which must provide the dependencies `pyproject.toml` declares (`python -m pip install -e ".[dev]"`). Strict mypy refuses an interpreter that lacks them and names the missing packages, because it would otherwise report type errors that no source change can fix.
 - Use `npm run format` only to apply formatting. Validation and CI use `npm run format:check` and must not rewrite source.
 - Run `npm run architecture` for the worktree and `npm run architecture:staged` for the exact Git index.
 - Run `npm run check:staged` (also `check:commit`) for the exact Git-index source and policy snapshot. CI runs the complete `npm run check` gate and rejects tracked-file mutation.
