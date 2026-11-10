@@ -128,7 +128,7 @@ fn append_at(
         events: events.to_vec(),
     })
     .map_err(io::Error::other)?;
-    write(&root, &format!("page-{slot}.json"), &bytes, context)
+    write(&root, &format!("page-{slot}.json"), &bytes, context).map_err(contention::page_held)
 }
 
 /// Refuse unknown siblings before publication and return the recognized entry count.

@@ -45,7 +45,7 @@ rationale = "An isolated formatter captures one fatal event to prove its cause c
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:27b748fc51c323e25990e6cc73a82a2a02776f5f33b5c46e6e1f79c86459e535"
+source_sha256 = "sha256:36a242b6c5053cfc5528c65811f3025d22a62f4ed0ce86d7716ae752af6e73b3"
 disposition = "storage"
 rationale = "Bounded operational pages and export through shared protected durable storage, separate from preserved incident records. Under exclusive writer custody it retires only verified page stages abandoned by interrupted writers."
 

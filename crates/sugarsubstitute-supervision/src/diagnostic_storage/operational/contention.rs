@@ -32,6 +32,39 @@ pub(super) fn acquire(
         }
     })
 }
+/// Classify a page another process holds open as contention: replacing it fails with access
+/// denied or a sharing violation until that reader closes it, while the writer rendezvous already
+/// proved the directory writable.
+pub(super) fn page_held(cause: io::Error) -> io::Error {
+    const ACCESS_DENIED: u32 = 5;
+    const SHARING_VIOLATION: u32 = 32;
+    let mut current: Option<&(dyn Error + 'static)> = Some(&cause);
+    let mut held = false;
+    for _ in 0..32 {
+        let Some(link) = current else { break };
+        held |=
+            win32_code(link).is_some_and(|code| matches!(code, ACCESS_DENIED | SHARING_VIOLATION));
+        current = link.source();
+    }
+    if held { io::Error::new(io::ErrorKind::WouldBlock, WriterBusy(cause)) } else { cause }
+}
+/// The original Win32 code one link carries, read through its owner's accessor.
+fn win32_code(link: &(dyn Error + 'static)) -> Option<u32> {
+    if let Some(claim) = link.downcast_ref::<crate::ClaimError>() {
+        return claim.win32_code();
+    }
+    if let Some(native) =
+        link.downcast_ref::<sugarsubstitute_execution::windows::NativeObservationError>()
+    {
+        return native.win32_code();
+    }
+    if let Some(io) = link.downcast_ref::<io::Error>() {
+        return io.raw_os_error().and_then(|code| u32::try_from(code).ok());
+    }
+    let native = link.downcast_ref::<windows::core::Error>()?;
+    let code = native.code().0 as u32;
+    (code & 0xffff_0000 == 0x8007_0000).then_some(code & 0xffff)
+}
 pub(super) fn is_busy(cause: &io::Error) -> bool {
     let mut current: Option<&(dyn Error + 'static)> = Some(cause);
     for _ in 0..32 {

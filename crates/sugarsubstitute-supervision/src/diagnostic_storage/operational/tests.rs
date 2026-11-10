@@ -4,6 +4,39 @@
 use super::*;
 use crate::setup_storage::test_worker::{self as worker, TestResult};
 
+/// A reader that holds the oldest page open delays its replacement like a busy writer; the
+/// next attempt after the reader closes publishes the batch.
+#[test]
+fn a_page_a_reader_holds_open_delays_its_replacement_as_contention() -> TestResult {
+    worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let path = temporary.path().join("operational");
+        protection::with(context, |protection| {
+            protection.directory(&path, Mode::CreateNew, context)?;
+            for sequence in 1..=PAGES as u64 {
+                append_at(
+                    &path,
+                    &[format!("operation=fill sequence={sequence}\n")],
+                    0,
+                    protection,
+                    context,
+                )?;
+            }
+            // Opening without delete sharing, as an ordinary reader does, holds the oldest page.
+            let reader = std::fs::File::open(path.join("page-0.json"))?;
+            let held = append_at(&path, &["operation=held\n".into()], 0, protection, context)
+                .err()
+                .ok_or_else(|| io::Error::other("Replacing a held page unexpectedly succeeded"))?;
+            assert!(writer_busy(&held), "{held}");
+            drop(reader);
+            append_at(&path, &["operation=held\n".into()], 0, protection, context)?;
+            let export = export_at(&path, protection, context)?;
+            assert!(export.as_bytes().ends_with(b"operation=held\n"));
+            Ok(())
+        })?;
+        Ok(())
+    })
+}
 #[test]
 fn native_rollover_restart_and_export_keep_only_eight_complete_pages() -> TestResult {
     worker::run(|context, _| {

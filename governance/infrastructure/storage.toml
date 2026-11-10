@@ -1045,7 +1045,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational/contention.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a5cbd5a607e08f08dd5c7da2ea47d9f42acada97a178cca6952f500fabb40cf0"
+source_sha256 = "sha256:90e9d1b307451587df5907f012d2ac7e60c14f63ec1be53cb903eba841d0d635"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Classify actual protected writer-rendezvous contention while retaining its storage-owner-acquired file. This module has no filesystem constructor and preserves unexpected native causes."
@@ -1054,8 +1054,8 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:91c152afe6b8e6b146084aa25c34f82080ab9343235c3398ad9b191fac550de4"
-capabilities = ["assert_eq! restricted capability fragments", "std::fs::create_dir", "std::fs::metadata", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+source_sha256 = "sha256:5f6300b6a52b9f0dfe90204b2454db08a6ba235d446b5270702235f6392e160e"
+capabilities = ["assert_eq! restricted capability fragments", "std::fs::File::open", "std::fs::create_dir", "std::fs::metadata", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify actual protected rollover, restart, export and preservation on admitted native workers. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
