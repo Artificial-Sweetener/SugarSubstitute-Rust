@@ -289,6 +289,17 @@ impl Surface {
     }
 }
 
+impl document::DocumentState {
+    /// Whether this document is drawable content of `selection`: a loaded source image, or an
+    /// input document, which draws its layers even when a blank base gives it no source image.
+    /// A document without either, such as the empty Output document, has no frame to present.
+    pub(super) fn draws(&self, selection: u64) -> bool {
+        self.scene.as_ref().is_some_and(|scene| {
+            (scene.source.is_some() || self.input.is_some()) && scene.source_revision == selection
+        })
+    }
+}
+
 impl Session {
     /// The input document with `identity`, wherever the session holds it: current, parked with
     /// its surface, or retained by presentation custody (a document preparation or a shown
@@ -359,10 +370,7 @@ impl Session {
     /// source image, or the shown input document, which draws its layers even when a blank
     /// base gives it no source image. Frames and camera evidence exist only for such content.
     pub(super) fn draws_current_selection(&self) -> bool {
-        self.document.scene.as_ref().is_some_and(|scene| {
-            (scene.source.is_some() || self.input_shown())
-                && scene.source_revision == self.selection
-        })
+        self.document.draws(self.selection)
     }
 
     /// The input document the Input route shows, once its swap has completed.

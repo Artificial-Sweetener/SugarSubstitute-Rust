@@ -249,11 +249,15 @@ impl Session {
         )?;
         previous.document.projection_base = None;
         previous.document.projection_damage = Some(DamagePlan::full(extent));
+        // The restored document is shown again only if it draws; one that does not, such as the
+        // empty Output document, has no frame to present, and a pending frame it could never
+        // hand to the native adapter would block every later preview.
         if !self.closing
             && !self.document_suspended
             && !replacing
             && self.drawable
             && self.pacing.readiness(now)? == PresentationReadiness::Ready
+            && previous.document.draws(previous.selection)
             && previous
                 .document
                 .display_evidence

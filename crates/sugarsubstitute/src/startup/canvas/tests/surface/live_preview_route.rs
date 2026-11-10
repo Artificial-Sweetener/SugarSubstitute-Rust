@@ -26,6 +26,11 @@ impl Heard {
         self.surface.iter().any(|reply| reply["requestId"] == id)
     }
 
+    /// How many previews were reported as shown on screen.
+    fn presented(&self) -> usize {
+        self.changes.iter().filter(|change| change["change"]["status"] == "presented").count()
+    }
+
     /// Whether a preview presentation change with `status` was published.
     fn changed(&self, status: &str) -> bool {
         self.changes.iter().any(|change| change["change"]["status"] == status)
@@ -196,6 +201,62 @@ fn withdrawn_preview_leaves_the_empty_output_route_serving() -> Result<(), Box<d
         json!({"token":"preview:1","leaseRevision":200}),
     )?;
     drive(&mut fixture, &mut heard, |heard| heard.answered(203) && heard.changed("cancelled"))?;
+    drain(&mut fixture)?;
+    fixture.finish()
+}
+
+#[test]
+fn next_preview_after_a_withdrawal_on_the_empty_output_route_is_shown() -> Result<(), Box<dyn Error>>
+{
+    let (mut fixture, mut heard) = empty_output_route()?;
+    transfer(&mut fixture, 200, "preview:1", JPEG)?;
+    drive(&mut fixture, &mut heard, |heard| heard.presented() == 1)?;
+    fixture.send(
+        203,
+        "surface.preview.withdraw",
+        json!({"token":"preview:1","leaseRevision":200}),
+    )?;
+    drive(&mut fixture, &mut heard, |heard| heard.answered(203) && heard.changed("cancelled"))?;
+    transfer(&mut fixture, 300, "preview:2", JPEG)?;
+    drive(&mut fixture, &mut heard, |heard| heard.presented() == 2)?;
+    drain(&mut fixture)?;
+    fixture.finish()
+}
+
+#[test]
+fn switching_to_input_and_back_during_a_live_preview_keeps_presenting_previews()
+-> Result<(), Box<dyn Error>> {
+    let (mut fixture, mut heard) = empty_output_route()?;
+    transfer(&mut fixture, 200, "preview:1", JPEG)?;
+    drive(&mut fixture, &mut heard, |heard| heard.presented() == 1)?;
+    // The page withdraws the preview as the Input route replaces the previewable Output route.
+    workflow(
+        &mut fixture,
+        13,
+        json!({"type":"activate", "workflow":WORKFLOW, "route":"input", "surface":"image", "mask":null}),
+    )?;
+    fixture.send(
+        203,
+        "surface.preview.withdraw",
+        json!({"token":"preview:1","leaseRevision":200}),
+    )?;
+    drive(&mut fixture, &mut heard, |heard| {
+        heard.result(13).is_some() && heard.answered(203) && heard.changed("cancelled")
+    })?;
+    fixture.settle()?;
+    assert!(
+        fixture.canvas.session.as_ref().is_some_and(|session| session.input_shown()),
+        "The Input document never returned to the screen"
+    );
+    show_output(&mut fixture, 14)?;
+    drive(&mut fixture, &mut heard, |heard| heard.result(14).is_some())?;
+    fixture.settle()?;
+    assert!(
+        fixture.canvas.session.as_ref().is_some_and(|session| !session.input_shown()),
+        "The Output route never replaced the Input document"
+    );
+    transfer(&mut fixture, 300, "preview:2", JPEG)?;
+    drive(&mut fixture, &mut heard, |heard| heard.presented() == 2)?;
     drain(&mut fixture)?;
     fixture.finish()
 }
