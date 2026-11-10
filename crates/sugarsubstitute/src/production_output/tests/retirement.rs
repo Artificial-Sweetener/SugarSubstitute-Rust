@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Close the real finite output owner; fake only returned wire bytes and worker boundaries.
 use super::*;
+use crate::completion_wake::wait_while_watched;
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
 use sugarsubstitute_supervision::lifecycle_protocol::ReplyOutcome;
 
 #[derive(Default)]
@@ -17,17 +17,13 @@ impl Gate {
         self.changed.notify_all();
     }
     fn wait(&self) -> TestResult {
-        let mut open = self.open.lock().map_err(|_| "Boundary poisoned")?;
-        while !*open {
-            let next = self
-                .changed
-                .wait_timeout(open, Duration::from_secs(10))
-                .map_err(|_| "Boundary poisoned")?;
-            open = next.0;
-            if next.1.timed_out() && !*open {
-                return Err("External worker boundary did not advance".into());
-            }
-        }
+        let open = self.open.lock().map_err(|_| "Boundary poisoned")?;
+        drop(wait_while_watched(
+            &self.changed,
+            open,
+            || "the external worker boundary to open".to_owned(),
+            |open| !*open,
+        ));
         Ok(())
     }
 }

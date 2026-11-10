@@ -2,11 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Use the real central executor, clock, scopes, notices and worker joins.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 struct Clock;
 impl sugarsubstitute_contracts::execution::Clock for Clock {
     fn now(&self) -> Moment {
@@ -14,18 +11,6 @@ impl sugarsubstitute_contracts::execution::Clock for Clock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 pub(super) struct Rig {
@@ -39,40 +24,24 @@ impl Rig {
     pub(super) fn finish(&mut self) -> TestResult {
         self.owner.request_shutdown(Moment::from_nanos(100));
         loop {
-            let count = self.wake.count.lock().map_err(|_| "Wake poisoned")?;
+            let before = self.wake.revision();
             self.client.drain_completions(NonZeroUsize::MIN.saturating_add(63))?;
             if self.owner.poll_shutdown()?.settled {
-                drop(count);
                 return Ok(self.owner.finish_shutdown()?);
             }
-            let next = self
-                .wake
-                .changed
-                .wait_timeout(count, Duration::from_secs(10))
-                .map_err(|_| "Wake poisoned")?;
-            if next.1.timed_out() && !self.owner.poll_shutdown()?.settled {
-                return Err("Actual executor retirement did not arrive".into());
-            }
+            self.wake.wait_after(before);
         }
     }
     /// Observe the actual owner's completion notice without taking its terminal custody.
     pub(super) fn notice(&self, output: &mut OutputOwner) -> TestResult {
-        loop {
-            let count = self.wake.count.lock().map_err(|_| "Wake poisoned")?;
-            let batch = self.client.drain_completions(NonZeroUsize::MIN.saturating_add(63))?;
+        self.wake.until(|| {
+            let batch = match self.client.drain_completions(NonZeroUsize::MIN.saturating_add(63)) {
+                Ok(batch) => batch,
+                Err(cause) => return Some(Err::<(), Box<dyn Error + Send + Sync>>(cause.into())),
+            };
             output.capture(&batch);
-            if output.noticed.is_some() {
-                return Ok(());
-            }
-            let next = self
-                .wake
-                .changed
-                .wait_timeout(count, Duration::from_secs(10))
-                .map_err(|_| "Wake poisoned")?;
-            if next.1.timed_out() {
-                return Err("Actual output completion did not arrive".into());
-            }
-        }
+            output.noticed.is_some().then_some(Ok(()))
+        })
     }
     pub(super) fn new() -> TestResult<Self> {
         let wake = Arc::new(Wake::default());
@@ -87,35 +56,22 @@ impl Rig {
         job: &mut OwnedJob<T, E>,
     ) -> TestResult<T> {
         let mut noticed = false;
-        loop {
-            let mut count = self.wake.count.lock().map_err(|_| "Wake poisoned")?;
-            let before = *count;
-            let batch =
-                self.client.drain_completions(NonZeroUsize::new(64).ok_or("Zero drain")?)?;
+        let done = self.wake.until(|| {
+            let batch = match self.client.drain_completions(NonZeroUsize::MIN.saturating_add(63)) {
+                Ok(batch) => batch,
+                Err(cause) => return Some(Err::<_, Box<dyn Error + Send + Sync>>(cause.into())),
+            };
             for n in batch.notifications {
                 if (n.scope_id, n.job_id) == (job.scope_id(), job.spec().id) {
                     noticed = true
                 }
             }
-            if noticed && let Some(done) = job.try_take_completion() {
-                return match done.outcome {
-                    JobOutcome::Success(v) => Ok(v),
-                    JobOutcome::Failure(e) => Err(Box::new(e)),
-                    other => Err(format!("Actual terminal {:?}", other.kind()).into()),
-                };
-            }
-            if *count == before {
-                let next = self
-                    .wake
-                    .changed
-                    .wait_timeout(count, Duration::from_secs(10))
-                    .map_err(|_| "Wake poisoned")?;
-                count = next.0;
-                if next.1.timed_out() {
-                    return Err("Actual completion did not arrive".into());
-                }
-            }
-            drop(count);
+            if noticed { job.try_take_completion().map(Ok) } else { None }
+        })?;
+        match done.outcome {
+            JobOutcome::Success(v) => Ok(v),
+            JobOutcome::Failure(e) => Err(Box::new(e)),
+            other => Err(format!("Actual terminal {:?}", other.kind()).into()),
         }
     }
 }
