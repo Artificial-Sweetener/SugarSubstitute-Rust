@@ -3,16 +3,16 @@
 //! Fake only protocol/family facts; cancellation and transport completion use the real owner.
 //! These fixtures authenticate no peer and claim no integrated helper or ACK qualification.
 use super::*;
+use crate::completion_wake::Wake;
 use std::{
     num::NonZeroUsize,
     sync::{
-        Arc, Condvar, Mutex,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, ExecutionPort, Scope, ScopeId, ScopeSpec, WaitFuture,
+    Clock, ExecutionPort, Scope, ScopeId, ScopeSpec, WaitFuture,
 };
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, windows::NativeObservationError};
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,34 +42,6 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    fn revision(&self) -> u64 {
-        *self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-    fn wait(&self, prior: u64) -> TestResult {
-        let guard = self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (_guard, timeout) = self
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |value| *value == prior)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() {
-            return Err("Actual transport retirement did not wake".into());
-        }
-        Ok(())
-    }
-}
 pub(super) struct Fixture {
     pub(super) clock: Arc<TestClock>,
     pub(super) client: ExecutionClient,
@@ -94,7 +66,7 @@ impl Fixture {
             if batch.notifications.iter().any(|notice| notice.job_id == id) {
                 return Ok(batch);
             }
-            self.wake.wait(prior)?;
+            self.wake.wait_after(prior);
         }
     }
     pub(super) fn new(tag: Option<u8>) -> std::result::Result<Self, Box<dyn Error + Send + Sync>> {
@@ -143,7 +115,7 @@ impl Fixture {
                     if parent.prepared() {
                         break;
                     }
-                    wake.wait(prior)?;
+                    wake.wait_after(prior);
                 }
                 Some(parent)
             }
@@ -178,7 +150,7 @@ impl Fixture {
             if owner.settled {
                 return Ok(());
             }
-            self.wake.wait(prior)?;
+            self.wake.wait_after(prior);
         }
     }
     pub(super) fn close_fixture(&mut self) -> TestResult {
@@ -191,7 +163,7 @@ impl Fixture {
                 if self.port.take_terminal()?.is_some() {
                     break;
                 }
-                self.wake.wait(prior)?;
+                self.wake.wait_after(prior);
             }
         }
         drop(self.port.parent.take());

@@ -2,10 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe original helper guards, retirement budgets and external causes on one execution owner.
 use super::*;
-use std::sync::{
-    Condvar, Mutex,
-    atomic::{AtomicU64, Ordering},
-};
+use crate::completion_wake::Wake;
+use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::{
     backend_custody::{BackendCustodyKey, BackendCustodySession},
     lifecycle::{CoordinatorEpoch, CoordinatorKey, NamespaceId},
@@ -17,24 +15,6 @@ impl Clock for TestClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other("Original wake poisoned")),
-            )
-        })?;
-        *revision += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 /// Keep the actual helper lifetime with its deterministic external clock and wake boundary.
@@ -132,26 +112,16 @@ fn active_helper_cancellation_rejects_healthy_shutdown_and_keeps_whole_original_
     lifetime.terminals.worker_original =
         Some(super::super::terminal::Original::new(&scope, request));
     lifetime.worker = Some(job);
-    let failure = loop {
-        let revision = *wake.revision.lock().map_err(|_| "Original wake poisoned")?;
-        client.drain_completions(NonZeroUsize::MAX)?;
+    let failure = wake.until(|| {
+        if let Err(cause) = client.drain_completions(NonZeroUsize::MAX) {
+            return Some(Err::<_, Box<dyn Error>>(cause.into()));
+        }
         match lifetime.observe() {
-            Ok(HeadlessStep::Active) => {}
-            Ok(_) => return Err("Unexpected active cancellation accepted".into()),
-            Err(cause) => break cause,
+            Ok(HeadlessStep::Active) => None,
+            Ok(_) => Some(Err("Unexpected active cancellation accepted".into())),
+            Err(cause) => Some(Ok(cause)),
         }
-        let (_after, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.revision.lock().map_err(|_| "Original wake poisoned")?,
-                std::time::Duration::from_secs(10),
-                |current| *current == revision,
-            )
-            .map_err(|_| "Original wake poisoned")?;
-        if timeout.timed_out() {
-            return Err("Original terminal notification absent".into());
-        }
-    };
+    })?;
     assert!(failure.to_string().contains("Cancelled"));
     assert!(!lifetime.closing);
     drop(lifetime.worker.take());

@@ -2,13 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Use genuine execution completions; only work failure and clock/wake boundaries are controlled.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::sync::Arc;
+use sugarsubstitute_execution::ExecutionOwner;
 use sugarsubstitute_execution::windows::NativeObservationError;
-use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 
 struct Clock;
 impl sugarsubstitute_contracts::execution::Clock for Clock {
@@ -17,48 +14,6 @@ impl sugarsubstitute_contracts::execution::Clock for Clock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().map_err(|cause| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other(cause.to_string())),
-            )
-        })?;
-        *revision += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-fn completion<T, E>(
-    client: &ExecutionClient,
-    wake: &Wake,
-    job: &mut OwnedJob<T, E>,
-) -> Result<JobCompletion<T, E>, Box<dyn Error>> {
-    loop {
-        let observed = *wake.revision.lock().map_err(|_| "Original observer poisoned")?;
-        client.drain_completions(NonZeroUsize::MAX)?;
-        if let Some(done) = job.try_take_completion() {
-            return Ok(done);
-        }
-        let (_after, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.revision.lock().map_err(|_| "Original observer poisoned")?,
-                Duration::from_secs(10),
-                |revision| *revision == observed,
-            )
-            .map_err(|_| "Original observer poisoned")?;
-        if timeout.timed_out() {
-            return Err("Original completion notification absent".into());
-        }
     }
 }
 fn request(id: u64) -> Result<JobSpec, Box<dyn Error>> {
@@ -87,7 +42,7 @@ fn helper_terminal_failure_preserves_original_source_and_full_guard_after_owner_
         ))
     })?;
     let original = Original::new(&scope, spec);
-    let done = completion(&client, &wake, &mut job)?;
+    let done = wake.completion(&client, &mut job)?;
     assert!(original.matches(&done));
     assert!(size_of::<Terminals>() <= done.memory.bytes() as usize);
     let mut wrong = original;
@@ -126,7 +81,7 @@ fn helper_terminal_cancellation_requires_real_closing_and_retains_original_ident
         Ok::<_, NativeObservationError>(())
     })?;
     job.cancel();
-    let done = completion(&client, &wake, &mut job)?;
+    let done = wake.completion(&client, &mut job)?;
     assert!(matches!(done.outcome, JobOutcome::Cancelled));
     assert!(Original::new(&scope, spec).matches(&done));
     assert!(classify(&done.outcome, false).is_err());
@@ -163,7 +118,7 @@ fn pre_auth_helper_pipe_rejects_foreign_key_and_keeps_entire_typed_completion()
             completed_writes: 0,
         })
     })?;
-    let done = completion(&client, &wake, &mut job)?;
+    let done = wake.completion(&client, &mut job)?;
     let mut terminals =
         Terminals { pipe_original: Some(Original::new(&scope, spec)), ..Terminals::default() };
     let failure = terminals
