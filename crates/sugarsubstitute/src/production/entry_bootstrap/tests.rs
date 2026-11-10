@@ -156,13 +156,14 @@ fn real_configuration_failure_retains_original_scope_completion_and_cause() -> T
     assert_eq!(runtime.failure(&mut bootstrap, &jobs)?, EntryBootstrapIssue::Preparation);
     assert!(bootstrap.owner().is_none());
     assert!(bootstrap.failure_source().is_some());
-    let original = bootstrap.failed_preparation.as_ref().ok_or("Missing original preparation")?;
+    let original =
+        bootstrap.migration.failure_completion().ok_or("Missing original preparation")?;
     assert_eq!(original.scope_id, bootstrap.scope.as_ref().ok_or("Scope lost")?.id());
     assert_eq!(original.spec.deadline, Some(bootstrap.original.until()));
     assert_eq!(original.outcome.kind(), TerminalKind::Failure);
     assert_eq!(
         bootstrap.scope.as_ref().ok_or("Scope lost")?.snapshot().reserved_bytes,
-        configuration::CONFIGURATION_RESERVATION_BYTES
+        sugarsubstitute_supervision::setup_storage::LAUNCH_DATA_PREPARATION_BYTES
     );
     assert!(bootstrap.scope.as_ref().ok_or("Scope lost")?.snapshot().terminal_unobserved == 0);
     drop(bootstrap);
@@ -222,13 +223,13 @@ fn repeated_start_cannot_replace_original_job_scope_or_budget() -> TestResult {
     let mut bootstrap = files.bootstrap()?;
     let jobs = JobSequence::new();
     bootstrap.start(&runtime.client, runtime.scope(1)?, &jobs)?;
-    let original = bootstrap.preparation.as_ref().ok_or("Original job absent")?.spec();
+    let original = bootstrap.migration.job_spec().ok_or("Original job absent")?;
     assert_eq!(
         bootstrap.start(&runtime.client, runtime.scope(2)?, &jobs),
         Err(EntryBootstrapIssue::Started)
     );
     assert_eq!(bootstrap.scope.as_ref().ok_or("Original scope absent")?.id(), ScopeId::new(1)?);
-    assert_eq!(bootstrap.preparation.as_ref().ok_or("Original job absent")?.spec(), original);
+    assert_eq!(bootstrap.migration.job_spec().ok_or("Original job absent")?, original);
     assert_eq!(runtime.failure(&mut bootstrap, &jobs)?, EntryBootstrapIssue::Preparation);
     drop(bootstrap);
     drop(runtime);

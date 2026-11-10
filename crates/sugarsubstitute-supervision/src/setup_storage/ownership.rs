@@ -54,6 +54,36 @@ pub(super) fn read(root: &Directory) -> io::Result<File> {
     Ok(file)
 }
 
+/// Share the running-image ownership boundary with pre-capture data settlement.
+/// Missing markers allow only a truly earlier/unowned namespace, never damaged selected state.
+pub(super) fn running_present(
+    root: &Directory,
+    inherited: bool,
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> io::Result<bool> {
+    match read(root) {
+        Ok(_) => Ok(true),
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
+            if inherited {
+                return Err(invalid("Inherited launch installation ownership is missing"));
+            }
+            let state = state_path(root);
+            for path in [
+                state.join(super::selection::DIRECTORY),
+                state.join(super::selection::NAMESPACE_MARKER),
+            ] {
+                match files::inspect(path, context) {
+                    Err(missing) if missing.kind() == io::ErrorKind::NotFound => {}
+                    Err(cause) => return Err(cause),
+                    Ok(_) => return Err(invalid("Installation ownership marker is missing")),
+                }
+            }
+            Ok(false)
+        }
+        Err(cause) => Err(cause),
+    }
+}
+
 /// Report whether `root` is owned through either layout's marker, without moving anything.
 pub(super) fn present(root: &Directory) -> io::Result<bool> {
     for path in [state_path(root).join(MARKER), root.path().join(EARLIER_MARKER)] {

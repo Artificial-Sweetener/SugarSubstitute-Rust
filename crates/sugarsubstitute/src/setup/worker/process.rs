@@ -19,7 +19,7 @@ impl Worker {
         let ticket = self.registry.as_mut().ok_or("Provisioning registry missing")?.submit_launch(
             &self.client,
             &self.scope,
-            ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+            ScopeSpec { id: self.scopes.allocate()?, deadline: None },
             creation,
             watch,
             binding,

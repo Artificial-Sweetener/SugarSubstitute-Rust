@@ -8,6 +8,11 @@ impl ProductionActivation {
         resources: &mut EntryResources<'_>,
     ) -> Result<()> {
         for pending in self.pending.iter_mut().flatten() {
+            if let Some(source) = &mut pending.source
+                && let Some(job) = source.advance(resources, self.closing)?
+            {
+                pending.job = Some(job);
+            }
             if let Some(job) = &mut pending.job
                 && let Some(completion) = job.try_take_completion()
             {

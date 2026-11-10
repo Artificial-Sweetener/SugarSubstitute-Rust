@@ -49,27 +49,37 @@ pub(super) fn transport(error: EntryTransportError) -> AdmissionError {
     AdmissionError::Unexpected(crate::runtime::error(error))
 }
 impl ExecutionClient {
-    /// Register exact original authenticated startup bytes before their first native transfer.
-    /// Claims the fixed 68 KiB envelope from the same actual 4 MiB projection, allocates
-    /// outside Core and releases the original Entry loan independently of this source.
+    /// Register original authenticated bytes and the native-selected effective child profile.
+    /// Claims the fixed 132 KiB original/effective envelope from the same actual 4 MiB projection, allocates
+    /// outside Core. The original frame/view remains unchanged; only child capture uses
+    /// the selected profile. The selected path grants no filesystem authority.
     /// # Errors
     /// Rejects counterfeit/foreign context, prior issuance, wrong fixed role/deadline,
-    /// actual Entry ownership, current cancellation/clock failure or original exhaustion.
+    /// actual Entry ownership, current cancellation/clock failure, invalid selected path,
+    /// effective-body growth beyond the unchanged frame limit, or original exhaustion.
+    /// Rejection preserves the original snapshot; successful issuance retains its alias.
     pub fn register_startup_source(
         &self,
-        snapshot: &PreparedStartupSnapshot,
+        snapshot: &mut PreparedStartupSnapshot,
         context: &JobContext,
         run: RunKey,
+        effective_profile: &std::path::Path,
     ) -> Result<RegisteredStartupSource, AdmissionError> {
         if size_of::<StateOwned>()
             + size_of::<RegisteredSnapshot>()
             + size_of::<RegisteredRestartAdmission<'_>>()
             + 2 * size_of::<usize>()
             > 4096
-            || snapshot.body().map_err(transport)?.len() > 65_536
+            || snapshot.original_body().map_err(transport)?.len() > 65_536
+            || snapshot.initial_effective.is_some()
         {
             return Err(AdmissionError::InvalidCaptureAdmission);
         }
+        let child_length = protocol::launch_payload::profile_length(
+            snapshot.original_body().map_err(transport)?,
+            effective_profile,
+        )
+        .map_err(transport)?;
         let entry = snapshot.admission_binding().map_err(transport)?;
         if !matches!(entry, StartupAdmissionBinding::Entry(_)) {
             return Err(AdmissionError::InvalidCaptureAdmission);
@@ -93,20 +103,37 @@ impl ExecutionClient {
                 context.memory().claim(REGISTERED_STARTUP_BYTES).map_err(AdmissionError::Memory)?;
             record.registered_startup_issued = true;
         }
-        let original_body = snapshot.body().map_err(transport)?;
+        let original_body = snapshot.original_body().map_err(transport)?;
         let mut body = Vec::new();
         body.try_reserve_exact(original_body.len())
             .map_err(|cause| AdmissionError::Unexpected(crate::runtime::error(cause)))?;
         body.extend_from_slice(original_body);
         let body = body.into_boxed_slice();
-        Ok(RegisteredStartupSource(Some(Arc::new(StateOwned {
+        let mut child_body = Vec::new();
+        child_body
+            .try_reserve_exact(child_length)
+            .map_err(|cause| AdmissionError::Unexpected(crate::runtime::error(cause)))?;
+        child_body.resize(child_length, 0);
+        protocol::launch_payload::project_profile(&mut child_body, &body, effective_profile)
+            .map_err(transport)?;
+        let child_body = child_body.into_boxed_slice();
+        let now = self.core.clock.metadata().map_err(AdmissionError::Unexpected)?;
+        {
+            let state = lock(&self.core.state);
+            projection(&self.core, &state, context, until, now)?;
+            entry.validate_current_locked(&self.core, &state, run, now).map_err(transport)?;
+        }
+        let source = RegisteredStartupSource(Some(Arc::new(StateOwned {
             core: self.core.clone(),
             entry,
             original_scope: context.scope_id(),
             body,
+            child_body,
             progress: Mutex::new(Progress { current: run, issued: None, recovery_issued: None }),
             _memory: claim,
-        }))))
+        })));
+        snapshot.initial_effective = Some(source.clone());
+        Ok(source)
     }
     /// Issue one captured restart capsule for the registered source's exact next generation.
     /// Its first coordinator-issued 30-second ancestor remains unchanged through retries;

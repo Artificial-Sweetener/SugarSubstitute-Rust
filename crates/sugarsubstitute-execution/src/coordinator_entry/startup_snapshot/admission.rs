@@ -35,7 +35,7 @@ pub(super) fn project(
     if launch.frame.buffer.is_none() {
         return Err(EntryTransportError::Closed);
     }
-    snapshot.body()?;
+    snapshot.original_body()?;
     let frame = protocol::decode(launch.frame.bytes())?;
     if !matches!(frame.payload, protocol::DecodedPayload::Launch(_))
         || frame.header.request != launch.request

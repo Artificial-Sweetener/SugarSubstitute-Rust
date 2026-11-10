@@ -22,7 +22,7 @@ mod types;
 pub use input::CoordinatorEntryInput;
 pub(crate) use namespace::NamespaceLifetime;
 pub use namespace::VerifiedEntryNamespace;
-pub use owner::CoordinatorEntryOwner;
+pub use owner::{CoordinatorEntryOwner, EntrySourceDataAdmission};
 pub use types::{
     EntryAdmissionError, EntryError, EntryInputError, EntryObservation, EntryPhase, EntrySnapshot,
 };

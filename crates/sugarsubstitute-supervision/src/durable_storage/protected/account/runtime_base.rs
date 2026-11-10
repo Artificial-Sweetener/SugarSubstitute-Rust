@@ -5,6 +5,8 @@
 //! Runtime records live below the installation they describe, never in account profile
 //! folders. The base is the installation root named by the configuration layout owner.
 use super::*;
+mod historical;
+pub(crate) use historical::resolve as historical;
 /// Open, pin and verify an existing runtime base, preserving native output and original causes.
 /// The returned final native path names every following namespace child.
 pub(crate) fn pin(

@@ -39,6 +39,7 @@ pub(crate) use publication::Publication;
 pub(crate) struct Protection {
     handles: Vec<Handle>,
     sid: Vec<u8>,
+    session_id: u32,
     budget: Budget,
 }
 
@@ -52,7 +53,8 @@ pub(crate) fn with<T>(
     check(context)?;
     let budget =
         Budget::Protected(Arc::new(context.memory().claim(1024 * 1024).map_err(io::Error::other)?));
-    let mut owner = Protection { handles: Vec::with_capacity(260), sid: Vec::new(), budget };
+    let mut owner =
+        Protection { handles: Vec::with_capacity(260), sid: Vec::new(), session_id: 0, budget };
     let result = (|| {
         let mut phase = NativePhase::ordinary(&owner.budget)?;
         let account = {
@@ -67,6 +69,7 @@ pub(crate) fn with<T>(
             )?
         };
         owner.sid = account.sid.bytes()?.to_vec();
+        owner.session_id = account.session_id;
         operation(&mut owner).map_err(|cause| ClaimError::new("setup_protected_payload", cause))
     })();
     let _retirement =
@@ -79,6 +82,29 @@ pub(crate) fn with<T>(
 }
 
 impl Protection {
+    /// Borrow the actual retained primary-account SID for an existing native record codec.
+    /// Configured paths, environment variables and presentation never supply this identity.
+    pub(crate) fn account_sid(&self) -> &[u8] {
+        &self.sid
+    }
+    /// Observe the primary token's Windows session captured with this account custody.
+    pub(crate) fn session_id(&self) -> u32 {
+        self.session_id
+    }
+
+    /// Reuse the unchanged namespace hash with this actual account and an already pinned generation.
+    /// The caller admits that generation through protected installation selection before importing.
+    pub(crate) fn generation_namespace(
+        &self,
+        generation: &Directory,
+        context: &JobContext,
+    ) -> io::Result<sugarsubstitute_contracts::lifecycle::NamespaceId> {
+        check(context)?;
+        let namespace = account::namespace_identity(&self.sid, &generation.native_identity()?);
+        check(context)?;
+        Ok(namespace)
+    }
+
     /// Check an already pinned file against the same account-specific protection policy.
     pub(crate) fn verify_file(&self, file: &File) -> io::Result<()> {
         let _verification =

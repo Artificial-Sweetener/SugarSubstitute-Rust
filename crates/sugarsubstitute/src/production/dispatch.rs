@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Start the installed application by default and select explicit qualification modes.
-use super::options::ConfigurationSource;
 use std::{
     error::Error,
     ffi::{OsStr, OsString},
     path::PathBuf,
 };
+use sugarsubstitute_configuration::paths::ConfigurationSource;
 use sugarsubstitute_configuration::paths::StartupPaths;
 use sugarsubstitute_contracts::configuration::LaunchConfiguration;
 

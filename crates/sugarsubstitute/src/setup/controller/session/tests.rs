@@ -8,6 +8,7 @@ use crate::{
     setup::presentation::{Action, Interaction},
 };
 use sugarsubstitute_application::setup_flow::{Page, PathField};
+use sugarsubstitute_contracts::execution::ScopeSpec;
 use sugarsubstitute_ui::{form::Role, text::PaintSpec};
 
 /// Re-examine `poll` after each execution wake until it reports completion.
@@ -26,11 +27,9 @@ impl Fixture {
         let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
         controller.clock = PausedClock::new();
         let owner = ExecutionOwner::new(controller.clock.clone(), wake.clone())?;
-        let client = owner.client();
-        controller.scope =
-            Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
-        controller.client = Some(client);
+        controller.client = Some(owner.client());
         controller.owner = Some(owner);
+        controller.scope = Some(controller.create_scope(None)?);
         let mut session = Session::new(
             r"E:\用户\Substitute".into(),
             View {
@@ -293,4 +292,21 @@ fn initial_system_theme_updates_inert_controller_paint_spec() -> Result<()> {
         assert!(controller.owner.is_none());
     }
     Ok(())
+}
+
+#[test]
+fn provisioning_scopes_created_after_the_native_session_follow_it_in_identity_order() -> Result<()>
+{
+    // Window start created the root and the session scope; the first page that needs the
+    // provisioning worker then creates the worker scope and the worker's process-family scope.
+    let mut f = Fixture::new()?;
+    let root = f.controller.scope.as_ref().ok_or("Installer root scope absent")?;
+    let worker = f.controller.create_scope(Some(root))?;
+    let client = f.controller.client.clone().ok_or("Installer execution absent")?;
+    let process = client.create_scope(
+        ScopeSpec { id: f.controller.scopes.allocate()?, deadline: None },
+        Some(&worker),
+    )?;
+    drop((process, worker));
+    f.finish()
 }

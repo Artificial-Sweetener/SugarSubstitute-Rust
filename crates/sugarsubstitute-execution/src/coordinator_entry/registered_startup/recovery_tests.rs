@@ -238,3 +238,34 @@ fn recovery_grant_final_control_retires_before_original_claimed_payload_and_all_
     drop(source);
     Ok(())
 }
+
+#[test]
+fn recovery_grant_keeps_original_view_and_maps_the_selected_child_profile() -> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, true)?;
+    let (_scope, mut session) = server(&rig, &boundary)?;
+    let snapshot = request_snapshot(&rig, &boundary, &session)?;
+    let original = snapshot.original_body()?.to_vec();
+    let profile = request()?.profile_directory().join("user").join("desktop-data").join("profile");
+    let (source, memory) = registered_profile(&rig, snapshot, profile)?;
+    drop(memory);
+    let expected = source.state()?.child_body.to_vec();
+    let mut completed = issued(&rig, &source)?;
+    let snapshot = take(&mut completed)?;
+    let grant =
+        rig.client.issue_registered_recovery_grant(snapshot, &source, &completed, key()?)?;
+    assert_ne!(original, expected);
+    assert_eq!(grant.state()?.startup_body(), expected);
+    assert_eq!(grant.startup_bytes(), expected.len());
+    assert_eq!(
+        grant.view()?.profile_directory().le_bytes(),
+        source.view()?.profile_directory().le_bytes()
+    );
+    assert_eq!(source.state()?.body.as_ref(), original);
+    grant.check()?;
+    drop(grant);
+    drop(completed);
+    drop(source);
+    close(&rig, &mut session)?;
+    Ok(())
+}

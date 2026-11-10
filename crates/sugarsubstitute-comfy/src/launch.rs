@@ -4,20 +4,42 @@
 //! Schema-one configuration arguments remain extra ComfyUI options. This pure
 //! conversion performs no path resolution, environment modification or launch.
 //! ComfyUI's `comfy/cli_args.py` owns option value types and operational semantics.
-use std::{error::Error, fmt};
-use sugarsubstitute_contracts::configuration::{ConfigurationError, LaunchConfiguration};
+use std::{error::Error, fmt, path::Path};
+use sugarsubstitute_contracts::configuration::{
+    BackendDataDisposition, ConfigurationError, LaunchConfiguration,
+};
 mod options;
+mod storage;
+pub use storage::{ExplicitStorageDirectories, StorageDirectory, explicit_storage_directories};
 
 /// Fixed Python and ComfyUI argument count added to managed requests.
 pub const MANAGED_PREFIX_ARGUMENTS: usize = 9;
-/// Embedded shutdown adapter bytes retained by each effective command.
-pub const MANAGED_BOOTSTRAP_BYTES: usize = include_str!("launch/managed.py").len();
+/// Maximum fixed prefix, including the owned-data public API's separately passed directory.
+pub const MAX_MANAGED_PREFIX_ARGUMENTS: usize = 10;
+const EXTERNAL_BOOTSTRAP: &str =
+    concat!(include_str!("launch/managed_start.py"), include_str!("launch/managed_finish.py"));
+const OWNED_BOOTSTRAP: &str = concat!(
+    include_str!("launch/managed_owned.py"),
+    include_str!("launch/managed_start.py"),
+    "    validate_owned_model_selection()\n",
+    include_str!("launch/managed_finish.py")
+);
+/// Maximum embedded adapter bytes retained by a complete effective command.
+pub const MANAGED_BOOTSTRAP_BYTES: usize = OWNED_BOOTSTRAP.len();
 
 /// Borrow ComfyUI's actual argv after checking the complete interpreter prefix.
 pub(crate) fn server_arguments(effective: &LaunchConfiguration) -> Option<&[String]> {
     let [unbuffered, command, source, argv @ ..] = effective.arguments() else { return None };
-    (unbuffered == "-u" && command == "-c" && source == include_str!("launch/managed.py"))
-        .then_some(argv)
+    if unbuffered != "-u" || command != "-c" {
+        return None;
+    }
+    if source == EXTERNAL_BOOTSTRAP {
+        return Some(argv);
+    }
+    if source == OWNED_BOOTSTRAP {
+        return argv.get(1..);
+    }
+    None
 }
 
 /// Reject an effective command without exposing supplied paths or option values.
@@ -60,23 +82,35 @@ impl Error for ManagedLaunchError {
 /// custom-node suppression and exit-only options, including their abbreviations.
 /// Supported option values retain exact Unicode, empty values and ordering.
 /// Final argument count, individual and aggregate byte limits include this prefix.
+/// `disposition` is inert parent-authenticated execution data. Native ownership remains with
+/// the composing parent's retained installation/provisioning owner. Owned execution validates
+/// model intent through the selected SugarCubes public API before main; external execution
+/// retains its original bootstrap bytes and never inspects this extra API.
 pub fn effective_managed_launch(
     requested: &LaunchConfiguration,
+    disposition: BackendDataDisposition,
+    cubes: &Path,
 ) -> Result<LaunchConfiguration, ManagedLaunchError> {
     options::validate(requested.arguments())?;
     let script = requested.root().join("main.py");
     let script = script.to_str().ok_or(ManagedLaunchError::ArgumentShape)?;
-    let mut arguments = vec![
-        "-u".into(),
-        "-c".into(),
-        include_str!("launch/managed.py").into(),
+    let mut arguments = vec!["-u".into(), "-c".into()];
+    match disposition {
+        BackendDataDisposition::External => arguments.push(EXTERNAL_BOOTSTRAP.into()),
+        BackendDataDisposition::InstallationOwned => {
+            LaunchConfiguration::validate_path(cubes).map_err(ManagedLaunchError::Configuration)?;
+            arguments.push(OWNED_BOOTSTRAP.into());
+            arguments.push(cubes.to_str().ok_or(ManagedLaunchError::ArgumentShape)?.into());
+        }
+    }
+    arguments.extend([
         script.into(),
         "--listen".into(),
         "127.0.0.1".into(),
         "--port".into(),
         requested.port().to_string(),
         "--disable-auto-launch".into(),
-    ];
+    ]);
     arguments.extend(requested.arguments().iter().cloned());
     LaunchConfiguration::new(
         requested.root().into(),

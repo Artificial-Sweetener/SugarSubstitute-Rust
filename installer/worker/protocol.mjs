@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Versioned, bounded host protocol. Selection values carry no download or execution authority. */
 export const VERSION = 1
+export const INTEGRATION_VERSION = 2
 // proxy_result is an additive operation supplied by the host paired with the signed Node worker.
 export const MAX_FRAME_BYTES = 65536
 const fields = new Set(['release', 'comfyVersion', 'variant'])
@@ -76,8 +77,9 @@ export function parseCommand(bytes) {
       text(input.selectionToken, 'selection token', 80)
       break
     case 'integrate':
-      keys(input, ['directory', 'python', 'frontend', 'metadata', 'models'])
-      for (const field of ['directory', 'python', 'frontend', 'metadata', 'models']) text(input[field], field)
+      keys(input, ['version', 'directory', 'python', 'frontend', 'metadata', 'models', 'storageBase'])
+      if (input.version !== INTEGRATION_VERSION) throw new Error('Unsupported model integration protocol')
+      for (const field of ['directory', 'python', 'frontend', 'metadata', 'models', 'storageBase']) text(input[field], field)
       break
     case 'cancel':
       keys(input, ['requestId'])

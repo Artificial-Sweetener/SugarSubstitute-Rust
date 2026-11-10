@@ -50,6 +50,33 @@ impl InstallationSession {
         self.admission.root.path()
     }
 
+    /// Create the protected user folders every installed host expects before its first start:
+    /// the user root, the desktop host's data and crash-capture storage.
+    ///
+    /// Only protected creation gives these folders their account-only access, and the host
+    /// verifies that protection instead of creating them, so setup provisions them for every
+    /// preparation. Existing folders keep their contents and are only verified.
+    /// # Errors
+    /// Preserves native creation, protection and cancellation failures without partial cleanup.
+    pub(super) fn provision_user_folders(&self, context: &JobContext) -> io::Result<()> {
+        let layout =
+            sugarsubstitute_configuration::layout::InstallationLayout::new(self.directory());
+        crate::durable_storage::protection::with(context, |protection| {
+            for folder in [
+                layout.user(),
+                layout.user().join(sugarsubstitute_configuration::layout::DESKTOP_DATA),
+                layout.capture_root(),
+            ] {
+                protection.directory(
+                    &folder,
+                    crate::durable_storage::protected::directories::Mode::OpenOrCreate,
+                    context,
+                )?;
+            }
+            Ok(())
+        })
+    }
+
     /// Reserve a protected generation and transfer this session into package preparation.
     /// Package verification and delivery may happen while this session retains the installation;
     /// this transition never releases and reacquires its mutation lock.
@@ -68,22 +95,7 @@ impl InstallationSession {
         )?;
         let generation =
             releases.path().join(crate::setup_storage::identity::generation()?.as_str());
-        crate::durable_storage::protection::with(context, |protection| {
-            protection.directory(
-                &root.path().join(sugarsubstitute_configuration::layout::USER),
-                crate::durable_storage::protected::directories::Mode::OpenOrCreate,
-                context,
-            )?;
-            protection.directory(
-                &root
-                    .path()
-                    .join(sugarsubstitute_configuration::layout::USER)
-                    .join(sugarsubstitute_configuration::layout::DESKTOP_DATA),
-                crate::durable_storage::protected::directories::Mode::OpenOrCreate,
-                context,
-            )?;
-            Ok(())
-        })?;
+        self.provision_user_folders(context)?;
         let (pinned, marker) = generation::create(&generation, bundle.digest(), context)?;
         Ok(PreparedInstallation {
             session: self,

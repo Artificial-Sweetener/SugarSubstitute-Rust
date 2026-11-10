@@ -105,6 +105,28 @@ impl ExecutionOwner {
         Self::build(clock, wake, if logical == 1 { 1 } else { 2 }, DEFAULT_MEMORY_BYTES)
     }
 
+    /// Construct the default owner and fund `additional_bytes` of declared application resources
+    /// beyond its standing 256 MiB capacity.
+    ///
+    /// Use this for resources an application keeps charged for the owner's whole lifetime, or
+    /// that one declared operation reserves beside its standing neighbours, so they never take
+    /// capacity from the jobs that run beside them. The total stays immutable like every other
+    /// capacity.
+    ///
+    /// # Errors
+    /// Rejects total capacity overflow and preserves original runtime/thread creation failures.
+    pub fn with_additional_memory(
+        clock: Arc<dyn Clock>,
+        wake: Arc<dyn CompletionWake>,
+        additional_bytes: u64,
+    ) -> Result<Self, ExecutionError> {
+        let memory_bytes = DEFAULT_MEMORY_BYTES
+            .checked_add(additional_bytes)
+            .ok_or_else(|| error(std::io::Error::other("Execution memory capacity overflow")))?;
+        let logical = std::thread::available_parallelism().map_err(error)?.get();
+        Self::build(clock, wake, if logical == 1 { 1 } else { 2 }, memory_bytes)
+    }
+
     /// Construct the same execution owner with a startup-selected total memory capacity.
     ///
     /// Capacity is immutable for this owner's lifetime. All job reservations, retained

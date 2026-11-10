@@ -18,6 +18,20 @@ pub const INPUT_OPTIONS: [&str; 6] = [
     "--profile-directory",
 ];
 
+/// Inert startup selection retained until an admitted adapter reads installed launch documents.
+/// This grants no installation, filesystem, backend or mutable-data ownership.
+pub enum ConfigurationSource {
+    /// Six explicitly selected, lexically validated paths.
+    Explicit(StartupPaths),
+    /// A descriptor whose bounded contents the startup storage owner must resolve and validate.
+    Installed(PathBuf),
+}
+impl From<StartupPaths> for ConfigurationSource {
+    fn from(paths: StartupPaths) -> Self {
+        Self::Explicit(paths)
+    }
+}
+
 /// Keep the original six separately selected paths without discovering an install.
 pub struct StartupPaths {
     configuration: PathBuf,
@@ -72,6 +86,18 @@ impl StartupPaths {
     /// Borrow the selected input document without granting file authority.
     pub fn configuration(&self) -> &std::path::Path {
         &self.configuration
+    }
+    /// Borrow the six exact inert selections in option order for bounded passive capture.
+    /// This performs no normalization, native inspection or authority admission.
+    pub fn as_paths(&self) -> [&std::path::Path; 6] {
+        [
+            &self.configuration,
+            &self.package,
+            &self.metadata,
+            &self.cubes,
+            &self.script,
+            &self.profile,
+        ]
     }
     /// Move validated inputs in option order into the admitted native request constructor.
     /// These paths remain inert requests and require resource-owner trust checks.

@@ -13,6 +13,12 @@ api = loader.load_model_root_api()
 if getattr(api, "MODEL_ROOT_API_VERSION", None) != 1:
     raise RuntimeError("SugarCubes model-root API version is unsupported")
 store = api.ModelRootStore(comfy)
+read_preserved = getattr(store, "read_preserved_selection", None)
+if not callable(read_preserved):
+    raise RuntimeError("SugarCubes preserved model-root reader is unavailable")
+# A corrupt or unsupported selected record must never be overwritten by setup.
+# The public owner retains current/legacy precedence and the original refusal cause.
+read_preserved()
 configuration = api.ModelRootConfiguration(store, lambda: store.default_root)
 configuration.configure("custom", str(models))
 if store.load() != models.resolve():

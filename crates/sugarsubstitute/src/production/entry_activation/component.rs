@@ -68,6 +68,7 @@ pub(crate) struct ProfileComponent {
     installation: PathBuf,
     run: Option<RunKey>,
     projection: Option<OwnedJob<projection::ProjectedEntry, projection::ProjectionFailure>>,
+    source: Option<super::source_preparation::Preparation>,
     projected: Option<JobCompletion<projection::ProjectedEntry, projection::ProjectionFailure>>,
     campaign: Option<Box<Campaign>>,
     capture: Option<CaptureRegistration>,
@@ -108,6 +109,7 @@ impl ProfileComponent {
             installation,
             run: None,
             projection: None,
+            source: None,
             projected: None,
             campaign: None,
             capture: None,
@@ -208,6 +210,15 @@ impl EntryActivation for ProfileComponent {
         }
         let run =
             RunKey { owner, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? };
+        let installation = resources.authority.running_installation();
+        if installation.is_some() && original.view()?.originals().is_some() {
+            return Err("Installed component cannot adopt source-host originals".into());
+        }
+        let admission = if installation.is_none() {
+            Some(resources.entry.source_data_admission(owner, original)?)
+        } else {
+            None
+        };
         let spec = Self::spec(
             &resources,
             JobClass::InfrastructureLifecycle,
@@ -227,18 +238,31 @@ impl EntryActivation for ProfileComponent {
             .user(),
             resources.client.clone(),
             run,
-            resources.authority.running_installation(),
+            installation,
         ));
-        match resources.client.submit_blocking_owned_box(
-            resources.finite,
-            spec,
-            &mut input,
-            projection::project,
-        ) {
-            Ok(job) => self.projection = Some(job),
-            Err(cause) => {
-                *request = input.take().and_then(projection::ProjectionInput::rejected_request);
-                return Err(Box::new(cause));
+        if let Some(admission) = admission {
+            let mut preparation = super::source_preparation::Preparation::new(
+                input.take().ok_or("Original component source absent")?,
+                self.installation.clone(),
+                admission,
+            );
+            if let Err(cause) = preparation.start(&resources, until) {
+                *request = preparation.rejected_request();
+                return Err(cause);
+            }
+            self.source = Some(preparation);
+        } else {
+            match resources.client.submit_blocking_owned_box(
+                resources.finite,
+                spec,
+                &mut input,
+                projection::project,
+            ) {
+                Ok(job) => self.projection = Some(job),
+                Err(cause) => {
+                    *request = input.take().and_then(projection::ProjectionInput::rejected_request);
+                    return Err(Box::new(cause));
+                }
             }
         }
         self.run = Some(run);
@@ -270,6 +294,9 @@ impl EntryActivation for ProfileComponent {
         if let Some(job) = &self.projection {
             job.cancel();
         }
+        if let Some(source) = &self.source {
+            source.cancel();
+        }
         Ok(())
     }
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
@@ -279,6 +306,11 @@ impl EntryActivation for ProfileComponent {
         self.complete && self.failure.is_none() && self.profile_retirement_ready()
     }
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
+        if let Some(cause) =
+            self.source.as_ref().and_then(super::source_preparation::Preparation::failure)
+        {
+            return Some(cause);
+        }
         self.campaign
             .as_ref()
             .and_then(|campaign| match &campaign.projection.outcome {
@@ -305,6 +337,10 @@ impl EntryActivation for ProfileComponent {
         self.request_close(Some(budget))?;
         let Some(mut resources) = resources else {
             return Ok(self.projection.is_none()
+                && self
+                    .source
+                    .as_ref()
+                    .is_none_or(super::source_preparation::Preparation::settled)
                 && self.complete
                 && self.profile_retirement_ready());
         };
@@ -318,6 +354,7 @@ impl EntryActivation for ProfileComponent {
         if !self.closing
             || !self.complete
             || self.projection.is_some()
+            || self.source.as_ref().is_some_and(|source| !source.settled())
             || !self.profile_retirement_ready()
         {
             return Err("Profile component ownership remains unsettled".into());

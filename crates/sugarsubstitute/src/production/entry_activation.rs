@@ -18,6 +18,8 @@ mod delivery;
 mod desktop_output;
 #[path = "entry_activation/desktop_role.rs"]
 pub(crate) mod desktop_role;
+#[path = "entry_activation/failure.rs"]
+mod failure;
 #[path = "entry_activation/forwarding.rs"]
 pub(in crate::production) mod forwarding;
 #[path = "entry_activation/funding.rs"]
@@ -64,6 +66,8 @@ mod restart;
 pub(crate) mod retirement;
 #[path = "entry_activation/shutdown.rs"]
 mod shutdown;
+#[path = "entry_activation/source_preparation.rs"]
+mod source_preparation;
 #[cfg(test)]
 #[path = "entry_activation/tests.rs"]
 mod tests;
@@ -182,79 +186,6 @@ impl ProductionActivation {
             self.failure = Some(cause);
         }
     }
-    fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
-        if let Some(cause) = self
-            .recovery_pending
-            .iter()
-            .chain(self.failed_recoveries.iter().flatten())
-            .find_map(|pending| pending.failure_source())
-        {
-            return Some(cause);
-        }
-        if let Some(cause) = self.incidents.reporting.failure() {
-            return Some(cause);
-        }
-        if let Some(cause) = self.incidents.host.failure() {
-            return Some(cause);
-        }
-        if let Some(cause) =
-            self.records.iter().flatten().find_map(|record| record.record.seed.failure())
-        {
-            return Some(cause);
-        }
-        if let Some(cause) =
-            self.records.iter().flatten().find_map(|record| record.record.collection.failure())
-        {
-            return Some(cause);
-        }
-        if let Some(operation) = self
-            .failure
-            .as_deref()
-            .and_then(|cause| cause.downcast_ref::<backend_failure::OperationFailure>())
-        {
-            return Some(operation.cause());
-        }
-        if let Some(key) = self.failure_resource
-            && let Some(retained) = &self.backend
-        {
-            if let Some(cause) = retained.backend.cleanup_failure(key) {
-                return Some(cause);
-            }
-            if let Some(cause) = retained.backend.failure(key) {
-                return Some(cause);
-            }
-        }
-        self.failure_run
-            .and_then(|run| {
-                self.records
-                    .iter()
-                    .flatten()
-                    .map(|retained| retained.record.as_ref())
-                    .filter(|record| record.run == run)
-                    .find_map(|record| {
-                        record
-                            .parent
-                            .as_ref()
-                            .and_then(|parent| parent.failure())
-                            .map(|cause| cause as &(dyn Error + 'static))
-                            .or_else(|| {
-                                record
-                                    .start
-                                    .as_ref()
-                                    .and_then(|start| start.output.as_ref())
-                                    .and_then(|output| output.failure())
-                            })
-                            .or_else(|| {
-                                record.start.as_ref().and_then(DesktopStart::recovery_failure)
-                            })
-                            .or_else(|| match &record.projected.as_ref()?.outcome {
-                                JobOutcome::Failure(cause) => Some(cause as &(dyn Error + 'static)),
-                                _ => None,
-                            })
-                    })
-            })
-            .or(self.failure.as_deref())
-    }
 }
 impl EntryActivation for ProductionActivation {
     fn presentation_locale(&self) -> Option<sugarsubstitute_contracts::configuration::LocaleId> {
@@ -316,6 +247,15 @@ impl EntryActivation for ProductionActivation {
         let connection = ConnectionId::new(next_connection)?;
         let launch = LaunchId::new(1)?;
         let navigation = Generation::new(1)?;
+        let installation = resources.authority.running_installation();
+        if installation.is_some() && original.view()?.originals().is_some() {
+            return Err("Installed entry cannot adopt a source-host originals reference".into());
+        }
+        let source_admission = if installation.is_none() {
+            Some(resources.entry.source_data_admission(owner, original)?)
+        } else {
+            None
+        };
         let spec = JobSpec {
             id: resources.jobs.allocate()?,
             operation: Operation::NativeLifecycle,
@@ -334,19 +274,31 @@ impl EntryActivation for ProductionActivation {
             .user(),
             resources.client.clone(),
             run,
-            resources.authority.running_installation(),
+            installation,
         ));
-        let submitted = resources.client.submit_blocking_owned_box(
-            resources.finite,
-            spec,
-            &mut input,
-            projection::project,
-        );
-        let job = match submitted {
-            Ok(job) => job,
-            Err(cause) => {
-                *request = input.take().and_then(ProjectionInput::rejected_request);
-                return Err(Box::new(cause));
+        let (job, source) = if let Some(admission) = source_admission {
+            let mut preparation = source_preparation::Preparation::new(
+                input.take().ok_or("Original source input missing")?,
+                self.working_directory.clone(),
+                admission,
+            );
+            if let Err(cause) = preparation.start(&resources, until) {
+                *request = preparation.rejected_request();
+                return Err(cause);
+            }
+            (None, Some(preparation))
+        } else {
+            match resources.client.submit_blocking_owned_box(
+                resources.finite,
+                spec,
+                &mut input,
+                projection::project,
+            ) {
+                Ok(job) => (Some(job), None),
+                Err(cause) => {
+                    *request = input.take().and_then(ProjectionInput::rejected_request);
+                    return Err(Box::new(cause));
+                }
             }
         };
         self.next_instance = next_instance;
@@ -357,7 +309,8 @@ impl EntryActivation for ProductionActivation {
             launch,
             navigation,
             connection,
-            job: Some(job),
+            job,
+            source,
             completion: None,
             restart: false,
         });
@@ -393,6 +346,9 @@ impl EntryActivation for ProductionActivation {
             }
         }
         for pending in self.pending.iter().flatten() {
+            if let Some(source) = &pending.source {
+                source.cancel();
+            }
             if let Some(job) = &pending.job {
                 job.cancel();
             }
@@ -443,7 +399,7 @@ impl EntryActivation for ProductionActivation {
         self.request_close(Some(budget))?;
         let Some(mut resources) = resources else {
             return Ok(self.records.iter().all(Option::is_none)
-                && self.pending.iter().all(Option::is_none)
+                && self.pending.iter().flatten().all(PendingProjection::source_terminal)
                 && self.recovery_pending.is_none()
                 && self.capture.is_none());
         };
@@ -469,7 +425,7 @@ impl EntryActivation for ProductionActivation {
             && self.incidents.reporting.settled()
             && incident_closed
             && self.incidents.diagnostic_transactions_settled()
-            && self.pending.iter().all(Option::is_none)
+            && self.pending.iter().flatten().all(PendingProjection::source_terminal)
             && self.delivery.as_ref().is_none_or(|delivery| !delivery.pending())
             && self.backend.as_ref().is_none_or(|retained| retained.backend.settled())
             && self
@@ -483,7 +439,7 @@ impl EntryActivation for ProductionActivation {
         if !self.closing
             || !self.incidents.diagnostic_transactions_settled()
             || self.records.iter().flatten().any(|retained| !retained.record.closed)
-            || self.pending.iter().any(Option::is_some)
+            || self.pending.iter().flatten().any(|pending| !pending.source_terminal())
             || self.recovery_pending.as_ref().is_some_and(|pending| !pending.settled())
         {
             return Err("Actual activation resources remain unsettled".into());

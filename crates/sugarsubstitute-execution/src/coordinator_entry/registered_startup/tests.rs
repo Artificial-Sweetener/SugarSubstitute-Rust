@@ -36,16 +36,49 @@ fn registered(
     rig: &Rig,
     startup: PreparedStartupSnapshot,
 ) -> TestResult<(RegisteredStartupSource, MemoryLease)> {
+    registered_profile(rig, startup, request()?.profile_directory().to_path_buf())
+}
+fn registered_profile(
+    rig: &Rig,
+    mut startup: PreparedStartupSnapshot,
+    profile: std::path::PathBuf,
+) -> TestResult<(RegisteredStartupSource, MemoryLease)> {
     let until = startup.launch.as_ref().ok_or("Original Entry missing")?.until();
+    let original_bytes = startup.original_body()?.to_vec();
     let client = rig.client.clone();
     let original = run()?;
     let mut job =
         rig.client.submit_blocking(&rig.scope, projection_spec(2, until)?, move |context| {
-            let source = client.register_startup_source(&startup, &context, original)?;
+            let source =
+                client.register_startup_source(&mut startup, &context, original, &profile)?;
             assert!(matches!(
-                client.register_startup_source(&startup, &context, original),
+                client.register_startup_source(&mut startup, &context, original, &profile),
                 Err(AdmissionError::InvalidCaptureAdmission)
             ));
+            assert_eq!(
+                startup
+                    .original_body()
+                    .map_err(|cause| AdmissionError::Unexpected(crate::runtime::error(cause)))?,
+                original_bytes
+            );
+            assert_eq!(
+                source
+                    .state()
+                    .map_err(|cause| AdmissionError::Unexpected(crate::runtime::error(cause)))?
+                    .body
+                    .as_ref(),
+                original_bytes
+            );
+            assert_eq!(
+                startup
+                    .body()
+                    .map_err(|cause| AdmissionError::Unexpected(crate::runtime::error(cause)))?,
+                source
+                    .state()
+                    .map_err(|cause| AdmissionError::Unexpected(crate::runtime::error(cause)))?
+                    .child_body
+                    .as_ref()
+            );
             assert!(source.view().is_ok());
             drop(startup);
             Ok::<_, AdmissionError>(source)
@@ -268,3 +301,6 @@ mod witness;
 
 #[path = "recovery_tests.rs"]
 mod recovery;
+
+#[path = "profile_tests.rs"]
+mod profile;

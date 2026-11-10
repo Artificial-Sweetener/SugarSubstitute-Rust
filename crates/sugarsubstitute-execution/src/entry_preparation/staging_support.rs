@@ -62,6 +62,7 @@ pub(crate) fn prepare(core: &Arc<Core>, scope: &Scope) -> TestResult<Prepared> {
         path.clone(),
         path.clone(),
         path,
+        None,
     )?;
     Ok(Prepared { input: Some(input), owner, queued, job })
 }

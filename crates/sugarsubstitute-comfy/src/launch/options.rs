@@ -132,6 +132,13 @@ pub(super) const PROTECTED: &[&str] = &[
     "--help",
 ];
 pub(super) fn validate(args: &[String]) -> Result<(), ManagedLaunchError> {
+    visit(args, |_, _| {})
+}
+/// Lend complete accepted options to storage inspection through this same arity grammar.
+pub(super) fn visit<'a>(
+    args: &'a [String],
+    mut accepted: impl FnMut(&str, Option<&'a str>),
+) -> Result<(), ManagedLaunchError> {
     let mut index = 0;
     while index < args.len() {
         let argument = &args[index];
@@ -150,6 +157,7 @@ pub(super) fn validate(args: &[String]) -> Result<(), ManagedLaunchError> {
                 ManagedLaunchError::ArgumentShape
             })?;
         index += 1;
+        let value = inline.or_else(|| args.get(index).map(String::as_str));
         let mut count = usize::from(inline.is_some());
         if inline.is_none() && !matches!(arity, Arity::Flag) {
             while index < args.len() && !is_option(&args[index]) {
@@ -170,6 +178,7 @@ pub(super) fn validate(args: &[String]) -> Result<(), ManagedLaunchError> {
         if !valid {
             return Err(ManagedLaunchError::ArgumentShape);
         }
+        accepted(name, value);
     }
     Ok(())
 }

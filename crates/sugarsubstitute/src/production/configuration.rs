@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare bounded configuration and actual environment under one original owned job.
 
-use super::options::ConfigurationSource;
-use sugarsubstitute_configuration::paths::StartupPaths;
+use sugarsubstitute_configuration::paths::{ConfigurationSource, StartupPaths};
 #[path = "configuration/installed.rs"]
 mod installed;
 use crate::job_sequence::JobSequence;
@@ -106,6 +105,28 @@ type PreparedRequestJob = OwnedJob<
     EntryPreparationSuccess<EntryRequestInput>,
     EntryPreparationFailure<ConfigurationCause>,
 >;
+/// Inert settled intent; the bootstrap retains its separate opaque custody through capture.
+pub(crate) struct SettledStartup {
+    pub(crate) options: StartupPaths,
+    pub(crate) configuration: StartupConfiguration,
+    pub(crate) originals:
+        Option<sugarsubstitute_contracts::coordinator_entry::EntryOriginalsReference>,
+}
+/// Startup intent either still to be read from its selected source or already settled.
+pub(crate) enum ConfigurationInput {
+    Source(ConfigurationSource),
+    Settled(Box<SettledStartup>),
+}
+impl From<ConfigurationSource> for ConfigurationInput {
+    fn from(source: ConfigurationSource) -> Self {
+        Self::Source(source)
+    }
+}
+impl From<StartupPaths> for ConfigurationInput {
+    fn from(paths: StartupPaths) -> Self {
+        Self::Source(paths.into())
+    }
+}
 /// Admit the concrete complete request factory on the process's existing execution owner.
 /// # Errors
 /// Rejects original admission before opening files or reading native environment.
@@ -113,7 +134,7 @@ pub(crate) fn submit(
     client: &ExecutionClient,
     scope: &Scope,
     jobs: &JobSequence,
-    options: ConfigurationSource,
+    options: ConfigurationInput,
     original: EntrySetupBudget,
 ) -> Result<PreparedRequestJob, Box<dyn Error>> {
     let spec = JobSpec {
@@ -126,15 +147,35 @@ pub(crate) fn submit(
     };
     client
         .submit_entry_preparation(scope, spec, original, move |context| {
-            let options = installed::resolve(&context, options)?;
-            let LoadedConfiguration { options, configuration } =
-                load_configuration(&context, options)?;
-            let captured =
-                context.capture_environment().map_err(ConfigurationCause::Environment)?;
-            let [_, package, metadata, cubes, script, profile] = options.into_paths();
-            captured
-                .into_request(configuration, package, metadata, cubes, script, profile)
-                .map_err(ConfigurationCause::Environment)
+            let capture =
+                |options: StartupPaths, configuration: StartupConfiguration, originals| {
+                    let captured =
+                        context.capture_environment().map_err(ConfigurationCause::Environment)?;
+                    let [_, package, metadata, cubes, script, profile] = options.into_paths();
+                    captured
+                        .into_request(
+                            configuration,
+                            package,
+                            metadata,
+                            cubes,
+                            script,
+                            profile,
+                            originals,
+                        )
+                        .map_err(ConfigurationCause::Environment)
+                };
+            match options {
+                ConfigurationInput::Source(source) => {
+                    let options = installed::resolve(&context, source)?;
+                    let LoadedConfiguration { options, configuration } =
+                        load_configuration(&context, options)?;
+                    capture(options, configuration, None)
+                }
+                ConfigurationInput::Settled(settled) => {
+                    let SettledStartup { options, configuration, originals } = *settled;
+                    capture(options, configuration, originals)
+                }
+            }
         })
         .map_err(|rejected| Box::new(rejected.error) as Box<dyn Error>)
 }

@@ -51,6 +51,38 @@ fn startup_memory_capacity_controls_retained_admission_and_retry_wakes() -> Test
     Ok(())
 }
 
+#[test]
+fn additional_memory_extends_the_standing_capacity_and_overflow_is_rejected() -> TestResult {
+    let extra = 12 * 1024 * 1024;
+    let clock = Arc::new(ManualClock::default());
+    let wake = Arc::new(Wake::default());
+    let owner = crate::ExecutionOwner::with_additional_memory(
+        Arc::new(ClockPort(clock.clone())),
+        wake.clone(),
+        extra,
+    )?;
+    assert_eq!(owner.limits().memory_bytes, LIMIT + extra);
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let rig = Rig { owner, client, clock, wake, scope };
+    // Custody kept charged beside the owner leaves the whole standing capacity to its jobs.
+    let retained = retained_context(&rig, 1, extra)?;
+    let standing = retained_context(&rig, 2, LIMIT)?;
+    drain(&rig)?;
+    assert_eq!(rig.scope.snapshot().reserved_bytes, LIMIT + extra);
+    drop((retained, standing));
+    wait_bytes(&rig, 0)?;
+    assert!(
+        crate::ExecutionOwner::with_additional_memory(
+            Arc::new(ClockPort(Arc::new(ManualClock::default()))),
+            Arc::new(Wake::default()),
+            u64::MAX,
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
 fn retained_context(rig: &Rig, id: u64, bytes: u64) -> TestResult<JobContext> {
     let mut job = rig.client.submit_blocking(
         &rig.scope,

@@ -3,6 +3,7 @@
 //! Check exact Windows units and authoritative lexical validation in the funded projection.
 use super::*;
 use std::os::windows::ffi::OsStrExt;
+use sugarsubstitute_contracts::coordinator_entry::{EntryConnectionView, EntryWindowsPathView};
 fn bytes(units: &[u16]) -> Vec<u8> {
     units.iter().flat_map(|unit| unit.to_le_bytes()).collect()
 }
@@ -10,7 +11,7 @@ fn bytes(units: &[u16]) -> Vec<u8> {
 fn projection_preserves_unpaired_profile_path_units() -> Result<(), Box<dyn Error + Send + Sync>> {
     let original = [69, 58, 92, 0xd800, 97, 0xdc01];
     let raw = bytes(&original);
-    let projected = path(EntryWindowsPathView::from_le_bytes(&raw)?)?;
+    let projected = fields::path(EntryWindowsPathView::from_le_bytes(&raw)?)?;
     assert_eq!(projected.as_os_str().encode_wide().collect::<Vec<_>>(), original);
     Ok(())
 }
@@ -19,7 +20,7 @@ fn projection_rejects_relative_and_parent_traversal_without_rewriting()
 -> Result<(), Box<dyn Error + Send + Sync>> {
     for value in ["profile", r"E:\parent\..\profile"] {
         let raw = bytes(&value.encode_utf16().collect::<Vec<_>>());
-        assert!(path(EntryWindowsPathView::from_le_bytes(&raw)?).is_err());
+        assert!(fields::path(EntryWindowsPathView::from_le_bytes(&raw)?).is_err());
     }
     Ok(())
 }
@@ -30,7 +31,7 @@ fn projection_path_exact_unit_bound_survives_owned_conversion()
         vec![u16::from(b'x'); sugarsubstitute_contracts::coordinator_entry::MAX_ENTRY_PATH_UNITS];
     units[..3].copy_from_slice(&[69, 58, 92]);
     let raw = bytes(&units);
-    let projected = path(EntryWindowsPathView::from_le_bytes(&raw)?)?;
+    let projected = fields::path(EntryWindowsPathView::from_le_bytes(&raw)?)?;
     assert_eq!(projected.as_os_str().encode_wide().collect::<Vec<_>>(), units);
     Ok(())
 }
@@ -64,6 +65,22 @@ fn managed_view<'a>(
     )?)
 }
 
+#[test]
+fn originals_matching_data_never_bypasses_missing_native_source_or_installed_custody()
+-> Result<(), Box<dyn Error + Send + Sync>> {
+    let root = bytes(&r"E:\comfyui".encode_utf16().collect::<Vec<_>>());
+    let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
+    let view = managed_view(&root, &interpreter, &[], 0, "en")?;
+    assert!(validate_source(view, None, false).is_err());
+    assert!(validate_source(view, None, true).is_ok());
+    let referenced = view.with_originals(
+        sugarsubstitute_contracts::coordinator_entry::EntryOriginalsReference::new([7; 32])?,
+    );
+    assert!(validate_source(referenced, None, false).is_err());
+    assert!(validate_source(referenced, None, true).is_err());
+    Ok(())
+}
+
 /// Empty schema-one extras still yield the complete Python/Comfy command before identity resolution.
 #[test]
 fn parent_projection_composes_complete_managed_command_from_empty_extras()
@@ -79,7 +96,8 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     assert!(available < PROJECTION_BYTES);
     assert_eq!(claim.bytes(), available);
     assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);
-    let projected = fields(original, &capture, available, |_| Ok(BackendStorage::External))?;
+    let projected =
+        fields::project(original, &capture, available, None, |_| Ok(BackendStorage::External))?;
     let BackendTarget::Managed(launch) = &projected.target else {
         return Err("Managed target changed mode".into());
     };
@@ -148,10 +166,11 @@ fn parent_projection_rejects_effective_command_overflow_without_changing_extra_s
         arguments.extend_from_slice(b"--cpu");
     }
     let original = managed_view(&root, &interpreter, &arguments, 58, "en")?;
-    let cause = fields(
+    let cause = fields::project(
         original,
         &PathBuf::new(),
         projection_data_bytes().ok_or("Joined projection partition underflow")?,
+        None,
         |_| Ok(BackendStorage::External),
     )
     .err()
@@ -185,10 +204,11 @@ fn configured_japanese_locale_reaches_production_report_view_work_without_web_co
     let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
     let original =
         managed_view(&root, &interpreter, &[], 0, "ja").map_err(|cause| cause as Box<dyn Error>)?;
-    let projected = fields(
+    let projected = fields::project(
         original,
         &PathBuf::new(),
         projection_data_bytes().ok_or("Joined projection partition underflow")?,
+        None,
         |_| Ok(BackendStorage::External),
     )
     .map_err(|cause| cause as Box<dyn Error>)?;
@@ -216,5 +236,99 @@ fn configured_japanese_locale_reaches_production_report_view_work_without_web_co
     assert!(!root_capture_degraded);
     assert!(receiving.configure_locale(LocaleId::new("en")?).is_err());
     assert!(matches!(receiving.view_work(binding), Ok(ReportingWork::View { locale: "ja", .. })));
+    Ok(())
+}
+
+/// Windows-shaped snapshot: `variables` entries whose text totals about `units` UTF-16 units.
+fn environment_bytes(variables: usize, units: usize) -> Vec<u8> {
+    let each = units / variables;
+    let mut block: Vec<u16> = Vec::new();
+    for index in 0..variables {
+        let name = format!("VARIABLE_{index:04}=");
+        let value = "v".repeat(each.saturating_sub(name.len() + 1));
+        block.extend(name.encode_utf16());
+        block.extend(value.encode_utf16());
+        block.push(0);
+    }
+    block.push(0);
+    bytes(&block)
+}
+
+/// Project a managed launch the way an installed host sends it: long installation paths, one
+/// ComfyUI beside them, and the caller's real environment. Returns the unused policy quota.
+fn project_installed_managed(environment: &[u8]) -> Result<u64, Box<dyn Error + Send + Sync>> {
+    use sugarsubstitute_contracts::{
+        configuration::{Presentation, Theme},
+        coordinator_entry::{EntryArgumentsView, EntryEnvironmentView, EntryFrontendView},
+    };
+    let install = r"D:\SugarSubstitute-Rust\canvas-integration\recovery\install-proof\installs\real-03\SugarSubstitute";
+    let wide = |tail: &str| bytes(&format!(r"{install}\{tail}").encode_utf16().collect::<Vec<_>>());
+    let root = wide(r"releases\generation\comfyui");
+    let interpreter = wide(r"releases\generation\python\python.exe");
+    let profile = wide(r"user\profile");
+    let root = EntryWindowsPathView::from_le_bytes(&root)?;
+    let interpreter = EntryWindowsPathView::from_le_bytes(&interpreter)?;
+    let profile = EntryWindowsPathView::from_le_bytes(&profile)?;
+    let view = EntryLaunchRequestView::new(
+        EntryConnectionView::Managed {
+            root,
+            interpreter,
+            arguments: EntryArgumentsView::from_encoded(&[], 0)?,
+            port: std::num::NonZeroU16::new(8188).ok_or("Invalid port")?,
+        },
+        EntryFrontendView::new(root, root, root, root),
+        profile,
+        "Profile_1",
+        Presentation::new("en", Theme::Dark, false)?,
+        EntryEnvironmentView::from_le_bytes(environment)?,
+    )?;
+    let capture = PathBuf::from(format!(r"{install}\user\capture"));
+    let available = projection_data_bytes().ok_or("Joined projection partition underflow")?;
+    let projected =
+        fields::project(view, &capture, available, None, |_| Ok(BackendStorage::External))?;
+    let (claim, _scope) = super::super::funding::tests::admitted(PROJECTION_BYTES, available)?;
+    let mut input = ProjectionInput::without_request();
+    input.capture_root = capture;
+    input._charge = Some(claim);
+    let installation =
+        sugarsubstitute_contracts::installation::InstallationId::new("a".repeat(32))?;
+    let (_data, policy) = capacity::funding(&mut input, &projected, &installation)?;
+    Ok(policy.bytes())
+}
+
+/// Every installed launch is managed, and a normal Windows environment holds thousands of units.
+#[test]
+fn installed_managed_projection_admits_typical_and_widest_environments()
+-> Result<(), Box<dyn Error + Send + Sync>> {
+    // A typical account environment, a developer-shell environment, and the widest block the
+    // native owner still admits beside its storage overrides.
+    for (variables, units) in [(130, 9_300), (200, 20_700), (850, 27_500)] {
+        let policy = project_installed_managed(&environment_bytes(variables, units))?;
+        assert!(policy > 0, "no policy quota left for {units} environment units");
+    }
+    Ok(())
+}
+
+/// The reservation still protects the partition: a path far beyond the lifecycle's share rejects.
+#[test]
+fn managed_projection_still_rejects_input_beyond_its_partition_as_overloaded()
+-> Result<(), Box<dyn Error + Send + Sync>> {
+    let long = format!(r"E:\{}", "x".repeat(20_000));
+    let root = bytes(&long.encode_utf16().collect::<Vec<_>>());
+    let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
+    let view = managed_view(&root, &interpreter, &[], 0, "en")?;
+    let cause = fields::project(
+        view,
+        &PathBuf::new(),
+        projection_data_bytes().ok_or("Joined projection partition underflow")?,
+        None,
+        |_| Ok(BackendStorage::External),
+    )
+    .err()
+    .ok_or("Oversized managed paths were admitted")?;
+    assert!(matches!(
+        cause.downcast_ref::<sugarsubstitute_contracts::lifecycle::LifecycleRejection>(),
+        Some(sugarsubstitute_contracts::lifecycle::LifecycleRejection::Overloaded)
+    ));
     Ok(())
 }

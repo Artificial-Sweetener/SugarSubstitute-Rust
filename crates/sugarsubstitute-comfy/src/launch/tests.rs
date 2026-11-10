@@ -3,12 +3,15 @@
 //! Qualify effective arguments without filesystem or process effects.
 use super::*;
 use sugarsubstitute_contracts::configuration::{MAX_ARGUMENT_BYTES, MAX_ARGUMENTS};
-fn requested(args: Vec<String>) -> Result<LaunchConfiguration, ConfigurationError> {
+pub(super) fn requested(args: Vec<String>) -> Result<LaunchConfiguration, ConfigurationError> {
     #[cfg(windows)]
     let (root, python) = (r"E:\Comfy café 🙂", r"E:\Python\python.exe");
     #[cfg(not(windows))]
     let (root, python) = ("/comfy café 🙂", "/python/bin/python");
     LaunchConfiguration::new(root.into(), python.into(), args, 8188)
+}
+fn external(requested: &LaunchConfiguration) -> Result<LaunchConfiguration, ManagedLaunchError> {
+    effective_managed_launch(requested, BackendDataDisposition::External, requested.root())
 }
 #[test]
 fn constructs_exact_managed_prefix_and_preserves_supported_values() -> Result<(), Box<dyn Error>> {
@@ -18,13 +21,13 @@ fn constructs_exact_managed_prefix_and_preserves_supported_values() -> Result<()
         "--feature-flag".into(),
         "".into(),
     ])?;
-    let effective = effective_managed_launch(&original)?;
+    let effective = external(&original)?;
     assert_eq!(
         &effective.arguments()[..9],
         &[
             "-u",
             "-c",
-            include_str!("managed.py"),
+            EXTERNAL_BOOTSTRAP,
             original.root().join("main.py").to_str().ok_or("script")?,
             "--listen",
             "127.0.0.1",
@@ -47,10 +50,7 @@ fn rejects_all_protected_options_and_every_abbreviation_and_equals_form()
             let name = &protected[..length];
             for token in [name.to_owned(), format!("{name}=private")] {
                 let request = requested(vec![token])?;
-                assert!(matches!(
-                    effective_managed_launch(&request),
-                    Err(ManagedLaunchError::ProtectedOption)
-                ));
+                assert!(matches!(external(&request), Err(ManagedLaunchError::ProtectedOption)));
             }
         }
     }
@@ -70,7 +70,7 @@ fn alternate_script_python_switches_and_unbound_positionals_are_rejected()
         vec!["--reserve", "1"],
     ] {
         let request = requested(args.into_iter().map(str::to_owned).collect())?;
-        assert!(effective_managed_launch(&request).is_err());
+        assert!(external(&request).is_err());
     }
     Ok(())
 }
@@ -84,10 +84,7 @@ fn option_arity_rejects_missing_extra_and_flag_values() -> Result<(), Box<dyn Er
         vec!["--output-directory", "--port", "99"],
         vec!["--output-directory", "-1."],
     ] {
-        assert!(
-            effective_managed_launch(&requested(args.into_iter().map(str::to_owned).collect())?)
-                .is_err()
-        );
+        assert!(external(&requested(args.into_iter().map(str::to_owned).collect())?).is_err());
     }
     Ok(())
 }
@@ -110,20 +107,17 @@ fn option_value_text_is_preserved_without_treating_equals_content_as_an_option()
         "画像 log.txt",
     ];
     let request = requested(args.into_iter().map(str::to_owned).collect())?;
-    let effective = effective_managed_launch(&request)?;
+    let effective = external(&request)?;
     assert_eq!(&effective.arguments()[MANAGED_PREFIX_ARGUMENTS..], request.arguments());
     Ok(())
 }
 #[test]
 fn complete_command_argument_count_includes_managed_interpreter_and_server_entries()
 -> Result<(), Box<dyn Error>> {
-    effective_managed_launch(&requested(vec![
-        "--cpu".into();
-        MAX_ARGUMENTS - MANAGED_PREFIX_ARGUMENTS
-    ])?)?;
+    external(&requested(vec!["--cpu".into(); MAX_ARGUMENTS - MANAGED_PREFIX_ARGUMENTS])?)?;
     let request = requested(vec!["--cpu".into(); MAX_ARGUMENTS - MANAGED_PREFIX_ARGUMENTS + 1])?;
     assert!(matches!(
-        effective_managed_launch(&request),
+        external(&request),
         Err(ManagedLaunchError::Configuration(ConfigurationError::TooManyArguments))
     ));
     Ok(())
@@ -137,7 +131,7 @@ fn complete_command_total_bytes_includes_prefix_and_script() -> Result<(), Box<d
     }
     let request = requested(args)?;
     assert!(matches!(
-        effective_managed_launch(&request),
+        external(&request),
         Err(ManagedLaunchError::Configuration(ConfigurationError::ArgumentsTooLarge))
     ));
     Ok(())
@@ -145,9 +139,66 @@ fn complete_command_total_bytes_includes_prefix_and_script() -> Result<(), Box<d
 #[test]
 fn rejected_option_diagnostics_do_not_render_private_argument_values() -> Result<(), Box<dyn Error>>
 {
-    let error = effective_managed_launch(&requested(vec!["--port=private-secret".into()])?)
-        .err()
-        .ok_or("error")?;
+    let error = external(&requested(vec!["--port=private-secret".into()])?).err().ok_or("error")?;
     assert!(!format!("{error} {error:?}").contains("private-secret"));
+    Ok(())
+}
+
+#[test]
+fn owned_model_validation_keeps_server_argv_and_extra_values_while_external_is_unchanged()
+-> Result<(), Box<dyn Error>> {
+    let original = requested(vec!["--base-directory=画像 café".into(), "--cpu".into()])?;
+    let external = external(&original)?;
+    let cubes = original.root().join("custom_nodes/SugarCubes");
+    let owned =
+        effective_managed_launch(&original, BackendDataDisposition::InstallationOwned, &cubes)?;
+    assert_eq!(owned.arguments()[2], OWNED_BOOTSTRAP);
+    assert_eq!(owned.arguments()[3], cubes.to_str().ok_or("cube path")?);
+    assert_eq!(server_arguments(&owned), server_arguments(&external));
+    assert_eq!(&owned.arguments()[MAX_MANAGED_PREFIX_ARGUMENTS..], original.arguments());
+    assert_eq!(external.arguments()[2], EXTERNAL_BOOTSTRAP);
+    assert!(!EXTERNAL_BOOTSTRAP.contains("read_preserved_selection"));
+    assert!(OWNED_BOOTSTRAP.contains("read_preserved_selection"));
+    assert!(OWNED_BOOTSTRAP.len() <= MAX_ARGUMENT_BYTES);
+    assert_eq!(original.arguments(), ["--base-directory=画像 café", "--cpu"]);
+    Ok(())
+}
+
+#[test]
+fn owned_prefix_uses_existing_argument_limits_and_requires_explicit_absolute_cube_path()
+-> Result<(), Box<dyn Error>> {
+    let original = requested(vec!["--cpu".into(); MAX_ARGUMENTS - MAX_MANAGED_PREFIX_ARGUMENTS])?;
+    effective_managed_launch(
+        &original,
+        BackendDataDisposition::InstallationOwned,
+        original.root(),
+    )?;
+    let overflow =
+        requested(vec!["--cpu".into(); MAX_ARGUMENTS - MAX_MANAGED_PREFIX_ARGUMENTS + 1])?;
+    assert!(matches!(
+        effective_managed_launch(
+            &overflow,
+            BackendDataDisposition::InstallationOwned,
+            overflow.root()
+        ),
+        Err(ManagedLaunchError::Configuration(ConfigurationError::TooManyArguments))
+    ));
+    assert!(
+        effective_managed_launch(
+            &original,
+            BackendDataDisposition::InstallationOwned,
+            Path::new("relative-cubes")
+        )
+        .is_err()
+    );
+    // The unused external value grants no API check, path interpretation or altered argv.
+    assert_eq!(
+        effective_managed_launch(
+            &original,
+            BackendDataDisposition::External,
+            Path::new("relative-cubes")
+        )?,
+        external(&original)?
+    );
     Ok(())
 }

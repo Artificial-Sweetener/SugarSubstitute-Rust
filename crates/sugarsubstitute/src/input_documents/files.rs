@@ -34,6 +34,25 @@ enum Observed {
     Rejected { length: u64, digest: [u8; 32] },
 }
 
+/// Reuse the current streaming integrity policy before a historical container is copied.
+/// Rejected/unknown encodings remain original evidence; this grants no archive association.
+#[cfg(all(windows, feature = "windows-native-host"))]
+pub(crate) fn classify_migration_source(
+    path: &Path,
+    context: &JobContext,
+) -> Result<sugarsubstitute_supervision::setup_storage::HistoricalArchiveDisposition, StoreError> {
+    use sugarsubstitute_supervision::setup_storage::HistoricalArchiveDisposition;
+    match observe(path, context)? {
+        Observed::Archive { .. } => Ok(HistoricalArchiveDisposition::Validated),
+        Observed::Rejected { .. } => Ok(HistoricalArchiveDisposition::PreservedOriginal),
+        Observed::Absent => Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Historical archive disappeared before inspection",
+        )
+        .into()),
+    }
+}
+
 /// Restore the current archive, or the recovery copy when the current archive is rejected.
 pub(super) fn load(
     directory: &Path,

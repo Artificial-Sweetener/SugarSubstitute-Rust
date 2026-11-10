@@ -17,6 +17,8 @@ use sugarsubstitute_contracts::{
     execution::{Clock, JobCompletion, JobOutcome, ScopeId, ScopeSpec, TerminalKind, WaitFuture},
 };
 type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
+#[path = "tests/owned.rs"]
+mod owned;
 
 fn external(view: EntryLaunchRequestView<'_>) -> Result<StartupConfiguration, ProjectionError> {
     project(view, BackendDataDisposition::External)

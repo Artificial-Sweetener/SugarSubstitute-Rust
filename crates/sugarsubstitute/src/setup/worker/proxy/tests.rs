@@ -4,6 +4,7 @@
 use super::*;
 use crate::{completion_wake::Wake, paused_clock::PausedClock};
 use std::num::NonZeroUsize;
+use sugarsubstitute_contracts::execution::ScopeId;
 use sugarsubstitute_execution::ExecutionOwner;
 
 #[test]

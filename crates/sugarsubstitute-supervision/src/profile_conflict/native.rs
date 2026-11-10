@@ -128,7 +128,7 @@ impl Native {
         let acquired = open(
             &mut self.writer,
             &folder,
-            ".sugarsubstitute-profile-v1.claim",
+            crate::profiles::locations::CLAIM,
             &sid,
             budget.clone(),
         )?;
@@ -144,7 +144,7 @@ impl Native {
             return Err(ClaimError::invalid("profile_conflict_record_identity"));
         }
         self.original = Some(bytes);
-        let users = self.resources.users(&folder.join(".sugarsubstitute-profile-v1.claim"))?;
+        let users = self.resources.users(&folder.join(crate::profiles::locations::CLAIM))?;
         for user in users {
             if user.dwProcessId == std::process::id() {
                 continue;
@@ -253,7 +253,7 @@ impl Native {
             return Err(ClaimError::invalid("profile_conflict_owner_changed"));
         }
         let users =
-            self.resources.users(&self.request.path.join(".sugarsubstitute-profile-v1.claim"))?;
+            self.resources.users(&self.request.path.join(crate::profiles::locations::CLAIM))?;
         if !users.iter().any(|user| self.processes[index].matches(user)) {
             return Err(ClaimError::invalid("profile_conflict_owner_changed"));
         }
@@ -277,7 +277,7 @@ impl Native {
         if !open(
             &mut self.writer,
             &folder,
-            ".sugarsubstitute-profile-v1.claim",
+            crate::profiles::locations::CLAIM,
             &sid,
             budget.clone(),
         )? {
@@ -288,7 +288,7 @@ impl Native {
         }
         self.custody = None;
         check(context)?;
-        if !open(&mut self.custody, &folder, ".sugarsubstitute-profile-v2.custody", &sid, budget)? {
+        if !open(&mut self.custody, &folder, crate::profiles::locations::CUSTODY, &sid, budget)? {
             return Ok(ConflictObservation::Waiting);
         }
         Ok(ConflictObservation::Released)
@@ -330,7 +330,7 @@ fn open(
         ExclusionOpen::InspectExisting,
         slot,
         NativeName::Ordinary(folder.join(name)),
-        NativeName::Ordinary(folder.join(".sugarsubstitute-profile-v1.record")),
+        NativeName::Ordinary(folder.join(crate::profiles::locations::RECORD)),
         NativeSid::Ordinary(sid.to_vec()),
         budget.clone(),
         &mut NativePhase::ordinary(&budget)?,

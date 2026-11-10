@@ -38,7 +38,10 @@ impl EntryBootstrap {
 
     /// Keep native startup and cleanup causes in the same slots for returned and queued failures.
     pub(super) fn retain_native_failure(&mut self, cause: EntryError) {
-        if self.failure.is_none() && self.failed_preparation.is_none() {
+        if self.failure.is_none()
+            && self.failed_preparation.is_none()
+            && self.migration.failure().is_none()
+        {
             self.failure = Some(Failure::Native(cause));
         } else if self.cleanup_failure.is_none() {
             self.cleanup_failure = Some(CleanupFailure::Native(cause));
@@ -48,6 +51,9 @@ impl EntryBootstrap {
 
     /// Borrow a retained primary source; complete preparation outcomes stay owned here.
     pub(crate) fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
+        if let Some(cause) = self.migration.failure() {
+            return Some(cause);
+        }
         if let Some(completion) = &self.failed_preparation {
             return match &completion.outcome {
                 JobOutcome::Failure(cause) => Some(cause),
@@ -70,7 +76,10 @@ impl EntryBootstrap {
         }
     }
     /// Borrow the original factory's later control observation without separating custody.
-    pub(crate) fn post_control(&self) -> Option<&sugarsubstitute_execution::EntryPreparationError> {
+    pub(crate) fn post_control(&self) -> Option<&(dyn Error + 'static)> {
+        if let Some(cause) = self.migration.failure() {
+            return cause.post_control().map(|cause| cause as &(dyn Error + 'static));
+        }
         let JobOutcome::Failure(failure) = &self.failed_preparation.as_ref()?.outcome else {
             return None;
         };
@@ -78,6 +87,6 @@ impl EntryBootstrap {
         else {
             return None;
         };
-        cause.post_control()
+        cause.post_control().map(|cause| cause as &(dyn Error + 'static))
     }
 }

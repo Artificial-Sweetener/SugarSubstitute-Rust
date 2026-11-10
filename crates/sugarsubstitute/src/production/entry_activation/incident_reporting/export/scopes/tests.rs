@@ -13,7 +13,7 @@ fn export_ids_follow_real_view_jobs_and_both_cleanup_roles_and_pair_reach_actual
     let owner = ExecutionOwner::new(Arc::new(TestClock), wake.clone())?;
     let client = owner.client();
     let sequence = crate::job_sequence::JobSequence::new();
-    let scopes = crate::production::scope_sequence::ScopeSequence::new();
+    let scopes = crate::scope_sequence::ScopeSequence::new();
     let view_scope =
         client.create_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
     let until = Moment::from_nanos(60_000_000_017);

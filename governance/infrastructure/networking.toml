@@ -94,14 +94,14 @@ rationale = "Pure metadata port and fetch boundary fakes qualify native record s
 [[records]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5c18126447bfe6376dd1636a3e0a4fa3e75006d84ca10e28cfcb6f8a604337fb"
+source_sha256 = "sha256:27ba7ba8a3528bc216c68e8df9bd80aa131c120d51056fe888ed9531d96f620b"
 boundary = "fixture"
 rationale = "Isolated worker protocol peers exercise authentication and bounded lifecycle using ephemeral loopback ports."
 
 [[records]]
 path = "installer/worker/main.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:595c2bbbe1fe43d859e25c3501f288a83e80ec6942b2a627766cdc3c05c98814"
+source_sha256 = "sha256:3831fd0e9cf0d8c8a1b9c144e92b38aa86b3eb16771ec8194944739a8a0658bc"
 boundary = "execution_ipc"
 rationale = "Worker connects only to the execution-owned authenticated loopback IPC; scheduling and host-side socket custody remain with sugarsubstitute-execution."
 

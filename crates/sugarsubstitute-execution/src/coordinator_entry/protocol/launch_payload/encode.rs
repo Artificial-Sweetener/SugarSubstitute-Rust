@@ -66,12 +66,13 @@ pub(crate) fn encoded_length(request: &EntryLaunchRequest) -> Result<usize, Entr
         }
         add(&mut length, text.len())?;
     }
+    add(&mut length, if request.originals().is_some() { 33 } else { 1 })?;
     if length > MAX_BODY_BYTES {
         return Err(EntryTransportError::Capacity);
     }
     Ok(length)
 }
-fn path(writer: &mut Writer<'_>, value: &Path) -> Result<(), EntryTransportError> {
+pub(super) fn path(writer: &mut Writer<'_>, value: &Path) -> Result<(), EntryTransportError> {
     writer.u32(raw_windows::length(value)?)?;
     for unit in raw_windows::units(value)? {
         writer.u16(unit)?;
@@ -145,6 +146,13 @@ fn launch(
         CanvasRendererPreference::Malformed => {
             writer.byte(2)?;
             writer.byte(0)?;
+        }
+    }
+    match request.originals() {
+        None => writer.byte(0)?,
+        Some(reference) => {
+            writer.byte(1)?;
+            writer.bytes(reference.manifest_sha256())?;
         }
     }
     Ok(())

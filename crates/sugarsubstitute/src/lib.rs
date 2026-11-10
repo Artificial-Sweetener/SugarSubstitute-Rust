@@ -59,6 +59,8 @@ mod production;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod production_output;
 mod render_transfer;
+#[cfg(all(windows, feature = "windows-native-host"))]
+mod scope_sequence;
 /// Branded installer composition and off-screen surface qualification.
 #[cfg(all(windows, feature = "windows-native-host"))]
 pub mod setup;

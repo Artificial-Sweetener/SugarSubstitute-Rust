@@ -3,7 +3,7 @@
 //! Observe actual owned jobs through the production execution boundary and bounded notifications.
 use super::*;
 use crate::completion_wake::Wake;
-use sugarsubstitute_contracts::execution::{Clock, JobCompletion, WaitFuture};
+use sugarsubstitute_contracts::execution::{Clock, JobCompletion, ScopeId, WaitFuture};
 use sugarsubstitute_execution::ExecutionOwner;
 
 /// Operation timers remain controlled by the executor and never expire.

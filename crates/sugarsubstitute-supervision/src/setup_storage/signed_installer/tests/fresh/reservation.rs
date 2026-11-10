@@ -140,3 +140,24 @@ fn unknown_canonical_files_and_missing_prepared_generations_are_never_reinitiali
         Ok(())
     })
 }
+
+#[test]
+fn fresh_preparation_provisions_the_protected_user_folders_an_installed_host_requires() -> TestResult
+{
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        let _prepared = import(temporary.path(), context)?.prepare(|| NOW, context)?;
+        let root = temporary.path().join("native");
+        let layout = sugarsubstitute_configuration::layout::InstallationLayout::new(&root);
+        for folder in [layout.user(), layout.user().join("desktop-data"), layout.capture_root()] {
+            assert!(folder.is_dir(), "{folder:?} is absent from the prepared installation");
+        }
+        let generations = std::fs::read_dir(layout.releases())?.collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(generations.len(), 1);
+        assert!(
+            !generations[0].path().join("capture").exists(),
+            "crash capture belongs to the user folder, not to an application generation"
+        );
+        Ok(())
+    })
+}

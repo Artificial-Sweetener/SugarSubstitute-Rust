@@ -33,7 +33,14 @@ mod inventory;
 pub use image::PreparationImage;
 mod running;
 mod runtime_record;
+mod user_data;
 pub use running::{RunningApplication, retain_running_generation};
+pub use user_data::{
+    ExplicitBackendDirectories, HistoricalArchiveDisposition, LAUNCH_DATA_LIFETIME_BYTES,
+    LAUNCH_DATA_PREPARATION_BYTES, LaunchDataFailure, PRESERVED_DIAGNOSTIC_SOURCE_BYTES,
+    PreparedStartup, PreservedDiagnosticEntry, PreservedDiagnosticSource, SourceLaunchSettlement,
+    StartupDataCustody, prepare_launch_data,
+};
 mod ownership;
 mod packed;
 mod publication;
@@ -57,8 +64,8 @@ pub use selection::{
 use std::io;
 use sugarsubstitute_contracts::execution::JobContext;
 pub use transaction::{
-    AdmittedCandidate, InstallationSession, InstalledApplication, PreparedCandidate,
-    PreparedInstallation, RuntimePaths, Selection,
+    AdmittedCandidate, InstallationSession, InstalledApplication, IntegrationRequest,
+    IntegrationStorage, PreparedCandidate, PreparedInstallation, RuntimePaths, Selection,
 };
 pub(crate) use trust::offered::OfferInputs;
 pub use trust::{

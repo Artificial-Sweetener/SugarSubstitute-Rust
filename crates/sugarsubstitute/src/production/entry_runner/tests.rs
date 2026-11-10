@@ -296,3 +296,27 @@ mod scope_admission;
 
 #[path = "retained_child_tests.rs"]
 mod retained_child;
+
+struct IdleWake;
+impl sugarsubstitute_contracts::execution::CompletionWake for IdleWake {
+    fn wake(&self) -> Result<(), sugarsubstitute_contracts::execution::ExecutionError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn coordinator_execution_keeps_its_standing_capacity_beside_the_retained_launch_data()
+-> Result<(), Box<dyn Error>> {
+    const STANDING_BYTES: u64 = 256 * 1024 * 1024;
+    let owner = EntryRunner::<NoChild>::execution_owner(
+        MonotonicClock::new(),
+        std::sync::Arc::new(IdleWake),
+    )?;
+    assert!(
+        owner.limits().memory_bytes
+            >= STANDING_BYTES
+                + sugarsubstitute_supervision::setup_storage::LAUNCH_DATA_LIFETIME_BYTES,
+        "settled launch data stays charged for the whole run and needs its own capacity"
+    );
+    Ok(())
+}

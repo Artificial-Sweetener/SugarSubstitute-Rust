@@ -39,6 +39,7 @@ pub(super) struct Record {
     pub(super) restart: restart::RestartState,
 }
 pub(super) struct PendingProjection {
+    pub(super) source: Option<super::source_preparation::Preparation>,
     pub(super) qualification: crate::production::qualification::QualificationIntent,
     pub(super) run: RunKey,
     pub(super) launch: LaunchId,
@@ -51,6 +52,15 @@ pub(super) struct PendingProjection {
 pub(super) struct RetainedRecord {
     pub(super) record: Box<Record>,
     pub(super) _storage: MemoryClaim,
+}
+impl PendingProjection {
+    /// Failed source-only preparation retains its original completion until activation disposal.
+    /// Its observed terminal and returned frame loan permit shutdown without losing that cause.
+    pub(super) fn source_terminal(&self) -> bool {
+        self.job.is_none()
+            && self.completion.is_none()
+            && self.source.as_ref().is_some_and(super::source_preparation::Preparation::settled)
+    }
 }
 
 impl Record {

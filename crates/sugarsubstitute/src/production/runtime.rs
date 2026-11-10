@@ -4,9 +4,9 @@
 use super::{
     child::{ChildInputs, ProductionChild},
     entry_activation::{ProductionActivation, desktop_role::DesktopRole},
-    scope_sequence::ScopeSequence,
 };
 use crate::job_sequence::JobSequence;
+use crate::scope_sequence::ScopeSequence;
 use crate::startup::{StartupHost, StartupScopes};
 use std::{error::Error, ffi::OsString};
 use sugarsubstitute_contracts::{execution::ScopeSpec, localization::messages};

@@ -4,9 +4,12 @@
 //! Original scopes, typed failures and native owner custody survive partial startup.
 #[path = "entry_bootstrap/failure.rs"]
 mod failure;
-use super::{configuration, options::ConfigurationSource};
+#[path = "entry_bootstrap/migration.rs"]
+mod migration;
+use super::configuration;
 use crate::job_sequence::JobSequence;
 use std::{error::Error, fmt, path::PathBuf};
+use sugarsubstitute_configuration::paths::ConfigurationSource;
 use sugarsubstitute_contracts::{
     configuration::{ConfigurationError, LaunchConfiguration},
     coordinator_entry::{EntryOwnerDegradation, EntrySetupBudget},
@@ -73,6 +76,7 @@ pub(crate) struct EntryBootstrap {
     client: Option<ExecutionClient>,
     scope: Option<Scope>,
     preparation: Option<PreparationJob>,
+    migration: migration::Migration,
     notice: Option<TerminalKind>,
     owner: Option<CoordinatorEntryOwner>,
     failure: Option<Failure>,
@@ -104,6 +108,7 @@ impl EntryBootstrap {
             client: None,
             scope: None,
             preparation: None,
+            migration: migration::Migration::default(),
             notice: None,
             owner: None,
             failure: None,
@@ -135,13 +140,13 @@ impl EntryBootstrap {
         }
         let options = self.options.take().ok_or(EntryBootstrapIssue::Input)?;
         let scope = self.scope.as_ref().ok_or(EntryBootstrapIssue::Identity)?;
-        match configuration::submit(client, scope, jobs, options, self.original) {
-            Ok(job) => self.preparation = Some(job),
-            Err(cause) => {
-                self.failure = Some(Failure::Submission(cause));
-                self.request_close();
-                return Err(EntryBootstrapIssue::Preparation);
-            }
+        let image = self.installation.as_ref().ok_or(EntryBootstrapIssue::Identity)?;
+        if let Err(cause) =
+            self.migration.start(image.clone(), options, client, scope, jobs, self.original)
+        {
+            self.failure = Some(Failure::Submission(cause));
+            self.request_close();
+            return Err(EntryBootstrapIssue::Preparation);
         }
         Ok(())
     }
@@ -155,6 +160,25 @@ impl EntryBootstrap {
         batch: &CompletionBatch,
         jobs: &JobSequence,
     ) -> Result<Option<EntryObservation>, EntryBootstrapIssue> {
+        let settled = match self.migration.consume(batch, self.closing) {
+            Ok(settled) => settled,
+            Err(cause) => {
+                self.request_close();
+                return Err(cause);
+            }
+        };
+        if let Some(settled) = settled {
+            let client = self.client.as_ref().ok_or(EntryBootstrapIssue::Identity)?;
+            let scope = self.scope.as_ref().ok_or(EntryBootstrapIssue::Identity)?;
+            match configuration::submit(client, scope, jobs, settled, self.original) {
+                Ok(job) => self.preparation = Some(job),
+                Err(cause) => {
+                    self.failure = Some(Failure::Submission(cause));
+                    self.request_close();
+                    return Err(EntryBootstrapIssue::Preparation);
+                }
+            }
+        }
         if let Some(job) = &self.preparation {
             for notice in &batch.notifications {
                 if (notice.scope_id, notice.job_id) == (job.scope_id(), job.spec().id) {
@@ -188,6 +212,7 @@ impl EntryBootstrap {
                 return Err(EntryBootstrapIssue::Preparation);
             }
             self.adopt(completion)?;
+            self.migration.captured();
         }
         let observation = if let Some(owner) = &mut self.owner {
             match owner.consume(batch) {
@@ -279,6 +304,7 @@ impl EntryBootstrap {
     /// Fence ordinary work and cancel actual outstanding preparation once.
     pub(crate) fn request_close(&mut self) {
         self.closing = true;
+        self.migration.cancel();
         if let Some(job) = &self.preparation {
             job.cancel();
         }
@@ -301,7 +327,7 @@ impl EntryBootstrap {
         }
         self.retirement_until =
             Some(self.retirement_until.map_or(until, |original| original.min(until)));
-        if self.preparation.is_some() {
+        if self.preparation.is_some() || self.migration.pending() {
             return Ok(false);
         }
         let Some(owner) = &mut self.owner else { return Ok(true) };

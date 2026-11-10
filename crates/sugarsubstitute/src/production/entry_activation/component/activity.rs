@@ -18,6 +18,11 @@ impl ProfileComponent {
         batch: &CompletionBatch,
         resources: &mut EntryResources<'_>,
     ) -> Result<()> {
+        if let Some(source) = &mut self.source
+            && let Some(job) = source.advance(resources, self.closing)?
+        {
+            self.projection = Some(job);
+        }
         if let Some(job) = &mut self.projection
             && let Some(completion) = job.try_take_completion()
         {

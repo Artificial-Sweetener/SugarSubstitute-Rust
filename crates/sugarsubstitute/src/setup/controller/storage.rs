@@ -9,6 +9,7 @@ pub(super) enum StorageResult {
     Imported(Box<setup_storage::SignedInstallation>),
     Prepared(Box<SignedPreparation>),
     Staged(Box<SignedPreparation>),
+    Integration(Box<SignedPreparation>, Box<setup_storage::IntegrationStorage>),
     Completed(Box<SignedCandidate>),
     Installed(CompletedInstallation),
     Opened(completion::OpenedLaunch),
@@ -203,6 +204,13 @@ impl Controller {
                     }
                     self.forward(id, "inspect", input, Purpose::Provision)?;
                 }
+            }
+            JobOutcome::Success(StorageResult::Integration(prepared, integration)) => {
+                let input = serde_json::to_value(integration.request())?;
+                self.prepared = Some(prepared);
+                self.integration = Some(integration);
+                let id = self.install_id.clone().ok_or("Installation request absent")?;
+                self.forward(id, "integrate", input, Purpose::Integrate)?;
             }
             JobOutcome::Success(StorageResult::Installed(installed)) => {
                 self.installed = Some(installed);

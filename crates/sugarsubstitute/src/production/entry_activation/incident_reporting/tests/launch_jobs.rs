@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Production Reporter metadata crosses the real central watch/creation admission boundary.
 use super::*;
-use crate::production::scope_sequence::ScopeSequence;
+use crate::scope_sequence::ScopeSequence;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use sugarsubstitute_execution::{OwnedInputError, windows::NativeCorrelation};
 

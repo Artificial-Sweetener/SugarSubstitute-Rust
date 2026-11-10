@@ -42,8 +42,8 @@ impl Recovery {
         HeldFile::acquire_into(
             ExclusionOpen::CreateOrOpen,
             &mut self.custody,
-            NativeName::Ordinary(folder.join(".sugarsubstitute-profile-v2.custody")),
-            NativeName::Ordinary(folder.join(".sugarsubstitute-profile-v1.record")),
+            NativeName::Ordinary(folder.join(crate::profiles::locations::CUSTODY)),
+            NativeName::Ordinary(folder.join(crate::profiles::locations::RECORD)),
             NativeSid::Ordinary(sid.to_vec()),
             budget.clone(),
             &mut NativePhase::ordinary(&budget)?,
@@ -53,20 +53,7 @@ impl Recovery {
         {
             return Err(ClaimError::invalid("profile_recovery_changed_predecessor"));
         }
-        let epoch = old
-            .original
-            .run
-            .owner
-            .epoch
-            .bytes()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-        let leaf = format!(
-            ".sugarsubstitute-profile-recovered-{epoch}-{}-{}",
-            old.original.run.instance.get(),
-            old.original.run.generation.get()
-        );
+        let leaf = crate::profiles::locations::recovered(old.original.run);
         self.original = Some(*original);
         HeldFile::acquire_into(
             ExclusionOpen::CreateOrOpen,

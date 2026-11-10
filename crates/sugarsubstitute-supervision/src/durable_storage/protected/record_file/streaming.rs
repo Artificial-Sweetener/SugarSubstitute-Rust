@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Extend the authoritative record-file owner with retained bounded streaming custody.
+/// Fixed native rendezvous leaf; an inert preserved copy never acquires this writer.
+pub(crate) const WRITER_LEAF: &str = "writer.lock";
 mod allocation;
-mod inventory;
+pub(super) mod inventory;
 mod io;
 pub(crate) mod layout;
 pub(crate) mod leaf;
@@ -109,7 +111,7 @@ impl Port for StreamingPort {
     }
     fn acquire_writer(&mut self, context: &JobContext) -> Result<(), ClaimError> {
         self.check(context)?;
-        let path = self.name("writer.lock", context)?;
+        let path = self.name(WRITER_LEAF, context)?;
         let record_path = self.name("unused.record", context)?;
         let sid = self.sid.as_ref().ok_or_else(|| self.reject())?.clone();
         let mut session = session::Session::path(&self.original, context)?;

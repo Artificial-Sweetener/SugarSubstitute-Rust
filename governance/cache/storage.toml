@@ -15,7 +15,7 @@ role = "external_runtime"
 [[script_boundaries]]
 path = "installer/worker/integration.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
+source_sha256 = "sha256:ca64cbbe04fb4e4f8e2a9ba0c8e4fb91952b8d2d65a6e7db5e9f2ed5ccd03e83"
 rationale = "Probe the external SugarCubes requirements file before invoking its installed Python owner."
 role = "external_runtime"
 
@@ -64,7 +64,7 @@ role = "fixture"
 [[script_boundaries]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5c18126447bfe6376dd1636a3e0a4fa3e75006d84ca10e28cfcb6f8a604337fb"
+source_sha256 = "sha256:27ba7ba8a3528bc216c68e8df9bd80aa131c120d51056fe888ed9531d96f620b"
 rationale = "Owned temporary worker arguments and the packaged Node runtime verify private startup, protocol rejection and host closure."
 role = "fixture"
 
@@ -125,4 +125,11 @@ path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:d460c21f3025978229748a1b3a4d2cd5af9a23b12a81fb8051bdf7e3b4649a1d"
 rationale = "Exercise the actual bounded panel transport in an isolated JavaScript VM with native and browser boundary fixtures."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/model-root.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:2227fd686de624ef4fb7af5a1e2b8ab022e183933ec685a50acf1a0b6cfd0c79"
+rationale = "Owned disposable model-root fixtures verify the SugarCubes public configuration adapter preserves selected paths and refuses corrupt controls; they perform no runtime cache acquisition."
 role = "fixture"

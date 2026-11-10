@@ -10,9 +10,12 @@ mod identity;
 mod lexical_tests;
 mod observations;
 mod ordinary;
+#[cfg(test)]
+#[allow(unsafe_code)]
+pub(crate) mod reparse_fixture;
 mod retirement;
 use super::invalid;
-pub(crate) use identity::{file_identity, single_link};
+pub(crate) use identity::{file_identity, native_identity, single_link};
 pub(crate) use observations::{canonical_path, exists, inspect};
 pub(crate) use ordinary::{
     ExistingAccess, FileExclusion, length, modified, read_admitted, set_modified, sync,
@@ -68,6 +71,41 @@ impl Directory {
     /// Callers retain this directory through receiver duplication; paths grant no equivalent custody.
     pub(crate) fn native_pins(&self) -> impl Iterator<Item = &File> {
         self._pins.iter()
+    }
+    /// Move only this owner's actual pins into a separately observed close-only lifetime.
+    /// This conveys no path lookup, write, publication or deletion permission.
+    pub(crate) fn into_retirement_pins(self) -> Vec<File> {
+        self._pins
+    }
+
+    /// Retain one verified directory object without duplicating its whole path inventory.
+    /// The tree owner separately retains its root ancestry and every intermediate directory.
+    pub(crate) fn pin_leaf(
+        &self,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> io::Result<File> {
+        super::check(context)?;
+        let file =
+            self._pins.last().ok_or_else(|| invalid("Directory has no native pin"))?.try_clone()?;
+        super::check(context)?;
+        Ok(file)
+    }
+
+    /// Compare retained native ancestors rather than granting confinement from a path prefix.
+    pub(crate) fn has_ancestor(
+        &self,
+        ancestor: &Self,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> io::Result<bool> {
+        let expected = ancestor.identity()?;
+        for pin in &self._pins {
+            super::check(context)?;
+            if file_identity(pin)? == expected {
+                return Ok(true);
+            }
+        }
+        super::check(context)?;
+        Ok(false)
     }
 
     /// Retain this exact native parent independently of its current borrow or originating job.

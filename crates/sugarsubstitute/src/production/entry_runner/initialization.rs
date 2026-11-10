@@ -11,13 +11,30 @@ impl<C: EntryActivation> EntryRunner<C> {
         if self.execution.is_some() || self.closing {
             return Err("Production execution cannot start twice or after close".into());
         }
-        self.execution = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
+        self.execution = Some(Self::execution_owner(self.clock.clone(), wake)?);
         let client = self.execution.as_ref().ok_or("Production execution missing")?.client();
         self.client = Some(client.clone());
         self.cleanup = Some(
             client.create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?,
         );
         Ok(())
+    }
+    /// Construct the coordinator's execution owner with its settled launch data funded.
+    ///
+    /// That data stays charged for the whole run, so it is declared beside the standing
+    /// capacity instead of taking capacity from the readiness and lifecycle jobs that run
+    /// beside it.
+    /// # Errors
+    /// Preserves runtime and thread creation failures from the execution owner.
+    pub(super) fn execution_owner(
+        clock: Arc<dyn sugarsubstitute_contracts::execution::Clock>,
+        wake: Arc<dyn CompletionWake>,
+    ) -> Result<ExecutionOwner, Box<dyn Error>> {
+        Ok(ExecutionOwner::with_additional_memory(
+            clock,
+            wake,
+            sugarsubstitute_supervision::setup_storage::LAUNCH_DATA_LIFETIME_BYTES,
+        )?)
     }
     /// Begin the original setup budget and actual entry pipeline without waiting for a presentation round trip.
     pub(in crate::production) fn begin_entry(&mut self) -> Result<(), Box<dyn Error>> {

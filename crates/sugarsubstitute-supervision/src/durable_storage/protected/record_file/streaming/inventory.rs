@@ -7,6 +7,10 @@ use super::*;
 use crate::diagnostic_storage::inventory::{ObservedEntry, Scan};
 use names::classify;
 use windows::Win32::{Foundation::ERROR_NO_MORE_FILES, Storage::FileSystem::*};
+/// Reuse the sole canonical-name classifier for existing-only passive copy readers.
+pub(crate) fn entry_class(name: &str) -> DiagnosticEntryClass {
+    classify(name).class
+}
 impl StreamingPort {
     pub(super) fn scan_owned(&mut self, context: &JobContext) -> Result<Scan, ClaimError> {
         self.check(context)?;
@@ -105,7 +109,7 @@ impl StreamingPort {
                     }
                 }
                 let owned_lock =
-                    name == "writer.lock" && self.writer.as_ref().is_some_and(HeldFile::is_locked);
+                    name == WRITER_LEAF && self.writer.as_ref().is_some_and(HeldFile::is_locked);
                 if name != "." && name != ".." && !owned_lock {
                     if scan.entries.len() == DIAGNOSTIC_SCAN_BOUND {
                         complete = false;

@@ -36,6 +36,13 @@ pub(crate) struct Record {
 }
 
 impl Record {
+    /// Supply canonical original-record fixture bytes to other native owner tests.
+    /// This test-only adapter grants no runtime encoder or profile ownership capability.
+    #[cfg(test)]
+    pub(crate) fn fixture_bytes(self) -> Vec<u8> {
+        self.encode().to_vec()
+    }
+
     pub(super) fn encode(self) -> [u8; RECORD_BYTES] {
         let mut bytes = [0; RECORD_BYTES];
         bytes[..8].copy_from_slice(MAGIC);

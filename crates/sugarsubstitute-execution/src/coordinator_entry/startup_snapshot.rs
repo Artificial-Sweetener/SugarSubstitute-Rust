@@ -17,6 +17,8 @@ pub struct PreparedStartupSnapshot {
     pub(super) registered: Option<super::registered_startup::RegisteredSnapshot>,
     pub(super) delegated: Option<crate::recovery_supervisor::startup::SourceRef>,
     pub(super) body: Range<usize>,
+    // Initial Entry admission remains tied to launch; this aliases only its registered child bytes.
+    pub(super) initial_effective: Option<super::RegisteredStartupSource>,
 }
 
 /// Return the same authenticated entry custody when startup shape validation fails.
@@ -35,7 +37,7 @@ impl AuthenticatedEntryLaunch {
     /// the clock epoch nor the receive deadline is reconstructed or renewed.
     /// # Errors
     /// Returns the exact original launch and cause if its retained frame fails
-    /// the full SSCE1 or unchanged Launch body grammar.
+    /// the current SSCE frame or complete Launch body grammar.
     #[expect(
         clippy::result_large_err,
         reason = "Return original admitted custody without a new fallible allocation"
@@ -58,6 +60,7 @@ impl AuthenticatedEntryLaunch {
                 launch: Some(self),
                 registered: None,
                 delegated: None,
+                initial_effective: None,
                 body,
             }),
             Err(error) => Err(StartupSnapshotRejection { error, launch: self }),
@@ -79,17 +82,15 @@ impl std::fmt::Debug for PreparedStartupSnapshot {
 }
 
 impl PreparedStartupSnapshot {
-    /// Borrow only the original admitted Launch body; no frame allocation is copied.
+    /// Borrow the original admitted body independently of its selected child projection.
     /// # Errors
     /// Rejects missing original frame custody or an invalid retained body range.
-    pub(crate) fn body(&self) -> Result<&[u8], EntryTransportError> {
+    pub(crate) fn original_body(&self) -> Result<&[u8], EntryTransportError> {
         match (&self.launch, &self.registered, &self.delegated) {
             (Some(launch), None, None) => {
                 launch.frame.bytes().get(self.body.clone()).ok_or(EntryTransportError::Malformed)
             }
-            (None, Some(registered), None) => {
-                registered.body().get(self.body.clone()).ok_or(EntryTransportError::Malformed)
-            }
+            (None, Some(registered), None) => Ok(&registered.source.state()?.body),
             (None, None, Some(delegated)) => {
                 delegated.body.get(self.body.clone()).ok_or(EntryTransportError::Malformed)
             }
@@ -97,10 +98,37 @@ impl PreparedStartupSnapshot {
         }
     }
 
+    /// Borrow only the effective child body for native capture and recovery maps.
+    /// The original authenticated frame remains separate for Entry admission.
+    pub(crate) fn body(&self) -> Result<&[u8], EntryTransportError> {
+        match &self.initial_effective {
+            Some(source)
+                if self.launch.is_some()
+                    && self.registered.is_none()
+                    && self.delegated.is_none() =>
+            {
+                Ok(&source.state()?.child_body)
+            }
+            Some(_) => Err(EntryTransportError::Malformed),
+            None if self.launch.is_none()
+                && self.registered.is_some()
+                && self.delegated.is_none() =>
+            {
+                self.registered
+                    .as_ref()
+                    .ok_or(EntryTransportError::Malformed)?
+                    .body()
+                    .get(self.body.clone())
+                    .ok_or(EntryTransportError::Malformed)
+            }
+            None => self.original_body(),
+        }
+    }
+
     /// Project inert matching facts for final Core-to-Entry admission validation.
     /// The original body and connection loan remain solely in this snapshot.
     /// # Errors
-    /// Rejects a missing frame or mismatched original SSCE1 correlation.
+    /// Rejects a missing frame or mismatched original SSCE correlation.
     pub(crate) fn admission_binding(&self) -> Result<StartupAdmissionBinding, EntryTransportError> {
         match (&self.launch, &self.registered, &self.delegated) {
             (Some(_), None, None) => admission::project(self).map(StartupAdmissionBinding::Entry),
@@ -119,7 +147,13 @@ impl PreparedStartupSnapshot {
     /// Transfer only the sealed child-side authenticated recovery source.
     pub(crate) fn delegated(source: crate::recovery_supervisor::startup::SourceRef) -> Self {
         let length = source.length;
-        Self { launch: None, registered: None, delegated: Some(source), body: 0..length }
+        Self {
+            launch: None,
+            registered: None,
+            delegated: Some(source),
+            initial_effective: None,
+            body: 0..length,
+        }
     }
 }
 

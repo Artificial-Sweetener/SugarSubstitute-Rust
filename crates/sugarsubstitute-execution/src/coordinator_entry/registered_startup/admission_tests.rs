@@ -32,7 +32,8 @@ fn registered_startup_counterfeit_matching_context_and_bare_memory_do_not_consum
     let rig = Rig::new()?;
     let boundary = Boundary::new(&rig, true)?;
     let (_scope, mut session) = server(&rig, &boundary)?;
-    let startup = request_snapshot(&rig, &boundary, &session)?;
+    let mut startup = request_snapshot(&rig, &boundary, &session)?;
+    let profile = request()?.profile_directory().to_path_buf();
     let until = startup.launch.as_ref().ok_or("Original Entry missing")?.until();
     let client = rig.client.clone();
     let original = run()?;
@@ -49,7 +50,7 @@ fn registered_startup_counterfeit_matching_context_and_bare_memory_do_not_consum
                 AdmittedJobResources::new(MemoryLease::new(BYTES, Box::new(ForeignRelease)), None),
             );
             assert!(matches!(
-                client.register_startup_source(&startup, &counterfeit, original),
+                client.register_startup_source(&mut startup, &counterfeit, original, &profile),
                 Err(AdmissionError::InvalidCaptureAdmission)
             ));
             assert_eq!(ports.0.load(std::sync::atomic::Ordering::Acquire), 0);
@@ -58,11 +59,12 @@ fn registered_startup_counterfeit_matching_context_and_bare_memory_do_not_consum
                 .claim(BYTES - REGISTERED_STARTUP_BYTES + 1)
                 .map_err(AdmissionError::Memory)?;
             assert!(matches!(
-                client.register_startup_source(&startup, &context, original),
+                client.register_startup_source(&mut startup, &context, original, &profile),
                 Err(AdmissionError::Memory(_))
             ));
             drop(exhausted);
-            let source = client.register_startup_source(&startup, &context, original)?;
+            let source =
+                client.register_startup_source(&mut startup, &context, original, &profile)?;
             Ok::<_, AdmissionError>(source)
         })?;
     let completed = rig.completion(&mut job)?;
@@ -78,7 +80,8 @@ fn registered_startup_cancel_at_original_clock_observation_prevents_issuance_and
     let rig = Rig::new()?;
     let boundary = Boundary::new(&rig, true)?;
     let (_scope, mut session) = server(&rig, &boundary)?;
-    let startup = request_snapshot(&rig, &boundary, &session)?;
+    let mut startup = request_snapshot(&rig, &boundary, &session)?;
+    let profile = request()?.profile_directory().to_path_buf();
     let until = startup.launch.as_ref().ok_or("Original Entry missing")?.until();
     let client = rig.client.clone();
     let original = run()?;
@@ -88,7 +91,9 @@ fn registered_startup_cancel_at_original_clock_observation_prevents_issuance_and
     let mut job =
         rig.client.submit_blocking(&rig.scope, projection_spec(2, until)?, move |context| {
             clock.on_next_current_thread_observation(Box::new(move || core.cancel_scope(scope)));
-            assert!(client.register_startup_source(&startup, &context, original).is_err());
+            assert!(
+                client.register_startup_source(&mut startup, &context, original, &profile).is_err()
+            );
             assert!(context.memory().claim(BYTES).is_ok());
             assert!(
                 !lock(&client.core.state)

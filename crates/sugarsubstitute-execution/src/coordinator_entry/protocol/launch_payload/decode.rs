@@ -7,7 +7,7 @@ use sugarsubstitute_contracts::{
     configuration::{LoopbackOrigin, Presentation, Theme},
     coordinator_entry::{
         EntryArgumentsView, EntryCanvasRendererView, EntryConnectionView, EntryEnvironmentView,
-        EntryFrontendView, EntryWindowsPathView,
+        EntryFrontendView, EntryOriginalsReference, EntryWindowsPathView,
     },
 };
 
@@ -17,7 +17,9 @@ fn path<'a>(reader: &mut Reader<'a>) -> Result<EntryWindowsPathView<'a>, EntryTr
 fn text<'a>(reader: &mut Reader<'a>, length: usize) -> Result<&'a str, EntryTransportError> {
     std::str::from_utf8(reader.bytes(length)?).map_err(|_| EntryTransportError::Malformed)
 }
-fn launch<'a>(reader: &mut Reader<'a>) -> Result<EntryLaunchRequestView<'a>, EntryTransportError> {
+fn launch<'a>(
+    reader: &mut Reader<'a>,
+) -> Result<(EntryLaunchRequestView<'a>, std::ops::Range<usize>), EntryTransportError> {
     let mode = reader.byte()?;
     let theme = match reader.byte()? {
         0 => Theme::Dark,
@@ -58,7 +60,9 @@ fn launch<'a>(reader: &mut Reader<'a>) -> Result<EntryLaunchRequestView<'a>, Ent
     };
     let frontend =
         EntryFrontendView::new(path(reader)?, path(reader)?, path(reader)?, path(reader)?);
+    let profile_start = reader.position;
     let profile_directory = path(reader)?;
+    let profile_range = profile_start..reader.position;
     let environment = EntryEnvironmentView::from_le_bytes(reader.section()?)
         .map_err(EntryTransportError::Shape)?;
     let renderer_kind = reader.byte()?;
@@ -69,7 +73,16 @@ fn launch<'a>(reader: &mut Reader<'a>) -> Result<EntryLaunchRequestView<'a>, Ent
         (2, 0) => EntryCanvasRendererView::Malformed,
         _ => return Err(EntryTransportError::Malformed),
     };
-    EntryLaunchRequestView::new(
+    let originals = match reader.byte()? {
+        0 => None,
+        1 => {
+            let mut digest = [0; 32];
+            digest.copy_from_slice(reader.bytes(32)?);
+            Some(EntryOriginalsReference::new(digest).map_err(EntryTransportError::Shape)?)
+        }
+        _ => return Err(EntryTransportError::Malformed),
+    };
+    let view = EntryLaunchRequestView::new(
         connection,
         frontend,
         profile_directory,
@@ -78,7 +91,14 @@ fn launch<'a>(reader: &mut Reader<'a>) -> Result<EntryLaunchRequestView<'a>, Ent
         environment,
     )
     .and_then(|view| view.with_canvas_renderer(canvas_renderer))
-    .map_err(EntryTransportError::Shape)
+    .map_err(EntryTransportError::Shape)?;
+    Ok((
+        match originals {
+            Some(reference) => view.with_originals(reference),
+            None => view,
+        },
+        profile_range,
+    ))
 }
 
 fn origin(host: u8, port: u16) -> Result<LoopbackOrigin, EntryTransportError> {
@@ -115,7 +135,9 @@ fn origin(host: u8, port: u16) -> Result<LoopbackOrigin, EntryTransportError> {
 
 /// Consume the whole bounded body without allocation or authentication authority.
 /// Preserves exact domain validation causes and rejects trailing bytes.
-pub(crate) fn decode(body: &[u8]) -> Result<EntryLaunchRequestView<'_>, EntryTransportError> {
+pub(super) fn with_profile(
+    body: &[u8],
+) -> Result<(EntryLaunchRequestView<'_>, std::ops::Range<usize>), EntryTransportError> {
     if body.is_empty() || body.len() > MAX_BODY_BYTES {
         return Err(EntryTransportError::Malformed);
     }
@@ -125,4 +147,9 @@ pub(crate) fn decode(body: &[u8]) -> Result<EntryLaunchRequestView<'_>, EntryTra
         return Err(EntryTransportError::Malformed);
     }
     Ok(view)
+}
+
+/// Borrow the complete validated body through the sole Launch parser.
+pub(crate) fn decode(body: &[u8]) -> Result<EntryLaunchRequestView<'_>, EntryTransportError> {
+    with_profile(body).map(|(view, _)| view)
 }

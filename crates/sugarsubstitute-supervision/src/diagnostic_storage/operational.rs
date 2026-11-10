@@ -24,6 +24,14 @@ use sugarsubstitute_contracts::diagnostics::{
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 mod contention;
+mod export;
+#[cfg(test)]
+use export::export_at;
+pub use export::{OPERATIONAL_EXPORT_BYTES, export};
+mod history_import;
+#[cfg(test)]
+pub(crate) use history_import::seed_earlier_history;
+pub(crate) use history_import::{HistorySource, import_original, with_closed_source};
 #[cfg(feature = "boundary-fixtures")]
 #[doc(hidden)]
 pub mod fixture;
@@ -78,17 +86,6 @@ pub fn append(
         append_at(&path, events, omitted, protection, context)
     })
 }
-/// Export recognized operational pages below `base`, without dumps, incident content or paths.
-///
-/// # Errors
-/// Missing history, unknown entries, invalid pages, writer contention, original
-/// native retirement and controls remain observable. This grants no export destination.
-pub fn export(base: &Path, context: &JobContext) -> io::Result<OperationalDiagnosticExport> {
-    protection::with(context, |protection| {
-        let path = protection.runtime_storage(base, DIRECTORY, false, context)?;
-        export_at(&path, protection, context)
-    })
-}
 /// Validate admitted events before protected exclusive publication in the selected namespace.
 fn append_at(
     path: &Path,
@@ -132,36 +129,6 @@ fn append_at(
     })
     .map_err(io::Error::other)?;
     write(&root, &format!("page-{slot}.json"), &bytes, context)
-}
-/// Retain export allocation through chronological projection of recognized pages only.
-fn export_at(
-    path: &Path,
-    protection: &mut protection::Protection,
-    context: &JobContext,
-) -> io::Result<OperationalDiagnosticExport> {
-    let memory = context.memory().claim(2 * 1024 * 1024).map_err(io::Error::other)?;
-    let root = Directory::open(path, false)?.resolved()?;
-    let _writer = contention::acquire(protection, &root.path().join("writer"), context)?;
-    inventory(&root, protection, context)?;
-    if read(&root, "owner", context)? != MARKER {
-        return Err(invalid("Operational diagnostic owner changed"));
-    }
-    let mut pages = pages(&root, context)?;
-    pages.sort_by_key(|(_, page)| page.sequence);
-    let mut bytes = Vec::with_capacity(PAGES * PAGE_BYTES);
-    for (_, page) in pages {
-        if page.omitted != 0 {
-            bytes.extend_from_slice(format!("omitted_events={}\n", page.omitted).as_bytes());
-        }
-        for event in page.events {
-            bytes.extend_from_slice(event.as_bytes());
-            if !event.ends_with('\n') {
-                bytes.push(b'\n');
-            }
-        }
-    }
-    check(context)?;
-    Ok(OperationalDiagnosticExport { bytes, _memory: memory })
 }
 
 /// Refuse unknown siblings before publication and return the recognized entry count.

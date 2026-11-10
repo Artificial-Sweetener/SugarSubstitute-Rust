@@ -183,6 +183,23 @@ fn owned_request(snapshot: Vec<u16>) -> Result<EntryLaunchRequest, Box<dyn Error
 }
 
 #[test]
+fn originals_reference_keeps_fixed_matching_data_without_consuming_dynamic_request_capacity()
+-> Result<(), Box<dyn Error>> {
+    let request = owned_request(vec![0, 0])?;
+    let retained = request.retained_bytes();
+    assert!(request.originals().is_none());
+    let reference = EntryOriginalsReference::new([7; 32])?;
+    let request = request.with_originals(reference);
+    assert_eq!(request.originals(), Some(reference));
+    assert_eq!(request.retained_bytes(), retained);
+    assert_eq!(MAX_ENTRY_REQUEST_ALLOCATION_BYTES, 100 * 1024);
+    assert_eq!(request.into_parts().originals, Some(reference));
+    assert_eq!(size_of::<EntryOriginalsReference>(), 32);
+    assert_eq!(EntryOriginalsReference::new([0; 32]), Err(EntryShapeError::Identity));
+    Ok(())
+}
+
+#[test]
 fn owned_request_moves_original_snapshot_without_normalization() -> Result<(), Box<dyn Error>> {
     let snapshot = vec![90, 61, 0xd800, 0, 65, 61, 50, 0, 0];
     let request = owned_request(snapshot.clone())?;

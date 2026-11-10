@@ -13,6 +13,8 @@ mod control;
 #[cfg(windows)]
 pub(crate) mod files;
 #[cfg(windows)]
+pub(crate) mod imports;
+#[cfg(windows)]
 pub(crate) mod input;
 #[cfg(windows)]
 pub(crate) mod payload;
@@ -26,6 +28,8 @@ pub(crate) mod protection;
 #[allow(unsafe_code)]
 pub(crate) mod receiving;
 #[cfg(windows)]
+pub(crate) mod record_publication;
+#[cfg(windows)]
 mod record_read;
 #[cfg(windows)]
 pub(crate) mod records;
@@ -37,6 +41,8 @@ pub(crate) mod retirement;
 pub(crate) mod staging;
 #[cfg(windows)]
 pub(crate) mod streamed_record;
+#[cfg(windows)]
+pub(crate) mod user_paths;
 
 use std::io;
 use sugarsubstitute_contracts::execution::JobContext;

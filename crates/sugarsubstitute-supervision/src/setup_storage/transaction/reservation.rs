@@ -2,10 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Persist signed preparation intent before allocating any canonical generation files.
 use super::*;
-use crate::{
-    durable_storage::protection,
-    setup_storage::{SelectionStore, TrustFailure, UpdateAuthorization},
-};
+use crate::setup_storage::{SelectionStore, TrustFailure, UpdateAuthorization};
 use sugarsubstitute_contracts::installation::{Candidate, Generation, PackageDigest};
 use sugarsubstitute_update::VerifiedOffer;
 
@@ -89,19 +86,7 @@ impl InstallationSession {
                     }
                     Err(cause) => return Err(cause),
                 };
-                protection::with(context, |protection| {
-                    protection.directory(
-                        &self.directory().join(sugarsubstitute_configuration::layout::USER),
-                        crate::durable_storage::protected::directories::Mode::OpenOrCreate,
-                        context,
-                    )?;
-                    protection.directory(
-                        &self.directory().join("user").join("desktop-data"),
-                        crate::durable_storage::protected::directories::Mode::OpenOrCreate,
-                        context,
-                    )?;
-                    Ok(())
-                })?;
+                self.provision_user_folders(context)?;
                 recheck()?;
                 Ok((path, pinned, marker))
             },

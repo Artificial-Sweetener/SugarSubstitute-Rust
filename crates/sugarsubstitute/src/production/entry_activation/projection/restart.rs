@@ -5,6 +5,7 @@ use super::*;
 use sugarsubstitute_contracts::{coordinator_entry::EntrySetupBudget, lifecycle::RunKey};
 /// Inert pending inputs retain the genuine original source and the first restart interval.
 pub(in crate::production::entry_activation) struct RestartProjection {
+    pub(in crate::production::entry_activation) source_custody: Option<Arc<SourceLaunchSettlement>>,
     pub(in crate::production::entry_activation) source: RegisteredStartupSource,
     pub(in crate::production::entry_activation) previous: RunKey,
     pub(in crate::production::entry_activation) run: RunKey,
@@ -20,6 +21,7 @@ impl ProjectionInput {
         restart: RestartProjection,
         installation: Option<Arc<RunningApplication>>,
     ) -> Self {
+        let source = restart.source_custody.clone();
         Self {
             request: None,
             snapshot: None,
@@ -29,6 +31,7 @@ impl ProjectionInput {
             capture_root,
             user,
             installation,
+            source,
             cause: ProjectionCause::NotStarted,
             post: None,
             _charge: None,
@@ -43,22 +46,24 @@ pub(super) fn project(
         let data = input.input().restart.as_ref().ok_or("Registered restart input missing")?;
         check(&context, data.original.started(), data.original.until())?;
         let available = capacity::field_available(input.input())?;
-        let fields =
-            fields(data.source.view()?, &input.input().capture_root, available, |configuration| {
-                match &input.input().installation {
-                    Some(installation) => installation
-                        .backend_storage(configuration.root(), &context)
-                        .map_err(|cause| Box::new(cause) as _),
-                    None => Ok(BackendStorage::External),
-                }
-            })?;
-        let session_installation =
-            sugarsubstitute_supervision::session_identity::session_host_identity(
-                &input.input().user,
-                &fields.profile,
-                input.input().installation.as_deref(),
-                &context,
-            )?;
+        validate_source(
+            data.source.view()?,
+            input.input().source.as_deref(),
+            input.input().installation.is_some(),
+        )?;
+        let fields = fields::project(
+            data.source.view()?,
+            &input.input().capture_root,
+            available,
+            input.input().source.as_ref().and_then(|source| source.profile_directory()),
+            |configuration| match &input.input().installation {
+                Some(installation) => installation
+                    .backend_storage(configuration.root(), &context)
+                    .map_err(|cause| Box::new(cause) as _),
+                None => Ok(BackendStorage::External),
+            },
+        )?;
+        let session_installation = host_identity(input.input(), &fields.profile, &context)?;
         let client =
             input.input().client.as_ref().ok_or("Actual restart execution owner missing")?;
         let snapshot = client.restart_startup_snapshot(
@@ -93,6 +98,7 @@ pub(super) fn project(
             }
         };
     Ok(ProjectedEntry {
+        source: input.input_mut().source.take(),
         locale: fields.locale,
         snapshot: Some(snapshot),
         registered: data.source,
@@ -107,6 +113,7 @@ pub(super) fn project(
         target: fields.target,
         frontend: Some(fields.frontend),
         backend_environment: fields.backend_environment,
+        backend_data_disposition: fields.backend_data_disposition,
         desktop_environment: Some(fields.desktop_environment),
         policy_credit: Some(policy_credit),
         _charge: charge,

@@ -140,6 +140,18 @@ impl SelectionStore {
         })
     }
 
+    /// Pin the complete protected snapshot while a finite data settlement observes generations.
+    /// This grants correlation/data-preservation authority only, never application-run ownership.
+    pub(in crate::setup_storage) fn pinned_snapshot(
+        &self,
+        context: &JobContext,
+    ) -> Result<(InstallationRecord, File), SelectionFailure> {
+        self.protected(context, |owner| {
+            let _writer = writer(&self.root, owner, context)?;
+            self.read_pinned(owner)?.ok_or(SelectionFailure::Missing)
+        })
+    }
+
     /// Publish preparation progress without changing running or accepted generation authority.
     /// Compare the entire record and its revision under independent writer exclusion.
     /// # Errors

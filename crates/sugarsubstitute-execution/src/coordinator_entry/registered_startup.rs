@@ -18,8 +18,8 @@ use sugarsubstitute_contracts::{
 };
 pub use witness::RegisteredRestartAdmission;
 
-/// Whole immutable specification and control envelope from the original 4 MiB projection.
-pub const REGISTERED_STARTUP_BYTES: u64 = 65_536 + 4096;
+/// Original and effective immutable bodies plus control from the same 4 MiB projection.
+pub const REGISTERED_STARTUP_BYTES: u64 = 2 * 65_536 + 4096;
 pub(crate) const PROJECTION_BYTES: u64 = 4 * 1024 * 1024;
 
 pub(super) struct StateOwned {
@@ -27,6 +27,7 @@ pub(super) struct StateOwned {
     pub(super) entry: StartupAdmissionBinding,
     pub(super) original_scope: ScopeId,
     pub(super) body: Box<[u8]>,
+    pub(super) child_body: Box<[u8]>,
     pub(super) progress: Mutex<Progress>,
     _memory: MemoryClaim,
 }
@@ -64,7 +65,7 @@ impl RegisteredStartupSource {
     pub fn view(&self) -> Result<EntryLaunchRequestView<'_>, EntryTransportError> {
         protocol::launch_payload::decode(&self.state()?.body)
     }
-    /// Return exact original retained source bytes; aliases cannot enlarge this envelope.
+    /// Return the charged original/effective source envelope; aliases do not enlarge it.
     pub const fn retained_bytes(&self) -> u64 {
         REGISTERED_STARTUP_BYTES
     }
@@ -92,7 +93,7 @@ pub(crate) struct RegisteredSnapshot {
 }
 impl RegisteredSnapshot {
     pub(crate) fn body(&self) -> &[u8] {
-        self.source.0.as_ref().map_or(&[], |source| &source.body)
+        self.source.0.as_ref().map_or(&[], |source| &source.child_body)
     }
     pub(crate) fn validate_current_locked(
         &self,
@@ -132,7 +133,13 @@ impl RegisteredSnapshot {
 
 impl PreparedStartupSnapshot {
     pub(super) fn registered(registered: RegisteredSnapshot) -> Result<Self, EntryTransportError> {
-        let length = registered.source.state()?.body.len();
-        Ok(Self { launch: None, registered: Some(registered), delegated: None, body: 0..length })
+        let length = registered.source.state()?.child_body.len();
+        Ok(Self {
+            launch: None,
+            registered: Some(registered),
+            delegated: None,
+            initial_effective: None,
+            body: 0..length,
+        })
     }
 }

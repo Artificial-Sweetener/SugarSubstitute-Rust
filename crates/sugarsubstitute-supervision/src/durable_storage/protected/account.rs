@@ -26,10 +26,13 @@ use windows::Win32::{
 };
 
 /// Distinguish account queries from protected account-storage enrollment, which only an
-/// ordinary budget may perform. Both open the primary token for query only.
+/// ordinary budget may perform. Historical reads alone request the Shell's documented token
+/// impersonation right; ordinary account queries and current storage retain query-only tokens.
 pub(crate) enum PrimaryAccountAccess {
     Query,
     AccountStorage,
+    /// Read an earlier known-folder location without creating account storage.
+    HistoricalStorage,
 }
 /// Observe one actual retained token and its bounded account/session facts.
 pub(crate) struct CurrentAccount {
@@ -46,7 +49,7 @@ pub(crate) fn resolve_current(
 ) -> Result<CurrentAccount, ClaimError> {
     phase.check_budget(&budget)?;
     phase.account()?;
-    if !budget.is_ordinary() && matches!(access, PrimaryAccountAccess::AccountStorage) {
+    if !budget.is_ordinary() && !matches!(access, PrimaryAccountAccess::Query) {
         return Err(budget.rejection("diagnostic_account_storage_access"));
     }
     if handles.len() == handles.capacity() {
@@ -72,12 +75,14 @@ pub(crate) fn resolve_current_cell(
 ) -> Result<(NativeSid, u32), ClaimError> {
     phase.check_budget(&cell.budget())?;
     phase.account()?;
-    if !cell.budget().is_ordinary() && matches!(access, PrimaryAccountAccess::AccountStorage) {
+    if !cell.budget().is_ordinary() && !matches!(access, PrimaryAccountAccess::Query) {
         return Err(cell.budget().rejection("account_storage_access"));
     }
     let destination = phase.sid_destination()?;
-    // Account storage is installation-local, so no consumer needs to impersonate the token.
-    let rights = TOKEN_QUERY;
+    let rights = match access {
+        PrimaryAccountAccess::HistoricalStorage => TOKEN_QUERY | TOKEN_IMPERSONATE,
+        PrimaryAccountAccess::Query | PrimaryAccountAccess::AccountStorage => TOKEN_QUERY,
+    };
     let mut raw = HANDLE::default();
     phase.check()?;
     // SAFETY: Borrowed pseudo-process handle and initialized token output are valid.
@@ -207,7 +212,8 @@ pub(crate) fn resolve_namespace(
         diagnostics: None,
     })
 }
-fn namespace_identity(sid: &[u8], installation: &[u8; 24]) -> NamespaceId {
+/// Preserve the existing domain-separated namespace algorithm; hashing grants no native authority.
+pub(crate) fn namespace_identity(sid: &[u8], installation: &[u8; 24]) -> NamespaceId {
     NamespaceId::new(hash_parts(&[b"SugarSubstitute.coordinator-namespace.v1", sid, installation]))
 }
 fn hash_parts(parts: &[&[u8]]) -> [u8; 32] {

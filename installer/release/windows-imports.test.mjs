@@ -47,3 +47,16 @@ test('ambiguous, truncated, malformed and wrong-architecture inspection fails cl
 test('an image with no import tables requires no fabricated dependency', () => {
   assert.deepEqual(parseImage(header.replace('0x1000', '0x0').replace('0x2000', '0x0').replace('0x3000', '0x0'), 'windows-x86_64'), { imports: [], exports: [] })
 })
+
+test('the host bootstrap accepts the Windows graphics and WinRT system libraries native composition imports', () => {
+  const socketHeader = header.replace('0x2000', '0x0').replace('0x3000', '0x0')
+  const image = name => ({ name: 'sugarsubstitute.exe', ...parseImage(socketHeader + `Import {
+  Name: ${name}
+  Symbol: Call (1)
+}
+`, 'windows-x86_64') })
+  for (const name of ['d3d11.dll', 'DXGI.dll', 'dcomp.dll', 'psapi.dll', 'api-ms-win-core-winrt-l1-1-0.dll', 'api-ms-win-shcore-scaling-l1-1-1.dll']) {
+    assert.doesNotThrow(() => requireBootstrapDependencies([image(name)]))
+  }
+  assert.throws(() => requireBootstrapDependencies([image('d3dcompiler_47.dll')]), /separately installed library/)
+})
