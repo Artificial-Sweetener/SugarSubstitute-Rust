@@ -15,9 +15,9 @@ use sugarsubstitute_desktop::{MainPlacementObservation, StartupWindowContent, Wi
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 #[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
+pub(super) struct Wake {
+    pub(super) revision: Mutex<u64>,
+    pub(super) changed: Condvar,
 }
 impl CompletionWake for Wake {
     fn wake(&self) -> Result<(), ExecutionError> {
@@ -35,11 +35,11 @@ struct Release;
 impl MemoryRelease for Release {
     fn release(&self, _: u64) {}
 }
-struct Fixture {
-    host: StartupHost<Platform>,
+pub(super) struct Fixture {
+    pub(super) host: StartupHost<Platform>,
     checkpoint: SessionCheckpoint,
     _directory: tempfile::TempDir,
-    wake: Arc<Wake>,
+    pub(super) wake: Arc<Wake>,
     store: WorkspaceStore,
 }
 fn terminal<T, E>(
@@ -64,7 +64,7 @@ fn terminal<T, E>(
     }
 }
 impl Fixture {
-    fn new(persistence: bool) -> TestResult<Self> {
+    pub(super) fn new(persistence: bool) -> TestResult<Self> {
         let vectors: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../../third_party/sugarcubes-session/session_vectors.json"
         ))?;

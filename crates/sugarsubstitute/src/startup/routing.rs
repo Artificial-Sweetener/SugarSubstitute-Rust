@@ -274,11 +274,10 @@ impl<B: StartupBackend> StartupHost<B> {
                         .child
                         .workspace_context(prepared)?
                         .ok_or("Authenticated workspace context absent")?;
-                    self.workspace.as_mut().ok_or("Workspace owner disappeared")?.begin(
-                        context,
-                        effect,
-                        self.clock.now(),
-                    )?;
+                    self.workspace
+                        .as_mut()
+                        .ok_or("Workspace owner disappeared")?
+                        .begin(context, effect)?;
                 }
                 StartupEffect::RetireSplash { launch } => self.commands.retire_splash(launch)?,
                 StartupEffect::RevealMain { .. } => {

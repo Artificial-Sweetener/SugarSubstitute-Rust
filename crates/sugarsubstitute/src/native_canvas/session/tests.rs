@@ -69,6 +69,19 @@ fn canvas_work_uses_the_composing_clock_and_shared_job_sequence() -> Result<(), 
     Ok(())
 }
 #[test]
+fn event_driven_work_carries_no_cutoff_of_its_own() -> Result<(), Box<dyn Error>> {
+    let (session, clock, _directory) = session()?;
+    clock.0.store(7_200_000_000_000, Ordering::SeqCst);
+    let spec = session.event_spec(
+        Operation::Infrastructure,
+        JobClass::InfrastructureOrdinary,
+        1024,
+        None,
+    )?;
+    assert_eq!(spec.deadline, None, "only the execution scope's shutdown bounds it");
+    Ok(())
+}
+#[test]
 fn normalized_tool_zoom_uses_the_execution_clock_and_keeps_finished_work_during_motion()
 -> Result<(), Box<dyn Error>> {
     let (mut session, clock, _directory) = session()?;

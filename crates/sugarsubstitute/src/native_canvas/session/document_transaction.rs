@@ -203,7 +203,7 @@ impl Session {
             return Ok(phase == Phase::Restoring);
         }
         if phase == Phase::Promoted {
-            let cutoff = self.retirement_cutoff()?;
+            let cutoff = self.disposal_cutoff();
             let mut transaction =
                 self.document_transaction.take().ok_or("Document transaction lost")?;
             if transaction.previous.document.input.is_some() {
@@ -218,20 +218,19 @@ impl Session {
                 _retained_document: Some(transaction.previous),
                 ..Default::default()
             });
-            self.retirement_deadline = Some(cutoff);
+            self.retirement_deadline = cutoff;
             return Ok(false);
         }
         if self.pending_open.is_some() {
-            let cutoff = self.retirement_cutoff()?;
             self.pending_retirement =
                 Some(Retired { _open: self.pending_open.take(), ..Default::default() });
-            self.retirement_deadline = Some(cutoff);
+            self.retirement_deadline = self.disposal_cutoff();
             return Ok(true);
         }
         if !self.document_work_settled() {
             return Ok(true);
         }
-        let cutoff = self.retirement_cutoff()?;
+        let cutoff = self.disposal_cutoff();
         let candidate = self.withdraw_document()?;
         let transaction = self.document_transaction.take().ok_or("Document transaction lost")?;
         self.document = transaction.previous.document;
@@ -244,7 +243,7 @@ impl Session {
         }
         self.pending_retirement =
             Some(Retired { _document: Some(candidate), ..Default::default() });
-        self.retirement_deadline = Some(cutoff);
+        self.retirement_deadline = cutoff;
         Ok(true)
     }
 

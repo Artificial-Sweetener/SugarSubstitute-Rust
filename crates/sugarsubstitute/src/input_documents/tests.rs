@@ -8,11 +8,8 @@ use sugarsubstitute_contracts::execution::{Moment, TimeError};
 #[cfg(windows)]
 mod storage;
 
-const POLICY: AutosavePolicy = AutosavePolicy {
-    quiet: Duration::from_millis(500),
-    longest: Duration::from_secs(2),
-    timeout: Duration::from_secs(30),
-};
+const POLICY: AutosavePolicy =
+    AutosavePolicy { quiet: Duration::from_millis(500), longest: Duration::from_secs(2) };
 
 fn at(milliseconds: u64) -> Moment {
     Moment::from_nanos(milliseconds * 1_000_000)

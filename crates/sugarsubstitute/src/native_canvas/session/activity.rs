@@ -163,8 +163,7 @@ impl Session {
     }
     /// Retain cleanup input even when deadline arithmetic fails before worker admission.
     pub(super) fn retire(&mut self, value: Retired) -> Result<(), Box<dyn Error>> {
-        let cutoff = self.retirement_cutoff();
-        let deadline = cutoff.as_ref().ok().copied();
+        let deadline = self.disposal_cutoff();
         if self.pending_retirement.is_none() {
             self.pending_retirement = Some(value);
             self.retirement_deadline = deadline;
@@ -174,9 +173,16 @@ impl Session {
         } else {
             return Err("Canvas retirement input is already retained".into());
         }
-        cutoff.map(|_| ())
+        Ok(())
     }
-    /// Bound disposal by the original close cutoff when shutdown is underway.
+    /// Disposal ends on its observed outcome, so a slow driver delays it instead of failing the
+    /// canvas; only the original close cutoff bounds it, once shutdown is underway.
+    pub(super) fn disposal_cutoff(&self) -> Option<Moment> {
+        self.shutdown_deadline
+    }
+    /// Bound acquirer cleanup, which calls into storage that requires an original deadline, by
+    /// the original close cutoff when shutdown is underway.
+    #[cfg(feature = "native-composition")]
     pub(super) fn retirement_cutoff(&self) -> Result<Moment, Box<dyn Error>> {
         let deadline = self.clock.now().checked_add(Duration::from_secs(5))?;
         Ok(self.shutdown_deadline.map_or(deadline, |cutoff| deadline.min(cutoff)))
@@ -188,13 +194,8 @@ impl Session {
             return Ok(());
         }
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
-        let mut spec = self.spec(
-            Operation::Infrastructure,
-            JobClass::InfrastructureLifecycle,
-            0,
-            Duration::from_secs(5),
-            None,
-        )?;
+        let mut spec =
+            self.event_spec(Operation::Infrastructure, JobClass::InfrastructureLifecycle, 0, None)?;
         spec.deadline = self.retirement_deadline;
         match runtime.client.submit_blocking_owned_input(
             &runtime.scope,
@@ -274,7 +275,7 @@ impl Session {
             || graphics_retained
             || composition_retained
         {
-            let cutoff = self.retirement_cutoff()?;
+            let cutoff = self.disposal_cutoff();
             let document = self.withdraw_document()?;
             let retired = Retired {
                 _open: self.pending_open.take(),
@@ -301,7 +302,7 @@ impl Session {
             self.gpu_presentation = None;
             // Diagnostics hold a claim on the retired reservation; observations end with it.
             self.gpu_diagnostics = None;
-            self.retirement_deadline = Some(cutoff);
+            self.retirement_deadline = cutoff;
             self.pending_retirement = Some(retired);
         } else if !self.shutdown_started {
             let deadline = self.shutdown_deadline.ok_or("Canvas shutdown deadline absent")?;

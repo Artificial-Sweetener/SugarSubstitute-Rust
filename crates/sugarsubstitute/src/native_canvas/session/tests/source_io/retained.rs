@@ -422,20 +422,18 @@ fn completed_initialization_waits_for_existing_source_disposal_during_shutdown()
 }
 
 #[test]
-fn deadline_failure_keeps_encoded_retirement_until_the_original_shutdown_cutoff()
+fn encoded_retirement_has_no_cutoff_until_the_original_shutdown_cutoff()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     let mut original = Some(fixture.encoded([9, 8, 7])?);
     assert!(fixture.session.offer_source(&mut original, CacheReuse::Compatible, None)?);
     let pending = fixture.session.pending_open.take().ok_or("Original was not retained")?;
+    // However far the clock has run, disposal derives no cutoff from it.
     fixture.session.clock = Arc::new(TestClock(AtomicU64::new(u64::MAX - 1)));
-    assert!(
-        fixture.session.retire(Retired { _open: Some(pending), ..Default::default() }).is_err()
-    );
+    fixture.session.retire(Retired { _open: Some(pending), ..Default::default() })?;
     assert!(fixture.session.pending_retirement.as_ref().is_some_and(|value| value._open.is_some()));
     assert_eq!(fixture.session.retirement_deadline, None);
 
-    // Restore the executor's clock after injecting the deadline-arithmetic failure.
     fixture.session.clock = fixture.clock.clone();
     fixture.session.close_until(Moment::from_nanos(10_000_000_000))?;
     assert_eq!(fixture.session.retirement_deadline, fixture.session.shutdown_deadline);

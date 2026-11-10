@@ -9,11 +9,10 @@ impl Session {
         target: FrameStamp,
         native: bool,
     ) -> Result<JobSpec, Box<dyn Error>> {
-        self.spec(
+        self.event_spec(
             if native { Operation::Infrastructure } else { Operation::FramePrepare },
             if native { JobClass::InfrastructureOrdinary } else { JobClass::CpuInteractive },
             2 * 1024 * 1024,
-            Duration::from_secs(30),
             if native {
                 None
             } else {

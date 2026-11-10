@@ -385,7 +385,6 @@ impl Session {
                         self.pending_gpu_presentation = Some(presentation::PendingPresentation {
                             target,
                             frame,
-                            deadline: self.clock.now().checked_add(Duration::from_secs(30))?,
                             frame_period: self.pacing.period(),
                         });
                     }

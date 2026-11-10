@@ -208,14 +208,9 @@ impl Session {
             .pending_open
             .as_ref()
             .is_some_and(|pending| pending.source.requires_worker_retirement());
-        let cutoff = if retiring {
-            if self.pending_retirement.is_some() {
-                return Ok(None);
-            }
-            Some(self.retirement_cutoff()?)
-        } else {
-            None
-        };
+        if retiring && self.pending_retirement.is_some() {
+            return Ok(None);
+        }
         self.abandon_cpu_frame(self.navigation_time())?;
         self.input_observed = self.navigation_time();
         self.selection = next;
@@ -228,9 +223,9 @@ impl Session {
             owner.cancel();
         }
         let previous = self.pending_open.take();
-        if let Some(cutoff) = cutoff {
+        if retiring {
             self.pending_retirement = Some(Retired { _open: previous, ..Default::default() });
-            self.retirement_deadline = Some(cutoff);
+            self.retirement_deadline = self.disposal_cutoff();
         }
         #[cfg(feature = "native-composition")]
         {

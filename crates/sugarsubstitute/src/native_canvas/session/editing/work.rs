@@ -29,8 +29,6 @@ const WORK_BYTES_PER_PIXEL: u64 = 6;
 const TRACE_BYTES_PER_PIXEL: u64 = 1;
 /// Fixed working storage of one coverage job.
 const WORK_BASE_BYTES: u64 = 1 << 20;
-/// Longest a coverage job may run.
-const WORK_DEADLINE: Duration = Duration::from_secs(120);
 /// Most deferred edits that may wait behind the running one.
 const WAITING_EDITS: usize = 32;
 
@@ -156,11 +154,10 @@ impl Session {
                 }
             }
             let bytes = Self::work_bytes(work.base().extent(), WORK_BYTES_PER_PIXEL)?;
-            let spec = self.spec(
+            let spec = self.event_spec(
                 Operation::Infrastructure,
                 JobClass::InfrastructureOrdinary,
                 bytes,
-                WORK_DEADLINE,
                 None,
             )?;
             let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
@@ -187,11 +184,10 @@ impl Session {
         {
             let fingerprint = work.fingerprint();
             let bytes = self.editing.work.trace_bytes;
-            let spec = self.spec(
+            let spec = self.event_spec(
                 Operation::Infrastructure,
                 JobClass::InfrastructureOrdinary,
                 bytes,
-                WORK_DEADLINE,
                 None,
             )?;
             let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;

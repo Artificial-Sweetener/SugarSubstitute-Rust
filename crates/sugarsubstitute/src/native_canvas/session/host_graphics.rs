@@ -40,11 +40,10 @@ impl Session {
         let selected = self.composition_device.as_ref().map(|device| device.descriptor().clone());
         let memory =
             self.resources.as_ref().ok_or("Canvas storage is unavailable")?.presentation.clone();
-        let spec = self.spec(
+        let spec = self.event_spec(
             Operation::Infrastructure,
             JobClass::InfrastructureOrdinary,
             64 * 1024,
-            Duration::from_secs(30),
             None,
         )?;
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;

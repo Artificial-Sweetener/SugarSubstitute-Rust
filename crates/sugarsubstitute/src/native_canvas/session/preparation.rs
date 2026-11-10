@@ -273,13 +273,7 @@ impl Session {
                 .and_then(|bytes| bytes.checked_add(256 * 1024))
                 .ok_or("Canvas patch reservation overflow")?
         };
-        let spec = self.spec(
-            Operation::ImageEvaluate,
-            JobClass::CpuDecode,
-            bytes,
-            Duration::from_secs(300),
-            None,
-        )?;
+        let spec = self.event_spec(Operation::ImageEvaluate, JobClass::CpuDecode, bytes, None)?;
         let resources =
             self.resources.as_ref().ok_or("Canvas preparation resources are unavailable")?.clone();
         let source = scene.source.clone();

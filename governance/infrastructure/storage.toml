@@ -4263,7 +4263,7 @@ rationale = "Owned temporary PNG and cache fixtures verify retained encoded inpu
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:279d4888345a6669df7aa8ba1546cf90eca52da82a0c9c72cd1abb35b4713e9e"
+source_sha256 = "sha256:d2b5bc218b03b21f229d861546a016232ee4276eeb0e720777e57f1cc1b230ed"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary directories keep viewer document and refinement fixtures portable and isolated; test teardown retains the directory through its actual session lifetime."
@@ -4303,7 +4303,7 @@ rationale = "Owned temporary cache fixtures verify retained encoded originals, a
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e0a569d2974dc721f0df617e63f28611cea5809b8b8bea7bb993b3f3886982e6"
+source_sha256 = "sha256:65b7ef10506ba606dcdfb114326974aca870c76635a5427505779da8cad225bc"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary cache fixtures exercise canvas source replacement, worker disposal and scoped shutdown without using user data."
@@ -4503,7 +4503,7 @@ rationale = "An isolated temporary cache root and explicit target-existence chec
 [[records]]
 path = "crates/sugarsubstitute/src/input_documents/tests/storage.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:4688b92a4eb3cb637fe408734ddb6ed24c0a60f315c452981a60d9116e4e50a7"
+source_sha256 = "sha256:1131984a3fa0b8a28674eb930af9d40b6d2ad20ceb814a0e0076fdd8bd5bbe2f"
 capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary session directories let real execution jobs save, damage, hold and reload input-document archives, proving atomic replacement, recovery copies, rejection evidence and preserved unknown files without user data."
@@ -4593,7 +4593,7 @@ rationale = "Owned temporary checkpoint files qualify atomic publication, exact 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3a009b42965243edce82db250d56f0a48d82dde00ecb2d95d946a160ba6c99df"
+source_sha256 = "sha256:5f59ee5332ae06a7c1865c00e302d78476c4e105614da759e5b034eccba429d9"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."

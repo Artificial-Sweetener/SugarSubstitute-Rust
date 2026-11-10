@@ -16,12 +16,8 @@ impl WorkspaceWork {
             && self.media.settled()
             && self.retirements.try_lock().is_ok_and(|owners| owners.is_empty())
         {
-            let (context, effect, until) =
-                self.pending_open.take().ok_or("Workspace open disappeared")?;
-            if now >= until {
-                return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
-            }
-            self.open(context, effect, until)?;
+            let (context, effect) = self.pending_open.take().ok_or("Workspace open disappeared")?;
+            self.open(context, effect, now)?;
         }
         if let Some(job) = &mut self.load
             && let Some(completion) = job.try_take_completion()

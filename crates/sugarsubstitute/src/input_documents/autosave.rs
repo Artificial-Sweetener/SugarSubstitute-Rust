@@ -19,15 +19,15 @@ use sugarsubstitute_contracts::execution::{
     OwnedJob, Scope, TerminalKind, TimeError,
 };
 
-/// Debounce and deadline timing for automatic saves.
+/// Debounce timing for automatic saves. A save has no cutoff of its own: it ends with its result,
+/// an observed failure or cancellation, and only [`Autosave::flush`] is bounded, by the shutdown
+/// cutoff.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AutosavePolicy {
     /// Quiet period after the latest change before a save starts.
     pub quiet: Duration,
     /// Longest a change waits while further changes keep arriving.
     pub longest: Duration,
-    /// Deadline of each save job.
-    pub timeout: Duration,
 }
 
 /// Deterministic debounce over host-assigned, increasing content generations.
@@ -155,7 +155,8 @@ pub enum SaveOutcome {
     Unchanged,
     /// The save failed; the content stays unsaved.
     Failed(StoreError),
-    /// The save was cancelled, timed out or panicked; the content stays unsaved.
+    /// The save was cancelled, stopped at the shutdown cutoff or panicked; the content stays
+    /// unsaved.
     Stopped(TerminalKind),
 }
 
@@ -225,13 +226,12 @@ impl Autosave {
         if self.schedule.begin(now).is_none() {
             return Ok(None);
         }
-        let deadline = now.checked_add(self.schedule.policy.timeout)?;
-        self.start(now, deadline, execution, scope, jobs, capture)
+        self.start(now, None, execution, scope, jobs, capture)
     }
 
-    /// Save every unsaved change now, regardless of the debounce, with a job deadline no later
-    /// than `cutoff`, such as the bounded shutdown's. A save that cannot finish by then is
-    /// stopped before it replaces the current archive, which stays intact.
+    /// Save every unsaved change now, regardless of the debounce, with a job deadline at
+    /// `cutoff`, such as the bounded shutdown's. A save that cannot finish by then is stopped
+    /// before it replaces the current archive, which stays intact.
     /// # Errors
     /// Preserves capture, identity and admission failures; the content stays dirty.
     pub fn flush<P: ExecutionPort>(
@@ -246,15 +246,14 @@ impl Autosave {
         if self.schedule.flush().is_none() {
             return Ok(None);
         }
-        let deadline = now.checked_add(self.schedule.policy.timeout)?.min(cutoff);
-        self.start(now, deadline, execution, scope, jobs, capture)
+        self.start(now, Some(cutoff), execution, scope, jobs, capture)
     }
 
     /// Submit the save the schedule just began, recording a failure to start as unsaved.
     fn start<P: ExecutionPort>(
         &mut self,
         now: Moment,
-        deadline: Moment,
+        deadline: Option<Moment>,
         execution: &P,
         scope: &Scope,
         jobs: &JobSequence,
@@ -310,7 +309,7 @@ impl Autosave {
 
     fn submit<P: ExecutionPort>(
         &self,
-        deadline: Moment,
+        deadline: Option<Moment>,
         execution: &P,
         scope: &Scope,
         jobs: &JobSequence,
@@ -325,7 +324,7 @@ impl Autosave {
             id: jobs.allocate().map_err(AutosaveError::Identity)?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
-            deadline: Some(deadline),
+            deadline,
             reservation_bytes: InputDocumentStore::save_reservation(&archive),
             replacement: None,
         };

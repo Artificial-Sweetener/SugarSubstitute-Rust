@@ -128,6 +128,61 @@ fn pending_retirement_consumes_terminal_work_that_releases_its_admission()
     Ok(())
 }
 
+/// A payload whose disposal blocks until the test releases it.
+struct HeldDisposal(Arc<(Mutex<bool>, Condvar)>);
+impl Drop for HeldDisposal {
+    fn drop(&mut self) {
+        let (released, changed) = &*self.0;
+        let mut released = released.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        while !*released {
+            released = changed.wait(released).unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+}
+
+#[test]
+fn a_slow_disposal_delays_the_canvas_instead_of_failing_it() -> Result<(), Box<dyn Error>> {
+    let (mut session, clock, _directory) = session()?;
+    let wake = Arc::new(Wake::default());
+    let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let client = owner.client();
+    session.runtime =
+        Some(Runtime::shared(client.clone(), ScopeSpec { id: ScopeId::new(1)?, deadline: None })?);
+    let gate = Arc::new((Mutex::new(false), Condvar::new()));
+    session.retire(Retired {
+        _fixture_hold: Some(Box::new(HeldDisposal(gate.clone()))),
+        ..Default::default()
+    })?;
+    session.advance()?;
+    assert!(session.retirement.is_some(), "the disposal was admitted");
+
+    // The driver stays busy for two hours of injected time; no cutoff turns that into a failure.
+    clock.0.store(7_200_000_000_000, Ordering::SeqCst);
+    client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+    session.advance()?;
+    assert!(session.retirement.is_some(), "the disposal is still held open");
+    assert!(session.failed.is_none(), "a slow disposal is not a failure");
+
+    *gate.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+    gate.1.notify_all();
+    while session.retirement.is_some() {
+        let observed = wake.revision();
+        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+        session.advance()?;
+        if session.retirement.is_some() {
+            wake.wait_after(observed)?;
+        }
+    }
+    assert!(session.failed.is_none(), "the released disposal completed without an error");
+    settle(&mut session, &client, &wake)?;
+    owner.request_shutdown(Moment::from_nanos(clock.0.load(Ordering::SeqCst) + 10_000_000_000));
+    while !owner.poll_shutdown()?.settled {
+        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+    }
+    owner.finish_shutdown()?;
+    Ok(())
+}
+
 /// Observe each cleanup completion before finishing the application-owned execution scope.
 fn settle(
     session: &mut Session,
@@ -175,13 +230,13 @@ fn completed_payload_retirement_is_deferred_behind_retained_cleanup() -> Result<
 {
     let (mut session, clock, _directory) = session()?;
     session.retire(Retired::default())?;
-    assert_eq!(session.retirement_deadline, Some(Moment::from_nanos(5_000_000_000)));
+    assert_eq!(session.retirement_deadline, None, "ordinary disposal has no cutoff of its own");
 
     clock.0.store(1_000_000_000, Ordering::SeqCst);
     session.retire(Retired::default())?;
     assert!(session.pending_retirement.is_some());
     assert!(session.deferred_retirement.is_some());
-    assert_eq!(session.deferred_retirement_deadline, Some(Moment::from_nanos(6_000_000_000)));
+    assert_eq!(session.deferred_retirement_deadline, None);
 
     let cutoff = Moment::from_nanos(2_000_000_000);
     session.close_until(cutoff)?;
