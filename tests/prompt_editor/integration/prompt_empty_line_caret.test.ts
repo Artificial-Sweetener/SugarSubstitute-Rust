@@ -264,3 +264,52 @@ test.each([
   },
   90_000,
 );
+
+/** Reset rules of the kind host pages and user stylesheets apply to every bare `img`. */
+const hostImageRules = {
+  'responsive images': 'img { max-width: 100% !important; height: auto !important; }',
+  'hidden decorative images': 'img[aria-hidden="true"] { display: none !important; }',
+  'collapsed images': 'img { height: 0 !important; max-height: 0 !important; }',
+} as const;
+
+test.each(Object.entries(hostImageRules))(
+  'keeps stopping on empty lines when the host page applies %s',
+  async (_name, rule) => {
+    const page = await mountPrompt(fixture, 'nodes-2', source, 1.09);
+    try {
+      await page.addStyleTag({ content: rule });
+      const boxes = await wrapLikeTheRecording(page);
+      const [first, last] = [boxes[0], boxes.at(-1)] as [LineBox, LineBox];
+      for (const [label, start, key, order] of [
+        ['Down', { x: first.left + 2, y: (first.top + first.bottom) / 2 }, 'ArrowDown', lineOfRow],
+        [
+          'Up',
+          { x: last.right - 2, y: (last.top + last.bottom) / 2 + 9 },
+          'ArrowUp',
+          [...lineOfRow].reverse(),
+        ],
+      ] as const) {
+        await page.mouse.click(start.x, start.y);
+        await settle(page);
+        const visited: number[] = [];
+        for (const _row of order) {
+          visited.push((await caret(page)).line);
+          await page.keyboard.press(key);
+          await settle(page);
+        }
+        expectAt(`${label} rows`, visited, [...order]);
+      }
+      // A click on an empty line still lands on that line.
+      for (const [line, box] of boxes.entries()) {
+        if (lineLengths[line] !== 0) continue;
+        await page.mouse.click(box.left + 40, (box.top + box.bottom) / 2);
+        await settle(page);
+        expectAt(`empty line ${String(line)}`, (await caret(page)).head, lineStarts[line] ?? -1);
+      }
+      expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+  90_000,
+);
