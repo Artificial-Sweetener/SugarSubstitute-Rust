@@ -93,7 +93,7 @@ impl Session {
                     "Canvas graphics preparation reached a terminal outcome during close");
             }
             Err(cause) => {
-                tracing::error!(operation="canvas_graphics_prepare", cause=%cause,
+                tracing::error!(operation="canvas_graphics_prepare", cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()),
                     "Canvas graphics preparation failed");
                 self.host_graphics_failure = Some(cause);
                 if let Some(device) = self.composition_device.take() {

@@ -157,7 +157,7 @@ impl NativeSurface {
                     )
                     && let Err(cause) = session.retain_output_original(key, &hashes)
                 {
-                    tracing::warn!(operation="canvas_original_promotion_refused",request_id=request.request_id(),cause=%cause,"Authored output retained after original mismatch");
+                    tracing::warn!(operation="canvas_original_promotion_refused",request_id=request.request_id(),cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()),"Authored output retained after original mismatch");
                     return self.reply(
                         identity,
                         &request,

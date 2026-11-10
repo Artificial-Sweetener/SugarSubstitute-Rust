@@ -294,7 +294,7 @@ impl Autosave {
         };
         self.schedule.finished(matches!(outcome, SaveOutcome::Saved(_)), now)?;
         if let SaveOutcome::Failed(cause) = &outcome {
-            tracing::warn!(operation = "input_documents_autosave", cause = %cause,
+            tracing::warn!(operation = "input_documents_autosave", cause_chain = %crate::diagnostics::CauseChain(cause),
                 "Input documents remain unsaved");
         }
         Ok(Some(outcome))

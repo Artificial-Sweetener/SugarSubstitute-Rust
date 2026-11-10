@@ -103,13 +103,13 @@ impl Session {
                     drag_staging::stage(cache, request, &filename, &bytes, now, &context)
                 })
                 .inspect_err(|cause| {
-                    tracing::warn!(operation = "drag_out_staging", cause = %cause,
+                    tracing::warn!(operation = "drag_out_staging", cause_chain = %crate::diagnostics::CauseChain(cause),
                         "The drag-out offers no file path; drops that need one are refused");
                 })
                 .ok();
             let preview = DragPreview::decode(&bytes, DRAG_PREVIEW_CEILING, &memory)
                 .inspect_err(|cause| {
-                    tracing::warn!(operation = "drag_out_preview", cause = %cause,
+                    tracing::warn!(operation = "drag_out_preview", cause_chain = %crate::diagnostics::CauseChain(cause),
                         "The drag-out shows no preview of its output");
                 })
                 .ok();
@@ -149,7 +149,7 @@ impl Session {
                     Some(DragOutBytes { request, bytes, claim, staged: path, preview });
             }
             Err(cause) => {
-                tracing::warn!(operation = "canvas_drag_out_copy", cause = %cause,
+                tracing::warn!(operation = "canvas_drag_out_copy", cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()),
                     "The shown output could not be prepared for drag-out");
             }
         }

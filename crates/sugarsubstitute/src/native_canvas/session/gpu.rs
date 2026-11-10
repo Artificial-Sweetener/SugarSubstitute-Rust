@@ -36,7 +36,7 @@ impl Session {
                         Ok(device) => Ok(Some(device)),
                         Err(cause) => {
                             tracing::warn!(operation = "canvas_gpu_initialization",
-                                job_id = context.job_id().get(), cause = %cause,
+                                job_id = context.job_id().get(), cause_chain = %crate::diagnostics::CauseChain(&cause),
                                 "Embedded canvas GPU initialization failed");
                             Ok(None)
                         }

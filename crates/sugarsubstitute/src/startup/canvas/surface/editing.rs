@@ -107,7 +107,7 @@ impl NativeSurface {
                     failure(CanvasFailureStatus::Unavailable, detail)
                 }
                 None => {
-                    tracing::warn!(operation = "canvas_edit_command", cause = %cause, "Edit command failed");
+                    tracing::warn!(operation = "canvas_edit_command", cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()), "Edit command failed");
                     failure(CanvasFailureStatus::Error, &cause.to_string())
                 }
             };
@@ -136,7 +136,7 @@ impl NativeSurface {
         let claim = match memory.claim(CanvasNativeNotification::STORAGE_BYTES) {
             Ok(claim) => claim,
             Err(cause) => {
-                tracing::warn!(operation = "canvas_edit_notification", cause = %cause, "Edit state notification admission is unavailable");
+                tracing::warn!(operation = "canvas_edit_notification", cause_chain = %crate::diagnostics::CauseChain(&cause), "Edit state notification admission is unavailable");
                 return Ok(());
             }
         };

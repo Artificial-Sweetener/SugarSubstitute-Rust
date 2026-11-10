@@ -79,13 +79,13 @@ impl NativeSurface {
                                     CanvasSurfaceReplyStatus::Applied
                                 }
                                 Err(cause) => {
-                                    tracing::warn!(operation="canvas_preview_assembly_admission", address=?request.address(), request_id=request.request_id(), lease_revision=request.revision(), cause=%cause, "Preview assembly admission failed");
+                                    tracing::warn!(operation="canvas_preview_assembly_admission", address=?request.address(), request_id=request.request_id(), lease_revision=request.revision(), cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()), "Preview assembly admission failed");
                                     CanvasSurfaceReplyStatus::Unavailable
                                 }
                             }
                         }
                         Err(cause) => {
-                            tracing::warn!(operation="canvas_preview_metadata_admission", address=?request.address(), request_id=request.request_id(), lease_revision=request.revision(), cause=%cause, "Preview metadata admission is unavailable");
+                            tracing::warn!(operation="canvas_preview_metadata_admission", address=?request.address(), request_id=request.request_id(), lease_revision=request.revision(), cause_chain = %crate::diagnostics::CauseChain(&cause), "Preview metadata admission is unavailable");
                             CanvasSurfaceReplyStatus::Unavailable
                         }
                     }
@@ -140,7 +140,7 @@ impl NativeSurface {
                                 CanvasSurfaceReplyStatus::Applied
                             }
                             Err(cause) => {
-                                tracing::warn!(operation="canvas_preview_original_admission", address=?request.address(), request_id=request.request_id(), lease_revision=lease.lease_revision(), cause=%cause, "Preview original admission failed");
+                                tracing::warn!(operation="canvas_preview_original_admission", address=?request.address(), request_id=request.request_id(), lease_revision=lease.lease_revision(), cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()), "Preview original admission failed");
                                 if matches!(
                                     cause.downcast_ref::<sugarsubstitute_image_io::ImportError>(),
                                     Some(sugarsubstitute_image_io::ImportError::Image(

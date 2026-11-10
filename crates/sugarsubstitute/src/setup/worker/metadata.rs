@@ -112,7 +112,7 @@ impl Worker {
             let memory = context.memory().claim(2 * 1024 * 1024).map_err(io::Error::other)?;
             let result = state.perform(&access, request.operation, &context);
             if let Err(cause) = &result {
-                tracing::warn!(operation="worker_metadata_io", request_id=%identity, serial=request.serial, cause=%cause, "Native metadata operation failed");
+                tracing::warn!(operation="worker_metadata_io", request_id=%identity, serial=request.serial, cause_chain=%crate::diagnostics::CauseChain(cause), "Native metadata operation failed");
             }
             Ok(MetadataCompletion { state, request: identity, serial: request.serial, result, _memory: memory })
         })?);

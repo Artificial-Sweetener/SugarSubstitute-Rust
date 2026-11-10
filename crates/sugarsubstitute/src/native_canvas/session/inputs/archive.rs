@@ -194,12 +194,12 @@ impl Session {
         let archive = match completion.outcome {
             JobOutcome::Success(restored) => {
                 for rejection in &restored.rejected {
-                    tracing::warn!(operation = "input_documents_restore", file = ?rejection.file, cause = %rejection.cause, "An input-document archive was rejected; its file is kept");
+                    tracing::warn!(operation = "input_documents_restore", file = ?rejection.file, cause_chain = %crate::diagnostics::CauseChain(&rejection.cause), "An input-document archive was rejected; its file is kept");
                 }
                 restored.archive.map(|(_, archive)| archive)
             }
             JobOutcome::Failure(cause) => {
-                tracing::warn!(operation = "input_documents_restore", cause = %cause, "Input documents could not be loaded; they are rebuilt from the workflow");
+                tracing::warn!(operation = "input_documents_restore", cause_chain = %crate::diagnostics::CauseChain(&cause), "Input documents could not be loaded; they are rebuilt from the workflow");
                 None
             }
             other => {
@@ -211,7 +211,7 @@ impl Session {
             Some(archive) if !self.closing => match self.restore_inputs(&archive) {
                 Ok(()) => Some(archive),
                 Err(cause) => {
-                    tracing::warn!(operation = "input_documents_restore", cause = %cause, "Archived input documents are inconsistent; they are rebuilt from the workflow");
+                    tracing::warn!(operation = "input_documents_restore", cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()), "Archived input documents are inconsistent; they are rebuilt from the workflow");
                     self.inputs.workflows.clear();
                     None
                 }
@@ -265,7 +265,7 @@ impl Session {
             persistence.autosave = Some(autosave);
         }
         if let Err(cause) = polled {
-            tracing::warn!(operation = "input_documents_autosave", cause = %cause, "Input documents remain unsaved");
+            tracing::warn!(operation = "input_documents_autosave", cause_chain = %crate::diagnostics::CauseChain(&cause), "Input documents remain unsaved");
         }
         Ok(())
     }
@@ -286,7 +286,7 @@ impl Session {
         if persistence.signature.replace(signature).is_some_and(|previous| previous != signature) {
             persistence.generation += 1;
             if let Err(cause) = autosave.changed(persistence.generation, now) {
-                tracing::warn!(operation = "input_documents_close_save", cause = %cause, "A final input-document change could not be scheduled");
+                tracing::warn!(operation = "input_documents_close_save", cause_chain = %crate::diagnostics::CauseChain(&cause), "A final input-document change could not be scheduled");
             }
         }
         if !autosave.dirty() {
@@ -301,7 +301,7 @@ impl Session {
                 self.submit_final_save();
             }
             Err(cause) => {
-                tracing::warn!(operation = "input_documents_close_save", cause = %cause, "The final input documents could not be captured; the previous archive is kept");
+                tracing::warn!(operation = "input_documents_close_save", cause_chain = %crate::diagnostics::CauseChain(&cause), "The final input documents could not be captured; the previous archive is kept");
             }
         }
     }
@@ -331,7 +331,7 @@ impl Session {
             None => Ok(None),
         };
         if let Err(cause) = flushed {
-            tracing::warn!(operation = "input_documents_close_save", cause = %cause, "The final input-document save could not start; the previous archive is kept");
+            tracing::warn!(operation = "input_documents_close_save", cause_chain = %crate::diagnostics::CauseChain(&cause), "The final input-document save could not start; the previous archive is kept");
         }
     }
     /// When the next automatic save is due.

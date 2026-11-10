@@ -482,7 +482,7 @@ impl Session {
             }
             current = error.source();
         }
-        tracing::error!(operation="canvas_viewer_work", cause=%cause, "Canvas operation failed");
+        tracing::error!(operation="canvas_viewer_work", cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()), "Canvas operation failed");
         if self.failed.is_none() {
             self.failed = Some(cause);
         }

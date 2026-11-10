@@ -237,7 +237,7 @@ impl Session {
                 Ok(prepared) if !self.closing => self.complete_editing(identity, prepared),
                 Ok(_) => {}
                 Err(cause) => {
-                    tracing::warn!(operation = "canvas_coverage_work", document_id = identity, cause = %cause, "Coverage work did not finish; the document is unchanged");
+                    tracing::warn!(operation = "canvas_coverage_work", document_id = identity, cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()), "Coverage work did not finish; the document is unchanged");
                     self.editing_work_failed(identity, request)?;
                 }
             }
@@ -252,7 +252,7 @@ impl Session {
                 Ok(_) => {}
                 Err(cause) => {
                     self.editing.outlines.abandon(fingerprint);
-                    tracing::warn!(operation = "canvas_selection_outline", cause = %cause, "Selection outline tracing did not finish");
+                    tracing::warn!(operation = "canvas_selection_outline", cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()), "Selection outline tracing did not finish");
                 }
             }
         }
@@ -307,7 +307,7 @@ impl Session {
                 );
             }
             Err(cause) => {
-                tracing::warn!(operation = "canvas_coverage_work", document_id = identity, cause = %cause, "Finished coverage work could not be applied");
+                tracing::warn!(operation = "canvas_coverage_work", document_id = identity, cause_chain = %crate::diagnostics::CauseChain(&cause), "Finished coverage work could not be applied");
             }
         }
     }

@@ -76,7 +76,7 @@ impl WorkspaceDriver {
         tracing::warn!(
             operation = "workspace_restore_failed",
             request_id = %request,
-            cause = %cause,
+            reason = %cause,
             "Workspace restore ended on an observed failure; the saved workspace is protected"
         );
         Ok(())

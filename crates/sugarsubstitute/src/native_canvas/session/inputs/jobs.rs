@@ -399,7 +399,7 @@ impl Session {
         tracing::warn!(
             operation = "canvas_input_memory",
             document_id = identity.get(),
-            cause = %cause,
+            cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()),
             "The canvas memory budget refused input document work"
         );
         self.record_input_failure(identity, applies, InputFailure::message(MEMORY_REFUSED));

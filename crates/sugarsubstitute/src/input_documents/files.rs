@@ -72,7 +72,7 @@ pub(super) fn load(
             Ok(archive) => return Ok(Restored { archive: Some((file, archive)), rejected }),
             Err(cause) if cause.interrupted() => return Err(cause.into()),
             Err(cause) => {
-                tracing::warn!(operation = "input_documents_load", file = ?file, cause = %cause,
+                tracing::warn!(operation = "input_documents_load", file = ?file, cause_chain = %crate::diagnostics::CauseChain(&cause),
                     "Input-document archive rejected");
                 rejected.push(Rejection { file, cause });
             }
