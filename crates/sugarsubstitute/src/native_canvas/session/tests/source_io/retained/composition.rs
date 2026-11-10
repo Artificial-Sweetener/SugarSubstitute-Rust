@@ -56,7 +56,7 @@ impl Fixture {
                 return Err("Canvas failed during composition qualification".into());
             }
             let snapshot = self.session.runtime.as_ref().ok_or("Runtime absent")?.scope.snapshot();
-            if snapshot.running + snapshot.queued > 0 && snapshot.terminal_unobserved == 0 {
+            if snapshot.running + snapshot.queued > 0 {
                 self.wake.wait_after(observed);
             }
         }

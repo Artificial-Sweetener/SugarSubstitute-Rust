@@ -27,7 +27,7 @@ impl Fixture {
         self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         self.session.poll(Duration::ZERO)?;
         let snapshot = self.session.runtime.as_ref().ok_or("Runtime absent")?.scope.snapshot();
-        if snapshot.running + snapshot.queued > 0 && snapshot.terminal_unobserved == 0 {
+        if snapshot.running + snapshot.queued > 0 {
             self.wake.wait_after(observed);
         }
         Ok(())

@@ -150,12 +150,11 @@ impl Fixture {
             self.session.did_present_cpu(target)?;
             return Ok(Some(Shown { evidence, pixel }));
         }
+        // Admitted work publishes a wake when it completes, even while an earlier completion is
+        // still held back, so a starved worker can only delay the test and never spend its steps
+        // or its injected time. Time advances only when no work remains to wait for.
         let progress = self.owner.poll_shutdown()?;
-        let undelivered = progress
-            .unresolved_jobs
-            .iter()
-            .any(|job| !job.acknowledged && matches!(job.phase, JobPhase::Terminal(_)));
-        if progress.running + progress.queued > 0 && !undelivered {
+        if progress.running + progress.queued > 0 {
             self.wake.wait_after(observed);
         } else {
             self.clock.0.fetch_add(100_000_000, Ordering::SeqCst);
