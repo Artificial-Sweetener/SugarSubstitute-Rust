@@ -3,40 +3,34 @@
 //! Exercise failure stages through the public startup polling boundary and real execution owner.
 
 use super::*;
+use crate::completion_wake::Wake;
 use sugarsubstitute_desktop::{StartupConsumeFailure, StartupConsumeStage};
 
-struct Wake;
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        Ok(())
-    }
-}
-
 /// Start the genuine host while the external platform adapter owns no native resources.
-pub(in crate::startup) fn started_host() -> BackendResult<StartupHost<Platform>> {
+///
+/// The returned wake observes the host's execution owner, so shutdown can be awaited by event.
+pub(in crate::startup) fn started_host() -> BackendResult<(StartupHost<Platform>, Arc<Wake>)> {
     let mut host = host()?;
     host.child.start_allowed = true;
-    host.start(Arc::new(Wake))?;
-    Ok(host)
+    let wake = Arc::new(Wake::default());
+    host.start(wake.clone())?;
+    Ok((host, wake))
 }
 
 /// Settle the original scope and native absence through the public shutdown contract.
-pub(in crate::startup) fn finish(host: &mut StartupHost<Platform>) -> BackendResult<()> {
+pub(in crate::startup) fn finish(
+    host: &mut StartupHost<Platform>,
+    wake: &Wake,
+) -> BackendResult<()> {
     host.request_shutdown()?;
     host.observe(DesktopStartupObservation::NativeRetired(host.run_key()))?;
-    let guard = Instant::now() + Duration::from_secs(10);
-    while !host.poll_shutdown()? {
-        if Instant::now() >= guard {
-            return Err("Startup test execution did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
+    wake.until(|| host.poll_shutdown().map(|settled| settled.then_some(())).transpose())?;
     host.finish_shutdown()
 }
 
 #[test]
 fn poll_frame_names_reload_failure_and_keeps_the_exact_original_box() -> BackendResult<()> {
-    let mut host = started_host()?;
+    let (mut host, wake) = started_host()?;
     host.startup = Some(Prepared {
         session: StartupSession::new(
             LaunchId::new(1)?,
@@ -63,7 +57,7 @@ fn poll_frame_names_reload_failure_and_keeps_the_exact_original_box() -> Backend
         retained.original().downcast_ref::<std::io::Error>().ok_or("Original Box absent")?,
     ));
     assert!(host.poll_frame(NonZeroUsize::MIN)?.is_none());
-    finish(&mut host)
+    finish(&mut host, &wake)
 }
 
 #[test]

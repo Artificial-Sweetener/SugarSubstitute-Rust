@@ -69,7 +69,7 @@ fn public_poll_frame_names_canvas_backend_refresh_overload() -> Result<(), Box<d
     impl MemoryRelease for Release {
         fn release(&self, _: u64) {}
     }
-    let mut host = crate::startup::platform_tests::consume::started_host()?;
+    let (mut host, wake) = crate::startup::platform_tests::consume::started_host()?;
     let identity = MainIdentity {
         run: host.policy.run(),
         launch: LaunchId::new(1)?,
@@ -160,5 +160,5 @@ fn public_poll_frame_names_canvas_backend_refresh_overload() -> Result<(), Box<d
     for sequence in 1..=8 {
         assert_eq!(delivered(surface)?, sequence);
     }
-    crate::startup::platform_tests::consume::finish(&mut host)
+    crate::startup::platform_tests::consume::finish(&mut host, &wake)
 }

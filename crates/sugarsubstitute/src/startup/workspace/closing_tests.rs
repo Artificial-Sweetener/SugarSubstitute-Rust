@@ -2,9 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep the native peer alive for a final checkpoint while ordinary frame polling drives close.
 use super::*;
+use crate::completion_wake::Wake;
 use crate::startup::platform_tests::{Platform, Prepared};
 use sha2::{Digest, Sha256};
-use std::{num::NonZeroUsize, sync::Condvar};
+use std::num::NonZeroUsize;
 use sugarsubstitute_application::startup::StartupSession;
 use sugarsubstitute_contracts::{
     configuration::*,
@@ -14,23 +15,6 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::{MainPlacementObservation, StartupWindowContent, WindowContent};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.revision.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other("Wake lock poisoned")),
-            )
-        })? += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
 struct Release;
 impl MemoryRelease for Release {
     fn release(&self, _: u64) {}
@@ -42,26 +26,13 @@ struct Fixture {
     wake: Arc<Wake>,
     store: WorkspaceStore,
 }
+/// Deliver completions until the job has its typed terminal outcome, then take it.
 fn terminal<T, E>(
     client: &ExecutionClient,
     wake: &Wake,
     mut job: OwnedJob<T, E>,
 ) -> TestResult<JobOutcome<T, E>> {
-    loop {
-        let revision = *wake.revision.lock().map_err(|_| "Wake lock")?;
-        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if let Some(completion) = job.try_take_completion() {
-            return Ok(completion.outcome);
-        }
-        let lock = wake.revision.lock().map_err(|_| "Wake lock")?;
-        let (lock, timeout) = wake
-            .changed
-            .wait_timeout_while(lock, Duration::from_secs(10), |value| *value == revision)
-            .map_err(|_| "Wake wait")?;
-        if timeout.timed_out() && *lock == revision {
-            return Err("Workspace worker did not terminate".into());
-        }
-    }
+    Ok(wake.completion(client, &mut job)?.outcome)
 }
 impl Fixture {
     fn new(persistence: bool) -> TestResult<Self> {
@@ -241,7 +212,7 @@ impl Fixture {
         assert!(matches!(self.host.take_command()?, Some(DesktopStartupCommand::Close)));
         assert_eq!(self.host.shutdown.budget()?, budget);
         assert!(self.host.take_command()?.is_none());
-        crate::startup::platform_tests::consume::finish(&mut self.host)?;
+        crate::startup::platform_tests::consume::finish(&mut self.host, &self.wake)?;
         Ok(())
     }
 }

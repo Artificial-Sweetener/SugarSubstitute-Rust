@@ -2,14 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Run media acquisition and later requests through the same real finite execution owner.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{
-        Condvar,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_execution::ExecutionOwner;
 #[derive(Default)]
 struct TestClock(AtomicU64);
@@ -19,20 +13,6 @@ impl Clock for TestClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake(Mutex<u64>, Condvar);
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.0.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(io::Error::other("Media wake poisoned")),
-            )
-        })? += 1;
-        self.1.notify_all();
-        Ok(())
     }
 }
 pub(super) struct Fixture {
@@ -74,28 +54,11 @@ impl Fixture {
             },
             work,
         )?;
-        loop {
-            let revision = *self.wake.0.lock().map_err(|_| "Media wake poisoned")?;
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if let Some(completion) = job.try_take_completion() {
-                return match completion.outcome {
-                    JobOutcome::Success(value) => Ok(value),
-                    JobOutcome::Failure(cause) => Err(cause.into()),
-                    outcome => Err(format!("Media worker stopped: {:?}", outcome.kind()).into()),
-                };
-            }
-            let (guard, timeout) = self
-                .wake
-                .1
-                .wait_timeout_while(
-                    self.wake.0.lock().map_err(|_| "Media wake poisoned")?,
-                    Duration::from_secs(20),
-                    |current| *current == revision,
-                )
-                .map_err(|_| "Media wake poisoned")?;
-            if timeout.timed_out() && *guard == revision {
-                return Err("Media worker did not terminate".into());
-            }
+        let completion = self.wake.completion(&self.client, &mut job)?;
+        match completion.outcome {
+            JobOutcome::Success(value) => Ok(value),
+            JobOutcome::Failure(cause) => Err(cause.into()),
+            outcome => Err(format!("Media worker stopped: {:?}", outcome.kind()).into()),
         }
     }
 }

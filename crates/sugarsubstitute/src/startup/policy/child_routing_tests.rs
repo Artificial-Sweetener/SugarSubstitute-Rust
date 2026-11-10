@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route cancellation callbacks through the genuine policy and child recipient with frozen time.
 use super::*;
+use crate::completion_wake::Wake;
 use crate::job_sequence::JobSequence;
 use crate::production::child::test_support;
 use crate::startup::{ShutdownInitiation, StartupBackend, StartupHost, StartupScopes};
@@ -9,7 +10,7 @@ use sugarsubstitute_contracts::{
     execution::{Moment, ScopeId, ScopeSpec},
     lifecycle::ShutdownBudget,
 };
-use sugarsubstitute_execution::MonotonicClock;
+use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
 
 /// A real watchdog observation must not discard a completed, unchanged splash frame.
 #[test]
@@ -17,7 +18,7 @@ fn native_activity_preserves_completed_splash_publication() -> TestResult {
     use crate::preparation::{FirstFrameContent, PreparationDriver};
     use std::{
         num::NonZeroUsize,
-        time::{Duration, Instant},
+        sync::{Arc, atomic::AtomicU64},
     };
     use sugarsubstitute_contracts::{
         execution::ExecutionPort,
@@ -27,7 +28,11 @@ fn native_activity_preserves_completed_splash_publication() -> TestResult {
     use sugarsubstitute_splash::{AnimationFrame, Appearance};
     use sugarsubstitute_ui::progress::ProgressFrame;
     let run = test_support::run()?;
-    let (child, mut owner, _) = test_support::child()?;
+    let (child, _child_owner, _) = test_support::child()?;
+    // The render work runs on its own owner so its completions wake this test.
+    let wake = Arc::new(Wake::default());
+    let mut owner =
+        ExecutionOwner::new(Arc::new(test_support::Frozen(AtomicU64::new(0))), wake.clone())?;
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(4)?, deadline: None }, None)?;
     let mut content = StartupHost::new(
@@ -60,28 +65,19 @@ fn native_activity_preserves_completed_splash_publication() -> TestResult {
         )
     };
     request(&mut render)?;
-    let guard = Instant::now().checked_add(Duration::from_secs(30)).ok_or("Test guard overflow")?;
-    loop {
-        let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if render.consume(&batch)?.is_some() {
-            break;
-        }
-        if Instant::now() >= guard {
-            return Err("Initial real splash frame did not complete".into());
-        }
-        std::hint::spin_loop();
-    }
+    wake.until(|| {
+        let published = (|| -> Result<bool, Box<dyn Error>> {
+            let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+            Ok(render.consume(&batch)?.is_some())
+        })();
+        published.map(|frame| frame.then_some(())).transpose()
+    })?;
     request(&mut render)?;
-    let batch = loop {
-        let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if !batch.notifications.is_empty() {
-            break batch;
-        }
-        if Instant::now() >= guard {
-            return Err("Second real splash frame did not complete".into());
-        }
-        std::hint::spin_loop();
-    };
+    let batch =
+        wake.until(|| match client.drain_completions(NonZeroUsize::MIN.saturating_add(31)) {
+            Ok(batch) if batch.notifications.is_empty() => None,
+            delivered => Some(delivered),
+        })?;
     content.preparation = Some(render);
     content.prepared = true;
     content.visible = true;
@@ -104,14 +100,7 @@ fn native_activity_preserves_completed_splash_publication() -> TestResult {
     render.request_retirement()?;
     assert!(render.poll_retirement()?);
     render.finish_retirement()?;
-    owner.request_shutdown(Moment::from_nanos(5_000_000_000));
-    while !owner.poll_shutdown()?.settled {
-        if Instant::now() >= guard {
-            return Err("Real execution owner did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
-    owner.finish_shutdown()?;
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(5_000_000_000))?;
     Ok(())
 }
 
