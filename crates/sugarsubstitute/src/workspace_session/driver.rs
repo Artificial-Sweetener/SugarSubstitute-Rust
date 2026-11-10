@@ -62,6 +62,8 @@ struct Restore {
 struct Capture {
     request: String,
     ticket: CaptureTicket,
+    /// Bounds only the wait for the page to deliver the capture, so an unresponsive page cannot
+    /// hold the capture slot forever; the capture is retried after it.
     deadline: Moment,
     transfer: Option<CaptureTransfer>,
     processing: bool,
@@ -218,15 +220,24 @@ impl WorkspaceDriver {
         self.outbound = Some(Outbound::new(request.into(), transfer.into(), encoded));
         Ok(())
     }
-    /// Borrow the earliest original capture or autosave cutoff for the existing native pump. A
-    /// startup restore has none: it ends on an observed event, never on elapsed time.
+    /// Borrow the earliest autosave due time or page-side capture cutoff for the existing native
+    /// pump. A startup restore has none: it ends on an observed event, never on elapsed time. A
+    /// capture the page has delivered is local work that ends on its observed outcome, so its
+    /// page-side cutoff no longer applies.
     pub fn deadline(&self) -> Option<Moment> {
         self.policy
             .deadline()
             .filter(|_| self.encoding.is_none())
             .into_iter()
-            .chain(self.capture.as_ref().map(|value| value.deadline))
+            .chain(
+                self.capture.as_ref().filter(|value| !value.processing).map(|value| value.deadline),
+            )
             .min()
+    }
+    /// The application's shutdown cutoff once a close began, which alone bounds local worker
+    /// jobs such as decoding and publishing a capture.
+    pub const fn shutdown_cutoff(&self) -> Option<Moment> {
+        self.close_cutoff
     }
     /// Freeze a final capture while the actual page/native peer is retained.
     /// # Errors

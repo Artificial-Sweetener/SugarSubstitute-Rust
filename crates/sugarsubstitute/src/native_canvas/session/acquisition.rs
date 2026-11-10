@@ -44,7 +44,7 @@ pub(super) struct Retirement {
 }
 
 impl Session {
-    /// Retain the original adapter before attempting to derive or admit a cleanup deadline.
+    /// Retain the original adapter before admitting its cleanup.
     pub(super) fn retain_acquirer(
         &mut self,
         owner: Arc<dyn SourceAcquirer>,
@@ -55,15 +55,14 @@ impl Session {
         if self.acquisition_retirement.is_some() {
             return Err("Canvas acquisition retirement is already retained".into());
         }
-        let cutoff = self.retirement_cutoff();
         self.acquisition_retirement = Some(Retirement {
             owner,
             job: None,
-            cutoff: cutoff.as_ref().ok().copied(),
+            cutoff: self.disposal_cutoff(),
             failed: false,
             retry_on_close: false,
         });
-        cutoff.map(|_| ())
+        Ok(())
     }
 
     /// Observe the real cleanup completion and admit at most one owned retirement job.
@@ -104,16 +103,17 @@ impl Session {
             return Ok(());
         }
         let owner = retirement.owner.clone();
-        let cutoff = retirement.cutoff.ok_or("Acquisition cleanup deadline is unavailable")?;
+        let cutoff = retirement.cutoff;
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
-        let mut spec = self.spec(
+        let mut spec = self.storage_spec(
             Operation::NativeLifecycle,
             JobClass::InfrastructureLifecycle,
             512 * 1024,
-            Duration::from_secs(5),
             None,
         )?;
-        spec.deadline = Some(cutoff);
+        if let Some(cutoff) = cutoff {
+            spec.deadline = Some(cutoff);
+        }
         match runtime.client.submit_blocking(&runtime.scope, spec, move |context| {
             owner.retire(&context).map_err(WorkError::from)
         }) {
@@ -134,7 +134,7 @@ impl Session {
             retirement.failed = false;
             retirement.retry_on_close = false;
         } else if let Some(job) = &retirement.job
-            && job.spec().deadline.is_some_and(|deadline| deadline > cutoff)
+            && job.spec().deadline.is_none_or(|deadline| deadline > cutoff)
         {
             retirement.retry_on_close = true;
             job.cancel();

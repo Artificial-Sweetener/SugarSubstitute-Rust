@@ -32,8 +32,6 @@ use sugarsubstitute_execution::ExecutionClient;
 pub(super) const CAPACITY: u64 = 5 * 1024 * 1024 * 1024;
 const DRIVER_BYTES: u64 = WorkspaceDriver::reservation_bytes();
 const DELIVERY_BYTES: u64 = 24 * 1024 * 1024;
-/// How long the load job may run once admitted.
-const LOAD_ALLOWANCE: Duration = Duration::from_secs(30);
 const LOAD_BYTES: u64 = WorkspaceStore::reservation_bytes()
     + ProfileStore::reservation_bytes()
     + DRIVER_BYTES
@@ -172,13 +170,11 @@ impl WorkspaceWork {
         self.pending_open = Some((context, effect));
         Ok(())
     }
-    /// Submit the load. Profile and checkpoint storage requires an original job deadline, so the
-    /// load keeps its allowance, measured from admission rather than from the request.
+    /// Submit the load, which ends on its observed outcome like the workers it waited for.
     fn open(
         &mut self,
         context: WorkspaceContext,
         effect: StartupEffect,
-        now: Moment,
     ) -> Result<(), Box<dyn Error>> {
         self.messages.clear();
         self.media = media::MediaWork::new();
@@ -201,7 +197,7 @@ impl WorkspaceWork {
         let origin = context.origin;
         let user = self.user.clone();
         let preloader = self.media.preloader();
-        let spec = self.job(LOAD_BYTES, Some(now.checked_add(LOAD_ALLOWANCE)?))?;
+        let spec = self.job(LOAD_BYTES, None)?;
         let client = self.client.as_ref().ok_or("Workspace execution absent")?;
         let scope = self.scope.as_ref().ok_or("Workspace scope absent")?;
         self.load = Some(client.submit_blocking(scope,spec,move |job| {
@@ -232,12 +228,14 @@ impl WorkspaceWork {
         self.deferred = Some(effect);
         Ok(())
     }
+    /// Bind one worker. Without a cutoff it is open-ended: the storage it calls demands a finite
+    /// admitted deadline, but only cancellation at shutdown ends it early.
     fn job(&self, bytes: u64, until: Option<Moment>) -> Result<JobSpec, Box<dyn Error>> {
         Ok(JobSpec {
             id: self.jobs.allocate()?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
-            deadline: until,
+            deadline: Some(until.unwrap_or(crate::job_deadline::OPEN_ENDED)),
             reservation_bytes: bytes,
             replacement: None,
         })
@@ -297,13 +295,11 @@ impl WorkspaceWork {
         )?)))
     }
     pub(super) fn deadline(&self) -> Option<Moment> {
-        self.load
+        self.driver
             .as_ref()
-            .and_then(|job| job.spec().deadline)
+            .filter(|_| !self.retired)
+            .and_then(WorkspaceDriver::deadline)
             .into_iter()
-            .chain(
-                self.driver.as_ref().filter(|_| !self.retired).and_then(WorkspaceDriver::deadline),
-            )
             .chain(self.closing.filter(|_| !self.retired))
             .min()
     }

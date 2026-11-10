@@ -10,7 +10,7 @@ impl Session {
     pub(super) fn submit_initialization(&mut self) -> Result<(), Box<dyn Error>> {
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         let gpu = self.config.gpu.is_some();
-        let spec = self.spec(
+        let spec = self.storage_spec(
             Operation::Infrastructure,
             JobClass::InfrastructureLifecycle,
             budget::reservation_bytes(
@@ -18,7 +18,6 @@ impl Session {
                 gpu,
                 self.config.retained_document_bytes,
             ),
-            Duration::from_secs(30),
             None,
         )?;
         let presentation = budget::presentation_bytes(self.config.maximum_extent, gpu);
@@ -58,11 +57,10 @@ impl Session {
         let extra = 0;
         let reservation =
             work::IMPORT_BYTES.checked_add(extra).ok_or("Source reservation overflow")?;
-        let spec = self.spec(
+        let spec = self.storage_spec(
             Operation::Infrastructure,
             JobClass::InfrastructureOrdinary,
             reservation,
-            Duration::from_secs(300),
             None,
         )?;
         match runtime.client.submit_blocking_owned_input(

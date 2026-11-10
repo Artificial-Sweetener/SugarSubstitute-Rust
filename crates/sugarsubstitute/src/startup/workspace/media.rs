@@ -195,7 +195,7 @@ impl MediaWork {
         }
         self.observe_acquisition(driver, commands)?;
         if self.retiring {
-            self.close_readers(client, scope, jobs, now, cutoff)?;
+            self.close_readers(client, scope, jobs, cutoff)?;
             return Ok(());
         }
         if self.acquisition.is_some() {
@@ -274,7 +274,6 @@ impl MediaWork {
         client: &ExecutionClient,
         scope: &Scope,
         jobs: &JobSequence,
-        now: Moment,
         cutoff: Option<Moment>,
     ) -> Result<(), Box<dyn Error>> {
         if let Some(job) = &mut self.close {
@@ -306,12 +305,12 @@ impl MediaWork {
             return Ok(());
         }
         let readers = self.readers.clone();
-        let until = cutoff.unwrap_or(now.checked_add(Duration::from_secs(15))?);
+        // Closing readers ends on its observed outcome; only the shutdown cutoff bounds it.
         let spec = JobSpec {
             id: jobs.allocate()?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureLifecycle,
-            deadline: Some(until),
+            deadline: Some(cutoff.unwrap_or(crate::job_deadline::OPEN_ENDED)),
             reservation_bytes: 128 * 1024,
             replacement: None,
         };

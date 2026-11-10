@@ -43,7 +43,8 @@ impl MediaWork {
     pub(in crate::startup::workspace) fn preloader(&self) -> Preloader {
         Preloader { readers: self.readers.clone() }
     }
-    /// Start one independent finite verification; HTTP deferrals keep their original15s cutoff.
+    /// Start one independent finite verification. It ends on its observed outcome; only the
+    /// shutdown cutoff bounds it, while each deferred HTTP request keeps the deadline its page set.
     pub(super) fn acquire(
         &mut self,
         admission: MediaAdmission<'_>,
@@ -51,19 +52,17 @@ impl MediaWork {
         asset: SessionAsset,
         resident: MemoryLease,
     ) -> Result<(), Box<dyn Error>> {
-        let MediaAdmission { client, scope, jobs, now, cutoff } = admission;
+        let MediaAdmission { client, scope, jobs, cutoff, .. } = admission;
         if self.acquisition.is_some() || !self.running.is_empty() {
             return Ok(());
         }
-        let until = now.checked_add(Duration::from_secs(30))?;
-        let until = cutoff.map_or(until, |cutoff| cutoff.min(until));
         let readers = self.readers.clone();
         let expected = asset.clone();
         let spec = JobSpec {
             id: jobs.allocate()?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
-            deadline: Some(until),
+            deadline: Some(cutoff.unwrap_or(crate::job_deadline::OPEN_ENDED)),
             reservation_bytes: 128 * 1024,
             replacement: None,
         };

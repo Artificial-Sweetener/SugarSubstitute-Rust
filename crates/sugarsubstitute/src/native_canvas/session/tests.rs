@@ -82,6 +82,20 @@ fn event_driven_work_carries_no_cutoff_of_its_own() -> Result<(), Box<dyn Error>
     Ok(())
 }
 #[test]
+fn storage_backed_work_is_open_ended_instead_of_cut_off_by_elapsed_time()
+-> Result<(), Box<dyn Error>> {
+    let (session, clock, _directory) = session()?;
+    clock.0.store(7_200_000_000_000, Ordering::SeqCst);
+    let spec = session.storage_spec(
+        Operation::Infrastructure,
+        JobClass::InfrastructureLifecycle,
+        1024,
+        None,
+    )?;
+    assert_eq!(spec.deadline, Some(crate::job_deadline::OPEN_ENDED));
+    Ok(())
+}
+#[test]
 fn normalized_tool_zoom_uses_the_execution_clock_and_keeps_finished_work_during_motion()
 -> Result<(), Box<dyn Error>> {
     let (mut session, clock, _directory) = session()?;

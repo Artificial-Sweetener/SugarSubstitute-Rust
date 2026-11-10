@@ -5,7 +5,7 @@ use super::*;
 
 impl Session {
     /// Bind work to one original deadline and the same sole job identity sequence. Use this only
-    /// for work whose callees require an original deadline, such as storage.
+    /// for work that is meant to stop at that deadline, such as a freshness lease.
     pub(super) fn spec(
         &self,
         operation: Operation,
@@ -21,6 +21,22 @@ impl Session {
             deadline: Some(self.clock.now().checked_add(duration)?),
             reservation_bytes: bytes,
             replacement,
+        })
+    }
+
+    /// Bind storage-backed work that ends on its own result, an observed failure or
+    /// cancellation. Its storage callees demand a finite admitted deadline, so it carries the
+    /// open-ended one: only cancellation at shutdown ends it early.
+    pub(super) fn storage_spec(
+        &self,
+        operation: Operation,
+        class: JobClass,
+        bytes: u64,
+        replacement: Option<ReplacementKey>,
+    ) -> Result<JobSpec, Box<dyn Error>> {
+        Ok(JobSpec {
+            deadline: Some(crate::job_deadline::OPEN_ENDED),
+            ..self.event_spec(operation, class, bytes, replacement)?
         })
     }
 

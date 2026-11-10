@@ -82,11 +82,10 @@ impl Session {
         };
         let resources = self.resources.as_ref().ok_or("Canvas storage is unavailable")?;
         let (memory, cache) = (resources.memory.clone(), resources.cache.clone());
-        let spec = self.spec(
+        let spec = self.storage_spec(
             Operation::Infrastructure,
             JobClass::InfrastructureOrdinary,
             DRAG_OUT_WORK_BYTES,
-            Duration::from_secs(10),
             None,
         )?;
         let evicted = (self.drag_out.staged.len() >= STAGED_DRAGS)

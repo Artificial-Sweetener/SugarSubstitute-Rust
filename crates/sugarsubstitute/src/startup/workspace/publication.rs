@@ -59,7 +59,7 @@ impl WorkspaceWork {
         Ok(())
     }
     pub(super) fn submit_publication(&mut self, now: Moment) -> Result<(), Box<dyn Error>> {
-        self.retire_transfers(now)?;
+        self.retire_transfers()?;
         if self.active.is_some()
             || self.publish_input.is_none()
             || self.retirement_job.is_some()
@@ -72,12 +72,10 @@ impl WorkspaceWork {
             return Ok(());
         }
         let input = self.publish_input.as_ref().ok_or("Workspace publication input absent")?;
-        let until = self
-            .driver
-            .as_ref()
-            .and_then(WorkspaceDriver::deadline)
-            .ok_or("Workspace publication cutoff absent")?;
-        if now >= until {
+        // Publication is local work that ends on its observed outcome; only the shutdown cutoff,
+        // once a close began, bounds it.
+        let until = self.driver.as_ref().and_then(WorkspaceDriver::shutdown_cutoff);
+        if until.is_some_and(|until| now >= until) {
             let input =
                 self.publish_input.take().ok_or("Workspace publication input disappeared")?;
             self.driver
@@ -93,7 +91,7 @@ impl WorkspaceWork {
                 sugarsubstitute_comfy::output_media::OUTPUT_TRANSFER_BYTES + 8 * 1024 * 1024,
             )
             .ok_or("Workspace transfer admission overflow")?;
-        let spec = self.job(bytes, Some(until))?;
+        let spec = self.job(bytes, until)?;
         let ticket = input.ticket.clone();
         let directory =
             self.input_directory.clone().ok_or("Workspace native archive directory absent")?;
@@ -140,7 +138,7 @@ impl WorkspaceWork {
         }
         Ok(())
     }
-    fn retire_transfers(&mut self, now: Moment) -> Result<(), Box<dyn Error>> {
+    fn retire_transfers(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(job) = &mut self.retirement_job {
             if let Some(completion) = job.try_take_completion() {
                 self.retirement_job = None;
@@ -167,9 +165,10 @@ impl WorkspaceWork {
         {
             return Ok(());
         }
-        let until = self.retirement_until.unwrap_or(now.checked_add(Duration::from_secs(15))?);
-        let mut spec =
-            self.job(sugarsubstitute_comfy::output_media::OUTPUT_TRANSFER_BYTES, Some(until))?;
+        let mut spec = self.job(
+            sugarsubstitute_comfy::output_media::OUTPUT_TRANSFER_BYTES,
+            self.retirement_until,
+        )?;
         spec.class = JobClass::InfrastructureLifecycle;
         let retirements = self.retirements.clone();
         self.retirement_job =

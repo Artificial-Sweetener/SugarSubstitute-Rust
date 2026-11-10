@@ -308,11 +308,10 @@ impl Session {
         };
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         let extra = acquirers.iter().map(|owner| owner.reservation_bytes()).max().unwrap_or(0);
-        let spec = self.spec(
+        let spec = self.storage_spec(
             Operation::Infrastructure,
             JobClass::InfrastructureOrdinary,
             work::IMPORT_BYTES.checked_add(extra).ok_or("Input reservation overflow")?,
-            Duration::from_secs(300),
             None,
         )?;
         match runtime.client.submit_blocking(&runtime.scope, spec, move |context| run(&context)) {

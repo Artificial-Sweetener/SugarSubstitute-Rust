@@ -180,13 +180,6 @@ impl Session {
     pub(super) fn disposal_cutoff(&self) -> Option<Moment> {
         self.shutdown_deadline
     }
-    /// Bound acquirer cleanup, which calls into storage that requires an original deadline, by
-    /// the original close cutoff when shutdown is underway.
-    #[cfg(feature = "native-composition")]
-    pub(super) fn retirement_cutoff(&self) -> Result<Moment, Box<dyn Error>> {
-        let deadline = self.clock.now().checked_add(Duration::from_secs(5))?;
-        Ok(self.shutdown_deadline.map_or(deadline, |cutoff| deadline.min(cutoff)))
-    }
     /// Transfer disposal through actual queue/completion admission while its payload's original
     /// claims continue funding retained storage; never drop native handles on the UI thread.
     fn submit_retirement(&mut self) -> Result<(), Box<dyn Error>> {

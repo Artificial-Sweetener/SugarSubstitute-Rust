@@ -275,7 +275,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:139c72ca314402de38500feb61cc4f577b6ab3d5c63e2edd887ff0640d388339"
+source_sha256 = "sha256:a870cb59415edf855c337d2642eb5067a6194f294496ac49faa819411a6e60ad"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 

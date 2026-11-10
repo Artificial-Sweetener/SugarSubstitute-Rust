@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Protect authored startup intent, original replay fences and observed encoding retirement.
+mod capture;
 mod close;
 mod media;
 use super::*;

@@ -46,6 +46,7 @@ pub mod input_documents;
 pub mod instance_conflict;
 mod invocation;
 pub mod job_sequence;
+mod job_deadline;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod output_fixture;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
