@@ -38,12 +38,14 @@ interface HostWorkflow {
     ds: { scale: number; offset: number[] };
   } | null;
   updatePath(path: string): void;
+  load(): Promise<HostWorkflow>;
 }
 
 /** Model the exposed workflow store and actual load reset/baseline behavior at the Comfy boundary. */
 function fixture() {
   let graph: object = { nodes: [], extra: { title: 'active' } };
   let key = 0;
+  let graphLoads = 0;
   const listeners = new Set<() => void>();
   const workflow = {
     openWorkflows: [] as HostWorkflow[],
@@ -67,6 +69,15 @@ function fixture() {
         updatePath(path: string) {
           this.path = path;
         },
+        /** Build the change tracker from the workflow's own content, as Comfy's load does. */
+        async load() {
+          this.changeTracker ??= {
+            activeState: JSON.parse(this.content),
+            initialState: JSON.parse(this.originalContent),
+            ds: { scale: 1, offset: [0, 0] },
+          };
+          return this;
+        },
       };
     },
     async closeWorkflow(target: HostWorkflow) {
@@ -87,6 +98,7 @@ function fixture() {
     canvas: { ds: { scale: 1, offset: [0, 0] } },
     rootGraph: { serialize: () => structuredClone(graph) },
     async loadGraphData(state: object, _clean: boolean, _restore: boolean, target: HostWorkflow) {
+      graphLoads++;
       graph = structuredClone(state);
       if (!workflow.openWorkflows.includes(target)) workflow.openWorkflows.push(target);
       workflow.activeWorkflow = target;
@@ -114,6 +126,7 @@ function fixture() {
   documents.install();
   return {
     workflow,
+    graphLoads: () => graphLoads,
     app,
     sessions,
     adapter,
@@ -192,6 +205,21 @@ test('materializes named and temporary dirty graphs in order and retains each sa
   await host.app.loadGraphData(JSON.parse(b.document.graphJson), true, true, target);
   expect(target.changeTracker?.initialState).toEqual(JSON.parse(b.document.baselineGraphJson!));
   expect(target.isModified).toBe(true);
+  host.dispose();
+});
+
+test('restoring several tabs loads only the active workflow graph and still opens every tab in order', async () => {
+  const host = fixture();
+  const a = entry('00000000-0000-4000-8000-000000000001', document('A', false));
+  const b = entry('00000000-0000-4000-8000-000000000002', document('B', true));
+  const c = entry('00000000-0000-4000-8000-000000000003', document('C', false));
+  await host.documents.materialize([a, b, c], b.id, () => true);
+  expect(host.graphLoads()).toBe(1);
+  expect(host.workflow.openWorkflows.map((item) => item.filename)).toEqual(['A', 'B', 'C']);
+  expect(host.workflow.activeWorkflow?.filename).toBe('B');
+  expect(host.workflow.openWorkflows.map((item) => item.changeTracker?.initialState)).toEqual(
+    [a, b, c].map((item) => JSON.parse(item.document.baselineGraphJson ?? '')),
+  );
   host.dispose();
 });
 
