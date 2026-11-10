@@ -2,49 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Use real admitted delivery to preserve notices across independent protocol failure.
 use super::*;
-use std::{
-    sync::{Condvar, Mutex},
-    time::Duration,
-};
-use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, ScopeId, ScopeSpec,
-};
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.count.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(io::Error::other("Controlled wake poisoned")),
-            )
-        })? += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    fn count(&self) -> Result<u64> {
-        Ok(*self.count.lock().map_err(|_| "Controlled count poisoned")?)
-    }
-    fn wait(&self, before: u64) -> Result<()> {
-        let (count, timeout) = self
-            .changed
-            .wait_timeout_while(
-                self.count.lock().map_err(|_| "Controlled count poisoned")?,
-                Duration::from_secs(5),
-                |count| *count == before,
-            )
-            .map_err(|_| "Controlled wake poisoned")?;
-        if timeout.timed_out() && *count == before {
-            return Err("Actual writer terminal did not wake".into());
-        }
-        Ok(())
-    }
-}
+use crate::completion_wake::Wake;
+use std::time::Duration;
+use sugarsubstitute_contracts::execution::{Clock, ScopeId, ScopeSpec};
 fn child() -> Result<(Child, Arc<Wake>)> {
     let mut child = Child::new(
         ChildOptions { role: Role::Corpus, section: None, deadline: None },
@@ -64,20 +24,24 @@ fn child() -> Result<(Child, Arc<Wake>)> {
     child.owner = Some(owner);
     Ok((child, wake))
 }
+/// Deliver completions until the child holds the writer's terminal notice.
 fn capture(child: &mut Child, wake: &Wake) -> Result<()> {
-    loop {
-        let before = wake.count()?;
-        let batch = child
-            .client
-            .as_ref()
-            .ok_or("Controlled client missing")?
-            .drain_completions(NonZeroUsize::MIN)?;
-        child.capture(&batch)?;
-        if child.write_notices[0].is_some() {
-            return Ok(());
+    wake.until(|| {
+        let captured = (|| -> Result<bool> {
+            let batch = child
+                .client
+                .as_ref()
+                .ok_or("Controlled client missing")?
+                .drain_completions(NonZeroUsize::MIN)?;
+            child.capture(&batch)?;
+            Ok(child.write_notices[0].is_some())
+        })();
+        match captured {
+            Ok(false) => None,
+            Ok(true) => Some(Ok(())),
+            Err(cause) => Some(Err(cause)),
         }
-        wake.wait(before)?;
-    }
+    })
 }
 fn finish(mut child: Child, _: &Wake) -> Result<()> {
     let deadline = child.clock.now().checked_add(Duration::from_secs(5))?;
@@ -192,16 +156,7 @@ fn deadline_write(role: Role) -> Result<()> {
             super::super::writers::write(&context, role, OutputStream::Stdout, &mut sink)
         },
     )?;
-    loop {
-        let before = wake.count()?;
-        let batch = client.drain_completions(NonZeroUsize::MIN)?;
-        if batch.notifications.iter().any(|n| n.job_id == job.spec().id) {
-            let completion = job.try_take_completion().ok_or("Writer terminal missing")?;
-            assert_eq!(completion.outcome.kind(), TerminalKind::TimedOut);
-            break;
-        }
-        wake.wait(before)?;
-    }
+    assert_eq!(wake.completion(&client, &mut job)?.outcome.kind(), TerminalKind::TimedOut);
     assert_eq!(calls.load(Ordering::Acquire), 1);
     assert_eq!(flushes.load(Ordering::Acquire), 0);
     drop(job);
