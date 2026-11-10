@@ -3,7 +3,8 @@
 //! Exercise preparation admission and hidden-state behavior through the real execution port.
 
 use super::*;
-use std::{convert::Infallible, time::Duration};
+use crate::completion_wake::Gate;
+use std::{convert::Infallible, sync::Arc, time::Duration};
 use sugarsubstitute_contracts::execution::{JobId, ScopeId, ScopeSpec};
 use sugarsubstitute_splash::PaperFlip;
 
@@ -153,7 +154,7 @@ fn saturated_preparation_retains_existing_renderer_and_latest_request() -> Resul
         Err(crate::render_transfer::TransferError::Consumed)
     ));
     driver.renderer = Some(PreparationTransfer::new(renderer));
-    drop(support::completion(&mut held, &wake)?);
+    drop(support::completion(&driver.client, &mut held, &wake)?);
     let prepared = support::pending_frame(&mut driver, &wake)?;
     assert_eq!(prepared.identity(), identity);
     assert!(driver.pending.is_none());
@@ -181,7 +182,7 @@ fn stale_and_hidden_terminal_results_restore_cache_without_publication()
         } else {
             driver.invalidate();
         }
-        assert!(support::poll(&mut driver)?.is_none());
+        assert!(support::poll(&mut driver, &wake)?.is_none());
         assert!(driver.active.is_none());
         assert_ne!(driver.gate.state_generation(), identity.state_generation);
         let renderer = driver.renderer.as_ref().ok_or("Rejected result lost cache")?.take()?;
@@ -201,7 +202,8 @@ fn retirement_is_scope_local_and_preserves_unrelated_execution() -> Result<(), B
     let client = driver.client.clone();
     let unrelated =
         client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
-    let latch = support::BlockingLatch::new();
+    let latch = Arc::new(Gate::default());
+    let _release = support::Release(latch.clone());
     let worker = latch.clone();
     let mut blocked = client.submit_blocking(
         &unrelated,
@@ -213,9 +215,12 @@ fn retirement_is_scope_local_and_preserves_unrelated_execution() -> Result<(), B
             reservation_bytes: 0,
             replacement: None,
         },
-        move |_| worker.run(),
+        move |_| {
+            worker.hold();
+            Ok::<_, std::io::Error>(())
+        },
     )?;
-    latch.wait_started()?;
+    latch.wait_entered();
     driver.request_retirement()?;
     assert!(driver.poll_retirement()?);
     driver.finish_retirement()?;
@@ -234,9 +239,9 @@ fn retirement_is_scope_local_and_preserves_unrelated_execution() -> Result<(), B
         },
         |_| async { Ok::<_, Infallible>(()) },
     )?;
-    drop(support::completion(&mut later, &wake)?);
-    latch.release()?;
-    drop(support::completion(&mut blocked, &wake)?);
+    drop(support::completion(&client, &mut later, &wake)?);
+    latch.release();
+    drop(support::completion(&client, &mut blocked, &wake)?);
     assert_eq!(retained.pixels().len(), retained.shape().byte_len());
     assert!(retained.reserved_bytes() > 0);
     support::finish(&mut owner, &mut driver, &wake)?;
@@ -262,7 +267,7 @@ fn consumer_leaves_foreign_metadata_and_terminal_ownership_untouched() -> Result
     assert!(driver.consume(&foreign)?.is_none());
     assert!(driver.active.is_some());
     assert_eq!(foreign.notifications.len(), 1);
-    support::poll(&mut driver)?;
+    support::poll(&mut driver, &wake)?;
     assert!(driver.renderer.is_some());
     support::finish(&mut owner, &mut driver, &wake)?;
     Ok(())
@@ -277,7 +282,8 @@ fn shared_shutdown_retains_workers_until_blocking_work_actually_stops() -> Resul
     let client = driver.client.clone();
     let unrelated =
         client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
-    let latch = support::BlockingLatch::new();
+    let latch = Arc::new(Gate::default());
+    let _release = support::Release(latch.clone());
     let worker = latch.clone();
     let mut blocked = client.submit_blocking(
         &unrelated,
@@ -289,9 +295,12 @@ fn shared_shutdown_retains_workers_until_blocking_work_actually_stops() -> Resul
             reservation_bytes: 0,
             replacement: None,
         },
-        move |_| worker.run(),
+        move |_| {
+            worker.hold();
+            Ok::<_, std::io::Error>(())
+        },
     )?;
-    latch.wait_started()?;
+    latch.wait_entered();
     driver.request_retirement()?;
     owner.request_shutdown(sugarsubstitute_contracts::execution::Moment::from_nanos(5_000_000_000));
     assert!(driver.poll_retirement()?);
@@ -299,8 +308,8 @@ fn shared_shutdown_retains_workers_until_blocking_work_actually_stops() -> Resul
     assert!(owner.finish_shutdown().is_err());
     assert!(driver.renderer.is_some());
     assert!(driver.scope.snapshot().reserved_bytes >= retained.reserved_bytes());
-    latch.release()?;
-    drop(support::completion(&mut blocked, &wake)?);
+    latch.release();
+    drop(support::completion(&client, &mut blocked, &wake)?);
     support::finish(&mut owner, &mut driver, &wake)?;
     assert!(driver.renderer.is_none());
     assert_eq!(retained.pixels().len(), retained.shape().byte_len());
@@ -396,13 +405,13 @@ fn console_resource_and_none_transitions_invalidate_actual_terminal_frames()
         driver.active.as_ref().and_then(|active| active.identity).ok_or("Old identity absent")?;
     driver.request(shape, appearance, character, feedback, Some(next.snapshot_tail(1)?.into()))?;
     assert_ne!(driver.gate.state_generation(), old.state_generation);
-    assert!(support::poll(&mut driver)?.is_none());
+    assert!(support::poll(&mut driver, &wake)?.is_none());
     assert!(first.snapshot_tail(1).is_ok());
     support::terminal(&driver, &wake)?;
     let generation = driver.gate.state_generation();
     driver.request(shape, appearance, character, feedback, None)?;
     assert_ne!(driver.gate.state_generation(), generation);
-    assert!(support::poll(&mut driver)?.is_none());
+    assert!(support::poll(&mut driver, &wake)?.is_none());
     let current = support::pending_frame(&mut driver, &wake)?;
     assert_eq!(current.identity().state_generation, driver.gate.state_generation());
     drop((bootstrap, current, held));
@@ -426,7 +435,8 @@ fn console_uninvoked_factory_keeps_pin_until_real_terminal_disposal() -> Result<
         let scope =
             driver.client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
         // The production owner has exactly one interactive lane, also on single-CPU systems.
-        let latch = support::BlockingLatch::new();
+        let latch = Arc::new(Gate::default());
+        let _release = support::Release(latch.clone());
         let worker = latch.clone();
         let mut occupant = driver.client.submit_cpu(
             &scope,
@@ -443,7 +453,7 @@ fn console_uninvoked_factory_keeps_pin_until_real_terminal_disposal() -> Result<
             },
             move |_| support::CpuHold(worker),
         )?;
-        latch.wait_started()?;
+        latch.wait_entered();
         driver.request(
             FrameShape::new(558, 558, 1.0)?,
             Appearance::demo(),
@@ -465,8 +475,8 @@ fn console_uninvoked_factory_keeps_pin_until_real_terminal_disposal() -> Result<
                 .replacement
                 .ok_or("Replacement key absent")?;
             key.revision = key.revision.next()?;
-            let ready = support::BlockingLatch::new();
-            ready.release()?;
+            let ready = Arc::new(Gate::default());
+            ready.release();
             Some(driver.client.submit_cpu(
                 &driver.scope,
                 JobSpec {
@@ -484,10 +494,10 @@ fn console_uninvoked_factory_keeps_pin_until_real_terminal_disposal() -> Result<
             None
         };
         assert!(matches!(store.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
-        latch.release()?;
-        drop(support::completion(&mut occupant, &wake)?);
+        latch.release();
+        drop(support::completion(&driver.client, &mut occupant, &wake)?);
         if let Some(job) = &mut replacement {
-            drop(support::completion(job, &wake)?);
+            drop(support::completion(&driver.client, job, &wake)?);
         }
         support::terminal(&driver, &wake)?;
         assert_eq!(
@@ -506,7 +516,7 @@ fn console_uninvoked_factory_keeps_pin_until_real_terminal_disposal() -> Result<
             store.resource()
         );
         active._request = Some(PreparationTransfer::new(input));
-        assert!(support::poll(&mut driver)?.is_none());
+        assert!(support::poll(&mut driver, &wake)?.is_none());
         assert!(store.snapshot_tail(1).is_ok());
         drop((bootstrap, held, occupant, replacement, scope));
         support::finish(&mut owner, &mut driver, &wake)?;

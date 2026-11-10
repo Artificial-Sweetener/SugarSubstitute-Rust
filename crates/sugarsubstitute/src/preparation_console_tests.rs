@@ -89,7 +89,8 @@ fn native_output_updates_preserve_completed_status_frames() -> Result<(), Box<dy
             Some(store.snapshot_tail(1)?.into()),
         )?;
     }
-    let frame = support::poll(&mut driver)?.ok_or("Output discarded completed status pixels")?;
+    let frame =
+        support::poll(&mut driver, &wake)?.ok_or("Output discarded completed status pixels")?;
     assert_eq!(frame.identity(), original);
     assert_eq!(driver.console_binding, Some((store.resource(), 4)));
     drop((bootstrap, frame));

@@ -155,7 +155,7 @@ fn execution_start_and_shutdown_preserve_one_owned_lifetime() -> Result<(), Box<
     never_started.request_shutdown()?;
     assert!(never_started.poll_shutdown()?);
     never_started.finish_shutdown()?;
-    assert!(never_started.start(test_support::Wake::new()).is_err());
+    assert!(never_started.start(Arc::new(crate::completion_wake::Wake::default())).is_err());
     let mut demo = SplashDemo::new("en", Appearance::demo(), true)?;
     let wake = test_support::start(&mut demo)?;
     assert!(demo.start(wake.clone()).is_err());
