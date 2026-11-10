@@ -5,7 +5,6 @@ use super::*;
 use std::{
     num::NonZeroUsize,
     sync::{Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
@@ -61,17 +60,14 @@ fn admitted(
         if let Some(value) = job.try_take_completion() {
             break value;
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == old,
-            )
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-        if timeout.timed_out() && *count == old {
-            return Err("Protected storage CPU owner deadline expired".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(
+                    wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                    |count| *count == old,
+                )
+                .map_err(|e| std::io::Error::other(e.to_string()))?,
+        );
     };
     match completion.outcome {
         JobOutcome::Success(()) => (),

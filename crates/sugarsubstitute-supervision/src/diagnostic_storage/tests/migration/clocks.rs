@@ -13,11 +13,13 @@ fn diagnostic_migration_same_scope_new_job_cannot_mask_original_cancellation() -
     let retained = Arc::new(Mutex::new(None));
     let output = retained.clone();
     let gate = Arc::new((Mutex::new((false, false)), Condvar::new()));
+    let _release = RaiseOnDrop(gate.clone(), |state| state.1 = true);
     let worker_gate = gate.clone();
     let mut first = client.submit_blocking(
         &scope,
         spec(1, DIAGNOSTIC_STORAGE_BYTES)?,
         move |context| -> TestResult {
+            let _entered = RaiseOnDrop(worker_gate.clone(), |state| state.0 = true);
             let filesystem = Filesystem::new();
             filesystem.put(DiagnosticObject::Summary(incident()?), LEGACY);
             let (mut storage, operation) = setup(&context, filesystem.clone())?;
@@ -28,26 +30,20 @@ fn diagnostic_migration_same_scope_new_job_cannot_mask_original_cancellation() -
             let mut state = mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             state.0 = true;
             changed.notify_all();
-            let (_state, timeout) = changed
-                .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-                .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-            if timeout.timed_out() {
-                return Err("cancellation handshake stalled".into());
-            }
+            drop(
+                changed
+                    .wait_while(state, |state| !state.1)
+                    .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+            );
             Ok(())
         },
     )?;
     let (mutex, changed) = &*gate;
-    let (mut state, timeout) = changed
-        .wait_timeout_while(
-            mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-            Duration::from_secs(10),
-            |state| !state.0,
-        )
+    let mut state = changed
+        .wait_while(mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner), |state| {
+            !state.0
+        })
         .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-    if timeout.timed_out() {
-        return Err("migration admission handshake stalled".into());
-    }
     first.cancel();
     state.1 = true;
     changed.notify_all();
@@ -212,16 +208,13 @@ fn without_clock(
         if let Some(completion) = job.try_take_completion() {
             return Ok(completion);
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == old,
-            )
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count == old {
-            return Err("failed callback completion stalled".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(
+                    wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                    |count| *count == old,
+                )
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
     }
 }

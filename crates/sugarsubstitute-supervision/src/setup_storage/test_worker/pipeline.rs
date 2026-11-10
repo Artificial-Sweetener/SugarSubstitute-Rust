@@ -3,7 +3,6 @@
 //! Run successive storage phases under one actual execution admission ledger.
 use super::observation::Observation;
 use super::*;
-use std::time::Instant;
 use sugarsubstitute_contracts::execution::{AdmissionError, Scope};
 use sugarsubstitute_execution::ExecutionClient;
 type Failure = Box<dyn Error + Send + Sync>;
@@ -59,7 +58,7 @@ impl Pipeline {
     ) -> Result<T, Failure> {
         let id = self.admit(|_, _, id| Ok(id))?;
         let body = Arc::new(Mutex::new(Some(body)));
-        let observation = Observation::new(self.wake.clone(), Duration::from_secs(20));
+        let observation = Observation::new(self.wake.clone());
         let submit = || {
             let body = body.clone();
             let observed = observation.clone();
@@ -140,18 +139,17 @@ impl Pipeline {
         .map_err(|cause| Box::new(cause) as Failure)
     }
 
-    /// Observe the real owner's terminal delivery with a finite observer bound and native wake.
+    /// Observe the real owner's terminal delivery by blocking on its native wake.
     pub(crate) fn observe<T>(&self, poll: impl FnMut() -> Option<T>) -> Result<T, Failure> {
         self.observe_phase(None, poll)
     }
 
-    /// Native-return progress and pure admission/completion waits have distinct liveness bounds.
+    /// Block on completion wakes; an observed phase also rejects exhausted finite native work.
     fn observe_phase<T>(
         &self,
         observation: Option<&Observation>,
         mut poll: impl FnMut() -> Option<T>,
     ) -> Result<T, Failure> {
-        let until = Instant::now() + Duration::from_secs(20);
         loop {
             let revision = *crate::registry::lock(&self.wake.0);
             self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
@@ -161,17 +159,13 @@ impl Pipeline {
                 }
                 return Ok(completion);
             }
-            let remaining = if let Some(observation) = observation {
-                observation.remaining()?
-            } else {
-                until.checked_duration_since(Instant::now()).ok_or("Pipeline observer expired")?
-            };
+            if let Some(observation) = observation {
+                observation.check()?;
+            }
             drop(
                 self.wake
                     .1
-                    .wait_timeout_while(crate::registry::lock(&self.wake.0), remaining, |current| {
-                        *current == revision
-                    })
+                    .wait_while(crate::registry::lock(&self.wake.0), |current| *current == revision)
                     .map_err(|_| "Pipeline observer poisoned")?,
             );
         }

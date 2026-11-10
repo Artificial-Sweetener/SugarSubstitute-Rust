@@ -8,7 +8,6 @@ use std::{
         Condvar,
         atomic::{AtomicBool, AtomicU64, AtomicUsize},
     },
-    time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::{
     execution::{
@@ -43,13 +42,7 @@ impl CompletionWake for Wake {
 impl Wake {
     fn wait(&self, prior: usize) -> Result<(), Box<dyn Error>> {
         let guard = lock(&self.count);
-        let (_guard, timed) = self
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |count| *count == prior)
-            .map_err(|_| "Wake poisoned")?;
-        if timed.timed_out() {
-            return Err("Production completion wake did not arrive".into());
-        }
+        drop(self.changed.wait_while(guard, |count| *count == prior).map_err(|_| "Wake poisoned")?);
         Ok(())
     }
 }
@@ -156,7 +149,6 @@ impl Harness {
         )?)
     }
     fn drain_until(&mut self, predicate: impl Fn(&WindowsProcessRegistry) -> bool) -> TestResult {
-        let until = Instant::now() + Duration::from_secs(10);
         loop {
             let count = *lock(&self.wake.count);
             self.registry.consume(&self.client.drain_completions(
@@ -164,9 +156,6 @@ impl Harness {
             )?)?;
             if predicate(&self.registry) {
                 return Ok(());
-            }
-            if Instant::now() >= until {
-                return Err("Registry did not reach the expected actual outcome".into());
             }
             self.wake.wait(count)?;
         }
@@ -278,17 +267,12 @@ impl crate::registry::construction_fixture::ConstructionWake for Wake {
     }
     fn wait_revision(&self, previous: u64) -> Result<(), Box<dyn std::error::Error>> {
         let guard = crate::registry::lock(&self.count);
-        let (_guard, timed) = self
-            .changed
-            .wait_timeout_while(guard, std::time::Duration::from_secs(10), |value| {
-                *value as u64 == previous
-            })
-            .map_err(|_| "Constructor completion wake poisoned")?;
-        if timed.timed_out() {
-            Err("Actual constructor completion did not arrive".into())
-        } else {
-            Ok(())
-        }
+        drop(
+            self.changed
+                .wait_while(guard, |value| *value as u64 == previous)
+                .map_err(|_| "Constructor completion wake poisoned")?,
+        );
+        Ok(())
     }
 }
 

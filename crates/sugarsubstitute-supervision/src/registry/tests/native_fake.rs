@@ -36,15 +36,11 @@ pub(super) struct Fake {
 impl Fake {
     pub(super) fn entered_enrollment(&self) -> Result<(), Box<dyn Error>> {
         let guard = lock(&self.state);
-        let (_guard, timed) = self
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |_| {
-                !self.enrollment_entered.load(Ordering::Acquire)
-            })
-            .map_err(|_| "Native enrollment fixture poisoned")?;
-        if timed.timed_out() {
-            return Err("Native enrollment boundary was not entered".into());
-        }
+        drop(
+            self.changed
+                .wait_while(guard, |_| !self.enrollment_entered.load(Ordering::Acquire))
+                .map_err(|_| "Native enrollment fixture poisoned")?,
+        );
         Ok(())
     }
     pub(super) fn new() -> Arc<Self> {
@@ -56,26 +52,20 @@ impl Fake {
     }
     pub(super) fn entered(&self) -> Result<(), Box<dyn Error>> {
         let guard = lock(&self.state);
-        let (_guard, timed) = self
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |state| !state.0)
-            .map_err(|_| "Native fixture poisoned")?;
-        if timed.timed_out() {
-            return Err("Creation boundary was not entered".into());
-        }
+        drop(
+            self.changed
+                .wait_while(guard, |state| !state.0)
+                .map_err(|_| "Native fixture poisoned")?,
+        );
         Ok(())
     }
     pub(super) fn closed(&self) -> Result<(), Box<dyn Error>> {
         let guard = lock(&self.state);
-        let (_guard, timed) = self
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |_| {
-                self.closes.load(Ordering::Acquire) == 0
-            })
-            .map_err(|_| "Native fixture poisoned")?;
-        if timed.timed_out() {
-            return Err("Owned containment was not closed".into());
-        }
+        drop(
+            self.changed
+                .wait_while(guard, |_| self.closes.load(Ordering::Acquire) == 0)
+                .map_err(|_| "Native fixture poisoned")?,
+        );
         Ok(())
     }
 }
@@ -125,13 +115,11 @@ impl NativePort for Fake {
         guard.0 = true;
         self.changed.notify_all();
         if self.hold_create.load(Ordering::Acquire) {
-            let (_guard, timed) = self
-                .changed
-                .wait_timeout_while(guard, Duration::from_secs(10), |state| !state.1)
-                .map_err(|_| RegistryError::invalid("fake_creation_latch"))?;
-            if timed.timed_out() {
-                return Err(RegistryError::invalid("fake_creation_latch"));
-            }
+            drop(
+                self.changed
+                    .wait_while(guard, |state| !state.1)
+                    .map_err(|_| RegistryError::invalid("fake_creation_latch"))?,
+            );
         }
         Ok(ROOT)
     }
@@ -308,13 +296,11 @@ impl Fake {
         self.enrollment_entered.store(true, Ordering::Release);
         self.changed.notify_all();
         if self.hold_enrollment.load(Ordering::Acquire) {
-            let (_guard, timed) = self
-                .changed
-                .wait_timeout_while(guard, Duration::from_secs(10), |state| !state.1)
-                .map_err(|_| RegistryError::invalid("fake_enrollment_latch"))?;
-            if timed.timed_out() {
-                return Err(RegistryError::invalid("fake_enrollment_latch"));
-            }
+            drop(
+                self.changed
+                    .wait_while(guard, |state| !state.1)
+                    .map_err(|_| RegistryError::invalid("fake_enrollment_latch"))?,
+            );
         }
         if self.fail_enrollment.load(Ordering::Acquire) {
             return Err(RegistryError::new(

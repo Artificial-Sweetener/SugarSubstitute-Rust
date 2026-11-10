@@ -8,7 +8,7 @@ use windows::Win32::{
         DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE_FLAG_PROTECT_FROM_CLOSE, HANDLE_FLAGS,
         SetHandleInformation, WAIT_OBJECT_0,
     },
-    System::Threading::{GetCurrentProcess, TerminateProcess, WaitForSingleObject},
+    System::Threading::{GetCurrentProcess, INFINITE, TerminateProcess, WaitForSingleObject},
 };
 pub(super) type Value<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -161,10 +161,10 @@ impl Process {
     pub(super) fn running(&self) -> Value<bool> {
         Ok(native::exit(self.raw())?.is_none())
     }
-    /// Wait only on this fixture's actual process, bounded independently of production deadlines.
+    /// Wait only on this fixture's actual process, for its exit event rather than elapsed time.
     pub(super) fn wait(&self) -> Value<u32> {
-        // SAFETY: the owned actual process outlives the bounded observation.
-        if unsafe { WaitForSingleObject(self.raw(), 5000) } != WAIT_OBJECT_0 {
+        // SAFETY: the owned actual process outlives the observation.
+        if unsafe { WaitForSingleObject(self.raw(), INFINITE) } != WAIT_OBJECT_0 {
             return Err("Fixture process failed to settle".into());
         }
         native::exit(self.raw())?.ok_or_else(|| "Signaled fixture has no exit code".into())

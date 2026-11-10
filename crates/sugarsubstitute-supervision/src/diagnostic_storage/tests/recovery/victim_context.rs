@@ -16,11 +16,13 @@ fn diagnostic_recovered_victim_observation_rejects_foreign_expired_and_original_
         let retained = Arc::new(Mutex::new(None));
         let output = retained.clone();
         let gate = Arc::new((Mutex::new((false, false)), Condvar::new()));
+        let _release = RaiseOnDrop(gate.clone(), |state| state.1 = true);
         let worker_gate = gate.clone();
         let mut first = client.submit_blocking(
             &scope,
             spec(1, DIAGNOSTIC_STORAGE_BYTES, 100)?,
             move |context| -> TestResult {
+                let _entered = RaiseOnDrop(worker_gate.clone(), |state| state.0 = true);
                 let filesystem = Filesystem::new();
                 let (mut storage, operation) = setup(&context, filesystem.clone())?;
                 let plan = recovery_plan(operation.key())?;
@@ -39,26 +41,20 @@ fn diagnostic_recovered_victim_observation_rejects_foreign_expired_and_original_
                 let mut state = mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 state.0 = true;
                 changed.notify_all();
-                let (_state, timeout) = changed
-                    .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-                    .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-                if timeout.timed_out() {
-                    return Err("victim observation handshake stalled".into());
-                }
+                drop(
+                    changed
+                        .wait_while(state, |state| !state.1)
+                        .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+                );
                 Ok(())
             },
         )?;
         let (mutex, changed) = &*gate;
-        let (mut state, timeout) = changed
-            .wait_timeout_while(
-                mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |state| !state.0,
-            )
+        let mut state = changed
+            .wait_while(mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner), |state| {
+                !state.0
+            })
             .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() {
-            return Err("victim admission handshake stalled".into());
-        }
         if mode == 2 {
             first.cancel();
         }

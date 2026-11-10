@@ -130,10 +130,7 @@ fn failed_native_effect_preserves_original_cause_when_control_expires() -> TestR
 #[test]
 fn actual_scope_cancellation_reaches_retained_entries_before_observed_settlement() -> TestResult {
     use crate::setup_storage::test_worker::pipeline::Pipeline;
-    use std::{
-        sync::{Arc, Condvar, Mutex},
-        time::Duration,
-    };
+    use std::sync::{Arc, Condvar, Mutex};
     use sugarsubstitute_contracts::execution::{
         ExecutionPort, JobClass, JobOutcome, JobSpec, Moment, Operation,
     };
@@ -143,8 +140,19 @@ fn actual_scope_cancellation_reaches_retained_entries_before_observed_settlement
         ready: bool,
         release: bool,
     }
+    /// Complete one side of the handshake even when its owner returns early or unwinds, so a
+    /// failure on either side ends the test with its cause instead of stranding the other side.
+    struct Settle(Arc<(Mutex<Checkpoint>, Condvar)>, fn(&mut Checkpoint));
+    impl Drop for Settle {
+        fn drop(&mut self) {
+            let (lock, wake) = &*self.0;
+            (self.1)(&mut lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+            wake.notify_all();
+        }
+    }
     let mut pipeline = Pipeline::new()?;
     let checkpoint = Arc::new((Mutex::new(Checkpoint::default()), Condvar::new()));
+    let _release = Settle(checkpoint.clone(), |state| state.release = true);
     let observed = Arc::new(Mutex::new(None));
     let worker_checkpoint = checkpoint.clone();
     let worker_observed = observed.clone();
@@ -160,6 +168,7 @@ fn actual_scope_cancellation_reaches_retained_entries_before_observed_settlement
                 replacement: None,
             },
             move |context| {
+                let _ready = Settle(worker_checkpoint.clone(), |state| state.ready = true);
                 let result: TestResult = (|| {
                     let root = tempfile::tempdir()?;
                     fs::write(root.path().join("kept"), b"preserved")?;
@@ -170,14 +179,9 @@ fn actual_scope_cancellation_reaches_retained_entries_before_observed_settlement
                     let mut checkpoint = lock.lock().map_err(|_| "Checkpoint poisoned")?;
                     checkpoint.ready = true;
                     wake.notify_all();
-                    let (checkpoint, timeout) = wake
-                        .wait_timeout_while(checkpoint, Duration::from_secs(20), |state| {
-                            !state.release
-                        })
+                    let checkpoint = wake
+                        .wait_while(checkpoint, |state| !state.release)
                         .map_err(|_| "Checkpoint poisoned")?;
-                    if timeout.timed_out() {
-                        return Err("Original cancellation was not released".into());
-                    }
                     drop(checkpoint);
                     assert!(context.cancellation_requested());
                     assert_eq!(
@@ -206,12 +210,8 @@ fn actual_scope_cancellation_reaches_retained_entries_before_observed_settlement
     })?;
     let (lock, wake) = &*checkpoint;
     let checkpoint = lock.lock().map_err(|_| "Checkpoint poisoned")?;
-    let (mut checkpoint, timeout) = wake
-        .wait_timeout_while(checkpoint, Duration::from_secs(20), |state| !state.ready)
-        .map_err(|_| "Checkpoint poisoned")?;
-    if timeout.timed_out() {
-        return Err("Native enumeration did not reach its checkpoint".into());
-    }
+    let mut checkpoint =
+        wake.wait_while(checkpoint, |state| !state.ready).map_err(|_| "Checkpoint poisoned")?;
     pipeline.admit(|_, scope, _| {
         scope.cancel();
         Ok(())

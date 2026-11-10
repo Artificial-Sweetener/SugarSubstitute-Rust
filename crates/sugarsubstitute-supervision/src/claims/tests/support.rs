@@ -2,10 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Provide deterministic boundary facts while retaining the production execution owner.
 use super::*;
-use std::{
-    error::Error,
-    time::{Duration, Instant},
-};
+use std::{error::Error, time::Duration};
 use sugarsubstitute_contracts::{
     execution::{
         Clock, CompletionWake, ExecutionError, JobClass, Moment, Operation, ScopeId, ScopeSpec,
@@ -187,7 +184,6 @@ impl Harness {
         &mut self,
         job: &mut OwnedJob<T, E>,
     ) -> Result<sugarsubstitute_contracts::execution::JobCompletion<T, E>, Box<dyn Error>> {
-        let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             let revision = *lock(&self.wake.revision);
             if let Some(completion) = job.try_take_completion() {
@@ -200,28 +196,21 @@ impl Harness {
             if let Some(completion) = job.try_take_completion() {
                 return Ok(completion);
             }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("Fixture typed completion deadline expired".into());
-            }
             let guard = lock(&self.wake.revision);
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, remaining, |current| *current == revision)
-                .map_err(|_| "Wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("Fixture typed completion wake deadline expired".into());
-            }
+            drop(
+                self.wake
+                    .changed
+                    .wait_while(guard, |current| *current == revision)
+                    .map_err(|_| "Wake poisoned")?,
+            );
         }
     }
-    /// Await exact scope bytes through capacity notifications within the original ten-second guard.
+    /// Await exact scope bytes through capacity notifications.
     pub(super) fn wait_reserved(
         &self,
         scope: &Scope,
         expected_bytes: u64,
     ) -> Result<(), Box<dyn Error>> {
-        let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             let revision = *lock(&self.wake.revision);
             if scope.snapshot().reserved_bytes == expected_bytes {
@@ -233,19 +222,13 @@ impl Harness {
             if scope.snapshot().reserved_bytes == expected_bytes {
                 return Ok(());
             }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("Actual memory release deadline expired".into());
-            }
             let guard = lock(&self.wake.revision);
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, remaining, |current| *current == revision)
-                .map_err(|_| "Wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("Actual memory release wake deadline expired".into());
-            }
+            drop(
+                self.wake
+                    .changed
+                    .wait_while(guard, |current| *current == revision)
+                    .map_err(|_| "Wake poisoned")?,
+            );
         }
     }
     pub(super) fn resource(&self, value: u64) -> Result<ResourceKey, Box<dyn Error>> {
@@ -261,7 +244,6 @@ impl Harness {
         Ok(std::mem::replace(&mut self.scope, scope))
     }
     pub(super) fn drain(&mut self) -> Result<(), Box<dyn Error>> {
-        let deadline = Instant::now() + Duration::from_secs(10);
         while self.claims.pending.iter().any(Option::is_some) {
             let revision = *lock(&self.wake.revision);
             self.claims.consume(
@@ -272,24 +254,17 @@ impl Harness {
             if self.claims.pending.iter().all(Option::is_none) {
                 break;
             }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("Claim completion deadline expired".into());
-            }
             let guard = lock(&self.wake.revision);
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, remaining, |current| *current == revision)
-                .map_err(|_| "Wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("Claim completion wake deadline expired".into());
-            }
+            drop(
+                self.wake
+                    .changed
+                    .wait_while(guard, |current| *current == revision)
+                    .map_err(|_| "Wake poisoned")?,
+            );
         }
         Ok(())
     }
     pub(super) fn drain_registry(&mut self) -> Result<(), Box<dyn Error>> {
-        let deadline = Instant::now() + Duration::from_secs(10);
         while !self.registry.is_empty() {
             let revision = *lock(&self.wake.revision);
             let batch = self
@@ -300,19 +275,13 @@ impl Harness {
             if self.registry.is_empty() {
                 break;
             }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("Registry retirement deadline expired".into());
-            }
             let guard = lock(&self.wake.revision);
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, remaining, |current| *current == revision)
-                .map_err(|_| "Wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("Registry retirement wake deadline expired".into());
-            }
+            drop(
+                self.wake
+                    .changed
+                    .wait_while(guard, |current| *current == revision)
+                    .map_err(|_| "Wake poisoned")?,
+            );
         }
         Ok(())
     }

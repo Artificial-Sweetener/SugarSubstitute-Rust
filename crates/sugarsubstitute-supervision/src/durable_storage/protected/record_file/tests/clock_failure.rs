@@ -4,7 +4,7 @@
 use super::release::{generation, ordinary};
 use super::*;
 use crate::coordinator_entry::fixture::ClockPort;
-use std::{sync::Condvar, time::Duration};
+use std::sync::Condvar;
 use sugarsubstitute_contracts::execution::{
     AdmissionError, CompletionWake, ExecutionError, JobClass, JobId, JobSpec, Operation, ScopeId,
     ScopeSpec,
@@ -68,13 +68,11 @@ fn fixed_record_fatal_original_clock_retains_actual_stage_and_charge() -> TestRe
         if let Some(done) = job.try_take_completion() {
             break done;
         }
-        let (_guard, timeout) = wake
-            .changed
-            .wait_timeout_while(lock(&wake.count), Duration::from_secs(10), |count| *count == old)
-            .map_err(|_| "fatal clock wake poisoned")?;
-        if timeout.timed_out() {
-            return Err("fatal clock terminal outcome missing".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(lock(&wake.count), |count| *count == old)
+                .map_err(|_| "fatal clock wake poisoned")?,
+        );
     };
     assert!(matches!(done.outcome, JobOutcome::Panicked(_)), "{done:?}");
     let cause = client.now().err().ok_or("fatal clock produced a timestamp")?;

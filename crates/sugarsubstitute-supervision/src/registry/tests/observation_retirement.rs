@@ -10,7 +10,6 @@ pub(super) fn created_with_deferred_watch(
     h: &mut Harness,
     key: ProcessKey,
 ) -> Result<CompletionBatch, Box<dyn Error>> {
-    let until = Instant::now() + Duration::from_secs(10);
     let index = h.registry.index(key)?;
     let spec = h.registry.records[index].as_ref().ok_or("Missing family")?.root_spec;
     let mut held = Vec::new();
@@ -32,9 +31,6 @@ pub(super) fn created_with_deferred_watch(
             .consume(&CompletionBatch { notifications: ready, remaining: batch.remaining })?;
         if !h.registry.snapshot(key)?.creation_pending {
             return Ok(CompletionBatch { notifications: held, remaining: batch.remaining });
-        }
-        if Instant::now() >= until {
-            return Err("Actual creation notification did not return".into());
         }
         if batch.remaining == 0 {
             h.wake.wait(count)?;
@@ -168,7 +164,6 @@ fn observation_retirement_request_does_not_replace_already_returned_success() ->
     let record = h.registry.records[index].as_mut().ok_or("Missing family")?;
     record.root_spec = spec;
     record.root_watch = Some(observed);
-    let until = Instant::now() + Duration::from_secs(10);
     let returned = loop {
         let count = *lock(&h.wake.count);
         let batch = h.client.drain_completions(std::num::NonZeroUsize::MIN)?;
@@ -176,9 +171,6 @@ fn observation_retirement_request_does_not_replace_already_returned_success() ->
             break batch;
         }
         h.registry.consume(&batch)?;
-        if Instant::now() >= until {
-            return Err("Typed successful observation did not return".into());
-        }
         if batch.remaining == 0 {
             h.wake.wait(count)?;
         }

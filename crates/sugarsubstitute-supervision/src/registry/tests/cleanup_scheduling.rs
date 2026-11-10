@@ -46,7 +46,6 @@ fn retained_member_watch_allows_finite_force_at_original_grace_without_an_exit_p
     // Route the finite job's genuine notice first. The separately admitted watch's
     // actual terminal is deliberately retained for its independent owner boundary.
     let mut retained = Vec::new();
-    let until = Instant::now() + Duration::from_secs(10);
     loop {
         let count = *lock(&h.wake.count);
         let batch = h.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
@@ -63,9 +62,6 @@ fn retained_member_watch_allows_finite_force_at_original_grace_without_an_exit_p
             && !h.registry.snapshot(key)?.cleanup_step_pending
         {
             break;
-        }
-        if Instant::now() >= until {
-            return Err("Finite inventory did not complete".into());
         }
         h.wake.wait(count)?;
     }

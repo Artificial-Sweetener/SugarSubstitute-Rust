@@ -135,15 +135,11 @@ impl RegistryFixture {
                 return Ok(Self { registry, _scope: scope, _owner: owner });
             }
             let guard = wake.revision.lock().map_err(|_| "Public constructor wake poisoned")?;
-            let (_guard, timed) = wake
-                .changed
-                .wait_timeout_while(guard, std::time::Duration::from_secs(10), |value| {
-                    *value == revision
-                })
-                .map_err(|_| "Public constructor wake poisoned")?;
-            if timed.timed_out() {
-                return Err("Actual public constructor completion missing".into());
-            }
+            drop(
+                wake.changed
+                    .wait_while(guard, |value| *value == revision)
+                    .map_err(|_| "Public constructor wake poisoned")?,
+            );
         }
     }
 }

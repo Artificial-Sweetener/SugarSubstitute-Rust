@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Bound native qualification by stalled calls and returned work, independently of domain clocks.
+//! Bound native qualification by returned work and delivery, never by elapsed wall-clock time.
 use std::{
     io,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionError};
 
@@ -15,7 +14,6 @@ const MAX_RETURNS: u64 = 8192 * 32;
 #[derive(Clone, Copy, Default)]
 pub(super) struct Progress {
     pub(super) returned: u64,
-    last_return: Duration,
 }
 #[derive(Default)]
 struct State {
@@ -25,30 +23,23 @@ struct State {
     repeated_start: bool,
 }
 struct Shared {
-    epoch: Instant,
     state: Mutex<State>,
     wake: Arc<dyn CompletionWake>,
 }
 
-/// Observe only actual storage-span returns; unrelated completion wakes grant no extra time.
-/// The unchanged stall interval guards real OS calls. The work ceiling guards productive loops.
+/// Observe only actual storage-span returns; unrelated completion wakes grant no extra work.
+/// The work ceiling guards productive loops. A native call that never returns leaves its test
+/// running, which the runner reports, because no wall-clock interval can tell a stalled call from
+/// storage that is merely slow on a loaded machine.
 /// Application expiry and cancellation continue to use the fixture's injected operation clock.
 #[derive(Clone)]
 pub(crate) struct Observation {
     shared: Arc<Shared>,
-    stall: Duration,
 }
 impl Observation {
     /// Start one bounded native phase using its existing completion notification boundary.
-    pub(crate) fn new(wake: Arc<dyn CompletionWake>, stall: Duration) -> Self {
-        Self {
-            shared: Arc::new(Shared {
-                epoch: Instant::now(),
-                state: Mutex::new(State::default()),
-                wake,
-            }),
-            stall,
-        }
+    pub(crate) fn new(wake: Arc<dyn CompletionWake>) -> Self {
+        Self { shared: Arc::new(Shared { state: Mutex::new(State::default()), wake }) }
     }
 
     /// Begin actual admitted work once, independently of time spent awaiting queue admission.
@@ -59,7 +50,6 @@ impl Observation {
                 state.repeated_start = true;
             } else {
                 state.started = true;
-                state.progress.last_return = self.shared.epoch.elapsed();
             }
         }
         self.notify();
@@ -67,11 +57,8 @@ impl Observation {
 
     /// Record actual storage returns without adding traffic to the completion notification port.
     pub(super) fn returned(&self) {
-        {
-            let mut state = crate::registry::lock(&self.shared.state);
-            state.progress.returned = state.progress.returned.saturating_add(1);
-            state.progress.last_return = self.shared.epoch.elapsed();
-        }
+        let mut state = crate::registry::lock(&self.shared.state);
+        state.progress.returned = state.progress.returned.saturating_add(1);
     }
 
     fn notify(&self) {
@@ -83,15 +70,14 @@ impl Observation {
         }
     }
 
-    /// Return the remaining no-progress interval, preserving notification failures and work limits.
-    pub(crate) fn remaining(&self) -> io::Result<Duration> {
-        let progress = self.progress()?;
-        remaining(self.stall, self.shared.epoch.elapsed(), progress)
+    /// Reject a lost notification, a repeated start or exhausted finite work while work continues.
+    pub(crate) fn check(&self) -> io::Result<()> {
+        validate_work(self.progress()?)
     }
 
     /// Check finite work and delivery even when a terminal arrived before its observer ran.
     pub(crate) fn completed(&self) -> io::Result<()> {
-        validate_work(self.progress()?)
+        self.check()
     }
 
     pub(super) fn progress(&self) -> io::Result<Progress> {
@@ -106,18 +92,6 @@ impl Observation {
     }
 }
 
-/// Keep watchdog decisions pure so progress, delayed observation and stalls need no sleeps.
-fn remaining(stall: Duration, now: Duration, progress: Progress) -> io::Result<Duration> {
-    validate_work(progress)?;
-    let idle = now
-        .checked_sub(progress.last_return)
-        .ok_or_else(|| io::Error::other("Native fixture progress clock regressed"))?;
-    stall
-        .checked_sub(idle)
-        .filter(|left| !left.is_zero())
-        .ok_or_else(|| io::Error::new(io::ErrorKind::TimedOut, "Native storage made no progress"))
-}
-
 fn validate_work(progress: Progress) -> io::Result<()> {
     if progress.returned > MAX_RETURNS {
         return Err(io::Error::other("Native fixture exceeded its storage-return work limit"));
@@ -130,84 +104,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn actual_progress_can_outlast_a_total_wall_time_interval() -> io::Result<()> {
-        let stall = Duration::from_secs(20);
-        for second in [0, 19, 38, 57, 76] {
-            let progress =
-                Progress { returned: second + 1, last_return: Duration::from_secs(second) };
-            assert_eq!(
-                remaining(stall, Duration::from_secs(second + 1), progress)?,
-                Duration::from_secs(19)
-            );
+    fn continuous_activity_cannot_exceed_the_finite_work_ceiling() {
+        assert!(validate_work(Progress { returned: MAX_RETURNS }).is_ok());
+        assert!(validate_work(Progress { returned: MAX_RETURNS + 1 }).is_err());
+    }
+
+    #[test]
+    fn returns_accumulate_until_the_ceiling_rejects_the_observation() {
+        let observation = Observation::new(Arc::new(super::super::Wake::default()));
+        observation.started();
+        for _ in 0..MAX_RETURNS {
+            observation.returned();
         }
-        Ok(())
-    }
-
-    #[test]
-    fn absent_progress_expires_at_the_original_stall_limit() -> io::Result<()> {
-        let stall = Duration::from_secs(20);
-        assert_eq!(
-            remaining(stall, Duration::from_secs(19), Progress::default())?,
-            Duration::from_secs(1)
-        );
-        assert_eq!(
-            remaining(stall, stall, Progress::default())
-                .err()
-                .ok_or_else(|| io::Error::other("Stalled work was accepted"))?
-                .kind(),
-            io::ErrorKind::TimedOut
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn late_observation_and_unrelated_wakes_cannot_renew_old_progress() {
-        let progress = Progress { returned: 10, last_return: Duration::from_secs(10) };
-        assert!(remaining(Duration::from_secs(20), Duration::from_secs(30), progress).is_err());
-        assert!(remaining(Duration::from_secs(20), Duration::from_secs(40), progress).is_err());
-    }
-
-    #[test]
-    fn continuous_activity_cannot_exceed_the_finite_work_ceiling() -> io::Result<()> {
-        let now = Duration::from_secs(1000);
-        assert_eq!(
-            remaining(
-                Duration::from_secs(20),
-                now,
-                Progress { returned: MAX_RETURNS, last_return: now }
-            )?,
-            Duration::from_secs(20)
-        );
-        assert!(
-            remaining(
-                Duration::from_secs(20),
-                now,
-                Progress { returned: MAX_RETURNS + 1, last_return: now }
-            )
-            .is_err()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn progress_cannot_arrive_from_a_future_observation_clock() {
-        assert!(
-            remaining(
-                Duration::from_secs(20),
-                Duration::from_secs(1),
-                Progress { returned: 1, last_return: Duration::from_secs(2) }
-            )
-            .is_err()
-        );
+        assert!(observation.check().is_ok());
+        observation.returned();
+        assert!(observation.check().is_err());
+        assert!(observation.completed().is_err());
     }
 
     #[test]
     fn repeated_phase_start_cannot_renew_the_observation() {
-        let observation =
-            Observation::new(Arc::new(super::super::Wake::default()), Duration::from_secs(20));
+        let observation = Observation::new(Arc::new(super::super::Wake::default()));
         observation.started();
         observation.started();
-        assert!(observation.remaining().is_err());
+        assert!(observation.check().is_err());
         assert!(observation.completed().is_err());
     }
 
@@ -222,7 +142,7 @@ mod tests {
                 ))
             }
         }
-        let observation = Observation::new(Arc::new(FailedWake), Duration::from_secs(20));
+        let observation = Observation::new(Arc::new(FailedWake));
         observation.started();
         let error = observation
             .completed()

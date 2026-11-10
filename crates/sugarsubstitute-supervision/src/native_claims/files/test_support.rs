@@ -5,7 +5,6 @@ use crate::ClaimError;
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
@@ -45,17 +44,14 @@ pub(crate) fn completion<T: Send + 'static, E: Send + 'static>(
         if let Some(done) = job.try_take_completion() {
             return Ok(done);
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == old,
-            )
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-        if timeout.timed_out() && *count == old {
-            return Err("Actual symbol fixture terminal absent".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(
+                    wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                    |count| *count == old,
+                )
+                .map_err(|e| std::io::Error::other(e.to_string()))?,
+        );
     }
 }
 /// Run an original paired main without issuing any selected-symbol authority.

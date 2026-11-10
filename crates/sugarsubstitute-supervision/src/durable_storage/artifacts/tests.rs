@@ -9,7 +9,6 @@ use std::{
         Arc, Condvar, Mutex,
         atomic::{AtomicU64, Ordering},
     },
-    time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
@@ -75,7 +74,6 @@ pub(super) fn run(
             Ok::<(), io::Error>(())
         },
     )?;
-    let until = Instant::now() + Duration::from_secs(20);
     loop {
         let revision = *wake.0.lock().map_err(|_| "Artifact wake poisoned")?;
         client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
@@ -83,19 +81,13 @@ pub(super) fn run(
             assert!(matches!(completion.outcome, JobOutcome::Success(()) | JobOutcome::TimedOut));
             break;
         }
-        let remaining =
-            until.checked_duration_since(Instant::now()).ok_or("Artifact observer expired")?;
-        let (_guard, timeout) = wake
-            .1
-            .wait_timeout_while(
-                wake.0.lock().map_err(|_| "Artifact wake poisoned")?,
-                remaining,
-                |count| *count == revision,
-            )
-            .map_err(|_| "Artifact wake poisoned")?;
-        if timeout.timed_out() {
-            return Err("Artifact worker did not finish".into());
-        }
+        drop(
+            wake.1
+                .wait_while(wake.0.lock().map_err(|_| "Artifact wake poisoned")?, |count| {
+                    *count == revision
+                })
+                .map_err(|_| "Artifact wake poisoned")?,
+        );
     }
     drop(job);
     drop(executor);

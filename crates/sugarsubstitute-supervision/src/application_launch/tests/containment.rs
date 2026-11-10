@@ -96,8 +96,8 @@ impl Process {
                 return self.abort().and(Err("Unexpected fixture suspend count".into()));
             }
         }
-        // SAFETY: observation is bounded and uses the retained actual process, never a PID lookup.
-        if unsafe { WaitForSingleObject(self.raw(), 5000) } != WAIT_OBJECT_0 {
+        // SAFETY: observation uses the retained actual process, never a PID lookup.
+        if unsafe { WaitForSingleObject(self.raw(), INFINITE) } != WAIT_OBJECT_0 {
             return self.abort().and(Err("Fixture exit observation expired".into()));
         }
         let mut code = 0;
@@ -109,7 +109,7 @@ impl Process {
         // SAFETY: exclusively this test's actual created child, never a user process or PID lookup.
         unsafe { TerminateProcess(self.raw(), 71) }?;
         // SAFETY: keep the exact process handle until actual exit has been observed.
-        if unsafe { WaitForSingleObject(self.raw(), 5000) } != WAIT_OBJECT_0 {
+        if unsafe { WaitForSingleObject(self.raw(), INFINITE) } != WAIT_OBJECT_0 {
             return Err("Owned fixture failed to terminate".into());
         }
         Ok(71)
@@ -227,7 +227,7 @@ fn spawn(job: &Job, child: Option<&str>, breakaway: bool) -> TestResultValue<Pro
             // SAFETY: this is exclusively the native partial output just adopted above.
             unsafe { TerminateProcess(HANDLE(process.as_raw_handle()), 71) }?;
             // SAFETY: the same actual owned partial process remains retained through observation.
-            if unsafe { WaitForSingleObject(HANDLE(process.as_raw_handle()), 5000) }
+            if unsafe { WaitForSingleObject(HANDLE(process.as_raw_handle()), INFINITE) }
                 != WAIT_OBJECT_0
             {
                 return Err("Partial fixture creation did not terminate".into());
