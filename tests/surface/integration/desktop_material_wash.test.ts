@@ -170,6 +170,38 @@ describe.each([
         expect(samples.duration).toBe(220);
         expect(samples.retained).toBe(true);
       }
+      // Substitute faded the wash only over the stack's live geometry: the body the rail grows
+      // into keeps its full wash, and the rail's edge and the aperture's edge travel together.
+      const expandedAt = async (time: number): Promise<string> =>
+        page.evaluate((at) => {
+          const main = document.querySelector('main')!;
+          document.dispatchEvent(new CustomEvent('stack-density', { detail: true }));
+          main.getAnimations()[0]?.finish();
+          document.dispatchEvent(new CustomEvent('stack-density', { detail: false }));
+          const animation = main.getAnimations()[0]!;
+          animation.pause();
+          animation.currentTime = at;
+          return getComputedStyle(document.querySelector('.sc-cube-stack')!).width;
+        }, time);
+      const halfWashed = base.map((value) =>
+        Math.round(value * (1 - alpha / 2) + (dark ? 32 : 251) * (alpha / 2)),
+      );
+      const expectPainted = async (x: number, expected: number[]): Promise<void> => {
+        for (const [channel, value] of (await painted(x)).entries())
+          expect(Math.abs(value - expected[channel]!)).toBeLessThanOrEqual(1);
+      };
+      const startWidth = await expandedAt(0);
+      expect(await painted(20)).toEqual(base);
+      await expectPainted(150, washed);
+      expect(startWidth).toBe('58px');
+      const midpointWidth = await expandedAt(110);
+      await expectPainted(100, halfWashed);
+      await expectPainted(180, washed);
+      expect(midpointWidth).toBe('141px');
+      expect(await expandedAt(220)).toBe('224px');
+      await expectPainted(150, washed);
+      await expectPainted(20, washed);
+      await page.evaluate(() => document.querySelector('main')!.getAnimations()[0]?.finish());
       expect(
         await page.evaluate(() => {
           const main = document.querySelector('main')!;
