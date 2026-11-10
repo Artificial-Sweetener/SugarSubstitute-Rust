@@ -41,17 +41,14 @@ impl DisposalGate {
         }
     }
 
-    /// Bound fixture failure without using elapsed time to infer worker entry.
-    fn wait_until_entered(&self) -> Result<(), Box<dyn Error>> {
+    /// Wait for the worker's published entry rather than inferring it from elapsed time.
+    fn wait_until_entered(&self) {
         let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.0)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && !state.0 {
-            return Err("Source disposal worker did not enter".into());
-        }
-        Ok(())
+        drop(
+            self.changed
+                .wait_while(state, |state| !state.0)
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
     }
 
     /// Permit the worker to dispose of its original payload; repeated release is harmless.
@@ -123,7 +120,7 @@ impl Fixture {
             client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
             session.poll(Duration::ZERO)?;
             if session.resources.is_none() {
-                wake.wait_after(observed)?;
+                wake.wait_after(observed);
             }
         }
         Ok(Self { session, clock, wake, owner, client, _directory: directory })
@@ -166,9 +163,7 @@ impl Fixture {
             {
                 return Ok(());
             }
-            self.wake
-                .wait_after(observed)
-                .map_err(|cause| format!("Canvas source loading: {cause}"))?;
+            self.wake.wait_after(observed);
         }
     }
 
@@ -184,33 +179,10 @@ impl Fixture {
             if self.session.settled().map_err(|cause| format!("Canvas settlement: {cause}"))? {
                 break;
             }
-            self.wake
-                .wait_after(observed)
-                .map_err(|cause| format!("Canvas scope settlement: {cause}"))?;
+            self.wake.wait_after(observed);
         }
         let finished = self.session.finish().map_err(|cause| format!("Canvas finish: {cause}"));
-        self.owner.request_shutdown(cutoff);
-        let deadline = std::time::Instant::now()
-            .checked_add(Duration::from_secs(10))
-            .ok_or("Execution shutdown deadline overflow")?;
-        loop {
-            self.client
-                .drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))
-                .map_err(|cause| format!("Execution completion drain: {cause}"))?;
-            if self
-                .owner
-                .poll_shutdown()
-                .map_err(|cause| format!("Execution settlement: {cause}"))?
-                .settled
-            {
-                break;
-            }
-            if std::time::Instant::now() >= deadline {
-                return Err("Shared execution did not settle".into());
-            }
-            std::hint::spin_loop();
-        }
-        self.owner.finish_shutdown()?;
+        self.wake.finish_shutdown(&mut self.owner, &self.client, cutoff)?;
         finished?;
         Ok(self._directory)
     }
@@ -379,7 +351,7 @@ fn completed_initialization_waits_for_existing_source_disposal_during_shutdown()
         )?
     };
     fixture.session.retirement = Some(source_retirement);
-    disposal.wait_until_entered()?;
+    disposal.wait_until_entered();
 
     let anchor = fixture._directory.path().join("second-cache");
     let scope = &fixture.session.runtime.as_ref().ok_or("Canvas scope absent")?.scope;
@@ -399,7 +371,7 @@ fn completed_initialization_waits_for_existing_source_disposal_during_shutdown()
             assert_eq!(kind, TerminalKind::Success);
             break;
         }
-        fixture.wake.wait_after(observed)?;
+        fixture.wake.wait_after(observed);
     }
     fixture.session.initializing = Some(initialization);
     fixture.session.close_until(Moment::from_nanos(10_000_000_000))?;

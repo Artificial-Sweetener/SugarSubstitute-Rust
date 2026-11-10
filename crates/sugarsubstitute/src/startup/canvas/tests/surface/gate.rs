@@ -13,9 +13,6 @@ use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_image_io::ImageSource;
 use sugarsubstitute_supervision::cache::RuntimeCache;
 
-/// Bound for one gate wait, so a broken ordering fails rather than stalls a worker forever.
-const GATE_WAIT: Duration = Duration::from_secs(10);
-
 #[derive(Default)]
 struct State {
     entered: bool,
@@ -58,6 +55,14 @@ impl Gate {
         self.changed.notify_all();
     }
 
+    /// Let a blocked acquisition that ignores cancellation return; a cooperative gate stops on
+    /// cancellation instead, so closing the canvas settles it.
+    pub(super) fn release_if_uncooperative(&self) {
+        if !self.cooperative {
+            self.release();
+        }
+    }
+
     /// Report whether a worker actually entered the acquisition.
     pub(super) fn entered(&self) -> bool {
         self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).entered
@@ -97,17 +102,14 @@ impl SourceAcquirer for Gate {
         let mut state = self.state.lock().map_err(|_| io::Error::other("Gate state poisoned"))?;
         state.entered = true;
         self.wake.wake().map_err(io::Error::other)?;
-        let (mut state, timeout) = self
+        let mut state = self
             .changed
-            .wait_timeout_while(state, GATE_WAIT, |state| !state.released && !self.stopped(state))
+            .wait_while(state, |state| !state.released && !self.stopped(state))
             .map_err(|_| io::Error::other("Gate state poisoned"))?;
         state.returned = true;
         self.wake.wake().map_err(io::Error::other)?;
         if self.stopped(&state) {
             return Err(io::ErrorKind::Interrupted.into());
-        }
-        if timeout.timed_out() && !state.released {
-            return Err(io::ErrorKind::TimedOut.into());
         }
         state.settled = true;
         Ok(SelectedOriginals::single(ImageSource::file(self.path.clone())))

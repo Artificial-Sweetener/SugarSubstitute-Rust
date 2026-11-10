@@ -27,12 +27,7 @@ impl Fixture {
         }
         let scope = self.session.runtime.as_ref().ok_or("Runtime absent")?.scope.snapshot();
         if scope.running + scope.queued > 0 {
-            self.wake.wait_after(observed).map_err(|cause| {
-                format!(
-                    "Pending route worker snapshot={:?}: {cause}",
-                    self.session.native_preparation_snapshot()
-                )
-            })?;
+            self.wake.wait_after(observed);
         }
         Ok(())
     }
@@ -199,7 +194,7 @@ fn stale_completed_input_draw_keeps_storage_for_the_next_output() -> Result<(), 
             {
                 break;
             }
-            fixture.wake.wait_after(observed)?;
+            fixture.wake.wait_after(observed);
         }
 
         // The worker really finished, but source replacement precedes coordinator publication.

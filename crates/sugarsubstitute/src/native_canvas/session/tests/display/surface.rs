@@ -141,7 +141,7 @@ fn selection_cancel_rejects_an_already_completed_display_before_native_publicati
         if matches!(drawing.job.status().phase, JobPhase::Terminal(TerminalKind::Success)) {
             break;
         }
-        fixture.wake.wait_after(observed)?;
+        fixture.wake.wait_after(observed);
     }
     fixture.session.cancel_selection()?;
     consume(&mut fixture.session, &fixture.wake)?;

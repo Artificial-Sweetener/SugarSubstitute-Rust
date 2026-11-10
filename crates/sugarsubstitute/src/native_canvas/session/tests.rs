@@ -312,7 +312,7 @@ fn empty_viewer_releases_picker_before_any_frame_or_gpu_completion() -> Result<(
         let observed = wake.revision();
         session.poll(Duration::ZERO)?;
         if session.resources.is_none() {
-            wake.wait_after(observed)?;
+            wake.wait_after(observed);
         }
     }
     assert!(session.document.front.is_none());
@@ -330,7 +330,7 @@ fn empty_viewer_releases_picker_before_any_frame_or_gpu_completion() -> Result<(
         let observed = wake.revision();
         session.poll(Duration::ZERO)?;
         if !session.shutdown_started {
-            wake.wait_after(observed)?;
+            wake.wait_after(observed);
         }
     }
     drop(session.runtime.take().ok_or("Execution missing")?);

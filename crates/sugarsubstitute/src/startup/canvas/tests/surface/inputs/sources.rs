@@ -151,11 +151,7 @@ fn watching_reports_each_changed_document_revision() -> Result<(), Box<dyn Error
     let appearance = json!({"type":"appearance", "workflow":WORKFLOW, "masks":[
         {"surface":"image", "mask":"painted", "color":"#123456", "opacity":0.25}]});
     inputs.workflow(appearance)?;
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while inputs.changes.len() == before {
-        assert!(Instant::now() < deadline, "No source change was reported");
-        inputs.ask("context.request", None)?;
-    }
+    inputs.until("No source change was reported", |inputs| inputs.changes.len() > before)?;
     let change = &inputs.changes[before];
     assert_eq!(change["type"], "source.changed");
     assert_eq!(change["requestId"], 0);
@@ -189,21 +185,18 @@ fn previews_follow_a_stroke_while_it_is_drawn_and_watching_reports_each_step()
     let before = inputs.changes.len();
     inputs.drag(&[[2.0, 3.0], [6.0, 3.0]])?;
     // While the button is still pressed, the canvas shows the staged stroke.
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let staged = loop {
-        let latest = inputs.changes[before..]
+    let staged_step = |inputs: &Inputs| {
+        inputs.changes[before..]
             .iter()
             .rev()
             .find(|change| change["change"]["documentId"] == image["document"]["id"])
-            .cloned();
-        if let Some(change) = latest.filter(|change| {
-            change["change"]["revision"].as_str().is_some_and(|text| text.contains('+'))
-        }) {
-            break change;
-        }
-        assert!(Instant::now() < deadline, "No staged stroke step was reported");
-        inputs.ask("context.request", None)?;
+            .filter(|change| {
+                change["change"]["revision"].as_str().is_some_and(|text| text.contains('+'))
+            })
+            .cloned()
     };
+    inputs.until("No staged stroke step was reported", |inputs| staged_step(inputs).is_some())?;
+    let staged = staged_step(&inputs).ok_or("The staged stroke step vanished")?;
     let drawing = preview(&mut inputs)?;
     assert_ne!(drawing["pixels"], blank["pixels"], "the preview shows the stroke being drawn");
     assert_eq!(drawing["revision"], blank["revision"], "the stroke is not yet published");
@@ -212,14 +205,11 @@ fn previews_follow_a_stroke_while_it_is_drawn_and_watching_reports_each_step()
     // Releasing publishes it; watching reports the new published revision without a step.
     let reported = inputs.changes.len();
     inputs.release()?;
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !inputs.changes[reported..]
-        .iter()
-        .any(|change| change["change"]["revision"].as_str().is_some_and(|text| !text.contains('+')))
-    {
-        assert!(Instant::now() < deadline, "The published stroke was not reported: {staged}");
-        inputs.ask("context.request", None)?;
-    }
+    inputs.until(&format!("The published stroke was not reported: {staged}"), |inputs| {
+        inputs.changes[reported..].iter().any(|change| {
+            change["change"]["revision"].as_str().is_some_and(|text| !text.contains('+'))
+        })
+    })?;
     let published = preview(&mut inputs)?;
     assert_ne!(published["revision"], blank["revision"]);
     assert_eq!(published["pixels"], drawing["pixels"]);
@@ -239,15 +229,9 @@ fn watching_reports_a_document_the_input_route_shows_again() -> Result<(), Box<d
                  since: usize,
                  document: &Value|
      -> Result<(), Box<dyn Error>> {
-        let deadline = Instant::now() + Duration::from_secs(30);
-        while !inputs.changes[since..]
-            .iter()
-            .any(|change| change["change"]["documentId"] == *document)
-        {
-            assert!(Instant::now() < deadline, "No change named {document}: {:?}", inputs.changes);
-            inputs.ask("context.request", None)?;
-        }
-        Ok(())
+        inputs.until(&format!("No change named {document}"), |inputs| {
+            inputs.changes[since..].iter().any(|change| change["change"]["documentId"] == *document)
+        })
     };
     let hidden = inputs.changes.len();
     inputs.workflow(activate(None, None, "output"))?;

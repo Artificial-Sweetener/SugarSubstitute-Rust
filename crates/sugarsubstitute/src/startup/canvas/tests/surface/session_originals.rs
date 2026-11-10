@@ -81,7 +81,7 @@ fn workflow_reply(fixture: &mut Fixture, id: u64) -> Result<Value, Box<dyn Error
         if let Some(command) = fixture.canvas.take_command() {
             break command;
         }
-        fixture.wake.wait_after(observed)?;
+        fixture.wake.wait_after(observed);
     };
     let DesktopStartupCommand::SendCanvasNative(reply) = command else {
         return Err("Missing workflow reply".into());

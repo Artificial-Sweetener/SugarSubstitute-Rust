@@ -3,6 +3,7 @@
 //! Provision, show and capture workflow input documents through the native protocol, with real
 //! execution and qualification fixture files standing in for ComfyUI input files.
 
+use super::viewport::fixture::{Execution, classify};
 use super::*;
 
 mod identities;
@@ -52,7 +53,7 @@ impl Inputs {
             let observed = wake.revision();
             pump(&mut canvas, &client)?;
             if !canvas.reported_ready {
-                wake.wait_after(observed)?;
+                wake.wait_after(observed);
             }
         }
         let identity = identity()?;
@@ -92,7 +93,7 @@ impl Inputs {
 
     /// Deliver completions until the reply to request `id` arrives.
     fn reply(&mut self, id: u64) -> Result<Value, Box<dyn Error>> {
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut idle = 0;
         loop {
             let observed = self.wake.revision();
             pump(&mut self.canvas, &self.client)?;
@@ -119,10 +120,9 @@ impl Inputs {
             if let Some(answer) = answer {
                 return Ok(answer);
             }
-            if Instant::now() >= deadline {
+            if !self.await_progress(observed, &mut idle)? {
                 return Err(format!("Request {id} was not answered").into());
             }
-            self.wait_briefly(observed);
         }
     }
 
@@ -139,30 +139,53 @@ impl Inputs {
 
     /// Ask for the context until `accept` takes its document, delivering completions between.
     fn context_until(&mut self, accept: impl Fn(&Value) -> bool) -> Result<Value, Box<dyn Error>> {
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut idle = 0;
         loop {
             let context = self.ask("context.request", None)?;
             if accept(&context["context"]["document"]) {
                 return Ok(context);
             }
-            if Instant::now() >= deadline {
-                return Err(format!("The context never matched: {context}").into());
-            }
             let observed = self.wake.revision();
             pump(&mut self.canvas, &self.client)?;
-            self.wait_briefly(observed);
+            if !self.await_progress(observed, &mut idle)? {
+                return Err(format!("The context never matched: {context}").into());
+            }
         }
     }
 
-    /// Wait up to a few milliseconds for a completion wake; work that needs no job, such as a
-    /// route change waiting for the next poll, proceeds on the following pump.
-    fn wait_briefly(&self, observed: u64) {
-        let guard = self.wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(
-            self.wake
-                .changed
-                .wait_timeout_while(guard, Duration::from_millis(20), |value| *value == observed),
-        );
+    /// Ask for the context, delivering completions between asks, until `reached` holds.
+    fn until(
+        &mut self,
+        failure: &str,
+        reached: impl Fn(&Self) -> bool,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut idle = 0;
+        while !reached(self) {
+            let observed = self.wake.revision();
+            self.ask("context.request", None)?;
+            if !reached(self) && !self.await_progress(observed, &mut idle)? {
+                return Err(failure.into());
+            }
+        }
+        Ok(())
+    }
+
+    /// Block for the next execution event while admitted work remains. Work that needs no job,
+    /// such as a route change waiting for the next poll, proceeds on the following pump, so an
+    /// idle canvas is polled again at once. Returns false after `IDLE_PUMPS` consecutive idle
+    /// observations, which counts polls instead of elapsed time.
+    fn await_progress(&self, observed: u64, idle: &mut u32) -> Result<bool, Box<dyn Error>> {
+        match classify(&self.owner)? {
+            Execution::Running | Execution::Delivering => {
+                self.wake.wait_after(observed);
+                *idle = 0;
+                Ok(true)
+            }
+            Execution::Idle => {
+                *idle += 1;
+                Ok(*idle < IDLE_PUMPS)
+            }
+        }
     }
 
     /// Press the primary mouse button at the first of `points` of the shown input document and
@@ -200,22 +223,10 @@ impl Inputs {
             if self.canvas.settled()? {
                 break;
             }
-            self.wake.wait_after(observed)?;
+            self.wake.wait_after(observed);
         }
         self.canvas.finish()?;
-        self.owner.request_shutdown(cutoff);
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if self.owner.poll_shutdown()?.settled {
-                break;
-            }
-            if Instant::now() >= deadline {
-                return Err("Execution did not settle".into());
-            }
-            std::hint::spin_loop();
-        }
-        self.owner.finish_shutdown()?;
+        self.wake.finish_shutdown(&mut self.owner, &self.client, cutoff)?;
         Ok(())
     }
 }

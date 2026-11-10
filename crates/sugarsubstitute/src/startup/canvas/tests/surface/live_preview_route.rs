@@ -96,7 +96,7 @@ fn drive(
             _ => {}
         }
         match fixture.execution()? {
-            Execution::Running => fixture.wake.wait_after(observed)?,
+            Execution::Running => fixture.wake.wait_after(observed),
             Execution::Idle | Execution::Delivering => fixture.advance(100),
         }
     }

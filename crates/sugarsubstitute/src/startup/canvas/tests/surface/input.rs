@@ -235,7 +235,7 @@ fn copied(fixture: &mut Fixture) -> Result<MainCanvasDragOut, Box<dyn Error>> {
         if let Some(drag) = fixture.canvas.take_drag_out() {
             return Ok(drag);
         }
-        fixture.wake.wait_after(revision)?;
+        fixture.wake.wait_after(revision);
     }
 }
 

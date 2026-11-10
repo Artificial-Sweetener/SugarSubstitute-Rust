@@ -69,7 +69,7 @@ fn a_refused_preview_offer_requests_one_poll_then_retries_on_actual_capacity_rel
     fixture.session.retire(Retired { _fixture_memory: Some(retained), ..Default::default() })?;
     let observed = fixture.wake.revision();
     fixture.session.poll(Duration::ZERO)?;
-    fixture.wake.wait_after(observed)?;
+    fixture.wake.wait_after(observed);
     let target = fixture.offered_preview(token)?;
     fixture.session.did_present_cpu(target)?;
     assert_eq!(fixture.session.preview_status(token), PreviewStatus::Presented(target));

@@ -24,6 +24,8 @@ mod capture_fixture;
 mod claim_fixture;
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod close_diagnostic;
+#[cfg(test)]
+mod completion_wake;
 mod demo;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod descendant_fixture;

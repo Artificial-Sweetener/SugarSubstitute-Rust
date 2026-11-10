@@ -38,18 +38,13 @@ fn await_presented_reply(
         }
         let work = fixture.scope_work(canvas)?;
         if work.running > gates.blocking() || (work.queued > 0 && !gates.holding()) {
-            fixture.wake.wait_after(observed).map_err(|cause| {
-                let jobs = fixture.scope_jobs(canvas).unwrap_or_default();
-                format!("{cause}; canvas {work:?}; held {:?}; jobs [{jobs}]", gates.held())
-            })?;
+            fixture.wake.wait_after(observed);
         } else if gates.open_next() {
         } else if let Some(deadline) = fixture.canvas.next_deadline() {
             let remaining = deadline.saturating_duration_since(Instant::now());
             fixture.advance(u64::try_from(remaining.as_millis())?.saturating_add(1));
         } else if work.undelivered > 0 {
-            fixture.wake.wait_after(observed).map_err(|cause| {
-                format!("{cause}; withheld completion without wake or deadline; canvas {work:?}")
-            })?;
+            fixture.wake.wait_after(observed);
         } else {
             return Err(format!("Request {id} stalled without work, wake or deadline").into());
         }

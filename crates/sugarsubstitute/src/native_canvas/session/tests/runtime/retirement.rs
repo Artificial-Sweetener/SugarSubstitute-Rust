@@ -48,7 +48,7 @@ fn retirement_admits_while_payload_retains_its_entire_original_reservation()
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         session.advance()?;
         if session.retirement.is_some() {
-            wake.wait_after(observed)?;
+            wake.wait_after(observed);
         }
     }
     assert_eq!(
@@ -99,7 +99,7 @@ fn pending_retirement_consumes_terminal_work_that_releases_its_admission()
         ) {
             break;
         }
-        wake.wait_after(observed)?;
+        wake.wait_after(observed);
     }
     client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
     session.advance()?;
@@ -116,7 +116,7 @@ fn pending_retirement_consumes_terminal_work_that_releases_its_admission()
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         session.advance()?;
         if session.retirement.is_some() {
-            wake.wait_after(observed)?;
+            wake.wait_after(observed);
         }
     }
     settle(&mut session, &client, &wake)?;
@@ -141,7 +141,7 @@ fn settle(
         if session.settled()? {
             break;
         }
-        wake.wait_after(observed)?;
+        wake.wait_after(observed);
     }
     session.finish()?;
     Ok(())

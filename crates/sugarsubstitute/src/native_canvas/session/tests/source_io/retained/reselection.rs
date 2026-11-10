@@ -40,17 +40,12 @@ impl HeldSource {
     }
 
     /// Wait until a storage worker actually entered the acquisition.
-    fn wait_entered(&self) -> Result<(), Box<dyn Error>> {
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(self.state(), Duration::from_secs(10), |state| !state.entered)
-            .map_err(|_| "Held source state poisoned")?;
-        if timeout.timed_out() && !state.entered {
-            drop(state);
-            self.cancel();
-            return Err("Held acquisition did not start".into());
-        }
-        Ok(())
+    fn wait_entered(&self) {
+        drop(
+            self.changed
+                .wait_while(self.state(), |state| !state.entered)
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
     }
 }
 
@@ -158,7 +153,7 @@ impl Fixture {
             .iter()
             .any(|job| !job.acknowledged && matches!(job.phase, JobPhase::Terminal(_)));
         if progress.running + progress.queued > 0 && !undelivered {
-            self.wake.wait_after(observed)?;
+            self.wake.wait_after(observed);
         } else {
             self.clock.0.fetch_add(100_000_000, Ordering::SeqCst);
         }
@@ -393,7 +388,7 @@ fn returning_while_another_output_downloads_relabels_the_current_document()
     fixture.session.retain_selection(key("b"));
     fixture.session.poll(Duration::ZERO)?;
     assert!(fixture.session.loading.is_some(), "The held acquisition was not admitted");
-    held.wait_entered()?;
+    held.wait_entered();
 
     assert!(fixture.session.reselect_retained(&key("a"))?);
     assert!(held.state().cancelled);

@@ -4,6 +4,9 @@
 
 use super::*;
 
+/// Debounce periods that may elapse on the fixture clock before an absent save counts as lost.
+const SAVE_PERIODS: u32 = 16;
+
 /// The session directory below a fixture anchor.
 fn session_directory(anchor: &std::path::Path) -> std::path::PathBuf {
     anchor.join("user").join("input-canvas")
@@ -27,22 +30,24 @@ impl Inputs {
     /// outlives its deadline on the fixture clock; a save that could not be admitted retries
     /// after the next quiet period.
     fn save_until(&mut self, saved: impl Fn() -> bool) -> Result<(), Box<dyn Error>> {
-        let deadline = Instant::now() + Duration::from_secs(30);
         // Observe the latest change before its quiet period elapses.
         self.ask("context.request", None)?;
-        while !saved() {
-            if Instant::now() >= deadline {
-                return Err("The input documents were not saved".into());
+        for _ in 0..SAVE_PERIODS {
+            if saved() {
+                return Ok(());
             }
             self.clock.0.fetch_add(3_000_000_000, Ordering::SeqCst);
-            let quiet = Instant::now() + Duration::from_secs(2);
-            while !saved() && Instant::now() < quiet {
+            // The quiet stretch ends once the canvas is idle with the save still absent.
+            let mut idle = 0;
+            while !saved() {
                 let observed = self.wake.revision();
                 self.ask("context.request", None)?;
-                self.wait_briefly(observed);
+                if !saved() && !self.await_progress(observed, &mut idle)? {
+                    break;
+                }
             }
         }
-        Ok(())
+        if saved() { Ok(()) } else { Err("The input documents were not saved".into()) }
     }
 }
 

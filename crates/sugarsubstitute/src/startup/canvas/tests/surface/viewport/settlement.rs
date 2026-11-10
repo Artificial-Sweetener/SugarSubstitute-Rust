@@ -47,7 +47,7 @@ fn answer(fixture: &mut Fixture, id: u64, acknowledge: bool) -> Result<Value, Bo
                 }
             }
             Execution::Idle | Execution::Delivering => fixture.advance(100),
-            Execution::Running => fixture.wake.wait_after(observed)?,
+            Execution::Running => fixture.wake.wait_after(observed),
         }
     }
     Err(format!("Viewport request {id} was never answered").into())

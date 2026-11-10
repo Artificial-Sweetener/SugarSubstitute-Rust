@@ -19,7 +19,7 @@ impl Fixture {
             if let Some(token) = self.session.prepare_document()? {
                 return Ok(token);
             }
-            self.wake.wait_after(revision)?;
+            self.wake.wait_after(revision);
         }
     }
 
@@ -31,7 +31,7 @@ impl Fixture {
             self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
             self.session.poll(Duration::ZERO)?;
             if self.session.document_transaction_pending(token) {
-                self.wake.wait_after(revision)?;
+                self.wake.wait_after(revision);
             }
         }
         Ok(())

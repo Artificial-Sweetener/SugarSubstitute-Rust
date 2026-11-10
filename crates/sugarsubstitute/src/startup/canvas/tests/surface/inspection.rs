@@ -134,7 +134,7 @@ fn settle(fixture: &mut Fixture) -> Result<Vec<Value>, Box<dyn Error>> {
         {
             fixture.canvas.presented(target)?;
         } else if fixture.execution()? == Execution::Running {
-            fixture.wake.wait_after(observed)?;
+            fixture.wake.wait_after(observed);
         }
     }
     Ok(cameras)

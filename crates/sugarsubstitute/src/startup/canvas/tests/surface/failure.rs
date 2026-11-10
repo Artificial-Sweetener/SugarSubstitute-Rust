@@ -55,7 +55,7 @@ fn select_at(
             while !gate.returned() {
                 let observed = host.fixture.wake.revision();
                 if !gate.returned() {
-                    host.fixture.wake.wait_after(observed)?;
+                    host.fixture.wake.wait_after(observed);
                 }
             }
         }

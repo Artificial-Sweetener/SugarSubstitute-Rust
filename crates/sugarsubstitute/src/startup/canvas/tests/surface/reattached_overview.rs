@@ -49,18 +49,20 @@ impl Latch {
         self.changed.notify_all();
     }
 
-    /// Hold a blocking worker until opened, bounded so a failed test cannot strand shutdown.
+    /// Hold a blocking worker until opened. `Gates` opens every latch when dropped, so a failed
+    /// test cannot strand shutdown.
     fn wait(&self) -> Result<(), std::io::Error> {
         self.entered.store(true, Ordering::SeqCst);
         if let Some(wake) = &self.announce {
             wake.wake().map_err(std::io::Error::other)?;
         }
         let guard = self.open.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (guard, _) = self
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(30), |open| !*open)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if *guard { Ok(()) } else { Err(std::io::Error::other("Lane gate was never opened")) }
+        drop(
+            self.changed
+                .wait_while(guard, |open| !*open)
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
+        Ok(())
     }
 }
 
@@ -158,10 +160,6 @@ impl Gates {
             .count()
     }
 
-    fn held(&self) -> Vec<Stage> {
-        self.pending.iter().map(|gate| gate.stage).collect()
-    }
-
     /// Require every gate job's own successful outcome before releasing its scope.
     fn finish(mut self, fixture: &Fixture) -> Result<(), Box<dyn Error>> {
         while self.open_next() {}
@@ -173,7 +171,7 @@ impl Gates {
                 if let Some(completion) = job.try_take_completion() {
                     break completion.outcome;
                 }
-                fixture.wake.wait_after(observed)?;
+                fixture.wake.wait_after(observed);
             };
             assert!(matches!(outcome, JobOutcome::Success(())), "{:?} gate failed", gate.stage);
         }
@@ -224,18 +222,13 @@ fn await_reply(
         }
         let work = fixture.scope_work(canvas)?;
         if work.running > gates.blocking() || (work.queued > 0 && !gates.holding()) {
-            fixture.wake.wait_after(observed).map_err(|cause| {
-                let jobs = fixture.scope_jobs(canvas).unwrap_or_default();
-                format!("{cause}; canvas {work:?}; held {:?}; jobs [{jobs}]", gates.held())
-            })?;
+            fixture.wake.wait_after(observed);
         } else if gates.open_next() {
         } else if let Some(deadline) = fixture.canvas.next_deadline() {
             let remaining = deadline.saturating_duration_since(Instant::now());
             fixture.advance(u64::try_from(remaining.as_millis())?.saturating_add(1));
         } else if work.undelivered > 0 {
-            fixture.wake.wait_after(observed).map_err(|cause| {
-                format!("{cause}; withheld completion without wake or deadline; canvas {work:?}")
-            })?;
+            fixture.wake.wait_after(observed);
         } else {
             return Err(format!("Request {id} stalled without work, wake or deadline").into());
         }

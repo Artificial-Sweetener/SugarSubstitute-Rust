@@ -26,6 +26,21 @@ pub(in crate::startup::canvas::tests::surface) enum Execution {
     Idle,
 }
 
+/// Classify the admitted work of `owner` that can still publish a completion wake.
+pub(in crate::startup::canvas::tests::surface) fn classify(
+    owner: &ExecutionOwner,
+) -> Result<Execution, Box<dyn Error>> {
+    let progress = owner.poll_shutdown()?;
+    if progress.running + progress.queued > 0 {
+        return Ok(Execution::Running);
+    }
+    let delivering = progress.unresolved_jobs.iter().any(|job| {
+        !job.acknowledged
+            && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
+    });
+    Ok(if delivering { Execution::Delivering } else { Execution::Idle })
+}
+
 pub(in crate::startup::canvas::tests::surface) struct Fixture {
     pub(in crate::startup::canvas::tests::surface) canvas: EmbeddedCanvas,
     pub(in crate::startup::canvas::tests::surface) clock: Arc<ClockValue>,
@@ -114,7 +129,7 @@ impl Fixture {
             let observed = wake.revision();
             pump(&mut canvas, &client)?;
             if !canvas.reported_ready {
-                wake.wait_after(observed)?;
+                wake.wait_after(observed);
             }
         }
         let identity = identity()?;
@@ -243,9 +258,7 @@ impl Fixture {
                 && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
         });
         if progress.running + progress.queued > 0 && !terminal {
-            self.wake.wait_after(observed).map_err(|cause| {
-                format!("Preview worker progress stopped: {cause}; {progress:?}")
-            })?;
+            self.wake.wait_after(observed);
         } else if self.canvas.next_deadline().is_some() {
             self.advance(100);
         } else if !terminal {
@@ -258,15 +271,7 @@ impl Fixture {
     pub(in crate::startup::canvas::tests::surface) fn execution(
         &self,
     ) -> Result<Execution, Box<dyn Error>> {
-        let progress = self.owner.poll_shutdown()?;
-        if progress.running + progress.queued > 0 {
-            return Ok(Execution::Running);
-        }
-        let delivering = progress.unresolved_jobs.iter().any(|job| {
-            !job.acknowledged
-                && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
-        });
-        Ok(if delivering { Execution::Delivering } else { Execution::Idle })
+        classify(&self.owner)
     }
 
     /// Present every frame until all admitted work and presentation deadlines have settled.
@@ -287,7 +292,7 @@ impl Fixture {
             match self.execution()? {
                 Execution::Idle if self.canvas.next_deadline().is_none() => return Ok(()),
                 Execution::Idle | Execution::Delivering => self.advance(100),
-                Execution::Running => self.wake.wait_after(observed)?,
+                Execution::Running => self.wake.wait_after(observed),
             }
         }
         Err("Canvas work never settled".into())
@@ -402,7 +407,7 @@ impl Fixture {
             {
                 return Ok(frame.content.target());
             }
-            self.wake.wait_after(observed)?;
+            self.wake.wait_after(observed);
         }
     }
 
@@ -465,7 +470,7 @@ impl Fixture {
             {
                 self.canvas.presented(target)?;
             } else {
-                self.wake.wait_after(observed)?;
+                self.wake.wait_after(observed);
             }
         }
     }
@@ -516,25 +521,10 @@ impl Fixture {
                 }
                 break;
             }
-            self.wake.wait_after(observed).map_err(|cause| {
-                format!("Canvas close progress stopped: {cause}; {:?}", self.owner.poll_shutdown())
-            })?;
+            self.wake.wait_after(observed);
         }
         let canvas_result = self.canvas.finish();
-        self.owner.request_shutdown(cutoff);
-        let deadline =
-            Instant::now().checked_add(Duration::from_secs(10)).ok_or("Deadline overflow")?;
-        loop {
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if self.owner.poll_shutdown()?.settled {
-                break;
-            }
-            if Instant::now() >= deadline {
-                return Err("Viewport fixture execution did not settle".into());
-            }
-            std::hint::spin_loop();
-        }
-        self.owner.finish_shutdown()?;
+        self.wake.finish_shutdown(&mut self.owner, &self.client, cutoff)?;
         drop(self.memory.claim(128 * 1024)?);
         match (expected_code, canvas_result) {
             (None, result) => result,

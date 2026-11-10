@@ -24,14 +24,7 @@ impl Fixture {
             {
                 return Ok(());
             }
-            self.wake.wait_after(observed).map_err(|cause| {
-                format!(
-                    "Document settlement (rendering={}, displaying={}, cleanup={}): {cause}",
-                    self.session.rendering.is_some(),
-                    self.session.displaying.is_some(),
-                    self.session.retirement.is_some()
-                )
-            })?;
+            self.wake.wait_after(observed);
         }
     }
 
@@ -51,7 +44,7 @@ impl Fixture {
                 let pixel = *frame.pixels.get(usize::try_from(center)?).ok_or("Center absent")?;
                 return Ok((frame.target, extent, pixel));
             }
-            self.wake.wait_after(observed)?;
+            self.wake.wait_after(observed);
         }
     }
 }

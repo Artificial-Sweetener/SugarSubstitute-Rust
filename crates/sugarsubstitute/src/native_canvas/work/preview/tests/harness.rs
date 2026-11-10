@@ -3,8 +3,8 @@
 //! Prepare protected cache custody on storage workers and evaluate candidates on CPU workers.
 
 use super::*;
-use std::sync::{Condvar, Mutex};
-use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
+use crate::completion_wake::Wake;
+use sugarsubstitute_execution::ExecutionOwner;
 
 struct FixedClock;
 impl Clock for FixedClock {
@@ -13,44 +13,6 @@ impl Clock for FixedClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    fn completion<T>(
-        &self,
-        client: &ExecutionClient,
-        job: &mut OwnedJob<T, WorkError>,
-    ) -> Result<JobCompletion<T, WorkError>, Box<dyn Error>> {
-        loop {
-            let revision = *self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-            if let Some(completion) = job.try_take_completion() {
-                return Ok(completion);
-            }
-            let guard = self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (guard, timeout) = self
-                .changed
-                .wait_timeout_while(guard, std::time::Duration::from_secs(10), |current| {
-                    *current == revision
-                })
-                .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-            if timeout.timed_out() && *guard == revision {
-                return Err("Preview task did not reach an observed terminal outcome".into());
-            }
-        }
     }
 }
 

@@ -75,7 +75,7 @@ impl Replacement<'_> {
             if self.canvas.take_command().is_some() {
                 return Err("Selection completed before its native frame was acknowledged".into());
             }
-            self.wake.wait_after(observed)?;
+            self.wake.wait_after(observed);
         }
     }
 

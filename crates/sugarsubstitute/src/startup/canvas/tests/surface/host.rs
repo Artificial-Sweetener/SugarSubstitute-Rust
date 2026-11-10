@@ -137,8 +137,32 @@ impl Address<'_> {
     }
 }
 
+/// Gates a test created. A gate that ignores cancellation is released when the host finishes,
+/// and every gate when the host unwinds, so a failed ordering cannot leave a worker blocked
+/// while the fixture waits to join it.
+#[derive(Default)]
+struct HeldGates(Vec<Arc<Gate>>);
+
+impl HeldGates {
+    fn release_uncooperative(&self) {
+        for gate in &self.0 {
+            gate.release_if_uncooperative();
+        }
+    }
+}
+
+impl Drop for HeldGates {
+    fn drop(&mut self) {
+        for gate in &self.0 {
+            gate.release();
+        }
+    }
+}
+
 /// The real canvas, its execution owner and a fake compositor driven one UI turn at a time.
 pub(super) struct Host {
+    /// Declared first so held acquisitions return before the fixture joins their workers.
+    held: HeldGates,
     pub(super) fixture: Fixture,
     native: Compositor,
     /// Injected page time in milliseconds before each request.
@@ -148,17 +172,32 @@ pub(super) struct Host {
 impl Host {
     /// Start from the fixture's prepared visible attachment with `wide.png` selected.
     pub(super) fn new(page_delay: u64) -> Result<Self, Box<dyn Error>> {
-        Ok(Self { fixture: Fixture::new()?, native: Compositor::default(), page_delay })
+        Ok(Self {
+            held: HeldGates::default(),
+            fixture: Fixture::new()?,
+            native: Compositor::default(),
+            page_delay,
+        })
     }
 
     /// Start from a prepared visible empty attachment, before any source or native pixels.
     pub(super) fn empty() -> Result<Self, Box<dyn Error>> {
-        Ok(Self { fixture: Fixture::empty()?, native: Compositor::default(), page_delay: 0 })
+        Ok(Self {
+            held: HeldGates::default(),
+            fixture: Fixture::empty()?,
+            native: Compositor::default(),
+            page_delay: 0,
+        })
     }
 
     /// Start from a prepared visible attachment whose selections fetch from `backend`.
     pub(super) fn comfy(backend: crate::startup::CanvasBackend) -> Result<Self, Box<dyn Error>> {
-        Ok(Self { fixture: Fixture::comfy(backend)?, native: Compositor::default(), page_delay: 0 })
+        Ok(Self {
+            held: HeldGates::default(),
+            fixture: Fixture::comfy(backend)?,
+            native: Compositor::default(),
+            page_delay: 0,
+        })
     }
 
     /// Address the original attachment `1` or a reopened one in the default workflow.
@@ -192,6 +231,7 @@ impl Host {
     pub(super) fn gate(&mut self, filename: &str, cooperative: bool) -> Arc<Gate> {
         let gate = Gate::new(self.fixture.output(filename), cooperative, self.fixture.wake.clone());
         self.fixture.canvas.surface.gate_fixture(filename, gate.clone());
+        self.held.0.push(gate.clone());
         gate
     }
 
@@ -221,10 +261,7 @@ impl Host {
                 self.fixture.advance(100);
                 continue;
             }
-            self.fixture
-                .wake
-                .wait_after(observed)
-                .map_err(|cause| format!("{stage} never arrived: {cause}"))?;
+            self.fixture.wake.wait_after(observed);
         }
         Err(format!("{stage} kept progressing without arriving").into())
     }
@@ -243,7 +280,7 @@ impl Host {
         }
         let execution = self.fixture.execution()?;
         if execution == Execution::Running {
-            self.fixture.wake.wait_after(observed)?;
+            self.fixture.wake.wait_after(observed);
             return Ok(Err(true));
         }
         if self.fixture.canvas.next_deadline().is_some() {
@@ -251,12 +288,13 @@ impl Host {
             return Ok(Err(true));
         }
         if execution == Execution::Delivering {
-            self.fixture.wake.wait_after(observed)?;
+            self.fixture.wake.wait_after(observed);
             return Ok(Err(true));
         }
         // A correlated request is still owed a reply: worker-side releases can arm a capacity
-        // wake after every job settled, so only that wake's absence proves a stall.
-        if id != 0 && self.fixture.wake.wait_after(observed).is_ok() {
+        // wake after every job settled, and that wake is the only event that can still arrive.
+        if id != 0 {
+            self.fixture.wake.wait_after(observed);
             return Ok(Err(true));
         }
         Ok(Err(false))
@@ -351,6 +389,7 @@ impl Host {
 
     /// Retire the canvas scope and its execution owner, discarding any unread reply.
     pub(super) fn finish(mut self) -> Result<(), Box<dyn Error>> {
+        self.held.release_uncooperative();
         while self.fixture.canvas.take_command().is_some() {}
         self.fixture.finish()
     }

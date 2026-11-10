@@ -49,7 +49,7 @@ fn deferred(selection: Selection) -> Result<Fixture, Box<dyn Error>> {
         match fixture.execution()? {
             Execution::Idle if fixture.canvas.next_deadline().is_none() => return Ok(fixture),
             Execution::Idle => fixture.advance(100),
-            Execution::Running | Execution::Delivering => fixture.wake.wait_after(observed)?,
+            Execution::Running | Execution::Delivering => fixture.wake.wait_after(observed),
         }
     }
 }

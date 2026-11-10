@@ -28,13 +28,7 @@ impl Fixture {
         self.session.poll(Duration::ZERO)?;
         let snapshot = self.session.runtime.as_ref().ok_or("Runtime absent")?.scope.snapshot();
         if snapshot.running + snapshot.queued > 0 && snapshot.terminal_unobserved == 0 {
-            self.wake.wait_after(observed).map_err(|cause| {
-                let state = self.session.runtime.as_ref().map(|runtime| runtime.scope.snapshot());
-                format!("Preview progress scope={state:?}, load={}, render={}, display={}, retirement={}, queued_retirement={}, deferred_retirement={}, preview={}, source={}: {cause}",
-                    self.session.loading.is_some(), self.session.rendering.is_some(), self.session.displaying.is_some(),
-                    self.session.retirement.is_some(), self.session.pending_retirement.is_some(),
-                    self.session.deferred_retirement.is_some(), self.session.preview_pending(), self.session.selection)
-            })?;
+            self.wake.wait_after(observed);
         }
         Ok(())
     }

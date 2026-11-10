@@ -6,51 +6,7 @@ use std::sync::{Condvar, Mutex};
 mod camera_readiness;
 mod source_fencing;
 
-#[derive(Default)]
-pub(super) struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    /// Observe a real terminal boundary without sleeps or depending on worker speed.
-    pub(super) fn completion<T, E>(
-        &self,
-        client: &ExecutionClient,
-        job: &mut OwnedJob<T, E>,
-    ) -> Result<JobCompletion<T, E>, Box<dyn Error>> {
-        loop {
-            let observed = self.revision();
-            client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-            if let Some(completion) = job.try_take_completion() {
-                return Ok(completion);
-            }
-            self.wait_after(observed)?;
-        }
-    }
-    /// Snapshot completion notification revision before inspecting the owned typed result.
-    pub(super) fn revision(&self) -> u64 {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-    /// Bound a stalled external observer while remaining insensitive to ordinary scheduling order.
-    pub(super) fn wait_after(&self, observed: u64) -> Result<(), Box<dyn Error>> {
-        let count = self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (count, timeout) = self
-            .changed
-            .wait_timeout_while(count, Duration::from_secs(10), |count| *count == observed)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count == observed {
-            return Err("Preparation terminal delivery did not arrive".into());
-        }
-        Ok(())
-    }
-}
+pub(super) use crate::completion_wake::Wake;
 /// Hold a started preparation on its CPU lane without spinning until the test observes it.
 ///
 /// A yielding task is rescheduled immediately, so a pending boundary that only yields would
@@ -205,7 +161,7 @@ fn observe_terminal(
         if session.rendering.is_none() {
             break;
         }
-        wake.wait_after(observed)?;
+        wake.wait_after(observed);
     }
     Ok(())
 }

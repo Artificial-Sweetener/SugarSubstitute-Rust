@@ -43,7 +43,7 @@ impl Fixture {
             {
                 self.session.did_present_cpu(target)?;
             } else {
-                self.wake.wait_after(observed)?;
+                self.wake.wait_after(observed);
             }
         }
     }

@@ -142,20 +142,7 @@ impl Fixture {
                 return Ok(());
             }
             if self.inputs_busy() {
-                let session = &self.session;
-                let state = format!(
-                    "input job {}, loading {}, rendering {}, displaying {}, retirement {}, \
-                     acquisition {}",
-                    session.inputs.running(),
-                    session.loading.is_some(),
-                    session.rendering.is_some(),
-                    session.displaying.is_some(),
-                    session.retirement.is_some(),
-                    session.acquisition_retirement.is_some(),
-                );
-                self.wake
-                    .wait_after(observed)
-                    .map_err(|cause| format!("Input work stalled ({state}): {cause}"))?;
+                self.wake.wait_after(observed);
                 idle = 0;
             } else {
                 idle += 1;

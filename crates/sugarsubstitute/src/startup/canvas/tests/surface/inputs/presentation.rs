@@ -103,7 +103,7 @@ fn ask(
         memory.claim(64 * 1024)?,
         Default::default(),
     )?;
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut idle = 0;
     loop {
         let observed = fixture.wake.revision();
         fixture.pump()?;
@@ -122,11 +122,14 @@ fn ask(
                 _ => return Err(format!("Unexpected command while waiting for {id}").into()),
             }
         }
-        if Instant::now() >= deadline {
-            return Err(format!("Canvas request {id} was not answered").into());
-        }
         if fixture.execution()? == Execution::Running {
-            fixture.wake.wait_after(observed)?;
+            fixture.wake.wait_after(observed);
+            idle = 0;
+        } else {
+            idle += 1;
+            if idle >= IDLE_PUMPS {
+                return Err(format!("Canvas request {id} was not answered").into());
+            }
         }
     }
 }
@@ -152,7 +155,7 @@ fn present(fixture: &mut Fixture, phase: &str) -> Result<Vec<u32>, Box<dyn Error
                     .ok_or_else(|| format!("{phase}: the surface never presented a frame").into());
             }
             Execution::Idle | Execution::Delivering => fixture.advance(100),
-            Execution::Running => fixture.wake.wait_after(observed)?,
+            Execution::Running => fixture.wake.wait_after(observed),
         }
     }
     Err(format!("{phase}: canvas work never settled: {}", state(fixture)?).into())
@@ -199,7 +202,7 @@ fn hide(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
                 return Err("The Output route kept the input document's pixels".into());
             }
             Execution::Idle | Execution::Delivering => fixture.advance(100),
-            Execution::Running => fixture.wake.wait_after(observed)?,
+            Execution::Running => fixture.wake.wait_after(observed),
         }
     }
     Err(format!("Canvas work never settled: {}", state(fixture)?).into())
@@ -239,7 +242,7 @@ fn camera(fixture: &mut Fixture, id: u64, command: Value) -> Result<String, Box<
                 return Err(format!("Viewport request {id} was held without an answer").into());
             }
             Execution::Idle | Execution::Delivering => fixture.advance(100),
-            Execution::Running => fixture.wake.wait_after(observed)?,
+            Execution::Running => fixture.wake.wait_after(observed),
         }
     }
     Err(format!("Viewport request {id} never settled: {}", state(fixture)?).into())
@@ -370,7 +373,7 @@ fn shared_viewport_commands_beside_a_selection_on_the_input_route_are_answered()
         {
             fixture.canvas.presented(target)?;
         } else if fixture.execution()? == Execution::Running {
-            fixture.wake.wait_after(observed)?;
+            fixture.wake.wait_after(observed);
         } else {
             fixture.advance(50);
         }
@@ -477,7 +480,7 @@ fn a_camera_command_right_after_focus_geometry_on_the_input_route_is_answered()
         match fixture.execution()? {
             Execution::Idle if fixture.canvas.next_deadline().is_none() => break,
             Execution::Idle | Execution::Delivering => fixture.advance(100),
-            Execution::Running => fixture.wake.wait_after(observed)?,
+            Execution::Running => fixture.wake.wait_after(observed),
         }
     }
     assert_eq!(statuses, vec![(json!(102), json!("applied")), (json!(103), json!("applied"))]);

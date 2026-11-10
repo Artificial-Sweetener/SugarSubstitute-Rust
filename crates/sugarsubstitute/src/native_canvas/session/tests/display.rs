@@ -183,7 +183,7 @@ fn consume(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
             .drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         session.consume_display()?;
         if session.displaying.is_some() {
-            wake.wait_after(observed)?;
+            wake.wait_after(observed);
         }
     }
     Ok(())

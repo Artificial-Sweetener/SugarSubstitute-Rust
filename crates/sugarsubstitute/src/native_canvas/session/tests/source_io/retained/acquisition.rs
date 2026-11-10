@@ -184,7 +184,7 @@ fn unretired_acquisition_cannot_publish_even_when_decoding_succeeds() -> Result<
         {
             break;
         }
-        fixture.wake.wait_after(revision)?;
+        fixture.wake.wait_after(revision);
     }
     assert!(owner.settled());
     assert!(fixture.session.document.scene.as_ref().is_some_and(|scene| scene.source.is_none()));
@@ -208,20 +208,16 @@ fn revoked_source_waits_for_real_job_completion_and_worker_retirement() -> Resul
         fixture.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         fixture.session.poll(Duration::ZERO)?;
         if fixture.session.loading.is_none() {
-            fixture.wake.wait_after(revision)?;
+            fixture.wake.wait_after(revision);
         }
     }
     let state = owner.state.lock().map_err(|_| "Source state poisoned")?;
-    let (state, timeout) = owner
-        .changed
-        .wait_timeout_while(state, Duration::from_secs(10), |state| !state.entered)
-        .map_err(|_| "Source state poisoned")?;
-    if timeout.timed_out() {
-        drop(state);
-        owner.cancel();
-        return Err("Source acquisition did not start".into());
-    }
-    drop(state);
+    drop(
+        owner
+            .changed
+            .wait_while(state, |state| !state.entered)
+            .map_err(|_| "Source state poisoned")?,
+    );
     let selection = fixture.session.selection;
     fixture.session.revoke_acquirer()?;
     assert!(fixture.session.selection > selection);
@@ -232,7 +228,7 @@ fn revoked_source_waits_for_real_job_completion_and_worker_retirement() -> Resul
         if fixture.session.loading.is_none() && fixture.session.acquisition_retirement.is_none() {
             break;
         }
-        fixture.wake.wait_after(revision)?;
+        fixture.wake.wait_after(revision);
     }
     let state = owner.state.lock().map_err(|_| "Source state poisoned")?;
     assert!(state.cancelled && state.settled);

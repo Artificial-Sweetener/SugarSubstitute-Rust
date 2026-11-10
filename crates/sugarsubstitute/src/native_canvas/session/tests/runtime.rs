@@ -25,7 +25,7 @@ fn embedded_graphics_waits_for_native_custody_before_worker_retirement()
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         session.poll(Duration::ZERO)?;
         if !session.initialized() {
-            wake.wait_after(revision).map_err(|cause| format!("Canvas initialization: {cause}"))?;
+            wake.wait_after(revision);
         }
     }
     assert!(session.host_graphics().is_none());
@@ -37,7 +37,7 @@ fn embedded_graphics_waits_for_native_custody_before_worker_retirement()
         if let Some(graphics) = session.host_graphics() {
             break graphics.clone();
         }
-        wake.wait_after(revision).map_err(|cause| format!("Graphics preparation: {cause}"))?;
+        wake.wait_after(revision);
     };
     assert!(session.host_graphics_job.is_none());
     session.request_host_graphics()?;
@@ -53,24 +53,10 @@ fn embedded_graphics_waits_for_native_custody_before_worker_retirement()
         if session.settled()? {
             break;
         }
-        wake.wait_after(revision).map_err(|cause| format!("Canvas retirement: {cause}"))?;
+        wake.wait_after(revision);
     }
     session.finish()?;
-    owner.request_shutdown(Moment::from_nanos(10_000_000_000));
-    let deadline = std::time::Instant::now()
-        .checked_add(Duration::from_secs(10))
-        .ok_or("Executor shutdown deadline overflow")?;
-    loop {
-        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-        if owner.poll_shutdown()?.settled {
-            break;
-        }
-        if std::time::Instant::now() >= deadline {
-            return Err("Executor shutdown did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
-    owner.finish_shutdown()?;
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(10_000_000_000))?;
     Ok(())
 }
 
@@ -99,17 +85,14 @@ impl HeldWork {
         }
     }
 
-    /// Bound fixture setup while waiting on the actual worker entry.
-    fn wait_until_entered(&self) -> Result<(), Box<dyn Error>> {
+    /// Wait for the actual worker entry, which the entering worker publishes under the same lock.
+    fn wait_until_entered(&self) {
         let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.entered)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && !state.entered {
-            return Err("Held canvas work did not start".into());
-        }
-        Ok(())
+        drop(
+            self.changed
+                .wait_while(state, |state| !state.entered)
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
     }
 
     /// Allow the same already-started blocking task to return.
@@ -151,7 +134,7 @@ fn closing_waits_for_running_host_graphics_preparation() -> Result<(), Box<dyn E
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         session.poll(Duration::ZERO)?;
         if !session.initialized() {
-            wake.wait_after(revision)?;
+            wake.wait_after(revision);
         }
     }
 
@@ -173,7 +156,7 @@ fn closing_waits_for_running_host_graphics_preparation() -> Result<(), Box<dyn E
             sugarsubstitute_desktop::canvas::CanvasGraphics::fixture(&memory, &context)
                 .map_err(WorkError::new)
         })?);
-    boundary.wait_until_entered()?;
+    boundary.wait_until_entered();
     session.close_until(Moment::from_nanos(10_000_000_000))?;
     assert!(
         session
@@ -191,23 +174,12 @@ fn closing_waits_for_running_host_graphics_preparation() -> Result<(), Box<dyn E
         if session.settled()? {
             break;
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     }
     assert!(session.host_graphics_job.is_none());
     assert!(session.host_graphics().is_none());
     session.finish()?;
-    owner.request_shutdown(Moment::from_nanos(10_000_000_000));
-    let deadline = std::time::Instant::now()
-        .checked_add(Duration::from_secs(10))
-        .ok_or("Executor shutdown deadline overflow")?;
-    while !owner.poll_shutdown()?.settled {
-        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-        if std::time::Instant::now() >= deadline {
-            return Err("Executor shutdown did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
-    owner.finish_shutdown()?;
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(10_000_000_000))?;
     Ok(())
 }
 
@@ -237,7 +209,7 @@ fn pacing_failure_still_fences_input_and_cancels_the_actual_worker() -> Result<(
     session.initializing = Some(job);
     session.initialization_pending = true;
     session.picker = true;
-    boundary.wait_until_entered()?;
+    boundary.wait_until_entered();
     session.pacing.set_frame_period(session.pacing.period(), Duration::from_secs(1))?;
     assert!(session.close_until(Moment::from_nanos(15_000_000_000)).is_err());
     assert!(session.closing);
@@ -260,26 +232,16 @@ fn pacing_failure_still_fences_input_and_cancels_the_actual_worker() -> Result<(
     drop(session.initializing.take());
     clock.0.store(1_000_000_000, Ordering::SeqCst);
     session.close_until(Moment::from_nanos(15_000_000_000))?;
-    let deadline = std::time::Instant::now()
-        .checked_add(Duration::from_secs(10))
-        .ok_or("Executor shutdown deadline overflow")?;
-    while !session.settled()? {
+    loop {
+        let revision = wake.revision();
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-        if std::time::Instant::now() >= deadline {
-            return Err("Canvas scope did not settle".into());
+        if session.settled()? {
+            break;
         }
-        std::hint::spin_loop();
+        wake.wait_after(revision);
     }
     session.finish()?;
-    owner.request_shutdown(Moment::from_nanos(15_000_000_000));
-    while !owner.poll_shutdown()?.settled {
-        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-        if std::time::Instant::now() >= deadline {
-            return Err("Canvas execution did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
-    owner.finish_shutdown()?;
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(15_000_000_000))?;
     Ok(())
 }
 
@@ -288,7 +250,7 @@ fn rejected_standalone_scope_keeps_its_executor_until_checked_shutdown()
 -> Result<(), Box<dyn Error>> {
     let (mut session, clock, _directory) = session()?;
     let wake = Arc::new(Wake::default());
-    let owner = ExecutionOwner::new(clock, wake)?;
+    let owner = ExecutionOwner::new(clock, wake.clone())?;
     let client = owner.client();
     let spec = ScopeSpec { id: ScopeId::new(1)?, deadline: None };
     let existing = client.create_scope(spec, None)?;
@@ -299,18 +261,13 @@ fn rejected_standalone_scope_keeps_its_executor_until_checked_shutdown()
 
     session.close_until(Moment::from_nanos(15_000_000_000))?;
     drop(existing);
-    let deadline = std::time::Instant::now()
-        .checked_add(Duration::from_secs(10))
-        .ok_or("Executor shutdown deadline overflow")?;
     loop {
+        let revision = wake.revision();
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         if session.settled()? {
             break;
         }
-        if std::time::Instant::now() >= deadline {
-            return Err("Rejected canvas execution did not settle".into());
-        }
-        std::hint::spin_loop();
+        wake.wait_after(revision);
     }
     session.finish()?;
     assert!(session.starting_owner.is_none());
@@ -338,7 +295,7 @@ fn shared_canvas_preserves_other_completion_and_waits_for_actual_scope_retiremen
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         session.poll(Duration::ZERO)?;
         if session.resources.is_none() {
-            wake.wait_after(observed).map_err(|cause| format!("Canvas initialization: {cause}"))?;
+            wake.wait_after(observed);
         }
     }
     assert!(!session.take_picker_request());
@@ -360,14 +317,12 @@ fn shared_canvas_preserves_other_completion_and_waits_for_actual_scope_retiremen
         client.submit_blocking(&foreign, foreign_spec, |_| Ok::<_, std::io::Error>(7))?;
     // Canvas preparation can share this wake. Keep the mailbox untouched while observing
     // the foreign terminal itself, so the following poll proves shared queue ownership.
-    let foreign_deadline = std::time::Instant::now()
-        .checked_add(Duration::from_secs(10))
-        .ok_or("Foreign completion deadline overflow")?;
-    while !matches!(foreign_job.status().phase, JobPhase::Terminal(_)) {
-        if std::time::Instant::now() >= foreign_deadline {
-            return Err("Foreign worker did not reach its terminal outcome".into());
+    loop {
+        let revision = wake.revision();
+        if matches!(foreign_job.status().phase, JobPhase::Terminal(_)) {
+            break;
         }
-        std::hint::spin_loop();
+        wake.wait_after(revision);
     }
     // Taking the scope snapshot synchronizes with installation of the terminal notice.
     assert_eq!(foreign.snapshot().terminal_unobserved, 1);
@@ -417,7 +372,7 @@ fn shared_canvas_preserves_other_completion_and_waits_for_actual_scope_retiremen
         worker.run();
         Ok::<_, std::io::Error>(())
     })?;
-    boundary.wait_until_entered()?;
+    boundary.wait_until_entered();
     session.close_until(Moment::from_nanos(2_000_000_000))?;
     loop {
         let observed = wake.revision();
@@ -426,7 +381,7 @@ fn shared_canvas_preserves_other_completion_and_waits_for_actual_scope_retiremen
         if session.shutdown_started {
             break;
         }
-        wake.wait_after(observed).map_err(|cause| format!("Canvas disposal: {cause}"))?;
+        wake.wait_after(observed);
     }
     assert!(!foreign.snapshot().cancellation_requested);
     clock.0.store(3_000_000_000, Ordering::SeqCst);
@@ -457,7 +412,7 @@ fn shared_canvas_preserves_other_completion_and_waits_for_actual_scope_retiremen
         if session.settled()? {
             break;
         }
-        wake.wait_after(observed).map_err(|cause| format!("Canvas settlement: {cause}"))?;
+        wake.wait_after(observed);
     }
     session.finish()?;
 
@@ -469,20 +424,6 @@ fn shared_canvas_preserves_other_completion_and_waits_for_actual_scope_retiremen
     drop(result);
     drop(later);
     drop(foreign);
-    owner.request_shutdown(Moment::from_nanos(5_000_000_000));
-    let deadline = std::time::Instant::now()
-        .checked_add(Duration::from_secs(10))
-        .ok_or("Executor shutdown deadline overflow")?;
-    loop {
-        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-        if owner.poll_shutdown()?.settled {
-            break;
-        }
-        if std::time::Instant::now() >= deadline {
-            return Err("Executor shutdown did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
-    owner.finish_shutdown()?;
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(5_000_000_000))?;
     Ok(())
 }

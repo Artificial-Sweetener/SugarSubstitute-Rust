@@ -38,7 +38,7 @@ fn changed_backdrop_rejects_an_already_completed_draw_before_native_publication(
         if matches!(drawing.job.status().phase, JobPhase::Terminal(TerminalKind::Success)) {
             break;
         }
-        fixture.wake.wait_after(observed)?;
+        fixture.wake.wait_after(observed);
     }
     assert_eq!(fixture.session.set_backdrops(vec![region(4.0)?])?, 1);
     consume(&mut fixture.session, &fixture.wake)?;

@@ -57,10 +57,23 @@ impl Fixture {
             }
             let snapshot = self.session.runtime.as_ref().ok_or("Runtime absent")?.scope.snapshot();
             if snapshot.running + snapshot.queued > 0 && snapshot.terminal_unobserved == 0 {
-                self.wake.wait_after(observed)?;
+                self.wake.wait_after(observed);
             }
         }
-        Err("Composition qualification did not reach its expected state".into())
+        let scope = self.session.runtime.as_ref().map(|runtime| runtime.scope.snapshot());
+        Err(format!(
+            "Composition qualification did not reach its expected state: scope {scope:?},              resources {}, device job {}, device pending {}, gpu admitted {}, gpu ready {},              loading {}, rendering {}, displaying {}, selection {}",
+            self.session.resources.is_some(),
+            self.session.device_job.is_some(),
+            self.session.device_pending,
+            self.session.gpu_admitted,
+            self.session.gpu_ready,
+            self.session.loading.is_some(),
+            self.session.rendering.is_some(),
+            self.session.displaying.is_some(),
+            self.session.selection,
+        )
+        .into())
     }
 
     /// Wait for the next unacknowledged selected frame and report its renderer kind.
@@ -119,18 +132,7 @@ fn shared_texture_adapters() -> Result<Vec<AdapterKey>, Box<dyn Error>> {
         other => return Err(format!("Discovery stopped: {:?}", other.kind()).into()),
     };
     drop(scope);
-    owner.request_shutdown(Moment::from_nanos(10_000_000_000));
-    let deadline = std::time::Instant::now()
-        .checked_add(Duration::from_secs(10))
-        .ok_or("Discovery shutdown deadline overflow")?;
-    while !owner.poll_shutdown()?.settled {
-        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-        if std::time::Instant::now() >= deadline {
-            return Err("Discovery execution did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
-    owner.finish_shutdown()?;
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(10_000_000_000))?;
     let unsupported: Vec<_> =
         adapters.iter().filter(|(_, shared, _)| !shared).map(|(_, _, name)| name).collect();
     if !unsupported.is_empty() {

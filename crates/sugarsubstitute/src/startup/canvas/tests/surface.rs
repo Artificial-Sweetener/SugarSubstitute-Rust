@@ -4,11 +4,14 @@
 
 use super::*;
 use serde_json::{Value, json};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    Condvar, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 use sugarsubstitute_contracts::{
     canvas_native::CanvasNativeRequest,
     canvas_surface::CanvasSurfaceMessage,
-    execution::{Generation, MemoryLease, MemoryRelease},
+    execution::{CompletionWake, Generation, MemoryLease, MemoryRelease, OwnedJob},
     lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey},
     panel::PanelSession,
     startup::{LaunchId, MainIdentity},
@@ -48,6 +51,10 @@ mod temporary;
 mod viewport;
 
 use capture::DiagnosticLines;
+
+/// Consecutive pumps that may find the canvas idle before a missing answer counts as lost. The
+/// bound counts polls rather than elapsed time, so machine load never changes it.
+const IDLE_PUMPS: u32 = 256;
 
 struct ClockValue(AtomicU64);
 impl Clock for ClockValue {
@@ -155,7 +162,7 @@ fn wait_reply(
         if let Some(command) = canvas.take_command() {
             return check_reply(command, id, status);
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     }
 }
 
@@ -193,7 +200,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         let revision = wake.revision();
         pump(&mut canvas, &client)?;
         if !canvas.reported_ready {
-            wake.wait_after(revision)?;
+            wake.wait_after(revision);
         }
     }
     let identity = identity()?;
@@ -278,7 +285,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         if let Some(command) = canvas.take_command() {
             break command;
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     };
     check_reply(selected, 3, "applied")?;
     canvas.surface(
@@ -314,7 +321,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         if prepared_frame(&canvas).is_some() {
             break;
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     }
     assert!(canvas.take_command().is_none());
     let second = prepared_frame(&canvas).ok_or("Prepared blue frame is missing")?;
@@ -377,7 +384,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         if let Some(frame) = prepared_frame(&canvas) {
             break frame.content.target();
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     };
     assert!(canvas.take_command().is_none());
     canvas.presented(restored_stamp)?;
@@ -430,7 +437,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
             assert_eq!(frame.placement.viewport.x, 12);
             break frame.content.target();
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     };
     assert_ne!(resized_stamp, restored_stamp);
     canvas.presented(resized_stamp)?;
@@ -446,7 +453,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
             check_reply(command, 10, "error")?;
             break;
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     }
     let MainCanvasPresentation::Retain(retained) = canvas.presentation() else {
         return Err("Failed source replacement withdrew the acknowledged native image".into());
@@ -485,22 +492,9 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         if canvas.settled()? {
             break;
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     }
     canvas.finish()?;
-    owner.request_shutdown(Moment::from_nanos(10_000_000_000));
-    let deadline =
-        Instant::now().checked_add(Duration::from_secs(10)).ok_or("Deadline overflow")?;
-    loop {
-        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if owner.poll_shutdown()?.settled {
-            break;
-        }
-        if Instant::now() >= deadline {
-            return Err("Execution did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
-    owner.finish_shutdown()?;
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(10_000_000_000))?;
     Ok(())
 }

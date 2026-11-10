@@ -20,7 +20,7 @@ fn quiesce(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
         match fixture.execution()? {
             Execution::Idle if fixture.canvas.next_deadline().is_none() => return Ok(()),
             Execution::Idle => fixture.advance(100),
-            Execution::Running | Execution::Delivering => fixture.wake.wait_after(observed)?,
+            Execution::Running | Execution::Delivering => fixture.wake.wait_after(observed),
         }
     }
 }

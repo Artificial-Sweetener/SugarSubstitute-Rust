@@ -233,20 +233,11 @@ impl Servers {
             }
         }
         drop((retire, self.jobs, self.scope));
-        self.owner.request_shutdown(self.client.now()?.checked_add(Duration::from_secs(10))?);
-        let deadline =
-            Instant::now().checked_add(Duration::from_secs(10)).ok_or("Deadline overflow")?;
-        loop {
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if self.owner.poll_shutdown()?.settled {
-                break;
-            }
-            if Instant::now() >= deadline {
-                return Err("Loopback server executor did not settle".into());
-            }
-            std::hint::spin_loop();
-        }
-        self.owner.finish_shutdown()?;
+        self.wake.finish_shutdown(
+            &mut self.owner,
+            &self.client,
+            self.client.now()?.checked_add(Duration::from_secs(10))?,
+        )?;
         Ok(())
     }
 }

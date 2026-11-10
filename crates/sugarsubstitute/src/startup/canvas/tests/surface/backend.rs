@@ -87,7 +87,7 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
         let revision = wake.revision();
         pump(&mut canvas, &client)?;
         if !canvas.reported_ready {
-            wake.wait_after(revision)?;
+            wake.wait_after(revision);
         }
     }
     let identity = identity()?;
@@ -173,22 +173,9 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
         if canvas.settled()? {
             break;
         }
-        wake.wait_after(revision)?;
+        wake.wait_after(revision);
     }
     canvas.finish()?;
-    owner.request_shutdown(Moment::from_nanos(10_000_000_000));
-    let deadline =
-        Instant::now().checked_add(Duration::from_secs(10)).ok_or("Deadline overflow")?;
-    loop {
-        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if owner.poll_shutdown()?.settled {
-            break;
-        }
-        if Instant::now() >= deadline {
-            return Err("Execution did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
-    owner.finish_shutdown()?;
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(10_000_000_000))?;
     Ok(())
 }

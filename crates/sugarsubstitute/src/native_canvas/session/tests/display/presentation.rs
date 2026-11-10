@@ -19,13 +19,13 @@ struct Gate {
 }
 
 impl Gate {
-    fn wait_entered(&self) -> Result<(), Box<dyn Error>> {
-        let state = self.state.lock().map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        let (state, _) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.entered)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if state.entered { Ok(()) } else { Err("Native presentation fixture did not enter".into()) }
+    fn wait_entered(&self) {
+        let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        drop(
+            self.changed
+                .wait_while(state, |state| !state.entered)
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
     }
 
     fn present(&self, target: FrameStamp) -> Result<GpuPresentation, WorkError> {
@@ -35,13 +35,11 @@ impl Gate {
             .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
         state.entered = true;
         self.changed.notify_all();
-        let (state, _) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.released)
-            .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?;
-        if !state.released {
-            return Err(WorkError::invalid("Native presentation fixture was not released"));
-        }
+        drop(
+            self.changed
+                .wait_while(state, |state| !state.released)
+                .map_err(|cause| WorkError::new(std::io::Error::other(cause.to_string())))?,
+        );
         Ok(GpuPresentation { target, receipt: WindowPresentation { needs_follow_up: true } })
     }
 
@@ -89,7 +87,7 @@ pub(super) fn presenting(
     let job =
         runtime.client.submit_blocking(&runtime.scope, spec, move |_| boundary.present(target))?;
     session.presenting = Some(Presenting { target, job });
-    gate.wait_entered()?;
+    gate.wait_entered();
     Ok((fixture, release, target))
 }
 
@@ -104,7 +102,7 @@ pub(super) fn consume_present(session: &mut Session, wake: &Wake) -> Result<(), 
             .drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
         session.consume_gpu_presentation()?;
         if session.presenting.is_some() {
-            wake.wait_after(observed)?;
+            wake.wait_after(observed);
         }
     }
     Ok(())
@@ -247,7 +245,7 @@ fn native_display_prepares_while_reconstruction_retains_the_cpu_interactive_slot
     let mut reconstruction = runtime
         .client
         .submit_cpu(&runtime.scope, cpu_spec, move |_| HeldCpu { gate: held, target })?;
-    gate.wait_entered()?;
+    gate.wait_entered();
     let mut input = Some(work::Draw {
         underlay: previous.underlay,
         tier: previous.tier,

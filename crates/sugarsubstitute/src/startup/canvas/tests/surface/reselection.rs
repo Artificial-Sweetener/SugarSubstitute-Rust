@@ -46,7 +46,7 @@ fn selecting_a_shown_output_again_presents_it_once_without_acquiring_it()
             presents += 1;
             fixture.canvas.presented(target)?;
         } else if fixture.execution()? == Execution::Running {
-            fixture.wake.wait_after(observed)?;
+            fixture.wake.wait_after(observed);
         }
     }
     assert!(replied, "The reselection was never applied");

@@ -43,17 +43,14 @@ impl GatedFile {
         })
     }
 
-    /// Wait until an import job is acquiring the file, bounding a stalled worker.
-    fn wait_entered(&self) -> Result<(), Box<dyn Error>> {
+    /// Wait until an import job is acquiring the file.
+    fn wait_entered(&self) {
         let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.entered)
-            .map_err(|cause| io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && !state.entered {
-            return Err("The seed file was never acquired".into());
-        }
-        Ok(())
+        drop(
+            self.changed
+                .wait_while(state, |state| !state.entered)
+                .unwrap_or_else(PoisonError::into_inner),
+        );
     }
 
     /// Let the acquisition finish; opening an open gate again is harmless.
@@ -207,7 +204,7 @@ impl Fixture {
                 || !session.inputs_restored()
                 || inputs && session.inputs.running()
             {
-                self.wake.wait_after(observed).map_err(|cause| format!("{what}: {cause}"))?;
+                self.wake.wait_after(observed);
             }
         }
         Err(format!("The canvas never reached {what}").into())
@@ -231,7 +228,7 @@ impl Fixture {
             created(session).is_some()
         })?;
         let (document, _) = created(&self.session).ok_or("The seeding document vanished")?;
-        gate.wait_entered()?;
+        gate.wait_entered();
         self.poll_until("the seeding document shown", false, |session| {
             session.document.input == Some(document)
         })?;

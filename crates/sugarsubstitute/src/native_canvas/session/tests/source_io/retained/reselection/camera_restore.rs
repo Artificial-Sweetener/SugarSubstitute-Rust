@@ -28,7 +28,7 @@ fn invalid_loaded_source_camera_retains_the_preceding_document_and_inspection()
         if fixture.session.failed.is_some() {
             break;
         }
-        fixture.wake.wait_after(observed)?;
+        fixture.wake.wait_after(observed);
     }
     assert_eq!(fixture.session.document.shown_key(), original);
     assert_eq!(fixture.session.document.tools.navigation().viewport(), viewport);
