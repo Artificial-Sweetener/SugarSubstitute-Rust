@@ -306,9 +306,11 @@ impl Host {
             match self.turn(id)? {
                 Ok(value) if value["status"] == status => return Ok(value),
                 Ok(value) => {
-                    return Err(
-                        format!("Request {id} replied {} not {status}", value["status"]).into()
-                    );
+                    return Err(format!(
+                        "Request {id} replied {} not {status}: {value}",
+                        value["status"]
+                    )
+                    .into());
                 }
                 Err(true) => {}
                 Err(false) => {

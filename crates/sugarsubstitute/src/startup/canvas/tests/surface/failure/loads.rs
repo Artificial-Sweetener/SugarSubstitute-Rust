@@ -133,16 +133,19 @@ fn serve(
 }
 
 /// Loopback servers on their own executor, so socket polling never needs the canvas's frozen
-/// clock. Its paused clock keeps every fixture lifetime logical, so a slow machine can never
-/// expire a server a test still needs, while its 1 ms socket polls still elapse for real.
+/// clock. Its paused clock keeps every fixture lifetime logical and never fires a deadline timer,
+/// so a slow machine can never expire a server a test still needs, while its 1 ms socket polls
+/// still elapse for real. The test ends the servers explicitly, and dropping them cancels them.
 struct Servers {
+    // Fields drop in declaration order: the servers are abandoned, and so cancelled, before the
+    // owner that joins them, so an unwinding test never waits on a server that nothing stops.
+    /// The qualification server, then the `/view` server.
+    jobs: [OwnedJob<(), io::Error>; 2],
+    scope: Arc<Scope>,
     owner: ExecutionOwner,
     client: ExecutionClient,
     wake: Arc<Wake>,
-    /// The qualification server, then the `/view` server.
-    jobs: [OwnedJob<(), io::Error>; 2],
     port: u16,
-    scope: Arc<Scope>,
 }
 
 /// A finite ordinary infrastructure job on the server executor.
@@ -216,19 +219,40 @@ impl Servers {
                 result
             }
         })?;
-        if let JobOutcome::Failure(cause) = self.wake.completion(&self.client, &mut retire)?.outcome
-        {
-            return Err(cause.into());
-        }
-        // The qualification client may pool its socket; nothing else will connect to it.
+        let retired = self.wake.completion(&self.client, &mut retire)?.outcome;
+        let retire_failed = matches!(retired, JobOutcome::Failure(_));
+        // The qualification client may pool its socket; nothing else will connect to it. A failed
+        // retire leaves the `/view` server waiting for it, so stop that server too and let its own
+        // outcome explain the failure.
         self.jobs[0].cancel();
+        if retire_failed {
+            self.jobs[1].cancel();
+        }
+        let mut server_failure = None;
         for (index, job) in self.jobs.iter_mut().enumerate() {
             match self.wake.completion(&self.client, job)?.outcome {
                 JobOutcome::Success(()) => {}
-                JobOutcome::Cancelled if index == 0 => {}
-                JobOutcome::Failure(cause) => return Err(cause.into()),
-                other => return Err(format!("Loopback server stopped: {:?}", other.kind()).into()),
+                JobOutcome::Cancelled if index == 0 || retire_failed => {}
+                JobOutcome::Failure(cause) => {
+                    server_failure
+                        .get_or_insert(format!("Loopback server {index} failed: {cause}"));
+                }
+                other => {
+                    server_failure.get_or_insert(format!(
+                        "Loopback server {index} stopped: {:?}",
+                        other.kind()
+                    ));
+                }
             }
+        }
+        if let JobOutcome::Failure(cause) = retired {
+            return Err(match server_failure {
+                Some(server) => format!("{server}; the retire request then failed: {cause}").into(),
+                None => cause.into(),
+            });
+        }
+        if let Some(server) = server_failure {
+            return Err(server.into());
         }
         drop((retire, self.jobs, self.scope));
         self.wake.finish_shutdown(
@@ -269,5 +293,11 @@ fn missing_truncated_mislabeled_and_corrupt_outputs_fail_exactly_and_the_next_se
         idle(host)
     });
     let served = servers.finish();
-    canvas.and(served)
+    match (canvas, served) {
+        (Ok(()), served) => served,
+        (Err(canvas), Ok(())) => Err(canvas),
+        (Err(canvas), Err(served)) => {
+            Err(format!("{canvas}; the loopback servers then reported: {served}").into())
+        }
+    }
 }

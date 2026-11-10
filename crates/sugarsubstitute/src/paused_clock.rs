@@ -4,15 +4,24 @@
 //! Freeze logical time for tests whose product code takes real deadlines.
 //!
 //! Product services bound their work with deadlines on an injected clock. A test that gives them
-//! this clock observes a deadline that never expires, however slowly a loaded machine runs, while
-//! the service's own polling timers still fire after their requested durations. Time is therefore
-//! decided by the test and elapsed time only paces polling; it never changes an outcome.
+//! this clock observes a deadline that never expires, however slowly a loaded machine runs. The
+//! service's own polling delays still elapse for real, so time is decided by the test and elapsed
+//! time only paces polling; it never changes an outcome.
+//!
+//! The clock port has one timer for both purposes, so the distance to the instant tells them
+//! apart: a wait up to [`DELAY_LIMIT`] is a polling delay, and a longer one is a deadline that
+//! logical time, being frozen, never reaches.
 
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 use sugarsubstitute_contracts::execution::{Clock, Moment, WaitFuture};
 use sugarsubstitute_execution::MonotonicClock;
 
-/// A clock whose `now` never moves and whose timers wait out the requested duration for real.
+/// Longest wait treated as a polling delay. Execution owners arm job deadlines as timers on the
+/// same port, and those must not elapse in real time on a slow machine.
+const DELAY_LIMIT: Duration = Duration::from_secs(1);
+
+/// A clock whose `now` never moves, whose short timers wait out the requested duration for real
+/// and whose long timers, the deadlines, never fire.
 pub(crate) struct PausedClock {
     real: Arc<MonotonicClock>,
     frozen: Moment,
@@ -30,16 +39,23 @@ impl Clock for PausedClock {
         self.frozen
     }
 
-    /// Wait for the logical distance to `deadline` on the real timer owned by the execution adapter.
+    /// Wait out a polling delay on the real timer owned by the execution adapter; a deadline
+    /// beyond [`DELAY_LIMIT`] stays pending forever.
     fn sleep_until(&self, deadline: Moment) -> WaitFuture {
         let remaining = deadline.checked_duration_since(self.frozen).unwrap_or(Duration::ZERO);
-        let wait: Pin<Box<dyn Future<Output = ()> + Send>> =
-            match self.real.now().checked_add(remaining) {
-                Ok(real_deadline) => self.real.sleep_until(real_deadline),
-                Err(_) => Box::pin(std::future::pending()),
-            };
+        let wait: Pin<Box<dyn Future<Output = ()> + Send>> = match polling_delay(remaining)
+            .and_then(|delay| self.real.now().checked_add(delay).ok())
+        {
+            Some(real_deadline) => self.real.sleep_until(real_deadline),
+            None => Box::pin(std::future::pending()),
+        };
         wait
     }
+}
+
+/// The real wait for a timer `remaining` logical time away, or none for a deadline.
+fn polling_delay(remaining: Duration) -> Option<Duration> {
+    (remaining <= DELAY_LIMIT).then_some(remaining)
 }
 
 #[cfg(test)]
@@ -50,6 +66,16 @@ mod tests {
         ExecutionPort, JobClass, JobId, JobOutcome, JobSpec, Operation, ScopeId, ScopeSpec,
     };
     use sugarsubstitute_execution::ExecutionOwner;
+
+    /// Polling delays elapse for real while a deadline, however near in logical time, never does.
+    #[test]
+    fn only_waits_up_to_the_delay_limit_are_real_timers() {
+        assert_eq!(polling_delay(Duration::ZERO), Some(Duration::ZERO));
+        assert_eq!(polling_delay(Duration::from_millis(1)), Some(Duration::from_millis(1)));
+        assert_eq!(polling_delay(DELAY_LIMIT), Some(DELAY_LIMIT));
+        assert_eq!(polling_delay(DELAY_LIMIT + Duration::from_nanos(1)), None);
+        assert_eq!(polling_delay(Duration::from_secs(60)), None);
+    }
 
     /// A timer fires after its requested duration while logical time stays where the test put it.
     #[test]
