@@ -14,7 +14,7 @@ pub(super) fn report<E: Error + 'static>(
     let Err(cause) = result else {
         return Ok(());
     };
-    tracing::error!(operation="installer_failed", cause=%Details(cause.as_ref()), "Setup could not finish");
+    tracing::error!(operation="installer_failed", cause_chain=%crate::diagnostics::CauseChain(cause.as_ref()), "Setup could not finish");
     if interactive {
         let copy = sugarsubstitute_contracts::localization::installer::messages(locale);
         if let Err(secondary) =

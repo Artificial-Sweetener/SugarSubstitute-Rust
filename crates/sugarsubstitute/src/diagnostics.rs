@@ -11,8 +11,10 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
+mod cause_chain;
 mod fields;
 mod queue;
+pub(crate) use cause_chain::CauseChain;
 #[cfg(windows)]
 mod service;
 #[cfg(all(windows, feature = "windows-native-host"))]

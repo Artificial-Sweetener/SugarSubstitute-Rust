@@ -24,9 +24,16 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:561285408f83c0ce81cb65e3162ab0da647cf9b4d277a8ee5faa163340a516e7"
+source_sha256 = "sha256:85cd2e1c55cede34feb532f6626cca616bd1b0e1f4d236092148f9c944e9f41f"
 disposition = "routing"
 rationale = "Process-global supported subscriber and original diagnostic failure health."
+
+[[records]]
+path = "crates/sugarsubstitute/src/diagnostics/cause_chain_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:83892b295defaac5c4be8524c1e1f6d4b18c91de57f8fbbe4e944d12efad9f0f"
+disposition = "fixture"
+rationale = "An isolated formatter captures one fatal event to prove its cause chain stays readable while sensitive links and the free-form failure field stay redacted; runtime routing is unchanged."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"

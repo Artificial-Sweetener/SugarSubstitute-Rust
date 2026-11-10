@@ -182,7 +182,7 @@ pub(in crate::production) fn retain_failure<C: EntryActivation + 'static>(
     lifetime: Box<EntryRunner<C>>,
 ) -> Box<dyn Error> {
     let failure = RunFailure { pump, lifetime };
-    tracing::error!(operation="production_entry_failed",failure=?failure,
+    tracing::error!(operation="production_entry_failed",cause_chain=%crate::diagnostics::CauseChain(failure.primary()),
         "Production entry failed with retained startup and cleanup causes");
     Box::new(failure)
 }
@@ -410,7 +410,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         if self.failure.is_none() {
             self.failure = Some(cause);
             if let Some(primary) = self.failure_source() {
-                tracing::error!(operation="production_ownership_failed",failure=?FailureDisplay(primary),
+                tracing::error!(operation="production_ownership_failed",cause_chain=%crate::diagnostics::CauseChain(primary),
                     "Production admission closed with its original retained cause");
             }
         } else if let Some(slot) = self.secondary.iter_mut().find(|slot| slot.is_none()) {

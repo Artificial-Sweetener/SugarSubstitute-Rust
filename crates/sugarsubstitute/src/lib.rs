@@ -45,8 +45,8 @@ mod held_fixture;
 pub mod input_documents;
 pub mod instance_conflict;
 mod invocation;
-pub mod job_sequence;
 mod job_deadline;
+pub mod job_sequence;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod output_fixture;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
@@ -289,7 +289,7 @@ fn run_application(
         #[cfg(not(all(windows, feature = "windows-native-host")))]
         let result = execute(health);
         if let Err(error) = &result {
-            tracing::error!(operation="application_startup",cause=%error,"SugarSubstitute could not complete its application lifetime");
+            tracing::error!(operation="application_startup",cause_chain=%diagnostics::CauseChain(error.as_ref()),"SugarSubstitute could not complete its application lifetime");
         }
         result
     })

@@ -25,7 +25,7 @@ impl Controller {
     pub(super) fn accept(&mut self, request: Request) -> Result<()> {
         let id = request.id.clone();
         if let Err(cause) = self.dispatch(request) {
-            tracing::error!(operation="installer_request_failed", request_id=%id, cause=%crate::failure_details::Details(cause.as_ref()), "Installer request failed");
+            tracing::error!(operation="installer_request_failed", request_id=%id, cause_chain=%crate::diagnostics::CauseChain(cause.as_ref()), "Installer request failed");
             self.diagnostic(crate::failure_details::Details(cause.as_ref()).to_string())?;
             self.emit(Some(id), Kind::Failed(input::message(cause.as_ref(), &self.locale).into()))?;
         }

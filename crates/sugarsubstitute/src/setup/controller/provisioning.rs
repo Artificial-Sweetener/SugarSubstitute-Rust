@@ -6,7 +6,7 @@ mod presentation;
 
 impl Controller {
     pub(super) fn worker_failed(&mut self, cause: Box<dyn Error>) -> Result<()> {
-        tracing::error!(operation="installer_worker_failure", cause=%cause, "Provisioning stopped");
+        tracing::error!(operation="installer_worker_failure", cause_chain=%crate::diagnostics::CauseChain(cause.as_ref()), "Provisioning stopped");
         if let Some(worker) = &mut self.worker {
             worker.close()?;
         }

@@ -11,7 +11,7 @@ pub(super) fn report_failure<C: EntryActivation + 'static, E: Error + 'static>(
 ) -> Box<dyn Error> {
     if super::entry_runner::is_normal_shutdown_failure::<C>(cause.as_ref()) {
         tracing::error!(operation="application_shutdown_failed",
-            cause=?super::entry_runner::FailureDisplay(cause.as_ref()),
+            cause_chain=%crate::diagnostics::CauseChain(cause.as_ref()),
             "User-requested shutdown finished with retained cleanup errors");
         return cause;
     }

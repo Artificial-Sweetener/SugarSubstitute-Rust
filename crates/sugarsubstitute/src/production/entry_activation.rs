@@ -324,7 +324,7 @@ impl EntryActivation for ProductionActivation {
         if let Err(cause) = self.activity(batch, &mut resources) {
             tracing::error!(
                 operation = "production_activation_transition_failed",
-                failure = ?crate::production::entry_runner::FailureDisplay(cause.as_ref()),
+                cause_chain = %crate::diagnostics::CauseChain(cause.as_ref()),
                 "Actual activation turn failed before original cause retention"
             );
             self.preserve(cause);
