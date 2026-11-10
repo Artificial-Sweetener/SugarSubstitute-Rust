@@ -174,3 +174,39 @@ fn shared_raw_json_rejects_duplicates_escaped_duplicates_truncation_and_bad_unic
     }
     Ok(())
 }
+
+/// A checkpoint the page captured must survive storage exactly: the store compares a saved
+/// checkpoint with its re-decoded bytes, so a coordinate that changes by one unit in the last
+/// place makes every later save fail.
+#[test]
+fn every_finite_graph_coordinate_survives_the_checkpoint_codec_exactly()
+-> Result<(), Box<dyn Error>> {
+    let vectors: Vectors = serde_json::from_str(VECTORS)?;
+    let mut checkpoint = vectors
+        .checkpoints
+        .into_iter()
+        .filter(|vector| vector.valid)
+        .find_map(|vector| decode_checkpoint(&serde_json::to_vec(&vector.value).ok()?).ok())
+        .ok_or("Missing valid checkpoint vector")?;
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut changed = Vec::new();
+    for _ in 0..2000 {
+        state =
+            state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        // Pan offsets and zoom scales of a real canvas: any magnitude up to a few thousand pixels.
+        let coordinate = ((state >> 11) as f64 / (1_u64 << 53) as f64 - 0.5) * 8192.0;
+        let entry = checkpoint.entries.first_mut().ok_or("Missing entry")?;
+        entry.document.view.x = coordinate;
+        let decoded = decode_checkpoint(&encode_checkpoint(&checkpoint)?)?;
+        if decoded != checkpoint {
+            changed.push(coordinate);
+        }
+    }
+    assert!(
+        changed.is_empty(),
+        "{} coordinates changed, first {:?}",
+        changed.len(),
+        changed.first()
+    );
+    Ok(())
+}
