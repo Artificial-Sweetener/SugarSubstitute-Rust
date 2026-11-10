@@ -20,6 +20,25 @@ const MAX_UNITS: usize = 32767;
 const MAX_VARIABLES: usize = 1024;
 const MAX_OVERRIDES: usize = 64;
 
+/// One output block holds at most the enforced unit limit and is reserved exactly.
+const BLOCK_BYTES: usize = MAX_UNITS * size_of::<u16>();
+/// The merge table reserves one slot per snapshot variable and per override.
+const MERGE_TABLE_BYTES: usize =
+    (MAX_VARIABLES + MAX_OVERRIDES) * size_of::<entries::Entry<'static>>();
+/// The sorted override table `merge` builds beside the merge table.
+const OVERRIDE_TABLE_BYTES: usize = MAX_OVERRIDES * size_of::<entries::Entry<'static>>();
+/// Override descriptors plus the two owned vectors and name text each override can carry.
+const CONSTRUCTOR_SCRATCH_BYTES: usize =
+    MAX_OVERRIDES * (size_of::<EnvironmentOverride<'static>>() + 2 * size_of::<Vec<u16>>() + 80);
+
+const fn larger(left: usize, right: usize) -> usize {
+    if left > right { left } else { right }
+}
+/// Override scratch, both merge tables and the output block exist together at the widest moment.
+const fn local_storage_peak() -> usize {
+    CONSTRUCTOR_SCRATCH_BYTES + MERGE_TABLE_BYTES + OVERRIDE_TABLE_BYTES + BLOCK_BYTES
+}
+
 /// Borrow an explicit ordinary-variable change for this child only.
 /// Names exclude NUL and `=`; values exclude NUL and may be empty. Hidden shell
 /// entries are snapshot-only. Project-private variables cannot be inserted.
@@ -142,6 +161,38 @@ impl LaunchEnvironment {
     /// The values are this owner's unchanged enforced unit/variable limits.
     pub const fn maximum_copy_storage_bytes() -> u64 {
         (MAX_VARIABLES * size_of::<entries::Entry<'static>>() + MAX_UNITS * size_of::<u16>()) as u64
+    }
+
+    /// Bound the peak buffers one [`Self::for_local_storage`] build owns beside its snapshot.
+    ///
+    /// Every merge table and output block is reserved exactly and limited by this owner's
+    /// enforced unit, variable and override counts, so the peak never exceeds this constant for
+    /// any admitted snapshot. Path-sized buffers the caller derives from the storage directory
+    /// are not included; the caller charges them from the actual path length.
+    pub const fn maximum_local_storage_bytes() -> u64 {
+        local_storage_peak() as u64
+    }
+
+    /// Bound the peak buffers a local-storage build followed by one [`Self::for_managed_backend`]
+    /// build own beside their snapshot, counting the local-storage block that stays retained.
+    ///
+    /// The backend build reuses no buffer of the local-storage build: it holds the retained
+    /// block, its own intermediate block, the PATH scratch (reallocated once), and then the
+    /// merged table beside the final block. The widest of those moments is the bound, so it
+    /// never exceeds this constant for any admitted snapshot.
+    pub const fn maximum_managed_backend_bytes() -> u64 {
+        let initial_table = MAX_VARIABLES * size_of::<entries::Entry<'static>>();
+        // Intermediate block, initial table, and PATH scratch while it grows beside its old copy.
+        let search_path_growth = BLOCK_BYTES + initial_table + 2 * BLOCK_BYTES;
+        // Intermediate block, PATH scratch, and the merged table while it grows by one entry.
+        let merged_table_growth = 2 * BLOCK_BYTES + 2 * MERGE_TABLE_BYTES;
+        // Intermediate block, PATH scratch, merged table, and the final block.
+        let final_block = 3 * BLOCK_BYTES + MERGE_TABLE_BYTES;
+        let backend = larger(
+            local_storage_peak(),
+            larger(search_path_growth, larger(merged_table_growth, final_block)),
+        );
+        (BLOCK_BYTES + CONSTRUCTOR_SCRATCH_BYTES + backend) as u64
     }
 
     /// Account actual retained buffer capacity in bytes, excluding this stack owner.

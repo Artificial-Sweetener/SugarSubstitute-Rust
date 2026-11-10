@@ -315,3 +315,34 @@ fn malformed_duplicate_and_oversized_managed_environments_reject_before_publicat
     ));
     Ok(())
 }
+
+/// The declared peaks are what a projection reserves before building these blocks, so they must
+/// cover the retained blocks of the largest environments the native limits admit.
+#[test]
+fn declared_peak_bounds_cover_the_largest_environments_both_builds_admit() -> TestResult {
+    const BLOCK_BYTES: u64 = 32767 * 2;
+    let widest_text: Vec<_> =
+        (0..850).map(|index| format!("VARIABLE_{index:04}={}", "v".repeat(20))).collect();
+    let most_variables: Vec<_> = (0..980).map(|index| format!("K{index:04}=v")).collect();
+    for lines in [&widest_text, &most_variables] {
+        let input = snapshot(&lines.iter().map(String::as_str).collect::<Vec<_>>());
+        let desktop = LaunchEnvironment::for_local_storage(&input, storage())?;
+        let backend = LaunchEnvironment::for_managed_backend(
+            &input,
+            &configuration(true)?,
+            BackendStorage::External,
+        )?;
+        assert!(desktop.allocated_bytes()? <= BLOCK_BYTES);
+        assert!(backend.allocated_bytes()? <= BLOCK_BYTES);
+        assert!(desktop.allocated_bytes()? <= LaunchEnvironment::maximum_local_storage_bytes());
+        assert!(
+            desktop.allocated_bytes()? + backend.allocated_bytes()?
+                <= LaunchEnvironment::maximum_managed_backend_bytes()
+        );
+    }
+    assert!(
+        LaunchEnvironment::maximum_local_storage_bytes()
+            < LaunchEnvironment::maximum_managed_backend_bytes()
+    );
+    Ok(())
+}

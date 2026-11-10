@@ -47,8 +47,6 @@ pub(super) fn preflight(
     settled_profile: Option<&Path>,
 ) -> Result<(), LifecycleRejection> {
     let mut bytes = count(capture.capacity())?;
-    // Desktop storage overrides can fill a native block even for an empty captured snapshot.
-    bytes = add(bytes, 256 * 1024)?;
     if let Some(profile) = settled_profile {
         let units = count(profile.as_os_str().encode_wide().count())?;
         bytes = add(bytes, add(mul(units, 4)?, vector(mul(units, 3)?, 1)?)?)?;
@@ -70,8 +68,6 @@ pub(super) fn preflight(
         // script-path preparation. The one actual owner remains comfy::launch.
         bytes = add(bytes, mul(path_peak(root)?, 6)?)?;
         bytes = add(bytes, mul(path_peak(interpreter)?, 5)?)?;
-        // Local storage preparation can fill a native environment even from an empty snapshot.
-        bytes = add(bytes, 256 * 1024)?;
         let mut argument_bytes = 0;
         for argument in arguments.iter() {
             argument_bytes = add(argument_bytes, count(argument.len())?)?;
@@ -90,14 +86,18 @@ pub(super) fn preflight(
         bytes = add(bytes, vector(count(arguments.len())?, size_of::<String>() as u64)?)?;
         bytes = add(bytes, 128 + sugarsubstitute_comfy::launch::MANAGED_BOOTSTRAP_BYTES as u64)?;
     }
-    let units = count(view.environment().unit_len())?;
-    // Raw snapshot, desktop/backend output and managed PATH scratch/reallocation.
-    // Entry is two slice-shaped fields in the source-pinned environment::entries owner.
-    let environment_copies =
-        if matches!(view.connection(), EntryConnectionView::Managed { .. }) { 12 } else { 6 };
-    bytes = add(bytes, mul(units, environment_copies)?)?;
-    let entry = (size_of::<&[u16]>() + size_of::<Option<&[u16]>>() + align_of::<&[u16]>()) as u64;
-    bytes = add(bytes, mul(1024.min(units), entry)?)?;
+    // Only the owned snapshot copy scales with the input. The environment owner bounds its own
+    // blocks and merge tables by its enforced unit and variable limits, which already cover
+    // the storage overrides, the managed PATH scratch and its reallocation, and both outputs.
+    bytes = add(bytes, mul(count(view.environment().unit_len())?, size_of::<u16>() as u64)?)?;
+    bytes = add(
+        bytes,
+        if matches!(view.connection(), EntryConnectionView::Managed { .. }) {
+            LaunchEnvironment::maximum_managed_backend_bytes()
+        } else {
+            LaunchEnvironment::maximum_local_storage_bytes()
+        },
+    )?;
     bytes = add(bytes, (size_of::<Fields>() + size_of::<ProjectedEntry>()) as u64)?;
     if bytes <= available { Ok(()) } else { Err(LifecycleRejection::Overloaded) }
 }

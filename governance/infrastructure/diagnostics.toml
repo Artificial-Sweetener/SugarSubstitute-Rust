@@ -1081,14 +1081,14 @@ rationale = "Redirect delegated pip log paths to the caller's explicit installat
 [[records]]
 path = "crates/sugarsubstitute-supervision/tests/backend_environment.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b292a348257025aa6ecad1f85c7ae1f5229abf770750aceabca287c5aa3788da"
+source_sha256 = "sha256:df3d450fe306c785587f7b2ef46ee9c5ede1bedbda1f8ef7c1de41d736aab32f"
 disposition = "fixture"
 rationale = "Verify that inherited delegated-tool log destinations are replaced by the explicit installation-local path without mutating the original environment."
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/projection_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:04b127375bc38b72bc0a35507260588611737f5d1c5a97dd8f17546baae8e004"
+source_sha256 = "sha256:fc94b33d567e8ac310f4ab3c46bc6fe4191805a86eb862050995bde4616c5eb3"
 disposition = "fixture"
 rationale = "Assert that production projection confines delegated pip log and temporary destinations while preserving the original captured environment; no diagnostic sink is created."
 
