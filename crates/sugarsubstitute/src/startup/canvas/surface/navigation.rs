@@ -14,6 +14,7 @@ impl NativeSurface {
     ) -> Result<(), Box<dyn Error>> {
         self.retire_preview_navigation(identity, session.as_deref_mut())?;
         self.editing.retire_navigation(identity);
+        self.retire_deferred(identity);
         let retained = self.retained.as_ref().is_some_and(|binding| binding.identity == identity);
         let current = self.binding.as_ref().is_some_and(|binding| binding.identity == identity);
         if retained && self.binding.as_ref().is_some_and(|binding| binding.identity != identity) {

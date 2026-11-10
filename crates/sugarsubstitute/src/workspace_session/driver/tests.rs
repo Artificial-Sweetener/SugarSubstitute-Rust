@@ -149,7 +149,7 @@ fn failed_replay_protects_originals_without_renewing_close_or_capturing_defaults
     let (mut driver, fence) = fixture()?;
     let (request, transfer) = encoding(ready(&mut driver, fence)?)?;
     driver.encoding_stopped(&request, &transfer)?;
-    driver.tick(Moment::from_nanos(30_000_000_000))?;
+    driver.restore_failed(&request, &RestoreFailure::Encoding)?;
     assert!(
         matches!(driver.next_message().map(|message| message.operation), Some(SessionOperation::Cancel { target_request_id }) if target_request_id == request)
     );
@@ -159,5 +159,64 @@ fn failed_replay_protects_originals_without_renewing_close_or_capturing_defaults
     driver.tick(Moment::from_nanos(40_000_000_000))?;
     assert!(driver.close_ready(Moment::from_nanos(40_000_000_000)));
     assert!(driver.next_message().is_none());
+    Ok(())
+}
+#[test]
+fn a_restore_waiting_on_its_page_is_never_abandoned_by_elapsed_time() -> TestResult {
+    let (mut driver, fence) = fixture()?;
+    let (request, _) = encoding(ready(&mut driver, fence)?)?;
+    // The restore has no cutoff of its own to wake the pump for.
+    assert!(driver.deadline().is_none());
+    for seconds in [30, 31, 600, 86_400, 31_536_000] {
+        driver.tick(Moment::from_nanos(seconds * 1_000_000_000))?;
+        assert!(driver.owns_restore(&request), "restore abandoned after {seconds} s");
+        assert!(driver.next_message().is_none());
+    }
+    Ok(())
+}
+#[test]
+fn a_page_refusal_ends_the_restore_with_a_typed_cause_and_protects_the_saved_workspace()
+-> TestResult {
+    for code in ["invalid", "unavailable", "not-committed"] {
+        let (mut driver, fence) = fixture()?;
+        let (request, transfer) = encoding(ready(&mut driver, fence)?)?;
+        driver.encoding_stopped(&request, &transfer)?;
+        driver.restore.as_mut().ok_or("Restore disappeared")?.sent = true;
+        let refusal = driver.message(
+            request.clone(),
+            SessionOperation::Error {
+                failure: SessionFailure {
+                    code: code.into(),
+                    retryable: code != "invalid",
+                    entry_id: None,
+                    output_id: None,
+                },
+            },
+        );
+        assert!(driver.receive(refusal, Moment::from_nanos(1))?.is_none());
+        assert!(!driver.owns_restore(&request), "{code} left the restore owned");
+        assert_eq!(
+            RestoreFailure::Refused { code: code.into(), retryable: code != "invalid" }.to_string(),
+            format!("page-refused code={code} retryable={}", code != "invalid")
+        );
+        // The saved workspace is protected: no default workspace is ever captured over it.
+        driver.tick(Moment::from_nanos(31_000_000_000))?;
+        assert!(driver.next_message().is_none());
+        assert!(driver.policy.deadline().is_none());
+    }
+    Ok(())
+}
+#[test]
+fn closing_ends_a_restore_still_waiting_on_its_page_and_protects_the_saved_workspace() -> TestResult
+{
+    let (mut driver, fence) = fixture()?;
+    let (request, transfer) = encoding(ready(&mut driver, fence)?)?;
+    driver.encoding_stopped(&request, &transfer)?;
+    driver.begin_close(Moment::from_nanos(5), Moment::from_nanos(10_000_000_000))?;
+    assert!(!driver.owns_restore(&request));
+    driver.tick(Moment::from_nanos(10_000_000_000))?;
+    assert!(driver.close_ready(Moment::from_nanos(10_000_000_000)));
+    assert!(driver.next_message().is_none());
+    assert_eq!(RestoreFailure::Shutdown.to_string(), "shutdown");
     Ok(())
 }

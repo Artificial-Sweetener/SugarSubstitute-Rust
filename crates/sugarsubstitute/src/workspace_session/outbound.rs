@@ -104,11 +104,13 @@ impl Outbound {
         Some((self.request.clone(), operation))
     }
 }
+/// Stop an encoding on cancellation, or on a cutoff when one was set. A restore encoding is
+/// submitted without a cutoff of its own, so only the scope's shutdown cancellation ends it early.
 fn check(context: &JobContext) -> Result<(), StoreError> {
     if context.cancellation_requested() {
         return Err(io::Error::from(io::ErrorKind::Interrupted).into());
     }
-    if context.deadline().is_none_or(|deadline| context.now() >= deadline) {
+    if context.deadline().is_some_and(|deadline| context.now() >= deadline) {
         return Err(io::Error::from(io::ErrorKind::TimedOut).into());
     }
     Ok(())

@@ -80,9 +80,9 @@ impl NativeSurface {
     }
 }
 
-/// Record a viewport request that outlived its settle budget while waiting for `wait`.
-pub(super) fn expired(request: &CanvasSurfaceRequest, wait: Wait) {
-    Record { pending: Waiting::Viewport, wait, ..record(Stage::Expired, request) }.emit();
+/// Record a candidate's preparation held behind the request that owns native mutation.
+pub(super) fn deferred(request: &CanvasSurfaceRequest) {
+    Record { pending: Waiting::Prepare, ..record(Stage::Deferred, request) }.emit();
 }
 
 /// Record admission past attachment, ordering and availability checks.

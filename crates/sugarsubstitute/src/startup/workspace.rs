@@ -12,7 +12,8 @@ mod publication;
 mod sources;
 use super::*;
 use crate::workspace_session::{
-    self, DriverEvent, OpenedProfile, ProfileStore, StoreError, WorkspaceDriver, WorkspaceStore,
+    self, DriverEvent, OpenedProfile, ProfileStore, RestoreFailure, StoreError, WorkspaceDriver,
+    WorkspaceStore,
 };
 use std::{collections::VecDeque, path::PathBuf, sync::Mutex};
 use sugarsubstitute_application::workspace_session::CaptureTicket;
@@ -192,7 +193,7 @@ impl WorkspaceWork {
         let origin = context.origin;
         let user = self.user.clone();
         let preloader = self.media.preloader();
-        let spec = self.job(LOAD_BYTES, until)?;
+        let spec = self.job(LOAD_BYTES, Some(until))?;
         let client = self.client.as_ref().ok_or("Workspace execution absent")?;
         let scope = self.scope.as_ref().ok_or("Workspace scope absent")?;
         self.load = Some(client.submit_blocking(scope,spec,move |job| {
@@ -223,12 +224,12 @@ impl WorkspaceWork {
         self.deferred = Some(effect);
         Ok(())
     }
-    fn job(&self, bytes: u64, until: Moment) -> Result<JobSpec, Box<dyn Error>> {
+    fn job(&self, bytes: u64, until: Option<Moment>) -> Result<JobSpec, Box<dyn Error>> {
         Ok(JobSpec {
             id: self.jobs.allocate()?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
-            deadline: Some(until),
+            deadline: until,
             reservation_bytes: bytes,
             replacement: None,
         })

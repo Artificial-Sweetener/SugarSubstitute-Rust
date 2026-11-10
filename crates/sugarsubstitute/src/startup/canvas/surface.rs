@@ -5,6 +5,7 @@
 mod attachment;
 mod backdrops;
 mod capabilities;
+mod deferral;
 mod editing;
 #[cfg(test)]
 mod fixture_file;
@@ -118,12 +119,10 @@ enum PendingKind {
     Hide,
     Commit,
     EmptyCommit,
-    /// A shared viewport command or read, answered once its camera settles; dmitted is the
-    /// execution clock reading that starts its settle budget.
+    /// A shared viewport command or read, answered once its camera settles.
     Viewport {
         intent: crate::native_canvas::session::CameraIntent,
         commanded: bool,
-        admitted: sugarsubstitute_contracts::execution::Moment,
     },
 }
 
@@ -162,6 +161,8 @@ pub(super) struct NativeSurface {
     retained: Option<Binding>,
     restoring: bool,
     pending: Option<Pending>,
+    /// A candidate's preparation held, at most one, while another request owns native mutation.
+    deferred: Option<deferral::Deferred>,
     contexts: [Option<Context>; 4],
     replies: [Option<DesktopStartupCommand>; 8],
     preview: preview::Preview,
@@ -194,6 +195,7 @@ impl NativeSurface {
             retained: None,
             restoring: false,
             pending: None,
+            deferred: None,
             contexts: std::array::from_fn(|_| None),
             replies: std::array::from_fn(|_| None),
             preview: preview::Preview::default(),
@@ -252,6 +254,10 @@ impl NativeSurface {
             .as_ref()
             .is_some_and(|binding| binding.backend.is_some() && binding.backend != backend);
         self.backend = backend;
+        // A held candidate whose grant ended can never prepare; answer it where the grant ends.
+        if self.deferred.as_ref().is_some_and(|held| !self.available(held.identity)) {
+            self.answer_deferred(CanvasSurfaceReplyStatus::Unavailable)?;
+        }
         if changed_attachment {
             self.discard_attachment(session)?;
             if let Some(pending) = self.pending.take() {
@@ -360,6 +366,12 @@ impl NativeSurface {
                 && !self.admits_beside_deferred_selection(identity, &request)
                 && !self.withdraw_for_release(identity, &request, session)?)
         {
+            // A candidate is early, not unavailable: it waits for the request that owns native mutation.
+            if matches!(request.operation(), CanvasSurfaceOperation::Prepare)
+                && self.available(identity)
+            {
+                return self.defer_prepare(identity, request, claim);
+            }
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
         }
         let operation = request.operation().clone();
@@ -502,6 +514,9 @@ impl NativeSurface {
         self.retained = None;
         if let Some(pending) = self.pending.take() {
             lifecycle::retired(&pending.request, pending.kind);
+        }
+        if let Some(held) = self.deferred.take() {
+            lifecycle::retired(&held.request, PendingKind::Prepare);
         }
         self.contexts = std::array::from_fn(|_| None);
         self.replies = std::array::from_fn(|_| None);

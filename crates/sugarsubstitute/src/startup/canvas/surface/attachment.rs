@@ -18,10 +18,9 @@ impl NativeSurface {
         }) {
             return self.reply(identity, &request, CanvasSurfaceReplyStatus::Stale, claim);
         }
-        if self.retained.is_some()
-            || self.binding.as_ref().is_some_and(|binding| binding.document.is_some())
-        {
-            return self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim);
+        // Another candidate is still staging: this one is early, not unavailable.
+        if self.prepare_blocked() {
+            return self.defer_prepare(identity, request, claim);
         }
         self.fence_previews(session)?;
         session.input(Input::Drawable(false))?;

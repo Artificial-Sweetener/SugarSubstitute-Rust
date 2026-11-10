@@ -8,6 +8,7 @@ use gate::Gate;
 use host::{Address, Host, Shade, geometry, select};
 use viewport::fixture::{Execution, Fixture};
 
+mod deferral;
 mod ingress;
 mod loads;
 mod ordering;

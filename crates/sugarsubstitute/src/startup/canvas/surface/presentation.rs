@@ -50,11 +50,20 @@ impl NativeSurface {
         retained.map_or(MainCanvasPresentation::Hide, MainCanvasPresentation::Retain)
     }
 
-    /// Resolve initial selection only once actual current pixels have been prepared.
+    /// Advance every pending request, then serve a held candidate once native mutation is free.
     pub(in crate::startup::canvas) fn poll(
         &mut self,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
+        self.poll_requests(session)?;
+        if self.closed {
+            return Ok(());
+        }
+        self.admit_deferred(session)
+    }
+
+    /// Resolve initial selection only once actual current pixels have been prepared.
+    fn poll_requests(&mut self, session: &mut Session) -> Result<(), Box<dyn Error>> {
         self.poll_previews(session)?;
         if self.closed {
             return Ok(());
