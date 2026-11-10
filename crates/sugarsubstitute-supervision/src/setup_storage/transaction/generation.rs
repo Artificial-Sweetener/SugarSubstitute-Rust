@@ -93,7 +93,6 @@ pub(super) fn create(
     let (stage, identity) = protection::with(context, |protection| {
         let stage = staging::unique_path(&parent, INITIAL_PREFIX.trim_end_matches('-'))?;
         protection.directory(&stage, Mode::CreateNew, context)?;
-        protection.directory(&stage.join("capture"), Mode::CreateNew, context)?;
         let directory = Directory::open(&stage, false)?;
         let bytes = serde_json::to_vec(&serde_json::json!({
             "schema_version": 1, "bundle_sha256": digest, "state": "staging",

@@ -2397,7 +2397,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rep
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/reservation.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:6e7a4f9733c6b641556c987934c21c3f0fd36ab64aa31c990686dd6441ffe572"
+source_sha256 = "sha256:4877286e71469bf4b58a3880aeb1608a4457320772dcea9081176ef99c0ad736"
 capabilities = ["assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Initial signed reservation remains recoverable at every directory-publication boundary. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
