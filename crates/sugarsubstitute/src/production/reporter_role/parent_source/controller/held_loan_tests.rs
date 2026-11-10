@@ -10,7 +10,6 @@ use std::{
         Condvar,
         atomic::{AtomicU64, Ordering},
     },
-    time::Duration,
 };
 use sugarsubstitute_execution::ExecutionOwner;
 
@@ -31,13 +30,13 @@ enum Case {
 }
 fn delivered(client: &ExecutionClient, wake: &Wake, relay: &mut ReporterRelay) -> TestResult {
     loop {
-        let before = wake.observed();
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(7))?;
         relay.capture(&batch)?;
         if relay.worker_delivered() {
             return Ok(());
         }
-        wake.wait_after(before)?;
+        wake.wait_after(before);
     }
 }
 fn held_loan(case: Case) -> TestResult {
@@ -190,10 +189,10 @@ fn held_loan(case: Case) -> TestResult {
         assert_eq!(relay.worker_terminal(), expected);
         assert_eq!(relay.retry(&client, &scope, &jobs), Err(ReporterSourceIssue::Busy));
     }
-    let before_return = wake.observed();
+    let before_return = wake.revision();
     loan_boundary.release();
     assert!(matches!(terminal(&client, &wake, &mut holder)?.outcome, JobOutcome::Success(())));
-    assert!(wake.observed() > before_return);
+    assert!(wake.revision() > before_return);
     let mut returned = alias.loan()?;
     assert_eq!(std::ptr::from_ref(returned.state()?) as usize, pointer);
     assert!(returned.state()?.funding.is_some());

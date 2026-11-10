@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! An actual central worker retains its source alias until its original terminal boundary.
 use super::*;
-use std::{error::Error, num::NonZeroUsize, sync::Condvar, time::Duration};
+use crate::completion_wake::{Wake, wait_while_watched};
+use std::{error::Error, num::NonZeroUsize, sync::Condvar};
 use sugarsubstitute_execution::ExecutionOwner;
 type TestError = Box<dyn Error + Send + Sync>;
 type TestResult<T> = Result<T, TestError>;
@@ -18,21 +19,22 @@ impl Clock for TestClock {
     }
 }
 #[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-#[derive(Default)]
 struct Gate {
     state: Mutex<(bool, bool)>,
     changed: Condvar,
+}
+impl Gate {
+    fn release(&self) {
+        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1 = true;
+        self.changed.notify_all();
+    }
+}
+/// Release the held worker even when the test fails before its explicit release.
+struct ReleaseGate(Arc<Gate>);
+impl Drop for ReleaseGate {
+    fn drop(&mut self) {
+        self.0.release();
+    }
 }
 fn spec(id: u64, bytes: u64) -> TestResult<JobSpec> {
     Ok(JobSpec {
@@ -50,22 +52,12 @@ fn terminal<T: Send + 'static>(
     job: &mut TestJob<T>,
 ) -> TestResult<TestCompletion<T>> {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         client.drain_completions(NonZeroUsize::MIN.saturating_add(7))?;
         if let Some(done) = job.try_take_completion() {
             return Ok(done);
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *count == before {
-            return Err("Original worker terminal stalled".into());
-        }
+        wake.wait_after(before);
     }
 }
 #[test]
@@ -93,6 +85,7 @@ fn recycle_concurrent_original_worker_alias_denies_reset_until_actual_return_and
         std::ptr::from_ref(loan.state()?) as usize
     };
     let gate = Arc::new(Gate::default());
+    let _release = ReleaseGate(gate.clone());
     let worker_gate = gate.clone();
     let alias = source.alias();
     let mut held = client.submit_blocking(&scope, spec(2, 32768)?, move |context| {
@@ -103,33 +96,24 @@ fn recycle_concurrent_original_worker_alias_denies_reset_until_actual_return_and
         let mut state = worker_gate.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.0 = true;
         worker_gate.changed.notify_all();
-        let (state, timeout) = worker_gate
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && !state.1 {
-            return Err("Original worker alias release stalled".into());
-        }
-        drop(state);
+        drop(wait_while_watched(
+            &worker_gate.changed,
+            state,
+            || "the test to release the alias worker".to_owned(),
+            |state| !state.1,
+        ));
         drop(original_alias);
         Ok(())
     })?;
-    let (state, timeout) = gate
-        .changed
-        .wait_timeout_while(
-            gate.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-            Duration::from_secs(10),
-            |state| !state.0,
-        )
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if timeout.timed_out() && !state.0 {
-        return Err("Actual alias worker never entered".into());
-    }
-    drop(state);
+    drop(wait_while_watched(
+        &gate.changed,
+        gate.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+        || "the actual alias worker to enter".to_owned(),
+        |state| !state.0,
+    ));
     assert!(matches!(source.recycling_loan(), Err(ReporterSourceIssue::Busy)));
     assert!(source.loan()?.state()?.funding.is_some());
-    gate.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1 = true;
-    gate.changed.notify_all();
+    gate.release();
     let done = terminal(&client, &wake, &mut held)?;
     assert!(matches!(done.outcome, JobOutcome::Success(())));
     drop(done);
