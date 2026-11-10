@@ -147,7 +147,6 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
   install(): void {
     if (this.#disposed || this.#stops.length) return;
     const { execution, canvas, presentation, route } = this.options;
-    this.#documents.install();
     this.#readiness.install();
     if (this.#readiness.read().committed) this.#intent.committed(this.#contextSignature());
     this.#stops.push(
@@ -299,7 +298,6 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
     this.#graph?.dispose();
     this.#graph = null;
     this.#reading.dispose();
-    this.#documents.dispose();
     this.#readiness.dispose();
     this.#submissions.dispose();
     this.#identities.dispose();

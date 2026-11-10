@@ -75,7 +75,11 @@ export class ComfyDesktopMaterialization {
   cancel(): void {
     this.#cancellation?.cancel();
   }
-  /** Bind host-adopted durable entries to fresh actual Comfy occurrences, then import references and view intent. */
+  /**
+   * Bind host-adopted durable entries to the tabs Comfy itself restored, then import references
+   * and view intent. Comfy owns the tabs: an entry whose tab Comfy did not reopen is left out, and
+   * the returned bindings name only the entries that were bound.
+   */
   async materialize(
     checkpoint: SessionCheckpoint,
     cancellation: DesktopSessionCancellation,
@@ -84,14 +88,14 @@ export class ComfyDesktopMaterialization {
     this.#cancellation = cancellation;
     this.options.bindings.changed();
     try {
-      const contexts = await this.options.documents.materialize(
+      const contexts = this.options.documents.match(
         checkpoint.entries,
-        checkpoint.activeEntry,
         () => !cancellation.cancelled() && !this.options.retired(),
       );
+      const entries = checkpoint.entries.filter((entry) => contexts.has(entry.id));
       this.options.assertCurrent(cancellation);
       this.options.bindings.synchronize(this.options.execution.sessions.read());
-      for (const entry of checkpoint.entries) {
+      for (const entry of entries) {
         const context = contexts.get(entry.id);
         if (!context)
           throw new DesktopSessionRefusal('stale', 'Restored Comfy workflow binding was retired.');
@@ -113,7 +117,7 @@ export class ComfyDesktopMaterialization {
       this.#phase = 'outputs';
       await this.options.publishObservation();
       this.options.assertCurrent(cancellation);
-      for (const entry of checkpoint.entries) {
+      for (const entry of entries) {
         this.options.assertCurrent(cancellation);
         const context = contexts.get(entry.id);
         if (!context)
@@ -145,9 +149,8 @@ export class ComfyDesktopMaterialization {
           decodeComfyWorkflowSources(JSON.parse(entry.document.graphJson) as unknown),
         );
       }
-      const active = checkpoint.activeEntry
-        ? checkpoint.entries.find((entry) => entry.id === checkpoint.activeEntry)
-        : null;
+      const shown = this.options.execution.sessions.read().active?.sessionId;
+      const active = entries.find((entry) => contexts.get(entry.id)?.sessionId === shown);
       if (active) this.options.route?.choose(active.view.route);
       if (checkpoint.route === 'settings') {
         if (!this.options.settingsRoute)
@@ -168,7 +171,10 @@ export class ComfyDesktopMaterialization {
       }
       this.#phase = null;
       this.options.refresh(true);
-      return this.options.bindings.fence().bindings;
+      const restored = new Set(entries.map((entry) => entry.id));
+      return this.options.bindings
+        .fence()
+        .bindings.filter((binding) => restored.has(binding.entryId));
     } catch (error: unknown) {
       if (error instanceof DesktopSessionRefusal && error.code === 'stale')
         this.options.superseded();

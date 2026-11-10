@@ -37,19 +37,23 @@ export interface ComfyDesktopDocumentsOptions {
   readonly sessions: WorkflowSessionStore;
   readonly adapter: Pick<
     ComfyWorkflowSessionAdapter,
-    'readHostWorkflow' | 'identifyHostWorkflow' | 'refresh' | 'readLoadSequence'
+    'readHostWorkflow' | 'identifyHostWorkflow' | 'refresh'
   >;
 }
 
-/** Preserve graph meaning and modified baselines without saving, deleting or importing a Comfy class. */
+/**
+ * Capture Comfy-owned documents and match a checkpoint to the tabs Comfy restored.
+ *
+ * Comfy owns workflow tabs: it reopens them from its own persistence. This owner never opens,
+ * closes, reorders or reloads a tab; it only reads documents and names which restored tab a
+ * checkpoint entry describes.
+ */
 export class ComfyDesktopDocuments {
   readonly #app: UnknownRecord;
   readonly #workflow: UnknownRecord;
-  readonly #imported = new WeakSet<object>();
   readonly #sourceIdentities = new WeakMap<object, string | null>();
-  #stop: (() => void) | null = null;
 
-  /** Validate deployed capabilities once; missing capability disables desktop materialization. */
+  /** Validate deployed capabilities once; missing capability disables desktop capture. */
   constructor(private readonly options: ComfyDesktopDocumentsOptions) {
     const app = options.app;
     const manager = isRecord(app) && isRecord(app.extensionManager) ? app.extensionManager : null;
@@ -57,34 +61,6 @@ export class ComfyDesktopDocuments {
       throw new TypeError('Comfy desktop workflow capabilities are unavailable.');
     this.#app = app;
     this.#workflow = manager.workflow;
-    for (const method of [
-      'createNewTemporary',
-      'closeWorkflow',
-      'attachWorkflow',
-      'reorderWorkflows',
-    ])
-      if (typeof this.#workflow[method] !== 'function')
-        throw new TypeError(`Comfy desktop workflow capability ${method} is unavailable.`);
-    if (typeof app.loadGraphData !== 'function')
-      throw new TypeError('Comfy desktop graph loading is unavailable.');
-  }
-
-  /** Preserve the imported saved baseline after Comfy resets its tracker during later tab activation. */
-  install(): void {
-    this.#stop ??= this.options.sessions.subscribe((snapshot) => {
-      if (snapshot.loading || !snapshot.active) return;
-      const workflow = this.options.adapter.readHostWorkflow(snapshot.active.sessionId);
-      if (!isRecord(workflow)) return;
-      const tracker = workflow.changeTracker;
-      if (isRecord(tracker) && this.#imported.has(tracker))
-        tracker.initialState = parseGraph(workflow.originalContent);
-    });
-  }
-
-  /** Stop baseline observation while allowing Comfy to keep its current workflow objects. */
-  dispose(): void {
-    this.#stop?.();
-    this.#stop = null;
   }
 
   /**
@@ -167,110 +143,38 @@ export class ComfyDesktopDocuments {
   }
 
   /**
-   * Build owned in-memory workflows in order; checkpoint bytes remain the recovery authority on refusal.
-   *
-   * Only the active workflow's graph is loaded onto the canvas. Every other workflow is opened with
-   * the change tracker Comfy builds from its own load, so restoring many tabs neither re-instantiates
-   * each graph nor makes the native canvas host synchronize each one in turn.
+   * Name the tab Comfy restored for each checkpoint entry: a saved entry by its path, a
+   * temporary one by its name among Comfy's temporary tabs. An entry Comfy did not reopen has
+   * no tab and is left out; a tab no entry describes keeps only what Comfy restored.
    */
-  async materialize(
+  match(
     entries: readonly SessionEntry[],
-    activeEntry: string | null,
     current: () => boolean,
-  ): Promise<ReadonlyMap<string, WorkflowSessionContext>> {
-    if (entries.length === 0)
-      throw new DesktopSessionRefusal(
-        'unsupported',
-        'Empty desktop checkpoints must seed from the committed Comfy default.',
-      );
+  ): ReadonlyMap<string, WorkflowSessionContext> {
     for (const entry of entries) validateDocument(entry.document);
-    const previous = this.#workflow.openWorkflows;
-    if (!Array.isArray(previous) || !previous.every(isRecord))
-      throw new TypeError('Comfy desktop open workflows are malformed.');
-    const original = [...previous];
-    const restored = new Map<string, UnknownRecord>();
     assertCurrent(current);
-    for (const workflow of original) {
-      await invoke(this.#workflow, 'closeWorkflow', workflow);
-      assertCurrent(current);
-    }
-    this.#workflow.activeWorkflow = null;
-    for (const entry of entries) {
-      assertCurrent(current);
-      const document = entry.document;
-      const graph = parseGraph(document.graphJson);
-      const workflow = invoke(this.#workflow, 'createNewTemporary', document.name, graph);
-      if (!isRecord(workflow)) throw new TypeError('Comfy did not create a workflow occurrence.');
-      await invoke(workflow, 'load');
-      assertCurrent(current);
-      const tracker = workflow.changeTracker;
-      if (!isRecord(tracker)) throw new TypeError('Comfy did not commit the restored graph.');
-      if (!document.temporary && document.path) {
-        await invoke(this.#workflow, 'closeWorkflow', workflow);
-        invoke(workflow, 'updatePath', document.path);
-        workflow.size = utf8Bytes(document.baselineGraphJson ?? document.graphJson);
-      }
-      invoke(this.#workflow, 'attachWorkflow', workflow, restored.size);
-      tracker.initialState = parseGraph(document.baselineGraphJson ?? document.graphJson);
-      tracker.activeState = parseGraph(document.graphJson);
-      tracker.ds = { scale: document.view.scale, offset: [document.view.x, document.view.y] };
-      workflow.originalContent = document.baselineGraphJson ?? document.graphJson;
-      workflow.content = document.graphJson;
-      workflow.isModified = document.dirty;
-      this.#imported.add(tracker);
-      this.#sourceIdentities.set(tracker, document.sourceIdentity);
-      restored.set(entry.id, workflow);
-    }
-    assertCurrent(current);
-    const activeId = activeEntry && restored.has(activeEntry) ? activeEntry : entries.at(-1)?.id;
-    const active = activeId ? restored.get(activeId) : null;
-    if (active) {
-      const tracker = active.changeTracker;
-      if (!isRecord(tracker)) throw new TypeError('Comfy restored active workflow is unavailable.');
-      await this.#load(tracker.activeState, active, current);
-      const entry = entries.find((candidate) => candidate.id === activeId);
-      if (entry) {
-        tracker.initialState = parseGraph(
-          entry.document.baselineGraphJson ?? entry.document.graphJson,
-        );
-        active.isModified = entry.document.dirty;
-        const canvas = this.#app.canvas;
-        if (isRecord(canvas) && isRecord(canvas.ds)) {
-          canvas.ds.scale = entry.document.view.scale;
-          canvas.ds.offset = [entry.document.view.x, entry.document.view.y];
-        }
-      }
-    }
     if (!this.options.adapter.refresh())
       throw new Error('Comfy restored workflow observation failed.');
+    const open = this.#workflow.openWorkflows;
+    if (!Array.isArray(open) || !open.every(isRecord))
+      throw new TypeError('Comfy desktop open workflows are malformed.');
+    const unclaimed = [...open];
+    const committed = this.options.sessions.read().open;
     const contexts = new Map<string, WorkflowSessionContext>();
-    for (const [entry, workflow] of restored) {
-      const id = this.options.adapter.identifyHostWorkflow(workflow);
-      const context = id
-        ? this.options.sessions.read().open.find((item) => item.sessionId === id)
-        : null;
-      if (!context) throw new Error('Comfy restored occurrence was not committed.');
-      contexts.set(entry, context);
+    for (const entry of entries) {
+      const document = entry.document;
+      const index = unclaimed.findIndex((workflow) =>
+        document.temporary
+          ? workflow.isTemporary === true && text(workflow.filename) === document.name
+          : workflow.isTemporary !== true && text(workflow.path) === document.path,
+      );
+      if (index < 0) continue;
+      const [workflow] = unclaimed.splice(index, 1);
+      const id = workflow ? this.options.adapter.identifyHostWorkflow(workflow) : null;
+      const context = id ? committed.find((item) => item.sessionId === id) : undefined;
+      if (context) contexts.set(entry.id, context);
     }
     return contexts;
-  }
-
-  /** Admit one owned public load and refuse any competing load before more restore effects. */
-  async #load(graph: unknown, workflow: UnknownRecord, current: () => boolean): Promise<void> {
-    const before = this.options.adapter.readLoadSequence();
-    await invoke(this.#app, 'loadGraphData', graph, true, true, workflow);
-    assertCurrent(current);
-    const active = this.#workflow.activeWorkflow;
-    if (
-      this.options.adapter.readLoadSequence() !== before + 1 ||
-      this.options.sessions.read().loading ||
-      !isRecord(active) ||
-      (active !== workflow && active.changeTracker !== workflow.changeTracker)
-    )
-      throw new DesktopSessionRefusal(
-        'stale',
-        'Comfy desktop materialization was superseded by another graph load.',
-      );
   }
 }
 

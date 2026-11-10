@@ -24,6 +24,7 @@ import type {
   SessionMessage,
   SessionOperation,
   SessionFence,
+  SessionCheckpoint,
 } from '../../../integrations/contracts/SessionProtocol.generated.js';
 import { utf8Bytes } from '../../../integrations/shared/SessionPrimitives.js';
 import { isDesktopCheckpoint } from '../../../integrations/shared/SessionSnapshot.js';
@@ -355,8 +356,13 @@ test('production runtime installs before startup commitment and retains accepted
   expect(f.errors).toEqual([]);
 });
 
-test('real G0 transport handshake materializes fresh Comfy occurrences, results and cameras without generation replay', async () => {
+test('real G0 transport handshake binds the tabs Comfy reopened to results and cameras without generation replay', async () => {
   const f = await desktopRuntimeFixture();
+  // Comfy reopens the tabs from its own persistence before startup commits.
+  const tabs = await f.host.reopen(
+    f.checkpoint.entries.map((entry) => entry.document),
+    f.checkpoint.entries.findIndex((entry) => entry.id === f.checkpoint.activeEntry),
+  );
   f.host.committed();
   const before = f.execution.sessions.read().active?.sessionId;
   const generation: string[] = [];
@@ -439,7 +445,8 @@ test('real G0 transport handshake materializes fresh Comfy occurrences, results 
     revision: f.checkpoint.revision,
     phase: 'materialized',
   });
-  expect(f.execution.sessions.read().active?.sessionId).not.toBe(before);
+  expect(f.execution.sessions.read().active?.sessionId).toBe(before);
+  expect(f.host.workflow.openWorkflows).toEqual(tabs);
   expect(f.runtime.fence().bindings.map((binding) => binding.entryId)).toEqual(
     f.checkpoint.entries.map((entry) => entry.id),
   );
@@ -463,8 +470,50 @@ test('real G0 transport handshake materializes fresh Comfy occurrences, results 
   expect(f.errors).toEqual([]);
 });
 
+test('a checkpoint naming fewer tabs than Comfy reopened leaves every reopened tab open and binds only its own', async () => {
+  const f = await desktopRuntimeFixture();
+  const kept = f.checkpoint.entries[0];
+  if (!kept || f.checkpoint.entries.length < 2)
+    throw new Error('The fixture needs several entries.');
+  const digests = new Set(kept.outputs.map((output) => output.assetDigest));
+  const stale: SessionCheckpoint = {
+    ...f.checkpoint,
+    entries: [kept],
+    activeEntry: kept.id,
+    assets: f.checkpoint.assets.filter((asset) => digests.has(asset.digest)),
+  };
+  const tabs = await f.host.reopen(
+    f.checkpoint.entries.map((entry) => entry.document),
+    0,
+  );
+  f.host.committed();
+  f.setResolve(async (output) => ({
+    available: true,
+    receipt: {
+      file: output.file,
+      digest: output.digest,
+      bytes: output.bytes,
+      width: output.width,
+      height: output.height,
+      media: output.media,
+      mime: output.mime,
+      metadataEmbedded: output.metadataEmbedded,
+      animated: false,
+    },
+  }));
+  const bindings = await f.runtime.materialize(stale, new DesktopSessionCancellation());
+  expect(f.host.workflow.openWorkflows).toEqual(tabs);
+  expect(bindings.map((binding) => binding.entryId)).toEqual([kept.id]);
+  expect(f.errors).toEqual([]);
+  f.dispose();
+});
+
 test('a competing committed load cancels delayed artifact restoration before pixels or view state can be published', async () => {
   const f = await desktopRuntimeFixture();
+  await f.host.reopen(
+    f.checkpoint.entries.map((entry) => entry.document),
+    f.checkpoint.entries.findIndex((entry) => entry.id === f.checkpoint.activeEntry),
+  );
   f.host.committed();
   let release: () => void = () => {};
   let entered: () => void = () => {};

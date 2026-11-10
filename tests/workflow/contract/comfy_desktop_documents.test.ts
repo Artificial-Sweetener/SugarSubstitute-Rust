@@ -123,7 +123,6 @@ function fixture() {
   const loads = createComfyWorkflowLoadObserver(app, sessions, adapter, { error: () => {} });
   loads.install();
   const documents = new ComfyDesktopDocuments({ app, sessions, adapter });
-  documents.install();
   return {
     workflow,
     graphLoads: () => graphLoads,
@@ -132,7 +131,6 @@ function fixture() {
     adapter,
     documents,
     dispose: () => {
-      documents.dispose();
       loads.dispose();
       adapter.dispose();
       sessions.dispose();
@@ -190,36 +188,54 @@ function entry(id: string, value: SessionDocument): SessionEntry {
   };
 }
 
-test('materializes named and temporary dirty graphs in order and retains each saved baseline after later activation', async () => {
-  const host = fixture();
-  const a = entry('00000000-0000-4000-8000-000000000001', document('A', false));
-  const b = entry('00000000-0000-4000-8000-000000000002', document('B', true));
-  const bindings = await host.documents.materialize([a, b], a.id, () => true);
-  expect(host.workflow.openWorkflows.map((item) => item.filename)).toEqual(['A', 'B']);
-  expect(host.workflow.activeWorkflow?.filename).toBe('A');
-  expect(host.workflow.openWorkflows[0].isTemporary).toBe(false);
-  expect(host.workflow.openWorkflows[1].isTemporary).toBe(true);
-  const context = bindings.get(a.id)!;
-  expect(host.documents.capture(context, 3)).toEqual(a.document);
-  const target = host.workflow.openWorkflows[1];
-  await host.app.loadGraphData(JSON.parse(b.document.graphJson), true, true, target);
-  expect(target.changeTracker?.initialState).toEqual(JSON.parse(b.document.baselineGraphJson!));
-  expect(target.isModified).toBe(true);
-  host.dispose();
-});
+/** Reopen tabs the way Comfy restores them from its own persistence, then show the active one. */
+async function reopen(
+  host: ReturnType<typeof fixture>,
+  documents: readonly SessionDocument[],
+  active: number,
+): Promise<HostWorkflow[]> {
+  const reopened = documents.map((value, index) => {
+    const created = host.workflow.createNewTemporary(value.name, JSON.parse(value.graphJson));
+    if (value.temporary) created.path = `workflows/${value.name}.json`;
+    else {
+      created.path = value.path!;
+      created.size = value.graphJson.length;
+    }
+    created.originalContent = value.baselineGraphJson ?? value.graphJson;
+    host.workflow.attachWorkflow(created, index);
+    return created;
+  });
+  const shown = reopened[active]!;
+  await host.app.loadGraphData(JSON.parse(documents[active]!.graphJson), true, true, shown);
+  return reopened;
+}
 
-test('restoring several tabs loads only the active workflow graph and still opens every tab in order', async () => {
+test('matches checkpoint entries to the tabs Comfy reopened without opening, closing or loading any', async () => {
   const host = fixture();
   const a = entry('00000000-0000-4000-8000-000000000001', document('A', false));
   const b = entry('00000000-0000-4000-8000-000000000002', document('B', true));
   const c = entry('00000000-0000-4000-8000-000000000003', document('C', false));
-  await host.documents.materialize([a, b, c], b.id, () => true);
-  expect(host.graphLoads()).toBe(1);
-  expect(host.workflow.openWorkflows.map((item) => item.filename)).toEqual(['A', 'B', 'C']);
-  expect(host.workflow.activeWorkflow?.filename).toBe('B');
-  expect(host.workflow.openWorkflows.map((item) => item.changeTracker?.initialState)).toEqual(
-    [a, b, c].map((item) => JSON.parse(item.document.baselineGraphJson ?? '')),
-  );
+  const unsaved = document('Comfy only', true);
+  const tabs = await reopen(host, [b.document, unsaved, a.document], 2);
+  const loads = host.graphLoads();
+  const contexts = host.documents.match([a, b, c], () => true);
+  expect(host.workflow.openWorkflows).toEqual(tabs);
+  expect(host.workflow.activeWorkflow).toBe(tabs[2]);
+  expect(host.graphLoads()).toBe(loads);
+  expect([...contexts.keys()]).toEqual([a.id, b.id]);
+  expect(host.adapter.readHostWorkflow(contexts.get(a.id)!.sessionId)).toBe(tabs[2]);
+  expect(host.adapter.readHostWorkflow(contexts.get(b.id)!.sessionId)).toBe(tabs[0]);
+  host.dispose();
+});
+
+test('a checkpoint naming none of the reopened tabs leaves every Comfy tab as Comfy restored it', async () => {
+  const host = fixture();
+  const tabs = await reopen(host, [document('A', false), document('B', true)], 1);
+  const stale = entry('00000000-0000-4000-8000-000000000001', document('Unsaved', true));
+  expect(host.documents.match([stale], () => true).size).toBe(0);
+  expect(host.documents.match([], () => true).size).toBe(0);
+  expect(host.workflow.openWorkflows).toEqual(tabs);
+  expect(host.workflow.activeWorkflow).toBe(tabs[1]);
   host.dispose();
 });
 
@@ -227,11 +243,11 @@ test('captures inactive tracker and unloaded content instead of assigning active
   const host = fixture();
   const a = entry('00000000-0000-4000-8000-000000000001', document('A', false));
   const b = entry('00000000-0000-4000-8000-000000000002', document('B', true));
-  const bindings = await host.documents.materialize([a, b], a.id, () => true);
-  const inactive = host.workflow.openWorkflows[1];
-  const bContext = bindings.get(b.id)!;
+  const [, inactive] = await reopen(host, [a.document, b.document], 0);
+  await inactive!.load();
+  const bContext = host.documents.match([a, b], () => true).get(b.id)!;
   expect(host.documents.capture(bContext, 3).graphJson).toBe(b.document.graphJson);
-  inactive.changeTracker = null;
+  inactive!.changeTracker = null;
   expect(host.documents.capture(bContext, 3).graphJson).toBe(b.document.graphJson);
   host.dispose();
 });
@@ -239,7 +255,8 @@ test('captures inactive tracker and unloaded content instead of assigning active
 test('captures Comfy optional serialized fields using its normal JSON representation without mutating host state', async () => {
   const host = fixture();
   const a = entry('00000000-0000-4000-8000-000000000001', document('A', true));
-  const contexts = await host.documents.materialize([a], a.id, () => true);
+  await reopen(host, [a.document], 0);
+  const contexts = host.documents.match([a], () => true);
   const graph = {
     nodes: [{ id: 1, widgets_values: [undefined, 'kept'] }],
     links: [],
@@ -273,7 +290,8 @@ test.each([
 ])('refuses lossy Comfy snapshot value $name', async ({ value }) => {
   const host = fixture();
   const a = entry('00000000-0000-4000-8000-000000000001', document('A', true));
-  const contexts = await host.documents.materialize([a], a.id, () => true);
+  await reopen(host, [a.document], 0);
+  const contexts = host.documents.match([a], () => true);
   host.app.rootGraph.serialize = () => ({ nodes: [], extra: { invalid: value } });
   expect(() => host.documents.capture(contexts.get(a.id)!, 3)).toThrow(TypeError);
   host.dispose();
@@ -282,27 +300,24 @@ test.each([
 test('refuses unpaired property names before JSON can escape them', async () => {
   const host = fixture();
   const a = entry('00000000-0000-4000-8000-000000000001', document('A', true));
-  const contexts = await host.documents.materialize([a], a.id, () => true);
+  await reopen(host, [a.document], 0);
+  const contexts = host.documents.match([a], () => true);
   host.app.rootGraph.serialize = () => ({ nodes: [], extra: { ['\ud800']: 'invalid' } });
   expect(() => host.documents.capture(contexts.get(a.id)!, 3)).toThrow(TypeError);
   host.dispose();
 });
 
-test('invalid document or superseded restore performs no admitted document replacement', async () => {
+test('an invalid checkpoint document or a superseded restore matches no tab', async () => {
   const host = fixture();
   const valid = entry('00000000-0000-4000-8000-000000000001', document('A', true));
-  await expect(
-    host.documents.materialize(
+  const tabs = await reopen(host, [valid.document], 0);
+  expect(() =>
+    host.documents.match(
       [{ ...valid, document: { ...valid.document, graphJson: 'invalid' } }],
-      valid.id,
       () => true,
     ),
-  ).rejects.toThrow('admission');
-  expect(host.workflow.openWorkflows).toEqual([]);
-  await expect(host.documents.materialize([], null, () => true)).rejects.toThrow('Comfy default');
-  await expect(host.documents.materialize([valid], valid.id, () => false)).rejects.toThrow(
-    'superseded',
-  );
-  expect(host.workflow.openWorkflows).toEqual([]);
+  ).toThrow('admission');
+  expect(() => host.documents.match([valid], () => false)).toThrow('superseded');
+  expect(host.workflow.openWorkflows).toEqual(tabs);
   host.dispose();
 });
