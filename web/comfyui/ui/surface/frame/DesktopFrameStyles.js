@@ -36,6 +36,9 @@ export const desktopFrameCss = `
   :root[data-sc-desktop-frame-surface] .sc-cube-stack-host[data-appearance] { background:transparent; border:0; box-shadow:none; }
   :root[data-sc-desktop-frame-surface] .sc-cube-stack[data-kind='rail'] {
     --sc-stack-row:var(--sc-desktop-card-wash); }
+  /* The rail's edge is the aperture's edge, so both travel on the material motion's one curve. */
+  :root[data-sc-desktop-frame-surface] .sc-cube-stack-host .sc-cube-stack[data-kind='rail'][data-appearance] {
+    width:var(--sc-stack-material-width); transition:none; }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] :is([data-sc-style-node],[data-sc-style-surface]) {
     --sc-card-fill:var(--sc-desktop-card-wash); }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] .sugarcubes-native-node-card[data-cube-face-native='nodes-2'] > .lg-node[data-sc-style-node] {

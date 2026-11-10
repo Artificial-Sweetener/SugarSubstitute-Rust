@@ -36,6 +36,7 @@ export function ensureCubeStackStyles(documentRef: Document): void {
   style.id = 'sugarcubes-cube-stack-styles';
   style.textContent = `
     @property --sc-stack-wash-opacity { syntax:'<number>'; inherits:true; initial-value:1; }
+    @property --sc-stack-material-width { syntax:'<length>'; inherits:true; initial-value:0px; }
     .sc-cube-stack {
       --sc-stack-bg:var(--comfy-menu-bg,#202020);
       --sc-stack-row:var(--secondary-background,#303030);
