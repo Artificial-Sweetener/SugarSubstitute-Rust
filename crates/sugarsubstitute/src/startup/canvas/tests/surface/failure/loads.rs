@@ -11,10 +11,7 @@ use sugarsubstitute_contracts::{
     },
     lifecycle::{LeaseId, ResourceGeneration, ResourceId},
 };
-use sugarsubstitute_execution::{
-    MonotonicClock,
-    http_fixture::{Exchange, Server},
-};
+use sugarsubstitute_execution::http_fixture::{Exchange, Server};
 use sugarsubstitute_networking::Transport;
 use sugarsubstitute_supervision::{
     backend_listener::{AttachedListenerLease, ConnectedLoopback, TcpOwnerWorkspace},
@@ -135,8 +132,9 @@ fn serve(
     Ok((job, port))
 }
 
-/// Loopback servers on their own real-time executor, so socket polling never needs the
-/// canvas's frozen clock.
+/// Loopback servers on their own executor, so socket polling never needs the canvas's frozen
+/// clock. Its paused clock keeps every fixture lifetime logical, so a slow machine can never
+/// expire a server a test still needs, while its 1 ms socket polls still elapse for real.
 struct Servers {
     owner: ExecutionOwner,
     client: ExecutionClient,
@@ -165,7 +163,7 @@ impl Servers {
         identity: MainIdentity,
     ) -> Result<(Self, crate::startup::CanvasBackend), Box<dyn Error>> {
         let wake = Arc::new(Wake::default());
-        let owner = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
+        let owner = ExecutionOwner::new(crate::paused_clock::PausedClock::new(), wake.clone())?;
         let client = owner.client();
         let scope = Arc::new(
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
