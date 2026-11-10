@@ -30,6 +30,10 @@ use sugarsubstitute_contracts::{
 /// One finite job precedes four-MiB capture, using the same original setup deadline.
 pub const LAUNCH_DATA_PREPARATION_BYTES: u64 = 32 * 1024 * 1024;
 const RETAINED_BYTES: u64 = 4 * 1024 * 1024;
+/// Memory a coordinator keeps charged for its whole life after launch data settles. An execution
+/// owner declares this beside its standing working capacity, so retained custody never takes
+/// capacity from the readiness and lifecycle jobs that run beside it.
+pub const LAUNCH_DATA_LIFETIME_BYTES: u64 = invocation::LIFETIME_BYTES;
 
 /// The native archive owner classifies bytes without associating them with a workflow/session.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

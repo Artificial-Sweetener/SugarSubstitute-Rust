@@ -69,7 +69,7 @@ impl SourceLaunchSettlement {
         if run.owner != self.admission.owner() {
             return Err(invalid("Source settlement run differs from actual elected owner"));
         }
-        self.memory = Some(context.memory().claim(8 * 1024 * 1024).map_err(io::Error::other)?);
+        self.memory = Some(context.memory().claim(SETTLEMENT_BYTES).map_err(io::Error::other)?);
         self.host = Some(VerifiedHost::capture(image_directory, context)?);
         let host =
             self.host.as_ref().ok_or_else(|| invalid("Actual source host custody absent"))?;

@@ -2968,7 +2968,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Own
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:63a98f14f4520199eb9aed54fa6daebe4decf1f653c30004d1fb793806e6f58e"
+source_sha256 = "sha256:11c64920f4f32dcfed5f76447063bd3f36311cae4ff6233a85d1cab5bc652a45"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Fail configuration before any environment capture and observe real runner joins. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -4794,7 +4794,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/user_data/invocation/settlement.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:9a3041fa74c11cb040e91f87878b53fd9a7c70601602d236726d6c1debbebf63"
+source_sha256 = "sha256:b49624094d5d0e86eea7fb620a6cc6507a727ff727d32d88be0d9f5efa33b04b"
 capabilities = ["std::fs::File"]
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Settle source-host data only after authenticated election, without adopting an installation. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
 disposition = "boundary"

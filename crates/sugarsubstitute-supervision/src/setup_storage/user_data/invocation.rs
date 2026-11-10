@@ -21,6 +21,11 @@ use sugarsubstitute_contracts::{
 };
 
 const RETAINED_BYTES: u64 = 4 * 1024 * 1024;
+/// Claim a source settlement keeps charged from its settlement until its owner drops.
+const SETTLEMENT_BYTES: u64 = 8 * 1024 * 1024;
+/// Memory the coordinator keeps charged for its whole life once launch data is settled: the
+/// settled source's claim and the passive invocation custody retained through retirement.
+pub(super) const LIFETIME_BYTES: u64 = SETTLEMENT_BYTES + RETAINED_BYTES;
 
 /// Own every current-invocation attempt and final passive pin through actual handoff terminal.
 pub(super) struct InvocationSnapshot {

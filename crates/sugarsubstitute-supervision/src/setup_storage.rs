@@ -36,9 +36,9 @@ mod runtime_record;
 mod user_data;
 pub use running::{RunningApplication, retain_running_generation};
 pub use user_data::{
-    ExplicitBackendDirectories, HistoricalArchiveDisposition, LAUNCH_DATA_PREPARATION_BYTES,
-    LaunchDataFailure, PRESERVED_DIAGNOSTIC_SOURCE_BYTES, PreparedStartup,
-    PreservedDiagnosticEntry, PreservedDiagnosticSource, SourceLaunchSettlement,
+    ExplicitBackendDirectories, HistoricalArchiveDisposition, LAUNCH_DATA_LIFETIME_BYTES,
+    LAUNCH_DATA_PREPARATION_BYTES, LaunchDataFailure, PRESERVED_DIAGNOSTIC_SOURCE_BYTES,
+    PreparedStartup, PreservedDiagnosticEntry, PreservedDiagnosticSource, SourceLaunchSettlement,
     StartupDataCustody, prepare_launch_data,
 };
 mod ownership;
