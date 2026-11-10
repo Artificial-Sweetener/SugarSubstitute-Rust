@@ -3,9 +3,19 @@
 //! Bind authenticated readiness to the owned installation publication.
 use super::*;
 
+/// Deadline of a trial's health publication.
+///
+/// The publication ends on its own storage outcome, an observed failure or cancellation at
+/// shutdown; a host that is slow to write after its first window still accepts the trial instead
+/// of failing it on elapsed time. Protected storage demands a finite admitted deadline, so the
+/// publication carries the open-ended one.
+const fn health_publication_deadline() -> Moment {
+    crate::job_deadline::OPEN_ENDED
+}
+
 impl CoordinatorAuthority {
     /// Called only after current native main/browser/backend authorization accepted its reveal.
-    /// The finite storage deadline begins here, after readiness, and never bounds provisioning.
+    /// The publication begins here, after readiness, and never bounds provisioning.
     pub(crate) fn accept_installation(
         &mut self,
         client: &ExecutionClient,
@@ -20,23 +30,29 @@ impl CoordinatorAuthority {
             self.installation.publish_shell(client, scope, jobs);
             return Ok(());
         }
-        let now = client.now().map_err(|cause| {
-            self.fail(Failure::Clock(cause));
-            AuthorityIssue::Clock
-        })?;
-        let until = now
-            .checked_add(std::time::Duration::from_secs(30))
-            .map_err(|_| AuthorityIssue::Clock)?;
         let spec = self.spec(
             client,
             scope,
             jobs,
             setup_storage::SELECTION_PUBLICATION_RESERVATION_BYTES,
-            until,
+            health_publication_deadline(),
         )?;
         self.installation.accept_ready(client, scope, spec).map_err(|cause| {
             self.fail(Failure::InstallationAdmission(cause));
             AuthorityIssue::Adapter
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Two hours after readiness, far beyond the thirty seconds the publication once had, its
+    /// deadline still lies ahead: a slow host's first launch never fails on elapsed time.
+    #[test]
+    fn trial_health_publication_outlasts_any_elapsed_time_after_readiness() {
+        let two_hours_after_readiness = Moment::from_nanos(7_200_000_000_000);
+        assert!(health_publication_deadline() > two_hours_after_readiness);
     }
 }
