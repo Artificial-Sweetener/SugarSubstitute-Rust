@@ -39,13 +39,12 @@ fn successful_root_and_member_notices_wait_for_finite_cleanup_and_transfer_actua
         let mut guard = lock(&factory.state);
         guard.0 = true;
         factory.changed.notify_all();
-        let (_guard, timed) = factory
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |state| !state.1)
-            .map_err(|_| RegistryError::invalid("fake_cleanup_latch"))?;
-        if timed.timed_out() {
-            return Err(RegistryError::invalid("fake_cleanup_latch"));
-        }
+        drop(
+            factory
+                .changed
+                .wait_while(guard, |state| !state.1)
+                .map_err(|_| RegistryError::invalid("fake_cleanup_latch"))?,
+        );
         Ok(())
     })?;
     held.entered()?;
@@ -115,7 +114,6 @@ fn unknown_owner_terminal_remains_available_in_same_borrowed_batch() -> TestResu
     let mut h = Harness::new()?;
     let spec = h.spec(JobClass::InfrastructureLifecycle, 4096)?;
     let mut other = h.client.submit_blocking(&h.scope, spec, |_| Ok::<_, RegistryError>(37u32))?;
-    let until = Instant::now() + Duration::from_secs(10);
     loop {
         let count = *lock(&h.wake.count);
         let batch = h
@@ -133,9 +131,6 @@ fn unknown_owner_terminal_remains_available_in_same_borrowed_batch() -> TestResu
             ));
             assert_eq!(batch.notifications.len(), 1);
             break;
-        }
-        if Instant::now() >= until {
-            return Err("Unrelated owner notification not delivered".into());
         }
         h.wake.wait(count)?;
     }

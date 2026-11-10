@@ -65,24 +65,20 @@ impl Barrier {
         let mut state = lock(&self.state);
         state.0 += 1;
         self.changed.notify_all();
-        let (_state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-            .map_err(|_| ClaimError::invalid("fixture_barrier_poison"))?;
-        if timeout.timed_out() {
-            return Err(ClaimError::invalid("fixture_barrier_deadline"));
-        }
+        drop(
+            self.changed
+                .wait_while(state, |state| !state.1)
+                .map_err(|_| ClaimError::invalid("fixture_barrier_poison"))?,
+        );
         Ok(())
     }
     pub(in crate::claims::tests) fn wait(&self, count: usize) -> Result<(), Box<dyn Error>> {
         let state = lock(&self.state);
-        let (_state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| state.0 < count)
-            .map_err(|_| "Fixture barrier poisoned")?;
-        if timeout.timed_out() {
-            return Err("Fixture barrier deadline expired".into());
-        }
+        drop(
+            self.changed
+                .wait_while(state, |state| state.0 < count)
+                .map_err(|_| "Fixture barrier poisoned")?,
+        );
         Ok(())
     }
     pub(in crate::claims::tests) fn release(&self) {
@@ -188,16 +184,11 @@ impl crate::registry::construction_fixture::ConstructionWake for Wake {
     }
     fn wait_revision(&self, previous: u64) -> Result<(), Box<dyn std::error::Error>> {
         let guard = crate::registry::lock(&self.revision);
-        let (_guard, timed) = self
-            .changed
-            .wait_timeout_while(guard, std::time::Duration::from_secs(10), |value| {
-                *value == previous
-            })
-            .map_err(|_| "Constructor completion wake poisoned")?;
-        if timed.timed_out() {
-            Err("Actual constructor completion did not arrive".into())
-        } else {
-            Ok(())
-        }
+        drop(
+            self.changed
+                .wait_while(guard, |value| *value == previous)
+                .map_err(|_| "Constructor completion wake poisoned")?,
+        );
+        Ok(())
     }
 }

@@ -7,7 +7,6 @@ use std::{
         Arc, Condvar, Mutex,
         atomic::{AtomicU64, Ordering},
     },
-    time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobContext, JobId, JobOutcome,
@@ -86,20 +85,17 @@ pub(super) fn observe(
             Ok::<(), io::Error>(())
         },
     )?;
-    let until = Instant::now() + Duration::from_secs(5);
     let completion = loop {
         let revision = *lock(&wake.0);
         client.drain_completions(std::num::NonZeroUsize::new(32).ok_or("Invalid drain")?)?;
         if let Some(completion) = job.try_take_completion() {
             break completion;
         }
-        let remaining =
-            until.checked_duration_since(Instant::now()).ok_or("Retry fixture did not settle")?;
-        let (guard, _) = wake
-            .1
-            .wait_timeout_while(lock(&wake.0), remaining, |current| *current == revision)
-            .map_err(|_| "Retry fixture wake poisoned")?;
-        drop(guard);
+        drop(
+            wake.1
+                .wait_while(lock(&wake.0), |current| *current == revision)
+                .map_err(|_| "Retry fixture wake poisoned")?,
+        );
     };
     lock(&observed).take().ok_or("Retry assertions were not executed")??;
     assert!(matches!(

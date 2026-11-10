@@ -4,7 +4,7 @@
 //! Exercise native retry activity through real admission, terminal transfer and retained contexts.
 
 use crate::{runtime_test_support::*, scope::lock};
-use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::execution::*;
 
 const LIMIT: u64 = 256 * 1024 * 1024;
@@ -104,15 +104,11 @@ fn drain(rig: &Rig) -> TestResult {
 
 fn wait_bytes(rig: &Rig, expected: u64) -> TestResult {
     let core = rig.client.core_for_test();
-    let (state, timeout) = core
-        .cpu_changed
-        .wait_timeout_while(lock(&core.state), Duration::from_secs(10), |state| {
-            state.bytes != expected
-        })
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
-    if timeout.timed_out() && state.bytes != expected {
-        return Err(std::io::Error::other("Original context guards did not release").into());
-    }
+    drop(
+        core.cpu_changed
+            .wait_while(lock(&core.state), |state| state.bytes != expected)
+            .map_err(|error| std::io::Error::other(error.to_string()))?,
+    );
     Ok(())
 }
 

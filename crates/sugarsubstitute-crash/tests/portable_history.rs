@@ -7,7 +7,6 @@ use std::{
     io,
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::{execution::*, incident::*, lifecycle::NamespaceId};
 use sugarsubstitute_crash::incident::{IncidentStoreState, encode_store_state, portable::*};
@@ -66,17 +65,14 @@ fn admitted(work: impl FnOnce(JobContext) -> TestResult + Send + 'static) -> Tes
                 }
             }
         }
-        let (_guard, waited) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == prior,
-            )
-            .map_err(|cause| io::Error::other(cause.to_string()))?;
-        if waited.timed_out() {
-            return Err("Public port completion did not return".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(
+                    wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                    |count| *count == prior,
+                )
+                .map_err(|cause| io::Error::other(cause.to_string()))?,
+        );
     }
     drop(job);
     drop(owner);

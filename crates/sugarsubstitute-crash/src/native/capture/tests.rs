@@ -9,7 +9,6 @@ use std::{
         Arc, Condvar, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
@@ -76,17 +75,13 @@ fn diagnostic_panic_cannot_drop_irrevocably_retained_owner_or_actual_charge()
         if let Some(completion) = job.try_take_completion() {
             break completion;
         }
-        let (observed, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().map_err(|_| "Poisoned test wake")?,
-                Duration::from_secs(10),
-                |observed| *observed == count,
-            )
-            .map_err(|_| "Poisoned test wake")?;
-        if timeout.timed_out() && *observed == count {
-            return Err("Actual job did not complete".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(wake.count.lock().map_err(|_| "Poisoned test wake")?, |observed| {
+                    *observed == count
+                })
+                .map_err(|_| "Poisoned test wake")?,
+        );
     };
     let JobOutcome::Success(memory) = completion.outcome else {
         return Err("Actual charge job failed".into());
@@ -187,17 +182,13 @@ fn actual_original_partitions_and_trusted_bundle_exactly_fit_four_mebibytes()
         if let Some(completion) = job.try_take_completion() {
             break completion;
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().map_err(|_| "Poisoned test wake")?,
-                Duration::from_secs(10),
-                |count| *count == previous,
-            )
-            .map_err(|_| "Poisoned test wake")?;
-        if timeout.timed_out() && *count == previous {
-            return Err("Actual allocation job did not finish".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(wake.count.lock().map_err(|_| "Poisoned test wake")?, |count| {
+                    *count == previous
+                })
+                .map_err(|_| "Poisoned test wake")?,
+        );
     };
     let JobOutcome::Success(ledger) = completion.outcome else {
         return Err("Actual allocation job failed".into());

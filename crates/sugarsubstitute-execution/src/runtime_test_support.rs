@@ -5,15 +5,12 @@
 
 use crate::{runtime::ExecutionOwner, scope::lock};
 use std::{
-    collections::HashMap,
-    future::Future,
     num::NonZeroUsize,
-    pin::Pin,
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
-    task::{Context, Poll, Waker},
+    task::{Poll, Waker},
     time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
@@ -25,19 +22,22 @@ struct ObservationCallback {
     thread: std::thread::ThreadId,
     action: ClockCallback,
 }
-#[derive(Default)]
+/// Manual execution time with test hooks on top of the shared [`crate::clock_fixture::ManualClock`].
 pub(crate) struct ManualClock {
     observation_callback: Mutex<Option<ObservationCallback>>,
-    current: Mutex<MomentState>,
-    next_waiter: AtomicU64,
+    timeline: Arc<crate::clock_fixture::ManualClock>,
     pub(crate) sleep_calls: AtomicU64,
     pub(crate) expired_sleep_calls: AtomicU64,
-    registered: Condvar,
 }
-#[derive(Default)]
-struct MomentState {
-    nanos: u64,
-    waiters: HashMap<u64, (Moment, Waker)>,
+impl Default for ManualClock {
+    fn default() -> Self {
+        Self {
+            observation_callback: Mutex::default(),
+            timeline: crate::clock_fixture::ManualClock::new(),
+            sleep_calls: AtomicU64::default(),
+            expired_sleep_calls: AtomicU64::default(),
+        }
+    }
 }
 
 impl ManualClock {
@@ -61,59 +61,16 @@ impl ManualClock {
             (callback.action)();
         }
     }
+    /// Block until the owner has parked a timer for exactly `deadline`, however long that takes.
     pub(crate) fn wait_until_registered(&self, deadline: Moment) -> TestResult {
-        let (state, timeout) = self
-            .registered
-            .wait_timeout_while(lock(&self.current), Duration::from_secs(10), |state| {
-                !state.waiters.values().any(|(registered, _)| *registered == deadline)
-            })
-            .map_err(|error| std::io::Error::other(error.to_string()))?;
-        if timeout.timed_out()
-            && !state.waiters.values().any(|(registered, _)| *registered == deadline)
-        {
-            return Err(std::io::Error::other("Owned timer did not register").into());
-        }
+        self.timeline.wait_for_sleeper(deadline);
         Ok(())
     }
     pub(crate) fn advance(&self, nanos: u64) {
-        let wakers = {
-            let mut state = lock(&self.current);
-            state.nanos += nanos;
-            let now = Moment::from_nanos(state.nanos);
-            state
-                .waiters
-                .extract_if(|_, (deadline, _)| *deadline <= now)
-                .map(|(_, (_, waker))| waker)
-                .collect::<Vec<_>>()
-        };
-        for waker in wakers {
-            waker.wake();
-        }
-    }
-}
-
-struct ManualWait {
-    clock: Arc<ManualClock>,
-    deadline: Moment,
-    id: u64,
-}
-impl Future for ManualWait {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<()> {
-        let mut state = lock(&self.clock.current);
-        if Moment::from_nanos(state.nanos) >= self.deadline {
-            state.waiters.remove(&self.id);
-            Poll::Ready(())
-        } else {
-            state.waiters.insert(self.id, (self.deadline, context.waker().clone()));
-            self.clock.registered.notify_all();
-            Poll::Pending
-        }
-    }
-}
-impl Drop for ManualWait {
-    fn drop(&mut self) {
-        lock(&self.clock.current).waiters.remove(&self.id);
+        assert!(
+            self.timeline.advance(Duration::from_nanos(nanos)).is_ok(),
+            "Manual execution time overflowed"
+        );
     }
 }
 
@@ -121,18 +78,14 @@ pub(crate) struct ClockPort(pub(crate) Arc<ManualClock>);
 impl Clock for ClockPort {
     fn now(&self) -> Moment {
         self.0.observe_callback();
-        Moment::from_nanos(lock(&self.0.current).nanos)
+        self.0.timeline.now()
     }
     fn sleep_until(&self, deadline: Moment) -> WaitFuture {
         self.0.sleep_calls.fetch_add(1, Ordering::Relaxed);
         if deadline <= self.now() {
             self.0.expired_sleep_calls.fetch_add(1, Ordering::Relaxed);
         }
-        Box::pin(ManualWait {
-            clock: self.0.clone(),
-            deadline,
-            id: self.0.next_waiter.fetch_add(1, Ordering::Relaxed),
-        })
+        self.0.timeline.sleep_until(deadline)
     }
 }
 
@@ -146,16 +99,13 @@ impl Wake {
     pub(crate) fn count(&self) -> u64 {
         *lock(&self.count)
     }
+    /// Block until a wake newer than `observed` arrives; real work under load only makes this slower.
     pub(crate) fn wait_after(&self, observed: u64) -> TestResult {
-        let (count, timeout) = self
-            .changed
-            .wait_timeout_while(lock(&self.count), Duration::from_secs(10), |count| {
-                *count == observed
-            })
-            .map_err(|error| std::io::Error::other(error.to_string()))?;
-        if timeout.timed_out() && *count == observed {
-            return Err(std::io::Error::other("Controlled completion wake did not arrive").into());
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.count), |count| *count == observed)
+                .map_err(|error| std::io::Error::other(error.to_string()))?,
+        );
         Ok(())
     }
 }
@@ -191,17 +141,13 @@ impl Gate {
             waker.wake();
         }
     }
+    /// Block until the gate opens; a gate that is never opened is a test the runner reports as long.
     pub(crate) fn wait(&self) -> TestResult {
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(lock(&self.state), Duration::from_secs(10), |state| !state.0)
-            .map_err(|error| std::io::Error::other(error.to_string()))?;
-        if timeout.timed_out() && !state.0 {
-            return Err(std::io::Error::other(
-                "Controlled work did not reach synchronization point",
-            )
-            .into());
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.state), |state| !state.0)
+                .map_err(|error| std::io::Error::other(error.to_string()))?,
+        );
         Ok(())
     }
     pub(crate) fn future(self: &Arc<Self>) -> WaitFuture {

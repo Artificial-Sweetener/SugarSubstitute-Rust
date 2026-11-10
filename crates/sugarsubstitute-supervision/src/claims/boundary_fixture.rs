@@ -3,7 +3,7 @@
 //! Substitute only native filesystem results while real claims jobs produce observations.
 
 use super::*;
-use std::{sync::Condvar, time::Duration};
+use std::sync::Condvar;
 
 /// Control only a deterministic external filesystem call, never execution or event insertion.
 #[derive(Clone)]
@@ -16,21 +16,18 @@ impl Control {
         state.1 = false;
         state.2 = false;
     }
-    /// Await actual entry into the paused boundary using a fixed fixture failure cutoff.
+    /// Block until the paused boundary is actually entered; entry has no wall-clock bound.
     /// # Errors
-    /// Reports poisoned synchronization or missing actual worker entry.
+    /// Reports poisoned synchronization.
     pub fn wait_entered(&self) -> Result<(), ClaimError> {
         let state = lock(&self.0.state);
-        let (_state, timeout) = self
-            .0
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-            .map_err(|_| ClaimError::invalid("claim_fixture_poison"))?;
-        if timeout.timed_out() {
-            Err(ClaimError::invalid("claim_fixture_not_entered"))
-        } else {
-            Ok(())
-        }
+        drop(
+            self.0
+                .changed
+                .wait_while(state, |state| !state.1)
+                .map_err(|_| ClaimError::invalid("claim_fixture_poison"))?,
+        );
+        Ok(())
     }
     /// Release the same paused call before joining the real executor on every teardown path.
     pub fn release(&self) {
@@ -71,15 +68,11 @@ impl native_claims::NativePort for Boundary {
         if state.0 {
             state.1 = true;
             self.changed.notify_all();
-            let (returned, timeout) = self
+            state = self
                 .changed
-                .wait_timeout_while(state, Duration::from_secs(10), |state| !state.2)
+                .wait_while(state, |state| !state.2)
                 .map_err(|_| ClaimError::invalid("claim_fixture_poison"))?;
-            state = returned;
             state.0 = false;
-            if timeout.timed_out() {
-                return Err(ClaimError::invalid("claim_fixture_blocked"));
-            }
         }
         drop(state);
         if self.fail.swap(false, Ordering::AcqRel) {

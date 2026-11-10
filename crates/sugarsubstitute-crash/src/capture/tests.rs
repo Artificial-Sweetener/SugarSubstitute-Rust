@@ -8,7 +8,6 @@ use std::{
         Condvar,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, windows::NativeCorrelation};

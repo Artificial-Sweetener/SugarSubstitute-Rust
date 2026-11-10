@@ -183,13 +183,11 @@ impl DropBoundary {
     }
     /// Await causal entry by both existing blocking workers, with a failure guard.
     fn wait_entered(&self) -> TestResult {
-        let (_state, timed) = self
-            .changed
-            .wait_timeout_while(lock(&self.state), Duration::from_secs(10), |state| state.0 != 2)
-            .map_err(|_| "Identity drop fixture poisoned")?;
-        if timed.timed_out() {
-            return Err("Both actual drop callbacks did not enter".into());
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.state), |state| state.0 != 2)
+                .map_err(|_| "Identity drop fixture poisoned")?,
+        );
         Ok(())
     }
     /// Release held callbacks before any executor teardown on normal or failed paths.

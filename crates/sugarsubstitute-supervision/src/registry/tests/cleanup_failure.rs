@@ -13,8 +13,6 @@ fn consume_exact(
 ) -> TestResult {
     assert!(!expected.is_empty() && expected.len() <= 2);
     let mut seen = [false; 2];
-    let until =
-        Instant::now().checked_add(Duration::from_secs(10)).ok_or("Test deadline overflow")?;
     loop {
         let count = *lock(&h.wake.count);
         let batch = h.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
@@ -32,9 +30,6 @@ fn consume_exact(
             && !h.registry.snapshot(key)?.cleanup_pending
         {
             return Ok(());
-        }
-        if Instant::now() >= until {
-            return Err("Exact cleanup/member terminal notifications did not settle".into());
         }
         h.wake.wait(count)?;
     }

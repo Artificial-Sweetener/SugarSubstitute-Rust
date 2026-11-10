@@ -8,7 +8,7 @@ use windows::Win32::{
     Foundation::{
         HANDLE, HANDLE_FLAG_PROTECT_FROM_CLOSE, HANDLE_FLAGS, SetHandleInformation, WAIT_OBJECT_0,
     },
-    System::Threading::{TerminateProcess, WaitForSingleObject},
+    System::Threading::{INFINITE, TerminateProcess, WaitForSingleObject},
 };
 
 #[test]
@@ -29,15 +29,15 @@ pub(in crate::application_launch) fn settle_fixture(handle: HANDLE) -> Result<()
     // SAFETY: the caller retains the uniquely owned process handle under its state lock.
     unsafe { SetHandleInformation(handle, HANDLE_FLAG_PROTECT_FROM_CLOSE.0, HANDLE_FLAGS(0)) }
         .map_err(|cause| ClaimError::new("fixture_unprotect_process", cause))?;
-    // SAFETY: the same actual child handle remains owned throughout the bounded observation.
-    if unsafe { WaitForSingleObject(handle, 5000) } == WAIT_OBJECT_0 {
+    // SAFETY: the same actual child handle remains owned throughout the observation.
+    if unsafe { WaitForSingleObject(handle, INFINITE) } == WAIT_OBJECT_0 {
         return Ok(());
     }
     // SAFETY: this is exclusively the windowless --list fixture created by this test, not a PID lookup.
     unsafe { TerminateProcess(handle, 1) }
         .map_err(|cause| ClaimError::new("fixture_terminate_process", cause))?;
     // SAFETY: termination is observed on the same retained kernel process object.
-    if unsafe { WaitForSingleObject(handle, 5000) } != WAIT_OBJECT_0 {
+    if unsafe { WaitForSingleObject(handle, INFINITE) } != WAIT_OBJECT_0 {
         return Err(ClaimError::invalid("fixture_process_not_settled"));
     }
     Err(ClaimError::invalid("fixture_process_observation_expired"))

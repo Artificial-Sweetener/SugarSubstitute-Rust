@@ -20,7 +20,6 @@ fn prepared(
         spec,
         sugarsubstitute_execution::windows_output::OutputIdentity::Managed(resource),
     )?;
-    let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         let revision = *lock(&h.wake.revision);
         h.client.drain_completions(std::num::NonZeroUsize::MIN)?;
@@ -30,18 +29,12 @@ fn prepared(
         if let Some(completion) = session.completion.try_take_completion() {
             return Err(format!("Output preparation ended: {:?}", completion.outcome).into());
         }
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            return Err("Output preparation deadline expired".into());
-        }
-        let (_guard, timeout) = h
-            .wake
-            .changed
-            .wait_timeout_while(lock(&h.wake.revision), remaining, |current| *current == revision)
-            .map_err(|_| "Output wake poisoned")?;
-        if timeout.timed_out() {
-            return Err("Output preparation wake deadline expired".into());
-        }
+        drop(
+            h.wake
+                .changed
+                .wait_while(lock(&h.wake.revision), |current| *current == revision)
+                .map_err(|_| "Output wake poisoned")?,
+        );
     }
 }
 

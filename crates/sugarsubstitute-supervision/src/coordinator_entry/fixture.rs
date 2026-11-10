@@ -18,7 +18,6 @@ use std::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
-    time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::{
     configuration::{

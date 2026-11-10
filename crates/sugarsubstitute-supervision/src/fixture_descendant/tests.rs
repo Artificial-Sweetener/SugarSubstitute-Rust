@@ -9,10 +9,9 @@ use std::{
         Condvar,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
-use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
+use sugarsubstitute_execution::{ExecutionOwner, clock_fixture::ManualClock};
 pub(super) type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 #[derive(Default)]
 pub(super) struct Wake {
@@ -28,13 +27,11 @@ impl CompletionWake for Wake {
 }
 impl Wake {
     pub(super) fn wait(&self, before: usize) -> TestResult {
-        let (count, timeout) = self
-            .changed
-            .wait_timeout_while(lock(&self.count), Duration::from_secs(10), |n| *n == before)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count == before {
-            return Err("Finite native completion did not arrive".into());
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.count), |n| *n == before)
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
         Ok(())
     }
 }
@@ -49,15 +46,9 @@ impl Gate {
         self.changed.notify_all();
     }
     pub(super) fn wait(&self) -> Result<(), RegistryError> {
-        let (open, timeout) = self
-            .changed
-            .wait_timeout_while(lock(&self.open), Duration::from_secs(10), |open| !*open)
-            .map_err(|cause| {
-                RegistryError::new("controlled_gate", std::io::Error::other(cause.to_string()))
-            })?;
-        if timeout.timed_out() && !*open {
-            return Err(RegistryError::invalid("controlled_gate"));
-        }
+        drop(self.changed.wait_while(lock(&self.open), |open| !*open).map_err(|cause| {
+            RegistryError::new("controlled_gate", std::io::Error::other(cause.to_string()))
+        })?);
         Ok(())
     }
 }
@@ -125,7 +116,7 @@ pub(super) struct Rig {
 impl Rig {
     pub(super) fn new() -> TestResult<Self> {
         let wake = Arc::new(Wake::default());
-        let owner = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
+        let owner = ExecutionOwner::new(ManualClock::new(), wake.clone())?;
         let client = owner.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;

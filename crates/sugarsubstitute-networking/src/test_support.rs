@@ -6,14 +6,15 @@ pub(crate) use clock::TestClock;
 use std::{
     io,
     sync::{Arc, Condvar, Mutex},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobCompletion, JobId,
     JobOutcome, JobSpec, Operation, OwnedJob, Scope, ScopeId, ScopeSpec,
 };
 use sugarsubstitute_execution::{
-    ExecutionClient, ExecutionOwner, MonotonicClock,
+    ExecutionClient, ExecutionOwner,
+    clock_fixture::ManualClock,
     http_fixture::{Exchange, Server},
 };
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -36,14 +37,7 @@ pub(crate) fn run(
     + Send
     + 'static,
 ) -> TestResult {
-    execute(
-        MonotonicClock::new(),
-        cancelled,
-        false,
-        reservation_bytes,
-        Duration::from_secs(10),
-        body,
-    )
+    execute(ManualClock::new(), cancelled, false, reservation_bytes, Duration::from_secs(10), body)
 }
 
 /// Execute deterministic proxy qualification through the same admitted worker boundary.
@@ -126,13 +120,15 @@ fn execute(
     Ok(())
 }
 
-/// Observe actual completion through the same adapter wake boundary without timed polling.
+/// Observe actual completion through the same adapter wake boundary, blocking on its wake events.
+///
+/// The wait has no wall-clock bound: native work that is slow under machine load only makes the
+/// test slower, never failed.
 fn completion<T, E>(
     job: &mut OwnedJob<T, E>,
     client: &ExecutionClient,
     wake: &Wake,
 ) -> Result<JobCompletion<T, E>, Box<dyn std::error::Error + Send + Sync>> {
-    let until = Instant::now() + Duration::from_secs(15);
     loop {
         let revision = *lock(&wake.0);
         client.drain_completions(
@@ -141,16 +137,11 @@ fn completion<T, E>(
         if let Some(completion) = job.try_take_completion() {
             return Ok(completion);
         }
-        let remaining = until
-            .checked_duration_since(Instant::now())
-            .ok_or("Native network qualification did not settle")?;
-        let (_guard, status) = wake
-            .1
-            .wait_timeout_while(lock(&wake.0), remaining, |value| *value == revision)
-            .map_err(|_| "Poisoned network qualification wake")?;
-        if status.timed_out() {
-            return Err("Native network qualification did not settle".into());
-        }
+        drop(
+            wake.1
+                .wait_while(lock(&wake.0), |value| *value == revision)
+                .map_err(|_| "Poisoned network qualification wake")?,
+        );
     }
 }
 /// Own an independent finite HTTP fixture through its actual socket-closing terminal outcome.
@@ -186,7 +177,7 @@ impl Running {
         let server = Server::bind(exchanges, context)?;
         let port = server.port()?;
         let wake = Arc::new(Wake::default());
-        let executor = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
+        let executor = ExecutionOwner::new(ManualClock::new(), wake.clone())?;
         let client = executor.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;

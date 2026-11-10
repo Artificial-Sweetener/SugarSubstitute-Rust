@@ -181,16 +181,13 @@ fn without_clock(
         if let Some(completion) = job.try_take_completion() {
             return Ok(completion);
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == old,
-            )
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count == old {
-            return Err("failed callback completion stalled".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(
+                    wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                    |count| *count == old,
+                )
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
     }
 }

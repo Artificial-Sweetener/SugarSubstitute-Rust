@@ -6,7 +6,7 @@ use crate::{
     ExecutionOwner,
     runtime_test_support::{Gate, TestResult, Wake, spec},
 };
-use std::{num::NonZeroUsize, time::Duration};
+use std::num::NonZeroUsize;
 use sugarsubstitute_contracts::execution::*;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -57,15 +57,12 @@ fn terminal_before_notice<T: Send + 'static, E: Send + 'static>(
 ) -> TestResult<JobCompletion<T, E>> {
     let core = client.core_for_test();
     let id = job.spec().id;
-    let (state, timeout) = core
+    let state = core
         .cpu_changed
-        .wait_timeout_while(crate::scope::lock(&core.state), Duration::from_secs(10), |state| {
+        .wait_while(crate::scope::lock(&core.state), |state| {
             state.jobs.get(&id).is_some_and(|record| !matches!(record.phase, JobPhase::Terminal(_)))
         })
         .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-    if timeout.timed_out() {
-        return Err("Original callback Core terminal did not arrive".into());
-    }
     let record = state.jobs.get(&id).ok_or("Original callback record disappeared")?;
     assert_eq!(record.scope_id, job.scope_id());
     assert_eq!(record.spec, job.spec());

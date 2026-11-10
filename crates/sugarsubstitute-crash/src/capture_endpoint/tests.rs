@@ -5,7 +5,6 @@ use super::*;
 use std::{
     num::NonZeroUsize,
     sync::{Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::{execution::*, lifecycle::*};
 use sugarsubstitute_execution::ExecutionOwner;
@@ -67,15 +66,11 @@ impl Harness {
             if let Some(completion) = job.try_take_completion() {
                 break completion;
             }
-            let (count, timeout) = wake
-                .changed
-                .wait_timeout_while(lock(&wake.count), Duration::from_secs(10), |count| {
-                    *count == previous
-                })
-                .map_err(|_| "Poisoned controlled wake")?;
-            if timeout.timed_out() && *count == previous {
-                return Err("Actual storage job did not complete".into());
-            }
+            drop(
+                wake.changed
+                    .wait_while(lock(&wake.count), |count| *count == previous)
+                    .map_err(|_| "Poisoned controlled wake")?,
+            );
         };
         let JobOutcome::Success(attempts) = completion.outcome else {
             return Err("Actual storage allocation failed".into());

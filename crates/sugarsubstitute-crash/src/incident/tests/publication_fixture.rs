@@ -6,7 +6,6 @@ use std::{
     num::NonZeroUsize,
     path::Path,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
@@ -99,17 +98,14 @@ fn run_job<T: Send + 'static>(
         if let Some(completion) = job.try_take_completion() {
             break completion;
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == old,
-            )
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count == old {
-            return Err("Repository completion stalled".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(
+                    wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                    |count| *count == old,
+                )
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
     };
     match completion.outcome {
         JobOutcome::Success(result) => {

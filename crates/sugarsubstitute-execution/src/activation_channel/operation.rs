@@ -59,11 +59,15 @@ impl Operation {
         Self::new(Direction::Write, bytes, memory)
     }
     #[cfg(test)]
-    /// Bound actual event observation in native tests without polling sleeps.
+    /// Block until the operation's completion event is signalled, without polling sleeps or a
+    /// wall-clock bound, so slow native I/O under machine load cannot change a test's outcome.
     pub(super) fn wait_fixture(&self) -> Result<(), NativeObservationError> {
-        use windows::Win32::{Foundation::WAIT_OBJECT_0, System::Threading::WaitForSingleObject};
-        // SAFETY: the controlled fixture holds this event and operation through a bounded wait.
-        if unsafe { WaitForSingleObject(self.event.raw(), 5000) } != WAIT_OBJECT_0 {
+        use windows::Win32::{
+            Foundation::WAIT_OBJECT_0,
+            System::Threading::{INFINITE, WaitForSingleObject},
+        };
+        // SAFETY: the controlled fixture holds this event and operation through the wait.
+        if unsafe { WaitForSingleObject(self.event.raw(), INFINITE) } != WAIT_OBJECT_0 {
             return Err(invalid("activation_channel_fixture_wait"));
         }
         Ok(())

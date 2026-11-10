@@ -6,7 +6,6 @@ use std::sync::{
     Condvar,
     atomic::{AtomicU64, Ordering},
 };
-use std::time::{Duration, Instant};
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobId, JobPhase, JobSpec,
     Moment, Operation, Scope, ScopeId, ScopeSpec, WaitFuture,
@@ -43,21 +42,17 @@ impl Wake {
         client: &ExecutionClient,
         mut ready: impl FnMut() -> Result<Option<T>, Box<dyn std::error::Error>>,
     ) -> Result<T, Box<dyn std::error::Error>> {
-        let until = Instant::now() + Duration::from_secs(5);
         loop {
             let revision = *lock(&self.revision);
             client.drain_completions(std::num::NonZeroUsize::new(32).ok_or("Invalid drain")?)?;
             if let Some(value) = ready()? {
                 return Ok(value);
             }
-            let remaining = until.checked_duration_since(Instant::now()).ok_or("Missing wake")?;
-            let (_guard, status) = self
-                .changed
-                .wait_timeout_while(lock(&self.revision), remaining, |current| *current == revision)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if status.timed_out() {
-                return Err("Missing causal completion wake".into());
-            }
+            drop(
+                self.changed
+                    .wait_while(lock(&self.revision), |current| *current == revision)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
         }
     }
 }

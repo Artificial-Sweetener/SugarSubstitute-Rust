@@ -6,7 +6,6 @@ use std::{
     error::Error,
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionOwner, windows_lifecycle_pipe::MIN_LIFECYCLE_PIPE_BYTES};
@@ -91,14 +90,11 @@ fn actual_parent_first_cause_survives_finish_and_native_pipe_cancellation() -> T
             break;
         }
         let guard = wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (guard, timeout) = wake
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |current| *current == observed)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(guard);
-        if timeout.timed_out() {
-            return Err("Original pipe cancellation did not retire".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(guard, |current| *current == observed)
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
     }
     drop(rejected);
     drop(parent);

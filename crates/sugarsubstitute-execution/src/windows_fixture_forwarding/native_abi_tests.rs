@@ -61,9 +61,11 @@ fn reserve(rig: &Rig) -> TestResult<(Scope, FixtureForwardingPermit)> {
         &scope,
         specification,
         crate::windows::NativeCorrelation::new(1)?,
+        // The native worker needs a finite real deadline. A day is far beyond any loaded run, so
+        // the fixture events alone decide every outcome in this module.
         crate::windows_fixture::FixtureDeadline::until(
             std::time::Instant::now()
-                .checked_add(std::time::Duration::from_secs(10))
+                .checked_add(std::time::Duration::from_secs(86_400))
                 .ok_or("deadline")?,
         )?,
     )?;

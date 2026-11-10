@@ -9,7 +9,6 @@ use crate::{
 use std::{
     num::NonZeroUsize,
     sync::{Condvar, Mutex},
-    time::{Duration, Instant},
 };
 use sugarsubstitute_execution::ExecutionOwner;
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -90,25 +89,19 @@ impl Rig {
     }
 
     fn completion(&self) -> Result<CompletionBatch, Box<dyn std::error::Error + Send + Sync>> {
-        let until = Instant::now() + Duration::from_secs(20);
         loop {
             let observed = *crate::registry::lock(&self.wake.0);
             let batch = self.client.drain_completions(NonZeroUsize::MAX)?;
             if !batch.notifications.is_empty() {
                 return Ok(batch);
             }
-            let left = until
-                .checked_duration_since(Instant::now())
-                .ok_or("Storage worker did not complete")?;
             let guard = crate::registry::lock(&self.wake.0);
-            let (_guard, timed) = self
-                .wake
-                .1
-                .wait_timeout_while(guard, left, |current| *current == observed)
-                .map_err(|_| "Wake poisoned")?;
-            if timed.timed_out() {
-                return Err("Storage worker observation expired".into());
-            }
+            drop(
+                self.wake
+                    .1
+                    .wait_while(guard, |current| *current == observed)
+                    .map_err(|_| "Wake poisoned")?,
+            );
         }
     }
 }

@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Observe each local-server job through the real execution adapter and finite clock.
+//! Observe each local-server job through the real execution adapter and a deterministic clock.
 use super::*;
 use crate::setup_storage::test_worker::TestResult;
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Instant,
 };
 use sugarsubstitute_contracts::execution::{
     CompletionWake, ExecutionError, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec, Operation,
@@ -14,7 +13,7 @@ use sugarsubstitute_contracts::execution::{
 };
 use sugarsubstitute_execution::http_fixture::Exchange;
 use sugarsubstitute_execution::{
-    ExecutionClient, ExecutionOwner, MonotonicClock, http_fixture::Server,
+    ExecutionClient, ExecutionOwner, clock_fixture::ManualClock, http_fixture::Server,
 };
 
 #[derive(Default)]
@@ -43,7 +42,7 @@ impl Running {
         let server = Server::bind(exchanges, context)?;
         let policy = Policy::loopback(server.port()?)?;
         let wake = Arc::new(Wake::default());
-        let executor = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
+        let executor = ExecutionOwner::new(ManualClock::new(), wake.clone())?;
         let client = executor.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -63,7 +62,8 @@ impl Running {
         Ok((Self { job, client, _scope: scope, wake, _executor: executor }, policy))
     }
     /// Observe the server even when its client has already returned an error.
-    /// The existing server deadline and completion-observation bound remain unchanged.
+    /// The server's finite job deadline never elapses on the fixture's manual clock, and the
+    /// completion wait has no wall-clock bound.
     /// # Errors
     /// Retains the original client and server causes when both operations fail.
     pub(crate) fn finish_after(self, client: TestResult) -> TestResult {
@@ -71,7 +71,6 @@ impl Running {
     }
     /// Observe actual server completion; a client succeeding cannot conceal fixture failure.
     pub(crate) fn finish(mut self) -> TestResult {
-        let until = Instant::now() + Duration::from_secs(15);
         let completion = loop {
             let revision = *crate::registry::lock(&self.wake.0);
             self.client
@@ -79,19 +78,12 @@ impl Running {
             if let Some(completion) = self.job.try_take_completion() {
                 break completion;
             }
-            let remaining = until
-                .checked_duration_since(Instant::now())
-                .ok_or("HTTP fixture did not settle")?;
-            let (_guard, timeout) = self
-                .wake
-                .1
-                .wait_timeout_while(crate::registry::lock(&self.wake.0), remaining, |current| {
-                    *current == revision
-                })
-                .map_err(|_| "Poisoned HTTP fixture wake")?;
-            if timeout.timed_out() {
-                return Err("HTTP fixture did not settle".into());
-            }
+            drop(
+                self.wake
+                    .1
+                    .wait_while(crate::registry::lock(&self.wake.0), |current| *current == revision)
+                    .map_err(|_| "Poisoned HTTP fixture wake")?,
+            );
         };
         match completion.outcome {
             JobOutcome::Success(()) => Ok(()),

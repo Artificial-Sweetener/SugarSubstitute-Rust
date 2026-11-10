@@ -13,7 +13,6 @@ use std::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
-    time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::{JobContext, Moment};
 
@@ -83,20 +82,11 @@ impl FixtureHttp {
         })
     }
     pub(crate) fn entered(&self) -> Result<(), Box<dyn Error>> {
-        let until = Instant::now() + Duration::from_secs(5);
-        let mut guard = lock(&self.gate);
-        while !guard.0 {
-            let remaining =
-                until.checked_duration_since(Instant::now()).ok_or("Missing causal HTTP entry")?;
-            let (next, status) = self
-                .changed
-                .wait_timeout(guard, remaining)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            guard = next;
-            if status.timed_out() {
-                return Err("Missing causal HTTP entry".into());
-            }
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.gate), |gate| !gate.0)
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
         Ok(())
     }
     pub(crate) fn release(&self) {

@@ -40,7 +40,6 @@ impl Fixture {
             },
             body,
         )?;
-        let cutoff = Instant::now() + Duration::from_secs(20);
         loop {
             let revision = *self.wake.0.lock().map_err(|_| "Retained fixture wake poisoned")?;
             self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
@@ -53,20 +52,15 @@ impl Fixture {
                     }
                 };
             }
-            let remaining =
-                cutoff.checked_duration_since(Instant::now()).ok_or("Retained fixture expired")?;
-            let (_guard, timeout) = self
-                .wake
-                .1
-                .wait_timeout_while(
-                    self.wake.0.lock().map_err(|_| "Retained fixture wake poisoned")?,
-                    remaining,
-                    |count| *count == revision,
-                )
-                .map_err(|_| "Retained fixture wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("Retained artifact worker did not stop".into());
-            }
+            drop(
+                self.wake
+                    .1
+                    .wait_while(
+                        self.wake.0.lock().map_err(|_| "Retained fixture wake poisoned")?,
+                        |count| *count == revision,
+                    )
+                    .map_err(|_| "Retained fixture wake poisoned")?,
+            );
         }
     }
 }

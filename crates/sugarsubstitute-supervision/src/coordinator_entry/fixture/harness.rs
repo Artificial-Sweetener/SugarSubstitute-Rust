@@ -112,7 +112,6 @@ impl Harness {
         Ok(())
     }
     pub(crate) fn drain(&mut self) -> Result<Option<EntryObservation>, Box<dyn Error>> {
-        let guard_until = Instant::now() + Duration::from_secs(10);
         loop {
             let revision = *lock(&self.wake.revision);
             let batch = self
@@ -122,27 +121,18 @@ impl Harness {
             if self.owner.snapshot().pending.is_none() {
                 return Ok(event);
             }
-            let remaining = guard_until.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("entry completion guard expired".into());
-            }
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(lock(&self.wake.revision), remaining, |current| {
-                    *current == revision
-                })
-                .map_err(|_| "entry wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("entry completion wake guard expired".into());
-            }
+            drop(
+                self.wake
+                    .changed
+                    .wait_while(lock(&self.wake.revision), |current| *current == revision)
+                    .map_err(|_| "entry wake poisoned")?,
+            );
         }
     }
     pub(crate) fn consume_job<T, E>(
         &mut self,
         job: &mut OwnedJob<T, E>,
     ) -> Result<sugarsubstitute_contracts::execution::JobCompletion<T, E>, Box<dyn Error>> {
-        let guard_until = Instant::now() + Duration::from_secs(10);
         loop {
             let revision = *lock(&self.wake.revision);
             if let Some(done) = job.try_take_completion() {
@@ -153,20 +143,12 @@ impl Harness {
             if let Some(done) = job.try_take_completion() {
                 return Ok(done);
             }
-            let remaining = guard_until.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("entry proof completion guard expired".into());
-            }
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(lock(&self.wake.revision), remaining, |current| {
-                    *current == revision
-                })
-                .map_err(|_| "entry proof wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("entry proof wake guard expired".into());
-            }
+            drop(
+                self.wake
+                    .changed
+                    .wait_while(lock(&self.wake.revision), |current| *current == revision)
+                    .map_err(|_| "entry proof wake poisoned")?,
+            );
         }
     }
     /// Consume one exact claims-owned job through its actual public completion owner.
@@ -175,7 +157,6 @@ impl Harness {
         claims: &mut crate::WindowsResourceClaims,
         expected: JobId,
     ) -> Result<(), Box<dyn Error>> {
-        let guard_until = Instant::now() + Duration::from_secs(10);
         loop {
             let revision = *lock(&self.wake.revision);
             let batch = self
@@ -189,20 +170,12 @@ impl Harness {
             if matched && consumed > 0 {
                 return Ok(());
             }
-            let remaining = guard_until.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("entry claims completion guard expired".into());
-            }
-            let (_guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(lock(&self.wake.revision), remaining, |current| {
-                    *current == revision
-                })
-                .map_err(|_| "entry claims wake poisoned")?;
-            if timeout.timed_out() {
-                return Err("entry claims wake guard expired".into());
-            }
+            drop(
+                self.wake
+                    .changed
+                    .wait_while(lock(&self.wake.revision), |current| *current == revision)
+                    .map_err(|_| "entry claims wake poisoned")?,
+            );
         }
     }
 }

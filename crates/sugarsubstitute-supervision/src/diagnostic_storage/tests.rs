@@ -28,7 +28,6 @@ use std::{
         Condvar,
         atomic::{AtomicU64, Ordering},
     },
-    time::Duration,
 };
 use sugarsubstitute_contracts::{
     execution::*,
@@ -50,6 +49,16 @@ impl Clock for TestClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
+    }
+}
+/// Raise one flag of a two-flag handshake when dropped, so an early return or unwind on one side
+/// still ends the other side's wait and the test fails with its cause instead of hanging.
+struct RaiseOnDrop(Arc<(Mutex<(bool, bool)>, Condvar)>, fn(&mut (bool, bool)));
+impl Drop for RaiseOnDrop {
+    fn drop(&mut self) {
+        let (mutex, changed) = &*self.0;
+        (self.1)(&mut mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+        changed.notify_all();
     }
 }
 #[derive(Default)]
@@ -108,17 +117,14 @@ fn observe_job(
         if let Some(value) = job.try_take_completion() {
             break value;
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == old,
-            )
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count == old {
-            return Err("Diagnostic CPU completion stalled".into());
-        }
+        drop(
+            wake.changed
+                .wait_while(
+                    wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                    |count| *count == old,
+                )
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
     };
     drop(completion.memory);
     Ok(completion.outcome)

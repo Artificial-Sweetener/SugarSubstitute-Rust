@@ -100,7 +100,7 @@ rationale = "Retained process environment snapshot for native launch; original b
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/tests/containment.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:346677dcffac892346cdfd1005811b3b701e0a7d74899f2e30000a051b5dcb60"
+source_sha256 = "sha256:712894adfbe93fb0b0932c8bb0e611722e1a31303747ef8ae54643094c34f2dc"
 capabilities = ["environment"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 

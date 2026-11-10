@@ -2,12 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe real parent release state after transport closure; wire fixtures grant no peer authority.
 use super::*;
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::{Duration, Instant},
+use std::sync::{
+    Arc, Condvar, Mutex,
+    atomic::{AtomicU64, Ordering},
 };
 use sugarsubstitute_contracts::{execution::*, lifecycle::*};
 use sugarsubstitute_execution::ExecutionOwner;
@@ -21,9 +18,16 @@ impl Clock for ClockSource {
         Box::pin(std::future::pending())
     }
 }
-struct Wake;
+/// Count the execution owner's completion wakes so shutdown can be awaited without polling.
+#[derive(Default)]
+struct Wake {
+    revision: Mutex<u64>,
+    changed: Condvar,
+}
 impl CompletionWake for Wake {
     fn wake(&self) -> Result<(), ExecutionError> {
+        *crate::registry::lock(&self.revision) += 1;
+        self.changed.notify_all();
         Ok(())
     }
 }
@@ -32,7 +36,8 @@ impl CompletionWake for Wake {
 fn original_release_receipt_survives_closed_transport_without_new_admission()
 -> Result<(), Box<dyn std::error::Error>> {
     let clock = Arc::new(ClockSource(AtomicU64::new(0)));
-    let mut execution = ExecutionOwner::new(clock.clone(), Arc::new(Wake))?;
+    let wake = Arc::new(Wake::default());
+    let mut execution = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = execution.client();
     let scope =
         client.create_native_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -86,13 +91,18 @@ fn original_release_receipt_survives_closed_transport_without_new_admission()
     );
     drop(parent);
     execution.request_shutdown(Moment::from_nanos(70_000_000_000));
-    let guard = Instant::now();
-    while !execution.poll_shutdown()?.settled {
+    loop {
+        let observed = *crate::registry::lock(&wake.revision);
         client.drain_completions(NonZeroUsize::MIN)?;
-        if guard.elapsed() > Duration::from_secs(30) {
-            return Err("Native fixture failed to retire".into());
+        if execution.poll_shutdown()?.settled {
+            break;
         }
-        std::hint::spin_loop();
+        // The execution owner publishes a wake after its last worker returns from shutdown.
+        drop(
+            wake.changed
+                .wait_while(crate::registry::lock(&wake.revision), |current| *current == observed)
+                .map_err(|_| "Shutdown wake poisoned")?,
+        );
     }
     execution.finish_shutdown()?;
     assert_eq!(scope.snapshot().reserved_bytes, 0);

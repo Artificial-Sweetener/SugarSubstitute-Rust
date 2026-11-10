@@ -416,14 +416,14 @@ rationale = "Inherited storage custody rejects aliasing with standard process ha
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker/trace.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:34dd9c746a235f993e134bcf4aba00ef97deb31b2dd310e59ea8cec5b364dd63"
+source_sha256 = "sha256:bd53096f72bffe863627fe28d38002550a7646360e2875e692c0c0cc97aa74ab"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:952c2d297db0e3b7eed45cb67cea14304a048927f88185ae885053efaed2fef0"
+source_sha256 = "sha256:ed71a5768376fa661a03dac4211a3941932d908fd4eb64021a04d82a3ad99906"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -997,7 +997,7 @@ rationale = "The isolated Node transport qualification captures bounded child st
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/tests/harness.rs"
 owner = "sugarsubstitute-image-io"
-source_sha256 = "sha256:0a85e45e6b4b4765861886f88dca5b48168fdc0d929f2c03050a261207e25a48"
+source_sha256 = "sha256:e415bf8cf8f179ae023efbdfa11ba55bfec4337e3e4d078d6032a60f4be34f9d"
 disposition = "fixture"
 rationale = "Bounded external test wake reports retained terminal failure causes after real execution admission; no runtime sink is constructed."
 
@@ -1053,14 +1053,14 @@ rationale = "Isolated 4K hardware qualification reports actual retained GPU copy
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker/pipeline.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c4757edcd2cb03c8391c14cb6ad85a2b4f3f62f8e16fd1557e88f5579ed82d8c"
+source_sha256 = "sha256:53bafee63f4d7239cd3006eb52b7e87dc8bec0bbe19b5983668b9ccebc27685f"
 disposition = "fixture"
 rationale = "The actual admitted native storage body receives an isolated diagnostic subscriber to observe returned storage scopes. Domain clocks, completion consumption and native effects retain their production owners; no global subscriber is installed."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/registry/tests/preparation/storage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b9f3c8026979d3ad8113be1af2349bb1fe8dc2a1356f2f7865fe2bd40ded42b9"
+source_sha256 = "sha256:5daee3eb9be507e360b8aa83345ca674179c9fbb94e74fa4ac7798ac27b8cc55"
 disposition = "fixture"
 rationale = "The actual admitted native storage body receives an isolated diagnostic subscriber to observe returned storage scopes. Domain clocks, completion consumption and native effects retain their production owners; no global subscriber is installed."
 

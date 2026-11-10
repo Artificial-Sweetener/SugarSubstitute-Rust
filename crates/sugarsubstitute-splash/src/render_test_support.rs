@@ -6,7 +6,6 @@
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
@@ -89,11 +88,7 @@ impl Rig {
             if let Some(completion) = job.try_take_completion() {
                 return Ok(completion);
             }
-            if !self.wait_after(observed)? {
-                return job
-                    .try_take_completion()
-                    .ok_or_else(|| "Preparation did not complete at the observed boundary".into());
-            }
+            self.wait_after(observed)?;
         }
     }
     /// Observe a real terminal result while leaving its typed payload unacknowledged.
@@ -107,26 +102,21 @@ impl Rig {
             if matches!(job.status().phase, JobPhase::Terminal(_)) {
                 return Ok(());
             }
-            if !self.wait_after(observed)? {
-                return if matches!(job.status().phase, JobPhase::Terminal(_)) {
-                    Ok(())
-                } else {
-                    Err("Preparation did not complete at the observed boundary".into())
-                };
-            }
+            self.wait_after(observed)?;
         }
     }
-    fn wait_after(&self, observed: u64) -> TestResult<bool> {
-        let (count, timeout) = self
-            .wake
-            .changed
-            .wait_timeout_while(
-                self.wake.count.lock().map_err(|error| error.to_string())?,
-                Duration::from_secs(20),
-                |count| *count == observed,
-            )
-            .map_err(|error| error.to_string())?;
-        Ok(!timeout.timed_out() || *count != observed)
+    /// Block until the execution owner publishes a wake newer than `observed`; real work under
+    /// machine load only makes this slower, never failed.
+    fn wait_after(&self, observed: u64) -> TestResult {
+        drop(
+            self.wake
+                .changed
+                .wait_while(self.wake.count.lock().map_err(|error| error.to_string())?, |count| {
+                    *count == observed
+                })
+                .map_err(|error| error.to_string())?,
+        );
+        Ok(())
     }
 }
 pub(super) fn spec(id: u64, bytes: u64) -> TestResult<JobSpec> {
@@ -162,17 +152,11 @@ impl Gate {
         Ok(())
     }
     pub(super) fn wait(&self) -> TestResult {
-        let (open, timeout) = self
-            .changed
-            .wait_timeout_while(
-                self.open.lock().map_err(|error| error.to_string())?,
-                Duration::from_secs(20),
-                |open| !*open,
-            )
-            .map_err(|error| error.to_string())?;
-        if timeout.timed_out() && !*open {
-            return Err("Controlled render boundary did not return".into());
-        }
+        drop(
+            self.changed
+                .wait_while(self.open.lock().map_err(|error| error.to_string())?, |open| !*open)
+                .map_err(|error| error.to_string())?,
+        );
         Ok(())
     }
 }

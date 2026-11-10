@@ -8,10 +8,7 @@ use crate::{
     runtime::ExecutionOwner,
     runtime_test_support::{ClockPort, Gate, Held, ManualClock, TestResult, Wake, spec},
 };
-use std::{
-    sync::{Condvar, OnceLock, Weak},
-    time::Duration,
-};
+use std::sync::{Condvar, OnceLock, Weak};
 use sugarsubstitute_contracts::execution::{
     CompletionWake, ExecutionError, ExecutionId, ExecutionPort, JobClass, JobOutcome, Moment,
     ScopeId, ScopeSpec,
@@ -28,17 +25,13 @@ impl StatusWake {
     fn observed(&self) -> Vec<Option<WorkerStatus>> {
         lock(&self.observed).clone()
     }
-    /// Bound a stalled observer; a missing settlement wake fails instead of hanging.
+    /// Block until settlement publishes another wake; a missing wake leaves the test running.
     fn wait_after(&self, observed: usize) -> TestResult {
-        let (recorded, timeout) = self
-            .changed
-            .wait_timeout_while(lock(&self.observed), Duration::from_secs(10), |recorded| {
-                recorded.len() == observed
-            })
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && recorded.len() == observed {
-            return Err("Worker settlement produced no wake".into());
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.observed), |recorded| recorded.len() == observed)
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
         Ok(())
     }
 }

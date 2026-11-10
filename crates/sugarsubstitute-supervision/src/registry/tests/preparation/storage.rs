@@ -14,7 +14,7 @@ pub(super) fn run<T: Send + 'static>(
     let source = std::panic::Location::caller();
     let phase = Arc::new(std::sync::atomic::AtomicU8::new(0));
     let worker_phase = phase.clone();
-    let observation = Observation::new(h.wake.clone(), Duration::from_secs(10));
+    let observation = Observation::new(h.wake.clone());
     let worker_observation = observation.clone();
     let trace = StorageTrace::new(observation.clone());
     let worker_trace = trace.clone();
@@ -36,7 +36,7 @@ pub(super) fn run<T: Send + 'static>(
             observation.completed()?;
             break completion;
         }
-        let remaining = observation.remaining().map_err(|cause| {
+        observation.check().map_err(|cause| {
             format!(
                 "Native storage phase {source}: state={}; {cause}; {}",
                 phase.load(Ordering::Acquire),
@@ -46,7 +46,7 @@ pub(super) fn run<T: Send + 'static>(
         drop(
             h.wake
                 .changed
-                .wait_timeout_while(lock(&h.wake.count), remaining, |current| *current == revision)
+                .wait_while(lock(&h.wake.count), |current| *current == revision)
                 .map_err(|_| "Native storage observer poisoned")?,
         );
     };

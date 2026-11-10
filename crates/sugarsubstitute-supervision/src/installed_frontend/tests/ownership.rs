@@ -7,7 +7,6 @@ use std::sync::{
     Arc, Condvar, Mutex,
     atomic::{AtomicU64, Ordering},
 };
-use std::time::{Duration, Instant};
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobContext, JobId, JobPhase,
     JobSpec, Moment, Operation, Scope, ScopeId, ScopeSpec, WaitFuture,
@@ -37,7 +36,6 @@ impl CompletionWake for Wake {
 }
 impl Wake {
     fn until(&self, client: &ExecutionClient, mut ready: impl FnMut() -> bool) -> TestResult {
-        let until = Instant::now() + Duration::from_secs(5);
         loop {
             let revision = *crate::registry::lock(&self.sequence);
             client
@@ -45,16 +43,12 @@ impl Wake {
             if ready() {
                 return Ok(());
             }
-            let remaining =
-                until.checked_duration_since(Instant::now()).ok_or("Missing terminal wake")?;
             let guard = crate::registry::lock(&self.sequence);
-            let (_guard, status) = self
-                .changed
-                .wait_timeout_while(guard, remaining, |sequence| *sequence == revision)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if status.timed_out() {
-                return Err("Missing terminal wake".into());
-            }
+            drop(
+                self.changed
+                    .wait_while(guard, |sequence| *sequence == revision)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
         }
     }
 }

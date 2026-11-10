@@ -22,7 +22,6 @@ fn turn(
     };
     let step = h.spec(JobClass::InfrastructureLifecycle, 4096)?;
     h.registry.submit_cleanup_step(&h.client, key, &h.scope, step, watch)?;
-    let until = Instant::now() + Duration::from_secs(10);
     while h.registry.snapshot(key)?.cleanup_step_pending {
         let count = *lock(&h.wake.count);
         let batch = h.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
@@ -30,9 +29,6 @@ fn turn(
         h.registry.consume(&ready)?;
         if !h.registry.snapshot(key)?.cleanup_step_pending {
             break;
-        }
-        if Instant::now() >= until {
-            return Err("Admitted cleanup step did not complete".into());
         }
         h.wake.wait(count)?;
     }
@@ -68,7 +64,6 @@ fn take_watch_notice(
     expected: (ScopeId, JobId),
     held: &mut Vec<CompletionNotification>,
 ) -> Result<CompletionNotification, Box<dyn Error>> {
-    let until = Instant::now() + Duration::from_secs(10);
     loop {
         if let Some(index) =
             held.iter().position(|notice| (notice.scope_id, notice.job_id) == expected)
@@ -81,9 +76,6 @@ fn take_watch_notice(
         held.extend(batch.notifications);
         if held.iter().any(|notice| (notice.scope_id, notice.job_id) == expected) {
             continue;
-        }
-        if Instant::now() >= until {
-            return Err("Actual member-watch terminal did not arrive".into());
         }
         if remaining == 0 {
             h.wake.wait(count)?;

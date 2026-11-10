@@ -36,12 +36,9 @@ pub(crate) fn cache_file(
     }
     Ok(entries[0].path().join("data").join(leaf))
 }
-use std::{
-    sync::{
-        Arc, Condvar, Mutex, OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Duration,
+use std::sync::{
+    Arc, Condvar, Mutex, OnceLock,
+    atomic::{AtomicU64, Ordering},
 };
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec,
@@ -132,7 +129,7 @@ fn execute(
     let worker_observed = observed.clone();
     let stage = Arc::new(AtomicU64::new(0));
     let worker_stage = stage.clone();
-    let observation = observation::Observation::new(wake.clone(), Duration::from_secs(20));
+    let observation = observation::Observation::new(wake.clone());
     let trace = StorageTrace::new(observation.clone());
     let worker_trace = trace.clone();
     let worker_observation = observation.clone();
@@ -167,7 +164,7 @@ fn execute(
             observation.completed()?;
             break completion;
         }
-        let remaining = observation.remaining().map_err(|cause| {
+        observation.check().map_err(|cause| {
             format!(
                 "Storage observer stopped: {cause}; stage={}, phase={}, status={:?}, {}",
                 stage.load(Ordering::SeqCst),
@@ -178,9 +175,7 @@ fn execute(
         })?;
         drop(
             wake.1
-                .wait_timeout_while(crate::registry::lock(&wake.0), remaining, |current| {
-                    *current == revision
-                })
+                .wait_while(crate::registry::lock(&wake.0), |current| *current == revision)
                 .map_err(|_| "Poisoned storage completion wake")?,
         );
     };

@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Target an injected provider regression to its actual callback without racing execution guardians.
+//! Inject deterministic external clocks into the real execution owner: a regression targeted at its
+//! actual callback without racing execution guardians, and manual time that moves only when advanced.
 use std::sync::{Arc, Mutex};
 use sugarsubstitute_contracts::execution::{Clock, Moment, WaitFuture};
+
+mod manual;
+pub use manual::ManualClock;
 
 /// Keep callback identity private alongside the immutable injected value and actual sample count.
 struct Regression {

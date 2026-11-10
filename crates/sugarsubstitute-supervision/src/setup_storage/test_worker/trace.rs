@@ -151,7 +151,7 @@ fn storage_diagnostics_follow_nested_custody_and_ignore_other_targets() {
 fn only_actual_storage_returns_advance_native_observation_without_completion_traffic()
 -> std::io::Result<()> {
     let wake = Arc::new(super::Wake::default());
-    let observation = Observation::new(wake.clone(), Duration::from_secs(20));
+    let observation = Observation::new(wake.clone());
     observation.started();
     let trace = StorageTrace::new(observation.clone());
     tracing::subscriber::with_default(trace, || {

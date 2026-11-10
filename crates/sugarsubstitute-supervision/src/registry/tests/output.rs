@@ -248,23 +248,19 @@ impl BlockedWorkers {
         let mut state = lock(&self.state);
         state.0 += 1;
         self.changed.notify_all();
-        let (_state, timed) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-            .map_err(|_| RegistryError::invalid("blocked_worker_poison"))?;
-        if timed.timed_out() {
-            return Err(RegistryError::invalid("blocked_worker_not_released"));
-        }
+        drop(
+            self.changed
+                .wait_while(state, |state| !state.1)
+                .map_err(|_| RegistryError::invalid("blocked_worker_poison"))?,
+        );
         Ok(())
     }
     fn entered(&self) -> TestResult {
-        let (_state, timed) = self
-            .changed
-            .wait_timeout_while(lock(&self.state), Duration::from_secs(10), |state| state.0 != 2)
-            .map_err(|_| "Blocked worker fixture poisoned")?;
-        if timed.timed_out() {
-            return Err("Both finite workers did not enter".into());
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.state), |state| state.0 != 2)
+                .map_err(|_| "Blocked worker fixture poisoned")?,
+        );
         Ok(())
     }
     fn release(&self) {

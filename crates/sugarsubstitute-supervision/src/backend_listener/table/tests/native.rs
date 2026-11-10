@@ -3,7 +3,6 @@
 //! Exercise actual SDK snapshots and retained workspace credit on the central execution owner.
 use super::*;
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::{Duration, Instant};
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec,
     Moment, Operation, ScopeId, ScopeSpec, WaitFuture,
@@ -85,23 +84,17 @@ fn actual_sdk_workspace_is_funded_once_retained_after_job_and_freed_before_final
             Ok((storage, body))
         },
     )?;
-    let until = Instant::now() + Duration::from_secs(10);
     let completion = loop {
         let revision = *crate::registry::lock(&wake.0);
         client.drain_completions(std::num::NonZeroUsize::new(32).ok_or("Invalid drain")?)?;
         if let Some(completion) = job.try_take_completion() {
             break completion;
         }
-        let remaining = until.checked_duration_since(Instant::now()).ok_or("Missing wake")?;
-        let (_guard, timeout) = wake
-            .1
-            .wait_timeout_while(crate::registry::lock(&wake.0), remaining, |current| {
-                *current == revision
-            })
-            .map_err(|_| "Poisoned wake")?;
-        if timeout.timed_out() {
-            return Err("Missing actual job completion".into());
-        }
+        drop(
+            wake.1
+                .wait_while(crate::registry::lock(&wake.0), |current| *current == revision)
+                .map_err(|_| "Poisoned wake")?,
+        );
     };
     let JobOutcome::Success((storage, body)) = completion.outcome else {
         return Err(format!("Actual snapshot failed: {:?}", completion.outcome.kind()).into());

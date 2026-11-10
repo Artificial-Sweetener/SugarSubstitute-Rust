@@ -27,7 +27,7 @@ pub(in crate::report_export::operation::tests) fn predecessor_mutation(path: &Pa
             destination: &bytes,
         },
     )?;
-    let clock = MonotonicClock::new();
+    let clock = ManualClock::new();
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();

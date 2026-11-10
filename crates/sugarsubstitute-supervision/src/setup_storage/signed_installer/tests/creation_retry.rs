@@ -3,7 +3,8 @@
 //! Retry native creation with the same pinned candidate after exact unstarted recovery.
 use super::*;
 use crate::{
-    application_launch::ApplicationLaunch, setup_storage::test_worker::pipeline::Pipeline,
+    application_launch::{ApplicationLaunch, rejected_creation::RejectedCreation},
+    setup_storage::test_worker::pipeline::Pipeline,
 };
 
 #[test]
@@ -29,8 +30,13 @@ fn recovered_candidate_retries_creation_without_reimport_and_rechecks_expiry_and
         })?;
         let owned = launch.clone();
         pipeline.run(RESERVATION_BYTES, move |context| {
-            let cause = owned.launch(&context).err().ok_or("Inert payload was started")?;
+            let creation = RejectedCreation::default();
+            let cause = owned
+                .launch_rejected(&context, &creation)
+                .err()
+                .ok_or("Inert payload was started")?;
             assert_eq!(cause.operation(), "application_launch_create");
+            assert_eq!(creation.attempts(), 1);
             Ok(())
         })?;
         pipeline.run(RESERVATION_BYTES, move |context| {

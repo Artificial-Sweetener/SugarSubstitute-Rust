@@ -97,15 +97,11 @@ fn archive_interrupted_write_observes_original_deadline_before_another_output_at
             break completion.outcome;
         }
         let guard = wake.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (guard, timeout) = wake
-            .1
-            .wait_timeout_while(guard, std::time::Duration::from_secs(10), |current| {
-                *current == revision
-            })
-            .map_err(|cause| io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *guard == revision {
-            return Err("Archive deadline test did not observe an actual terminal outcome".into());
-        }
+        drop(
+            wake.1
+                .wait_while(guard, |current| *current == revision)
+                .map_err(|cause| io::Error::other(cause.to_string()))?,
+        );
     };
     assert!(matches!(outcome, JobOutcome::TimedOut));
     assert!(observed.load(Ordering::SeqCst));

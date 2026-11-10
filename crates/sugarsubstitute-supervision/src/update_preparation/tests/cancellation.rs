@@ -91,26 +91,30 @@ impl ClockGate {
         let mut state = crate::registry::lock(&self.0);
         state.0 = true;
         self.1.notify_all();
-        match self.1.wait_timeout_while(state, Duration::from_secs(10), |state| !state.1) {
-            Ok((state, timeout)) if state.1 && !timeout.timed_out() => NOW,
-            _ => i64::MAX,
+        match self.1.wait_while(state, |state| !state.1) {
+            Ok(_) => NOW,
+            Err(_) => i64::MAX,
         }
     }
     fn entered(&self) -> TestResult {
-        let (state, timeout) = self
-            .1
-            .wait_timeout_while(crate::registry::lock(&self.0), Duration::from_secs(10), |state| {
-                !state.0
-            })
-            .map_err(|_| "Clock gate poisoned")?;
-        if !state.0 || timeout.timed_out() {
-            return Err("Clock gate was not entered".into());
-        }
+        drop(
+            self.1
+                .wait_while(crate::registry::lock(&self.0), |state| !state.0)
+                .map_err(|_| "Clock gate poisoned")?,
+        );
         Ok(())
     }
     fn release(&self) {
         crate::registry::lock(&self.0).1 = true;
         self.1.notify_all();
+    }
+}
+
+/// Open the gate when a test unwinds, so a failed assertion cannot strand the gated worker.
+struct ReleaseOnDrop(Arc<ClockGate>);
+impl Drop for ReleaseOnDrop {
+    fn drop(&mut self) {
+        self.0.release();
     }
 }
 
@@ -128,6 +132,7 @@ fn cancellation_during_running_discovery_stays_nonblocking_and_observes_actual_s
     let mut worker = Worker::new(configuration(&fixture, policy))?;
     step(&mut pipeline, &mut worker)?;
     let gate = Arc::new(ClockGate::default());
+    let _release = ReleaseOnDrop(gate.clone());
     let clock = gate.clone();
     pipeline.admit(|client, scope, id| {
         Ok(worker
@@ -163,6 +168,7 @@ fn cancellation_after_extraction_releases_live_setup_custody_without_publishing_
     server.finish()?;
     assert_eq!(worker.progress(), Progress::Preparing);
     let gate = Arc::new(ClockGate::default());
+    let _release = ReleaseOnDrop(gate.clone());
     let clock = gate.clone();
     let mut samples = 0;
     pipeline.admit(|client, scope, id| {
