@@ -2,14 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe actual execution terminals while faking only the storage operation result.
 use super::*;
+use crate::completion_wake::Wake;
 use std::io;
-use std::{
-    sync::{Condvar, Mutex},
-    time::{Duration, Instant},
-};
-use sugarsubstitute_contracts::execution::{
-    AdmissionError, Clock, CompletionWake, ExecutionError, ScopeSpec, WaitFuture,
-};
+use sugarsubstitute_contracts::execution::{AdmissionError, Clock, ScopeSpec, WaitFuture};
 use sugarsubstitute_execution::ExecutionOwner;
 
 #[derive(Default)]
@@ -22,22 +17,6 @@ impl Clock for FixedClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-struct Wake(Mutex<u64>, Condvar);
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.0.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::NativeLifecycle,
-                Box::new(io::Error::other("Health observer poisoned")),
-            )
-        })?;
-        *revision += 1;
-        self.1.notify_all();
-        Ok(())
-    }
-}
-
 /// Observe capacity through actual admission and its release notification, not worker timing.
 pub(super) struct Capacity<'a> {
     scope: &'a Scope,
@@ -61,28 +40,18 @@ impl Capacity<'_> {
         &self,
         mut ready: impl FnMut() -> Result<bool, Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
-        let until = Instant::now() + Duration::from_secs(10);
-        loop {
-            let revision = *self.wake.0.lock().map_err(|_| "Release observer poisoned")?;
-            self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-            if ready()? {
-                return Ok(());
+        self.wake.until(|| {
+            if let Err(cause) =
+                self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))
+            {
+                return Some(Err::<(), Box<dyn Error>>(cause.into()));
             }
-            let remaining =
-                until.checked_duration_since(Instant::now()).ok_or("Release completion absent")?;
-            let (_guard, timed) = self
-                .wake
-                .1
-                .wait_timeout_while(
-                    self.wake.0.lock().map_err(|_| "Release observer poisoned")?,
-                    remaining,
-                    |value| *value == revision,
-                )
-                .map_err(|_| "Release observer poisoned")?;
-            if timed.timed_out() {
-                return Err("Release completion absent".into());
+            match ready() {
+                Ok(true) => Some(Ok(())),
+                Ok(false) => None,
+                Err(cause) => Some(Err(cause)),
             }
-        }
+        })
     }
 
     pub(super) fn reserved_bytes(&self) -> u64 {
@@ -91,7 +60,6 @@ impl Capacity<'_> {
 
     /// A whole-capacity job can start only after the publication's original reservation retires.
     pub(super) fn require_released(&self, id: JobId) -> Result<(), Box<dyn Error>> {
-        let until = Instant::now() + Duration::from_secs(10);
         let spec = JobSpec {
             id,
             operation: Operation::NativeLifecycle,
@@ -101,41 +69,27 @@ impl Capacity<'_> {
             replacement: None,
         };
         let mut probe = None;
-        loop {
-            let revision = *self.wake.0.lock().map_err(|_| "Capacity observer poisoned")?;
+        self.wake.until(|| {
             if probe.is_none() {
                 match self.client.submit_blocking(self.scope, spec, |_| Ok::<_, io::Error>(())) {
                     Ok(job) => probe = Some(job),
                     Err(AdmissionError::MemorySaturated { .. }) => {}
-                    Err(cause) => return Err(cause.into()),
+                    Err(cause) => return Some(Err::<(), Box<dyn Error>>(cause.into())),
                 }
             }
-            self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-            if let Some(job) = &mut probe
-                && let Some(completion) = job.try_take_completion()
+            if let Err(cause) =
+                self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))
             {
-                return if matches!(completion.outcome, JobOutcome::Success(())) {
-                    Ok(())
-                } else {
-                    Err("Capacity probe did not complete successfully".into())
-                };
+                return Some(Err(cause.into()));
             }
-            let remaining = until
-                .checked_duration_since(Instant::now())
-                .ok_or("Publication still retains execution capacity")?;
-            let (_guard, timed) = self
-                .wake
-                .1
-                .wait_timeout_while(
-                    self.wake.0.lock().map_err(|_| "Capacity observer poisoned")?,
-                    remaining,
-                    |value| *value == revision,
-                )
-                .map_err(|_| "Capacity observer poisoned")?;
-            if timed.timed_out() {
-                return Err("Publication still retains execution capacity".into());
-            }
-        }
+            let job = probe.as_mut()?;
+            let completion = job.try_take_completion()?;
+            Some(if matches!(completion.outcome, JobOutcome::Success(())) {
+                Ok(())
+            } else {
+                Err("Capacity probe did not complete successfully".into())
+            })
+        })
     }
 }
 
@@ -168,27 +122,13 @@ pub(super) fn completed<T: Send + 'static>(
         }
         result
     })?;
-    let until = Instant::now() + Duration::from_secs(10);
-    let batch = loop {
-        let revision = *wake.0.lock().map_err(|_| "Observer poisoned")?;
-        let batch = client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-        if batch.notifications.iter().any(|notice| notice.job_id == spec.id) {
-            break batch;
-        }
-        let remaining =
-            until.checked_duration_since(Instant::now()).ok_or("Health completion absent")?;
-        let (_guard, timed) = wake
-            .1
-            .wait_timeout_while(
-                wake.0.lock().map_err(|_| "Observer poisoned")?,
-                remaining,
-                |value| *value == revision,
-            )
-            .map_err(|_| "Observer poisoned")?;
-        if timed.timed_out() {
-            return Err("Health completion absent".into());
-        }
-    };
+    let batch = wake.until(|| {
+        let batch = match client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31)) {
+            Ok(batch) => batch,
+            Err(cause) => return Some(Err::<_, Box<dyn Error>>(cause.into())),
+        };
+        batch.notifications.iter().any(|notice| notice.job_id == spec.id).then_some(Ok(batch))
+    })?;
     check(
         job,
         batch,

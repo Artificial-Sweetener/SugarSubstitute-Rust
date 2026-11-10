@@ -2,10 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose real claims jobs and both actual bounded queues; fake only native filesystem facts.
 use super::*;
-use std::{
-    sync::{Condvar, Mutex},
-    time::{Duration, Instant},
-};
+use crate::completion_wake::Wake;
 use sugarsubstitute_contracts::{
     configuration::LaunchConfiguration,
     execution::{JobId, JobSpec},
@@ -82,37 +79,13 @@ fn cancelled_scope_cannot_start_installation_validation_or_claim_readiness() -> 
     Ok(())
 }
 
-/// Observe real executor publications without introducing another scheduler or channel.
-#[derive(Default)]
-struct RevisionWake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for RevisionWake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::NativeLifecycle,
-                Box::new(std::io::Error::other("Claim observer poisoned")),
-            )
-        })?;
-        *revision = revision.checked_add(1).ok_or_else(|| {
-            ExecutionError::new(
-                Operation::NativeLifecycle,
-                Box::new(std::io::Error::other("Claim observer exhausted")),
-            )
-        })?;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
 /// Retain the actual authority, scopes and claims ahead of the original executor join.
 struct Rig {
     authority: CoordinatorAuthority,
     control: Control,
     scope: Scope,
     client: ExecutionClient,
-    wake: Arc<RevisionWake>,
+    wake: Arc<Wake>,
     _executor: ExecutionOwner,
     next: u64,
 }
@@ -125,7 +98,7 @@ impl Drop for Rig {
 impl Rig {
     /// Initialize the genuine claims pool/job; only native filesystem outputs are supplied.
     fn new() -> Result<Self, Box<dyn Error>> {
-        let wake = Arc::new(RevisionWake::default());
+        let wake = Arc::new(Wake::default());
         let executor = ExecutionOwner::new(Arc::new(TestClock::default()), wake.clone())?;
         let client = executor.client();
         let scope =
@@ -193,28 +166,15 @@ impl Rig {
     }
     /// Await the genuine notice while preserving the same immutable complete batch.
     fn wait_batch(&self, id: JobId) -> Result<CompletionBatch, Box<dyn Error>> {
-        let until = Instant::now()
-            .checked_add(Duration::from_secs(10))
-            .ok_or("Observer cutoff overflow")?;
-        loop {
-            let previous = *self.wake.revision.lock().map_err(|_| "Observer poisoned")?;
+        self.wake.until(|| {
             let batch =
-                self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
-            if batch.notifications.iter().any(|notice| notice.job_id == id) {
-                return Ok(batch);
-            }
-            let revision = self.wake.revision.lock().map_err(|_| "Observer poisoned")?;
-            let remaining =
-                until.checked_duration_since(Instant::now()).ok_or("Actual claim notice absent")?;
-            let (_returned, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(revision, remaining, |current| *current == previous)
-                .map_err(|_| "Observer poisoned")?;
-            if timeout.timed_out() {
-                return Err("Actual claim notice absent".into());
-            }
-        }
+                match self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))
+                {
+                    Ok(batch) => batch,
+                    Err(cause) => return Some(Err::<_, Box<dyn Error>>(cause.into())),
+                };
+            batch.notifications.iter().any(|notice| notice.job_id == id).then_some(Ok(batch))
+        })
     }
     /// Invoke the actual composing method with inert unrelated entry input, granting no authority.
     fn consume(&mut self, batch: &CompletionBatch) -> Result<(), Box<dyn Error>> {

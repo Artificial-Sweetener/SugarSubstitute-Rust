@@ -35,7 +35,7 @@ fn prepare_external_source(external: &OutputFixture) -> Result<()> {
     )?;
     external.end(OutputStream::Stdout);
     external.end(OutputStream::Stderr);
-    wake.until(&client, || {
+    delivered_until(&wake, &client, || {
         matches!(
             first.completion.status().phase,
             sugarsubstitute_contracts::execution::JobPhase::Terminal(_)
@@ -71,7 +71,7 @@ fn exercise(failed: bool) -> Result<()> {
         external.end(OutputStream::Stdout);
         external.end(OutputStream::Stderr);
     }
-    wake.until(&client, || {
+    delivered_until(&wake, &client, || {
         backend.record(key).ok().and_then(|record| record.output.as_ref()).is_some_and(|output| {
             matches!(
                 output.completion.status().phase,

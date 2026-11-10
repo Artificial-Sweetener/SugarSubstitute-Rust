@@ -2,15 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Delay the supplied clock boundary while the production executor owns a real queued output job.
 use super::super::*;
+use crate::completion_wake::{Wake, wait_while_watched};
 use std::{
     cell::Cell,
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
-use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, ScopeId, WaitFuture,
-};
+use sugarsubstitute_contracts::execution::{Clock, ScopeId, WaitFuture};
 use sugarsubstitute_execution::{
     ExecutionOwner,
     windows_output::{OutputIdentity, WindowsOutputError},
@@ -26,11 +24,12 @@ impl Clock for HeldClock {
     fn now(&self) -> Moment {
         if !OBSERVING_CALLER.with(Cell::get) {
             let guard = self.held.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            drop(
-                self.released
-                    .wait_while(guard, |held| *held)
-                    .unwrap_or_else(std::sync::PoisonError::into_inner),
-            );
+            drop(wait_while_watched(
+                &self.released,
+                guard,
+                || "the test to release the held output clock".to_owned(),
+                |held| *held,
+            ));
         }
         Moment::from_nanos(0)
     }
@@ -56,19 +55,6 @@ impl Drop for ClockHold {
         OBSERVING_CALLER.with(|caller| caller.set(self.previous));
     }
 }
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-
 fn queued_output(
     check: impl FnOnce(&mut CoordinatorBackend, LeaseKey) -> Result<()>,
 ) -> Result<()> {
@@ -158,21 +144,13 @@ fn queued_output(
     output.control.close();
     drop(hold);
     loop {
-        let observed = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let observed = wake.revision();
         client.drain_completions(NonZeroUsize::MIN)?;
         if let Some(completion) = output.completion.try_take_completion() {
             assert!(matches!(completion.outcome, JobOutcome::Cancelled));
             break;
         }
-        let guard = wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (guard, timeout) = wake
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |count| *count == observed)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(guard);
-        if timeout.timed_out() {
-            return Err("Original native cancellation did not complete".into());
-        }
+        wake.wait_after(observed);
     }
     assert!(output.control.snapshot().retired);
     assert_eq!(output.control.snapshot().eof, [false, false]);

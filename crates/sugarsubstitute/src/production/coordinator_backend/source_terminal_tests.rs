@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Drive source terminal adoption and explicit cleanup through real execution and policy owners.
 use super::{consume_source, *};
+use crate::completion_wake::{Wake, wait_while_watched};
 use crate::production::coordinator_backend::{cutoff_tests, tests as backend_tests};
 use std::{
     cell::Cell,
@@ -10,9 +11,8 @@ use std::{
         Arc, Condvar, Mutex,
         atomic::{AtomicU64, Ordering},
     },
-    time::{Duration, Instant},
 };
-use sugarsubstitute_contracts::execution::{Clock, CompletionWake, ExecutionError, WaitFuture};
+use sugarsubstitute_contracts::execution::{Clock, WaitFuture};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::installed_frontend::boundary_fixture;
 
@@ -27,11 +27,12 @@ impl Clock for HeldClock {
     fn now(&self) -> Moment {
         if !CALLER.with(Cell::get) {
             let guard = self.held.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            drop(
-                self.released
-                    .wait_while(guard, |held| *held)
-                    .unwrap_or_else(std::sync::PoisonError::into_inner),
-            );
+            drop(wait_while_watched(
+                &self.released,
+                guard,
+                || "the test to release the held source clock".to_owned(),
+                |held| *held,
+            ));
         }
         Moment::from_nanos(self.now.load(Ordering::Acquire))
     }
@@ -57,41 +58,16 @@ impl Drop for Hold {
         CALLER.with(|caller| caller.set(self.previous));
     }
 }
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    fn until(&self, client: &ExecutionClient, mut ready: impl FnMut() -> bool) -> Result<()> {
-        let until = Instant::now() + Duration::from_secs(10);
-        loop {
-            let before = *self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if ready() {
-                return Ok(());
-            }
-            let remaining = until
-                .checked_duration_since(Instant::now())
-                .ok_or("Source terminal wake absent")?;
-            let guard = self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (guard, timeout) = self
-                .changed
-                .wait_timeout_while(guard, remaining, |at| *at == before)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            drop(guard);
-            if timeout.timed_out() {
-                return Err("Source terminal wake absent".into());
-            }
-        }
-    }
+/// Deliver completions until `ready` observes the awaited state, blocking on execution wakes.
+fn delivered_until(
+    wake: &Wake,
+    client: &ExecutionClient,
+    mut ready: impl FnMut() -> bool,
+) -> Result<()> {
+    wake.until(|| match client.drain_completions(NonZeroUsize::MIN.saturating_add(31)) {
+        Err(cause) => Some(Err(cause.into())),
+        Ok(_) => ready().then_some(Ok(())),
+    })
 }
 fn exercise_source_stop(
     shutdown_first: bool,
@@ -200,7 +176,7 @@ fn exercise_source_stop(
     if timed_out {
         clock.now.store(1000, Ordering::Release);
         drop(hold);
-        wake.until(&client, || {
+        delivered_until(&wake, &client, || {
             backend.records[0]
                 .as_ref()
                 .is_some_and(|record| record.scope.snapshot().terminal_unobserved == 1)
@@ -218,7 +194,7 @@ fn exercise_source_stop(
             )?;
         }
         drop(hold);
-        wake.until(&client, || {
+        delivered_until(&wake, &client, || {
             backend.records[0]
                 .as_ref()
                 .is_some_and(|record| record.scope.snapshot().terminal_unobserved == 1)
@@ -286,7 +262,7 @@ fn exercise_source_stop(
             .reservation_bytes,
         FRONTEND_SOURCE_CLOSE_BYTES,
     );
-    wake.until(&client, || {
+    delivered_until(&wake, &client, || {
         backend.records[0].as_ref().and_then(|record| record.source_close.as_ref()).is_some_and(
             |job| {
                 matches!(
@@ -297,7 +273,7 @@ fn exercise_source_stop(
         )
     })?;
     if admission_fails {
-        wake.until(&client, || {
+        delivered_until(&wake, &client, || {
             backend.records[0].as_ref().and_then(|record| record.output.as_ref()).is_some_and(
                 |output| {
                     matches!(

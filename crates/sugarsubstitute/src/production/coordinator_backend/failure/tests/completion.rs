@@ -2,28 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Obtain a real typed failure through the same central execution boundary.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Condvar, Mutex},
-    time::Duration,
-};
-use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionError, ScopeId};
+use crate::completion_wake::Wake;
+use std::num::NonZeroUsize;
+use sugarsubstitute_contracts::execution::ScopeId;
 use sugarsubstitute_execution::ExecutionOwner;
 
-#[derive(Default)]
-struct Wake {
-    generation: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut generation =
-            self.generation.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        *generation += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
 pub(super) fn native_failure() -> Result<JobCompletion<WindowsOutputReport, NativeObservationError>>
 {
     let wake = Arc::new(Wake::default());
@@ -51,22 +34,11 @@ pub(super) fn native_failure() -> Result<JobCompletion<WindowsOutputReport, Nati
         },
     )?;
     loop {
-        let observed = *wake.generation.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(completion) = job.try_take_completion() {
-            return Ok(completion);
-        }
+        let observed = wake.revision();
         client.drain_completions(NonZeroUsize::MIN)?;
         if let Some(completion) = job.try_take_completion() {
             return Ok(completion);
         }
-        let generation = wake.generation.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (generation, timeout) = wake
-            .changed
-            .wait_timeout_while(generation, Duration::from_secs(10), |now| *now == observed)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(generation);
-        if timeout.timed_out() {
-            return Err("Actual failure diagnostic completion boundary timed out".into());
-        }
+        wake.wait_after(observed);
     }
 }
