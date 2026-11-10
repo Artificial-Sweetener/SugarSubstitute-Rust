@@ -6737,7 +6737,7 @@ var DocView = class {
     if (cursor.head == lineStart || cursor.head == lineStart + line.length)
       return;
     let before = this.coordsAt(cursor.head, -1), after = this.coordsAt(cursor.head, 1);
-    if (!before || !after || before.bottom > after.top)
+    if (!before || !after || before.bottom > after.top + (after.bottom - after.top) / 2)
       return;
     let dom = this.domAtPos(cursor.head + cursor.assoc, cursor.assoc);
     sel.collapse(dom.node, dom.offset);

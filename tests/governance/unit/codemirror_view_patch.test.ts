@@ -91,8 +91,8 @@ test('restores both original entrypoints after a partial second write fails', ()
 });
 
 /** Rewrite the fixture's upstream entrypoints as one superseded installed generation. */
-function installSuperseded(f: ReturnType<typeof fixture>): void {
-  const [generation] = codeMirrorPatchManifest.superseded;
+function installSuperseded(f: ReturnType<typeof fixture>, generationIndex = 0): void {
+  const generation = codeMirrorPatchManifest.superseded[generationIndex];
   if (!generation) throw new Error('Missing superseded patch generation');
   codeMirrorPatchManifest.entries.forEach((entry, index) => {
     const path = resolve(f.root, entry.path);
@@ -105,16 +105,19 @@ function installSuperseded(f: ReturnType<typeof fixture>): void {
   });
 }
 
-test('upgrades a superseded installed generation to the current patch', () => {
-  const f = fixture();
-  installSuperseded(f);
-  expect(() => installCodeMirrorPatch(f.root, 'check', f.fs)).toThrow('CM_PATCH_MISSING');
-  expect(f.writes).toEqual([]);
-  expect(installCodeMirrorPatch(f.root, 'apply', f.fs)).toBe('applied');
-  for (const entry of codeMirrorPatchManifest.entries)
-    expect(sha256(f.fs.read(resolve(f.root, entry.path)))).toBe(entry.afterSha256);
-  expect(installCodeMirrorPatch(f.root, 'check', f.fs)).toBe('verified');
-});
+test.each(codeMirrorPatchManifest.superseded.map((_, index) => index))(
+  'upgrades superseded installed generation %i to the current patch',
+  (index) => {
+    const f = fixture();
+    installSuperseded(f, index);
+    expect(() => installCodeMirrorPatch(f.root, 'check', f.fs)).toThrow('CM_PATCH_MISSING');
+    expect(f.writes).toEqual([]);
+    expect(installCodeMirrorPatch(f.root, 'apply', f.fs)).toBe('applied');
+    for (const entry of codeMirrorPatchManifest.entries)
+      expect(sha256(f.fs.read(resolve(f.root, entry.path)))).toBe(entry.afterSha256);
+    expect(installCodeMirrorPatch(f.root, 'check', f.fs)).toBe('verified');
+  },
+);
 
 test('restores the superseded generation when an upgrade write fails', () => {
   const f = fixture();
