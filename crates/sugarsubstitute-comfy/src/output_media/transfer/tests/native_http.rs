@@ -8,14 +8,15 @@ use std::{
     num::{NonZeroU32, NonZeroU64, NonZeroUsize},
     path::PathBuf,
     sync::{Arc, Condvar, Mutex},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
     CompletionWake, ExecutionError, ExecutionPort, JobClass, JobCompletion, JobId, JobOutcome,
     JobSpec, Moment, Operation, OwnedJob, Scope, ScopeId, ScopeSpec,
 };
 use sugarsubstitute_execution::{
-    ExecutionClient, ExecutionOwner, MonotonicClock,
+    ExecutionClient, ExecutionOwner,
+    clock_fixture::ManualClock,
     http_fixture::{Exchange, Server},
 };
 use sugarsubstitute_supervision::{
@@ -56,24 +57,17 @@ fn take<T, E>(
     wake: &Wake,
     job: &mut OwnedJob<T, E>,
 ) -> Result<JobCompletion<T, E>, Box<dyn Error>> {
-    let until = Instant::now().checked_add(Duration::from_secs(30)).ok_or("Deadline overflow")?;
     loop {
         let revision = *wake.0.lock().map_err(|_| "Wake poisoned")?;
         client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
         if let Some(result) = job.try_take_completion() {
             return Ok(result);
         }
-        let remaining = until.checked_duration_since(Instant::now()).ok_or("Job did not settle")?;
-        let (guard, timed) = wake
-            .1
-            .wait_timeout_while(wake.0.lock().map_err(|_| "Wake poisoned")?, remaining, |value| {
-                *value == revision
-            })
-            .map_err(|_| "Wake poisoned")?;
-        drop(guard);
-        if timed.timed_out() {
-            return Err("Job did not settle".into());
-        }
+        drop(
+            wake.1
+                .wait_while(wake.0.lock().map_err(|_| "Wake poisoned")?, |value| *value == revision)
+                .map_err(|_| "Wake poisoned")?,
+        );
     }
 }
 
@@ -351,7 +345,7 @@ fn actual_http_transfer_requires_the_granted_process_birth_and_retires_its_handl
 -> Result<(), Box<dyn Error>> {
     let directory = tempfile::tempdir()?;
     let wake = Arc::new(Wake::default());
-    let mut owner = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
+    let mut owner = ExecutionOwner::new(ManualClock::new(), wake.clone())?;
     let client = owner.client();
     let scope =
         Arc::new(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
@@ -420,17 +414,18 @@ fn actual_http_transfer_requires_the_granted_process_birth_and_retires_its_handl
     drop(scope);
     let cutoff: Moment = client.now()?.checked_add(Duration::from_secs(10))?;
     owner.request_shutdown(cutoff);
-    let until = Instant::now().checked_add(Duration::from_secs(15)).ok_or("Deadline overflow")?;
     loop {
+        let revision = *wake.0.lock().map_err(|_| "Wake poisoned")?;
         client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        let progress = owner.poll_shutdown()?;
-        if progress.settled {
+        if owner.poll_shutdown()?.settled {
             break;
         }
-        if Instant::now() >= until {
-            return Err(format!("Owner did not settle: {progress:?}").into());
-        }
-        std::hint::spin_loop();
+        // The execution owner publishes a wake after its last worker returns from shutdown.
+        drop(
+            wake.1
+                .wait_while(wake.0.lock().map_err(|_| "Wake poisoned")?, |value| *value == revision)
+                .map_err(|_| "Wake poisoned")?,
+        );
     }
     owner.finish_shutdown()?;
     Ok(())

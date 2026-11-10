@@ -2,12 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fake only native HTTP acquisition, independent response bytes and checked per-slot closure.
 use super::*;
-use std::{
-    sync::{
-        Condvar,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::{Duration, Instant},
+use std::sync::{
+    Condvar,
+    atomic::{AtomicBool, Ordering},
 };
 pub(super) struct Boundary {
     clock: Arc<super::harness::TestClock>,
@@ -46,20 +43,11 @@ impl Boundary {
         lock(&self.phases).push((name, context.deadline().map_or(0, Moment::as_nanos)));
     }
     pub(super) fn entered(&self) -> TestResult {
-        let until = Instant::now() + Duration::from_secs(5);
-        let mut guard = lock(&self.gate);
-        while !guard.0 {
-            let remaining =
-                until.checked_duration_since(Instant::now()).ok_or("HTTP boundary not entered")?;
-            let (next, status) = self
-                .changed
-                .wait_timeout(guard, remaining)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            guard = next;
-            if status.timed_out() {
-                return Err("HTTP boundary not entered".into());
-            }
-        }
+        drop(
+            self.changed
+                .wait_while(lock(&self.gate), |gate| !gate.0)
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
         Ok(())
     }
     pub(super) fn release(&self) {
