@@ -349,6 +349,96 @@ test('materializes only after exact chunks digest and full checkpoint admission'
   expect(host.errors).toEqual([]);
 });
 
+/** Deliver one saved workspace and ask the page to materialize it. */
+async function requestMaterialization(host: ReturnType<typeof fixture>): Promise<SessionMessage> {
+  const transferId = '00000000-0000-4000-8000-0000000000fe';
+  const text = JSON.stringify(host.checkpoint);
+  const chunks = desktopSessionChunks(text);
+  await host.client.receive(
+    host.message({
+      kind: 'begin',
+      transfer: {
+        id: transferId,
+        checkpointId: host.checkpoint.id,
+        revision: host.checkpoint.revision,
+        bytes: utf8Bytes(text),
+        chunks: chunks.length,
+        digest: await digest(text),
+        direction: 'materialize',
+      },
+    }),
+  );
+  for (const [index, text] of chunks.entries())
+    await host.client.receive(host.message({ kind: 'chunk', transferId, index, text }));
+  await host.client.receive(host.message({ kind: 'commit', transferId }));
+  return host.message({ kind: 'materialize', transferId, fence: host.fence });
+}
+
+test('a graph load that supersedes a restore ends the host request as cancelled without reporting a canvas failure', async () => {
+  const host = fixture();
+  let entered: () => void = () => {};
+  let supersede: () => void = () => {};
+  const restoring = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  host.runtime.materialize = async (_checkpoint, cancellation) => {
+    supersede = () => cancellation.cancel();
+    entered();
+    // The page's own graph load cancels the restore; its pending asset read then aborts.
+    await new Promise<void>((resolve) => cancellation.subscribe(resolve));
+    throw new DOMException('signal is aborted without reason', 'AbortError');
+  };
+  const request = await requestMaterialization(host);
+  const pending = host.client.receive(request);
+  await restoring;
+  supersede();
+  await pending;
+  expect(host.errors).toEqual([]);
+  expect(
+    host.sent.filter(
+      (message) => message.requestId === request.requestId && message.operation.kind === 'error',
+    ),
+  ).toEqual([
+    {
+      ...request,
+      operation: {
+        kind: 'error',
+        failure: { code: 'cancelled', retryable: false, entryId: null, outputId: null },
+      },
+    },
+  ]);
+  expect(host.sent.some((message) => message.operation.kind === 'acknowledged')).toBe(false);
+  host.client.dispose();
+});
+
+test('a restore the host cancels is answered once, by the cancellation itself', async () => {
+  const host = fixture();
+  let entered: () => void = () => {};
+  const restoring = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  host.runtime.materialize = async (_checkpoint, cancellation) => {
+    entered();
+    await new Promise<void>((resolve) => cancellation.subscribe(resolve));
+    throw new DOMException('signal is aborted without reason', 'AbortError');
+  };
+  const request = await requestMaterialization(host);
+  const pending = host.client.receive(request);
+  await restoring;
+  await host.client.receive({
+    ...host.message({ kind: 'cancel', targetRequestId: request.requestId }),
+    requestId: '00000000-0000-4000-8000-0000000000ac',
+  });
+  await pending;
+  expect(host.errors).toEqual([]);
+  expect(
+    host.sent.filter(
+      (message) => message.requestId === request.requestId && message.operation.kind === 'error',
+    ),
+  ).toHaveLength(1);
+  host.client.dispose();
+});
+
 test('stale capture retains operation ownership until native error admission completes', async () => {
   const host = fixture();
   let release: () => void = () => {};

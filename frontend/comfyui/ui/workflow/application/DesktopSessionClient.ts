@@ -42,6 +42,10 @@ import { DesktopSessionTransfer, desktopSessionChunks } from './DesktopSessionTr
 interface ActiveOperation {
   readonly requestId: string;
   readonly cancellation: DesktopSessionCancellation;
+  /** The host withdrew this request and already received its cancelled reply. */
+  hostCancelled: boolean;
+  /** A terminal reply for this request has been sent to the host. */
+  answered: boolean;
 }
 export interface DesktopSessionClientOptions {
   readonly transport: DesktopSessionTransport;
@@ -134,7 +138,10 @@ export class DesktopSessionClient {
     const operation = value.operation;
     if (operation.kind === 'cancel') {
       this.#transfer.cancel(operation.targetRequestId);
-      if (this.#active?.requestId === operation.targetRequestId) this.#active.cancellation.cancel();
+      if (this.#active?.requestId === operation.targetRequestId) {
+        this.#active.hostCancelled = true;
+        this.#active.cancellation.cancel();
+      }
       return this.#error(operation.targetRequestId, 'cancelled');
     }
     if (operation.kind === 'acknowledged') {
@@ -203,6 +210,8 @@ export class DesktopSessionClient {
     const active: ActiveOperation = {
       requestId: message.requestId,
       cancellation: new DesktopSessionCancellation(),
+      hostCancelled: false,
+      answered: false,
     };
     this.#active = active;
     try {
@@ -214,7 +223,7 @@ export class DesktopSessionClient {
         );
         if (!this.#current(active)) return;
         if (!sameSessionFence(operation.fence, this.options.runtime.fence()))
-          return await this.#error(message.requestId, 'stale');
+          return await this.#refuse(active, 'stale');
         if (
           !isDesktopCheckpoint(checkpoint) ||
           checkpoint.id !== operation.checkpointId ||
@@ -227,7 +236,7 @@ export class DesktopSessionClient {
         const digest = await this.options.digest(text);
         if (!this.#current(active)) return;
         if (!sameSessionFence(operation.fence, this.options.runtime.fence()))
-          return await this.#error(message.requestId, 'stale');
+          return await this.#refuse(active, 'stale');
         const transferId = this.options.nextId();
         await this.#send(message.requestId, {
           kind: 'begin',
@@ -244,7 +253,7 @@ export class DesktopSessionClient {
         for (const [index, text] of chunks.entries()) {
           if (!this.#current(active)) return;
           if (!sameSessionFence(operation.fence, this.options.runtime.fence()))
-            return await this.#error(message.requestId, 'stale');
+            return await this.#refuse(active, 'stale');
           await this.#send(message.requestId, { kind: 'chunk', transferId, index, text });
         }
         if (!this.#current(active)) return;
@@ -263,11 +272,12 @@ export class DesktopSessionClient {
           phase: 'captured',
           bindings: operation.fence.bindings,
         });
+        active.answered = true;
       } else {
         const checkpoint = await this.#transfer.take(message.requestId, operation.transferId);
         if (!this.#current(active)) return;
         if (!sameScope(checkpoint.scope, this.options.transport.scope))
-          return await this.#error(message.requestId, 'stale');
+          return await this.#refuse(active, 'stale');
         const bindings = await this.options.runtime.materialize(checkpoint, active.cancellation);
         if (!this.#current(active)) return;
         this.#awaitingAcknowledgement = {
@@ -284,19 +294,34 @@ export class DesktopSessionClient {
           phase: 'materialized',
           bindings,
         });
+        active.answered = true;
       }
     } catch (cause: unknown) {
-      if (active.cancellation.cancelled() || this.#disposed) {
-        this.options.report(cause);
-        return;
-      }
+      // A failure after cancellation is the cancellation's own outcome, such as an aborted asset
+      // read, never a separate fault to show the user.
+      if (active.cancellation.cancelled() || this.#disposed) return;
       throw cause;
     } finally {
       if (this.#active === active) {
         this.#active = null;
+        // Work this page cancelled itself, for example when a graph load supersedes a restore, still
+        // ends the host's request so it never waits for an answer that will not come.
+        if (
+          active.cancellation.cancelled() &&
+          !active.hostCancelled &&
+          !active.answered &&
+          !this.#disposed
+        )
+          await this.#error(active.requestId, 'cancelled');
         this.ready();
       }
     }
+  }
+
+  /** Send one terminal refusal for the active request. */
+  async #refuse(active: ActiveOperation, code: SessionErrorCode): Promise<void> {
+    active.answered = true;
+    await this.#error(active.requestId, code);
   }
 
   /** Refuse delayed completion after page teardown or request cancellation. */
