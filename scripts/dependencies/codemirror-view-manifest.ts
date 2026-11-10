@@ -27,7 +27,7 @@ export interface SupersededCodeMirrorPatch {
   readonly afterSha256: readonly [string, string];
 }
 
-/** Reviewed, finite patch identity for CodeMirror's selection synchronization and wrapped viewport. */
+/** Reviewed, finite patch identity for CodeMirror's selection synchronization, cursor side and wrapped viewport. */
 export interface CodeMirrorPatchManifest {
   /** Exact package identity, with unchanged upstream MIT license bytes. */
   readonly package: {
@@ -138,6 +138,22 @@ const anchorBefore =
   'scrollAnchorHeight = this.viewState.heightMap.height / this.viewState.scaleY;';
 const anchorAfter = 'scrollAnchorHeight = this.viewState.heightMap.height;';
 
+/**
+ * Cursor side is enforced for rows whose rectangles merely touch.
+ *
+ * `enforceCursorAssoc` skips a caret whose upstream and downstream rectangles overlap, which is how it
+ * recognizes one visual row. Beneath a fractional canvas scale Firefox reports the touching rectangles of
+ * two adjacent rows overlapping by floating point noise, so the guard returned early, nothing placed the
+ * browser caret on the row the selection names, and the painted caret stayed at the start of the next row.
+ * Rows now count as one only when the rectangles overlap by more than half a row.
+ */
+const enforceAssocBefore = `        if (!before || !after || before.bottom > after.top)
+            return;`;
+const enforceAssocAfter = `        // SugarPrompt: adjacent row rectangles of a fractionally scaled editor meet within floating point
+        // noise; only an overlap of more than half a row means the rectangles share one visual row.
+        if (!before || !after || before.bottom > after.top + (after.bottom - after.top) / 2)
+            return;`;
+
 /** Seal the upstream 6.43.13 distribution and complete reviewed patched-build identities. */
 export const codeMirrorPatchManifest: CodeMirrorPatchManifest = {
   package: {
@@ -153,6 +169,7 @@ export const codeMirrorPatchManifest: CodeMirrorPatchManifest = {
     { before: gapBoundariesBefore, after: gapBoundariesAfter },
     { before: displaySizeBefore, after: displaySizeAfter },
     { before: anchorBefore, after: anchorAfter },
+    { before: enforceAssocBefore, after: enforceAssocAfter },
   ],
   superseded: [
     {
@@ -168,17 +185,31 @@ export const codeMirrorPatchManifest: CodeMirrorPatchManifest = {
         '9252a026e1150e62404611f38f3f2630276779fc8be0d62dbe669222206649ed',
       ],
     },
+    {
+      replacements: [
+        { before, after },
+        { before: focusBefore, after: focusAfter },
+        { before: wrappedMarginBefore, after: wrappedMarginAfter },
+        { before: gapBoundariesBefore, after: gapBoundariesAfter },
+        { before: displaySizeBefore, after: displaySizeAfter },
+        { before: anchorBefore, after: anchorAfter },
+      ],
+      afterSha256: [
+        'b7429658da4c4b981ffc2127cfea34da8b51e1e895e70da6bc0ed5e7b4ec3257',
+        'c8940e3b6b1f35af2f24811a9eaeeaf6d8343a0f0531ff8b9e966d5d1a68e343',
+      ],
+    },
   ],
   entries: [
     {
       path: 'dist/index.js',
       beforeSha256: '5626b4f31cdf55fd6a92be66d28cd40e9446d2caeb10a5b3f3e6c1c02be42950',
-      afterSha256: 'b7429658da4c4b981ffc2127cfea34da8b51e1e895e70da6bc0ed5e7b4ec3257',
+      afterSha256: 'd5d14844e66b97040fee75eab4e9b48e3cd46f97f13ed9ba2d907a283225df1a',
     },
     {
       path: 'dist/index.cjs',
       beforeSha256: '0ea6fbfd8e5b42ee2926058a929185ac1afffc913a4998e485269f203f7ca17c',
-      afterSha256: 'c8940e3b6b1f35af2f24811a9eaeeaf6d8343a0f0531ff8b9e966d5d1a68e343',
+      afterSha256: '034987a2e1ee927e67d7d689a58a626a0d6869fb961c0b3faa3db98934d1ef04',
     },
   ],
 };

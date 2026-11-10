@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise real prompt mounting and renderer-specific surfaces in an isolated browser document. */
+import { EditorSelection } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { CubePromptEditorHost } from '../../../frontend/comfyui/ui/prompt_editor/CubePromptEditorHost.js';
 import { CubePromptTextareaScope } from '../../../frontend/comfyui/ui/surface/CubePromptTextareaScope.js';
@@ -47,6 +48,10 @@ export interface PromptBrowserProof {
   annotateNativeField(): void;
   theme(style: VisualStyle, dark: boolean): void;
   selection(): { readonly anchor: number; readonly head: number } | null;
+  /** Offsets where one visual row ends and the next begins, in the mounted editor's visible rows. */
+  wrapBoundaries(): readonly number[];
+  /** Select a collapsed caret at `position` on the given side of a soft wrap, as a pointer or arrow key does. */
+  placeCaret(position: number, side: -1 | 1): void;
   read(): {
     source: unknown;
     callbacks: number;
@@ -181,6 +186,14 @@ function present(renderer: 'nodes-1' | 'nodes-2', scale: number): void {
   }
 }
 
+/** The mounted prompt's view, found through its content element. */
+function promptView(): EditorView {
+  const content = document.querySelector<HTMLElement>('[data-sc-prompt-editor] .cm-content');
+  const view = content && EditorView.findFromDOM(content);
+  if (!view) throw new Error('No mounted prompt editor');
+  return view;
+}
+
 window.promptBrowserProof = {
   theme(style, dark): void {
     accentStyle.textContent = accentThemeCss('#b63acb', dark);
@@ -304,6 +317,25 @@ window.promptBrowserProof = {
     } finally {
       node.remove();
     }
+  },
+  /** Offsets whose upstream and downstream caret rectangles sit on different visual rows. */
+  wrapBoundaries() {
+    const view = promptView();
+    const boundaries: number[] = [];
+    for (let position = 1; position < view.state.doc.length; position++) {
+      const upstream = view.coordsAtPos(position, -1);
+      const downstream = view.coordsAtPos(position, 1);
+      if (upstream && downstream && Math.abs(upstream.top - downstream.top) > 8)
+        boundaries.push(position);
+    }
+    return boundaries;
+  },
+  /** Select one side of a soft wrap through CodeMirror's own selection association. */
+  placeCaret(position, side): void {
+    promptView().dispatch({
+      selection: EditorSelection.create([EditorSelection.cursor(position, side)]),
+      scrollIntoView: false,
+    });
   },
   /** Observe the mounted editor's public main selection in logical source offsets. */
   selection() {
