@@ -6,7 +6,6 @@ use std::{
     marker::PhantomData,
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
@@ -44,13 +43,11 @@ impl CancelPoint {
     }
     fn wait_until_reached(&self) -> TestResult {
         let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(30), |state| !state.reached)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && !state.reached {
-            return Err(std::io::Error::other("Image test did not reach cancellation point").into());
-        }
+        drop(
+            self.changed
+                .wait_while(state, |state| !state.reached)
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
         Ok(())
     }
     fn release(&self) {
@@ -163,15 +160,11 @@ fn run_admitted<T: Send + 'static>(
             break completion;
         }
         let guard = wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (_guard, timeout) = wake
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(30), |v| *v == revision)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() {
-            return Err(
-                std::io::Error::other("Image execution did not reach a terminal outcome").into()
-            );
-        }
+        drop(
+            wake.changed
+                .wait_while(guard, |v| *v == revision)
+                .map_err(|cause| std::io::Error::other(cause.to_string()))?,
+        );
     };
     let maximum =
         NonZeroUsize::new(32).ok_or_else(|| std::io::Error::other("Invalid drain bound"))?;

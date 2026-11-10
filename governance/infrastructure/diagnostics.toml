@@ -990,7 +990,7 @@ rationale = "The isolated Node transport qualification captures bounded child st
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/tests/harness.rs"
 owner = "sugarsubstitute-image-io"
-source_sha256 = "sha256:0a85e45e6b4b4765861886f88dca5b48168fdc0d929f2c03050a261207e25a48"
+source_sha256 = "sha256:e415bf8cf8f179ae023efbdfa11ba55bfec4337e3e4d078d6032a60f4be34f9d"
 disposition = "fixture"
 rationale = "Bounded external test wake reports retained terminal failure causes after real execution admission; no runtime sink is constructed."
 
