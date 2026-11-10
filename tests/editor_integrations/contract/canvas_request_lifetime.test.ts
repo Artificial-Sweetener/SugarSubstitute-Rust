@@ -46,7 +46,7 @@ const address = {
 } as const;
 
 /** Admit messages synchronously and retain explicit host replies and deterministic deadline callbacks. */
-function fixture(onSend: (message: CanvasMessage) => void = () => {}) {
+function fixture(onSend: (message: CanvasMessage) => void = () => {}, awaitsPresentation = false) {
   const sent: CanvasMessage[] = [];
   const deadlines: { callback(): void; stop: ReturnType<typeof jest.fn<() => void>> }[] = [];
   const active = new Set<() => void>();
@@ -65,6 +65,7 @@ function fixture(onSend: (message: CanvasMessage) => void = () => {}) {
       return stop;
     },
     report,
+    ...(awaitsPresentation ? { awaitsPresentation } : {}),
   });
   return {
     client,
@@ -256,4 +257,79 @@ test('a typed cancellation reply retires a bridge-held surface request without a
   expect(f.active.size).toBe(0);
   expect(f.report).not.toHaveBeenCalled();
   f.client.dispose();
+});
+
+describe('a transport whose peer loss is observed directly', () => {
+  test('waits for context discovery and surface replies without a deadline, however slow the host', async () => {
+    const f = fixture(() => {}, true);
+    await connectCanvasSurface(f.client, f.sent);
+    // Discovery itself never registered a deadline.
+    expect(f.deadlines).toHaveLength(0);
+    const requestIndex = f.sent.length;
+    const outcome = negotiatedSurface(f.client).execute({
+      type: 'surface.prepare',
+      address,
+      revision: 1,
+    });
+    let settled = false;
+    void outcome.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await Promise.resolve();
+    expect(f.deadlines).toHaveLength(0);
+    expect(f.active.size).toBe(0);
+    expect(settled).toBe(false);
+    const request = f.sent[requestIndex];
+    if (request?.type !== 'surface.prepare') throw new Error('Missing surface request.');
+    // A host that finally answers is accepted: waiting was the whole of the policy.
+    f.client.receive({
+      protocol: request.protocol,
+      version: request.version,
+      session: request.session,
+      requestId: request.requestId,
+      type: 'surface.reply',
+      address,
+      revision: 1,
+      status: 'ready',
+      message: '',
+    });
+    await expect(outcome).resolves.toMatchObject({ status: 'ready' });
+    expect(f.report).not.toHaveBeenCalled();
+    f.client.dispose();
+  });
+
+  test('ends a waiting surface request only on observed loss of the connection', async () => {
+    const f = fixture(() => {}, true);
+    await connectCanvasSurface(f.client, f.sent);
+    const outcome = negotiatedSurface(f.client).execute({
+      type: 'surface.prepare',
+      address,
+      revision: 1,
+    });
+    const rejected = expect(outcome).rejects.toThrow('closed');
+    await Promise.resolve();
+    expect(f.deadlines).toHaveLength(0);
+    f.client.dispose();
+    await rejected;
+    expect(f.sent.at(-1)).toMatchObject({ type: 'cancel' });
+  });
+
+  test('still bounds requests that are not canvas discovery or presentation', async () => {
+    const f = fixture(() => {}, true);
+    const insertion = f.client.insertImage({
+      image: new Uint8Array([1]),
+      format: 'png',
+      name: 'x',
+      position: 'center',
+    } as unknown as Parameters<CanvasClient['insertImage']>[0]);
+    const rejected = expect(insertion).rejects.toThrow('timed out');
+    expect(f.deadlines).toHaveLength(1);
+    f.expire(0);
+    await rejected;
+  });
 });

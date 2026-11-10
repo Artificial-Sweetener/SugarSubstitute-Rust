@@ -253,8 +253,6 @@ describe('composed browser canvas attachment', () => {
     const transport = createNativePanelTransport(window);
     if (!transport) throw new Error('Native transport fixture was not admitted.');
     const primary = new CanvasPrimarySurface({
-      // Retries of timed-out preparation are not exercised here.
-      clock: { later: () => () => {} },
       document,
       views: f.views,
       window: windowId('browser'),
@@ -291,7 +289,10 @@ describe('composed browser canvas attachment', () => {
       const request = messages.find((message) => message.type === 'surface.capabilities.request');
       if (!request) throw new Error('Missing delayed discovery request.');
       expect(connection.surface).toBeNull();
-      expect(primary.diagnostics().address).toBeNull();
+      // With nothing else shown, the attachment awaiting discovery is committed and loads silently.
+      expect(primary.diagnostics().address).toEqual(mounted[0]?.port.read().address);
+      expect(mounted[0]?.port.read().resource.state).toBe('loading');
+      expect(f.errors).toEqual([]);
       expect(prefersNativeOutputSurface(window)).toBe(true);
       expect(f.loader.requests).toHaveLength(0);
       expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
@@ -369,8 +370,6 @@ describe('composed browser canvas attachment', () => {
       },
     };
     const primary = new CanvasPrimarySurface({
-      // Retries of timed-out preparation are not exercised here.
-      clock: { later: () => () => {} },
       document,
       views: f.views,
       window: windowId('browser'),
@@ -509,46 +508,73 @@ describe('composed browser canvas attachment', () => {
     },
   );
 
-  test.each(['timeout', 'release'] as const)(
-    'settles staged native readiness on %s and rejects a late host completion',
-    async (terminal) => {
-      const f = fixture();
-      const candidate = f.views.prepareAttachment(f.view, windowId('browser'));
-      const calls: CanvasSurfaceCommand[] = [];
-      let prepared!: (result: CanvasSurfaceResult) => void;
-      const surface = new NativeCanvasAttachment(f.root, {
-        ...f.options,
-        address: candidate,
-        accepts: () => f.views.accepts(candidate),
-        acceptsPreparation: () => f.views.acceptsPreparation(candidate),
-        nativeSurface: () => ({
-          capabilities: selectedPngCapabilities,
-          execute: async (command) => {
-            calls.push(command);
-            if (command.type === 'surface.prepare')
-              return new Promise<CanvasSurfaceResult>((resolve) => {
-                prepared = resolve;
-              });
-            return { status: 'applied', message: '' };
-          },
-        }),
-      });
-      const outcome = expect(surface.ready).rejects.toThrow(
-        terminal === 'timeout' ? 'timed out' : 'released before preparation',
-      );
-      if (terminal === 'timeout') f.clock.advance(5000);
-      else surface.dispose();
-      await outcome;
-      f.views.cancelAttachment(candidate);
-      surface.dispose();
-      prepared({ status: 'ready', message: '' });
+  /** A staged native attachment whose host never answers its preparation, as a slow host does. */
+  function stagedAttachment(f: ReturnType<typeof fixture>) {
+    const candidate = f.views.prepareAttachment(f.view, windowId('browser'));
+    const calls: CanvasSurfaceCommand[] = [];
+    let prepared!: (result: CanvasSurfaceResult) => void;
+    const surface = new NativeCanvasAttachment(f.root, {
+      ...f.options,
+      address: candidate,
+      accepts: () => f.views.accepts(candidate),
+      acceptsPreparation: () => f.views.acceptsPreparation(candidate),
+      nativeSurface: () => ({
+        capabilities: selectedPngCapabilities,
+        execute: async (command) => {
+          calls.push(command);
+          if (command.type === 'surface.prepare')
+            return new Promise<CanvasSurfaceResult>((resolve) => {
+              prepared = resolve;
+            });
+          return { status: 'applied', message: '' };
+        },
+      }),
+    });
+    return { candidate, calls, surface, answer: (result: CanvasSurfaceResult) => prepared(result) };
+  }
+
+  test('settles staged native readiness on release and rejects a late host completion', async () => {
+    const f = fixture();
+    const { candidate, calls, surface, answer } = stagedAttachment(f);
+    const outcome = expect(surface.ready).rejects.toThrow('released before preparation');
+    surface.dispose();
+    await outcome;
+    expect(surface.ready).toBeInstanceOf(Promise);
+    f.views.cancelAttachment(candidate);
+    surface.dispose();
+    answer({ status: 'ready', message: '' });
+    for (let index = 0; index < 24; index++) await Promise.resolve();
+    expect(f.views.accepts(f.address)).toBe(true);
+    expect(calls.some((call) => call.type === 'surface.commit')).toBe(false);
+    expect(calls.at(-1)).toMatchObject({ type: 'surface.release', address: candidate });
+    expect(f.clock.pending).toBe(0);
+  });
+
+  test('staged native readiness is pending, not failed, however long the host takes to answer', async () => {
+    const f = fixture();
+    const { calls, surface, answer } = stagedAttachment(f);
+    let settled = false;
+    void surface.ready.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    for (let minute = 0; minute < 120; minute++) {
+      f.clock.advance(60_000);
       for (let index = 0; index < 24; index++) await Promise.resolve();
-      expect(f.views.accepts(f.address)).toBe(true);
-      expect(calls.some((call) => call.type === 'surface.commit')).toBe(false);
-      expect(calls.at(-1)).toMatchObject({ type: 'surface.release', address: candidate });
-      expect(f.clock.pending).toBe(0);
-    },
-  );
+    }
+    expect(settled).toBe(false);
+    // Only the host's answer or a release can end the wait; the late answer is harmless once released.
+    const released = expect(surface.ready).rejects.toThrow('released before preparation');
+    surface.dispose();
+    await released;
+    answer({ status: 'ready', message: '' });
+    for (let index = 0; index < 24; index++) await Promise.resolve();
+    expect(calls.some((call) => call.type === 'surface.commit')).toBe(false);
+  });
 
   test('presents native outputs and tabs without allocating browser image resources', async () => {
     const f = fixture();

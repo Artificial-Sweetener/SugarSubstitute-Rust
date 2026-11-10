@@ -221,8 +221,7 @@ export class ComfyCanvasHost {
       retireBeforeMount: (previous, next) =>
         previous.endsWith(':browser') !== next.endsWith(':browser'),
       report,
-      clock,
-      mount: (element, address, _catalog, accepts, acceptsPreparation, recover) => {
+      mount: (element, address, _catalog, accepts, acceptsPreparation) => {
         const shared: CanvasAttachmentOptions = {
           address,
           views,
@@ -251,7 +250,6 @@ export class ComfyCanvasHost {
             acceptsPreparation,
             nativeSurface: () => execution.canvases.surfaceHost('embedded-document'),
             surfacePending: () => presenter.current() === 'pending',
-            recover,
             editing: () => execution.canvases.editHost(),
           });
         return import('./ComfyBrowserCanvasHost.js').then(({ ComfyBrowserCanvasHost }) => {

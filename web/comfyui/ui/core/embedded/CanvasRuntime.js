@@ -1363,16 +1363,17 @@ var CanvasClient = class {
         this.#cancel(requestId);
       };
       this.#pending.set(requestId, { type: reply, accept: resolve, reject, stop, cancel });
-      stopDeadline = this.port.later(3e4, () => {
-        this.#pending.delete(requestId);
-        stop();
-        if (request.type !== "source.request") cancel();
-        reject(
-          new Error(
-            request.type === "surface.capabilities.request" ? "Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together." : "Canvas request timed out; it was not retried."
-          )
-        );
-      });
+      if (!this.#awaitsHost(request))
+        stopDeadline = this.port.later(3e4, () => {
+          this.#pending.delete(requestId);
+          stop();
+          if (request.type !== "source.request") cancel();
+          reject(
+            new Error(
+              request.type === "surface.capabilities.request" ? "Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together." : "Canvas request timed out; it was not retried."
+            )
+          );
+        });
       stopCancellation = cancellation?.subscribe(() => {
         const pending = this.#pending.get(requestId);
         if (!pending) return;
@@ -1428,6 +1429,10 @@ var CanvasClient = class {
         );
       }
     });
+  }
+  /** Whether this request waits for the host's own reply instead of a client-side deadline. */
+  #awaitsHost(request) {
+    return this.port.awaitsPresentation === true && (request.type === "context.request" || request.type.startsWith("surface."));
   }
   /** Signal cancellation without inventing a new mutation identity. */
   #cancel(requestId) {

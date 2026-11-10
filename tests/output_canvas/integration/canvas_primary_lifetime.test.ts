@@ -101,8 +101,6 @@ function fixture() {
   let fail = false;
   const report = jest.fn<(error: unknown) => void>();
   const primary = new CanvasPrimarySurface({
-    // Retries of timed-out preparation are not exercised here.
-    clock: { later: () => () => {} },
     document,
     views,
     coordinator,

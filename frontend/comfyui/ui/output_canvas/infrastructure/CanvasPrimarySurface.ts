@@ -25,18 +25,17 @@ import type { AttributedWorkflowSource } from '../../execution/application/Workf
 import type { CanvasImageDiagnostics } from '../domain/CanvasImageResource.js';
 import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import type { CanvasRevealDestination } from '../application/CanvasRevealCoordinator.js';
-import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
 import {
-  CanvasPreparationTimeout,
+  CanvasPreparationReleased,
   CanvasPreparationUnavailable,
 } from '../domain/CanvasPreparation.js';
-import {
-  CanvasPreparationRecovery,
-  sameCanvasPreparationTarget,
-} from './CanvasPreparationRecovery.js';
 
 export interface PrimaryCanvasAttachment {
-  /** Settle within the host's bounded readiness deadline; disposal must also settle this promise. */
+  /**
+   * Settle from observed events only: resolve when the host acknowledges preparation, reject with
+   * `CanvasPreparationUnavailable` when the host or its transport reports a failure, and with
+   * `CanvasPreparationReleased` on disposal. Elapsed time never settles it; a slow host leaves it pending.
+   */
   readonly ready?: Promise<void>;
   /** Read counters only on explicit diagnostic request, with no telemetry timer. */
   diagnostics(): CanvasImageDiagnostics & { readonly renderFrames: number };
@@ -48,10 +47,6 @@ export interface PrimaryCanvasAttachment {
     source: WorkflowPreview['sourceId'],
   ): boolean;
   receive(preview: WorkflowPreview, blob: Blob): void;
-  /** Report a preparation that passed its deadline and has not completed since. */
-  stalled?(): boolean;
-  /** Show the preparation error once retries for this target are exhausted. */
-  preparationFailed?(): void;
   /** Revoke immediately; settle asynchronous native release before another attachment mounts. */
   dispose(): void | Promise<void>;
 }
@@ -76,23 +71,17 @@ export interface CanvasPrimarySurfaceOptions {
   readonly window: WindowId;
   readonly views: CanvasViewRegistry;
   readonly coordinator: CanvasSessionCoordinator;
-  /** Schedule bounded retries of a preparation that timed out. */
-  readonly clock: Pick<ExecutionClock, 'later'>;
   element(): HTMLElement | null;
   renderer(): string;
   /** Require observed native/browser retirement before constructing the other presentation owner. */
   retireBeforeMount?(previous: string, next: string): boolean;
-  /**
-   * Separate staged preparation authority from committed view and preview delivery. `recover`
-   * asks for a fresh attachment when a stalled attachment's request changes.
-   */
+  /** Separate staged preparation authority from committed view and preview delivery. */
   mount(
     element: HTMLElement,
     address: CanvasAttachmentAddress,
     catalog: CanvasCatalogSnapshot,
     accepts: () => boolean,
     acceptsPreparation: () => boolean,
-    recover: () => void,
   ): PrimaryCanvasAttachment | Promise<PrimaryCanvasAttachment | null>;
   report(error: unknown): void;
 }
@@ -106,36 +95,9 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
   #watchedView: CanvasViewId | null = null;
   #disposed = false;
   #retirement: Promise<void> | null = null;
-  /** Mount a fresh candidate even though the committed attachment matches the target. */
-  #remount = false;
-  readonly #recovery: CanvasPreparationRecovery;
 
   /** Inject attachment construction so lifecycle proofs exercise authority without borrowing platform decoders. */
-  constructor(private readonly options: CanvasPrimarySurfaceOptions) {
-    this.#recovery = new CanvasPreparationRecovery({
-      clock: options.clock,
-      retry: (target) => {
-        const current = this.#current;
-        // A slow host may have finished meanwhile; a prepared attachment needs no retry. Any
-        // other committed attachment, including an outdated one, is replaced afresh.
-        if (
-          current &&
-          sameCanvasPreparationTarget(current, target) &&
-          current.attachment.stalled?.() === false
-        ) {
-          this.#recovery.reset();
-          return;
-        }
-        this.#remount = true;
-        this.reconcile();
-      },
-      exhausted: (target) => {
-        const current = this.#current;
-        if (current && sameCanvasPreparationTarget(current, target))
-          current.attachment.preparationFailed?.();
-      },
-    });
-  }
+  constructor(private readonly options: CanvasPrimarySurfaceOptions) {}
 
   /** Report this primary attachment's bounded owned resources without exposing handles or workflow files. */
   diagnostics() {
@@ -189,7 +151,6 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       return;
     }
     if (
-      !this.#remount &&
       this.#current?.view === view &&
       this.#current.generation === catalog.generation &&
       this.#current.element === element &&
@@ -239,7 +200,6 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       this.options.report(error);
       return;
     }
-    this.#remount = false;
     const pending: PendingAttachment = {
       view,
       generation: catalog.generation,
@@ -281,14 +241,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
         this.#cancelPending();
         return;
       }
-      const attachment = this.options.mount(
-        root,
-        address,
-        catalog,
-        accepts,
-        acceptsPreparation,
-        () => this.#recover(),
-      );
+      const attachment = this.options.mount(root, address, catalog, accepts, acceptsPreparation);
       if (attachment instanceof Promise)
         void attachment.then(
           (loaded) => this.#adopt(pending, loaded),
@@ -326,7 +279,6 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     this.#stopView = null;
     this.#watchedView = null;
     this.options.document.removeEventListener('visibilitychange', this.reconcile);
-    this.#recovery.reset();
     this.#cancelPending();
     this.#release();
   }
@@ -338,14 +290,6 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     this.#stopView = null;
     this.#watchedView = view;
     if (view) this.#stopView = this.options.views.subscribe(view, this.reconcile);
-  }
-
-  /** Attach afresh at once, with a new retry budget, after a stalled attachment's request changed. */
-  #recover(): void {
-    if (this.#disposed) return;
-    this.#recovery.reset();
-    this.#remount = true;
-    this.reconcile();
   }
 
   /** Adopt only the still-current constructed attachment, retiring late loads immediately. */
@@ -369,19 +313,26 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       return;
     }
     pending.attachment = attachment;
-    if (attachment.ready)
-      void attachment.ready.then(
-        () => this.#activate(pending),
-        (error: unknown) => this.#failPending(pending, error),
-      );
-    else this.#activate(pending);
+    if (!attachment.ready) {
+      this.#activate(pending);
+      return;
+    }
+    // A replacement waits for its host's acknowledgement so the shown attachment is never lost to
+    // one that has not prepared. With nothing shown there is nothing to protect: commit at once, so
+    // a host that is slow to answer leaves the user this attachment's own loading state.
+    if (!this.#current) {
+      this.#activate(pending);
+      void attachment.ready.catch((error: unknown) => this.#failCommitted(attachment, error));
+      return;
+    }
+    void attachment.ready.then(
+      () => this.#activate(pending),
+      (error: unknown) => this.#failPending(pending, error),
+    );
   }
 
-  /**
-   * Commit only a still-current ready candidate, then retire the replaced surface. A candidate
-   * committed after its preparation timed out keeps the retry budget running.
-   */
-  #activate(pending: PendingAttachment, recovering = false): void {
+  /** Commit only a still-current ready candidate, then retire the replaced surface. */
+  #activate(pending: PendingAttachment): void {
     if (this.#pending !== pending) return;
     const { coordinator, views } = this.options;
     if (
@@ -406,7 +357,6 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     const previous = this.#current;
     this.#pending = null;
     this.#current = { ...pending, attachment: pending.attachment };
-    if (!recovering) this.#recovery.reset();
     pending.root.style.visibility = '';
     pending.root.style.pointerEvents = '';
     if (previous) {
@@ -426,27 +376,48 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
   /**
    * Ignore failures from a canceled candidate and retain the previous committed attachment.
    *
-   * A preparation timeout is recoverable: the host may only be slow. Unless a committed
-   * attachment already serves this exact target, the timed-out candidate is committed so its
-   * loading state replaces a blank pane or an outdated attachment (one from an earlier renderer
-   * identity, such as before native discovery concluded). The same target is then retried
-   * afresh on a bounded backoff until it prepares or shows its preparation error.
-   * An unavailable native candidate also commits its diagnostic chrome without retrying or
-   * claiming that native pixels prepared successfully.
+   * Only an observed native failure ends a preparation: an unavailable native candidate commits
+   * its diagnostic chrome, unless a committed attachment already serves this exact target, so the
+   * user sees what the host reported instead of a blank pane, and the failure is reported once
+   * without a retry. A candidate released before its host answered ends silently. A host that is
+   * merely slow never reaches this method; its candidate stays pending until it answers.
    */
   #failPending(pending: PendingAttachment, error: unknown): void {
     if (this.#pending !== pending) return;
-    const timedOut = error instanceof CanvasPreparationTimeout;
-    const served = this.#current !== null && sameCanvasPreparationTarget(this.#current, pending);
+    if (error instanceof CanvasPreparationReleased) {
+      this.#cancelPending();
+      return;
+    }
     if (
-      (timedOut || error instanceof CanvasPreparationUnavailable) &&
-      !served &&
+      error instanceof CanvasPreparationUnavailable &&
+      !this.#serves(pending) &&
       pending.attachment
     )
-      this.#activate(pending, timedOut);
+      this.#activate(pending);
     else this.#cancelPending();
     this.options.report(error);
-    if (timedOut) this.#recovery.failed(pending);
+  }
+
+  /**
+   * Report an observed native failure of an attachment committed before its host answered. Its
+   * diagnostic chrome already shows; a release, or an attachment since replaced, ends silently.
+   */
+  #failCommitted(attachment: PrimaryCanvasAttachment, error: unknown): void {
+    if (this.#current?.attachment !== attachment || error instanceof CanvasPreparationReleased)
+      return;
+    this.options.report(error);
+  }
+
+  /** Whether the committed attachment already presents this exact target. */
+  #serves(target: Pick<AttachmentRecord, 'view' | 'generation' | 'element' | 'renderer'>): boolean {
+    const current = this.#current;
+    return (
+      current !== null &&
+      current.view === target.view &&
+      current.generation === target.generation &&
+      current.element === target.element &&
+      current.renderer === target.renderer
+    );
   }
 
   /** Cancel the exact staged transaction before disposing any candidate resources. */

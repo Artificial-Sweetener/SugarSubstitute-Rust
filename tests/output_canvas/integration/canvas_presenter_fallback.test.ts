@@ -175,8 +175,6 @@ function fixture(discovery: Discovery) {
   const mounted = { native: 0, browser: 0 };
   const natives: { attachment: NativeCanvasAttachment; address: CanvasAttachmentAddress }[] = [];
   const primary = new CanvasPrimarySurface({
-    // Retries of timed-out preparation are not exercised here.
-    clock: { later: () => () => {} },
     document,
     views,
     window: windowId('presenter'),
@@ -280,7 +278,8 @@ describe('output presenter at native startup', () => {
         expect(reportedText(f.errors).join('\n')).not.toMatch(/unavailable/i);
         expect(f.snapshots()).toHaveLength(1);
         expect(f.snapshots()[0]).toMatchObject({
-          resource: { state: 'empty', message: '' },
+          // With nothing else shown, the attachment awaiting discovery loads silently.
+          resource: { state: 'loading', message: '' },
           secondaryResource: null,
           nativeBackdrop: 'unavailable',
         });

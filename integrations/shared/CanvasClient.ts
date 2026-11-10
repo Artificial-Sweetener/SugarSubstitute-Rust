@@ -69,6 +69,14 @@ export interface CanvasClientPort {
   send(message: CanvasMessage): void;
   later(milliseconds: number, callback: () => void): () => void;
   report(error: unknown): void;
+  /**
+   * Let canvas discovery and surface presentation requests wait for the host without a deadline.
+   *
+   * Set it only for a transport whose peer's loss is observed directly, such as the embedded native
+   * bridge, where the host owns this page and a slow host is merely busy decoding or rendering.
+   * A transport that can only infer a silent peer's death from elapsed time leaves it unset.
+   */
+  readonly awaitsPresentation?: boolean;
 }
 interface Pending {
   readonly type:
@@ -364,18 +372,19 @@ export class CanvasClient implements CanvasLayerHost {
         this.#cancel(requestId);
       };
       this.#pending.set(requestId, { type: reply, accept: resolve, reject, stop, cancel });
-      stopDeadline = this.port.later(30000, () => {
-        this.#pending.delete(requestId);
-        stop();
-        if (request.type !== 'source.request') cancel();
-        reject(
-          new Error(
-            request.type === 'surface.capabilities.request'
-              ? 'Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together.'
-              : 'Canvas request timed out; it was not retried.',
-          ),
-        );
-      });
+      if (!this.#awaitsHost(request))
+        stopDeadline = this.port.later(30000, () => {
+          this.#pending.delete(requestId);
+          stop();
+          if (request.type !== 'source.request') cancel();
+          reject(
+            new Error(
+              request.type === 'surface.capabilities.request'
+                ? 'Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together.'
+                : 'Canvas request timed out; it was not retried.',
+            ),
+          );
+        });
       stopCancellation =
         cancellation?.subscribe(() => {
           const pending = this.#pending.get(requestId);
@@ -446,6 +455,13 @@ export class CanvasClient implements CanvasLayerHost {
         );
       }
     });
+  }
+  /** Whether this request waits for the host's own reply instead of a client-side deadline. */
+  #awaitsHost(request: Request): boolean {
+    return (
+      this.port.awaitsPresentation === true &&
+      (request.type === 'context.request' || request.type.startsWith('surface.'))
+    );
   }
   /** Signal cancellation without inventing a new mutation identity. */
   #cancel(requestId: number): void {
