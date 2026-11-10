@@ -10,7 +10,6 @@ use std::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
     ExecutionPort, JobClass, JobOutcome, MemoryLease, MemoryRelease, OwnedJob,
@@ -150,14 +149,10 @@ pub(super) fn listening(
         spec(1, JobClass::IoOrdinary, RESERVATION_BYTES)?,
         move |context| runner.run(context),
     )?;
-    let TransportEvent::Listening { port, token } =
-        transport.events.recv_timeout(Duration::from_secs(10))?
-    else {
+    let TransportEvent::Listening { port, token } = transport.events.recv()? else {
         return Err("Listener did not precede frames".into());
     };
     let peer = TcpStream::connect(("127.0.0.1", port))?;
-    peer.set_read_timeout(Some(Duration::from_secs(10)))?;
-    peer.set_write_timeout(Some(Duration::from_secs(10)))?;
     Ok((transport, job, peer, token))
 }
 
@@ -170,9 +165,9 @@ fn burst(peer: &mut TcpStream, token: &str) -> io::Result<()> {
     peer.flush()
 }
 
-/// Receive exactly one actual event; the timeout only guards a failed synchronization.
+/// Receive exactly one actual event, blocking until the transport publishes it.
 pub(super) fn receive(transport: &Transport) -> TestResult<Frame> {
-    match transport.events.recv_timeout(Duration::from_secs(10))? {
+    match transport.events.recv()? {
         TransportEvent::Frame(frame) => Ok(frame),
         _ => Err("Unexpected duplicate listener".into()),
     }

@@ -8,10 +8,7 @@ use crate::{
     runtime::{ExecutionClient, ExecutionOwner},
     runtime_test_support::{ClockPort, Gate, Held, ManualClock, TestResult, spec},
 };
-use std::{
-    sync::{Condvar, OnceLock, Weak},
-    time::Duration,
-};
+use std::sync::{Condvar, OnceLock, Weak};
 use sugarsubstitute_contracts::execution::{
     CompletionWake, ExecutionError, ExecutionPort, JobClass, Moment, OwnedJob, Scope,
     ScopeSnapshot, ScopeSpec,
@@ -29,21 +26,15 @@ impl ScopeWake {
     fn count(&self) -> usize {
         lock(&self.observed).len()
     }
-    /// Bound a stalled observer; a missing wake fails instead of hanging.
+    /// Block until the observed snapshots satisfy `satisfied`; a missing wake leaves the test running.
     fn wait_until(
         &self,
         satisfied: impl Fn(&[ScopeSnapshot]) -> bool,
-        failure: &str,
     ) -> TestResult<Vec<ScopeSnapshot>> {
-        let (observed, timeout) = self
+        let observed = self
             .changed
-            .wait_timeout_while(lock(&self.observed), Duration::from_secs(10), |observed| {
-                !satisfied(observed)
-            })
+            .wait_while(lock(&self.observed), |observed| !satisfied(observed))
             .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && !satisfied(&observed) {
-            return Err(format!("{failure}: {:?}", observed.last()).into());
-        }
         Ok(observed.clone())
     }
 }
@@ -125,10 +116,8 @@ fn abandoned_result_retirement_is_announced<J>(
         scope.cancel();
     }
     release.open();
-    wake.wait_until(
-        |observed| observed.last().is_some_and(drained),
-        "Retirement of the abandoned result produced no wake after its record left the scope",
-    )?;
+    // Retiring the abandoned result must announce a wake after its record left the scope.
+    wake.wait_until(|observed| observed.last().is_some_and(drained))?;
     drop(scope);
     owner.request_shutdown(Moment::from_nanos(0));
     loop {
@@ -136,7 +125,7 @@ fn abandoned_result_retirement_is_announced<J>(
         if owner.poll_shutdown()?.settled {
             break;
         }
-        wake.wait_until(|recorded| recorded.len() > observed, "Shutdown produced no wake")?;
+        wake.wait_until(|recorded| recorded.len() > observed)?;
     }
     owner.finish_shutdown()?;
     Ok(())

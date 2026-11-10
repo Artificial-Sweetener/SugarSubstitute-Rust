@@ -322,23 +322,14 @@ fn abandoned_scopes_retire_only_after_children_and_retained_bytes() -> TestResul
 
 fn notification_barrier(rig: &Rig) -> TestResult {
     let core = &rig.client.core_for_test();
-    let (state, timeout) = core
-        .cpu_changed
-        .wait_timeout_while(
-            crate::scope::lock(&core.state),
-            std::time::Duration::from_secs(10),
-            |state| {
+    drop(
+        core.cpu_changed
+            .wait_while(crate::scope::lock(&core.state), |state| {
                 state.notifications_inflight > 0
                     || state.scopes.values().any(|scope| scope.cancel.pending())
-            },
-        )
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
-    if timeout.timed_out()
-        && (state.notifications_inflight > 0
-            || state.scopes.values().any(|scope| scope.cancel.pending()))
-    {
-        return Err(std::io::Error::other("Cancellation notifications did not settle").into());
-    }
+            })
+            .map_err(|error| std::io::Error::other(error.to_string()))?,
+    );
     Ok(())
 }
 

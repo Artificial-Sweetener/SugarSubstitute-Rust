@@ -250,7 +250,7 @@ boundary = "native_ipc"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/activation_channel/operation.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:ac828940d038712ac53b1a31a43d7db097e76092a341bffa2451ad994bb69312"
+source_sha256 = "sha256:10d301a871bf782afe684a7a020dc566875b7738ff4adf31d4439f3ca9764098"
 capabilities = ["ReadFile", "WriteFile", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::ReadFile", "windows::Win32::Storage::FileSystem::WriteFile"]
 disposition = "boundary"
 rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Stable overlapped storage survives issue, partial completion, cancellation and checked retirement. Native object custody and original queue, memory and shutdown limits remain with the execution owner."

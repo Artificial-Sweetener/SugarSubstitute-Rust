@@ -9,7 +9,7 @@ mod admission;
 mod admission_liveness;
 mod admission_timing;
 mod blocking;
-#[cfg(feature = "boundary-fixtures")]
+#[cfg(any(test, feature = "boundary-fixtures"))]
 #[doc(hidden)]
 pub mod http_fixture;
 mod owned_input;

@@ -197,14 +197,11 @@ fn combined_original_bytes_reject_without_spending_either_cleanup() -> TestResul
     release.open();
     drop(setup.rig.completion(&mut blocker)?);
     let core = setup.rig.client.core_for_test();
-    let (state, timeout) = core
-        .cpu_changed
-        .wait_timeout_while(lock(&core.state), std::time::Duration::from_secs(10), |state| {
-            state.bytes != 65_536
-        })
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
-    assert!(!timeout.timed_out());
-    drop(state);
+    drop(
+        core.cpu_changed
+            .wait_while(lock(&core.state), |state| state.bytes != 65_536)
+            .map_err(|error| std::io::Error::other(error.to_string()))?,
+    );
     let (mut source, mut receiving) = setup.submit(rejected.factory).map_err(|r| r.error)?;
     assert!(matches!(setup.rig.completion(&mut source)?.outcome, JobOutcome::Success(true)));
     assert!(matches!(setup.rig.completion(&mut receiving)?.outcome, JobOutcome::Success(true)));

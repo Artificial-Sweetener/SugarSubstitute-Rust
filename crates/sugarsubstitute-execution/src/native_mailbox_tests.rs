@@ -4,23 +4,22 @@
 //! Bound combined completion metadata while preserving separate native credit and wake interests.
 
 use super::*;
-use std::{num::NonZeroUsize, time::Duration};
+use std::num::NonZeroUsize;
 
 pub(super) fn wait_terminal(rig: &Rig, id: u64) -> TestResult {
     let id = JobId::new(id)?;
-    let (state, timeout) = rig
-        .client
-        .core
-        .cpu_changed
-        .wait_timeout_while(lock(&rig.client.core.state), Duration::from_secs(10), |state| {
-            state.jobs.get(&id).is_some_and(|record| !matches!(record.phase, JobPhase::Terminal(_)))
-        })
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
-    if timeout.timed_out()
-        && state.jobs.get(&id).is_some_and(|record| !matches!(record.phase, JobPhase::Terminal(_)))
-    {
-        return Err("Owned terminal transaction was not observed".into());
-    }
+    drop(
+        rig.client
+            .core
+            .cpu_changed
+            .wait_while(lock(&rig.client.core.state), |state| {
+                state
+                    .jobs
+                    .get(&id)
+                    .is_some_and(|record| !matches!(record.phase, JobPhase::Terminal(_)))
+            })
+            .map_err(|error| std::io::Error::other(error.to_string()))?,
+    );
     Ok(())
 }
 

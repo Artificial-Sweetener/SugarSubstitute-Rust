@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Scoped loopback HTTP boundary for actual native transport qualification.
-use std::{
-    io::{self, Read, Write},
-    net::{TcpListener, TcpStream},
-    time::Duration,
-};
+use std::{future::Future, io, net};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, Scope};
+use tokio::net::{TcpListener, TcpStream};
 
 /// Exact request expectation and raw server response, including deliberately truncated bodies.
 pub struct Exchange {
@@ -24,7 +21,7 @@ pub struct Exchange {
 }
 /// Nonblocking socket custody transferred to one execution-owned asynchronous fixture job.
 pub struct Server {
-    listener: TcpListener,
+    listener: net::TcpListener,
     exchanges: Vec<Exchange>,
     _memory: MemoryClaim,
 }
@@ -45,7 +42,7 @@ impl Server {
             return Err(io::Error::other("HTTP fixture bound"));
         }
         let memory = context.memory().claim(5 * 1024 * 1024).map_err(io::Error::other)?;
-        let listener = TcpListener::bind(("127.0.0.1", 0))?;
+        let listener = net::TcpListener::bind(("127.0.0.1", 0))?;
         listener.set_nonblocking(true)?;
         Ok(Self { listener, exchanges, _memory: memory })
     }
@@ -54,44 +51,35 @@ impl Server {
         Ok(self.listener.local_addr()?.port())
     }
     /// Serve exactly the scripted requests, then close all sockets and release fixture custody.
+    ///
+    /// Every wait is a socket readiness event or the job's own cancellation and deadline timers, so
+    /// the script advances at the pace of its peer rather than of any polling interval.
     /// # Errors
     /// Rejects unexpected request bytes, credentials, peer addresses, cancellation and I/O.
     pub async fn run(self, context: JobContext) -> io::Result<()> {
+        let Self { listener, exchanges, _memory } = self;
+        let listener = TcpListener::from_std(listener)?;
         // A keep-alive client may send its next request on the same socket, or pool the socket
         // and connect again; a pooled socket stays open until the script ends.
         let mut pooled = Vec::new();
         let mut next = None;
-        for (index, exchange) in self.exchanges.iter().enumerate() {
-            let (mut socket, prefix) = match next.take() {
+        for (index, exchange) in exchanges.iter().enumerate() {
+            let (socket, prefix) = match next.take() {
                 Some(next) => next,
-                None => loop {
-                    check(&context)?;
-                    if let Some(socket) = accept(&self.listener)? {
-                        break (socket, Vec::new());
-                    }
-                    wait(&context).await?;
-                },
+                None => (within(&context, accept(&listener)).await?, Vec::new()),
             };
-            socket.set_nonblocking(true)?;
-            request(&mut socket, exchange, prefix, &context).await?;
+            request(&socket, exchange, prefix, &context).await?;
             let mut offset = 0;
             while offset < exchange.response.len() {
-                check(&context)?;
-                match socket.write(&exchange.response[offset..]) {
-                    Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
-                    Ok(count) => offset += count,
-                    Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {
-                        wait(&context).await?
-                    }
-                    Err(cause) => return Err(cause),
-                }
+                offset +=
+                    within(&context, write_some(&socket, &exchange.response[offset..])).await?;
             }
             if let Some(client) = &exchange.cancel_client {
                 client.cancel();
             }
             if exchange.await_client_close {
-                let more = index + 1 < self.exchanges.len();
-                next = match closed(&mut socket, &self.listener, more, &context).await? {
+                let more = index + 1 < exchanges.len();
+                next = match closed(&socket, &listener, more, &context).await? {
                     Retirement::Closed => None,
                     Retirement::Reused(prefix) => Some((socket, prefix)),
                     Retirement::Reconnected(arrival) => {
@@ -113,46 +101,78 @@ enum Retirement {
     /// The client pooled the socket and opened this next connection.
     Reconnected(TcpStream),
 }
-/// Accept one pending loopback connection without blocking.
-fn accept(listener: &TcpListener) -> io::Result<Option<TcpStream>> {
-    match listener.accept() {
-        Ok((socket, peer)) if peer.ip().is_loopback() => Ok(Some(socket)),
-        Ok(_) => Err(io::Error::other("HTTP fixture non-loopback peer")),
-        Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => Ok(None),
-        Err(cause) => Err(cause),
+/// What happened while the script waited for the client to let go of a served socket.
+enum Arrival {
+    Readable,
+    Connection(TcpStream),
+}
+/// Accept one loopback connection, refusing any other peer.
+async fn accept(listener: &TcpListener) -> io::Result<TcpStream> {
+    let (socket, peer) = listener.accept().await?;
+    if peer.ip().is_loopback() {
+        Ok(socket)
+    } else {
+        Err(io::Error::other("HTTP fixture non-loopback peer"))
+    }
+}
+/// Read the next available bytes, or none once the peer has closed its sending side.
+async fn read_some(socket: &TcpStream, buffer: &mut [u8]) -> io::Result<usize> {
+    loop {
+        socket.readable().await?;
+        match socket.try_read(buffer) {
+            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {}
+            outcome => return outcome,
+        }
+    }
+}
+/// Write a non-empty prefix of `bytes`, returning how many bytes the socket accepted.
+async fn write_some(socket: &TcpStream, bytes: &[u8]) -> io::Result<usize> {
+    loop {
+        socket.writable().await?;
+        match socket.try_write(bytes) {
+            Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
+            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {}
+            outcome => return outcome,
+        }
     }
 }
 /// Wait until the client closes `socket` or, while `more` requests remain scripted, reuses or
 /// replaces it. A silent peer exercises the client's real idle timeout without a sleep.
 async fn closed(
-    socket: &mut TcpStream,
+    socket: &TcpStream,
     listener: &TcpListener,
     more: bool,
     context: &JobContext,
 ) -> io::Result<Retirement> {
     let mut byte = [0];
     loop {
-        check(context)?;
-        match socket.read(&mut byte) {
-            Ok(0) => return Ok(Retirement::Closed),
-            Ok(_) if more => return Ok(Retirement::Reused(byte.to_vec())),
-            Ok(_) => return Err(io::Error::other("Unexpected request body")),
-            Err(cause) if cause.kind() == io::ErrorKind::ConnectionReset => {
-                return Ok(Retirement::Closed);
+        let arrival = within(context, async {
+            tokio::select! {
+                biased;
+                readable = socket.readable() => readable.map(|()| Arrival::Readable),
+                connection = accept(listener), if more => connection.map(Arrival::Connection),
             }
-            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {}
-            Err(cause) => return Err(cause),
+        })
+        .await?;
+        match arrival {
+            Arrival::Connection(next) => return Ok(Retirement::Reconnected(next)),
+            Arrival::Readable => match socket.try_read(&mut byte) {
+                Ok(0) => return Ok(Retirement::Closed),
+                Ok(_) if more => return Ok(Retirement::Reused(byte.to_vec())),
+                Ok(_) => return Err(io::Error::other("Unexpected request body")),
+                Err(cause) if cause.kind() == io::ErrorKind::ConnectionReset => {
+                    return Ok(Retirement::Closed);
+                }
+                Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {}
+                Err(cause) => return Err(cause),
+            },
         }
-        if more && let Some(next) = accept(listener)? {
-            return Ok(Retirement::Reconnected(next));
-        }
-        wait(context).await?;
     }
 }
 /// Read only bounded HTTP headers, after any `prefix` already read from the same socket, and
 /// verify the request without a general-purpose web server.
 async fn request(
-    socket: &mut TcpStream,
+    socket: &TcpStream,
     exchange: &Exchange,
     prefix: Vec<u8>,
     context: &JobContext,
@@ -160,12 +180,9 @@ async fn request(
     let mut bytes = prefix;
     let mut scratch = [0; 1024];
     while !bytes.ends_with(b"\r\n\r\n") {
-        check(context)?;
-        match socket.read(&mut scratch) {
-            Ok(0) => return Err(io::ErrorKind::UnexpectedEof.into()),
-            Ok(count) => bytes.extend_from_slice(&scratch[..count]),
-            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => wait(context).await?,
-            Err(cause) => return Err(cause),
+        match within(context, read_some(socket, &mut scratch)).await? {
+            0 => return Err(io::ErrorKind::UnexpectedEof.into()),
+            count => bytes.extend_from_slice(&scratch[..count]),
         }
         if bytes.len() > 8192 {
             return Err(io::Error::other("HTTP fixture request bound"));
@@ -198,12 +215,20 @@ async fn request(
     }
     Ok(())
 }
-/// Poll nonblocking external sockets through the execution owner's cancellable timer.
-async fn wait(context: &JobContext) -> io::Result<()> {
+/// Let `work` finish only while the job is live: cancellation and the job's own deadline end the
+/// wait through the execution owner's timers, never through elapsed polling.
+async fn within<T>(
+    context: &JobContext,
+    work: impl Future<Output = io::Result<T>>,
+) -> io::Result<T> {
     check(context)?;
-    let until = context.now().checked_add(Duration::from_millis(1)).map_err(io::Error::other)?;
-    context.sleep_until(until).await;
-    check(context)
+    let deadline = context.deadline().ok_or(io::ErrorKind::TimedOut)?;
+    tokio::select! {
+        biased;
+        outcome = work => outcome,
+        () = context.cancelled() => Err(io::ErrorKind::Interrupted.into()),
+        () = context.sleep_until(deadline) => Err(io::ErrorKind::TimedOut.into()),
+    }
 }
 /// Fixture lifetimes are always finite, even when a client never connects.
 fn check(context: &JobContext) -> io::Result<()> {
@@ -215,3 +240,6 @@ fn check(context: &JobContext) -> io::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

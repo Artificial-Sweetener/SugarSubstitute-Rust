@@ -24,9 +24,16 @@ rationale = "Bounded WinHTTP headers/body reads, original finite phase deadlines
 [[records]]
 path = "crates/sugarsubstitute-execution/src/http_fixture.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:13a2aac06dfdf4c196cce287a406cc2d4e6c42d2f7515fce687cb902501ce968"
+source_sha256 = "sha256:0a03596fc36607da04582303f927b8859848be6893c1209648a853cac6e621a4"
 boundary = "fixture"
 rationale = "Execution-owned isolated HTTP server qualifies real native requests, hostile responses and actual client socket closure."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/http_fixture/tests.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:53119ea1174008026f60de3e69bd2b2e98b35585ec0b38e6ae72c804f87eddfb"
+boundary = "fixture"
+rationale = "Real loopback client sockets exercise the isolated HTTP fixture's event-driven request, response, deadline and cancellation handling."
 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/provisioning_transport/socket.rs"
@@ -38,7 +45,7 @@ rationale = "Execution owns authenticated finite loopback IPC, readiness, queue 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/provisioning_transport/tests.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:2ecbac1ad39031a6b6ef1574787744245a3496e3ce4d4230bf212a962aa3d6e5"
+source_sha256 = "sha256:2e48bd0d65f9c9f06b3af96514cf3ab7731bf2d5b19905a2dca662866df4ff95"
 boundary = "fixture"
 rationale = "Real loopback peers test execution-owned authentication, bounds and actual socket closure."
 
