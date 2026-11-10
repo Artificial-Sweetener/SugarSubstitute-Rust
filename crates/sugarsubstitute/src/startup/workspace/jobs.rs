@@ -122,7 +122,7 @@ impl WorkspaceWork {
                         .ok_or("Workspace driver absent")?
                         .encoding_stopped(&request, &transfer)?;
                     if let JobOutcome::Failure(cause) = completion.outcome {
-                        tracing::warn!(operation="workspace_encoding_retirement",cause=%cause,"Superseded encoding stopped; durable checkpoint retained");
+                        tracing::warn!(operation="workspace_encoding_retirement",cause_chain=%crate::diagnostics::CauseChain(&cause),"Superseded encoding stopped; durable checkpoint retained");
                     }
                     return Ok(());
                 }
@@ -133,7 +133,7 @@ impl WorkspaceWork {
                         .ok_or("Workspace driver absent")?
                         .encoded_restore(&request, &transfer, encoded)?,
                     JobOutcome::Failure(cause) => {
-                        tracing::warn!(operation="workspace_encode",cause=%cause,"Workspace replay failed; original checkpoint protected");
+                        tracing::warn!(operation="workspace_encode",cause_chain=%crate::diagnostics::CauseChain(&cause),"Workspace replay failed; original checkpoint protected");
                         let driver = self.driver.as_mut().ok_or("Workspace driver absent")?;
                         driver.encoding_stopped(&request, &transfer)?;
                         driver.restore_failed(&request, &RestoreFailure::Encoding)?;
@@ -172,7 +172,7 @@ impl WorkspaceWork {
                         }
                     }
                     JobOutcome::Failure(cause) => {
-                        tracing::warn!(operation="workspace_capture_decode",cause=%cause,"Workspace capture rejected; durable checkpoint retained");
+                        tracing::warn!(operation="workspace_capture_decode",cause_chain=%crate::diagnostics::CauseChain(&cause),"Workspace capture rejected; durable checkpoint retained");
                         let protected = matches!(cause, StoreError::Protected);
                         let driver = self.driver.as_mut().ok_or("Workspace driver absent")?;
                         driver.publication_failed(&ticket, now)?;
@@ -201,7 +201,7 @@ impl WorkspaceWork {
                         driver.published(&ticket, published.captured, &published.receipt, now)?
                     }
                     JobOutcome::Failure(cause) => {
-                        tracing::warn!(operation="workspace_publish",cause=%cause,"Workspace publication failed; previous checkpoint retained");
+                        tracing::warn!(operation="workspace_publish",cause_chain=%crate::diagnostics::CauseChain(&cause),"Workspace publication failed; previous checkpoint retained");
                         driver.publication_failed(&ticket, now)?;
                     }
                     outcome => {
