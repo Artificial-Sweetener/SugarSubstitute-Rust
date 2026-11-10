@@ -2,60 +2,17 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise native page publication against the real backend and its single execution mailbox.
 use super::*;
-use crate::setup::presentation::{Action, Interaction};
-use std::{
-    sync::{Condvar, Mutex},
-    time::Instant,
+use crate::{
+    completion_wake::Wake,
+    paused_clock::PausedClock,
+    setup::presentation::{Action, Interaction},
 };
 use sugarsubstitute_application::setup_flow::{Page, PathField};
-use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionError};
 use sugarsubstitute_ui::{form::Role, text::PaintSpec};
 
-#[derive(Default)]
-struct Wake(Mutex<u64>, Condvar);
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut revision = self.0.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(io::Error::other("Native session observer poisoned")),
-            )
-        })?;
-        *revision += 1;
-        self.1.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    /// Bound test failure observation without advancing application time or sleeping between polls.
-    fn observe(&self, mut poll: impl FnMut() -> Result<bool>) -> Result<()> {
-        let until = Instant::now() + Duration::from_secs(20);
-        loop {
-            let revision = *self.0.lock().map_err(|_| "Native session observer poisoned")?;
-            if poll()? {
-                return Ok(());
-            }
-            let remaining = until
-                .checked_duration_since(Instant::now())
-                .ok_or("Native session observer expired")?;
-            let (guard, timeout) = self
-                .1
-                .wait_timeout_while(
-                    self.0.lock().map_err(|_| "Native session observer poisoned")?,
-                    remaining,
-                    |current| *current == revision,
-                )
-                .map_err(|_| "Native session observer poisoned")?;
-            drop(guard);
-            if timeout.timed_out() {
-                return if poll()? {
-                    Ok(())
-                } else {
-                    Err("Native session observer expired".into())
-                };
-            }
-        }
-    }
+/// Re-examine `poll` after each execution wake until it reports completion.
+fn observe(wake: &Wake, mut poll: impl FnMut() -> Result<bool>) -> Result<()> {
+    wake.until(|| poll().map(|done| done.then_some(())).transpose())
 }
 struct Fixture {
     controller: Controller,
@@ -67,6 +24,7 @@ impl Fixture {
     fn new() -> Result<Self> {
         let wake = Arc::new(Wake::default());
         let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
+        controller.clock = PausedClock::new();
         let owner = ExecutionOwner::new(controller.clock.clone(), wake.clone())?;
         let client = owner.client();
         controller.scope =
@@ -94,7 +52,8 @@ impl Fixture {
     }
     /// Wait for a page matching current application input through real completion wakes.
     fn frame(&mut self, now: Duration) -> Result<()> {
-        self.wake.clone().observe(|| {
+        let wake = self.wake.clone();
+        observe(&wake, || {
             self.session.advance(&mut self.controller, now)?;
             Ok(self.session.ready())
         })
@@ -111,7 +70,8 @@ impl Fixture {
     fn finish(&mut self) -> Result<()> {
         self.session.close()?;
         self.controller.close()?;
-        self.wake.clone().observe(|| {
+        let wake = self.wake.clone();
+        observe(&wake, || {
             self.session.advance(&mut self.controller, Duration::ZERO)?;
             assert!(!self.session.ready());
             if !self.session.settled() {
@@ -192,7 +152,8 @@ fn native_session_close_retires_render_when_root_failure_consumed_its_notificati
     f.session.invalidate()?;
     f.session.advance(&mut f.controller, Duration::ZERO)?;
     // Model failure after the root's drain but before the batch reaches the renderer.
-    f.wake.clone().observe(|| {
+    let wake = f.wake.clone();
+    observe(&wake, || {
         let advanced = f.controller.advance_events()?;
         assert!(advanced.events.is_empty());
         Ok(!advanced.completions.notifications.is_empty())

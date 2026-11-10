@@ -2,14 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the composed record session with actual native files and the production execution owner.
 use super::*;
+use crate::completion_wake::Wake;
 use serde_json::json;
-use std::{
-    sync::{Condvar, Mutex},
-    time::Instant,
-};
-use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, JobContext, ScopeId, ScopeSpec, WaitFuture,
-};
+use sugarsubstitute_contracts::execution::{Clock, JobContext, ScopeId, ScopeSpec, WaitFuture};
 use sugarsubstitute_execution::ExecutionOwner;
 
 struct ClockZero;
@@ -19,21 +14,6 @@ impl Clock for ClockZero {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake(Mutex<u64>, Condvar);
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut revision = self.0.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(io::Error::other("Record observer poisoned")),
-            )
-        })?;
-        *revision += 1;
-        self.1.notify_all();
-        Ok(())
     }
 }
 /// Test clocks replace time, while native work and reservation admission use the actual owner.
@@ -54,22 +34,7 @@ fn run(body: impl FnOnce(JobContext) -> io::Result<()> + Send + 'static) -> Resu
         },
         body,
     )?;
-    let until = Instant::now() + Duration::from_secs(10);
-    let completion = loop {
-        let revision = wake.0.lock().map_err(|_| "Record observer poisoned")?;
-        if let Some(completion) = job.try_take_completion() {
-            break completion;
-        }
-        let remaining = until
-            .checked_duration_since(Instant::now())
-            .ok_or("Record operation did not complete")?;
-        let (guard, timed) =
-            wake.1.wait_timeout(revision, remaining).map_err(|_| "Record observer poisoned")?;
-        drop(guard);
-        if timed.timed_out() {
-            break job.try_take_completion().ok_or("Record operation did not complete")?;
-        }
-    };
+    let completion = wake.completion(&client, &mut job)?;
     match completion.outcome {
         JobOutcome::Success(()) => Ok(()),
         JobOutcome::Failure(cause) => Err(cause.into()),

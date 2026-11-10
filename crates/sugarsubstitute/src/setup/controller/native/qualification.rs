@@ -9,12 +9,16 @@ use sugarsubstitute_contracts::{execution::CompletionWake, presentation::FrameSh
 use sugarsubstitute_desktop::installer::native::{self as window, Lifetime};
 use sugarsubstitute_ui::form::Control;
 
+/// Real time a qualification process may spend in its native loop before it is declared hung.
+const WATCHDOG: Duration = Duration::from_secs(90);
+
 pub(in crate::setup) fn run(
     bundle: PathBuf,
     workspace: PathBuf,
     distribution: &'static [u8],
 ) -> Result<Value> {
     let mut fixture = Fixture::new(bundle, workspace, distribution)?;
+    fixture.watchdog = Some(WATCHDOG);
     window::run(
         window::Window {
             visible: false,
@@ -40,6 +44,8 @@ struct Fixture {
     lines: usize,
     passed: bool,
     native_console: bool,
+    /// Only the standalone qualification process is bounded by real time; in-process tests are not.
+    watchdog: Option<Duration>,
 }
 impl Lifetime for Fixture {
     fn inventory(&self) -> &[Control] {
@@ -62,7 +68,7 @@ impl Lifetime for Fixture {
     }
     fn advance(&mut self, elapsed: Duration) -> Result<()> {
         if !self.owner.controller.closing {
-            if elapsed >= Duration::from_secs(90) {
+            if self.watchdog.is_some_and(|limit| elapsed >= limit) {
                 return Err("Native installer qualification exceeded its test watchdog".into());
             }
             if let Some(id) = self.install {
@@ -145,6 +151,7 @@ impl Fixture {
             lines: 0,
             passed: false,
             native_console: false,
+            watchdog: None,
         })
     }
 

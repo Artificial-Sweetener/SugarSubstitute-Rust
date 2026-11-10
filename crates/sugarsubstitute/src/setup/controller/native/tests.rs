@@ -116,6 +116,7 @@ fn real_native_installer_navigates_and_applies_picker_without_browser() -> Resul
 /// Replace package/provisioning effects only; retain the real execution and native presentation owners.
 pub(super) fn start(native: &mut Native, wake: Arc<dyn CompletionWake>) -> Result<()> {
     let backend = &mut native.controller;
+    backend.clock = crate::paused_clock::PausedClock::new();
     let owner = ExecutionOwner::new(backend.clock.clone(), wake)?;
     let client = owner.client();
     backend.scope =

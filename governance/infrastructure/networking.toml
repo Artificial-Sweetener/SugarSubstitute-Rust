@@ -181,7 +181,7 @@ rationale = "Exact pristine upstream HTTP sources are consumed through registere
 [[records]]
 path = "crates/sugarsubstitute/src/setup/worker/downloads/native_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:c6623a1b3c2de070331ba8e9c1678fea710a312453b40a0d52fa8b89e273a046"
+source_sha256 = "sha256:11826d404736ef1d6bc19464e422b5b99ea2ea2039e1819638e11e44d2a0ec1a"
 boundary = "fixture"
 rationale = "An isolated external worker actor connects to the authenticated literal-loopback transport while production storage batches retain their original job and prepared grant custody."
 

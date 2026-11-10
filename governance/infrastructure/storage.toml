@@ -2985,7 +2985,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute/src/setup/worker/downloads/native_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:c6623a1b3c2de070331ba8e9c1678fea710a312453b40a0d52fa8b89e273a046"
+source_sha256 = "sha256:11826d404736ef1d6bc19464e422b5b99ea2ea2039e1819638e11e44d2a0ec1a"
 capabilities = ["assert! restricted capability fragments", "std::fs::read", "std::fs::rename", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify actual authenticated TCP, command matching, prepared grants and Windows file custody. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -3001,7 +3001,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Obt
 [[records]]
 path = "crates/sugarsubstitute/src/setup/worker/records/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b577bac098ad6d732e820690f017aabc16dbf070fee0fa217019f7e7ee8dfc14"
+source_sha256 = "sha256:4b4d6f2b5ee2099a265faca301834e1f03c7cc200bbb4cbf6933d19e564ae2bd"
 capabilities = ["assert! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise the composed record session with actual native files and the production execution owner. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

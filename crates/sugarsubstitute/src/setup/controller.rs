@@ -21,8 +21,8 @@ pub(super) use native::qualification as window_qualification;
 use serde_json::{Value, json};
 use std::{collections::VecDeque, error::Error, io, path::PathBuf, sync::Arc};
 use sugarsubstitute_contracts::execution::{
-    ExecutionPort, JobClass, JobContext, JobOutcome, JobSpec, Operation, OwnedJob, Scope, ScopeId,
-    ScopeSpec,
+    Clock, ExecutionPort, JobClass, JobContext, JobOutcome, JobSpec, Operation, OwnedJob, Scope,
+    ScopeId, ScopeSpec,
 };
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 use sugarsubstitute_supervision::{
@@ -55,7 +55,7 @@ pub(super) struct Controller {
     distribution: &'static [u8],
     bundle_root: PathBuf,
     workspace: PathBuf,
-    clock: Arc<MonotonicClock>,
+    clock: Arc<dyn Clock>,
     owner: Option<ExecutionOwner>,
     client: Option<ExecutionClient>,
     scope: Option<Scope>,

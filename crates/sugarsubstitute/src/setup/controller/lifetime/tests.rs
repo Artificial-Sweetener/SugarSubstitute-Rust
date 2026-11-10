@@ -2,31 +2,16 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe real cleanup jobs through repeated close and failed recovery completion.
 use super::*;
-use std::{
-    sync::{Condvar, Mutex},
-    time::Instant,
+use crate::{
+    completion_wake::{Gate, Wake},
+    paused_clock::PausedClock,
 };
-use sugarsubstitute_contracts::execution::ExecutionError;
-
-#[derive(Default)]
-struct Wake(Mutex<u64>, Condvar);
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut value = self.0.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(io::Error::other("Cleanup observer poisoned")),
-            )
-        })?;
-        *value += 1;
-        self.1.notify_all();
-        Ok(())
-    }
-}
+use std::sync::Mutex;
 
 fn fixture() -> Result<(Controller, Arc<Wake>)> {
     let wake = Arc::new(Wake::default());
     let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
+    controller.clock = PausedClock::new();
     let owner = ExecutionOwner::new(controller.clock.clone(), wake.clone())?;
     let client = owner.client();
     controller.scope =
@@ -42,32 +27,16 @@ fn fixture() -> Result<(Controller, Arc<Wake>)> {
     Ok((controller, wake))
 }
 
+/// Re-examine `step` after each execution wake; slow real work only makes the observation longer.
 fn observe(wake: &Wake, mut step: impl FnMut() -> Result<bool>) -> Result<()> {
-    let until = Instant::now() + Duration::from_secs(10);
-    loop {
-        let revision = *wake.0.lock().map_err(|_| "Cleanup observer poisoned")?;
-        if step()? {
-            return Ok(());
-        }
-        let remaining =
-            until.checked_duration_since(Instant::now()).ok_or("Cleanup observer expired")?;
-        let (guard, timed) = wake
-            .1
-            .wait_timeout_while(
-                wake.0.lock().map_err(|_| "Cleanup observer poisoned")?,
-                remaining,
-                |current| *current == revision,
-            )
-            .map_err(|_| "Cleanup observer poisoned")?;
-        drop(guard);
-        if timed.timed_out() {
-            // Worker return can follow its last completion wake. Inspect actual settlement
-            // before treating an expired observation as an unfinished operation.
-            if step()? {
-                return Ok(());
-            }
-            return Err("Cleanup observer expired".into());
-        }
+    wake.until(|| step().map(|done| done.then_some(())).transpose())
+}
+
+/// Release the held worker when the test unwinds, so a failed assertion cannot strand its join.
+struct Release(Arc<Gate>);
+impl Drop for Release {
+    fn drop(&mut self) {
+        self.0.release();
     }
 }
 
@@ -268,13 +237,6 @@ fn closing_does_not_swallow_cleanup_failure_or_drop_retained_launch_ownership() 
     Ok(())
 }
 
-#[derive(Default)]
-struct Boundary {
-    entered: bool,
-    release: bool,
-    cancelled: Option<bool>,
-}
-
 #[test]
 fn closing_cancels_preparation_but_observes_transfer_and_creation_without_discarding_results()
 -> Result<()> {
@@ -286,34 +248,25 @@ fn closing_cancels_preparation_but_observes_transfer_and_creation_without_discar
         (StorageWork::Launch, false),
     ] {
         let (mut controller, wake) = fixture()?;
-        let boundary = Arc::new((Mutex::new(Boundary::default()), Condvar::new()));
-        let worker_boundary = boundary.clone();
-        let worker_wake = wake.clone();
+        let gate = Arc::new(Gate::default());
+        let _release = Release(gate.clone());
+        let cancelled = Arc::new(Mutex::new(None));
+        let (worker_gate, worker_cancelled) = (gate.clone(), cancelled.clone());
         controller.submit(work, move |context| {
-            let mut state =
-                worker_boundary.0.lock().map_err(|_| io::Error::other("Boundary poisoned"))?;
-            state.entered = true;
-            worker_wake.wake().map_err(io::Error::other)?;
-            let (mut state, timeout) = worker_boundary
-                .1
-                .wait_timeout_while(state, Duration::from_secs(10), |state| !state.release)
-                .map_err(|_| io::Error::other("Boundary poisoned"))?;
-            if timeout.timed_out() {
-                return Err(io::Error::other("Boundary observer expired"));
-            }
-            state.cancelled = Some(context.cancellation_requested());
+            worker_gate.hold();
+            *worker_cancelled.lock().map_err(|_| io::Error::other("Boundary poisoned"))? =
+                Some(context.cancellation_requested());
             Ok(StorageResult::Launched)
         })?;
-        observe(&wake, || Ok(boundary.0.lock().map_err(|_| "Boundary poisoned")?.entered))?;
+        gate.wait_entered();
         controller.close()?;
         assert!(!controller.settled()?);
-        boundary.0.lock().map_err(|_| "Boundary poisoned")?.release = true;
-        boundary.1.notify_all();
+        gate.release();
         observe(&wake, || {
             controller.advance_events()?;
             controller.settled()
         })?;
-        assert_eq!(boundary.0.lock().map_err(|_| "Boundary poisoned")?.cancelled, Some(cancel));
+        assert_eq!(*cancelled.lock().map_err(|_| "Boundary poisoned")?, Some(cancel));
         controller.finish()?;
     }
     Ok(())
@@ -324,28 +277,17 @@ fn close_during_open_retains_returned_creator_until_observed_retirement() -> Res
     let (mut controller, wake) = fixture()?;
     let launch = controller.relaunch.take().ok_or("Creator absent")?;
     controller.install_id = Some("open".into());
-    let boundary = Arc::new((Mutex::new(Boundary::default()), Condvar::new()));
-    let worker_boundary = boundary.clone();
-    let worker_wake = wake.clone();
+    let gate = Arc::new(Gate::default());
+    let _release = Release(gate.clone());
+    let worker_gate = gate.clone();
     controller.submit(StorageWork::Open, move |_| {
-        let mut state =
-            worker_boundary.0.lock().map_err(|_| io::Error::other("Boundary poisoned"))?;
-        state.entered = true;
-        worker_wake.wake().map_err(io::Error::other)?;
-        let (_state, timeout) = worker_boundary
-            .1
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.release)
-            .map_err(|_| io::Error::other("Boundary poisoned"))?;
-        if timeout.timed_out() {
-            return Err(io::Error::other("Boundary observer expired"));
-        }
+        worker_gate.hold();
         Ok(StorageResult::Opened(super::super::completion::OpenedLaunch::Installed(launch)))
     })?;
-    observe(&wake, || Ok(boundary.0.lock().map_err(|_| "Boundary poisoned")?.entered))?;
+    gate.wait_entered();
     controller.close()?;
     assert!(controller.relaunch.is_none());
-    boundary.0.lock().map_err(|_| "Boundary poisoned")?.release = true;
-    boundary.1.notify_all();
+    gate.release();
     observe(&wake, || {
         controller.poll_storage()?;
         Ok(controller.storage.is_none())

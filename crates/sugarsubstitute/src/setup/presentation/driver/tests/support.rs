@@ -2,55 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe real execution completion using notifications and a deterministic application clock.
 use super::*;
-use std::{
-    sync::{Arc, Condvar, Mutex},
-    time::Instant,
-};
-use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, Moment, ScopeId, ScopeSpec, WaitFuture,
-};
+use crate::completion_wake::Wake;
+use std::sync::Arc;
+use sugarsubstitute_contracts::execution::{Clock, Moment, ScopeId, ScopeSpec, WaitFuture};
 use sugarsubstitute_execution::ExecutionOwner;
 
-#[derive(Default)]
-pub(super) struct Wake(Mutex<u64>, Condvar);
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut value = self.0.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(io::Error::other("Render observer poisoned")),
-            )
-        })?;
-        *value += 1;
-        self.1.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    /// Synchronization time bounds failures; it never advances installer/application time.
-    pub(super) fn observe<T>(&self, mut poll: impl FnMut() -> Result<Option<T>>) -> Result<T> {
-        let until = Instant::now() + Duration::from_secs(15);
-        loop {
-            let revision = *self.0.lock().map_err(|_| "Render observer poisoned")?;
-            if let Some(result) = poll()? {
-                return Ok(result);
-            }
-            let remaining =
-                until.checked_duration_since(Instant::now()).ok_or("Render observer expired")?;
-            let (guard, timed) = self
-                .1
-                .wait_timeout_while(
-                    self.0.lock().map_err(|_| "Render observer poisoned")?,
-                    remaining,
-                    |current| *current == revision,
-                )
-                .map_err(|_| "Render observer poisoned")?;
-            drop(guard);
-            if timed.timed_out() {
-                return poll()?.ok_or_else(|| "Render observer expired".into());
-            }
-        }
-    }
+/// Re-examine `poll` after each execution wake until it yields a value, however slowly it renders.
+pub(super) fn observe<T>(wake: &Wake, mut poll: impl FnMut() -> Result<Option<T>>) -> Result<T> {
+    wake.until(|| poll().transpose())
 }
 struct Frozen;
 impl Clock for Frozen {
@@ -106,10 +65,11 @@ impl Fixture {
         self.driver.advance(&self.flow, self.view, &batch)
     }
     pub(super) fn frame(&mut self) -> Result<Prepared> {
-        self.wake.clone().observe(|| self.poll())
+        let wake = self.wake.clone();
+        observe(&wake, || self.poll())
     }
     pub(super) fn terminal(&self) -> Result {
-        self.wake.observe(|| {
+        observe(&self.wake, || {
             let active = self.driver.active.as_ref().ok_or("Active render absent")?;
             Ok(matches!(
                 active.job.status().phase,
@@ -120,13 +80,14 @@ impl Fixture {
     }
     pub(super) fn finish(&mut self) -> Result {
         self.driver.close()?;
-        self.wake.clone().observe(|| {
+        let wake = self.wake.clone();
+        observe(&wake, || {
             assert!(self.poll()?.is_none());
             Ok(self.driver.settled().then_some(()))
         })?;
         self.driver.finish()?;
         self.owner.request_shutdown(Moment::from_nanos(5_000_000_000));
-        self.wake.clone().observe(|| {
+        observe(&wake, || {
             assert!(self.poll()?.is_none());
             Ok(self.owner.poll_shutdown()?.settled.then_some(()))
         })?;

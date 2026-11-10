@@ -3,7 +3,7 @@
 //! Qualify real render admission, stale-result rejection, cache retention and shutdown.
 use super::*;
 mod support;
-use support::Fixture;
+use support::{Fixture, observe};
 
 #[test]
 fn edited_page_rejects_completed_old_pixels_and_coalesces_pending_input() -> Result {
@@ -73,7 +73,7 @@ fn saturated_admission_preserves_fonts_and_retries_only_latest_page() -> Result 
     assert!(f.poll()?.is_none());
     let latest = f.driver.pending.as_ref().ok_or("Pending absent")?.identity;
     assert!(f.driver.inputs.as_ref().ok_or("Inputs absent")?.same_reservation(&inputs));
-    drop(f.wake.observe(|| Ok(held.try_take_completion()))?);
+    drop(observe(&f.wake, || Ok(held.try_take_completion()))?);
     let frame = f.frame()?;
     assert_eq!(frame.frame.identity(), latest);
     drop((frame, original, inputs, held, scope));
@@ -89,7 +89,8 @@ fn invalid_scene_returns_fonts_and_next_valid_view_renders() -> Result {
     let inputs = f.driver.inputs.as_ref().ok_or("Inputs absent")?.clone();
     f.view.scroll = f32::NAN;
     f.driver.invalidate()?;
-    let cause = f.wake.clone().observe(|| match f.poll() {
+    let wake = f.wake.clone();
+    let cause = observe(&wake, || match f.poll() {
         Err(error) => Ok(Some(error)),
         Ok(None) => Ok(None),
         Ok(Some(_)) => Err("Invalid view was published".into()),

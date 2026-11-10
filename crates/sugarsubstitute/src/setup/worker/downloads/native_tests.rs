@@ -39,14 +39,12 @@ impl Peer<'_> {
             "{}",
             serde_json::json!({"version":1,"event":"downloads","id":"native","sequence":serial,"data":{"version":1,"serial":serial,"operation":operation}})
         )?;
-        let until = std::time::Instant::now() + Duration::from_secs(10);
+        // The request is already in the loopback socket; each finite batch yields to the executor
+        // between short receive polls until the service has admitted this command.
         loop {
             assert_eq!(self.batch()?, Batch::Continue);
             if self.native.lock().map_err(|_| "Native custody poisoned")?.serial == serial {
                 break;
-            }
-            if std::time::Instant::now() >= until {
-                return Err("Native request did not reach its original command".into());
             }
         }
         let mut reply = String::new();
@@ -101,8 +99,6 @@ fn authenticated_native_service_uses_only_the_prepared_grant_and_flushes_before_
     let stop = Arc::new(AtomicBool::new(false));
     let pressure = Arc::new(AtomicBool::new(false));
     let mut peer = TcpStream::connect(("127.0.0.1", port_number))?;
-    peer.set_read_timeout(Some(Duration::from_secs(10)))?;
-    peer.set_write_timeout(Some(Duration::from_secs(10)))?;
     peer.set_nodelay(true)?;
     writeln!(
         peer,
@@ -165,7 +161,7 @@ fn authenticated_native_service_uses_only_the_prepared_grant_and_flushes_before_
     assert!(actor.native.lock().map_err(|_| "Native custody poisoned")?.active.is_empty());
     actor.peer.shutdown(Shutdown::Both)?;
     drop(actor);
-    assert!(matches!(rig.completion(&mut socket_job, "socket")?.outcome, JobOutcome::Success(())));
+    assert!(matches!(rig.completion(&mut socket_job)?.outcome, JobOutcome::Success(())));
     drop(transport);
     let expected = Sha256::digest(&bytes);
     drop(bytes);

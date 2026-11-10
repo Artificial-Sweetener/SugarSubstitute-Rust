@@ -3,9 +3,7 @@
 //! Observe actual family and execution settlement before releasing installer custody.
 use super::*;
 use std::{num::NonZeroUsize, time::Duration};
-use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionPort, ScopeId, ScopeSpec,
-};
+use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionPort, ScopeId, ScopeSpec};
 
 impl Controller {
     /// Admit the current native transcript placement without waiting for preparation.

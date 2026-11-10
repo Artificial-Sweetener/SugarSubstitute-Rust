@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe admitted lookup completion, output overload and repeated close without losing custody.
 use super::*;
-use std::{num::NonZeroUsize, sync::Condvar, time::Instant};
-use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionError};
-use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
+use crate::{completion_wake::Wake, paused_clock::PausedClock};
+use std::num::NonZeroUsize;
+use sugarsubstitute_execution::ExecutionOwner;
 
 #[test]
 fn native_routes_publish_the_version_one_worker_contract_in_order() {
@@ -14,42 +14,15 @@ fn native_routes_publish_the_version_one_worker_contract_in_order() {
     );
 }
 
-#[derive(Default)]
-struct Wake(Mutex<u64>, Condvar);
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.1.notify_all();
-        Ok(())
-    }
-}
+/// Re-examine `step` after each execution wake; slow lookups only make the observation longer.
 fn observe(wake: &Wake, mut step: impl FnMut() -> Result<bool>) -> Result<()> {
-    let until = Instant::now() + Duration::from_secs(15);
-    loop {
-        let revision = *wake.0.lock().map_err(|_| "Proxy fixture poisoned")?;
-        if step()? {
-            return Ok(());
-        }
-        let remaining =
-            until.checked_duration_since(Instant::now()).ok_or("Proxy fixture expired")?;
-        let (_guard, timeout) = wake
-            .1
-            .wait_timeout_while(
-                wake.0.lock().map_err(|_| "Proxy fixture poisoned")?,
-                remaining,
-                |value| *value == revision,
-            )
-            .map_err(|_| "Proxy fixture poisoned")?;
-        if timeout.timed_out() {
-            return Err("Proxy fixture expired".into());
-        }
-    }
+    wake.until(|| step().map(|done| done.then_some(())).transpose())
 }
 
 #[test]
 fn overloaded_reply_retains_completion_until_close_retires_it() -> Result<()> {
     let wake = Arc::new(Wake::default());
-    let owner = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
+    let owner = ExecutionOwner::new(PausedClock::new(), wake.clone())?;
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let jobs = JobSequence::new();
@@ -82,7 +55,7 @@ fn overloaded_reply_retains_completion_until_close_retires_it() -> Result<()> {
 fn cancellation_retires_all_admitted_lookups_and_identity_validation_precedes_admission()
 -> Result<()> {
     let wake = Arc::new(Wake::default());
-    let owner = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
+    let owner = ExecutionOwner::new(PausedClock::new(), wake.clone())?;
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let jobs = JobSequence::new();
