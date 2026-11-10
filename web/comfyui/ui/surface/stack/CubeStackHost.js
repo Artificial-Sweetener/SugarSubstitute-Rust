@@ -49,6 +49,7 @@ export class CubeStackHost {
     #disposed = false;
     #frameListeners = new Set();
     #frameSignature = '';
+    #reservedWidth = 0;
     /** Compose typed intent handlers while preference and graph services keep their own authority. */
     constructor(options) {
         this.#options = options;
@@ -188,7 +189,7 @@ export class CubeStackHost {
         }
         if (!this.#stackVisible()) {
             this.#view?.previewCubeOrder(null);
-            this.#view?.setStackWidth(0);
+            this.#reserveWidth(0);
             if (!this.#motion?.canAnimate)
                 this.#unmount();
             else {
@@ -226,7 +227,7 @@ export class CubeStackHost {
             this.#motion = new CubeStackDrawerMotion(this.#element);
             this.#mounted.setInteractive(false);
         }
-        view.setStackWidth(cubeStackReservedWidth(state.compact, state.packed, this.#options.frame?.enabled === true));
+        this.#reserveWidth(cubeStackReservedWidth(state.compact, state.packed, this.#options.frame?.enabled === true));
         this.#material?.set(state.compact, cubeStackReservedWidth(state.compact, state.packed, true), animate);
         if (this.#surfaceVisible)
             void this.#present(true, animate).catch(this.#options.reportError);
@@ -318,6 +319,12 @@ export class CubeStackHost {
             mounted.setInteractive(true);
         return completed;
     }
+    /** In Substitute, cards travel on the stack's density frame; showing and hiding follow the drawer. */
+    #reserveWidth(width) {
+        const densityTravel = this.#options.frame?.enabled === true && this.#reservedWidth > 0 && width > 0;
+        this.#reservedWidth = width;
+        this.#view?.setStackWidth(width, densityTravel ? 'transform' : 'surface');
+    }
     /** Remove owned presentation while retaining preferences for the next eligible masonry surface. */
     #unmount() {
         this.#material?.dispose();
@@ -327,7 +334,7 @@ export class CubeStackHost {
         this.#motion?.dispose();
         this.#motion = null;
         this.#view?.previewCubeOrder(null);
-        this.#view?.setStackWidth(0);
+        this.#reserveWidth(0);
         this.#mounted?.dispose();
         this.#mounted = null;
         this.#element?.remove();

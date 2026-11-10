@@ -166,7 +166,9 @@ test('releases loading suppression only when the committed destination is graph'
 });
 
 test('applies stack reservation before the first measured masonry layout', async () => {
-  const setup = fixture(undefined, { onSurfaceReady: (view) => view.setStackWidth(224) });
+  const setup = fixture(undefined, {
+    onSurfaceReady: (view) => view.setStackWidth(224, 'surface'),
+  });
   const layout = jest.spyOn(WorkflowMasonryView.prototype, 'layout');
   await setup.controller.restore(true);
   expect(layout).toHaveBeenCalledTimes(1);
@@ -185,7 +187,7 @@ test('reserves the stack before mounting controls at their final column width', 
           800 -
           Number.parseFloat(view.element.style.getPropertyValue('--sc-masonry-stack-width') || '0'),
       });
-      view.setStackWidth(224);
+      view.setStackWidth(224, 'surface');
     },
   });
   const mount = setup.mount.getMockImplementation();
@@ -683,7 +685,7 @@ describe('workflow masonry controller', () => {
   test('keeps graph visible during assembly and safely reverses a pending exit', async () => {
     const leaving = jest.fn();
     const setup = fixture(undefined, {
-      onSurfaceReady: (view) => view.setStackWidth(248),
+      onSurfaceReady: (view) => view.setStackWidth(248, 'surface'),
       onSurfaceLeaving: leaving,
     });
     const effects: Array<{ finish(): void; cancel: ReturnType<typeof jest.fn> }> = [];
@@ -1045,11 +1047,11 @@ test.each([82, 248])(
   'retains %ipx rail reservation through exit travel and releases it once at teardown',
   async (width) => {
     let view: WorkflowMasonryView | null = null;
-    const leaving = jest.fn(() => view?.setStackWidth(0));
+    const leaving = jest.fn(() => view?.setStackWidth(0, 'surface'));
     const setup = fixture(undefined, {
       onSurfaceReady: (surface) => {
         view = surface;
-        surface.setStackWidth(width);
+        surface.setStackWidth(width, 'surface');
       },
       onSurfaceLeaving: leaving,
     });

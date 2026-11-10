@@ -190,19 +190,19 @@ test('commits inset layout once and animates from the current painted position a
   const layout = jest.fn(() => {
     painted = null;
   });
-  motion.set(element, content, 82, layout);
+  motion.set(element, content, 82, 'surface', layout);
   expect(effects).toHaveLength(0);
   expect(content.getBoundingClientRect).not.toHaveBeenCalled();
-  motion.set(element, content, 248, layout);
+  motion.set(element, content, 248, 'surface', layout);
   expect(effects[0]?.frames).toEqual([
     { transform: 'translateX(-166px)' },
     { transform: 'translateX(0px)' },
   ]);
   expect(effects[0]?.options.duration).toBeGreaterThan(0);
-  motion.set(element, content, 248, layout);
+  motion.set(element, content, 248, 'surface', layout);
   expect(layout).toHaveBeenCalledTimes(2);
   painted = 160;
-  motion.set(element, content, 82, layout);
+  motion.set(element, content, 82, 'surface', layout);
   expect(effects[0]?.cancel).toHaveBeenCalledTimes(1);
   expect(effects[1]?.frames[0]).toEqual({ transform: 'translateX(78px)' });
   motion.dispose();
@@ -232,8 +232,8 @@ test('honors reduced motion while preserving the final reserved width', () => {
       toJSON: () => ({}),
     }));
     const motion = new MasonryStackInsetMotion();
-    motion.set(element, content, 82, () => undefined);
-    motion.set(element, content, 248, () => undefined);
+    motion.set(element, content, 82, 'surface', () => undefined);
+    motion.set(element, content, 248, 'surface', () => undefined);
     expect(animate).not.toHaveBeenCalled();
     expect(element.style.getPropertyValue('--sc-masonry-stack-width')).toBe('248px');
     motion.dispose();
@@ -270,18 +270,61 @@ test('waits for the latest inset destination across interrupted motion before gr
     },
   });
   const motion = new MasonryStackInsetMotion();
-  motion.set(element, content, 82, () => undefined);
-  motion.set(element, content, 248, () => undefined);
+  motion.set(element, content, 82, 'surface', () => undefined);
+  motion.set(element, content, 248, 'surface', () => undefined);
   let settled = false;
   const pending = motion.settled().then(() => {
     settled = true;
   });
-  motion.set(element, content, 82, () => undefined);
+  motion.set(element, content, 82, 'surface', () => undefined);
   for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
   expect(settled).toBe(false);
   finishes[1]?.();
   await pending;
   expect(settled).toBe(true);
   await motion.settled();
+  motion.dispose();
+});
+
+test('moves cards on the stack density frame: 220 ms Qt InOutCubic from the painted position', () => {
+  const element = document.createElement('section');
+  const content = document.createElement('div');
+  element.append(content);
+  jest.spyOn(content, 'getBoundingClientRect').mockImplementation(() => ({
+    left: Number.parseFloat(element.style.getPropertyValue('--sc-masonry-stack-width') || '0'),
+    top: 0,
+    right: 0,
+    bottom: 0,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    toJSON: () => ({}),
+  }));
+  const effects: { frames: Keyframe[]; options: KeyframeAnimationOptions }[] = [];
+  Object.defineProperty(content, 'animate', {
+    value: (frames: Keyframe[], options: KeyframeAnimationOptions) => {
+      effects.push({ frames, options });
+      return { cancel: jest.fn(), finished: new Promise<Animation>(() => undefined) };
+    },
+  });
+  const motion = new MasonryStackInsetMotion();
+  motion.set(element, content, 58, 'transform', () => undefined);
+  motion.set(element, content, 224, 'transform', () => undefined);
+  // Each half has linear x and cubic y: exactly Qt's InOutCubic, as Substitute's editor followed the stack.
+  expect(effects[0]?.frames).toEqual([
+    {
+      transform: 'translateX(-166px)',
+      offset: 0,
+      easing: 'cubic-bezier(0.3333333333333333,0,0.6666666666666666,0)',
+    },
+    {
+      transform: 'translateX(-83px)',
+      offset: 0.5,
+      easing: 'cubic-bezier(0.3333333333333333,1,0.6666666666666666,1)',
+    },
+    { transform: 'translateX(0px)', offset: 1 },
+  ]);
+  expect(effects[0]?.options).toEqual({ duration: 220 });
   motion.dispose();
 });

@@ -36,6 +36,7 @@ import { SubstituteFrameMode } from '../../../frontend/comfyui/ui/surface/frame/
 import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
 import { pluginFrameCss } from '../../../frontend/comfyui/ui/surface/frame/PluginFrameStyles.js';
 import { COMPACT_MASONRY_CHANGE } from '../../../frontend/comfyui/ui/surface/masonry/CompactMasonryPreference.js';
+import type { InsetMotion } from '../../../frontend/comfyui/ui/surface/appearance/TransformMotion.js';
 
 test('Plugin Mode compacts the existing rail and removes extra space before the cards', async () => {
   const frame = new SubstituteFrameMode();
@@ -54,15 +55,15 @@ test('Plugin Mode compacts the existing rail and removes extra space before the 
   await nextTick();
   expect(document.querySelector('.sc-cube-stack-host')).toBe(rail);
   expect(rail?.querySelector('[data-compact]')).not.toBeNull();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46, 'transform');
   expect(
     getComputedStyle(fixture.surface.element).getPropertyValue('--sc-masonry-inline-padding'),
   ).toBe('0px');
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(false);
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46, 'transform');
   publishPluginMode(document, false);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224, 'transform');
   expect(document.querySelector('.sc-cube-stack-host')).toBe(rail);
 });
 
@@ -76,15 +77,16 @@ test('frame mode changes allocation without replacing the existing rail or accen
   const indicator = rail?.querySelector('.sc-cube-stack__selection');
   frame.setEnabled(true);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224);
+  // Substitute moves the cards on the stack's density frame; the browser keeps the surface curve.
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224, 'transform');
   expect(document.querySelector('.sc-cube-stack-host')).toBe(rail);
   expect(rail?.querySelector('.sc-cube-stack__selection')).toBe(indicator);
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(58);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(58, 'transform');
   frame.setEnabled(false);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82, 'surface');
 });
 
 test('compact Cube stack keeps masonry spacing while Compact masonry packs the rail flush', async () => {
@@ -96,7 +98,7 @@ test('compact Cube stack keeps masonry spacing while Compact masonry packs the r
   await nextTick();
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82, 'surface');
   const gap = (): string =>
     getComputedStyle(fixture.surface.element).getPropertyValue('--sugarcubes-masonry-gap');
   expect(gap()).not.toBe('0');
@@ -104,12 +106,12 @@ test('compact Cube stack keeps masonry spacing while Compact masonry packs the r
   document.dispatchEvent(new Event(COMPACT_MASONRY_CHANGE));
   await nextTick();
   try {
-    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46, 'surface');
     expect(gap()).toBe('0');
     expect(document.querySelector('.sc-cube-stack')?.hasAttribute('data-compact')).toBe(true);
     fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(false);
     await nextTick();
-    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224);
+    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224, 'surface');
   } finally {
     document.documentElement.removeAttribute('data-sc-compact-masonry');
   }
@@ -342,17 +344,17 @@ test('retains one mounted rail, follows official appearance and recovers a hidde
   expect(document.querySelector('.sc-cube-stack-row__activate')).toBe(button);
   expect(rail?.getAttribute('data-appearance')).toBe('fluent');
   expect(rail?.parentElement?.dataset.colorScheme).toBe('light');
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(248);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(248, 'surface');
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82, 'surface');
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(false);
   expect(document.querySelector('.sc-cube-stack')).toBeNull();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0, 'surface');
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(true);
   await nextTick();
   expect(document.querySelector('.sc-cube-stack')).not.toBeNull();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82, 'surface');
 });
 
 test('routes navigation through search and waits for accepted masonry state after keyboard reorder', async () => {
@@ -392,12 +394,12 @@ test('retains the same Vue controls until drawer exit finishes and survives a qu
     const row = document.querySelector('.sc-cube-stack-row__activate');
     fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(false);
     expect(document.querySelector('.sc-cube-stack-row__activate')).toBe(row);
-    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0);
+    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0, 'surface');
     fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(true);
     for (const finish of completions) finish();
     for (let tick = 0; tick < 8; tick += 1) await nextTick();
     expect(document.querySelector('.sc-cube-stack-row__activate')).toBe(row);
-    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(248);
+    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(248, 'surface');
   } finally {
     Reflect.deleteProperty(HTMLElement.prototype, 'animate');
   }
@@ -503,7 +505,7 @@ function setup(analysisAvailable = true, available = true, frame?: SubstituteFra
     }),
     previewCubeOrder: jest.fn<(order: readonly string[] | null) => void>(),
     setCubeOrder: jest.fn<(order: readonly string[]) => void>(),
-    setStackWidth: jest.fn<(width: number) => void>(),
+    setStackWidth: jest.fn<(width: number, motion: InsetMotion) => void>(),
     scrollToSection: jest.fn<(id: string) => void>(),
   } satisfies CubeStackSurface;
   const listeners = new Set<() => void>();
@@ -636,7 +638,7 @@ test('empty masonry reserves no rail and introduces the first cube through exist
   fixture.host.ready(fixture.surface);
   await nextTick();
   expect(document.querySelector('.sc-cube-stack-host')).toBeNull();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0, 'surface');
   expect(fixture.host.frameControls.available).toBe(true);
   expect(fixture.host.frameControls.action).toBe('add');
   await fixture.host.frameControls.activate();
@@ -653,7 +655,7 @@ test('empty masonry reserves no rail and introduces the first cube through exist
   fixture.host.valuesChanged();
   await nextTick();
   expect(document.querySelector('.sc-cube-stack-host')).toBeNull();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0, 'surface');
   expect(fixture.host.frameControls.action).toBe('add');
   await fixture.host.transition(false);
   await fixture.host.frameControls.activate();
