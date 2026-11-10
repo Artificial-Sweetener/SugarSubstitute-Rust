@@ -91,8 +91,9 @@ export class EmbeddedCanvasConnection implements CanvasLayerHost, NativeSurfaceD
         return () => window.clearTimeout(timer);
       },
       report,
-      // The native host owns this page, so its loss ends the page; a slow host is never a dead one.
-      awaitsPresentation: true,
+      // The native host owns this page and answers every request, so its loss ends the page; a
+      // slow host is never a dead one.
+      settlesRequests: true,
     });
     this.#client = client;
     this.#window = window;
