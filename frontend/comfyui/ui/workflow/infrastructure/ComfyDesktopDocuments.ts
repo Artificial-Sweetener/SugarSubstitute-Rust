@@ -166,7 +166,13 @@ export class ComfyDesktopDocuments {
     return Object.freeze({ ...document, view: Object.freeze(document.view) });
   }
 
-  /** Build owned in-memory workflows in order; checkpoint bytes remain the recovery authority on refusal. */
+  /**
+   * Build owned in-memory workflows in order; checkpoint bytes remain the recovery authority on refusal.
+   *
+   * Only the active workflow's graph is loaded onto the canvas. Every other workflow is opened with
+   * the change tracker Comfy builds from its own load, so restoring many tabs neither re-instantiates
+   * each graph nor makes the native canvas host synchronize each one in turn.
+   */
   async materialize(
     entries: readonly SessionEntry[],
     activeEntry: string | null,
@@ -195,15 +201,16 @@ export class ComfyDesktopDocuments {
       const graph = parseGraph(document.graphJson);
       const workflow = invoke(this.#workflow, 'createNewTemporary', document.name, graph);
       if (!isRecord(workflow)) throw new TypeError('Comfy did not create a workflow occurrence.');
-      await this.#load(graph, workflow, current);
+      await invoke(workflow, 'load');
+      assertCurrent(current);
       const tracker = workflow.changeTracker;
       if (!isRecord(tracker)) throw new TypeError('Comfy did not commit the restored graph.');
       if (!document.temporary && document.path) {
         await invoke(this.#workflow, 'closeWorkflow', workflow);
         invoke(workflow, 'updatePath', document.path);
         workflow.size = utf8Bytes(document.baselineGraphJson ?? document.graphJson);
-        invoke(this.#workflow, 'attachWorkflow', workflow, restored.size);
       }
+      invoke(this.#workflow, 'attachWorkflow', workflow, restored.size);
       tracker.initialState = parseGraph(document.baselineGraphJson ?? document.graphJson);
       tracker.activeState = parseGraph(document.graphJson);
       tracker.ds = { scale: document.view.scale, offset: [document.view.x, document.view.y] };
@@ -215,12 +222,13 @@ export class ComfyDesktopDocuments {
       restored.set(entry.id, workflow);
     }
     assertCurrent(current);
-    const active = activeEntry ? restored.get(activeEntry) : null;
+    const activeId = activeEntry && restored.has(activeEntry) ? activeEntry : entries.at(-1)?.id;
+    const active = activeId ? restored.get(activeId) : null;
     if (active) {
       const tracker = active.changeTracker;
       if (!isRecord(tracker)) throw new TypeError('Comfy restored active workflow is unavailable.');
       await this.#load(tracker.activeState, active, current);
-      const entry = entries.find((candidate) => candidate.id === activeEntry);
+      const entry = entries.find((candidate) => candidate.id === activeId);
       if (entry) {
         tracker.initialState = parseGraph(
           entry.document.baselineGraphJson ?? entry.document.graphJson,
