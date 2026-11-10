@@ -863,7 +863,7 @@ rationale = "Construct isolated malformed UI policy documents to verify unknown-
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_test_desktop.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:7f8ffcbd82e682233c69970b10566a638535387c1c4262487c14e096713a48fe"
+source_sha256 = "sha256:b186f6268b007a7c928cb431564be681aadf246c2950be073e758deaa23f2fa5"
 capabilities = ["environment"]
 rationale = "Read only the exact per-test private-desktop and target environment selectors; the parent retains the actual child process and desktop through checked process termination without reading or writing product settings."
 

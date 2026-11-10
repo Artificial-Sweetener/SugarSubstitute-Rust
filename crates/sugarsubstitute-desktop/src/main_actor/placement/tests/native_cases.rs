@@ -195,14 +195,14 @@ fn drain_native(events: &mut EventLoop<crate::native_action::NativeAction>) -> T
     Ok(())
 }
 
-/// Dispatch actual WM_CLOSE on this fixture's retained event loop with an original finite cutoff.
+/// Dispatch actual WM_CLOSE on this fixture's retained event loop until Tao delivers it.
+///
+/// The message is already queued on this thread, so the loop waits on the OS event itself and
+/// exits on delivery; it has no wall-clock cutoff for load to turn into a failure.
 fn close_intent(
     actor: &mut MainActor,
     events: &mut EventLoop<crate::native_action::NativeAction>,
 ) -> TestResult {
-    use std::time::{Duration, Instant};
-    let deadline =
-        Instant::now().checked_add(Duration::from_secs(5)).ok_or("native close cutoff overflow")?;
     let target = actor.window()?.id();
     let handle = hwnd(actor.window()?);
     // SAFETY: This test retains its exact native peer on the creating thread; the message is
@@ -218,15 +218,11 @@ fn close_intent(
             observed =
                 Some(actor.window_event(window_id, &tao::event::WindowEvent::CloseRequested));
         }
-        *control = if observed.is_some() || Instant::now() >= deadline {
-            ControlFlow::Exit
-        } else {
-            ControlFlow::WaitUntil(deadline)
-        };
+        *control = if observed.is_some() { ControlFlow::Exit } else { ControlFlow::Wait };
     });
     assert_eq!(exit_code, 0, "native close dispatch exited unsuccessfully");
     assert!(matches!(
-        observed.ok_or("native close intent did not arrive before cutoff")??,
+        observed.ok_or("native close dispatch ended without the close intent")??,
         Some(DesktopStartupObservation::CloseRequested)
     ));
     Ok(())

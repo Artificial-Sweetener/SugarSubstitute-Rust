@@ -738,7 +738,7 @@ rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId a
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/placement/tests/native_cases.rs"
-source_sha256 = "sha256:944ae66cbd88e805555a0a7bc49e53e98c6b86a92b3b2a159020ff2b12abfc56"
+source_sha256 = "sha256:b9fc1826a989b0a326cee50deb2cc215b1f53d1b1883a7c97f43d97de846e7f5"
 kind = "fixture"
 rationale = "Native placement fixture uses fixed caption labels only to construct its owned hidden test peer."
 

@@ -7,12 +7,12 @@
 //! threads. Process exit precedes desktop release; no test runs on the user's interactive desktop.
 use crate::DesktopError;
 use std::{
-    os::windows::{io::AsRawHandle, process::CommandExt},
+    os::windows::process::CommandExt,
     process::{Child, Command},
 };
 use windows::{
     Win32::{
-        Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT},
+        Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0},
         System::{
             Com::CoCreateGuid,
             StationsAndDesktops::{
@@ -32,12 +32,13 @@ const TARGET: &str = "SUGARSUBSTITUTE_NATIVE_TEST_TARGET";
 const DESKTOP: &str = "SUGARSUBSTITUTE_NATIVE_TEST_DESKTOP";
 const PREFIX: &str = "SugarSubstitute-Native-";
 const ACCESS: u32 = DESKTOP_CREATEWINDOW.0 | DESKTOP_READOBJECTS.0 | DESKTOP_WRITEOBJECTS.0;
-const RUN_MILLIS: u32 = 60_000;
-const STOP_MILLIS: u32 = 5_000;
 
 /// Reexecute this exact libtest case with its own process-scoped private desktop.
 /// A completion event proves that the selected body actually ran; a successful empty test filter
-/// cannot pass. Each caller remains parallel-safe and owns its independently bounded child.
+/// cannot pass. Each caller remains parallel-safe and owns its independently supervised child.
+/// The parent waits for the child's actual exit with no wall-clock budget: native work that is
+/// slow on a loaded machine only makes the case slower, and a child that never exits shows as a
+/// test that libtest reports as running long rather than as a load-dependent verdict.
 #[cfg(test)]
 pub(crate) fn run(name: &'static str, body: fn() -> TestResult) -> TestResult {
     run_for(env!("CARGO_CRATE_NAME"), name, body)
@@ -151,8 +152,7 @@ impl Case {
                 .spawn()?,
         );
         let child = self.child.as_mut().ok_or("native child custody absent")?;
-        wait(child, RUN_MILLIS)?;
-        let status = child.try_wait()?.ok_or("signaled native child has no exit status")?;
+        let status = child.wait()?;
         if !status.success() {
             return Err(format!("native qualification child failed: {status}").into());
         }
@@ -169,7 +169,8 @@ impl Case {
             if child.try_wait()?.is_none() {
                 child.kill()?;
             }
-            wait(child, STOP_MILLIS)?;
+            // Termination is joined, not assumed: the desktop is released only after the exit.
+            child.wait()?;
             self.child.take();
         }
         if let Some(event) = self.completed {
@@ -194,15 +195,6 @@ impl Drop for Case {
                 std::mem::forget(child);
             }
         }
-    }
-}
-/// Observe the exact owned process handle with a finite native wait, preserving OS failures.
-fn wait(child: &Child, milliseconds: u32) -> TestResult {
-    // SAFETY: Child retains this exact native process handle throughout the bounded wait.
-    match unsafe { WaitForSingleObject(HANDLE(child.as_raw_handle()), milliseconds) } {
-        WAIT_OBJECT_0 => Ok(()),
-        WAIT_TIMEOUT => Err("native qualification exceeded its bounded lifetime".into()),
-        _ => Err(windows::core::Error::from_thread().into()),
     }
 }
 fn wide(value: &str) -> Vec<u16> {

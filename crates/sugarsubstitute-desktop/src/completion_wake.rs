@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Borrow a native proxy for completion wakeups only while its event loop is alive.
 
+#[cfg(all(windows, test))]
+pub(crate) mod observer;
+
 use std::fmt::Debug;
 use std::sync::{
     Arc,

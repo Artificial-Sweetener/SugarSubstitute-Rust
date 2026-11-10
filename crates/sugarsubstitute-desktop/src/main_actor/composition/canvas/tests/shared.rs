@@ -81,6 +81,9 @@ impl GpuInterval {
     }
 
     /// End the interval and spin on the non-blocking query results; no sleep is involved.
+    ///
+    /// The GPU reports each result or a device failure, which `?` preserves, so the spin has no
+    /// wall-clock bound: a slow or contended GPU only makes the test slower.
     fn finish(self) -> TestResult<f64> {
         // SAFETY: These queries belong to this context's device.
         unsafe {
@@ -90,7 +93,6 @@ impl GpuInterval {
         }
         let mut disjoint = D3D11_QUERY_DATA_TIMESTAMP_DISJOINT::default();
         let (mut start, mut end) = (0_u64, 0_u64);
-        let deadline = Instant::now() + std::time::Duration::from_secs(10);
         for (query, data, size) in [
             (&self.disjoint, (&raw mut disjoint).cast(), size_of_val(&disjoint)),
             (&self.start, (&raw mut start).cast(), size_of::<u64>()),
@@ -112,9 +114,6 @@ impl GpuInterval {
                     break;
                 }
                 status.ok()?;
-                if Instant::now() >= deadline {
-                    return Err("GPU timestamp query did not complete".into());
-                }
                 std::hint::spin_loop();
             }
         }

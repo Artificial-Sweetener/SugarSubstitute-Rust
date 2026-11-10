@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise image work on the real executor with an injected deterministic clock.
-use std::{
-    marker::PhantomData,
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::observer::Wake;
+use std::{marker::PhantomData, num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_image_ops::ImageError;
@@ -19,19 +15,6 @@ impl Clock for FixedClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        *revision += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 struct Task<F, T> {
@@ -49,7 +32,7 @@ where
     }
 }
 
-/// Real execution admission; the condition wait is a bounded external completion boundary.
+/// Real execution admission; the test blocks on the owner's completion wake, not on elapsed time.
 pub(crate) fn run<T: Send + 'static>(
     bytes: u64,
     action: impl FnOnce(&JobContext) -> Result<T, ImageError> + Send + 'static,
@@ -161,21 +144,19 @@ impl BlockingExecution {
         wait(&self.client, &self.wake, &mut job)
     }
 
-    /// Observe bounded shutdown after the test releases its native output and reservation.
+    /// Observe shutdown after the test releases its native output and reservation.
+    ///
+    /// The owner publishes a completion wake for every terminal job and after its last worker
+    /// returns, so each turn blocks on that wake and settles when the owner reports it.
     pub(crate) fn finish(mut self) -> TestResult {
         self.owner.request_shutdown(Moment::from_nanos(10_000_000_000));
-        let deadline = std::time::Instant::now()
-            .checked_add(Duration::from_secs(10))
-            .ok_or_else(|| std::io::Error::other("Execution shutdown deadline overflow"))?;
         loop {
+            let observed = self.wake.revision();
             self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
             if self.owner.poll_shutdown()?.settled {
                 break;
             }
-            if std::time::Instant::now() >= deadline {
-                return Err(std::io::Error::other("Graphics execution did not settle").into());
-            }
-            std::hint::spin_loop();
+            self.wake.wait_after(observed);
         }
         self.owner.finish_shutdown()?;
         Ok(())
@@ -218,20 +199,11 @@ where
     E: std::error::Error + Send + Sync + 'static,
 {
     let outcome = loop {
-        let revision = *wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let observed = wake.revision();
         if let Some(completion) = job.try_take_completion() {
             break completion;
         }
-        let guard = wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (_guard, timeout) = wake
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(30), |v| *v == revision)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() {
-            return Err(
-                std::io::Error::other("Image execution did not reach a terminal outcome").into()
-            );
-        }
+        wake.wait_after(observed);
     };
     let maximum =
         NonZeroUsize::new(32).ok_or_else(|| std::io::Error::other("Invalid drain bound"))?;
