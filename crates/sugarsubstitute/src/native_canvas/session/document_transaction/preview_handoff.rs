@@ -135,11 +135,23 @@ impl Session {
     /// Accept only the exact offered target, preserving the latest actual final camera at this instant.
     /// Validate an already uploaded preview independently from new-borrow eligibility deadlines.
     pub(crate) fn preview_frame_acknowledgeable(&self, target: FrameStamp) -> bool {
+        self.preview_frame_offered(target)
+            && self.preview.candidate.as_ref().is_some_and(|candidate| {
+                matches!(&candidate.stage, Stage::Offered(document, _)
+                    if document.pending_cpu_evidence.is_some_and(|evidence|
+                        evidence.backdrop_generation == self.backdrops.generation))
+            })
+    }
+
+    /// Whether the live candidate awaits native acknowledgement of exactly `target`, whatever
+    /// its evidence now says.
+    pub(crate) fn preview_frame_offered(&self, target: FrameStamp) -> bool {
         self.preview.candidate.as_ref().is_some_and(|candidate| {
-            !candidate.cancelled && candidate.owner_selection == self.selection
-                && matches!(&candidate.stage, Stage::Offered(document, _) if document.cpu_pending == Some(target)
-                    && document.pending_cpu_evidence.is_some_and(|evidence| evidence.target == target
-                        && evidence.backdrop_generation == self.backdrops.generation))
+            !candidate.cancelled
+                && candidate.owner_selection == self.selection
+                && matches!(&candidate.stage, Stage::Offered(document, _)
+                    if document.cpu_pending == Some(target)
+                        && document.pending_cpu_evidence.is_some_and(|evidence| evidence.target == target))
         })
     }
 
@@ -166,17 +178,26 @@ impl Session {
             _ => return Err("Preview acceptance lost its pixels".into()),
         };
         let now = self.navigation_time();
+        // Judge the offered document before custody changes, so a rejected preview stays withdrawable.
+        if let Some(Stage::Offered(document, _)) =
+            self.preview.candidate.as_ref().map(|candidate| &candidate.stage)
+        {
+            self.judge_display_in(document, evidence)?;
+        }
         // A document without navigation content has no camera to park, such as the empty Output
         // document that took over the screen's display evidence from an Input document.
         if self.preview.parked.is_none()
             && let Some(evidence) = self.document.display_evidence
             && self.document.tools.navigation().accepts_camera(evidence.view)
         {
-            self.document.tools.freeze_at(
-                evidence.view,
-                self.document.scene.as_ref().map(|scene| &scene.document),
-                now,
-            )?;
+            self.document
+                .tools
+                .freeze_at(
+                    evidence.view,
+                    self.document.scene.as_ref().map(|scene| &scene.document),
+                    now,
+                )
+                .map_err(|cause| Unaccepted::rejected_by(Rejection::Camera, Box::new(cause)))?;
         }
         self.pacing.native_accepted(target, now)?;
         let candidate =

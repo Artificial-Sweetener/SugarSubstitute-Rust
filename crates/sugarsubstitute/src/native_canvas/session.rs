@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Coordinate one camera/document lifetime with typed shared-execution jobs and worker retirement.
+mod acknowledgement;
 #[cfg(feature = "native-composition")]
 pub(crate) mod acquisition;
 mod activity;
@@ -30,6 +31,7 @@ pub(crate) mod editing;
 pub(crate) use super::work::{
     Originals as SelectedOriginals, OverviewOriginals, OverviewSelection,
 };
+pub(crate) use acknowledgement::{Ignored, Rejection, Unaccepted};
 #[cfg(feature = "native-composition")]
 pub(crate) use document_transaction::{DocumentToken, PreviewOffer, PreviewStatus, PreviewToken};
 mod gpu;

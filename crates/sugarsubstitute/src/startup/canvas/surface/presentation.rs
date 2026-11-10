@@ -3,6 +3,7 @@
 //! Resolve current surface requests only against actual native presentation effects.
 
 use super::*;
+use crate::native_canvas::session::{Ignored, Rejection, Unaccepted};
 
 impl NativeSurface {
     /// Keep acknowledged native pixels during a same-attachment source replacement, and show
@@ -143,6 +144,9 @@ impl NativeSurface {
             return None;
         }
         let (content, memory) = session.selected_frame()?;
+        if self.rejected == Some(content.target()) {
+            return None;
+        }
         Some(MainCanvasFrame {
             identity: binding.identity,
             placement: binding.placement?,
@@ -154,22 +158,50 @@ impl NativeSurface {
     }
 
     /// Resolve the operation only after this exact frame and placement reached the native tree.
-    pub(in crate::startup::canvas) fn presented(
+    ///
+    /// # Errors
+    /// Answers acknowledgements that match no awaited frame with [`Unaccepted::Ignored`] and
+    /// frames that cannot be accepted with [`Unaccepted::Rejected`]; every other error is
+    /// custody or accounting corruption.
+    pub(super) fn accept_presented(
         &mut self,
         target: FrameStamp,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
         if self.pending.as_ref().is_some_and(|pending| matches!(pending.kind, PendingKind::Hide)) {
-            return Err("Native canvas presented while a hide is pending".into());
+            return Err(Unaccepted::Ignored(Ignored::HidePending).into());
         }
         self.follow_rebuilt_selection(session);
+        let preparing = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| matches!(pending.kind, PendingKind::Prepare));
+        let gone = || Unaccepted::rejected(Rejection::BindingGone);
+        // Acknowledging the frame an attachment, or the one it replaces, already accepted again
+        // is a duplicate; it needs neither a placement nor a selected frame.
+        let duplicate = [self.binding.as_ref(), self.retained.as_ref()]
+            .into_iter()
+            .flatten()
+            .any(|binding| binding.presented.is_some_and(|presented| presented.target == target));
+        // Surface custody is judged before the session accepts anything.
+        let binding = if preparing { self.retained.as_ref() } else { self.binding.as_ref() }
+            .ok_or_else(gone)?;
+        if binding.placement.is_none() || binding.allocation.is_none() {
+            return Err(if duplicate { Unaccepted::Ignored(Ignored::Stale) } else { gone() }.into());
+        }
         if session.preview_frame_acknowledgeable(target) {
             session.did_present_cpu(target)?;
         } else {
-            let (content, _) =
-                session.selected_frame().ok_or("Selected canvas frame is unavailable")?;
+            let Some((content, _)) = session.selected_frame() else {
+                return Err(if duplicate {
+                    Unaccepted::Ignored(Ignored::Stale)
+                } else {
+                    Unaccepted::rejected(Rejection::FrameUnavailable)
+                }
+                .into());
+            };
             if content.target() != target {
-                return Err("Native canvas acknowledged a stale frame".into());
+                return Err(Unaccepted::Ignored(Ignored::Stale).into());
             }
             if content.pending() {
                 session.did_present_selected(target)?;
@@ -178,24 +210,20 @@ impl NativeSurface {
         let preview = self.is_preview_frame(target, session);
         let observed = Self::observed_viewport(session, preview)?;
         let accepted = session.accepted_camera();
-        let preparing = self
-            .pending
-            .as_ref()
-            .is_some_and(|pending| matches!(pending.kind, PendingKind::Prepare));
         let binding = if preparing { self.retained.as_mut() } else { self.binding.as_mut() }
-            .ok_or("Canvas binding disappeared")?;
+            .ok_or_else(gone)?;
         let promoting = binding.document.is_some();
         if let Some(token) = binding.document {
             session.promote_document(token, target)?;
             binding.document = None;
         }
-        let placement = binding.placement.ok_or("Canvas placement disappeared")?;
+        let placement = binding.placement.ok_or_else(gone)?;
         binding.presented = Some(MainCanvasRetention {
             identity: binding.identity,
             target,
             placement,
             shown: placement,
-            allocation: binding.allocation.ok_or("Canvas allocation disappeared")?,
+            allocation: binding.allocation.ok_or_else(gone)?,
         });
         binding.presented_input = !preview && session.input_shown();
         let final_selected = !preview
@@ -286,7 +314,8 @@ impl NativeSurface {
             || binding.revision != pending.request.revision()
             || binding.address != *pending.request.address()
         {
-            return Err("Native canvas hide acknowledgement is stale".into());
+            self.ignore_stale_hide(identity);
+            return Ok(());
         }
         let pending = self.pending.take().ok_or("Pending canvas hide disappeared")?;
         self.reply(

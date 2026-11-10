@@ -66,8 +66,8 @@ fn superseded_frames_and_foreign_hide_acknowledgements_are_never_applied()
         host.expect(6, "applied")?;
         host.quiesce()?;
         assert_eq!(host.shown(), Some(Shade::Green));
-        // A late acknowledgement of the withdrawn frame is refused and changes nothing.
-        assert!(host.fixture.canvas.presented(stale).is_err());
+        // A late acknowledgement of the withdrawn frame is ignored and changes nothing.
+        host.fixture.canvas.presented(stale)?;
         let foreign = MainIdentity { navigation: Generation::new(2)?, ..host.fixture.identity };
         host.fixture.canvas.hidden(foreign)?;
         assert!(host.fixture.canvas.take_command().is_none());

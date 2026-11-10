@@ -116,6 +116,7 @@ fn public_poll_frame_names_canvas_backend_refresh_overload() -> Result<(), Box<d
         allocation: None,
         backdrops: Vec::new(),
         backdrop_generation: 0,
+        rejected_frames: 0,
         occlusions: Vec::new(),
         modal: false,
         selected: false,

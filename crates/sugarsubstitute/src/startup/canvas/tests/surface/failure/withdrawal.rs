@@ -16,7 +16,7 @@ fn withdraw(stage: Stage) -> Result<(), Box<dyn Error>> {
         assert_eq!(prepared.is_some(), stage == Stage::Present);
         assert_eq!(host.cancel(5)?.as_deref(), Some("cancelled"));
         if let Some(target) = prepared {
-            assert!(host.fixture.canvas.presented(target).is_err());
+            host.fixture.canvas.presented(target)?;
         }
         // A duplicate cancellation only consumes its own receipt.
         assert_eq!(host.cancel(5)?, None);
