@@ -3,11 +3,11 @@
 //! Real service delivery and cleanup with an external protected filesystem fixture.
 use super::super::tests::{prepared, summary};
 use super::*;
-use crate::production::diagnostic_helper::tests::{TestClock, TestError, Wake, observe, spec};
+use crate::completion_wake::{Wake, wait_while_watched};
+use crate::production::diagnostic_helper::tests::{TestClock, TestError, observe, spec};
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_crash::incident::{StoredIncidentSummary, encode_summary};
 use sugarsubstitute_execution::ExecutionOwner;
@@ -22,23 +22,13 @@ fn delivered(
     cleanup: bool,
 ) -> Result<(), TestError> {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         service.capture(&batch)?;
         if if cleanup { service.cleanup.completion.is_some() } else { service.delivered() } {
             return Ok(());
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *count == before {
-            return Err("Actual recovery delivery stalled".into());
-        }
+        wake.wait_after(before);
     }
 }
 #[test]
@@ -140,22 +130,21 @@ impl FailedCloseBoundary {
         let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.0 = true;
         self.changed.notify_all();
-        let (state, _) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let state = wait_while_watched(
+            &self.changed,
+            state,
+            || "the test to release the failed external close".to_owned(),
+            |state| !state.1,
+        );
         state.1
     }
-    fn observe_failed_close(&self) -> Result<(), TestError> {
-        let (state, _) = self
-            .changed
-            .wait_timeout_while(
-                self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |state| !state.0,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if state.0 { Ok(()) } else { Err("Actual failed-close boundary did not arrive".into()) }
+    fn observe_failed_close(&self) {
+        drop(wait_while_watched(
+            &self.changed,
+            self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+            || "the actual failed-close boundary".to_owned(),
+            |state| !state.0,
+        ));
     }
     fn release(&self) {
         self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1 = true;
@@ -264,7 +253,7 @@ fn completed_read_cause_and_uncertain_cleanup_remain_visible_with_original_escap
             Ok(false)
         },
     )?);
-    boundary.observe_failed_close()?;
+    boundary.observe_failed_close();
     assert_eq!(
         source.inspect(|operation| !operation.retired && operation.retirement.is_some()),
         Some(true)

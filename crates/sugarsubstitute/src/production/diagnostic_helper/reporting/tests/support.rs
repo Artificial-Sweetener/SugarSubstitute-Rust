@@ -2,12 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own real finite execution and a deterministic external filesystem fixture.
 use super::*;
+use crate::completion_wake::Wake;
 use sha2::{Digest, Sha256};
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::lifecycle::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 pub(super) type TestError = Box<dyn std::error::Error + Send + Sync>;
@@ -19,18 +16,6 @@ impl Clock for TestClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-pub(super) struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 pub(super) fn execution() -> Result<(ExecutionOwner, Arc<Wake>, Scope), TestError> {
@@ -59,7 +44,7 @@ pub(super) fn completed<T: Send + 'static, E: Send + 'static>(
     job: &mut OwnedJob<T, E>,
 ) -> Result<JobCompletion<T, E>, TestError> {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         if let Some(value) = job.try_take_completion() {
             return Ok(value);
@@ -67,7 +52,7 @@ pub(super) fn completed<T: Send + 'static, E: Send + 'static>(
         if batch.remaining > 0 {
             continue;
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
 }
 pub(super) fn delivered(
@@ -77,7 +62,7 @@ pub(super) fn delivered(
     cleanup: bool,
 ) -> TestResult {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         if cleanup {
             service.capture_cleanup(&batch)?;
@@ -94,7 +79,7 @@ pub(super) fn delivered(
         if batch.remaining > 0 {
             continue;
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
 }
 /// Observe the actual native Prepared bootstrap without installing or launching a child.
@@ -104,7 +89,7 @@ pub(super) fn prepared_parent(
     source: &crate::production::reporter_role::parent_source::ReporterSource,
 ) -> TestResult {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         let facts = source.poll()?;
         assert!(!facts.authenticated);
@@ -118,7 +103,7 @@ pub(super) fn prepared_parent(
         if batch.remaining > 0 {
             continue;
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
 }
 /// Drive the real closed Parent until its original worker supplies checked pipe retirement.
@@ -129,7 +114,7 @@ pub(super) fn retired_parent(
     source: &crate::production::reporter_role::parent_source::ReporterSource,
 ) -> TestResult {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         let actual = source.poll_retiring()?;
         assert!(!actual.authenticated);
@@ -140,22 +125,8 @@ pub(super) fn retired_parent(
         if batch.remaining > 0 {
             continue;
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
-}
-fn wait(wake: &Wake, before: u64) -> TestResult {
-    let (count, timeout) = wake
-        .changed
-        .wait_timeout_while(
-            wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-            Duration::from_secs(10),
-            |count| *count == before,
-        )
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if timeout.timed_out() && *count == before {
-        return Err("actual reporting delivery stalled".into());
-    }
-    Ok(())
 }
 pub(super) fn delivered_view(
     client: &ExecutionClient,
@@ -163,7 +134,7 @@ pub(super) fn delivered_view(
     service: &mut ReportingService,
 ) -> TestResult {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         service.capture_view(&batch)?;
         if service.presentation.completion.is_some() {
@@ -172,7 +143,7 @@ pub(super) fn delivered_view(
         if batch.remaining > 0 {
             continue;
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
 }
 pub(super) fn success<T, E: Into<TestError>>(
@@ -271,7 +242,7 @@ pub(super) fn entry_delivery(
     owner: &mut sugarsubstitute_supervision::coordinator_entry::CoordinatorEntryOwner,
 ) -> Result<sugarsubstitute_supervision::coordinator_entry::EntryObservation, TestError> {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         if let Some(observation) = owner.consume(&batch)? {
             return Ok(observation);
@@ -279,7 +250,7 @@ pub(super) fn entry_delivery(
         if batch.remaining > 0 {
             continue;
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
 }
 
@@ -292,7 +263,7 @@ pub(super) fn cancelled_delivery_with_reads(
 ) -> Result<[JobCompletion<(), TestError>; 2], TestError> {
     let mut done: [Option<JobCompletion<(), TestError>>; 2] = std::array::from_fn(|_| None);
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         service.capture(&batch)?;
         for (slot, job) in done.iter_mut().zip(reads.iter_mut()) {
@@ -316,6 +287,6 @@ pub(super) fn cancelled_delivery_with_reads(
         if batch.remaining > 0 {
             continue;
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
 }

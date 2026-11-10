@@ -8,22 +8,22 @@ use sugarsubstitute_execution::ReportExportPairRequest;
 /// Await one exact actual terminal notice without acknowledging its retained job credit.
 fn observed(client: &ExecutionClient, wake: &Wake, id: JobId) -> TestResult {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
         if batch.notifications.iter().any(|notice| notice.job_id == id) {
             return Ok(());
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
 }
 /// The actual cancellation jobs and their correlated notices, never a copied native flag.
 fn cancelled(client: &ExecutionClient, wake: &Wake, service: &mut ExportService) -> TestResult {
     assert!(service.take_unsubmitted_input()?.is_none());
     while !service.unsubmitted_observed() {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         service.capture(&client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?)?;
         if !service.unsubmitted_observed() {
-            wait(wake, before)?;
+            wake.wait_after(before);
         }
     }
     Ok(())
@@ -219,13 +219,13 @@ fn partial_export_overload_observes_original_cancellation_before_fresh_user_requ
     service.delivery[0].job = Some(source_job);
     service.delivery[1].job = Some(receiving_job);
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         service.capture(&client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?)?;
         service.advance_cleanup(&client)?;
         if service.checked_terminal() {
             break;
         }
-        wait(&wake, before)?;
+        wake.wait_after(before);
     }
     assert!(service.delivery.iter().all(delivery::Delivery::succeeded));
     assert!(service.receipt().is_none()); // This admission case produced no native archive receipt.

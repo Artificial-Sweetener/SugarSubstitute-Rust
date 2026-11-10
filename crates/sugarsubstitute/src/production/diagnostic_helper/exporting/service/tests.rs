@@ -2,11 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Original controller memory and real delivery remain distinct from physical-close flags.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_execution::ExecutionOwner;
 type TestError = Box<dyn std::error::Error + Send + Sync>;
 type TestResult = Result<(), TestError>;
@@ -19,44 +16,18 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-fn wait(wake: &Wake, before: u64) -> TestResult {
-    let (count, timed) = wake
-        .changed
-        .wait_timeout_while(
-            wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-            Duration::from_secs(10),
-            |count| *count == before,
-        )
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if timed.timed_out() && *count == before {
-        return Err("original export test completion stalled".into());
-    }
-    Ok(())
-}
 fn complete<T, E>(
     client: &ExecutionClient,
     wake: &Wake,
     job: &mut OwnedJob<T, E>,
 ) -> Result<JobCompletion<T, E>, TestError> {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         client.drain_completions(NonZeroUsize::MIN)?;
         if let Some(completion) = job.try_take_completion() {
             return Ok(completion);
         }
-        wait(wake, before)?;
+        wake.wait_after(before);
     }
 }
 fn spec(id: u64, bytes: u64) -> Result<JobSpec, IdentityError> {
@@ -115,13 +86,13 @@ fn export_delivery_requires_actual_matching_terminal_then_retains_original_memor
     let mut delivery = Delivery { job: Some(job), ..Delivery::default() };
     assert!(!delivery.succeeded());
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN)?;
         delivery.capture(&batch)?;
         if delivery.completion.is_some() {
             break;
         }
-        wait(&wake, before)?;
+        wake.wait_after(before);
     }
     assert!(delivery.succeeded());
     assert!(delivery.job.is_none());
@@ -168,7 +139,7 @@ fn export_capture_feeds_other_real_deliveries_after_first_lane_identity_failure(
     let maximum = NonZeroUsize::new(8).ok_or("completion bound")?;
     let mut batch = client.drain_completions(maximum)?;
     while observed(&batch) < 4 {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let arrived = client.drain_completions(maximum)?;
         assert!(batch.notifications.len() + arrived.notifications.len() <= 5);
         batch.notifications.extend(arrived.notifications);
@@ -176,7 +147,7 @@ fn export_capture_feeds_other_real_deliveries_after_first_lane_identity_failure(
         if observed(&batch) == 4 {
             break;
         }
-        wait(&wake, before)?;
+        wake.wait_after(before);
     }
     assert_eq!(observed(&batch), 4);
     // Drain the coalesced wake mailbox; every accumulated notice remains an actual owner output.

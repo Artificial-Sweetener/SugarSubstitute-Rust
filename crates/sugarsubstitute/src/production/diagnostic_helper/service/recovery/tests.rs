@@ -2,13 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise original execution delivery and checked storage retirement before reusing the seed cell.
 use super::*;
+use crate::completion_wake::{Wake, wait_while_watched};
 use crate::production::diagnostic_helper::tests::{
-    TestClock, TestError, Wake, key, observe, prepared, seed, spec,
+    TestClock, TestError, key, observe, prepared, seed, spec,
 };
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_execution::ExecutionOwner;
 use sugarsubstitute_supervision::diagnostic_storage::fixture::{
@@ -22,7 +22,7 @@ fn delivered(
     cleanup: bool,
 ) -> Result<(), TestError> {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
         if cleanup {
             service.capture_cleanup(&batch)?;
@@ -37,18 +37,7 @@ fn delivered(
         if batch.remaining > 0 {
             continue;
         }
-        let (guard, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |value| *value == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(guard);
-        if timeout.timed_out() {
-            return Err("Actual seed retirement delivery stalled".into());
-        }
+        wake.wait_after(before);
     }
 }
 fn exercise(started: bool, cancelled: bool) -> Result<(), TestError> {
@@ -97,26 +86,23 @@ fn exercise(started: bool, cancelled: bool) -> Result<(), TestError> {
                     worker_gate.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 state.0 = true;
                 worker_gate.1.notify_all();
-                let (state, timeout) = worker_gate
-                    .1
-                    .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                drop(state);
-                if timeout.timed_out() {
-                    return Err(SeedServiceIssue::Busy);
-                }
+                drop(wait_while_watched(
+                    &worker_gate.1,
+                    state,
+                    || "the test to release the cancelled seed worker".to_owned(),
+                    |state| !state.1,
+                ));
             }
             Ok::<_, SeedServiceIssue>(())
         })?);
         if cancelled {
             let state = gate.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (mut state, timeout) = gate
-                .1
-                .wait_timeout_while(state, Duration::from_secs(10), |state| !state.0)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if timeout.timed_out() {
-                return Err("Actual seed worker never reached cancellation boundary".into());
-            }
+            let mut state = wait_while_watched(
+                &gate.1,
+                state,
+                || "the actual seed worker to reach its cancellation boundary".to_owned(),
+                |state| !state.0,
+            );
             service.cancel();
             state.1 = true;
             gate.1.notify_all();

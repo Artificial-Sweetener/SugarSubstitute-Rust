@@ -3,12 +3,8 @@
 //! Keep actual seed/partial repository custody through central completion and worker join.
 use super::service::SeedServiceIssue;
 use super::*;
-use std::{
-    error::Error,
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{error::Error, num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::{execution::*, incident::*, lifecycle::*};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::diagnostic_storage::fixture::*;
@@ -22,40 +18,18 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-pub(super) struct Wake {
-    pub(super) count: Mutex<u64>,
-    pub(super) changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
 pub(super) fn observe<T: Send + 'static, E: Send + 'static>(
     client: &ExecutionClient,
     wake: &Wake,
     job: &mut OwnedJob<T, E>,
 ) -> Result<JobCompletion<T, E>, TestError> {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         client.drain_completions(NonZeroUsize::MIN)?;
         if let Some(value) = job.try_take_completion() {
             return Ok(value);
         }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *count == before {
-            return Err("actual seed operation completion stalled".into());
-        }
+        wake.wait_after(before);
     }
 }
 pub(super) fn key() -> Result<LogicalStoreOperationKey, TestError> {

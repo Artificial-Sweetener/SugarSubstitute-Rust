@@ -4,14 +4,14 @@
 //! The inert service fixture supplies no namespace capability and qualifies no native path.
 use super::super::{
     SeedOperation,
-    tests::{TestClock, Wake, observe, prepared, seed, spec},
+    tests::{TestClock, observe, prepared, seed, spec},
 };
 use super::*;
+use crate::completion_wake::Wake;
 use std::{
     io::{self, Write},
     num::NonZeroUsize,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 use sugarsubstitute_execution::ExecutionOwner;
 use sugarsubstitute_supervision::diagnostic_storage::fixture::{
@@ -53,7 +53,7 @@ fn delivered(
     cleanup: bool,
 ) -> Result<(), TestError> {
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
         if cleanup {
             service.capture_cleanup(&batch)?;
@@ -68,18 +68,7 @@ fn delivered(
         if batch.remaining > 0 {
             continue;
         }
-        let (guard, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |value| *value == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(guard);
-        if timeout.timed_out() {
-            return Err("Actual seed service terminal delivery stalled".into());
-        }
+        wake.wait_after(before);
     }
 }
 

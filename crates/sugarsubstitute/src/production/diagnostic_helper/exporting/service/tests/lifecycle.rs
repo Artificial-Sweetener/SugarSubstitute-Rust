@@ -21,12 +21,12 @@ fn export_unsubmitted_recovery_rejects_actual_admitted_delivery() -> TestResult 
         Some(client.submit_blocking(&scope, spec(2, 131_072)?, |_| Ok::<_, ExportIssue>(true))?);
     assert_eq!(service.take_unsubmitted_input().err(), Some(ExportIssue::Started));
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         service.capture(&client.drain_completions(NonZeroUsize::MIN)?)?;
         if service.delivery[0].completion.is_some() {
             break;
         }
-        wait(&wake, before)?;
+        wake.wait_after(before);
     }
     assert_eq!(service.take_unsubmitted_input().err(), Some(ExportIssue::Started));
     assert!(!service.checked_terminal());
@@ -89,13 +89,13 @@ fn export_unsubmitted_recovery_observes_both_original_held_cancellations() -> Te
     );
     assert_eq!(service.release_unsubmitted(), Err(ExportIssue::Busy));
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         service
             .capture(&client.drain_completions(NonZeroUsize::new(8).ok_or("Completion bound")?)?)?;
         if service.unsubmitted_observed() {
             break;
         }
-        wait(&wake, before)?;
+        wake.wait_after(before);
     }
     assert!(
         service.delivery[..2].iter().all(|lane| lane.job.is_none() && lane.completion.is_none())
@@ -142,12 +142,12 @@ fn export_worker_failure_keeps_actual_cause_and_cannot_complete_as_save_failure(
             Err::<bool, _>(ExportIssue::Identity)
         })?);
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         service.capture(&client.drain_completions(NonZeroUsize::MIN)?)?;
         if service.delivery[0].completion.is_some() {
             break;
         }
-        wait(&wake, before)?;
+        wake.wait_after(before);
     }
     assert_eq!(
         service.inspect_execution_failure(|done| matches!(
@@ -190,12 +190,12 @@ fn export_typed_cleanup_rejection_stays_strict_and_retains_actual_delivery() -> 
     service.delivery[2].job =
         Some(client.submit_blocking(&scope, spec(2, 32_768)?, |_| Ok::<_, ExportIssue>(false))?);
     loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = wake.revision();
         service.capture(&client.drain_completions(NonZeroUsize::MIN)?)?;
         if service.delivery[2].completion.is_some() {
             break;
         }
-        wait(&wake, before)?;
+        wake.wait_after(before);
     }
     assert!(service.cleanup_failed());
     assert!(service.inspect_execution_failure(|_| ()).is_none());

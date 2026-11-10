@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Restore a genuine protected View input and renew only its actual source primitive.
 use super::*;
+use crate::completion_wake::wait_while_watched;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::{configuration::*, coordinator_entry::*};
@@ -150,32 +151,33 @@ impl FilesystemGate {
         let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.0 += 1;
         self.changed.notify_all();
-        let (_guard, timeout) = self
-            .changed
-            .wait_timeout_while(state, std::time::Duration::from_secs(10), |state| !state.1)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() {
-            return Err("External filesystem gate did not release".into());
-        }
+        drop(wait_while_watched(
+            &self.changed,
+            state,
+            || "the test to release the external filesystem gate".to_owned(),
+            |state| !state.1,
+        ));
         Ok(())
     }
     fn both_reading(&self) -> TestResult {
-        let (_guard, timeout) = self
-            .changed
-            .wait_timeout_while(
-                self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                std::time::Duration::from_secs(10),
-                |state| state.0 != 2,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() {
-            return Err("Actual blocking workers did not reach external reads".into());
-        }
+        drop(wait_while_watched(
+            &self.changed,
+            self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+            || "both blocking workers to reach their external reads".to_owned(),
+            |state| state.0 != 2,
+        ));
         Ok(())
     }
     fn release(&self) {
         self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1 = true;
         self.changed.notify_all();
+    }
+}
+/// Release the external reads even when the test fails before its explicit release.
+struct ReleaseFilesystem(std::sync::Arc<FilesystemGate>);
+impl Drop for ReleaseFilesystem {
+    fn drop(&mut self) {
+        self.0.release();
     }
 }
 #[test]
@@ -211,6 +213,7 @@ fn reporting_actual_queued_cancellation_restores_protected_input_and_keeps_origi
         authentication: None,
     });
     let gate = std::sync::Arc::new(FilesystemGate::default());
+    let _release = ReleaseFilesystem(gate.clone());
     let mut reads = Vec::with_capacity(2);
     for id in [3, 4] {
         let boundary = gate.clone();

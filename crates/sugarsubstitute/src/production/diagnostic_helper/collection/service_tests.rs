@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Test actual charged service controls without constructing native Capture inputs.
 use super::*;
+use crate::completion_wake::Wake;
 /// Missing genuine input cannot restore policy or manufacture file/completion proof.
 #[test]
 fn collection_unsubmitted_missing_native_input_retains_identity_cause_without_proof()
@@ -31,11 +32,7 @@ fn collection_unsubmitted_missing_native_input_retains_identity_cause_without_pr
     )
 }
 
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_execution::ExecutionOwner;
 type TestError = Box<dyn std::error::Error + Send + Sync>;
 struct TestClock;
@@ -47,40 +44,18 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-struct Wake {
-    value: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
 fn completion<T: Send + 'static, E: Send + 'static>(
     client: &ExecutionClient,
     wake: &Wake,
     job: &mut OwnedJob<T, E>,
 ) -> Result<JobCompletion<T, E>, TestError> {
     loop {
-        let observed = *wake.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let observed = wake.revision();
         client.drain_completions(NonZeroUsize::MIN)?;
         if let Some(done) = job.try_take_completion() {
             return Ok(done);
         }
-        let (value, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |value| *value == observed,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *value == observed {
-            return Err("actual collection service completion stalled".into());
-        }
+        wake.wait_after(observed);
     }
 }
 /// Central rejection is genuine; the installed flag tests service control without native input.

@@ -2,9 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Real execution/source loans and fake external disk, without native namespace or process proof fabrication.
 use super::*;
-use crate::production::diagnostic_helper::tests::{
-    TestClock, TestError, Wake, key, observe, seed, spec,
-};
+use crate::completion_wake::Wake;
+use crate::production::diagnostic_helper::tests::{TestClock, TestError, key, observe, seed, spec};
 use std::sync::Arc;
 use sugarsubstitute_contracts::lifecycle::*;
 use sugarsubstitute_crash::incident::{StoredIncidentSummary, encode_summary};
