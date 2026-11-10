@@ -68,6 +68,11 @@ impl MetadataScope {
     }
 }
 /// Native state and encoded replies retain actual allocation through completion delivery.
+/// Setup probes for files that may not exist yet; the page receives the absence as its answer, so
+/// it is reported as an expected outcome rather than a failure.
+fn answers_absence(cause: &io::Error) -> bool {
+    cause.kind() == io::ErrorKind::NotFound
+}
 pub(super) struct MetadataCompletion {
     state: Session,
     request: String,
@@ -111,8 +116,14 @@ impl Worker {
         self.metadata_io = Some(self.client.submit_blocking(&self.scope, specification, move |context| {
             let memory = context.memory().claim(2 * 1024 * 1024).map_err(io::Error::other)?;
             let result = state.perform(&access, request.operation, &context);
-            if let Err(cause) = &result {
-                tracing::warn!(operation="worker_metadata_io", request_id=%identity, serial=request.serial, cause_chain=%crate::diagnostics::CauseChain(cause), "Native metadata operation failed");
+            match &result {
+                Err(cause) if answers_absence(cause) => {
+                    tracing::debug!(operation="worker_metadata_io", request_id=%identity, serial=request.serial, "Native metadata found no entry");
+                }
+                Err(cause) => {
+                    tracing::warn!(operation="worker_metadata_io", request_id=%identity, serial=request.serial, cause_chain=%crate::diagnostics::CauseChain(cause), "Native metadata operation failed");
+                }
+                Ok(_) => {}
             }
             Ok(MetadataCompletion { state, request: identity, serial: request.serial, result, _memory: memory })
         })?);
@@ -187,6 +198,13 @@ pub(super) fn command_scope(value: &Value) -> Result<Option<MetadataScope>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_missing_entry_is_an_answer_while_other_metadata_failures_stay_failures() {
+        assert!(answers_absence(&io::Error::from(io::ErrorKind::NotFound)));
+        assert!(answers_absence(&io::Error::from_raw_os_error(2)));
+        assert!(!answers_absence(&io::Error::from(io::ErrorKind::PermissionDenied)));
+        assert!(!answers_absence(&io::Error::from_raw_os_error(5)));
+    }
     #[test]
     fn metadata_wire_rejects_paths_unbounded_extents_and_noncanonical_chunks() {
         for operation in [
