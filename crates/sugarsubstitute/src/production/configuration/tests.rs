@@ -4,14 +4,13 @@
 #[path = "tests/input.rs"]
 mod input;
 use super::*;
+use crate::completion_wake::Wake;
 use std::{
     ffi::OsString,
-    sync::{Arc, Condvar, Mutex},
-    time::{Duration, Instant},
+    sync::{Arc, Mutex},
 };
 use sugarsubstitute_contracts::execution::{
-    Clock, CompletionWake, ExecutionError, ExecutionPort, JobCompletion, JobOutcome, Moment,
-    ScopeId, ScopeSpec, WaitFuture,
+    Clock, ExecutionPort, JobOutcome, Moment, ScopeId, ScopeSpec, WaitFuture,
 };
 use sugarsubstitute_execution::{EntryPreparationCause, ExecutionOwner};
 type TestResult = Result<(), Box<dyn Error>>;
@@ -25,48 +24,6 @@ impl Clock for FrozenClock {
         Box::pin(std::future::pending())
     }
 }
-/// Notifications preserve causal progress; elapsed time bounds test failure only.
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other("Observer poisoned")),
-            )
-        })?;
-        *revision += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    fn completion<T, E>(
-        &self,
-        job: &mut OwnedJob<T, E>,
-    ) -> Result<JobCompletion<T, E>, Box<dyn Error>> {
-        let until = Instant::now().checked_add(Duration::from_secs(10)).ok_or("Test deadline")?;
-        let mut revision = self.revision.lock().map_err(|_| "Observer poisoned")?;
-        loop {
-            if let Some(result) = job.try_take_completion() {
-                return Ok(result);
-            }
-            let remaining =
-                until.checked_duration_since(Instant::now()).ok_or("Missing completion")?;
-            let (next, timed) =
-                self.changed.wait_timeout(revision, remaining).map_err(|_| "Observer poisoned")?;
-            revision = next;
-            if timed.timed_out() {
-                return job.try_take_completion().ok_or_else(|| "Missing completion".into());
-            }
-        }
-    }
-}
-
 fn options() -> Result<StartupPaths, Box<dyn Error>> {
     Ok(StartupPaths::parse(
         [
@@ -125,7 +82,7 @@ fn real_schema_failure_preserves_redaction_and_original_whole_claim() -> TestRes
             input.into(),
             EntrySetupBudget::new(Moment::from_nanos(0))?,
         )?;
-        let completion = wake.completion(&mut job)?;
+        let completion = wake.completion(&client, &mut job)?;
         let memory = completion.memory.clone();
         let JobOutcome::Failure(failure) = completion.outcome else {
             return Err("Expected schema failure".into());
@@ -201,7 +158,7 @@ fn real_post_cancel_cause_stays_visible_without_replacing_read_or_schema_source(
                 Ok::<_, ConfigurationCause>(())
             })
             .map_err(|rejected| rejected.error)?;
-        let completion = wake.completion(&mut job)?;
+        let completion = wake.completion(&client, &mut job)?;
         let memory = completion.memory.clone();
         drop(completion);
         let cause =
@@ -267,7 +224,7 @@ origin="http://localhost:8188"
                 load_configuration(&context, input)
             })
             .map_err(|rejected| rejected.error)?;
-        let completion = wake.completion(&mut job)?;
+        let completion = wake.completion(&client, &mut job)?;
         let memory = completion.memory.clone();
         let JobOutcome::Success(prepared) = completion.outcome else {
             return Err("Expected parser success".into());

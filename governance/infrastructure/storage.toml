@@ -2935,7 +2935,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute/src/production/configuration/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:c16cb51ddded8de91e41588f92bf5c9b8cf196ef2c56b46120b20acf34b589f2"
+source_sha256 = "sha256:f3a7ab6ea661933d6e3370b5946844e83b7203f82a90bacf4eeacaa54256cc16"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Verify actual preparation/opaque failure custody without reading process environment. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2943,7 +2943,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Ver
 [[records]]
 path = "crates/sugarsubstitute/src/production/configuration/tests/input.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e7d848f478e24f859af77bbe39fad930f8f4508abf984e4a3d3f6637d653263c"
+source_sha256 = "sha256:739365a4d354ce864a09298be9cd2bc96585b50e1643d6b2447ca5d39e77e608"
 capabilities = ["std::fs::metadata", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify startup file consumers through genuine original execution admission. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2960,7 +2960,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_bootstrap/test_support.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:09811f3685abe7473642a6f43dbc0868530b80c33bea90f23a9e7c81fe700b25"
+source_sha256 = "sha256:850ea216bd2a9dbea46c1d84b0754203f9e652eb02b50c3214d47d5790d957bf"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Own isolated files and synchronize actual terminal publication without sleeps. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

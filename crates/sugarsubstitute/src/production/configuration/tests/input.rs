@@ -31,7 +31,7 @@ fn shared_input_keeps_original_open_cause_and_rejects_unfunded_bounds() -> TestR
                 read_preparation_file(&context, &path, maximum).map_err(ConfigurationCause::read)
             })
             .map_err(|rejected| rejected.error)?;
-        let completion = wake.completion(&mut job)?;
+        let completion = wake.completion(&client, &mut job)?;
         let memory = completion.memory.clone();
         let JobOutcome::Failure(failure) = completion.outcome else {
             return Err("Expected original input failure".into());
@@ -83,7 +83,7 @@ fn startup_file_over_bound_rejects_before_schema_parsing() -> TestResult {
             move |context| load_configuration(&context, input),
         )
         .map_err(|rejected| rejected.error)?;
-    let completion = wake.completion(&mut job)?;
+    let completion = wake.completion(&client, &mut job)?;
     let JobOutcome::Failure(failure) = completion.outcome else {
         return Err("Oversized startup input reached schema parsing".into());
     };
@@ -149,7 +149,7 @@ origin="http://localhost:8188"
             },
         )
         .map_err(|rejected| rejected.error)?;
-    let completion = wake.completion(&mut job)?;
+    let completion = wake.completion(&client, &mut job)?;
     let memory = completion.memory.clone();
     let JobOutcome::Success(prepared) = completion.outcome else {
         return Err("Installed input pair did not complete".into());
