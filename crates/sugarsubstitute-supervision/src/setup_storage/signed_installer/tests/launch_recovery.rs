@@ -3,7 +3,8 @@
 //! Actual creator failures and independent cleanup jobs preserve resumable signed preparation.
 use super::*;
 use crate::{
-    application_launch::ApplicationLaunch, setup_storage::test_worker::pipeline::Pipeline,
+    application_launch::{ApplicationLaunch, rejected_creation::RejectedCreation},
+    setup_storage::test_worker::pipeline::Pipeline,
 };
 mod broker;
 
@@ -30,9 +31,15 @@ fn unstarted_and_native_failed_creations_resume_the_same_signed_candidate_after_
         let owned = launch.clone();
         pipeline.run(RESERVATION_BYTES, move |context| {
             if create {
-                // The authenticated fixture contains inert bytes, so Windows rejects CreateProcess.
-                let cause = owned.launch(&context).err().ok_or("Inert executable was started")?;
+                // The authenticated fixture contains inert bytes, which Windows refuses to execute.
+                // The creation boundary reports that refusal without handing them to the OS loader.
+                let creation = RejectedCreation::default();
+                let cause = owned
+                    .launch_rejected(&context, &creation)
+                    .err()
+                    .ok_or("Inert executable was started")?;
                 assert!(cause.to_string().contains("application_launch_create"), "{cause}");
+                assert_eq!(creation.attempts(), 1);
             }
             assert!(owned.retire().is_err());
             Ok(())

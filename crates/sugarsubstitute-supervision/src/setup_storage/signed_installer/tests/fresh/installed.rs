@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Durable explicit choices survive restart while automatic candidates retain live trust checks.
 use super::*;
-use crate::application_launch::{ApplicationLaunch, CreationOutcome};
+use crate::application_launch::{
+    ApplicationLaunch, CreationOutcome, rejected_creation::RejectedCreation,
+};
 use crate::setup_storage::test_worker::pipeline::Pipeline;
 
 const AUTHORIZATION: &str = "installation-authorization-v1.record";
@@ -163,8 +165,13 @@ fn explicit_installation_reopens_without_metadata_and_retains_real_trial_recover
     assert!(matches!(state.candidate(), Some(Candidate::Trial { .. })));
     let pending = launch.clone();
     pipeline.run(crate::application_launch::CREATION_RESERVATION_BYTES, move |context| {
-        let cause = pending.launch(&context).err().ok_or("Inert fixture unexpectedly executed")?;
+        let creation = RejectedCreation::default();
+        let cause = pending
+            .launch_rejected(&context, &creation)
+            .err()
+            .ok_or("Inert fixture unexpectedly executed")?;
         assert_eq!(cause.operation(), "application_launch_create");
+        assert_eq!(creation.attempts(), 1);
         Ok(())
     })?;
     pipeline.run(crate::application_launch::RECOVERY_RESERVATION_BYTES, move |context| {

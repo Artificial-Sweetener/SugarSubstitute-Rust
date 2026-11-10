@@ -4,6 +4,8 @@
 pub mod broker;
 mod creation;
 #[cfg(test)]
+pub(crate) mod rejected_creation;
+#[cfg(test)]
 mod tests;
 mod trial;
 mod updater;

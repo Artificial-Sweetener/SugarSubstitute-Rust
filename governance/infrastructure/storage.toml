@@ -953,6 +953,14 @@ rationale = "Lend storage-owner-acquired verified file pins to the bounded authe
 boundary = "native_custody"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/rejected_creation.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:20afd7dfbcd0afa896c652e03efe703f7033afe447f2a18e85e190d41b44b2d8"
+capabilities = ["std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: A recorded creation boundary that refuses an inert image without starting it. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/tests/containment.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:346677dcffac892346cdfd1005811b3b701e0a7d74899f2e30000a051b5dcb60"
@@ -2333,7 +2341,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Qua
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/creation_retry.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d7f7c4d718462c00b17c726443a1c99a19334ce90537da9895f834c5e940d552"
+source_sha256 = "sha256:176cab8856ad884a1a49edddd562694d4dfc929d22190782f2e5d19bf542186e"
 capabilities = ["assert! restricted capability fragments", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Retry native creation with the same pinned candidate after exact unstarted recovery. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2357,7 +2365,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Fre
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:0cbd6dd69301becc77a8ac4486f19513218770038a5c5e464346a0315a9f1b46"
+source_sha256 = "sha256:0b7b1b93c27270e1f0350ad5a359fe8fd6c25df16165f748e45a91053e2d555d"
 capabilities = ["std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Durable explicit choices survive restart while automatic candidates retain live trust checks. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
