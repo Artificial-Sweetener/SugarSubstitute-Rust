@@ -67,18 +67,16 @@ export function sessionOutput(value: SessionOutput): boolean {
   );
 }
 
-/** Validate an occurrence without matching it by path, title or graph contents. */
-function entry(value: SessionEntry, checkpoint: SessionCheckpoint): boolean {
-  if (
-    !sessionSubmissions(value, checkpoint.scope) ||
-    !sessionScenes(value) ||
-    !sessionNavigation(value) ||
-    !sessionUuid(value.id) ||
-    sessionDocumentError(value.document) !== null ||
-    utf8Bytes(JSON.stringify(value.view)) > 1048576 ||
-    (value.input !== null && (!value.input.documentId || !sessionDigest(value.input.signature)))
-  )
-    return false;
+/** Name the first rule an occurrence breaks, without matching it by path, title or graph contents. */
+function entryError(value: SessionEntry, checkpoint: SessionCheckpoint): string | null {
+  if (!sessionSubmissions(value, checkpoint.scope)) return 'entry submissions';
+  if (!sessionScenes(value)) return 'entry scenes';
+  if (!sessionNavigation(value)) return 'entry navigation';
+  if (!sessionUuid(value.id)) return 'entry identity';
+  if (sessionDocumentError(value.document) !== null) return 'entry document';
+  if (utf8Bytes(JSON.stringify(value.view)) > 1048576) return 'entry view size';
+  if (value.input !== null && (!value.input.documentId || !sessionDigest(value.input.signature)))
+    return 'entry input';
   const sources = new Set<string>();
   for (const source of value.sources) {
     if (
@@ -88,7 +86,7 @@ function entry(value: SessionEntry, checkpoint: SessionCheckpoint): boolean {
       !source.executionPath ||
       source.graphRevision > value.document.graphRevision
     )
-      return false;
+      return 'entry sources';
     sources.add(source.id);
   }
   const outputs = new Map<string, SessionOutput>();
@@ -110,7 +108,7 @@ function entry(value: SessionEntry, checkpoint: SessionCheckpoint): boolean {
       outputs.has(output.id) ||
       positions.has(position)
     )
-      return false;
+      return 'entry outputs';
     outputs.set(output.id, output);
     positions.add(position);
   }
@@ -119,52 +117,54 @@ function entry(value: SessionEntry, checkpoint: SessionCheckpoint): boolean {
     !selection(value.view.comparison.selection, outputs) ||
     (value.view.comparison.enabled && value.view.comparison.selection === null)
   )
-    return false;
+    return 'entry selection';
   const cameras = new Set<string>();
   for (const camera of value.view.cameras) {
-    if (!outputs.has(camera.outputId) || cameras.has(camera.outputId)) return false;
+    if (!outputs.has(camera.outputId) || cameras.has(camera.outputId)) return 'entry cameras';
     cameras.add(camera.outputId);
   }
-  return true;
+  return null;
 }
 
-/** Validate v1 before storage or materialization; rejected original bytes belong to the store. */
-export function isDesktopCheckpoint(value: unknown): value is SessionCheckpoint {
+/**
+ * Name the first v1 rule a checkpoint breaks, or null when it is admissible.
+ *
+ * The name identifies a rule, never checkpoint content, so it can appear in a refusal.
+ */
+export function desktopCheckpointError(value: unknown): string | null {
+  if (!isSessionCheckpoint(value)) return 'shape';
+  if (!sessionJsonScalars(value)) return 'text';
+  if (!sessionScope(value.scope)) return 'scope';
   if (
-    !isSessionCheckpoint(value) ||
-    !sessionJsonScalars(value) ||
-    !sessionScope(value.scope) ||
     !sessionUuid(value.id) ||
-    (value.previousId !== null &&
-      (!sessionUuid(value.previousId) || value.previousId === value.id)) ||
-    !value.producer ||
-    !value.frontend ||
-    !value.sugarcubes ||
-    (value.placement !== null && sessionPlacementError(value.placement) !== null)
+    (value.previousId !== null && (!sessionUuid(value.previousId) || value.previousId === value.id))
   )
-    return false;
+    return 'identity';
+  if (!value.producer || !value.frontend || !value.sugarcubes) return 'versions';
+  if (value.placement !== null && sessionPlacementError(value.placement) !== null)
+    return 'placement';
   const entries = new Set<string>();
   const outputs = new Set<string>();
   const prompts = new Set<string>();
   let count = 0;
   for (const item of value.entries) {
-    if (entries.has(item.id) || !entry(item, value)) return false;
+    if (entries.has(item.id)) return 'duplicate entry';
+    const error = entryError(item, value);
+    if (error) return error;
     entries.add(item.id);
     count += item.outputs.length;
     for (const submission of item.submissions) {
-      if (prompts.has(submission.promptId)) return false;
+      if (prompts.has(submission.promptId)) return 'shared prompt';
       prompts.add(submission.promptId);
     }
     for (const output of item.outputs) {
-      if (outputs.has(output.id)) return false;
+      if (outputs.has(output.id)) return 'shared output';
       outputs.add(output.id);
     }
   }
-  if (
-    count > 65536 ||
-    (value.activeEntry === null ? entries.size !== 0 : !entries.has(value.activeEntry))
-  )
-    return false;
+  if (count > 65536) return 'output count';
+  if (value.activeEntry === null ? entries.size !== 0 : !entries.has(value.activeEntry))
+    return 'active entry';
   const assets = new Map(value.assets.map((asset) => [asset.digest, asset]));
   if (
     assets.size !== value.assets.length ||
@@ -177,7 +177,7 @@ export function isDesktopCheckpoint(value: unknown): value is SessionCheckpoint 
     ) ||
     value.assets.reduce((total, asset) => total + asset.bytes, 0) > 8589934592
   )
-    return false;
+    return 'assets';
   const referenced = new Set<string>();
   for (const item of value.entries)
     for (const output of item.outputs) {
@@ -189,8 +189,14 @@ export function isDesktopCheckpoint(value: unknown): value is SessionCheckpoint 
         asset.bytes !== output.bytes ||
         asset.media !== output.media
       )
-        return false;
+        return 'asset receipts';
       referenced.add(asset.digest);
     }
-  return referenced.size === assets.size && utf8Bytes(JSON.stringify(value)) <= 134217728;
+  if (referenced.size !== assets.size) return 'unreferenced assets';
+  return utf8Bytes(JSON.stringify(value)) <= 134217728 ? null : 'size';
+}
+
+/** Validate v1 before storage or materialization; rejected original bytes belong to the store. */
+export function isDesktopCheckpoint(value: unknown): value is SessionCheckpoint {
+  return desktopCheckpointError(value) === null;
 }

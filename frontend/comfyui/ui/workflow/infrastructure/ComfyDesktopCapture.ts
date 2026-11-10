@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Capture an admitted portable checkpoint from the current Comfy document and result owners. */
-import { isDesktopCheckpoint, utf8Bytes } from '../../core/embedded/SessionRuntime.js';
+import { desktopCheckpointError, utf8Bytes } from '../../core/embedded/SessionRuntime.js';
 import type {
   SessionAsset,
   SessionCheckpoint,
@@ -160,8 +160,12 @@ export class ComfyDesktopCapture {
       placement: null,
       assets: Object.freeze([...assets.values()]),
     });
-    if (!isDesktopCheckpoint(checkpoint))
-      throw new DesktopSessionRefusal('invalid', 'Desktop checkpoint failed semantic admission.');
+    const rule = desktopCheckpointError(checkpoint);
+    if (rule !== null)
+      throw new DesktopSessionRefusal(
+        'invalid',
+        `Desktop checkpoint failed semantic admission: ${rule}.`,
+      );
     return checkpoint;
   }
 }

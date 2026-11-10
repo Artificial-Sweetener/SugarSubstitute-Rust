@@ -30,7 +30,10 @@ import {
   sessionAdmission,
   sessionMessageError,
 } from '../../../integrations/shared/SessionProtocol.js';
-import { isDesktopCheckpoint } from '../../../integrations/shared/SessionSnapshot.js';
+import {
+  desktopCheckpointError,
+  isDesktopCheckpoint,
+} from '../../../integrations/shared/SessionSnapshot.js';
 import { sessionDirectory, sessionGraph } from '../../../integrations/shared/SessionPrimitives.js';
 import { sessionBindings } from '../../../scripts/integrations/generate-session-contract.js';
 
@@ -148,6 +151,24 @@ test('session namespace is relative to the installation user-data root', () => {
   expect(sessionDirectory('')).toBeNull();
   expect(sessionDirectory('x'.repeat(64))).toBe(`sessions/${'x'.repeat(64)}/`);
   expect(sessionDirectory('x'.repeat(65))).toBeNull();
+});
+
+test('a refused checkpoint names the rule it breaks without quoting its content', () => {
+  const base = vectors.checkpoints[0];
+  if (!base) throw new Error('Missing mixed-workspace fixture');
+  const value = decodeDesktopCheckpoint(JSON.stringify(base.value));
+  const entry = value?.entries[0];
+  const camera = entry?.view.cameras[0];
+  if (!value || !entry || !camera) throw new Error('Missing final camera fixture');
+  expect(desktopCheckpointError(value)).toBeNull();
+  const refused = (changed: typeof entry): string | null =>
+    desktopCheckpointError({ ...value, entries: [changed, ...value.entries.slice(1)] });
+  expect(refused({ ...entry, view: { ...entry.view, cameras: [camera, camera] } })).toBe(
+    'entry cameras',
+  );
+  expect(refused({ ...entry, submissions: [] })).toBe('entry submissions');
+  expect(desktopCheckpointError({ ...value, activeEntry: null })).toBe('active entry');
+  expect(desktopCheckpointError({ ...value, version: 2 })).toBe('shape');
 });
 
 test('rejects nonfinite cameras and invalid Unicode before JSON serialization erases them', () => {
