@@ -2,38 +2,33 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Real incomplete/failed preparation cannot create native retirement or accepted disposal.
 use super::*;
+use crate::completion_wake::wait_while_watched;
+use std::sync::{Condvar, Mutex};
 #[derive(Default)]
 struct QueueBoundary {
     state: Mutex<(usize, bool)>,
     changed: Condvar,
 }
 impl QueueBoundary {
-    fn hold(&self) -> std::result::Result<(), Box<dyn Error + Send + Sync>> {
+    /// Worker side: count entry, then hold until the test releases every queued worker.
+    fn hold(&self) {
         let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.0 += 1;
         self.changed.notify_all();
-        let (state, timed) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timed.timed_out() && !state.1 {
-            return Err("Controlled external worker boundary was not released".into());
-        }
-        Ok(())
+        drop(wait_while_watched(
+            &self.changed,
+            state,
+            || "the test to release a held finite worker".to_owned(),
+            |state| !state.1,
+        ));
     }
-    fn wait_all(&self, workers: usize) -> Result<()> {
-        let (state, timed) = self
-            .changed
-            .wait_timeout_while(
-                self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |state| state.0 != workers,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timed.timed_out() && state.0 != workers {
-            return Err("Actual finite workers did not reach controlled external boundary".into());
-        }
-        Ok(())
+    fn wait_all(&self, workers: usize) {
+        drop(wait_while_watched(
+            &self.changed,
+            self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+            || format!("{workers} finite workers to reach the controlled external boundary"),
+            |state| state.0 != workers,
+        ));
     }
     fn release(&self) {
         self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1 = true;
@@ -62,9 +57,12 @@ fn final_reporter_observation_waits_for_actual_queued_completion_before_natural_
         specification.id = JobId::new(u64::try_from(index)? + 1)?;
         specification.reservation_bytes = 0;
         let boundary = gate.clone();
-        blockers.push(client.submit_blocking(&scope, specification, move |_| boundary.hold())?);
+        blockers.push(client.submit_blocking(&scope, specification, move |_| {
+            boundary.hold();
+            Ok::<(), std::io::Error>(())
+        })?);
     }
-    gate.wait_all(workers)?;
+    gate.wait_all(workers);
     let mut specification = spec()?;
     specification.id = JobId::new(u64::try_from(workers)? + 1)?;
     let until = specification.deadline.ok_or("Original final completion cutoff absent")?;

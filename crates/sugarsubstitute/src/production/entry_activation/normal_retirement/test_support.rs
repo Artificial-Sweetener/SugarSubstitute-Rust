@@ -2,11 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Run independent production reservations and native output workers over an external pipe fake.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::{Duration, Instant},
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_contracts::transcript::OutputStream;
 use sugarsubstitute_execution::windows_output::{
@@ -21,19 +18,6 @@ impl Clock for FixedClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        *revision += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 pub(super) struct Rig {
@@ -108,29 +92,12 @@ impl Rig {
     pub(super) fn batch(&self) -> Result<CompletionBatch> {
         Ok(self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?)
     }
+    /// Re-examine `ready` after each execution wake until it reports completion or fails.
     pub(super) fn until(&self, mut ready: impl FnMut() -> Result<bool>) -> Result<()> {
-        let until = Instant::now().checked_add(Duration::from_secs(10)).ok_or("Guard overflow")?;
-        loop {
-            let previous =
-                *self.wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            if ready()? {
-                return Ok(());
-            }
-            let remaining = until
-                .checked_duration_since(Instant::now())
-                .ok_or("Actual output retirement timed out")?;
-            let revision =
-                self.wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (revision, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(revision, remaining, |value| *value == previous)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            drop(revision);
-            if timeout.timed_out() {
-                return Err("Actual owner completion wake absent".into());
-            }
-        }
+        self.wake.until(|| match ready() {
+            Ok(false) => None,
+            other => Some(other.map(drop)),
+        })
     }
     pub(super) fn join(&mut self) {
         drop(self.owner.take());

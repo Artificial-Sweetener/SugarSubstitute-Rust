@@ -2,46 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise final receive admission while actual finite wait completions remain independently owned.
 use super::*;
-use std::{
-    error::Error,
-    io,
-    sync::Condvar,
-    time::{Duration, Instant},
-};
-use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
+use crate::completion_wake::{Gate, Wake};
+use std::{error::Error, io};
+use sugarsubstitute_execution::ExecutionOwner;
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
-#[derive(Default)]
-struct Wake {
-    state: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        *state = state.saturating_add(1);
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    fn revision(&self) -> u64 {
-        *self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-    fn after(&self, revision: u64, until: Instant) -> TestResult {
-        let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let left =
-            until.checked_duration_since(Instant::now()).ok_or("Original wait bound elapsed")?;
-        let (state, timed) = self
-            .changed
-            .wait_timeout_while(state, left, |state| *state <= revision)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timed.timed_out() && *state <= revision {
-            return Err("Actual Core completion did not wake".into());
-        }
-        Ok(())
-    }
-}
 struct Frozen;
 impl Clock for Frozen {
     fn now(&self) -> Moment {
@@ -51,64 +16,10 @@ impl Clock for Frozen {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-struct ExternalWait {
-    state: Mutex<(bool, bool)>,
-    changed: Condvar,
-}
-impl ExternalWait {
-    fn wait(&self) -> io::Result<()> {
-        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        state.0 = true;
-        self.changed.notify_all();
-        let (state, timed) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timed.timed_out() && !state.1 {
-            return Err(io::Error::other("External wait fixture was not released"));
-        }
-        Ok(())
-    }
-    fn entered(&self) -> TestResult {
-        let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (state, timed) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.0)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timed.timed_out() && !state.0 {
-            return Err("Actual wait job did not reach its external boundary".into());
-        }
-        Ok(())
-    }
-    fn release(&self) {
-        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1 = true;
-        self.changed.notify_all();
-    }
-}
-struct Release(Arc<ExternalWait>);
+struct Release(Arc<Gate>);
 impl Drop for Release {
     fn drop(&mut self) {
         self.0.release();
-    }
-}
-
-fn completion(
-    job: &mut OwnedJob<(), io::Error>,
-    client: &ExecutionClient,
-    wake: &Wake,
-    until: Instant,
-) -> TestResult<JobCompletion<(), io::Error>> {
-    loop {
-        let revision = wake.revision();
-        let actual = client.drain_completions(NonZeroUsize::MIN)?;
-        if let Some(done) = job.try_take_completion() {
-            return Ok(done);
-        }
-        if actual.remaining == 0 {
-            wake.after(revision, until)
-                .map_err(|cause| format!("Actual job completion remained pending: {cause}"))?;
-        }
     }
 }
 
@@ -130,11 +41,14 @@ fn recovery_final_receive_prevents_new_native_read_while_actual_wait_completions
             replacement: None,
         })
     };
-    let gate = Arc::new(ExternalWait::default());
+    let gate = Arc::new(Gate::default());
     let _release = Release(gate.clone());
     let boundary = gate.clone();
-    let mut handler_wait = client.submit_blocking(&scope, spec(1)?, move |_| boundary.wait())?;
-    gate.entered()?;
+    let mut handler_wait = client.submit_blocking(&scope, spec(1)?, move |_| {
+        boundary.hold();
+        Ok::<(), io::Error>(())
+    })?;
+    gate.wait_entered();
     let mut desktop_wait = client.submit_blocking(&scope, spec(2)?, |_| Ok::<(), io::Error>(()))?;
     let mut received = RetirementReceipt::default();
     let mut reads = 0;
@@ -156,10 +70,8 @@ fn recovery_final_receive_prevents_new_native_read_while_actual_wait_completions
     assert_eq!(reads, 1);
     assert_eq!(scope.snapshot().reserved_bytes, 8192);
     gate.release();
-    let until =
-        Instant::now().checked_add(Duration::from_secs(10)).ok_or("Fixture wait overflow")?;
-    let handler = completion(&mut handler_wait, &client, &wake, until)?;
-    let desktop = completion(&mut desktop_wait, &client, &wake, until)?;
+    let handler = wake.completion(&client, &mut handler_wait)?;
+    let desktop = wake.completion(&client, &mut desktop_wait)?;
     for done in [&handler, &desktop] {
         assert!(matches!(done.outcome, JobOutcome::Success(())));
         assert_eq!(done.spec.deadline, Some(original));

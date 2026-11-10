@@ -3,9 +3,8 @@
 //! Consume both real queue transitions without borrowing an unrelated native completion.
 use super::*;
 use crate::job_sequence::JobSequence;
-use crate::production::incident_host::tests::{
-    Wake as HostWake, completion,
-    constructor::report_queue::{prepared_host, present, recover, store_completed},
+use crate::production::incident_host::tests::constructor::report_queue::{
+    prepared_host, present, recover, store_completed,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_supervision::diagnostic_storage::DIAGNOSTIC_STORAGE_BYTES;
@@ -41,7 +40,7 @@ fn context(now: Moment) -> Result<IncidentRequestContext> {
 fn fresh_restart_ack_queue_and_store_queue_wake_before_original_cutoff_without_unrelated_event()
 -> Result<()> {
     let clock = Arc::new(ClockAt(AtomicU64::new(0)));
-    let wake = Arc::new(HostWake::default());
+    let wake = Arc::new(Wake::default());
     let execution = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = execution.client();
     let finite = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -57,7 +56,7 @@ fn fresh_restart_ack_queue_and_store_queue_wake_before_original_cutoff_without_u
     specification.reservation_bytes = DIAGNOSTIC_STORAGE_BYTES;
     let mut presented =
         client.submit_blocking(&finite, specification, |context| presented_fixture(&context))?;
-    let (operation, fixture, summary) = match completion(&client, &wake, &mut presented)?.outcome {
+    let (operation, fixture, summary) = match wake.completion(&client, &mut presented)?.outcome {
         JobOutcome::Success(value) => value,
         JobOutcome::Failure(cause) => return Err(cause as Box<dyn Error>),
         _ => return Err("Actual presented repository worker did not succeed".into()),
@@ -123,7 +122,7 @@ fn fresh_restart_ack_queue_and_store_queue_wake_before_original_cutoff_without_u
     let mut acknowledged = client.submit_blocking(&finite, specification, move |context| {
         acknowledge_fixture(fixture, scope.operation(), actual, actual_at, &context)
     })?;
-    let (operation, summary) = match completion(&client, &wake, &mut acknowledged)?.outcome {
+    let (operation, summary) = match wake.completion(&client, &mut acknowledged)?.outcome {
         JobOutcome::Success(value) => value,
         JobOutcome::Failure(cause) => return Err(cause as Box<dyn Error>),
         _ => return Err("Actual acknowledgement worker did not succeed".into()),
@@ -143,7 +142,7 @@ fn fresh_restart_ack_queue_and_store_queue_wake_before_original_cutoff_without_u
 #[test]
 fn store_continuation_clears_while_actual_transaction_blocks_without_renewing_deadline()
 -> Result<()> {
-    let wake = Arc::new(HostWake::default());
+    let wake = Arc::new(Wake::default());
     let execution = ExecutionOwner::new(Arc::new(ClockAt(AtomicU64::new(0))), wake.clone())?;
     let client = execution.client();
     let finite = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -228,7 +227,7 @@ fn retire_repository(
     operation: ReportingOperation,
     client: &ExecutionClient,
     cleanup: &Scope,
-    wake: &HostWake,
+    wake: &Wake,
     jobs: &JobSequence,
 ) -> Result<()> {
     let cleanup_until = client.now()?.checked_add(Duration::from_secs(15))?;
@@ -239,7 +238,7 @@ fn retire_repository(
     let mut retiring = client.submit_blocking(cleanup, specification, move |context| {
         Ok::<_, std::io::Error>(operation.retire_fixture(&context))
     })?;
-    let (retired, operation) = match completion(client, wake, &mut retiring)?.outcome {
+    let (retired, operation) = match wake.completion(client, &mut retiring)?.outcome {
         JobOutcome::Success(value) => value,
         JobOutcome::Failure(cause) => return Err(cause.into()),
         _ => return Err("Actual independent repository cleanup worker did not succeed".into()),

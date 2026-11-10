@@ -2,11 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise final callers while the real release job remains unconsumed.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_contracts::{execution::*, lifecycle::*};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::{WindowsProcessRegistry, profiles::PROFILE_OPERATION_BYTES};
@@ -20,39 +17,12 @@ impl Clock for FixedClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut count = self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        *count += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    /// Drain the genuine matching terminal notification without taking its outcome.
-    fn terminal(&self, client: &ExecutionClient, id: JobId) -> Result<CompletionBatch> {
-        loop {
-            let prior = *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let batch = client.drain_completions(NonZeroUsize::new(32).ok_or("Drain bound")?)?;
-            if batch.notifications.iter().any(|notice| notice.job_id == id) {
-                return Ok(batch);
-            }
-            let count = self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (count, timeout) = self
-                .changed
-                .wait_timeout_while(count, Duration::from_secs(10), |count| *count == prior)
-                .map_err(|_| "Actual completion wake poisoned")?;
-            drop(count);
-            if timeout.timed_out() {
-                return Err("Actual terminal notification absent".into());
-            }
-        }
-    }
+/// Drain the genuine matching terminal notification without taking its outcome.
+fn terminal(wake: &Wake, client: &ExecutionClient, id: JobId) -> Result<CompletionBatch> {
+    wake.until(|| match client.drain_completions(NonZeroUsize::MIN.saturating_add(31)) {
+        Ok(batch) if !batch.notifications.iter().any(|notice| notice.job_id == id) => None,
+        other => Some(other.map_err(Into::into)),
+    })
 }
 fn specification(id: u64, bytes: u64) -> Result<JobSpec> {
     Ok(JobSpec {
@@ -86,7 +56,7 @@ fn component_final_callers_retain_actual_released_pending_operation_and_first_fa
         specification(1, WindowsProcessRegistry::required_reservation_bytes())?,
         run.owner,
     )?;
-    let registry_batch = wake.terminal(&client, registry_job.spec().id)?;
+    let registry_batch = terminal(&wake, &client, registry_job.spec().id)?;
     let registry = registry_job.try_take_completion().ok_or("Actual registry result absent")?;
     let JobOutcome::Success(registry_value) = &registry.outcome else {
         return Err("Actual registry construction failed".into());
@@ -103,7 +73,7 @@ fn component_final_callers_retain_actual_released_pending_operation_and_first_fa
         specification(2, PROFILE_OPERATION_BYTES)?,
         registry_value,
     )?;
-    let release_batch = wake.terminal(&client, id)?;
+    let release_batch = terminal(&wake, &client, id)?;
     assert!(profile.snapshot().released && profile.snapshot().pending);
     assert!(!profile.snapshot().retirement_ready());
 
@@ -114,7 +84,7 @@ fn component_final_callers_retain_actual_released_pending_operation_and_first_fa
         &mut input,
         projection::project,
     )?;
-    let projection_batch = wake.terminal(&client, projection_job.spec().id)?;
+    let projection_batch = terminal(&wake, &client, projection_job.spec().id)?;
     let projected =
         projection_job.try_take_completion().ok_or("Actual projection result absent")?;
     assert!(matches!(&projected.outcome, JobOutcome::Failure(_)));

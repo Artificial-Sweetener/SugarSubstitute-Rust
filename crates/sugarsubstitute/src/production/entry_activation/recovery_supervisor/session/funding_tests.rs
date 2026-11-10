@@ -2,50 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prove the actual admitted memory claim survives the final real Work alias.
 use super::*;
-use std::{
-    error::Error,
-    sync::Condvar,
-    time::{Duration, Instant},
-};
+use crate::completion_wake::Wake;
+use std::error::Error;
 use sugarsubstitute_execution::ExecutionOwner;
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::NativeLifecycle,
-                Box::new(std::io::Error::other("Recovery funding observer poisoned")),
-            )
-        })?;
-        *revision = revision.saturating_add(1);
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-impl Wake {
-    fn revision(&self) -> Result<u64, Box<dyn Error>> {
-        Ok(*self.revision.lock().map_err(|_| "Observer poisoned")?)
-    }
-    fn after(&self, revision: u64, until: Instant) -> Result<bool, Box<dyn Error>> {
-        let mut current = self.revision.lock().map_err(|_| "Observer poisoned")?;
-        while *current <= revision {
-            let Some(left) = until.checked_duration_since(Instant::now()) else {
-                return Ok(false);
-            };
-            let (next, timed) =
-                self.changed.wait_timeout(current, left).map_err(|_| "Observer poisoned")?;
-            current = next;
-            if timed.timed_out() && *current <= revision {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-}
 struct Frozen;
 impl Clock for Frozen {
     fn now(&self) -> Moment {
@@ -75,17 +34,7 @@ fn root_recovery_actual_work_retains_admitted_funding_until_last_worker_alias_is
         },
         move |context| context.memory().claim(bytes),
     )?;
-    let until =
-        Instant::now().checked_add(Duration::from_secs(10)).ok_or("Failure deadline overflow")?;
-    let done = loop {
-        let revision = wake.revision()?;
-        if let Some(done) = job.try_take_completion() {
-            break done;
-        }
-        if !wake.after(revision, until)? {
-            break job.try_take_completion().ok_or("Actual funding job missing")?;
-        }
-    };
+    let done = wake.completion(&client, &mut job)?;
     let lease = done.memory.clone();
     let claim = match done.outcome {
         JobOutcome::Success(claim) => claim,
@@ -117,22 +66,6 @@ fn root_recovery_actual_work_retains_admitted_funding_until_last_worker_alias_is
     drop(job);
     drop(scope);
     // This finite owner test creates no process/pipe registration and claims no native retirement.
-    owner.request_shutdown(Moment::from_nanos(15_000_000_000));
-    loop {
-        let revision = wake.revision()?;
-        let _actual =
-            client.drain_completions(NonZeroUsize::new(32).unwrap_or(NonZeroUsize::MIN))?;
-        if owner.poll_shutdown()?.settled {
-            owner.finish_shutdown()?;
-            break;
-        }
-        if !wake.after(revision, until)? {
-            if owner.poll_shutdown()?.settled {
-                owner.finish_shutdown()?;
-                break;
-            }
-            return Err("Actual execution worker settlement missing".into());
-        }
-    }
+    wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(15_000_000_000))?;
     Ok(())
 }

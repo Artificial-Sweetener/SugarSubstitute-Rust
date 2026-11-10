@@ -2,10 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe real paired cancellation routing and retained charge without a synthetic provider proof.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_execution::ExecutionOwner;
 struct TestClock;
 impl Clock for TestClock {
@@ -14,18 +12,6 @@ impl Clock for TestClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 #[test]
@@ -48,24 +34,10 @@ fn symbol_receiving_unissued_pair_requires_actual_delivery_and_retains_original_
     assert_eq!(main.snapshot().reserved_bytes, 0);
     assert_eq!(cleanup.snapshot().reserved_bytes, 32 * 1024);
     service.cancel_unsubmitted()?;
-    let actual = loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let actual = client.drain_completions(NonZeroUsize::MIN)?;
-        if !actual.notifications.is_empty() {
-            break actual;
-        }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *count == before {
-            return Err("Actual unissued Symbol pair did not deliver retirement".into());
-        }
-    };
+    let actual = wake.until(|| match client.drain_completions(NonZeroUsize::MIN) {
+        Ok(actual) if actual.notifications.is_empty() => None,
+        other => Some(other),
+    })?;
     let foreign = CompletionBatch {
         notifications: actual
             .notifications

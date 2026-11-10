@@ -185,7 +185,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/incident_reporting/tests/receiving_failure.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:17be065ff215b460919369b4efb98e4906a1067d5fe457cd3b29b1edc6fa83b2"
+source_sha256 = "sha256:c6c999115dcb62e9b69a46451fdc25a9b6a542e74799fce3c5e7483f1a737139"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reorder real service policy custody and completion delivery without constructing native input.
 use super::*;
+use crate::completion_wake::Gate;
 
 struct Rig {
     execution: ExecutionOwner,
@@ -31,38 +32,6 @@ fn policy(host: &mut IncidentHost) -> TestResult<&mut FundedPolicy> {
     match host.completion.as_mut().map(|done| &mut done.outcome) {
         Some(JobOutcome::Success(controller)) => Ok(&mut controller.policy),
         _ => Err("Actual admitted constructor missing".into()),
-    }
-}
-#[derive(Default)]
-struct Gate {
-    state: Mutex<(bool, bool)>,
-    changed: Condvar,
-}
-impl Gate {
-    fn boundary(&self) {
-        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        state.0 = true;
-        self.changed.notify_all();
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        assert!(!timeout.timed_out() || state.1, "External policy boundary was not released");
-    }
-    fn entered(&self) -> TestResult {
-        let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.0)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && !state.0 {
-            return Err("Actual policy worker did not enter its external boundary".into());
-        }
-        Ok(())
-    }
-    fn release(&self) {
-        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1 = true;
-        self.changed.notify_all();
     }
 }
 struct Release(Arc<Gate>);
@@ -108,12 +77,12 @@ fn reordered_policy_loan(closing: bool) -> TestResult {
             &rig.scope,
             probe,
             &mut policy.state,
-            move || external.boundary(),
+            move || external.hold(),
         )?;
         assert!(policy.state.is_none());
         assert!(policy.collection.policy_pending());
     }
-    gate.entered()?;
+    gate.wait_entered();
     let independent = spec(rig.jobs.allocate()?);
     let mut other =
         rig.client.submit_blocking(&rig.scope, independent, |_| Ok::<_, std::io::Error>(()))?;

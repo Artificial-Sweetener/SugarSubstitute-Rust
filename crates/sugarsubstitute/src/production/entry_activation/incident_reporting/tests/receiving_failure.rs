@@ -5,7 +5,10 @@ use super::*;
 use std::{
     fmt,
     io::Write,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 #[derive(Debug)]
 struct Cause {

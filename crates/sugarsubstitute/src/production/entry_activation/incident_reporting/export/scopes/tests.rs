@@ -2,10 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Interleaved view preparation crosses the actual central admission boundary before export IDs.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_execution::{ExecutionOwner, ReportExportPairRequest};
 
 #[test]
@@ -152,36 +150,10 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-/// Drain original notices before sleeping on the same wake revision, without polling time.
+/// Drain original notices, sleeping only on the owner's causal wake and never on elapsed time.
 fn batch(client: &ExecutionClient, wake: &Wake) -> Result<CompletionBatch> {
-    loop {
-        let before = *wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let actual = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if !actual.notifications.is_empty() {
-            return Ok(actual);
-        }
-        let (revision, timed) = wake
-            .changed
-            .wait_timeout_while(
-                wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |revision| *revision == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timed.timed_out() && *revision == before {
-            return Err("Original export admission completion missing".into());
-        }
-    }
+    wake.until(|| match client.drain_completions(NonZeroUsize::MIN.saturating_add(31)) {
+        Ok(actual) if actual.notifications.is_empty() => None,
+        other => Some(other.map_err(Into::into)),
+    })
 }

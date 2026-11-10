@@ -2,12 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep application admission until real writer retirement, independently of execution delivery.
 use super::*;
-use std::{
-    error::Error,
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{error::Error, sync::Arc};
 use sugarsubstitute_contracts::{execution::*, incident::IncidentOperationId, lifecycle::*};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::diagnostic_storage::{
@@ -153,18 +149,6 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
 fn spec(id: u64, reservation_bytes: u64) -> TestResult<JobSpec> {
     Ok(JobSpec {
         id: JobId::new(id)?,
@@ -180,25 +164,5 @@ fn completion<T: Send + 'static, E: Send + 'static>(
     wake: &Wake,
     job: &mut OwnedJob<T, E>,
 ) -> TestResult<JobCompletion<T, E>> {
-    loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if let Some(done) = job.try_take_completion() {
-            return Ok(done);
-        }
-        if batch.remaining > 0 {
-            continue;
-        }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *count == before {
-            return Err("Actual namespace transaction boundary stalled".into());
-        }
-    }
+    wake.completion(client, job).map_err(|cause| cause.to_string().into())
 }

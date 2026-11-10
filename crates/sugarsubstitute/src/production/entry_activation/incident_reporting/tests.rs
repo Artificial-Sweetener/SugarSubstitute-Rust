@@ -2,10 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Check actual finite delivery custody independently of native or durable acknowledgement proofs.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_execution::ExecutionOwner;
 struct TestClock;
 impl Clock for TestClock {
@@ -14,18 +12,6 @@ impl Clock for TestClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    value: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 fn spec() -> Result<JobSpec> {
@@ -38,25 +24,12 @@ fn spec() -> Result<JobSpec> {
         replacement: None,
     })
 }
+/// Drain central completions until a notice arrives, sleeping only on the owner's causal wake.
 fn batch(client: &ExecutionClient, wake: &Wake) -> Result<CompletionBatch> {
-    loop {
-        let before = *wake.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let actual = client.drain_completions(NonZeroUsize::MIN)?;
-        if !actual.notifications.is_empty() {
-            return Ok(actual);
-        }
-        let (value, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |value| *value == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *value == before {
-            return Err("Actual report receiving delivery stalled".into());
-        }
-    }
+    wake.until(|| match client.drain_completions(NonZeroUsize::MIN) {
+        Ok(actual) if actual.notifications.is_empty() => None,
+        other => Some(other.map_err(Into::into)),
+    })
 }
 #[test]
 fn incident_reporting_foreign_notice_cannot_take_actual_delivery_or_release_credit() -> Result<()> {

@@ -2,11 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify original failed facts and finite metadata custody without creating capture/store proof.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::sync::Arc;
 use sugarsubstitute_contracts::{execution::*, lifecycle::*};
 use sugarsubstitute_execution::ExecutionOwner;
 type TestError = Box<dyn Error + Send + Sync>;
@@ -18,18 +15,6 @@ impl Clock for TestClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 /// Mint sealed data through the authoritative exit transaction; this claims no native observation.
@@ -101,31 +86,6 @@ fn incident_collection_failed_installed_control_waits_for_checked_disposition() 
     assert!(collection.capture.is_none());
     Ok(())
 }
-/// Observe actual central delivery with synchronization, never arbitrary sleeping.
-fn completion<T: Send + 'static, E: Send + 'static>(
-    client: &sugarsubstitute_execution::ExecutionClient,
-    wake: &Wake,
-    job: &mut OwnedJob<T, E>,
-) -> std::result::Result<JobCompletion<T, E>, TestError> {
-    loop {
-        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        client.drain_completions(NonZeroUsize::MIN)?;
-        if let Some(done) = job.try_take_completion() {
-            return Ok(done);
-        }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if timeout.timed_out() && *count == before {
-            return Err("actual failure metadata completion stalled".into());
-        }
-    }
-}
 #[test]
 fn incident_collection_real_preparation_keeps_utc_fact_and_original_charge_after_worker_join()
 -> std::result::Result<(), TestError> {
@@ -151,7 +111,7 @@ fn incident_collection_real_preparation_keeps_utc_fact_and_original_charge_after
             })
         },
     )?;
-    let done = completion(&client, &wake, &mut job)?;
+    let done = wake.completion(&client, &mut job).map_err(|cause| cause.to_string())?;
     let material = match done.outcome {
         JobOutcome::Success(material) => material,
         JobOutcome::Failure(cause) => return Err(cause.into()),
@@ -193,7 +153,7 @@ fn incident_collection_real_preparation_preserves_original_wallclock_error_and_f
             })
         },
     )?;
-    let done = completion(&client, &wake, &mut job)?;
+    let done = wake.completion(&client, &mut job).map_err(|cause| cause.to_string())?;
     let failure = match done.outcome {
         JobOutcome::Failure(cause) => cause,
         _ => return Err("unexpected failure metadata result".into()),

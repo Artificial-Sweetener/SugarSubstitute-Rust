@@ -3,6 +3,7 @@
 //! Observe real reservation and restored native custody without fabricating a genuine grant.
 use super::super::test_support::*;
 use super::*;
+use crate::completion_wake::Wake;
 use crate::job_sequence::JobSequence;
 use sugarsubstitute_supervision::diagnostic_storage::fixture::{
     DiagnosticFixtureFailure, DiagnosticStorageFixture,

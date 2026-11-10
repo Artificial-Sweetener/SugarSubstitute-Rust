@@ -2,11 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise real original reservations through terminal transfer, worker join and final Drop.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_execution::ExecutionOwner;
 
 #[path = "tests/constructor.rs"]
@@ -40,19 +37,6 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-#[derive(Default)]
-pub(in crate::production) struct Wake {
-    value: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut value = self.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        *value += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
 fn key() -> Result<CoordinatorKey, Box<dyn Error>> {
     Ok(CoordinatorKey {
         namespace: sugarsubstitute_contracts::lifecycle::NamespaceId::new([1; 32]),
@@ -69,28 +53,6 @@ fn spec(id: JobId) -> JobSpec {
         replacement: None,
     }
 }
-pub(in crate::production) fn completion<T: Send + 'static, E: Send + 'static>(
-    client: &ExecutionClient,
-    wake: &Wake,
-    job: &mut OwnedJob<T, E>,
-) -> Result<JobCompletion<T, E>, Box<dyn Error>> {
-    loop {
-        let observed = *wake.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if let Some(value) = job.try_take_completion() {
-            return Ok(value);
-        }
-        let guard = wake.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (guard, timeout) = wake
-            .changed
-            .wait_timeout_while(guard, Duration::from_secs(10), |value| *value == observed)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(guard);
-        if timeout.timed_out() {
-            return Err("Actual controller job did not cross its completion boundary".into());
-        }
-    }
-}
 #[test]
 fn controller_table_retains_original_charge_after_terminal_and_actual_worker_join()
 -> Result<(), Box<dyn Error>> {
@@ -103,7 +65,7 @@ fn controller_table_retains_original_charge_after_terminal_and_actual_worker_joi
     let mut job = client.submit_blocking(&scope, spec(jobs.allocate()?), move |context| {
         super::admission::allocate_policy(owner, &context)
     })?;
-    let JobCompletion { outcome, memory, .. } = completion(&client, &wake, &mut job)?;
+    let JobCompletion { outcome, memory, .. } = wake.completion(&client, &mut job)?;
     let policy = match outcome {
         JobOutcome::Success(value) => value,
         JobOutcome::Failure(cause) => return Err(cause.into()),
@@ -139,7 +101,7 @@ fn exhausted_original_claim_preserves_genuine_memory_cause_before_any_controller
         let attempted = super::admission::allocate_policy(owner, &context);
         Ok::<_, MemoryClaimError>((attempted, held))
     })?;
-    let JobCompletion { outcome, memory, .. } = completion(&client, &wake, &mut job)?;
+    let JobCompletion { outcome, memory, .. } = wake.completion(&client, &mut job)?;
     let (attempted, held) = match outcome {
         JobOutcome::Success(value) => value,
         JobOutcome::Failure(cause) => return Err(cause.into()),
@@ -190,7 +152,7 @@ fn missing_collection_input_retains_the_identical_funded_policy_before_job_admis
     let mut job = client.submit_blocking(&scope, spec(jobs.allocate()?), move |context| {
         super::admission::allocate_policy(owner, &context)
     })?;
-    let done = completion(&client, &wake, &mut job)?;
+    let done = wake.completion(&client, &mut job)?;
     let mut policy = match done.outcome {
         JobOutcome::Success(value) => value,
         JobOutcome::Failure(cause) => return Err(cause.into()),
@@ -233,7 +195,8 @@ pub(in crate::production) fn admitted_value<T: Send + 'static>(
     specification.reservation_bytes = bytes;
     specification.deadline = Some(Moment::from_nanos(100));
     let mut job = client.submit_blocking(&scope, specification, work)?;
-    let done = completion(&client, &wake, &mut job)
+    let done = wake
+        .completion(&client, &mut job)
         .map_err(|cause| std::io::Error::other(cause.to_string()))?;
     let text = match done.outcome {
         JobOutcome::Success(value) => value,

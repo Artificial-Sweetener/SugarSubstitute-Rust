@@ -2,11 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep actual failure/control allocations charged after passive source abandonment.
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::sync::Arc;
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
 struct FixedClock;
@@ -16,20 +13,6 @@ impl Clock for FixedClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    generation: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut generation =
-            self.generation.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        *generation += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 #[test]
@@ -68,27 +51,7 @@ fn unused_projection_source_return_keeps_first_cause_controls_and_original_charg
             Err::<ProjectedEntry, _>(ProjectionFailure { retained })
         },
     )?;
-    let mut completed = loop {
-        let observed = *wake.generation.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(completion) = job.try_take_completion() {
-            break completion;
-        }
-        client.drain_completions(NonZeroUsize::MIN)?;
-        if let Some(completion) = job.try_take_completion() {
-            break completion;
-        }
-        let generation = wake.generation.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (generation, timeout) = wake
-            .changed
-            .wait_timeout_while(generation, Duration::from_secs(10), |generation| {
-                *generation == observed
-            })
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(generation);
-        if timeout.timed_out() {
-            return Err("Actual projection completion did not arrive".into());
-        }
-    };
+    let mut completed = wake.completion(&client, &mut job).map_err(|cause| cause.to_string())?;
     drop(job);
     drop(executor);
     assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);

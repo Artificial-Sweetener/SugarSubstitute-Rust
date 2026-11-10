@@ -49,34 +49,29 @@ fn entry_owner() -> TestResult<CoordinatorEntryOwner> {
     ))
 }
 
-/// Wait for a causal completion notification, with a wall-clock fail-safe for deadlocks.
+/// Deliver completion batches to `consume` until it yields, sleeping only on the execution
+/// owner's causal wake and never on elapsed time.
 fn delivery<T>(
     client: &ExecutionClient,
     wake: &Wake,
     mut consume: impl FnMut(&CompletionBatch) -> TestResult<Option<T>>,
 ) -> TestResult<T> {
-    loop {
-        let before = *wake.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if let Some(value) = consume(&batch)? {
-            return Ok(value);
+    wake.until(|| {
+        loop {
+            let batch = match client.drain_completions(NonZeroUsize::MIN.saturating_add(31)) {
+                Ok(batch) => batch,
+                Err(cause) => return Some(Err(cause.into())),
+            };
+            match consume(&batch) {
+                Ok(None) => {}
+                Ok(Some(value)) => return Some(Ok(value)),
+                Err(cause) => return Some(Err(cause)),
+            }
+            if batch.remaining == 0 {
+                return None;
+            }
         }
-        if batch.remaining > 0 {
-            continue;
-        }
-        let (guard, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.value.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |value| *value == before,
-            )
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(guard);
-        if timeout.timed_out() {
-            return Err("Actual entry/constructor completion was not delivered".into());
-        }
-    }
+    })
 }
 
 fn namespace(

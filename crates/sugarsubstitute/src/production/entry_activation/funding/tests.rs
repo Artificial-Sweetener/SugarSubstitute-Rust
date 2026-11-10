@@ -2,12 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise actual admitted-claim retention without manufacturing a lease or authority.
 use super::*;
-use std::{
-    cell::Cell,
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
+use crate::completion_wake::Wake;
+use std::{cell::Cell, sync::Arc};
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -18,19 +14,6 @@ impl Clock for ClockPort {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    sequence: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut sequence = self.sequence.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        *sequence += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 /// Same real execution producer used by constructor storage tests. The worker
@@ -56,25 +39,7 @@ pub(in crate::production::entry_activation) fn admitted(
         },
         move |context| context.memory().claim(bytes),
     )?;
-    let completion = loop {
-        let observed = *wake.sequence.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(done) = job.try_take_completion() {
-            break done;
-        }
-        client.drain_completions(NonZeroUsize::MIN)?;
-        if let Some(done) = job.try_take_completion() {
-            break done;
-        }
-        let sequence = wake.sequence.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (sequence, timeout) = wake
-            .changed
-            .wait_timeout_while(sequence, Duration::from_secs(10), |value| *value == observed)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(sequence);
-        if timeout.timed_out() {
-            return Err("Actual funding completion boundary timed out".into());
-        }
-    };
+    let completion = wake.completion(&client, &mut job).map_err(|cause| cause.to_string())?;
     let claim = match completion.outcome {
         JobOutcome::Success(claim) => claim,
         JobOutcome::Failure(cause) => return Err(cause.into()),
@@ -215,25 +180,7 @@ fn fresh_recovery_preparation_fits_with_all_original_projection_roles_live() -> 
         },
         |context| Ok::<_, std::io::Error>(context.memory().clone()),
     )?;
-    let completion = loop {
-        let observed = *wake.sequence.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(done) = job.try_take_completion() {
-            break done;
-        }
-        client.drain_completions(NonZeroUsize::MIN)?;
-        if let Some(done) = job.try_take_completion() {
-            break done;
-        }
-        let sequence = wake.sequence.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (sequence, timeout) = wake
-            .changed
-            .wait_timeout_while(sequence, Duration::from_secs(10), |value| *value == observed)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(sequence);
-        if timeout.timed_out() {
-            return Err("Actual recovery funding admission completion timed out".into());
-        }
-    };
+    let completion = wake.completion(&client, &mut job).map_err(|cause| cause.to_string())?;
     let memory = match completion.outcome {
         JobOutcome::Success(memory) => memory,
         JobOutcome::Failure(cause) => return Err(cause.into()),
