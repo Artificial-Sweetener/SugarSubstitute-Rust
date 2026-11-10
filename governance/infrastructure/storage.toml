@@ -91,7 +91,7 @@ owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:5ce7264e4d4a11e128f058192dc206a68ab5da5451d13bf865b8b190a885901f"
+source_sha256 = "sha256:df6b4b4e9826b954c277156a2c8f2bbe72189e1b93cfdfa28e11e34c78062e9a"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -99,7 +99,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:5ce7264e4d4a11e128f058192dc206a68ab5da5451d13bf865b8b190a885901f"
+source_sha256 = "sha256:df6b4b4e9826b954c277156a2c8f2bbe72189e1b93cfdfa28e11e34c78062e9a"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -107,7 +107,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:5ce7264e4d4a11e128f058192dc206a68ab5da5451d13bf865b8b190a885901f"
+source_sha256 = "sha256:df6b4b4e9826b954c277156a2c8f2bbe72189e1b93cfdfa28e11e34c78062e9a"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
