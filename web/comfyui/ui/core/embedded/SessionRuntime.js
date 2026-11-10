@@ -173,11 +173,11 @@ function sessionPlacementError(value) {
 }
 
 // integrations/shared/SessionScenes.ts
-function sessionScenes(entry2) {
+function sessionScenes(entry) {
   const slots = /* @__PURE__ */ new Map();
   const facts = /* @__PURE__ */ new Map();
   const counts = /* @__PURE__ */ new Map();
-  for (const item of [...entry2.submissions, ...entry2.outputs]) {
+  for (const item of [...entry.submissions, ...entry.outputs]) {
     const scene = item.scene;
     if (scene === null) continue;
     const slot = `${scene.groupId}/${String(scene.order)}`;
@@ -193,27 +193,27 @@ function sessionScenes(entry2) {
 }
 
 // integrations/shared/SessionNavigation.ts
-function sessionNavigation(entry2) {
-  const navigation = entry2.view.navigation;
+function sessionNavigation(entry) {
+  const navigation = entry.view.navigation;
   if (navigation.sceneOverview && navigation.sceneId !== null) return false;
-  if (navigation.sourceId !== null && !entry2.sources.some((source) => source.id === navigation.sourceId))
+  if (navigation.sourceId !== null && !entry.sources.some((source) => source.id === navigation.sourceId))
     return false;
-  if (navigation.sceneId !== null && !entry2.submissions.some((item) => item.scene?.sceneId === navigation.sceneId) && !entry2.outputs.some((item) => item.scene?.sceneId === navigation.sceneId))
+  if (navigation.sceneId !== null && !entry.submissions.some((item) => item.scene?.sceneId === navigation.sceneId) && !entry.outputs.some((item) => item.scene?.sceneId === navigation.sceneId))
     return false;
   if (navigation.batchOverview) return true;
-  const outputs = entry2.outputs.filter(
+  const outputs = entry.outputs.filter(
     (item) => (navigation.sourceId === null || item.sourceId === navigation.sourceId) && (navigation.sceneOverview || (item.scene?.sceneId ?? null) === navigation.sceneId)
   );
   return outputs.length === 0 ? navigation.batchIndex === 0 : outputs.some((item) => item.batchIndex === navigation.batchIndex);
 }
 
 // integrations/shared/SessionSubmissions.ts
-function sessionSubmissions(entry2, scope) {
+function sessionSubmissions(entry, scope) {
   const prompts = /* @__PURE__ */ new Set();
   const runs = /* @__PURE__ */ new Set();
-  for (const submission of entry2.submissions) {
+  for (const submission of entry.submissions) {
     const key = `${submission.runId}/${submission.scene?.sceneId ?? ""}`;
-    if (submission.entryId !== entry2.id || submission.backend !== scope.backend || !sessionUuid(submission.runId) || !submission.promptId || prompts.has(submission.promptId) || runs.has(key) || submission.graphRevision > entry2.document.graphRevision || submission.scene !== null && (!sessionUuid(submission.scene.groupId) || !sessionUuid(submission.scene.sceneId) || submission.scene.order >= submission.scene.count))
+    if (submission.entryId !== entry.id || submission.backend !== scope.backend || !sessionUuid(submission.runId) || !submission.promptId || prompts.has(submission.promptId) || runs.has(key) || submission.graphRevision > entry.document.graphRevision || submission.scene !== null && (!sessionUuid(submission.scene.groupId) || !sessionUuid(submission.scene.sceneId) || submission.scene.order >= submission.scene.count))
       return false;
     prompts.add(submission.promptId);
     runs.add(key);
@@ -224,8 +224,8 @@ function sessionSubmissions(entry2, scope) {
       sources.add(source.id);
     }
   }
-  return entry2.outputs.every(
-    (output) => output.promptId === null || entry2.submissions.some(
+  return entry.outputs.every(
+    (output) => output.promptId === null || entry.submissions.some(
       (submission) => submission.promptId === output.promptId && submission.runId === output.runId && submission.runOrder === output.runOrder && (submission.scene === null ? output.scene === null : output.scene !== null && submission.scene.groupId === output.scene.groupId && submission.scene.sceneId === output.scene.sceneId && submission.scene.order === output.scene.order && submission.scene.count === output.scene.count && submission.scene.title === output.scene.title) && submission.sources.some((source) => source.id === output.sourceId)
     )
   );
@@ -240,13 +240,19 @@ function selection(value, outputs) {
 function sessionOutput(value) {
   return [value.id, value.entryId, value.backend, value.runId, value.sourceId].every(sessionUuid) && sessionDigest(value.digest) && (value.assetDigest === null || sessionDigest(value.assetDigest)) && (value.promptId === null || value.promptId.length > 0) && sessionFile(value.file) && (value.file.storage !== "temp" || value.assetDigest === value.digest) && (value.assetDigest === null || value.assetDigest === value.digest) && (value.scene === null || [value.scene.groupId, value.scene.sceneId].every(sessionUuid) && value.scene.order < value.scene.count);
 }
-function entry(value, checkpoint) {
-  if (!sessionSubmissions(value, checkpoint.scope) || !sessionScenes(value) || !sessionNavigation(value) || !sessionUuid(value.id) || sessionDocumentError(value.document) !== null || utf8Bytes(JSON.stringify(value.view)) > 1048576 || value.input !== null && (!value.input.documentId || !sessionDigest(value.input.signature)))
-    return false;
+function entryError(value, checkpoint) {
+  if (!sessionSubmissions(value, checkpoint.scope)) return "entry submissions";
+  if (!sessionScenes(value)) return "entry scenes";
+  if (!sessionNavigation(value)) return "entry navigation";
+  if (!sessionUuid(value.id)) return "entry identity";
+  if (sessionDocumentError(value.document) !== null) return "entry document";
+  if (utf8Bytes(JSON.stringify(value.view)) > 1048576) return "entry view size";
+  if (value.input !== null && (!value.input.documentId || !sessionDigest(value.input.signature)))
+    return "entry input";
   const sources = /* @__PURE__ */ new Set();
   for (const source of value.sources) {
     if (!sessionUuid(source.id) || sources.has(source.id) || !source.nodeId || !source.executionPath || source.graphRevision > value.document.graphRevision)
-      return false;
+      return "entry sources";
     sources.add(source.id);
   }
   const outputs = /* @__PURE__ */ new Map();
@@ -261,56 +267,69 @@ function entry(value, checkpoint) {
       output.imageIndex
     ]);
     if (!sessionOutput(output) || output.entryId !== value.id || output.backend !== checkpoint.scope.backend || !sources.has(output.sourceId) || outputs.has(output.id) || positions.has(position))
-      return false;
+      return "entry outputs";
     outputs.set(output.id, output);
     positions.add(position);
   }
   if (!selection(value.view.selection, outputs) || !selection(value.view.comparison.selection, outputs) || value.view.comparison.enabled && value.view.comparison.selection === null)
-    return false;
+    return "entry selection";
   const cameras = /* @__PURE__ */ new Set();
   for (const camera of value.view.cameras) {
-    if (!outputs.has(camera.outputId) || cameras.has(camera.outputId)) return false;
+    if (!outputs.has(camera.outputId) || cameras.has(camera.outputId)) return "entry cameras";
     cameras.add(camera.outputId);
   }
-  return true;
+  return null;
 }
-function isDesktopCheckpoint(value) {
-  if (!isSessionCheckpoint(value) || !sessionJsonScalars(value) || !sessionScope(value.scope) || !sessionUuid(value.id) || value.previousId !== null && (!sessionUuid(value.previousId) || value.previousId === value.id) || !value.producer || !value.frontend || !value.sugarcubes || value.placement !== null && sessionPlacementError(value.placement) !== null)
-    return false;
+function desktopCheckpointError(value) {
+  if (!isSessionCheckpoint(value)) return "shape";
+  if (!sessionJsonScalars(value)) return "text";
+  if (!sessionScope(value.scope)) return "scope";
+  if (!sessionUuid(value.id) || value.previousId !== null && (!sessionUuid(value.previousId) || value.previousId === value.id))
+    return "identity";
+  if (!value.producer || !value.frontend || !value.sugarcubes) return "versions";
+  if (value.placement !== null && sessionPlacementError(value.placement) !== null)
+    return "placement";
   const entries = /* @__PURE__ */ new Set();
   const outputs = /* @__PURE__ */ new Set();
   const prompts = /* @__PURE__ */ new Set();
   let count = 0;
   for (const item of value.entries) {
-    if (entries.has(item.id) || !entry(item, value)) return false;
+    if (entries.has(item.id)) return "duplicate entry";
+    const error = entryError(item, value);
+    if (error) return error;
     entries.add(item.id);
     count += item.outputs.length;
     for (const submission of item.submissions) {
-      if (prompts.has(submission.promptId)) return false;
+      if (prompts.has(submission.promptId)) return "shared prompt";
       prompts.add(submission.promptId);
     }
     for (const output of item.outputs) {
-      if (outputs.has(output.id)) return false;
+      if (outputs.has(output.id)) return "shared output";
       outputs.add(output.id);
     }
   }
-  if (count > 65536 || (value.activeEntry === null ? entries.size !== 0 : !entries.has(value.activeEntry)))
-    return false;
+  if (count > 65536) return "output count";
+  if (value.activeEntry === null ? entries.size !== 0 : !entries.has(value.activeEntry))
+    return "active entry";
   const assets = new Map(value.assets.map((asset) => [asset.digest, asset]));
   if (assets.size !== value.assets.length || value.assets.some(
     (asset) => !sessionDigest(asset.digest) || (["mp4", "webm"].includes(asset.extension) ? asset.media !== "video" : asset.media !== "image")
   ) || value.assets.reduce((total, asset) => total + asset.bytes, 0) > 8589934592)
-    return false;
+    return "assets";
   const referenced = /* @__PURE__ */ new Set();
   for (const item of value.entries)
     for (const output of item.outputs) {
       if (output.assetDigest === null) continue;
       const asset = assets.get(output.assetDigest);
       if (!asset || asset.digest !== output.digest || asset.bytes !== output.bytes || asset.media !== output.media)
-        return false;
+        return "asset receipts";
       referenced.add(asset.digest);
     }
-  return referenced.size === assets.size && utf8Bytes(JSON.stringify(value)) <= 134217728;
+  if (referenced.size !== assets.size) return "unreferenced assets";
+  return utf8Bytes(JSON.stringify(value)) <= 134217728 ? null : "size";
+}
+function isDesktopCheckpoint(value) {
+  return desktopCheckpointError(value) === null;
 }
 
 // integrations/shared/SessionProtocol.ts
@@ -486,6 +505,7 @@ export {
   SESSION_CHUNK_BYTES,
   SESSION_DOCUMENT_BYTES,
   decodeDesktopCheckpoint,
+  desktopCheckpointError,
   isDesktopCheckpoint,
   isSessionBinding,
   isSessionDocument,

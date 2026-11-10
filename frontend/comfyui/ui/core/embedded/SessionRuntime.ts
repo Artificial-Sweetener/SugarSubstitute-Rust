@@ -29,7 +29,10 @@ export {
   sessionMessageError,
 } from '../../../../../integrations/shared/SessionProtocol.js';
 export type { SessionErrorCode } from '../../../../../integrations/shared/SessionProtocol.js';
-export { isDesktopCheckpoint } from '../../../../../integrations/shared/SessionSnapshot.js';
+export {
+  desktopCheckpointError,
+  isDesktopCheckpoint,
+} from '../../../../../integrations/shared/SessionSnapshot.js';
 export {
   parseSessionJson,
   decodeDesktopCheckpoint,
