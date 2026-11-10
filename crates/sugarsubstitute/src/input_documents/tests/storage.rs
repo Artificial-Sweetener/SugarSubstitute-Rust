@@ -4,14 +4,12 @@
 //! jobs over owned temporary directories.
 use super::super::{files, *};
 use super::{POLICY, at};
-use crate::job_sequence::JobSequence;
+use crate::{
+    completion_wake::{Gate, Wake},
+    job_sequence::JobSequence,
+};
 use std::{
-    error::Error,
-    num::NonZeroUsize,
-    os::windows::fs::OpenOptionsExt,
-    path::PathBuf,
-    sync::{Arc, Condvar, Mutex, PoisonError},
-    time::Duration,
+    error::Error, num::NonZeroUsize, os::windows::fs::OpenOptionsExt, path::PathBuf, sync::Arc,
 };
 use sugarsubstitute_canvas::{
     ArchivedDocument, Document, DocumentEdit, Layer, LayerContent, LayerId, MaskAppearance,
@@ -32,19 +30,6 @@ impl Clock for FixedClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.revision.lock().unwrap_or_else(PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 
@@ -98,22 +83,13 @@ impl Fixture {
 
     /// Wait for completion signals until `observe` reports a terminal result.
     fn settle<T>(&self, mut observe: impl FnMut() -> TestResult<Option<T>>) -> TestResult<T> {
-        loop {
-            let revision = *self.wake.revision.lock().unwrap_or_else(PoisonError::into_inner);
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if let Some(value) = observe()? {
-                return Ok(value);
+        self.wake.until(|| {
+            if let Err(cause) = self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))
+            {
+                return Some(Err(cause.into()));
             }
-            let guard = self.wake.revision.lock().unwrap_or_else(PoisonError::into_inner);
-            let (guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, Duration::from_secs(30), |current| *current == revision)
-                .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-            if timeout.timed_out() && *guard == revision {
-                return Err("Store job did not reach an observed terminal outcome".into());
-            }
-        }
+            observe().transpose()
+        })
     }
 
     fn outcome<T, E>(&self, mut job: OwnedJob<T, E>) -> TestResult<JobOutcome<T, E>> {
@@ -287,21 +263,16 @@ fn a_cancelled_save_changes_no_file() -> TestResult {
     fixture.save(&first)??;
     let before = std::fs::read(fixture.path(CURRENT_ARCHIVE))?;
     let second = fixture.archive(2, b"second")?;
-    let gate = Arc::new((Mutex::new(false), Condvar::new()));
+    let gate = Arc::new(Gate::default());
     let worker_gate = gate.clone();
     let directory = fixture.store.directory().to_path_buf();
     let spec = fixture.spec(InputDocumentStore::save_reservation(&second))?;
     let job = fixture.client.submit_blocking(&fixture.scope, spec, move |context| {
-        let (open, changed) = &*worker_gate;
-        let guard = open.lock().unwrap_or_else(PoisonError::into_inner);
-        let _released = changed
-            .wait_timeout_while(guard, Duration::from_secs(30), |open| !*open)
-            .unwrap_or_else(PoisonError::into_inner);
+        worker_gate.hold();
         files::save(&directory, &second, &context)
     })?;
     job.cancel();
-    *gate.0.lock().unwrap_or_else(PoisonError::into_inner) = true;
-    gate.1.notify_all();
+    gate.release();
     match fixture.outcome(job)? {
         JobOutcome::Cancelled => {}
         JobOutcome::Failure(cause) => assert!(cause.interrupted(), "{cause}"),

@@ -6,12 +6,8 @@ mod profiles;
 mod storage;
 mod transfers;
 use super::*;
-use crate::job_sequence::JobSequence;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Condvar, Mutex, PoisonError},
-    time::Duration,
-};
+use crate::{completion_wake::Wake, job_sequence::JobSequence};
+use std::sync::Arc;
 use sugarsubstitute_contracts::{desktop_session::decode_checkpoint, execution::*};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -34,18 +30,6 @@ impl Clock for FixedClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.revision.lock().unwrap_or_else(PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
     }
 }
 struct Fixture {
@@ -87,22 +71,7 @@ impl Fixture {
         })
     }
     fn terminal<T, E>(&self, mut job: OwnedJob<T, E>) -> TestResult<JobOutcome<T, E>> {
-        loop {
-            let revision = *self.wake.revision.lock().unwrap_or_else(PoisonError::into_inner);
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if let Some(result) = job.try_take_completion() {
-                return Ok(result.outcome);
-            }
-            let guard = self.wake.revision.lock().unwrap_or_else(PoisonError::into_inner);
-            let (guard, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(guard, Duration::from_secs(30), |value| *value == revision)
-                .map_err(|cause| io::Error::other(cause.to_string()))?;
-            if timeout.timed_out() && *guard == revision {
-                return Err("Workspace job did not terminate".into());
-            }
-        }
+        Ok(self.wake.completion(&self.client, &mut job)?.outcome)
     }
     fn save(&self, checkpoint: SessionCheckpoint) -> TestResult<Result<SaveReceipt, StoreError>> {
         let job = self.store.submit_save(&self.client, &self.scope, self.spec()?, checkpoint)?;
