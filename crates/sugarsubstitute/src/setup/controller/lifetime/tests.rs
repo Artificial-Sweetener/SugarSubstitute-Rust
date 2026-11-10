@@ -32,14 +32,6 @@ fn observe(wake: &Wake, mut step: impl FnMut() -> Result<bool>) -> Result<()> {
     wake.until(|| step().map(|done| done.then_some(())).transpose())
 }
 
-/// Release the held worker when the test unwinds, so a failed assertion cannot strand its join.
-struct Release(Arc<Gate>);
-impl Drop for Release {
-    fn drop(&mut self) {
-        self.0.release();
-    }
-}
-
 #[test]
 fn repeated_close_preserves_admitted_launch_cleanup_until_observed_settlement() -> Result<()> {
     let (mut controller, wake) = fixture()?;
@@ -249,7 +241,7 @@ fn closing_cancels_preparation_but_observes_transfer_and_creation_without_discar
     ] {
         let (mut controller, wake) = fixture()?;
         let gate = Arc::new(Gate::default());
-        let _release = Release(gate.clone());
+        let _release = gate.guard();
         let cancelled = Arc::new(Mutex::new(None));
         let (worker_gate, worker_cancelled) = (gate.clone(), cancelled.clone());
         controller.submit(work, move |context| {
@@ -278,7 +270,7 @@ fn close_during_open_retains_returned_creator_until_observed_retirement() -> Res
     let launch = controller.relaunch.take().ok_or("Creator absent")?;
     controller.install_id = Some("open".into());
     let gate = Arc::new(Gate::default());
-    let _release = Release(gate.clone());
+    let _release = gate.guard();
     let worker_gate = gate.clone();
     controller.submit(StorageWork::Open, move |_| {
         worker_gate.hold();

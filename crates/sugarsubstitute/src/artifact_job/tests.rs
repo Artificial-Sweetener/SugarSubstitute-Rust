@@ -17,14 +17,6 @@ impl Clock for Manual {
     }
 }
 
-/// Release the held worker when the test unwinds, so a failed assertion cannot strand its join.
-struct Release(Arc<Gate>);
-impl Drop for Release {
-    fn drop(&mut self) {
-        self.0.release();
-    }
-}
-
 /// A real blocking worker must remain owned after a shutdown request until it actually returns.
 #[test]
 fn artifact_cancellation_preserves_unreturned_work_and_its_original_failure() -> Result {
@@ -50,7 +42,7 @@ fn retained_failure(expire: bool) -> Result {
         )))
     })?;
     // Declared after the lifetime so it drops first and frees the worker before the join.
-    let _release = Release(gate.clone());
+    let _release = gate.guard();
     let wake = Arc::new(Wake::default());
     lifetime.start(wake.clone())?;
     gate.wait_entered();

@@ -19,7 +19,7 @@
 use std::{
     error::Error,
     num::NonZeroUsize,
-    sync::{Condvar, Mutex, MutexGuard, OnceLock, PoisonError},
+    sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError},
     time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::{
@@ -269,6 +269,23 @@ impl Gate {
     }
 }
 
+/// Releases its gate when dropped, so a failing assertion can never leave a held worker blocking
+/// the executor join that follows.
+pub(crate) struct ReleaseOnDrop(Arc<Gate>);
+
+impl Drop for ReleaseOnDrop {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+
+impl Gate {
+    /// Guard that releases this gate on drop, including when the test unwinds.
+    pub(crate) fn guard(self: &Arc<Self>) -> ReleaseOnDrop {
+        ReleaseOnDrop(Arc::clone(self))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,7 +324,7 @@ mod tests {
         assert!(message.contains("stalled waiting for the lost fixture event"), "{message}");
     }
 
-    /// A held worker is observed entering, then returns only after its release.
+    /// A held worker is observed entering, then returns only after its guard or release frees it.
     #[test]
     fn a_gate_holds_a_real_worker_until_released() -> TestResult {
         let clock = PausedClock::new();
@@ -332,7 +349,8 @@ mod tests {
         })?;
         gate.wait_entered();
         assert!(job.try_take_completion().is_none());
-        gate.release();
+        // Dropping the guard releases the worker; releasing again is harmless.
+        drop(gate.guard());
         gate.release();
         assert!(matches!(wake.completion(&client, &mut job)?.outcome, JobOutcome::Success(7)));
         drop((job, scope));

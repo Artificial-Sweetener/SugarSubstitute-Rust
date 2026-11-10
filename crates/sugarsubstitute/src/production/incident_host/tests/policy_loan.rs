@@ -34,12 +34,6 @@ fn policy(host: &mut IncidentHost) -> TestResult<&mut FundedPolicy> {
         _ => Err("Actual admitted constructor missing".into()),
     }
 }
-struct Release(Arc<Gate>);
-impl Drop for Release {
-    fn drop(&mut self) {
-        self.0.release();
-    }
-}
 /// Park original metadata copied from a genuine central batch; no terminal is manufactured.
 fn notice(
     client: &ExecutionClient,
@@ -66,7 +60,7 @@ fn reordered_policy_loan(closing: bool) -> TestResult {
         .map(|funded| std::ptr::from_ref(&*funded.state))
         .ok_or("Original policy absent")?;
     let gate = Arc::new(Gate::default());
-    let _release = Release(gate.clone());
+    let _release = gate.guard();
     let external = gate.clone();
     let mut probe = spec(rig.jobs.allocate()?);
     probe.reservation_bytes = 4096;

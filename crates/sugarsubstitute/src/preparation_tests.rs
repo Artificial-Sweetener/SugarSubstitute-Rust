@@ -203,7 +203,7 @@ fn retirement_is_scope_local_and_preserves_unrelated_execution() -> Result<(), B
     let unrelated =
         client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
     let latch = Arc::new(Gate::default());
-    let _release = support::Release(latch.clone());
+    let _release = latch.guard();
     let worker = latch.clone();
     let mut blocked = client.submit_blocking(
         &unrelated,
@@ -283,7 +283,7 @@ fn shared_shutdown_retains_workers_until_blocking_work_actually_stops() -> Resul
     let unrelated =
         client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
     let latch = Arc::new(Gate::default());
-    let _release = support::Release(latch.clone());
+    let _release = latch.guard();
     let worker = latch.clone();
     let mut blocked = client.submit_blocking(
         &unrelated,
@@ -436,7 +436,7 @@ fn console_uninvoked_factory_keeps_pin_until_real_terminal_disposal() -> Result<
             driver.client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
         // The production owner has exactly one interactive lane, also on single-CPU systems.
         let latch = Arc::new(Gate::default());
-        let _release = support::Release(latch.clone());
+        let _release = latch.guard();
         let worker = latch.clone();
         let mut occupant = driver.client.submit_cpu(
             &scope,

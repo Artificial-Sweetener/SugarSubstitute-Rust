@@ -64,15 +64,6 @@ fn settle(
     })
 }
 
-/// Release a held worker when the test leaves scope, so a failed assertion cannot strand the
-/// executor that must join it.
-struct Release(Arc<Gate>);
-impl Drop for Release {
-    fn drop(&mut self) {
-        self.0.release();
-    }
-}
-
 fn identity(navigation: u64) -> Result<MainIdentity, Box<dyn Error>> {
     Ok(MainIdentity {
         run: super::super::policy::tests::test_run()?,
@@ -171,7 +162,7 @@ fn expired_running_wait_keeps_its_main_until_actual_completion() -> Result<(), B
     let (fence, input) = CompositionFence::fixture();
     let mut input = Some(input);
     let hold = Arc::new(Gate::default());
-    let release = Release(hold.clone());
+    let release = hold.guard();
     let worker = hold.clone();
     let spec = JobSpec {
         id: jobs.allocate()?,
@@ -204,7 +195,7 @@ fn expired_running_wait_keeps_its_main_until_actual_completion() -> Result<(), B
     work.close();
     assert!(!work.settled(Moment::from_nanos(10))?);
     assert!(work.main_retired(main).is_err());
-    release.0.release();
+    drop(release);
     advance_until_idle(&wake, &client, &mut work, Moment::from_nanos(10))?;
     assert!(fence.completed());
     work.main_retired(main)?;
@@ -232,7 +223,7 @@ fn replacement_waits_for_terminal_outcome_after_native_retirement() -> Result<()
     let (fence, wait) = CompositionFence::fixture();
     let mut input = Some(wait);
     let hold = Arc::new(Gate::default());
-    let release = Release(hold.clone());
+    let release = hold.guard();
     let worker = hold.clone();
     let spec = JobSpec {
         id: jobs.allocate()?,
@@ -265,7 +256,7 @@ fn replacement_waits_for_terminal_outcome_after_native_retirement() -> Result<()
     assert!(!work.register(replacement)?);
 
     clock.0.store(31, Ordering::SeqCst);
-    release.0.release();
+    drop(release);
     advance_until_idle(&wake, &client, &mut work, Moment::from_nanos(31))?;
     assert!(work.register(replacement)?);
     work.close();

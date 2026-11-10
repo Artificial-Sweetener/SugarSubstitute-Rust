@@ -16,13 +16,6 @@ impl Clock for Frozen {
         Box::pin(std::future::pending())
     }
 }
-struct Release(Arc<Gate>);
-impl Drop for Release {
-    fn drop(&mut self) {
-        self.0.release();
-    }
-}
-
 #[test]
 fn recovery_final_receive_prevents_new_native_read_while_actual_wait_completions_are_pending()
 -> TestResult {
@@ -42,7 +35,7 @@ fn recovery_final_receive_prevents_new_native_read_while_actual_wait_completions
         })
     };
     let gate = Arc::new(Gate::default());
-    let _release = Release(gate.clone());
+    let _release = gate.guard();
     let boundary = gate.clone();
     let mut handler_wait = client.submit_blocking(&scope, spec(1)?, move |_| {
         boundary.hold();

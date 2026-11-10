@@ -66,15 +66,6 @@ impl sugarsubstitute_contracts::execution::CpuTask<(), std::io::Error> for CpuHo
     }
 }
 
-/// Release a held worker when the test leaves scope, so a failed assertion cannot strand the
-/// executor that must join it.
-pub(super) struct Release(pub(super) Arc<Gate>);
-impl Drop for Release {
-    fn drop(&mut self) {
-        self.0.release();
-    }
-}
-
 /// Keep execution time deterministic; progress is observed only through completion wakes.
 struct FrozenClock;
 impl Clock for FrozenClock {
