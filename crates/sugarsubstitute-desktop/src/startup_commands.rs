@@ -20,25 +20,17 @@ pub(super) fn drain(
         else {
             return Ok(());
         };
-        if session.closing
-            && matches!(
-                &command,
-                DesktopStartupCommand::SendSurfacePresentation(_)
-                    | DesktopStartupCommand::SendCanvasNotification(_)
-            )
-        {
-            continue;
-        }
-        if session.closing
-            && !matches!(
-                command,
-                DesktopStartupCommand::Close
-                    | DesktopStartupCommand::RetireMain { .. }
-                    | DesktopStartupCommand::ConfirmMainAbsent(_)
-                    | DesktopStartupCommand::ProcessUiChallenge(_)
-            )
-        {
-            return Err(DesktopError::message("startup_command", "startup admission is closed"));
+        if session.closing {
+            match command.while_closing() {
+                crate::host_contract::ClosingAdmission::Run => {}
+                crate::host_contract::ClosingAdmission::Drop => continue,
+                crate::host_contract::ClosingAdmission::Refuse => {
+                    return Err(DesktopError::message(
+                        "startup_command",
+                        "startup admission is closed",
+                    ));
+                }
+            }
         }
         match command {
             DesktopStartupCommand::CaptureMainPlacement { identity, capture_id } => {

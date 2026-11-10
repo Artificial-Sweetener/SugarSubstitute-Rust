@@ -155,3 +155,42 @@ fn host_command_checks_exact_scope_origin_and_original_admitted_charge() -> Resu
     assert_eq!(command.message(), &message);
     Ok(())
 }
+
+/// A workspace save that finishes as the window closes answers a page that is leaving: the
+/// answer is dropped, while unrelated commands after close began remain refused.
+#[test]
+fn a_session_message_queued_after_close_began_is_dropped_not_refused() -> Result {
+    use crate::{DesktopStartupCommand, host_contract::ClosingAdmission};
+    let bootstrap = bootstrap()?;
+    let message = SessionMessage {
+        protocol: "sugarcubes.desktop-session".into(),
+        version: 1,
+        request_id: bootstrap.webview().into(),
+        scope: bootstrap.scope().clone(),
+        origin: origin_text(bootstrap.origin()),
+        operation: SessionOperation::Capture {
+            fence: SessionFence {
+                webview: bootstrap.webview().into(),
+                revision: 1,
+                bindings: vec![],
+            },
+            checkpoint_id: "00000000-0000-4000-8000-000000000002".into(),
+            revision: 3,
+        },
+    };
+    let lease = MemoryLease::new(SessionCommand::STORAGE_BYTES, Box::new(Release));
+    let command = SessionCommand::new(
+        identity()?,
+        message.clone(),
+        lease.claim(SessionCommand::STORAGE_BYTES)?,
+        bootstrap.scope(),
+        &message.origin,
+    )?;
+    assert_eq!(DesktopStartupCommand::SendSession(command).while_closing(), ClosingAdmission::Drop);
+    assert_eq!(DesktopStartupCommand::Close.while_closing(), ClosingAdmission::Run);
+    assert_eq!(
+        DesktopStartupCommand::RevealMain(identity()?).while_closing(),
+        ClosingAdmission::Refuse
+    );
+    Ok(())
+}

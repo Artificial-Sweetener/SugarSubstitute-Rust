@@ -450,7 +450,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:afa0ac0dfd6ea251a8f01b0e05764046b04c8caf84871eaa1f0ae6b1f37e3ddf"
+source_sha256 = "sha256:36ad4a13760a327fb9857ede3412a2bd16c6bf221835b80ca70fcbd7b52eb0b4"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -744,7 +744,7 @@ rationale = "Native placement fixture uses fixed caption labels only to construc
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_session_contract/tests.rs"
-source_sha256 = "sha256:7d130568dbdf47b1fc3051dc7e86c9192dcdf26d3b49155074d7e17a58233c5d"
+source_sha256 = "sha256:3a3f3d4506c673045680384754629dad7c3a1581c8aa7639e3dfe01a9ee44b6c"
 kind = "fixture"
 rationale = "Session admission fixture uses fixed caption labels while testing exact scope, profile and bridge rejection."
 
