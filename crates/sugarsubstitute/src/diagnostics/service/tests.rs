@@ -293,3 +293,96 @@ fn explicit_writer_contention_retries_the_original_batch_without_reclassifying_s
     assert_eq!(frames.len() as u64 + omitted, 1);
     Ok(())
 }
+
+/// Execution time that a test advances past any former elapsed-time bound without waiting.
+struct AdvancedClock {
+    actual: Arc<sugarsubstitute_execution::MonotonicClock>,
+    offset: std::sync::atomic::AtomicU64,
+}
+impl AdvancedClock {
+    fn advance(&self, by: Duration) {
+        self.offset.fetch_add(u64::try_from(by.as_nanos()).unwrap_or(u64::MAX), Ordering::AcqRel);
+    }
+}
+impl Clock for AdvancedClock {
+    fn now(&self) -> sugarsubstitute_contracts::execution::Moment {
+        sugarsubstitute_contracts::execution::Moment::from_nanos(
+            self.actual.now().as_nanos().saturating_add(self.offset.load(Ordering::Acquire)),
+        )
+    }
+    fn sleep_until(
+        &self,
+        deadline: sugarsubstitute_contracts::execution::Moment,
+    ) -> sugarsubstitute_contracts::execution::WaitFuture {
+        self.actual.sleep_until(sugarsubstitute_contracts::execution::Moment::from_nanos(
+            deadline.as_nanos().saturating_sub(self.offset.load(Ordering::Acquire)),
+        ))
+    }
+}
+/// A history writer that another process holds until the test releases it.
+#[derive(Default)]
+struct HeldWriter {
+    state: Mutex<HeldState>,
+    changed: Condvar,
+}
+#[derive(Default)]
+struct HeldState {
+    released: bool,
+    latest_busy_attempt: Option<sugarsubstitute_contracts::execution::Moment>,
+    published: Vec<String>,
+}
+impl Sink for HeldWriter {
+    fn append(&self, frames: &[String], _: u64, context: &JobContext) -> io::Result<()> {
+        let mut state =
+            self.state.lock().map_err(|_| io::Error::other("Fixture state poisoned"))?;
+        if !state.released {
+            state.latest_busy_attempt = Some(context.now());
+            self.changed.notify_all();
+            return Err(io::ErrorKind::WouldBlock.into());
+        }
+        state.published.extend_from_slice(frames);
+        Ok(())
+    }
+    fn overloaded(&self, cause: &io::Error) -> bool {
+        cause.kind() == io::ErrorKind::WouldBlock
+    }
+}
+impl HeldWriter {
+    /// Block until publication retries the busy writer at or after `moment`.
+    fn busy_at_or_after(
+        &self,
+        moment: sugarsubstitute_contracts::execution::Moment,
+    ) -> Result<(), Box<dyn Error>> {
+        let state = self.state.lock().map_err(|_| "Fixture state poisoned")?;
+        drop(wait_while_watched(
+            &self.changed,
+            state,
+            || "publication to retry the busy history writer".to_owned(),
+            |state| state.latest_busy_attempt.is_none_or(|attempt| attempt < moment),
+        ));
+        Ok(())
+    }
+}
+#[test]
+fn a_writer_held_past_any_elapsed_time_delays_the_batch_without_failing_diagnostics()
+-> Result<(), Box<dyn Error>> {
+    let clock = Arc::new(AdvancedClock {
+        actual: sugarsubstitute_execution::MonotonicClock::new(),
+        offset: Default::default(),
+    });
+    let sink = Arc::new(HeldWriter::default());
+    let health = DiagnosticHealth::fixture();
+    let service = Service::start(health.clone(), sink.clone(), clock.clone())?;
+    service.queue().push("operation=held_writer\n".into());
+    sink.busy_at_or_after(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
+    clock.advance(Duration::from_secs(3_600));
+    let later = clock.now();
+    sink.busy_at_or_after(later)?;
+    health.check()?;
+    sink.state.lock().map_err(|_| "Fixture state poisoned")?.released = true;
+    service.finish(&health);
+    health.check()?;
+    let state = sink.state.lock().map_err(|_| "Fixture state poisoned")?;
+    assert_eq!(state.published, ["operation=held_writer\n"]);
+    Ok(())
+}

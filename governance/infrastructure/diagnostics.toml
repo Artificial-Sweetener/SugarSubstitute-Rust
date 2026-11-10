@@ -80,21 +80,21 @@ rationale = "Supported bounded field formatter applies the shared contract befor
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service/batches.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:6183ead63f4905f822ada780a7d98cc78568828b6a38c10851af38346ab86c96"
+source_sha256 = "sha256:d7100b15ab37cb97e5bfb10bf6167f91e7ceabccac0fcf3d4d1a84d5e8632c75"
 disposition = "routing"
 rationale = "Native sink calls suppress recursive executor events within source-preserving bounded publication attempts."
 
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3861946abbe18594217bc959a95769cb7c08fdff75120cbc3d46b2dbd7d9793b"
+source_sha256 = "sha256:3a5e1e24499015bfc59bacef706ce83e7923957a464f8e873f26237197ea0c94"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:547ad0837822433169d51d49fc0514de5fcd96f431aa1685bab637414cb335e4"
+source_sha256 = "sha256:46cca8b15841b62ebf12d533c0112036ae34fdfd0581b89aba844a0006f26a9d"
 disposition = "routing"
 rationale = "Host lifetime composes the existing execution adapter with the protected operational storage port."
 

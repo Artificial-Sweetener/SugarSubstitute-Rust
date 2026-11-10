@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Publish one original batch through finite source-preserving attempts with an unchanged cutoff.
+//! Publish one original batch through source-preserving attempts that only the shutdown cutoff ends.
 use super::*;
 use crate::diagnostics::queue::Batch;
 
@@ -9,12 +9,12 @@ struct AttemptFailure {
     batch: Batch,
     cause: io::Error,
 }
-/// Native writer admission may be retried; the original failure survives exhaustion.
+/// Native writer admission is retried until the shutdown cutoff; the original busy cause survives it.
 #[derive(Debug)]
 struct ContentionDeadline(io::Error);
 impl std::fmt::Display for ContentionDeadline {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Diagnostic writer contention exceeded its original cutoff")
+        f.write_str("Diagnostic writer contention outlasted the shutdown cutoff")
     }
 }
 impl std::error::Error for ContentionDeadline {
@@ -38,7 +38,7 @@ impl std::error::Error for AdmissionFailure {
         Some(&self.cause)
     }
 }
-/// Keep drained frames and their original charge through rejection, native return and bounded retry.
+/// Keep drained frames and their original charge through rejection, native return and retry.
 pub(super) async fn publish(
     batch: Batch,
     client: &ExecutionClient,
@@ -48,13 +48,18 @@ pub(super) async fn publish(
     context: &JobContext,
     sequence: &mut u64,
 ) -> io::Result<()> {
-    let deadline = context.now().checked_add(Duration::from_secs(2)).map_err(io::Error::other)?;
+    // Another process of this installation may hold the shared history writer for as long as
+    // its own slow write takes, so a busy writer delays the batch until it frees. Only the
+    // shutdown cutoff, once the service stops, ends the wait.
     let cutoff = batch.cutoff.clone();
     let effective_deadline = || {
-        deadline.min(sugarsubstitute_contracts::execution::Moment::from_nanos(
+        sugarsubstitute_contracts::execution::Moment::from_nanos(
             cutoff.load(std::sync::atomic::Ordering::Acquire),
-        ))
+        )
     };
+    // Protected storage demands a finite admitted deadline; before shutdown the attempt carries
+    // the open-ended one, so only the shutdown cutoff or cancellation stops it.
+    let attempt_deadline = || effective_deadline().min(crate::job_deadline::OPEN_ENDED);
     let mut first_busy = None;
     let mut input = Some(batch);
     'attempt: loop {
@@ -77,7 +82,7 @@ pub(super) async fn publish(
                 spec(
                     *sequence,
                     JobClass::InfrastructureOrdinary,
-                    Some(effective_deadline()),
+                    Some(attempt_deadline()),
                     BATCH_MEMORY_BYTES,
                 )?,
                 &mut input,

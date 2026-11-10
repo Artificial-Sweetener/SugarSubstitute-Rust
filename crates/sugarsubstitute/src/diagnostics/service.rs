@@ -28,6 +28,8 @@ use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 const PUMP_MEMORY_BYTES: u64 = 1024 * 1024;
 /// One finite native publication, including bounded protected storage preparation.
 const BATCH_MEMORY_BYTES: u64 = 8 * 1024 * 1024;
+/// How often admission looks for the pump's installed queue memory between completion wakes.
+const ADMISSION_OBSERVATION: Duration = Duration::from_millis(10);
 
 /// Actual persistence boundary; producers never receive its filesystem or scheduling authority.
 pub(super) trait Sink: Send + Sync + 'static {
@@ -93,6 +95,9 @@ pub(super) struct Service {
 impl Service {
     /// Admit the process route before producers start, using only the existing execution adapter.
     /// Every deadline of the route, including publication and shutdown, runs on `clock`.
+    ///
+    /// Admission ends when the pump holds its queue memory or when the pump ends, whose original
+    /// cause diagnostic health retains; a slow host delays it instead of failing the process.
     pub(super) fn start(
         health: DiagnosticHealth,
         sink: Arc<dyn Sink>,
@@ -125,22 +130,17 @@ impl Service {
             },
         )?;
         let mut service = Self { owner, client, queue, job, wake, clock };
-        let until = service.clock.now().checked_add(Duration::from_secs(5))?;
         while service.queue.state().memory.is_none() {
             service.client.drain_completions(NonZeroUsize::MIN)?;
             if service.job.try_take_completion().is_some() {
                 startup_health.check()?;
                 return Err(io::Error::other("Diagnostic routing admission failed").into());
             }
-            if service.clock.now() >= until {
-                service.job.cancel();
-                return Err(io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    "Diagnostic routing admission elapsed",
-                )
-                .into());
-            }
-            service.wake.wait(&*service.clock, until)?;
+            // The pump's memory installation is not a completion event; the wake also returns
+            // after a short interval so the installed claim is observed.
+            service
+                .wake
+                .wait(&*service.clock, service.clock.now().checked_add(ADMISSION_OBSERVATION)?)?;
         }
         Ok(service)
     }
