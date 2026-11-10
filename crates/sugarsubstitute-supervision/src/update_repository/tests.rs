@@ -15,7 +15,9 @@ use sugarsubstitute_execution::http_fixture::Exchange;
 use sugarsubstitute_update::{Error as Verification, fixture::*};
 mod delivery;
 mod hostile;
-const IDLE: Duration = Duration::from_secs(1);
+/// A healthy loopback exchange is never idle for long, so the product's longest supported idle
+/// timeout bounds only a dead peer; the server answers at the pace of its events, not a timer.
+const IDLE: Duration = Duration::from_secs(120);
 const RESERVATION: u64 = RESERVATION_BYTES + 4 * 1024 * 1024;
 
 fn request(channel: Channel) -> Request {

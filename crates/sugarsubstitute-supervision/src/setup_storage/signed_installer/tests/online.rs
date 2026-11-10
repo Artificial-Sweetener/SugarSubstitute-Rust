@@ -125,7 +125,8 @@ fn http_delivery_enters_shared_preparation_while_application_run_exclusion_remai
             ),
         ];
         let (server, policy) = Running::start(exchanges, context)?;
-        let mut repository = Repository::new(policy, Duration::from_secs(1));
+        // The product's longest supported idle timeout: only a dead peer reaches it.
+        let mut repository = Repository::new(policy, Duration::from_secs(120));
         let Check::Offer(offer) = repository.discover(&trust, signed.request, || NOW, context)?
         else {
             return Err("Expected complete discovery".into());

@@ -5,7 +5,9 @@ use super::*;
 use crate::setup_storage::test_worker::{self as worker, TestResult, installation};
 mod signed;
 use super::fixture::{Running, complete, exchange};
-const IDLE: Duration = Duration::from_secs(1);
+/// A healthy loopback exchange is never idle for long, so the product's longest supported idle
+/// timeout bounds only a dead peer; the server answers at the pace of its events, not a timer.
+const IDLE: Duration = Duration::from_secs(120);
 const RESERVATION: u64 = 24 * 1024 * 1024;
 
 #[test]

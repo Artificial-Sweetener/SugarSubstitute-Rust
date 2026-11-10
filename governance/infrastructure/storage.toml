@@ -2445,7 +2445,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Bro
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/online.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4c2b1440063ddd485bb3acbf6caa29e698f063f975823494544108f8a33c74b3"
+source_sha256 = "sha256:60db83f838de5cfbaaa189a20cbe4fc6ca8ee8a771f9dc0ad91f89c8ac7b1718"
 capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "method metadata", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Join real HTTP delivery and offline delivery to identical retained preparation custody. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2756,7 +2756,7 @@ consumer = "protocol_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_http/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f1875b87f308539256668fcfa1253cd63e84740ec6b1c9079c6a83024c457097"
+source_sha256 = "sha256:81fa002b54d99744d2161444003445a89277d536b4f31925f966aa119e210830"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Actual WinHTTP requests against isolated execution-owned loopback sockets. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

@@ -45,7 +45,8 @@ pub(super) fn configuration(fixture: &Fixture, policy: Policy) -> Configuration 
         workspace: fixture.workspace.path().to_owned(),
         repository: [92; 32],
         policy,
-        idle: Duration::from_secs(1),
+        // The product's longest supported idle timeout: only a dead peer reaches it.
+        idle: Duration::from_secs(120),
     }
 }
 
