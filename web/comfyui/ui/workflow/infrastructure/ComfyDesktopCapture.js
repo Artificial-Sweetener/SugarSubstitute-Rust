@@ -42,6 +42,10 @@ export class ComfyDesktopCapture {
                 throw new DesktopSessionRefusal('stale', 'Desktop workflow owner was retired.');
             const outputs = await this.options.outputs.capture(binding, this.options.scope.backend, result, cancellation);
             this.options.assertCurrent(cancellation);
+            // Results arriving while receipts were awaited can advance this workflow past the captured
+            // document; the capture then describes no single moment and is retried, not refused.
+            if (!sameBinding(this.options.bindings.binding(context.sessionId), binding))
+                throw new DesktopSessionRefusal('stale', 'Desktop workflow changed while its checkpoint was captured.');
             const route = readComfyWorkflowInputState(JSON.parse(document.graphJson))?.route ?? 'output';
             const view = this.options.canvas.capture(context, binding, outputs, this.options.identities, preferences, route);
             entries.push(Object.freeze({
@@ -119,4 +123,13 @@ function requestedTemporaryAsset(output) {
         extension,
         media: output.media,
     });
+}
+/** Whether a workflow still sits at the exact revisions a capture started from. */
+function sameBinding(left, right) {
+    return (left.entryId === right.entryId &&
+        left.runtimeSession === right.runtimeSession &&
+        left.generation === right.generation &&
+        left.graphRevision === right.graphRevision &&
+        left.sourceRevision === right.sourceRevision &&
+        left.navigationRevision === right.navigationRevision);
 }

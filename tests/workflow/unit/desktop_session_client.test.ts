@@ -294,6 +294,30 @@ test('a graph load that begins during admitted capture returns a retryable refus
   host.client.dispose();
 });
 
+test('a capture the workspace outran is refused as retryable without reporting a canvas failure', async () => {
+  const host = fixture();
+  host.runtime.capture = async () => {
+    throw new DesktopSessionRefusal(
+      'stale',
+      'Desktop workflow changed while its checkpoint was captured.',
+    );
+  };
+  const request = host.message({
+    kind: 'capture',
+    fence: host.fence,
+    checkpointId: host.checkpoint.id,
+    revision: 12,
+  });
+  await host.client.receive(request);
+  expect(host.errors).toEqual([]);
+  expect(
+    host.sent.find(
+      (message) => message.requestId === request.requestId && message.operation.kind === 'error',
+    )?.operation,
+  ).toMatchObject({ kind: 'error', failure: { code: 'stale', retryable: true } });
+  host.client.dispose();
+});
+
 test('an unexpected capture error is reported with its original cause and correlated invalid reply', async () => {
   const host = fixture();
   const error = new Error('Unexpected document serialization failure.');
