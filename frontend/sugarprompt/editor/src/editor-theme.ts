@@ -53,6 +53,25 @@ export const editorTheme = EditorView.theme({
     caretColor: 'currentColor',
   },
   '.cm-line': { padding: '0' },
+  // CodeMirror's zero-width widget buffer is a bare `img` that places the caret beside a widget and
+  // gives empty lines their measurable box. Host pages and user stylesheets restyle bare images
+  // (`height: auto`, `display: none`, `max-height: 0`), which collapses that box and makes vertical
+  // motion skip every empty line, so the metrics CodeMirror depends on are pinned against them.
+  '.cm-widgetBuffer': {
+    display: 'inline !important',
+    position: 'static !important',
+    float: 'none !important',
+    width: '0 !important',
+    minWidth: '0 !important',
+    maxWidth: 'none !important',
+    height: '1em !important',
+    minHeight: '0 !important',
+    maxHeight: 'none !important',
+    margin: '0 !important',
+    padding: '0 !important',
+    border: '0 !important',
+    verticalAlign: 'text-top !important',
+  },
   '.cm-content::selection, .cm-content ::selection': {
     backgroundColor: 'Highlight',
     color: 'HighlightText',
