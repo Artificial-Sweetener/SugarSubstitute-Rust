@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the real coordinator and execution owner with a platform-neutral native boundary.
 use super::*;
-use std::sync::{Condvar, Mutex};
+use crate::{completion_wake::Wake, paused_clock::PausedClock};
+use std::sync::Mutex;
 
 #[derive(Clone, Default)]
 struct Boundary(Arc<Mutex<Vec<&'static str>>>);
@@ -46,60 +47,22 @@ impl ConflictBackend for Boundary {
         Ok(())
     }
 }
-#[derive(Default)]
-struct Wake {
-    generation: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        let mut generation = self.generation.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other("wake poisoned")),
-            )
-        })?;
-        *generation += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
+/// Drive the service on each execution wake until `reached`; real work only makes this slower.
 fn advance(
     service: &mut Service<Boundary>,
     wake: &Wake,
     reached: impl Fn(&Service<Boundary>) -> bool,
 ) -> Result<()> {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        let generation = *wake.generation.lock().map_err(|_| "wake poisoned")?;
-        service.drive()?;
-        if reached(service) {
-            return Ok(());
-        }
-        let current = wake.generation.lock().map_err(|_| "wake poisoned")?;
-        let (observed, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                current,
-                deadline.saturating_duration_since(Instant::now()),
-                |value| *value == generation,
-            )
-            .map_err(|_| "wake poisoned")?;
-        drop(observed);
-        if timeout.timed_out() {
-            service.drive()?;
-            return if reached(service) {
-                Ok(())
-            } else {
-                Err("conflict completion missing".into())
-            };
-        }
-    }
+    wake.until(|| match service.drive() {
+        Err(cause) => Some(Err(cause)),
+        Ok(()) => reached(service).then_some(Ok(())),
+    })
 }
 #[test]
 fn portable_backend_close_retires_before_relaunch_and_rejoins_execution() -> Result<()> {
     let boundary = Boundary::default();
     let mut service = Service::new(boundary.clone());
+    service.clock = PausedClock::new();
     let wake = Arc::new(Wake::default());
     service.initialize(wake.clone())?;
     advance(&mut service, &wake, |service| service.phase == Phase::Ready)?;
@@ -119,6 +82,7 @@ fn portable_backend_close_retires_before_relaunch_and_rejoins_execution() -> Res
 fn cancellation_uses_same_port_without_closing_or_relaunching_other_copy() -> Result<()> {
     let boundary = Boundary::default();
     let mut service = Service::new(boundary.clone());
+    service.clock = PausedClock::new();
     let wake = Arc::new(Wake::default());
     service.initialize(wake.clone())?;
     advance(&mut service, &wake, |service| service.phase == Phase::Ready)?;

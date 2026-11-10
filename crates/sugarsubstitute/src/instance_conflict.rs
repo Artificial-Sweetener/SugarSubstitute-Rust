@@ -21,6 +21,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// The caller retains this service until `finished`, including surface failures.
 pub struct Service<B: ConflictBackend> {
     session: B,
+    clock: Arc<dyn Clock>,
     relaunch_started: bool,
     replacement: Option<OwnedJob<(), B::Error>>,
     native_retired: bool,
@@ -41,6 +42,7 @@ impl<B: ConflictBackend> Service<B> {
     pub fn new(session: B) -> Self {
         Self {
             session,
+            clock: MonotonicClock::new(),
             relaunch_started: false,
             replacement: None,
             native_retired: false,
@@ -69,7 +71,7 @@ impl<B: ConflictBackend> Service<B> {
         if self.owner.is_some() {
             return Ok(());
         }
-        let owner = ExecutionOwner::new(MonotonicClock::new(), wake)?;
+        let owner = ExecutionOwner::new(self.clock.clone(), wake)?;
         self.client = Some(owner.client());
         self.owner = Some(owner);
         self.scope = Some(
