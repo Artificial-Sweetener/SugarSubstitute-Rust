@@ -25,7 +25,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             return Err("Production entry cannot start twice or after close".into());
         }
         let client = self.client()?.clone();
-        let anchor = Instant::now();
+        let anchor = (self.native_now)();
         let original = EntrySetupBudget::new(client.now()?)?;
         self.original = Some(original);
         self.setup_deadline = Some(

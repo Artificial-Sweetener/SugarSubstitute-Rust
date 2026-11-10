@@ -67,7 +67,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         if let Some(forward) = &self.forward {
             forward.control.close();
         }
-        let anchor = Instant::now();
+        let anchor = (self.native_now)();
         self.shutdown = self.child.shutdown_budget();
         let sampled = self.client.as_ref().map(ExecutionClient::now).transpose();
         let mut first: Option<Box<dyn Error>> = None;
@@ -126,7 +126,8 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             }
             self.shutdown = Some(tightened);
         }
-        let cutoff = self.consume_cleanup_cutoff(Instant::now());
+        let native_now = (self.native_now)();
+        let cutoff = self.consume_cleanup_cutoff(native_now);
         if cutoff {
             let budget = self.shutdown.ok_or("Original production shutdown budget missing")?;
             if let Some(execution) = &mut self.execution
@@ -153,7 +154,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             // waiting for a failed logical owner here would hide the process forever.
             let actual =
                 self.execution.as_ref().ok_or("Production execution missing")?.poll_shutdown()?;
-            let now = Instant::now();
+            let now = (self.native_now)();
             if self
                 .shutdown_diagnostic
                 .is_none_or(|previous| now.duration_since(previous) >= Duration::from_secs(5))

@@ -2,9 +2,38 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fail configuration before any environment capture and observe real runner joins.
 use super::*;
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::{completion_wake::Wake, paused_clock::PausedClock};
+use std::sync::{
+    OnceLock,
+    atomic::{AtomicU64, Ordering},
+};
 static NEXT: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct NoChild(pub(crate) Option<sugarsubstitute_contracts::configuration::LocaleId>);
+
+/// The one native instant a frozen runner reports, so a cutoff expires only when a test says so.
+pub(super) fn frozen_native_now() -> Instant {
+    static ORIGIN: OnceLock<Instant> = OnceLock::new();
+    *ORIGIN.get_or_init(Instant::now)
+}
+
+/// Freeze the runner's logical and native time before it starts. Execution timers still fire for
+/// real and only pace polling; no cleanup, setup or post-exit deadline can expire from load.
+pub(super) fn freeze_time<C: EntryActivation>(runner: &mut EntryRunner<C>) {
+    runner.clock = PausedClock::new();
+    runner.native_now = frozen_native_now;
+}
+
+/// Poll `step` after each completion wake until it reports that the owner has settled, so a slow
+/// machine only delays the test and never expires a bound.
+pub(super) fn settle(
+    wake: &Wake,
+    mut step: impl FnMut() -> Result<bool, Box<dyn Error>>,
+) -> Result<(), Box<dyn Error>> {
+    wake.until(|| match step() {
+        Ok(false) => None,
+        other => Some(other.map(drop)),
+    })
+}
 
 /// Supply valid inert inputs while tests reject their installation before any read.
 pub(super) fn unopened_paths() -> Result<
@@ -40,7 +69,7 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let issued = ShutdownBudget::new(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
-    let cutoff = Instant::now();
+    let cutoff = frozen_native_now();
     owner.closing = true;
     owner.shutdown = Some(issued);
     owner.cleanup_deadline = Some(cutoff);
@@ -224,7 +253,14 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
         directory.join("capture"),
     )?;
     let original_child = std::ptr::from_ref(child.as_ref());
-    let result = run(command, |_| Ok(child), crate::diagnostics::DiagnosticHealth::fixture());
+    let mut lifetime = boxed_lifetime(
+        command,
+        std::env::current_exe()?,
+        child,
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
+    freeze_time(&mut lifetime);
+    let result = drive(lifetime);
     let returned = match result {
         Err(cause) => cause,
         Ok(()) => return Err("Malformed actual configuration was admitted".into()),

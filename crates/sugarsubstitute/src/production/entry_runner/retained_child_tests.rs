@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retained fatal child sources enter actual runner cleanup instead of vetoing idle forever.
 use super::*;
-use sugarsubstitute_contracts::{configuration::ConfigurationError, execution::ExecutionError};
+use crate::completion_wake::Wake;
+use sugarsubstitute_contracts::configuration::ConfigurationError;
 
 #[derive(Debug)]
 struct OriginalChildFailure(Arc<()>);
@@ -89,24 +90,16 @@ impl EntryActivation for RetainedChild {
         Ok(())
     }
 }
-struct QuietWake;
-
 #[test]
 fn expired_failed_cleanup_returns_after_actual_execution_join_instead_of_hiding_forever()
 -> Result<(), Box<dyn Error>> {
-    let mut runner = runner()?;
+    let (mut runner, wake) = runner()?;
     runner.child.retain_failure();
     runner.child.fail_cleanup = true;
     runner.request_shutdown()?;
-    runner.cleanup_deadline = Some(Instant::now());
+    runner.cleanup_deadline = Some(frozen_native_now());
     assert!(runner.poll_shutdown().is_err());
-    let until = Instant::now().checked_add(Duration::from_secs(15)).ok_or("Guard overflow")?;
-    while !runner.poll_shutdown()? {
-        if Instant::now() >= until {
-            return Err("Actual execution workers did not settle".into());
-        }
-        std::hint::spin_loop();
-    }
+    settle(&wake, || runner.poll_shutdown())?;
     assert!(!runner.child.cleanup_ready);
     assert!(!runner.child_closed);
     assert!(runner.execution.as_ref().ok_or("Execution absent")?.poll_shutdown()?.settled);
@@ -116,13 +109,8 @@ fn expired_failed_cleanup_returns_after_actual_execution_join_instead_of_hiding_
     Ok(())
 }
 
-impl CompletionWake for QuietWake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        Ok(())
-    }
-}
 /// Retain the existing actual execution/scopes before invalid configuration effects.
-fn runner() -> Result<EntryRunner<RetainedChild>, Box<dyn Error>> {
+fn runner() -> Result<(EntryRunner<RetainedChild>, Arc<Wake>), Box<dyn Error>> {
     let invalid = PathBuf::from("relative-installation");
     let command = ProductionCommand {
         launch_selection: None,
@@ -147,17 +135,20 @@ fn runner() -> Result<EntryRunner<RetainedChild>, Box<dyn Error>> {
         Box::new(child),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
+    freeze_time(&mut runner);
+    let wake = Arc::new(Wake::default());
     // The existing invalid-start fixture retains the real execution/scopes before configuration effects.
-    let rejected = runner.start(Arc::new(QuietWake)).err().ok_or("Invalid setup was admitted")?;
+    let rejected = runner.start(wake.clone()).err().ok_or("Invalid setup was admitted")?;
     assert!(rejected.downcast_ref::<ConfigurationError>().is_some());
     assert!(runner.bootstrap.is_none());
     let budget = ShutdownBudget::new(runner.client()?.now()?)?;
     runner.child.budget = Some(budget);
-    Ok(runner)
+    Ok((runner, wake))
 }
 /// Observe actual child closure and adapter joins without assuming elapsed native time.
 fn finish_cleanup(
     runner: &mut EntryRunner<RetainedChild>,
+    wake: &Wake,
     original: *const dyn Error,
 ) -> Result<(), Box<dyn Error>> {
     runner.child.cleanup_ready = true;
@@ -165,13 +156,8 @@ fn finish_cleanup(
     assert!(runner.child_closed);
     assert!(runner.intake_settled);
     assert!(!runner.finished);
-    let until = runner.cleanup_deadline.ok_or("Original cleanup deadline missing")?;
-    while !runner.poll_shutdown()? {
-        if Instant::now() >= until {
-            return Err("Original Runner cleanup failed to observe actual worker settlement".into());
-        }
-        std::hint::spin_loop();
-    }
+    assert!(runner.cleanup_deadline.is_some(), "Original cleanup deadline missing");
+    settle(wake, || runner.poll_shutdown())?;
     let actual =
         runner.execution.as_ref().ok_or("Execution was dropped before joins")?.poll_shutdown()?;
     assert!(actual.settled);
@@ -195,7 +181,7 @@ fn finish_cleanup(
 #[test]
 fn active_child_retained_failure_starts_bounded_runner_cleanup_and_preserves_original_source()
 -> Result<(), Box<dyn Error>> {
-    let mut runner = runner()?;
+    let (mut runner, wake) = runner()?;
     let budget = runner.child.budget;
     assert_eq!(runner.child.active_turn(), HeadlessStep::Active);
     let source = runner.child.failure_source().ok_or("Child did not retain its original source")?;
@@ -225,7 +211,7 @@ fn active_child_retained_failure_starts_bounded_runner_cleanup_and_preserves_ori
     assert!(!runner.finished);
     assert_eq!(runner.shutdown, budget);
     assert_eq!(runner.child.close_calls, 1);
-    finish_cleanup(&mut runner, original)?;
+    finish_cleanup(&mut runner, &wake, original)?;
     assert_eq!(runner.shutdown, budget);
     assert!(
         format!(
@@ -239,7 +225,7 @@ fn active_child_retained_failure_starts_bounded_runner_cleanup_and_preserves_ori
 #[test]
 fn closing_child_retained_failure_is_reported_once_before_actual_cleanup()
 -> Result<(), Box<dyn Error>> {
-    let mut runner = runner()?;
+    let (mut runner, wake) = runner()?;
     runner.request_shutdown()?;
     assert!(runner.failure_source().is_none());
     runner.child.retain_on_poll = true;
@@ -261,11 +247,11 @@ fn closing_child_retained_failure_is_reported_once_before_actual_cleanup()
     assert_eq!(runner.drain(NonZeroUsize::MIN)?, HeadlessStep::Shutdown);
     assert_eq!(runner.secondary.iter().flatten().count(), secondary);
     assert!(!runner.child_closed);
-    finish_cleanup(&mut runner, original)
+    finish_cleanup(&mut runner, &wake, original)
 }
 #[test]
 fn later_child_cleanup_failure_preserves_the_first_owned_origin() -> Result<(), Box<dyn Error>> {
-    let mut runner = runner()?;
+    let (mut runner, wake) = runner()?;
     let identity = Arc::new(());
     runner.close_on_failure(Box::new(OriginalChildFailure(identity.clone())));
     let original = runner.failure_source().ok_or("First owner source missing")? as *const dyn Error;
@@ -281,7 +267,7 @@ fn later_child_cleanup_failure_preserves_the_first_owned_origin() -> Result<(), 
     assert!(runner.child.failure_source().is_some());
     assert!(!runner.child_closed);
     assert_eq!(runner.drain(NonZeroUsize::MIN)?, HeadlessStep::Shutdown);
-    finish_cleanup(&mut runner, original)
+    finish_cleanup(&mut runner, &wake, original)
 }
 
 #[derive(Debug)]
@@ -307,7 +293,7 @@ impl Error for FundedFiniteFailure {
 fn failed_finite_source_remains_funded_through_runner_poll_and_actual_worker_joins()
 -> Result<(), Box<dyn Error>> {
     use sugarsubstitute_contracts::execution::{JobClass, JobOutcome, JobSpec, Operation};
-    let mut runner = runner()?;
+    let (mut runner, wake) = runner()?;
     let client = runner.client()?.clone();
     let identity = Arc::new(());
     let retained_identity = identity.clone();
@@ -331,22 +317,7 @@ fn failed_finite_source_remains_funded_through_runner_poll_and_actual_worker_joi
             })
         },
     )?;
-    let remaining = spec
-        .deadline
-        .ok_or("Original finite deadline missing")?
-        .checked_duration_since(client.now()?)?;
-    let until =
-        Instant::now().checked_add(remaining).ok_or("Original finite result wait overflow")?;
-    let actual = loop {
-        client.drain_completions(NonZeroUsize::MIN)?;
-        if let Some(actual) = job.try_take_completion() {
-            break actual;
-        }
-        if Instant::now() >= until {
-            return Err("Original finite source did not deliver its actual failure".into());
-        }
-        std::hint::spin_loop();
-    };
+    let actual = wake.completion(&client, &mut job)?;
     assert_eq!(actual.scope_id, runner.finite.as_ref().ok_or("Finite scope lost")?.id());
     assert_eq!(actual.spec, spec);
     let JobOutcome::Failure(cause) = actual.outcome else {
@@ -367,7 +338,7 @@ fn failed_finite_source_remains_funded_through_runner_poll_and_actual_worker_joi
     let budget = runner.shutdown;
     assert!(runner.drain(NonZeroUsize::MIN).is_err());
     assert_eq!(runner.drain(NonZeroUsize::MIN)?, HeadlessStep::Shutdown);
-    finish_cleanup(&mut runner, original)?;
+    finish_cleanup(&mut runner, &wake, original)?;
     assert_eq!(runner.shutdown, budget);
     drop(actual.memory);
     drop(job);

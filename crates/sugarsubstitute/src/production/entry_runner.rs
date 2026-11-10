@@ -116,7 +116,15 @@ pub(crate) fn run<C: EntryActivation + 'static>(
 ) -> Result<(), Box<dyn Error>> {
     let executable = std::env::current_exe()?;
     let child = child(&command)?;
-    let mut lifetime = boxed_lifetime(command, executable, child, diagnostics);
+    drive(boxed_lifetime(command, executable, child, diagnostics))
+}
+
+/// Pump a constructed lifetime to settlement, keeping the failed runner and its causes owned.
+/// # Errors
+/// Returns the retained original failure after the headless owner's checked shutdown.
+fn drive<C: EntryActivation + 'static>(
+    mut lifetime: Box<EntryRunner<C>>,
+) -> Result<(), Box<dyn Error>> {
     match run_headless(lifetime.as_mut()) {
         Ok(()) => Ok(()),
         Err(pump) => Err(retain_failure(Box::new(pump), lifetime)),
@@ -315,6 +323,9 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     client: Option<ExecutionClient>,
     execution: Option<ExecutionOwner>,
     clock: Arc<dyn sugarsubstitute_contracts::execution::Clock>,
+    /// Samples the native monotonic instant that anchors every native-thread wake. Production
+    /// reads the real clock; runner tests freeze it so elapsed time never expires a cutoff.
+    native_now: fn() -> Instant,
     original: Option<EntrySetupBudget>,
     setup_deadline: Option<Instant>,
     shutdown: Option<ShutdownBudget>,
@@ -368,6 +379,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             client: None,
             execution: None,
             clock: MonotonicClock::new(),
+            native_now: Instant::now,
             original: None,
             setup_deadline: None,
             shutdown: None,

@@ -45,7 +45,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         else {
             return Ok(false);
         };
-        self.post_exit = Some(Deadline::new(until, self.client()?.now()?, Instant::now())?);
+        self.post_exit = Some(Deadline::new(until, self.client()?.now()?, (self.native_now)())?);
         tracing::info!(
             operation = "update_post_exit_started",
             "Application custody retired; bounded update preparation remains"
@@ -57,7 +57,7 @@ impl<C: EntryActivation> EntryRunner<C> {
     /// application lifecycle owners or reacquiring any run/profile/backend/entry claim.
     pub(super) fn poll_post_exit(&mut self) -> Result<bool, Box<dyn Error>> {
         let phase = self.post_exit.as_ref().ok_or("Post-exit phase absent")?;
-        if !self.execution_stopping && Instant::now() >= phase.wake_at {
+        if !self.execution_stopping && (self.native_now)() >= phase.wake_at {
             self.execution
                 .as_mut()
                 .ok_or("Post-exit execution absent")?
@@ -109,8 +109,9 @@ impl<C: EntryActivation> EntryRunner<C> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::tests::{frozen_native_now, settle};
     use super::*;
-    use crate::updates::test_support::{Manual, Wake, observe};
+    use crate::{completion_wake::Wake, updates::test_support::Manual};
     use std::sync::atomic::Ordering;
     type Fixture = (EntryRunner<super::super::tests::NoChild>, Arc<Manual>, Arc<Wake>);
     fn seconds(value: u64) -> Moment {
@@ -143,11 +144,12 @@ mod tests {
         let clock = Arc::new(Manual::default());
         let wake = Arc::new(Wake::default());
         runner.clock = clock.clone();
+        runner.native_now = frozen_native_now;
         runner.initialize_execution(wake.clone())?;
         runner.closing = true;
         runner.normal_shutdown = true;
         runner.shutdown = Some(ShutdownBudget::new(seconds(0))?);
-        runner.cleanup_deadline = Some(Instant::now());
+        runner.cleanup_deadline = Some(frozen_native_now());
         Ok((runner, clock, wake))
     }
 
@@ -156,10 +158,10 @@ mod tests {
     {
         let (mut runner, _, wake) = runner()?;
         let original = runner.shutdown;
-        runner.post_exit = Some(Deadline::new(seconds(135), seconds(0), Instant::now())?);
+        runner.post_exit = Some(Deadline::new(seconds(135), seconds(0), frozen_native_now())?);
         let wake_at = runner.post_exit.as_ref().ok_or("Phase absent")?.wake_at;
         assert_eq!(runner.next_deadline(), Some(wake_at));
-        observe(&wake, || runner.poll_shutdown())?;
+        settle(&wake, || runner.poll_shutdown())?;
         assert!(!runner.child_closed, "Retired child was polled again");
         assert!(!runner.intake_settled, "Retired intake was polled again");
         assert!(!runner.deadline_reported);
@@ -173,11 +175,11 @@ mod tests {
     fn late_post_exit_observation_accepts_actual_join_without_renewing_cutoff()
     -> Result<(), Box<dyn Error>> {
         let (mut runner, clock, wake) = runner()?;
-        runner.post_exit = Some(Deadline::new(seconds(135), seconds(0), Instant::now())?);
+        runner.post_exit = Some(Deadline::new(seconds(135), seconds(0), frozen_native_now())?);
         let execution = runner.execution.as_mut().ok_or("Execution absent")?;
         execution.request_shutdown(seconds(135));
         runner.execution_stopping = true;
-        observe(&wake, || Ok(execution.poll_shutdown()?.settled))?;
+        settle(&wake, || Ok(execution.poll_shutdown()?.settled))?;
         clock.0.store(200_000_000_000, Ordering::SeqCst);
         assert!(runner.poll_shutdown()?);
         assert!(!runner.deadline_reported);
@@ -190,9 +192,9 @@ mod tests {
     fn post_exit_cutoff_joins_even_when_completion_observation_is_unavailable()
     -> Result<(), Box<dyn Error>> {
         let (mut runner, _, wake) = runner()?;
-        runner.post_exit = Some(Deadline { until: seconds(135), wake_at: Instant::now() });
+        runner.post_exit = Some(Deadline { until: seconds(135), wake_at: frozen_native_now() });
         runner.client = None;
-        observe(&wake, || runner.poll_shutdown())?;
+        settle(&wake, || runner.poll_shutdown())?;
         assert!(runner.execution_stopping);
         assert!(runner.failure_source().is_some());
         assert!(!runner.deadline_reported, "A completed actual join is not a timeout");
@@ -204,7 +206,7 @@ mod tests {
     #[test]
     fn post_exit_projection_uses_remaining_time_and_tightens_without_renewal()
     -> Result<(), Box<dyn Error>> {
-        let anchor = Instant::now();
+        let anchor = frozen_native_now();
         let mut deadline = Deadline::new(seconds(135), seconds(10), anchor)?;
         assert_eq!(deadline.wake_at, anchor + Duration::from_secs(125));
         deadline.tighten(seconds(40))?;

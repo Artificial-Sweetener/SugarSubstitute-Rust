@@ -2,51 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prove actual runner scope routing before any configuration or environment effect.
 use super::*;
-use std::sync::{
-    Condvar, Mutex,
-    atomic::{AtomicBool, AtomicUsize, Ordering},
-};
+use crate::completion_wake::Wake;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use sugarsubstitute_contracts::{
     configuration::ConfigurationError,
     execution::{AdmissionError, ExecutionError, JobClass, JobOutcome, JobSpec, Operation},
 };
 use sugarsubstitute_execution::OwnedInputError;
-#[derive(Default)]
-struct ScopeWake {
-    revision: Mutex<u64>,
-    changed: Condvar,
-}
-impl ScopeWake {
-    fn revision(&self) -> Result<u64, Box<dyn Error>> {
-        Ok(*self.revision.lock().map_err(|_| std::io::Error::other("Scope wake poisoned"))?)
-    }
-    fn wait_after(&self, observed: u64) -> Result<(), Box<dyn Error>> {
-        let revision =
-            self.revision.lock().map_err(|_| std::io::Error::other("Scope wake poisoned"))?;
-        let (current, elapsed) = self
-            .changed
-            .wait_timeout_while(revision, Duration::from_secs(10), |revision| *revision == observed)
-            .map_err(|_| std::io::Error::other("Scope wake poisoned"))?;
-        if elapsed.timed_out() && *current == observed {
-            return Err("Actual finite completion did not notify its owner".into());
-        }
-        Ok(())
-    }
-}
-impl CompletionWake for ScopeWake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        let mut revision = self.revision.lock().map_err(|_| {
-            ExecutionError::new(
-                Operation::Infrastructure,
-                Box::new(std::io::Error::other("Scope wake poisoned")),
-            )
-        })?;
-        *revision = revision.saturating_add(1);
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-
 #[derive(Debug)]
 struct WakeFailure(Arc<()>);
 impl fmt::Display for WakeFailure {
@@ -57,7 +19,7 @@ impl fmt::Display for WakeFailure {
 impl Error for WakeFailure {}
 
 struct FailOnceWake {
-    observed: ScopeWake,
+    observed: Wake,
     pending: AtomicBool,
     identity: Arc<()>,
 }
@@ -92,10 +54,11 @@ fn mailbox_wake_failure_retains_original_and_runner_observes_cleanup_after_admis
     );
     let identity = Arc::new(());
     let wake = Arc::new(FailOnceWake {
-        observed: ScopeWake::default(),
+        observed: Wake::default(),
         pending: AtomicBool::new(true),
         identity: identity.clone(),
     });
+    freeze_time(&mut runner);
     let rejected_start = runner.start(wake.clone()).err().ok_or("Invalid setup was admitted")?;
     assert!(rejected_start.downcast_ref::<ConfigurationError>().is_some());
     assert!(runner.failure_source().is_none());
@@ -113,13 +76,13 @@ fn mailbox_wake_failure_retains_original_and_runner_observes_cleanup_after_admis
     let calls = Arc::new(AtomicUsize::new(0));
     let observed = calls.clone();
     let mut input = Some(identity.clone());
-    let revision = wake.observed.revision()?;
+    let revision = wake.observed.revision();
     let mut job = client.submit_blocking_owned_box(finite, spec, &mut input, move |value, _| {
         observed.fetch_add(1, Ordering::AcqRel);
         Ok::<_, std::io::Error>(value)
     })?;
     assert!(input.is_none());
-    wake.observed.wait_after(revision)?;
+    wake.observed.wait_after(revision);
     let completion = job.try_take_completion().ok_or("Actual wake had no typed completion")?;
     assert_eq!(completion.scope_id, finite.id());
     assert_eq!(completion.spec, spec);
@@ -195,7 +158,8 @@ fn actual_runner_native_rejects_finite_box_and_real_finite_scope_preserves_origi
         Box::new(NoChild(None)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
-    let wake = Arc::new(ScopeWake::default());
+    freeze_time(&mut runner);
+    let wake = Arc::new(Wake::default());
     let rejected_start = runner
         .start(wake.clone())
         .err()
@@ -247,18 +211,20 @@ fn actual_runner_native_rejects_finite_box_and_real_finite_scope_preserves_origi
         Ok::<_, std::io::Error>(value)
     })?;
     assert!(input.is_none());
-    let completion = loop {
-        let revision = wake.revision()?;
-        let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if batch
+    let completion = wake.until(|| -> Option<Result<_, Box<dyn Error>>> {
+        let batch = match client.drain_completions(NonZeroUsize::MIN.saturating_add(31)) {
+            Ok(batch) => batch,
+            Err(cause) => return Some(Err(cause.into())),
+        };
+        batch
             .notifications
             .iter()
             .any(|notice| notice.scope_id == finite.id() && notice.job_id == spec.id)
-        {
-            break job.try_take_completion().ok_or("Real finite notice had no typed completion")?;
-        }
-        wake.wait_after(revision)?;
-    };
+            .then(|| {
+                job.try_take_completion()
+                    .ok_or_else(|| "Real finite notice had no typed completion".into())
+            })
+    })?;
     assert_eq!(completion.scope_id, finite.id());
     assert_eq!(completion.spec, spec);
     let JobOutcome::Success(value) = &completion.outcome else {
