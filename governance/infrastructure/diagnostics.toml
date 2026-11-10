@@ -24,7 +24,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e690f861a0e7956f6ade696e80a72866ffdf505512bc8aa75c1924b1993f7ac5"
+source_sha256 = "sha256:561285408f83c0ce81cb65e3162ab0da647cf9b4d277a8ee5faa163340a516e7"
 disposition = "routing"
 rationale = "Process-global supported subscriber and original diagnostic failure health."
 
@@ -87,14 +87,14 @@ rationale = "Native sink calls suppress recursive executor events within source-
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:bb526dffb8d872fdfe1fda61c8e06218b4503952767528088b949539cb7a8e86"
+source_sha256 = "sha256:3861946abbe18594217bc959a95769cb7c08fdff75120cbc3d46b2dbd7d9793b"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:028c3078638d6cc9bf6c5b20fce183bd2c079e8caacf9c0e9405e910ca8bfc6b"
+source_sha256 = "sha256:547ad0837822433169d51d49fc0514de5fcd96f431aa1685bab637414cb335e4"
 disposition = "routing"
 rationale = "Host lifetime composes the existing execution adapter with the protected operational storage port."
 

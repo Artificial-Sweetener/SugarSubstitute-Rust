@@ -2918,7 +2918,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Adm
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:bb526dffb8d872fdfe1fda61c8e06218b4503952767528088b949539cb7a8e86"
+source_sha256 = "sha256:3861946abbe18594217bc959a95769cb7c08fdff75120cbc3d46b2dbd7d9793b"
 capabilities = ["std::fs::read", "std::fs::read_dir", "std::fs::rename", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify routing, overload, original memory custody and actual native sink retirement. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

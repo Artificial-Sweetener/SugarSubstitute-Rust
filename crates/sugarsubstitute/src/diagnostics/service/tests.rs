@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify routing, overload, original memory custody and actual native sink retirement.
 use super::*;
+use crate::{completion_wake::wait_while_watched, paused_clock::PausedClock};
 use std::{
     error::Error,
     io::Write,
@@ -27,15 +28,15 @@ struct Controlled {
     path: Option<PathBuf>,
 }
 impl Controlled {
+    /// Block until the actual sink has been entered by its publication worker.
     fn entered(&self) -> Result<(), Box<dyn Error>> {
         let state = self.state.lock().map_err(|_| "Diagnostic fixture poisoned")?;
-        let (state, timeout) = self
-            .changed
-            .wait_timeout_while(state, Duration::from_secs(20), |state| !state.entered)
-            .map_err(|_| "Diagnostic fixture poisoned")?;
-        if timeout.timed_out() || !state.entered {
-            return Err("Actual diagnostic sink never entered".into());
-        }
+        drop(wait_while_watched(
+            &self.changed,
+            state,
+            || "the actual diagnostic sink to be entered".to_owned(),
+            |state| !state.entered,
+        ));
         Ok(())
     }
     fn release(&self) -> Result<(), Box<dyn Error>> {
@@ -55,16 +56,12 @@ impl Sink for Controlled {
                 self.state.lock().map_err(|_| io::Error::other("Diagnostic fixture poisoned"))?;
             state.entered = true;
             self.changed.notify_all();
-            let (mut state, timeout) = self
-                .changed
-                .wait_timeout_while(state, Duration::from_secs(2), |state| !state.released)
-                .map_err(|_| io::Error::other("Diagnostic fixture poisoned"))?;
-            if timeout.timed_out() {
-                return Err(io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    "Actual fixture sink release missing",
-                ));
-            }
+            let mut state = wait_while_watched(
+                &self.changed,
+                state,
+                || "the test to release the diagnostic sink".to_owned(),
+                |state| !state.released,
+            );
             state.events.extend_from_slice(frames);
             state.omitted = state.omitted.saturating_add(omitted);
         }
@@ -98,12 +95,10 @@ fn native_route_preserves_correlation_redacts_copies_and_releases_every_director
     let path = temporary.path().join("operational");
     let sink = Arc::new(Controlled { path: Some(path.clone()), ..Controlled::default() });
     let health = DiagnosticHealth::fixture();
-    let service = Service::start(health.clone(), sink.clone())?;
+    let service = Service::start(health.clone(), sink.clone(), PausedClock::new())?;
     let queue = service.queue();
     queue.push("operation=fixture_bootstrap\n".into());
     sink.entered()?;
-    // The bootstrap batch runs under the service's real-clock publication deadline; holding it
-    // while this thread routes the event would put test-thread scheduling inside that deadline.
     sink.release()?;
     let output = Output::default();
     let writer = output.clone();
@@ -170,7 +165,7 @@ fn overloaded_queue_rejects_new_frames_counts_exact_loss_and_retires_original_ch
 -> Result<(), Box<dyn Error>> {
     let sink = Arc::new(Controlled::default());
     let health = DiagnosticHealth::fixture();
-    let service = Service::start(health.clone(), sink.clone())?;
+    let service = Service::start(health.clone(), sink.clone(), PausedClock::new())?;
     let queue = service.queue();
     queue.push("operation=bootstrap\n".into());
     sink.entered()?;
@@ -207,7 +202,7 @@ fn cancelled_pump_keeps_drained_frame_memory_until_the_actual_sink_returns()
 -> Result<(), Box<dyn Error>> {
     let sink = Arc::new(Controlled::default());
     let health = DiagnosticHealth::fixture();
-    let service = Service::start(health.clone(), sink.clone())?;
+    let service = Service::start(health.clone(), sink.clone(), PausedClock::new())?;
     let queue = service.queue();
     queue.push("operation=bootstrap\n".into());
     sink.entered()?;
@@ -246,7 +241,8 @@ fn persistent_sink_failure_retains_its_original_source_until_the_last_health_obs
 -> Result<(), Box<dyn Error>> {
     let dropped = Arc::new(AtomicUsize::new(0));
     let health = DiagnosticHealth::fixture();
-    let service = Service::start(health.clone(), Arc::new(Failed(dropped.clone())))?;
+    let service =
+        Service::start(health.clone(), Arc::new(Failed(dropped.clone())), PausedClock::new())?;
     service.queue().push("operation=failure\n".into());
     service.finish(&health);
     let failure = health.check().err().ok_or("Persistent sink failure was hidden")?;
@@ -287,7 +283,7 @@ fn explicit_writer_contention_retries_the_original_batch_without_reclassifying_s
 -> Result<(), Box<dyn Error>> {
     let sink = Arc::new(BusyThenReady::default());
     let health = DiagnosticHealth::fixture();
-    let service = Service::start(health.clone(), sink.clone())?;
+    let service = Service::start(health.clone(), sink.clone(), PausedClock::new())?;
     service.queue().push("operation=contention\n".into());
     service.finish(&health);
     health.check()?;

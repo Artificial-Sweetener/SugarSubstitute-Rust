@@ -16,13 +16,13 @@ use std::{
     io,
     num::NonZeroUsize,
     sync::{Arc, Condvar, Mutex},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobContext, JobId, JobOutcome,
-    JobSpec, Operation, OwnedJob, Scope, ScopeId, ScopeSpec,
+    JobSpec, Moment, Operation, OwnedJob, Scope, ScopeId, ScopeSpec,
 };
-use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
+use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 
 /// Original reservation retaining the queue and pump control for the process lifetime.
 const PUMP_MEMORY_BYTES: u64 = 1024 * 1024;
@@ -66,12 +66,14 @@ impl CompletionWake for Wake {
     }
 }
 impl Wake {
-    /// Wait only for actual completion activity or the original shutdown bound.
-    fn wait(&self, until: Instant) -> io::Result<()> {
+    /// Wait only for actual completion activity or the original shutdown bound on `clock`.
+    fn wait(&self, clock: &dyn Clock, until: Moment) -> io::Result<()> {
         let revision = self.0.lock().map_err(|_| io::Error::other("Diagnostic wake poisoned"))?;
         let value = *revision;
-        let remaining =
-            until.saturating_duration_since(Instant::now()).min(Duration::from_millis(10));
+        let remaining = until
+            .checked_duration_since(clock.now())
+            .unwrap_or_default()
+            .min(Duration::from_millis(10));
         let (_guard, _timeout) = self
             .1
             .wait_timeout_while(revision, remaining, |current| *current == value)
@@ -86,16 +88,17 @@ pub(super) struct Service {
     queue: Arc<Queue>,
     job: OwnedJob<(), io::Error>,
     wake: Arc<Wake>,
-    clock: Arc<MonotonicClock>,
+    clock: Arc<dyn Clock>,
 }
 impl Service {
     /// Admit the process route before producers start, using only the existing execution adapter.
+    /// Every deadline of the route, including publication and shutdown, runs on `clock`.
     pub(super) fn start(
         health: DiagnosticHealth,
         sink: Arc<dyn Sink>,
+        clock: Arc<dyn Clock>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let queue = Queue::new();
-        let clock = MonotonicClock::new();
         let wake = Arc::new(Wake::default());
         let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
         let client = owner.client();
@@ -122,14 +125,14 @@ impl Service {
             },
         )?;
         let mut service = Self { owner, client, queue, job, wake, clock };
-        let until = Instant::now() + Duration::from_secs(5);
+        let until = service.clock.now().checked_add(Duration::from_secs(5))?;
         while service.queue.state().memory.is_none() {
             service.client.drain_completions(NonZeroUsize::MIN)?;
             if service.job.try_take_completion().is_some() {
                 startup_health.check()?;
                 return Err(io::Error::other("Diagnostic routing admission failed").into());
             }
-            if Instant::now() >= until {
+            if service.clock.now() >= until {
                 service.job.cancel();
                 return Err(io::Error::new(
                     io::ErrorKind::TimedOut,
@@ -137,7 +140,7 @@ impl Service {
                 )
                 .into());
             }
-            service.wake.wait(until)?;
+            service.wake.wait(&*service.clock, until)?;
         }
         Ok(service)
     }
@@ -162,7 +165,8 @@ impl Service {
     }
     /// Observe terminal outcomes and actual native joins within one original shutdown observation bound.
     fn finish_inner(&mut self, health: &DiagnosticHealth) -> io::Result<()> {
-        let until = Instant::now() + Duration::from_secs(5);
+        let until =
+            self.clock.now().checked_add(Duration::from_secs(5)).map_err(io::Error::other)?;
         loop {
             self.client
                 .drain_completions(
@@ -188,27 +192,27 @@ impl Service {
                 }
                 break;
             }
-            if Instant::now() >= until {
+            if self.clock.now() >= until {
                 self.job.cancel();
                 return Err(io::Error::new(
                     io::ErrorKind::TimedOut,
                     "Diagnostic flush deadline elapsed",
                 ));
             }
-            self.wake.wait(until)?;
+            self.wake.wait(&*self.clock, until)?;
         }
         self.owner.request_shutdown(
             self.clock.now().checked_add(Duration::from_secs(2)).map_err(io::Error::other)?,
         );
         while !self.owner.poll_shutdown().map_err(io::Error::other)?.settled {
             self.client.drain_completions(NonZeroUsize::MIN).map_err(io::Error::other)?;
-            if Instant::now() >= until {
+            if self.clock.now() >= until {
                 return Err(io::Error::new(
                     io::ErrorKind::TimedOut,
                     "Diagnostic worker shutdown deadline elapsed",
                 ));
             }
-            self.wake.wait(until)?;
+            self.wake.wait(&*self.clock, until)?;
         }
         self.owner.finish_shutdown().map_err(io::Error::other)
     }

@@ -224,6 +224,7 @@ impl Diagnostics {
         let service = service::Service::start(
             health.clone(),
             Arc::new(service::AccountSink { base: records }),
+            sugarsubstitute_execution::MonotonicClock::new(),
         )?;
         #[cfg(not(windows))]
         drop(records);
