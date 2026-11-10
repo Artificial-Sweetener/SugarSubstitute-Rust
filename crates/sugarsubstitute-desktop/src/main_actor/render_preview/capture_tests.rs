@@ -204,8 +204,10 @@ fn original_four_mib_lease_funds_maximum_request_and_live_preview_claims_togethe
         MemoryLease::new(MainWindowRequest::RESERVATION_BYTES, Box::new(Released)),
     )?;
     let lease = request.storage_lease();
-    // The main actor carves its bulk transfer partition before any known storage claim.
+    // The main actor carves its bulk transfer and session partitions before any known storage
+    // claim; only the remaining four MiB funds the claims below.
     let bulk = lease.claim(MainWindowRequest::BULK_TRANSFER_BYTES)?;
+    let session = lease.claim(MainWindowRequest::SESSION_STORAGE_BYTES)?;
     let native = lease.claim(512 * 1024)?;
     let receivers = lease.claim(65536)?;
     let environment = lease.claim(MainEnvironmentFacts::MAX_STORAGE_BYTES)?;
@@ -214,7 +216,7 @@ fn original_four_mib_lease_funds_maximum_request_and_live_preview_claims_togethe
     let preview = Shared::new(lease)?;
     assert_eq!(preview.metadata().bytes(), 8192);
     assert!(Shared::new(lease).is_err());
-    drop((native, receivers, environment, tables, events, preview, bulk));
+    drop((native, receivers, environment, tables, events, preview, bulk, session));
     let remaining = MainWindowRequest::RESERVATION_BYTES - request.allocated_metadata_bytes();
     let recovered = lease.claim(remaining)?;
     assert_eq!(recovered.bytes(), remaining);

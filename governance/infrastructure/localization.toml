@@ -150,7 +150,7 @@ rationale = "Native boundary: Adopt every window, presenter, controller and nati
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/render_preview/capture_tests.rs"
-source_sha256 = "sha256:363ce483f11d9d84353f3f08fbefb8f5e9c4cb51e1e9dc25cb385c1aaf48aba8"
+source_sha256 = "sha256:67819a9b551dad72e8618176a301dfd8380af6801e90a516325d62bb4e4dff22"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Exercise actual COM callback obligations with a fake external completion boundary."
 
