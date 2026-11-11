@@ -1,0 +1,733 @@
+[
+  {
+    "label": "usage",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage without consumers",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": []
+    }
+  },
+  {
+    "label": "usage at the exact integer bound",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 9007199254740991,
+      "demandBytes": 9007199254740991,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage with sixteen consumers",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "c0",
+          "bytes": 1
+        },
+        {
+          "id": "c1",
+          "bytes": 1
+        },
+        {
+          "id": "c2",
+          "bytes": 1
+        },
+        {
+          "id": "c3",
+          "bytes": 1
+        },
+        {
+          "id": "c4",
+          "bytes": 1
+        },
+        {
+          "id": "c5",
+          "bytes": 1
+        },
+        {
+          "id": "c6",
+          "bytes": 1
+        },
+        {
+          "id": "c7",
+          "bytes": 1
+        },
+        {
+          "id": "c8",
+          "bytes": 1
+        },
+        {
+          "id": "c9",
+          "bytes": 1
+        },
+        {
+          "id": "c10",
+          "bytes": 1
+        },
+        {
+          "id": "c11",
+          "bytes": 1
+        },
+        {
+          "id": "c12",
+          "bytes": 1
+        },
+        {
+          "id": "c13",
+          "bytes": 1
+        },
+        {
+          "id": "c14",
+          "bytes": 1
+        },
+        {
+          "id": "c15",
+          "bytes": 1
+        }
+      ]
+    }
+  },
+  {
+    "label": "share preference",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "share",
+        "percent": 25
+      }
+    }
+  },
+  {
+    "label": "share preference at its lower bound",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "share",
+        "percent": 10
+      }
+    }
+  },
+  {
+    "label": "share preference at its upper bound",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "share",
+        "percent": 75
+      }
+    }
+  },
+  {
+    "label": "fixed preference",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "fixed",
+        "bytes": 8589934592
+      }
+    }
+  },
+  {
+    "label": "allowance",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "allowance",
+      "generation": 2,
+      "level": "elevated",
+      "allowanceBytes": 16777216,
+      "ceilingBytes": 17179869184,
+      "totalBytes": 68719476736,
+      "preference": {
+        "mode": "share",
+        "percent": 25
+      }
+    }
+  },
+  {
+    "label": "allowance at generation zero under critical pressure",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "allowance",
+      "generation": 0,
+      "level": "critical",
+      "allowanceBytes": 0,
+      "ceilingBytes": 17179869184,
+      "totalBytes": 68719476736,
+      "preference": {
+        "mode": "fixed",
+        "bytes": 1
+      }
+    }
+  },
+  {
+    "label": "usage with seventeen consumers",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "c0",
+          "bytes": 1
+        },
+        {
+          "id": "c1",
+          "bytes": 1
+        },
+        {
+          "id": "c2",
+          "bytes": 1
+        },
+        {
+          "id": "c3",
+          "bytes": 1
+        },
+        {
+          "id": "c4",
+          "bytes": 1
+        },
+        {
+          "id": "c5",
+          "bytes": 1
+        },
+        {
+          "id": "c6",
+          "bytes": 1
+        },
+        {
+          "id": "c7",
+          "bytes": 1
+        },
+        {
+          "id": "c8",
+          "bytes": 1
+        },
+        {
+          "id": "c9",
+          "bytes": 1
+        },
+        {
+          "id": "c10",
+          "bytes": 1
+        },
+        {
+          "id": "c11",
+          "bytes": 1
+        },
+        {
+          "id": "c12",
+          "bytes": 1
+        },
+        {
+          "id": "c13",
+          "bytes": 1
+        },
+        {
+          "id": "c14",
+          "bytes": 1
+        },
+        {
+          "id": "c15",
+          "bytes": 1
+        },
+        {
+          "id": "c16",
+          "bytes": 1
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage with an uppercase consumer id",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "Canvas",
+          "bytes": 1
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage with an empty consumer id",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "",
+          "bytes": 1
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage with an overlong consumer id",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bytes": 1
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage with an extended consumer",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas",
+          "bytes": 1,
+          "path": "x"
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage beyond the exact integer bound",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 9007199254740992,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage with negative bytes",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": -1,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage with fractional bytes",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 1.5,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage missing demand",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "usage with an extra member",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ],
+      "extra": true
+    }
+  },
+  {
+    "label": "share preference below its bound",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "share",
+        "percent": 9
+      }
+    }
+  },
+  {
+    "label": "share preference above its bound",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "share",
+        "percent": 76
+      }
+    }
+  },
+  {
+    "label": "fixed preference of zero bytes",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "fixed",
+        "bytes": 0
+      }
+    }
+  },
+  {
+    "label": "fixed preference carrying a percent",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "fixed",
+        "bytes": 1,
+        "percent": 25
+      }
+    }
+  },
+  {
+    "label": "preference with an unknown mode",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "preference",
+      "preference": {
+        "mode": "auto"
+      }
+    }
+  },
+  {
+    "label": "allowance with an unknown level",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "allowance",
+      "generation": 2,
+      "level": "panic",
+      "allowanceBytes": 16777216,
+      "ceilingBytes": 17179869184,
+      "totalBytes": 68719476736,
+      "preference": {
+        "mode": "share",
+        "percent": 25
+      }
+    }
+  },
+  {
+    "label": "allowance missing total memory",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "allowance",
+      "generation": 2,
+      "level": "elevated",
+      "allowanceBytes": 16777216,
+      "ceilingBytes": 17179869184,
+      "preference": {
+        "mode": "share",
+        "percent": 25
+      }
+    }
+  },
+  {
+    "label": "allowance with an extra member",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "allowance",
+      "generation": 2,
+      "level": "elevated",
+      "allowanceBytes": 16777216,
+      "ceilingBytes": 17179869184,
+      "totalBytes": 68719476736,
+      "preference": {
+        "mode": "share",
+        "percent": 25
+      },
+      "extra": 1
+    }
+  },
+  {
+    "label": "foreign protocol",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "newer version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 2,
+      "session": "panel-0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "short session",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "short",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "session with a separator",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel_0123456789abcdef",
+      "type": "usage",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  {
+    "label": "unknown type",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.memory",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "flush",
+      "usedBytes": 33554432,
+      "demandBytes": 234881024,
+      "consumers": [
+        {
+          "id": "canvas.images",
+          "bytes": 33554432
+        },
+        {
+          "id": "model-thumbnails",
+          "bytes": 0
+        }
+      ]
+    }
+  }
+]

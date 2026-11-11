@@ -1,0 +1,622 @@
+schema = 1
+test_root = "tests"
+full_suite_sources = [
+  "tests/frontend_core/support/BrowserFixtureLifetime.ts",
+  "package.json", "package-lock.json", "TEST_POLICY.toml", "QUALITY_POLICY.toml",
+  "ARCHITECTURE_*.toml", "tools/architecture/**", "tools/testing/**", "tools/quality/**",
+  "tools/test.py", "jest.config.json", "tsconfig.json", "tsconfig.tests.json", ".eslintrc.json",
+  ".github/workflows/**",
+  ".gitignore", ".gitattributes", ".prettierrc.json", ".prettierignore",
+  "scripts/standards-audit.ts", "tools/add_license_headers.py",
+]
+
+[[area]]
+name = "output_saving"
+sources = ["sugarcubes/output_saving/**", "frontend/comfyui/ui/output_saving/**", "web/comfyui/ui/output_saving/**"]
+proofs = ["unit", "contract", "integration"]
+
+[[boundary]]
+name = "output_saving_contract"
+area = "output_saving"
+
+[[subscription]]
+boundary = "output_saving_contract"
+groups = ["runtime/unit", "execution/integration", "execution/contract", "output_canvas/unit", "output_canvas/contract", "output_canvas/integration"]
+
+[[area]]
+name = "masonry_search"
+sources = ["frontend/comfyui/ui/search/**", "web/comfyui/ui/search/**", "frontend/static/icons/search/**", "web/icons/search/**", "frontend/static/textures/acrylic-grain.svg", "web/textures/acrylic-grain.svg"]
+proofs = ["unit", "integration"]
+
+[[area]]
+name = "relations"
+sources = ["frontend/comfyui/ui/relations/**", "web/comfyui/ui/relations/**"]
+proofs = ["unit", "integration"]
+
+[[area]]
+name = "editor_actions"
+sources = ["frontend/comfyui/ui/editor_actions/**", "web/comfyui/ui/editor_actions/**"]
+proofs = ["unit", "contract", "integration"]
+
+[[area]]
+name = "governance"
+sources = [
+  "__init__.py",
+  "scripts/*.ts",
+  "scripts/*.py",
+  "scripts/dependencies/**",
+  "tools/**",
+  "third_party/**",
+  "web/third_party/**",
+  "stubs/**",
+  "types/**",
+  "sugarcubes/tools/**",
+  "sugarcubes/maintenance.py",
+  "sugarcubes/extension_layout.py",
+  "sugarcubes/package_identity.py",
+  "package.json",
+  "package-lock.json",
+  "pyproject.toml",
+  "requirements.txt",
+  "jest.config.json",
+  "tsconfig.json", "tsconfig.web.json", "tsconfig.tests.json", "tsconfig.output-canvas-tests.json",
+  "ARCHITECTURE_*.toml",
+  "TEST_POLICY.toml",
+  "QUALITY_POLICY.toml",
+  "agents.md",
+  ".gitignore",
+  ".gitattributes",
+  ".eslintrc.json",
+  ".prettierrc.json",
+  ".prettierignore",
+  "artifacts/phase6-acceptance/**",
+  "artifacts/recipe-compatibility/**",
+  ".github/workflows/**",
+]
+proofs = ["contract", "unit"]
+
+[[area]]
+name = "cube_model"
+sources = ["sugarcubes/cube_model/**"]
+proofs = ["contract", "unit"]
+
+[[area]]
+name = "model_library"
+sources = ["prestartup_script.py", "load_model_roots.py", "sugarcubes_model_roots/**", "sugarcubes/model_library/**", "frontend/comfyui/ui/model_library/**", "web/comfyui/ui/model_library/**"]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "workflow"
+sources = [
+  "sugarcubes/workflow/**",
+  "sugarcubes/serialized_cube_proximity.py",
+  "sugarcubes/workflow_analysis.py",
+  "sugarcubes/workflow_cube_replacement.py",
+  "sugarcubes/workflow_mutation.py",
+  "sugarcubes/workflow_cube_placement.py",
+  "sugarcubes/workflow_mutation_errors.py",
+  "sugarcubes/workflow_stack_mutation.py",
+  "sugarcubes/workflow_node_pack.py",
+  "frontend/comfyui/ui/workflow/**",
+]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "language"
+sources = ["sugarcubes/language/**"]
+proofs = ["contract"]
+
+[[area]]
+name = "optimizer"
+sources = ["sugarcubes/optimization/**"]
+proofs = ["contract"]
+
+[[area]]
+name = "comfy_contract"
+sources = ["sugarcubes/comfy/**"]
+proofs = ["contract"]
+
+[[area]]
+name = "export"
+sources = [
+  "sugarcubes/exporter/**",
+  "sugarcubes/backend/services/cube_authored_flavor_save_service.py",
+  "sugarcubes/backend/services/cube_export_graph_contract.py",
+  "sugarcubes/backend/services/cube_export_persistence.py",
+  "sugarcubes/backend/services/cube_export_service.py",
+  "sugarcubes/backend/services/cube_implementation_defaults_service.py",
+  "sugarcubes/backend/services/cube_save_commit_finalizer.py",
+  "sugarcubes/backend/services/cube_save_models.py",
+  "sugarcubes/backend/services/cube_save_response.py",
+  "sugarcubes/backend/services/cube_save_target_planner.py",
+]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "import"
+sources = ["sugarcubes/importer/**"]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "runtime"
+sources = [
+  "sugarcubes/__init__.py",
+  "sugarcubes/py.typed",
+  "sugarcubes/host_api.py",
+  "sugarcubes/nodes.py",
+  "sugarcubes/payloads.py",
+  "sugarcubes/runtime/**",
+  "sugarcubes/instrumentation/**",
+]
+proofs = ["unit"]
+
+[[area]]
+name = "backend_api"
+sources = [
+  "sugarcubes/backend/*.py",
+  "sugarcubes/backend/validation/**",
+  "sugarcubes/backend/services/__init__.py",
+]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "version_control"
+sources = [
+  "sugarcubes/backend/services/pygit2_repository.py",
+  "sugarcubes/backend/services/pygit2_tree.py",
+  "sugarcubes/backend/services/repository_network.py",
+  "sugarcubes/backend/services/repository_network_worker.py",
+  "sugarcubes/backend/services/repository_service.py",
+]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "library"
+sources = [
+  "sugarcubes/library/**",
+  "sugarcubes/backend/services/cube_artifact_repository.py",
+  "sugarcubes/backend/services/cube_catalog_state_service.py",
+  "sugarcubes/backend/services/cube_file_io.py",
+  "sugarcubes/backend/services/cube_git_context.py",
+  "sugarcubes/backend/services/cube_history_service.py",
+  "sugarcubes/backend/services/cube_icon_service.py",
+  "sugarcubes/backend/services/cube_identity_redirect_service.py",
+  "sugarcubes/backend/services/cube_library_artifact_service.py",
+  "sugarcubes/backend/services/cube_library_catalog_projection.py",
+  "sugarcubes/backend/services/cube_library_diagnostics.py",
+  "sugarcubes/backend/services/cube_library_listing.py",
+  "sugarcubes/backend/services/cube_library_mutation_service.py",
+  "sugarcubes/backend/services/cube_library_pack_service.py",
+  "sugarcubes/backend/services/cube_library_preview_service.py",
+  "sugarcubes/backend/services/cube_library_readiness_service.py",
+  "sugarcubes/backend/services/cube_library_source_resolver.py",
+  "sugarcubes/backend/services/cube_library_state_service.py",
+  "sugarcubes/backend/services/dependency_install_plan.py",
+  "sugarcubes/backend/services/dependency_requirement_cache.py",
+  "sugarcubes/backend/services/dependency_requirement_inventory.py",
+  "sugarcubes/backend/services/dependency_requirement_sources.py",
+  "sugarcubes/backend/services/cube_library_service.py",
+  "sugarcubes/backend/services/cube_load_service.py",
+  "sugarcubes/backend/services/cube_metadata.py",
+  "sugarcubes/backend/services/cube_metadata_service.py",
+  "sugarcubes/backend/services/cube_picker_catalog_service.py",
+  "sugarcubes/backend/services/cube_promotion_service.py",
+  "sugarcubes/backend/services/cube_revision_version_projection.py",
+  "sugarcubes/backend/services/cube_revision_loader.py",
+  "sugarcubes/backend/services/cube_summary.py",
+  "sugarcubes/backend/services/cube_version_artifact_cache.py",
+  "sugarcubes/backend/services/identity_policy_service.py",
+  "sugarcubes/backend/services/local_flavor_service.py",
+  "sugarcubes/backend/services/ownership_policy_service.py",
+  "sugarcubes/backend/services/revision_service.py",
+  "sugarcubes/backend/services/tracked_repo_preflight_service.py",
+  "sugarcubes/backend/services/tracked_repo_git.py",
+  "sugarcubes/backend/services/tracked_repo_catalog.py",
+  "sugarcubes/backend/services/tracked_repo_batch.py",
+  "sugarcubes/backend/services/tracked_repo_manifest.py",
+  "sugarcubes/backend/services/tracked_repo_models.py",
+  "sugarcubes/backend/services/tracked_repo_service.py",
+  "sugarcubes/backend/services/tracked_repo_sync_policy.py",
+  "sugarcubes/backend/services/workflow_catalog_artifact_provider.py",
+  "sugarcubes/backend/services/workflow_fork_repository.py",
+  "sugarcubes/backend/services/workflow_source_sync_port.py",
+]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "dependencies"
+sources = [
+  "sugarcubes/backend/services/dependency_acquisition.py",
+  "sugarcubes/backend/services/dependency_acquisition_diagnostics.py",
+  # Preserve test ownership for deletion-aware changed-file selection.
+  "sugarcubes/backend/services/dependency_cli.py",
+  "sugarcubes/backend/services/cube_dependency_manifest.py",
+  "sugarcubes/backend/services/cube_dependency_service.py",
+  "sugarcubes/backend/services/dependency_approval_policy.py",
+  "sugarcubes/backend/services/dependency_diagnostics.py",
+  "sugarcubes/backend/services/dependency_first_party_manifest.py",
+  "sugarcubes/backend/services/dependency_git_inspection.py",
+  "sugarcubes/backend/services/dependency_installation.py",
+  "sugarcubes/backend/services/dependency_inventory.py",
+  "sugarcubes/backend/services/dependency_python_requirements.py",
+  "sugarcubes/backend/services/dependency_registry_source.py",
+  "sugarcubes/backend/services/dependency_repair_logging.py",
+  "sugarcubes/backend/services/dependency_requirement_fingerprint.py",
+  "sugarcubes/backend/services/dependency_requirement_implications.py",
+  "sugarcubes/backend/services/dependency_semver.py",
+  "sugarcubes/backend/services/dependency_requirements.py",
+  "sugarcubes/backend/services/dependency_source_archive.py",
+  "sugarcubes/backend/services/dependency_source_git.py",
+  "sugarcubes/backend/services/dependency_state_fingerprint.py",
+  "sugarcubes/backend/services/dependency_version_readiness.py",
+  "sugarcubes/backend/services/dependency_version_types.py",
+  "sugarcubes/backend/services/dependency_version_repair.py",
+  "sugarcubes/backend/services/dependency_versions.py",
+]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "frontend_core"
+sources = [
+  "frontend/comfyui/*.ts",
+  "frontend/comfyui/ui/*.ts",
+  "frontend/comfyui/ui/core/**",
+  "frontend/comfyui/ui/menus/**",
+  "frontend/comfyui/ui/debug/**",
+  "frontend/comfyui/ui/types/**",
+  "frontend/comfyui/ui/sidebar/**",
+]
+proofs = ["integration", "unit"]
+
+[[boundary]]
+name = "plugin_mode"
+area = "frontend_core"
+
+[[subscription]]
+boundary = "plugin_mode"
+groups = ["surface/integration", "relations/unit", "output_canvas/integration"]
+
+[[area]]
+name = "graph"
+sources = [
+  "frontend/comfyui/ui/geometry/**",
+  "frontend/comfyui/ui/graph/**",
+  "frontend/comfyui/ui/layout/**",
+]
+proofs = ["contract", "unit"]
+
+[[area]]
+name = "execution"
+sources = ["sugarcubes/execution/**", "frontend/comfyui/ui/cube/execution/**", "frontend/comfyui/ui/execution/**", "web/comfyui/ui/execution/**"]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "output_canvas"
+sources = ["sugarcubes/frontend_assets.py", "frontend/comfyui/ui/output_canvas/**", "web/comfyui/ui/output_canvas/**"]
+proofs = ["unit", "contract", "integration"]
+
+[[area]]
+name = "canvas_editing"
+sources = ["frontend/comfyui/ui/canvas_editing/**", "web/comfyui/ui/canvas_editing/**", "frontend/static/icons/canvas-editing/**", "web/icons/canvas-editing/**", "frontend/static/canvas-editing/**", "web/canvas-editing/**"]
+proofs = ["unit", "integration"]
+
+[[boundary]]
+name = "canvas_editing_overlay"
+area = "canvas_editing"
+
+[[subscription]]
+boundary = "canvas_editing_overlay"
+groups = ["output_canvas/integration"]
+
+[[area]]
+name = "cube"
+sources = [
+  "frontend/comfyui/ui/affordance/**",
+  "frontend/comfyui/ui/cube/*.ts",
+  "frontend/comfyui/ui/cube/connection/**",
+  "frontend/comfyui/ui/cube/container/**",
+  "frontend/comfyui/ui/cube/geometry/**",
+  "frontend/comfyui/ui/cube/graph/**",
+  "frontend/comfyui/ui/cube/migration/**",
+  "frontend/comfyui/ui/cube/node/**",
+  "frontend/comfyui/ui/cube/placement/**",
+  "frontend/comfyui/ui/cube/stack/**",
+  "frontend/comfyui/ui/cube/version/**",
+]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "surface"
+sources = [
+  "frontend/static/orb/**",
+  "web/orb/**",
+  "frontend/static/icons/node/**",
+  "web/icons/node/**",
+  "frontend/static/icons/view/**",
+  "web/icons/view/**",
+  "frontend/static/icons/seed/**",
+  "web/icons/seed/**",
+  "frontend/comfyui/ui/overlays/**",
+  "frontend/comfyui/ui/surface/**",
+]
+proofs = ["contract", "integration", "unit"]
+isolated_proofs = ["integration"]
+
+[[boundary]]
+name = "desktop_frame_contract"
+area = "surface"
+
+[[subscription]]
+boundary = "desktop_frame_contract"
+groups = ["frontend_core/integration", "frontend_core/unit"]
+
+[[area]]
+name = "browser"
+sources = [
+  "frontend/comfyui/ui/browser/**",
+  "frontend/comfyui/ui/picker/**",
+]
+proofs = ["contract", "integration", "unit"]
+isolated_proofs = ["integration"]
+
+[[area]]
+name = "authoring"
+sources = [
+  "sugarcubes/authoring/**",
+  "sugarcubes/backend/services/native_cube_import_preparer.py",
+  "sugarcubes/backend/services/sugarscript_catalog_resolver.py",
+  "frontend/comfyui/ui/create/**",
+  "frontend/comfyui/ui/flavors/**",
+  "frontend/comfyui/ui/import/**",
+  "frontend/comfyui/ui/packs/**",
+  "frontend/comfyui/ui/promotion/**",
+  "frontend/comfyui/ui/save/**",
+  "frontend/comfyui/ui/sugarscript/**",
+]
+proofs = ["contract", "integration", "unit"]
+isolated_proofs = ["integration"]
+
+[[area]]
+name = "settings"
+sources = [
+  "frontend/static/legal/**",
+  "web/legal/**",
+  "frontend/comfyui/ui/controls/**",
+  "frontend/comfyui/ui/dialogs/**",
+  "frontend/comfyui/ui/settings/**",
+]
+proofs = ["integration", "unit"]
+
+[[boundary]]
+name = "cube_document"
+area = "cube_model"
+
+[[boundary]]
+name = "canonical_workflow"
+area = "workflow"
+
+[[boundary]]
+name = "sugarscript_language"
+area = "language"
+
+[[boundary]]
+name = "optimization_contract"
+area = "optimizer"
+
+[[boundary]]
+name = "comfy_execution_contract"
+area = "comfy_contract"
+
+[[boundary]]
+name = "backend_http"
+area = "backend_api"
+
+[[boundary]]
+name = "library_contract"
+area = "library"
+
+[[boundary]]
+name = "frontend_host"
+area = "frontend_core"
+
+[[boundary]]
+name = "floating_menu_contract"
+area = "frontend_core"
+
+[[subscription]]
+boundary = "floating_menu_contract"
+groups = ["model_library/integration", "surface/integration", "surface/unit", "browser/unit", "cube/integration", "editor_actions/integration", "editor_actions/unit"]
+
+[[boundary]]
+name = "graph_contract"
+area = "graph"
+
+[[boundary]]
+name = "modal_presentation"
+area = "settings"
+
+[[subscription]]
+boundary = "modal_presentation"
+groups = ["model_library/integration", "editor_actions/integration", "authoring/unit", "authoring/integration", "masonry_search/integration", "output_saving/integration"]
+
+[[boundary]]
+name = "execution_prompt"
+area = "execution"
+
+[[subscription]]
+boundary = "execution_prompt"
+groups = ["output_saving/unit", "output_saving/contract", "output_saving/integration"]
+
+[[boundary]]
+name = "native_card_presentation"
+area = "surface"
+
+[[boundary]]
+name = "model_library_editor_contract"
+area = "model_library"
+
+[[subscription]]
+boundary = "model_library_editor_contract"
+groups = ["editor_actions/integration", "editor_actions/unit"]
+
+[[subscription]]
+boundary = "native_card_presentation"
+groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration", "masonry_search/integration", "graph/unit", "output_canvas/integration", "prompt_editor/integration", "input_canvas/integration"]
+
+[[subscription]]
+boundary = "cube_document"
+groups = [
+  "export/contract",
+  "import/integration",
+  "authoring/integration",
+  "execution/integration",
+]
+
+[[subscription]]
+boundary = "canonical_workflow"
+groups = [
+  "cube/unit",
+  "cube/integration",
+  "surface/unit",
+  "surface/integration",
+  "language/contract",
+  "library/integration",
+  "comfy_contract/contract",
+  "execution/integration",
+  "browser/integration",
+]
+
+[[subscription]]
+boundary = "sugarscript_language"
+groups = ["authoring/integration"]
+
+[[subscription]]
+boundary = "optimization_contract"
+groups = ["execution/integration", "comfy_contract/contract"]
+
+[[subscription]]
+boundary = "comfy_execution_contract"
+groups = ["execution/integration", "browser/integration"]
+
+[[subscription]]
+boundary = "backend_http"
+groups = [
+  "browser/integration",
+  "authoring/integration",
+  "settings/integration",
+]
+
+[[subscription]]
+boundary = "library_contract"
+groups = [
+  "backend_api/integration",
+  "browser/integration",
+  "authoring/integration",
+  "dependencies/integration",
+]
+
+[[subscription]]
+boundary = "frontend_host"
+groups = [
+  "browser/integration",
+  "cube/integration",
+  "surface/integration",
+  "input_canvas/integration",
+]
+
+[[subscription]]
+boundary = "graph_contract"
+groups = [
+  "authoring/integration",
+  "cube/integration",
+  "execution/integration",
+  "surface/integration",
+  "input_canvas/unit",
+  "input_canvas/integration",
+]
+
+[[subscription]]
+boundary = "execution_prompt"
+groups = ["surface/integration", "relations/integration", "output_canvas/integration"]
+
+[[boundary]]
+name = "workflow_execution_results"
+area = "execution"
+
+[[boundary]]
+name = "spatial_probe"
+area = "execution"
+
+[[subscription]]
+boundary = "spatial_probe"
+groups = ["editor_actions/unit", "editor_actions/integration"]
+
+[[subscription]]
+boundary = "workflow_execution_results"
+groups = ["surface/integration", "surface/unit", "model_library/unit", "output_canvas/integration", "input_canvas/integration"]
+
+[[boundary]]
+name = "canvas_view"
+area = "output_canvas"
+
+[[boundary]]
+name = "workflow_view_preferences"
+area = "workflow"
+
+[[subscription]]
+boundary = "workflow_view_preferences"
+groups = ["output_canvas/integration", "surface/integration", "frontend_core/integration"]
+
+[[boundary]]
+name = "canvas_workspace"
+area = "output_canvas"
+
+[[subscription]]
+boundary = "canvas_workspace"
+groups = ["surface/integration", "frontend_core/integration"]
+
+[[area]]
+name = "prompt_editor"
+sources = ["frontend/sugarprompt/**", "frontend/comfyui/ui/prompt_editor/**", "web/sugarprompt/**", "web/comfyui/ui/prompt_editor/**"]
+proofs = ["unit", "contract", "integration"]
+isolated_proofs = ["integration"]
+
+[[area]]
+name = "editor_integrations"
+sources = ["integrations/AGENTS.md", "integrations/.eslintrc.json", "integrations/contracts/**", "integrations/shared/**", "scripts/integrations/**", "tsconfig.integrations.json", "tsconfig.integration-tools.json"]
+proofs = ["contract"]
+
+[[area]]
+name = "input_canvas"
+sources = ["sugarcubes/input_canvas/**", "frontend/comfyui/ui/input_canvas/**", "web/comfyui/ui/input_canvas/**"]
+proofs = ["unit", "integration"]
+
+[[boundary]]
+name = "canvas_mask_inputs"
+area = "input_canvas"
+
+[[subscription]]
+boundary = "canvas_mask_inputs"
+groups = ["execution/unit", "execution/integration", "surface/integration", "photoshop/contract", "gimp/contract", "frontend_core/unit", "frontend_core/integration", "relations/unit", "relations/integration"]
+
+[[area]]
+name = "photoshop"
+sources = ["integrations/photoshop/**", "scripts/photoshop/**", "tsconfig.photoshop.json"]
+proofs = ["contract"]
+
+[[area]]
+name = "gimp"
+sources = ["integrations/gimp/**", "scripts/gimp/**", "tsconfig.gimp.json"]
+proofs = ["contract", "unit"]
+
+[[boundary]]
+name = "editor_adapter_contract"
+area = "editor_integrations"
+
+[[subscription]]
+boundary = "native_card_presentation"
+groups = ["gimp/contract"]
+
+[[subscription]]
+boundary = "editor_adapter_contract"
+groups = ["photoshop/contract", "gimp/contract", "frontend_core/unit", "frontend_core/integration", "surface/unit", "surface/integration", "relations/unit", "execution/unit", "execution/contract", "execution/integration", "output_canvas/unit", "output_canvas/contract", "output_canvas/integration", "input_canvas/unit", "input_canvas/integration"]

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.integrations.json",
+  "compilerOptions": {
+    "types": ["@adobe/cc-ext-uxp-types", "photoshop"],
+    "skipLibCheck": true,
+    "jsx": "preserve"
+  },
+  "include": ["integrations/photoshop/src/**/*"],
+  "exclude": []
+}

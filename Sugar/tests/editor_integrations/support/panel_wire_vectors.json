@@ -1,0 +1,222 @@
+[
+  {
+    "label": "ready",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "ready"
+    }
+  },
+  {
+    "label": "applied",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "applied"
+    }
+  },
+  {
+    "label": "ping",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "ping"
+    }
+  },
+  {
+    "label": "pong",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "pong",
+      "connected": true
+    }
+  },
+  {
+    "label": "rejected",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "rejected",
+      "reason": "presentation-failed"
+    }
+  },
+  {
+    "label": "configure nullable color",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "configure",
+      "presentation": {
+        "pluginMode": false,
+        "visualStyle": "comfy",
+        "photoProPalette": "dark-gray",
+        "accentColor": null,
+        "resizeCornerSize": 0
+      }
+    }
+  },
+  {
+    "label": "configure hexadecimal color",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "configure",
+      "presentation": {
+        "pluginMode": false,
+        "visualStyle": "fluent",
+        "photoProPalette": "black",
+        "accentColor": "#aF0123",
+        "resizeCornerSize": 64
+      }
+    }
+  },
+  {
+    "label": "missing required nullable color",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "configure",
+      "presentation": {
+        "pluginMode": false,
+        "visualStyle": "comfy",
+        "photoProPalette": "dark-gray",
+        "resizeCornerSize": 0
+      }
+    }
+  },
+  {
+    "label": "invalid color",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "configure",
+      "presentation": {
+        "pluginMode": false,
+        "visualStyle": "comfy",
+        "photoProPalette": "black",
+        "accentColor": "#GG0000",
+        "resizeCornerSize": 0
+      }
+    }
+  },
+  {
+    "label": "out of range resize",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "configure",
+      "presentation": {
+        "pluginMode": false,
+        "visualStyle": "comfy",
+        "photoProPalette": "black",
+        "accentColor": null,
+        "resizeCornerSize": 65
+      }
+    }
+  },
+  {
+    "label": "fractional resize",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "configure",
+      "presentation": {
+        "pluginMode": false,
+        "visualStyle": "comfy",
+        "photoProPalette": "black",
+        "accentColor": null,
+        "resizeCornerSize": 0.5
+      }
+    }
+  },
+  {
+    "label": "foreign protocol",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "ready"
+    }
+  },
+  {
+    "label": "wrong version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 2,
+      "session": "session-12345678",
+      "type": "ready"
+    }
+  },
+  {
+    "label": "short session",
+    "valid": false,
+    "value": { "protocol": "sugarcubes.panel", "version": 3, "session": "short", "type": "ready" }
+  },
+  {
+    "label": "session with newline",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678\n",
+      "type": "ready"
+    }
+  },
+  {
+    "label": "extra member",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "ready",
+      "privilege": true
+    }
+  },
+  {
+    "label": "unknown message type",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "execute"
+    }
+  },
+  {
+    "label": "bad rejection reason",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 3,
+      "session": "session-12345678",
+      "type": "rejected",
+      "reason": "arbitrary"
+    }
+  }
+]

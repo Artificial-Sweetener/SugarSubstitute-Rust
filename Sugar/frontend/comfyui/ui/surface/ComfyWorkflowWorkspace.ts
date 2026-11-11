@@ -1,0 +1,109 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Compose workflow view persistence and presentation adapters around one committed session boundary. */
+import {
+  ComfyCanvasHost,
+  type ComfyCanvasHostOptions,
+} from '../output_canvas/infrastructure/ComfyCanvasHost.js';
+import {
+  WorkflowMasonryHostLifecycle,
+  type WorkflowMasonryHostLifecycleOptions,
+} from '../surface/masonry/WorkflowMasonryHostLifecycle.js';
+import { ComfyWorkflowViewPreferences } from '../workflow/infrastructure/ComfyWorkflowViewPreferences.js';
+import { OUTPUT_CANVAS_VISIBLE_SETTING } from '../output_canvas/infrastructure/ComfyCanvasPreferences.js';
+import { WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH } from './masonry/WorkflowMasonryLayout.js';
+import { isRecord } from '../types/common.js';
+import { ComfyDesktopSessionHost } from '../workflow/infrastructure/ComfyDesktopSessionHost.js';
+import type { SettingsWorkspaceRoute } from '../settings/SettingsWorkspaceRoute.js';
+
+/** Keep presentation lifecycle registration outside the host extension entry point. */
+export class ComfyWorkflowWorkspace {
+  readonly canvas: ComfyCanvasHost;
+  readonly masonry: WorkflowMasonryHostLifecycle;
+  readonly #presentation: ComfyWorkflowViewPreferences;
+  readonly #desktop: ComfyDesktopSessionHost | null;
+
+  /** Inject existing runtime and surface collaborators without reproducing their policies. */
+  constructor(
+    private readonly options: Omit<
+      ComfyCanvasHostOptions,
+      'presentation' | 'defaultEditorWidth'
+    > & { readonly settingsRoute?: SettingsWorkspaceRoute },
+    masonry: Omit<WorkflowMasonryHostLifecycleOptions, 'presentation' | 'getContainer'>,
+    logger: Pick<Console, 'warn'>,
+  ) {
+    this.#presentation = new ComfyWorkflowViewPreferences(
+      options.execution.sessions,
+      () => options.document.defaultView?.localStorage ?? null,
+      () => {
+        const app = isRecord(options.app) ? options.app : {};
+        const ui = isRecord(app.ui) ? app.ui : {};
+        const settings = isRecord(ui.settings) ? ui.settings : {};
+        const read = settings.getSettingValue;
+        const value: unknown =
+          typeof read === 'function'
+            ? read.call(settings, OUTPUT_CANVAS_VISIBLE_SETTING, true)
+            : true;
+        return typeof value === 'boolean' ? value : true;
+      },
+      logger,
+    );
+    this.canvas = new ComfyCanvasHost({
+      ...options,
+      presentation: this.#presentation,
+      defaultEditorWidth: WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH,
+    });
+    this.masonry = new WorkflowMasonryHostLifecycle({
+      ...masonry,
+      presentation: this.#presentation,
+      getContainer: () => this.canvas.content,
+    });
+    const window = options.document.defaultView;
+    this.#desktop = window
+      ? new ComfyDesktopSessionHost(window, {
+          app: options.app,
+          execution: options.execution,
+          canvas: this.canvas.sessionSnapshots,
+          presentation: this.#presentation,
+          ...(options.route ? { route: options.route } : {}),
+          report: options.report,
+          ...(options.settingsRoute ? { settingsRoute: options.settingsRoute } : {}),
+        })
+      : null;
+  }
+
+  /** Register view restoration before consumers react to workflow activation. */
+  setup(): void {
+    this.#presentation.setup();
+    this.canvas.setup();
+    this.masonry.setup();
+    try {
+      this.#desktop?.setup();
+    } catch (error: unknown) {
+      this.options.report(error);
+    }
+    this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
+  }
+
+  /** Release lightweight session state alongside the presentation surfaces at window teardown. */
+  readonly #pagehide = (): void => {
+    this.options.document.defaultView?.removeEventListener('pagehide', this.#pagehide);
+    this.#desktop?.dispose();
+    this.#presentation.dispose();
+    this.canvas.dispose();
+    this.masonry.dispose();
+  };
+}
