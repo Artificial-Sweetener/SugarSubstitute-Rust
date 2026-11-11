@@ -353,11 +353,9 @@ export const reorderPreviewExtension: Extension = [
     };
   }),
   EditorView.theme({
-    '&[data-reorder-preview="true"] .cm-content, &[data-reorder-preview="true"] .cm-content *': {
-      caretColor: 'transparent',
-    },
-    '&[data-reorder-preview="true"] .cm-content::selection, &[data-reorder-preview="true"] .cm-content ::selection':
-      { backgroundColor: 'transparent', color: 'inherit' },
+    '&[data-reorder-preview="true"] .cm-cursorLayer': { visibility: 'hidden' },
+    '&[data-reorder-preview="true"] .cm-content .cm-line ::selection, &[data-reorder-preview="true"] .cm-content .cm-line::selection':
+      { backgroundColor: 'transparent !important', color: 'inherit' },
     '.sp-reorder-preview': { whiteSpace: 'inherit', userSelect: 'none' },
     '.sp-reorder-chip': {
       display: 'inline',

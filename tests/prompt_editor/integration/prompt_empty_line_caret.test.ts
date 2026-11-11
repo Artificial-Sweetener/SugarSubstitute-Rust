@@ -26,6 +26,7 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
+import { drawnCaret } from '../support/DrawnCaret.js';
 
 let fixture: PromptBrowserFixture;
 
@@ -120,16 +121,6 @@ async function caret(page: Page): Promise<{ head: number; line: number; column: 
   return { head: selection.head, line, column: selection.head - (lineStarts[line] ?? 0) };
 }
 
-/** The painted native caret's horizontal position, or null where the browser paints none. */
-async function paintedCaretX(page: Page): Promise<number | null> {
-  return page.evaluate(() => {
-    const selection = getSelection();
-    if (!selection?.rangeCount) return null;
-    const rect = selection.getRangeAt(0).getBoundingClientRect();
-    return rect.height > 0 ? rect.left : null;
-  });
-}
-
 /** Painted visual rows of one decorated source line, measured from its rendered characters. */
 async function visualRows(page: Page, line: number): Promise<LineBox[]> {
   return page.evaluate((index) => {
@@ -177,6 +168,13 @@ test.each([
               placed.head,
               lineStarts[line] ?? -1,
             );
+            const drawn = await drawnCaret(page);
+            if (!drawn) throw new Error('No caret is drawn on the empty line');
+            expectAt(
+              `caret drawn on empty line ${String(line)}`,
+              drawn.top >= box.top - 1 && drawn.bottom <= box.bottom + 1,
+              true,
+            );
           }
           continue;
         }
@@ -191,11 +189,9 @@ test.each([
           await settle(page);
           const placed = await caret(page);
           expectAt(`row ${String(index)} of line ${String(line)}`, placed.line, line);
-          const painted = await page.evaluate(() => {
-            const rect = getSelection()?.getRangeAt(0).getBoundingClientRect();
-            return rect ? (rect.top + rect.bottom) / 2 : null;
-          });
-          if (painted === null) throw new Error('The collapsed caret is not painted');
+          const drawn = await drawnCaret(page);
+          if (!drawn) throw new Error('The collapsed caret is not drawn');
+          const painted = (drawn.top + drawn.bottom) / 2;
           expect(painted).toBeGreaterThan(row.top - 2);
           expect(painted).toBeLessThan(row.bottom + 2);
           if (index === rows.length - 1) expect(placed.column).toBe(lineLengths[line]);
@@ -243,7 +239,7 @@ test.each([
       await page.mouse.click(row.left + 120, (row.top + row.bottom) / 2);
       await settle(page);
       const start = await caret(page);
-      const startX = await paintedCaretX(page);
+      const startX = (await drawnCaret(page))?.x ?? null;
       expect(start.line).toBe(2);
       expect(startX).not.toBeNull();
       const visited: number[] = [];
@@ -254,9 +250,7 @@ test.each([
       }
       expect(visited).toEqual([1, 0, 1, 2]);
       expect((await caret(page)).head).toBe(start.head);
-      expect(
-        Math.abs((await paintedCaretX(page)) ?? Number.NaN) - Math.abs(startX ?? 0),
-      ).toBeLessThan(2);
+      expect(Math.abs(((await drawnCaret(page))?.x ?? Number.NaN) - (startX ?? 0))).toBeLessThan(2);
       expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
     } finally {
       await page.close();

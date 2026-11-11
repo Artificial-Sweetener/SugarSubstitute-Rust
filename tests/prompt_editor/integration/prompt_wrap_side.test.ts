@@ -15,11 +15,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Prove CodeMirror places the browser caret on the row a soft-wrap selection names, including in a
- * browser whose adjacent row rectangles overlap by rounding noise. Firefox reports touching rows
- * that way beneath a fractional canvas scale; CodeMirror used to read the overlap as one visual row,
- * never asked the browser to move its caret to the row end, and the painted caret stayed at the start
- * of the next row.
+ * Prove the prompt draws its caret on the visual row a soft-wrap selection's side names, at whole and
+ * fractional canvas scales, whether the caret arrives from elsewhere or only changes side, and that the
+ * browser's own caret is never painted.
  * @jest-environment node
  */
 import type { Page } from '@playwright/test';
@@ -28,11 +26,12 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
+import { drawnCaret } from '../support/DrawnCaret.js';
 
 let fixture: PromptBrowserFixture;
 
 const source =
-  'a very long description of a cat sitting on a windowsill looking at the rain outside while the city lights blur into soft colors, (tail:1.20), and a second sentence that wraps as well';
+  'a very long description of a cat, sitting on a windowsill, looking at the rain outside, while the city lights blur into soft colors, (tail:1.20), and a second sentence that wraps as well';
 const editorWidth = 320;
 
 beforeAll(async () => {
@@ -43,7 +42,7 @@ afterAll(async () => {
   await fixture.close();
 }, 30_000);
 
-/** Wait for queued native measurement and the wrap publication it schedules to paint. */
+/** Wait for queued native measurement, the wrap publication it schedules and the drawn layers to paint. */
 async function settle(page: Page): Promise<void> {
   await page.evaluate(
     () =>
@@ -70,81 +69,84 @@ async function wrapBoundaries(page: Page): Promise<number[]> {
   throw new Error('The prompt never wrapped');
 }
 
-/** Make every rectangle taller by `noise` pixels, as a browser whose row edges meet within rounding error. */
-async function addRectangleNoise(page: Page, noise: number): Promise<void> {
-  await page.evaluate((amount) => {
-    const original = Range.prototype.getClientRects;
-    Range.prototype.getClientRects = function getClientRects(this: Range): DOMRectList {
-      const rects = [...original.call(this)].map(
-        (rect) => new DOMRect(rect.x, rect.y, rect.width, rect.height + amount),
-      );
-      return Object.assign(rects, { item: (index: number) => rects[index] ?? null }) as DOMRectList;
-    };
-  }, noise);
-}
+/** How the caret reaches the wrap offset: from elsewhere in the prompt, or by changing only its side there. */
+type Arrival = 'from elsewhere' | 'side only';
 
-/** Record every browser-native selection movement CodeMirror requests. */
-async function recordSelectionMoves(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const moves: string[] = [];
-    Reflect.set(window, 'selectionMoves', moves);
-    const original = Selection.prototype.modify;
-    Selection.prototype.modify = function modify(
-      this: Selection,
-      ...args: [string, string, string]
-    ) {
-      moves.push(args.join(' '));
-      return original.apply(this, args);
-    };
-  });
+/** Place the caret on one side of a wrap offset after arriving the given way. */
+async function placeOnSide(
+  page: Page,
+  boundary: number,
+  side: -1 | 1,
+  arrival: Arrival,
+): Promise<void> {
+  await page.evaluate(
+    ([position, wanted, sideOnly]) => {
+      if (sideOnly) window.promptBrowserProof.placeCaret(position, wanted === 1 ? -1 : 1);
+      else window.promptBrowserProof.placeCaret(Math.max(position - 30, 0), 1);
+    },
+    [boundary, side, arrival === 'side only'] as const,
+  );
+  await settle(page);
+  await page.evaluate(
+    ([position, wanted]) => window.promptBrowserProof.placeCaret(position, wanted),
+    [boundary, side] as const,
+  );
+  await settle(page);
 }
 
 test.each(
   (['nodes-1', 'nodes-2'] as const).flatMap((renderer) =>
-    [0, 0.02].map((noise) => [renderer, noise] as const),
+    [1.09, 0.8].map((scale) => [renderer, scale] as const),
   ),
 )(
-  '%s with %s px of rectangle noise has the browser move its caret to the row end or row start named by the side',
-  async (renderer, noise) => {
-    const page = await mountPrompt(fixture, renderer, source, 1.09);
+  '%s at scale %d draws the caret on the row each side of every wrap offset names',
+  async (renderer, scale) => {
+    const page = await mountPrompt(fixture, renderer, source, scale);
     try {
       const boundaries = await wrapBoundaries(page);
-      await addRectangleNoise(page, noise);
-      await recordSelectionMoves(page);
       await page.evaluate(() =>
         document.querySelector<HTMLElement>('[data-sc-prompt-editor] .cm-content')?.focus(),
       );
       for (const boundary of boundaries) {
-        for (const [side, expected] of [
-          [-1, 'move forward lineboundary'],
-          [1, 'move backward lineboundary'],
+        // The upper row ends with the character before the offset; the lower row starts with the one at it.
+        const rows = await page.evaluate(
+          (position) => ({
+            upper: window.promptBrowserProof.characterRow(position - 1),
+            lower: window.promptBrowserProof.characterRow(position),
+          }),
+          boundary,
+        );
+        if (!rows.upper || !rows.lower) throw new Error(`No characters around ${String(boundary)}`);
+        for (const [side, arrival] of [
+          [-1, 'from elsewhere'],
+          [1, 'from elsewhere'],
+          [-1, 'side only'],
+          [1, 'side only'],
         ] as const) {
-          await page.evaluate(() => {
-            (Reflect.get(window, 'selectionMoves') as string[]).length = 0;
-          });
-          await page.evaluate(
-            ([position, wanted]) => {
-              // Leave the boundary first so the placement below always changes the selection.
-              window.promptBrowserProof.placeCaret(Math.max(position - 30, 0), 1);
-              window.promptBrowserProof.placeCaret(position, wanted);
-            },
-            [boundary, side] as const,
-          );
-          await settle(page);
-          const moves = await page.evaluate(
-            () => Reflect.get(window, 'selectionMoves') as string[],
-          );
-          expect({ boundary, side, moves: moves.includes(expected) }).toEqual({
+          await placeOnSide(page, boundary, side, arrival);
+          const row = side < 0 ? rows.upper : rows.lower;
+          const caret = await drawnCaret(page);
+          const middle = caret ? (caret.top + caret.bottom) / 2 : Number.NaN;
+          expect({
             boundary,
             side,
-            moves: true,
-          });
+            arrival,
+            onRow: middle >= row.top && middle <= row.bottom,
+          }).toEqual({ boundary, side, arrival, onRow: true });
           expect(await page.evaluate(() => window.promptBrowserProof.selection())).toEqual({
             anchor: boundary,
             head: boundary,
           });
         }
       }
+      // Only the drawn caret is painted: the browser's own caret is transparent.
+      expect(
+        await page.evaluate(() => {
+          const line = document.querySelector('[data-sc-prompt-editor] .cm-line');
+          if (!line) throw new Error('Missing prompt line');
+          return getComputedStyle(line).caretColor;
+        }),
+      ).toBe('rgba(0, 0, 0, 0)');
       expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
     } finally {
       await page.close();

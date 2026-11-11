@@ -25,6 +25,7 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
+import { drawnCaret, expectDrawnCaretOnRow } from '../support/DrawnCaret.js';
 
 let fixture: PromptBrowserFixture;
 const wrapped =
@@ -79,33 +80,6 @@ async function visualRows(page: Page, line: number): Promise<VisualRow[]> {
   }, line);
 }
 
-/** Read the painted rectangle of the collapsed native caret inside the prompt. */
-async function paintedCaret(page: Page): Promise<{ x: number; top: number; bottom: number }> {
-  return page.evaluate(() => {
-    const selection = getSelection(),
-      content = document.querySelector('.cm-content');
-    if (!selection?.isCollapsed || !selection.focusNode || !content?.contains(selection.focusNode))
-      throw new Error('The prompt has no collapsed caret');
-    const rect = selection.getRangeAt(0).getBoundingClientRect();
-    return { x: rect.left, top: rect.top, bottom: rect.bottom };
-  });
-}
-
-/** Wait until the native caret is painted on the row containing the given vertical point. */
-async function expectCaretOnRow(page: Page, row: VisualRow): Promise<void> {
-  await page.waitForFunction(
-    ({ top, bottom }) => {
-      const selection = getSelection();
-      if (!selection?.rangeCount) return false;
-      const rect = selection.getRangeAt(0).getBoundingClientRect();
-      const middle = (rect.top + rect.bottom) / 2;
-      return rect.height > 0 && middle >= top && middle <= bottom;
-    },
-    { top: row.top, bottom: row.bottom },
-    { timeout: 2_000 },
-  );
-}
-
 test.each([
   ['nodes-1', 1],
   ['nodes-2', 0.85],
@@ -129,11 +103,11 @@ test.each([
         [secondStart, second],
       ] as const) {
         await page.mouse.click(point.x, point.y);
-        await expectCaretOnRow(page, row);
+        await expectDrawnCaretOnRow(page, row);
       }
       await page.mouse.click(pastFirst.x, pastFirst.y);
-      await expectCaretOnRow(page, first);
-      expect(Math.abs((await paintedCaret(page)).x - first.right)).toBeLessThan(2);
+      await expectDrawnCaretOnRow(page, first);
+      expect(Math.abs(((await drawnCaret(page))?.x ?? Number.NaN) - first.right)).toBeLessThan(2);
       await page.keyboard.insertText('|');
       await expectSource(page, wrapped.slice(0, second.from) + '|' + wrapped.slice(second.from));
       expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);

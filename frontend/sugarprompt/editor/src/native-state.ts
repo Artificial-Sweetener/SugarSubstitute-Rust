@@ -45,7 +45,7 @@ import { prepareProjection } from './projection-preparation.js';
 import { promptWrapLayout } from './prompt-wrap-layout.js';
 import { semanticRefresh } from './semantic-refresh.js';
 import { promptMouseSelection } from './mouse-selection.js';
-import { nativeCaretSide } from './native-caret-side.js';
+import { drawnSelection } from './drawn-selection.js';
 import { weightPreview } from './weight-preview.js';
 import { keyboardWeightInteractions } from './weight-interactions.js';
 import { pointerWeightInteractions } from './weight-pointer.js';
@@ -176,7 +176,7 @@ export function createNativeState(source: string, options: NativeStateOptions): 
       loraMediaPreparation,
       ...(options.onLoraMediaError ? [loraMediaErrors.of(options.onLoraMediaError)] : []),
       promptMouseSelection,
-      nativeCaretSide,
+      drawnSelection,
       reorderInteractions,
       weightPreview,
       keyboardWeightInteractions,

@@ -546,7 +546,7 @@ test.each(
     (['fluent', 'spectrum', 'comfy'] as const).map((style) => [renderer, style] as const),
   ),
 )(
-  '%s %s uses the browser caret and selection without a separate animated cursor',
+  '%s %s draws its caret in the text colour over the browser selection, whose highlight stays native',
   async (renderer, style) => {
     const page = await browser.newPage();
     try {
@@ -566,20 +566,22 @@ test.each(
       const painting = await page.locator('.cm-content').evaluate((content) => {
         const selection = getSelection();
         const editor = content.closest('.cm-editor');
+        const cursor = editor?.querySelector('.cm-cursor-primary');
+        const selectionLayer = editor?.querySelector('.cm-selectionLayer');
         return {
-          caret: getComputedStyle(content).caretColor,
+          caret: cursor ? getComputedStyle(cursor).backgroundColor : null,
           foreground: getComputedStyle(content).color,
-          leafCarets: Array.from(content.querySelectorAll('.cm-line, .sp-reorder-chip')).map(
+          nativeCarets: [content, ...content.querySelectorAll('.cm-line, .sp-reorder-chip')].map(
             (node) => getComputedStyle(node).caretColor,
           ),
-          overlays: editor?.querySelectorAll('.cm-cursorLayer,.cm-selectionLayer').length,
+          drawnHighlight: selectionLayer ? getComputedStyle(selectionLayer).display : null,
           inside: !!selection?.focusNode && content.contains(selection.focusNode),
           collapsed: selection?.isCollapsed,
         };
       });
       expect(painting.caret).toBe(painting.foreground);
-      expect(painting.leafCarets.every((color) => color === painting.caret)).toBe(true);
-      expect(painting.overlays).toBe(0);
+      expect(painting.nativeCarets.every((color) => color === 'rgba(0, 0, 0, 0)')).toBe(true);
+      expect(painting.drawnHighlight).toBe('none');
       expect(painting.inside).toBe(true);
       expect(painting.collapsed).toBe(true);
       await page.keyboard.press('Control+a');
@@ -843,16 +845,15 @@ test.each(['nodes-1', 'nodes-2'] as const)(
           if (!chrome || !content) throw new Error('Missing official Fluent textarea');
           const field = getComputedStyle(chrome);
           const selection = getSelection();
+          const cursor = root.querySelector('.cm-cursor-primary');
           return {
             foreground: getComputedStyle(content).color,
-            caret: getComputedStyle(content).caretColor,
+            caret: cursor ? getComputedStyle(cursor).backgroundColor : null,
             nativeSelection:
               selection?.isCollapsed &&
               !!selection.focusNode &&
               content.contains(selection.focusNode),
-            caretHeight: selection?.rangeCount
-              ? selection.getRangeAt(0).getBoundingClientRect().height
-              : 0,
+            caretHeight: cursor?.getBoundingClientRect().height ?? 0,
             top: field.borderTopColor,
             right: field.borderRightColor,
             accent: getComputedStyle(chrome, '::after').borderBottomColor,
@@ -1135,33 +1136,28 @@ test('an empty prompt shows an insertion caret before typing and after undo', as
       window.promptBrowserProof.mount('nodes-2', 1, '');
     });
     await page.locator('.cm-content').click();
-    await page.waitForFunction(() => {
-      const root = document.querySelector('[data-sc-prompt-editor]'),
-        content = root?.querySelector('.cm-content'),
-        selection = getSelection();
-      return (
-        content &&
-        selection?.isCollapsed &&
-        !!selection.focusNode &&
-        content.contains(selection.focusNode) &&
-        getComputedStyle(content).caretColor === getComputedStyle(content).color
-      );
-    });
+    // The editor draws the caret in the text colour while the native caret keeps the input focus.
+    const drawsCaret = () =>
+      page.waitForFunction(() => {
+        const content = document.querySelector('[data-sc-prompt-editor] .cm-content'),
+          cursor = document.querySelector('[data-sc-prompt-editor] .cm-cursor-primary'),
+          selection = getSelection();
+        return (
+          !!content &&
+          !!selection?.isCollapsed &&
+          !!selection.focusNode &&
+          content.contains(selection.focusNode) &&
+          !!cursor &&
+          cursor.getBoundingClientRect().height > 0 &&
+          getComputedStyle(cursor).backgroundColor === getComputedStyle(content).color
+        );
+      });
+    await drawsCaret();
     await page.keyboard.type('a');
     await page.waitForFunction(() => window.promptBrowserProof.read().source === 'a');
     await page.keyboard.press('Control+z');
     await page.waitForFunction(() => window.promptBrowserProof.read().source === '');
-    expect(
-      await page.locator('.cm-content').evaluate((content) => {
-        const selection = getSelection();
-        return (
-          selection?.isCollapsed &&
-          !!selection.focusNode &&
-          content.contains(selection.focusNode) &&
-          getComputedStyle(content).caretColor === getComputedStyle(content).color
-        );
-      }),
-    ).toBe(true);
+    await drawsCaret();
     expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
   } finally {
     await page.close();
