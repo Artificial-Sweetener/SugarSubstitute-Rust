@@ -31,6 +31,7 @@ type Engine = (typeof engines)[number];
 const scenarios = ['unavailable', 'native-document', 'panel-admission'] as const;
 type Scenario = (typeof scenarios)[number];
 const browsers = new Map<Engine, Browser>();
+const launchFailures = new Map<Engine, unknown>();
 const pages = new Map<Scenario, Map<Engine, Page>>();
 interface ActivePage {
   page: Page;
@@ -42,6 +43,10 @@ let address: string;
 /** Claim one preallocated page exactly once before any case setup can block. */
 function claimPage(scenario: Scenario, engine: Engine): Page {
   if (activePage) throw new Error('A Tauri shell page is already active.');
+  if (launchFailures.has(engine))
+    throw new Error(`The ${engine} browser fixture did not launch.`, {
+      cause: launchFailures.get(engine),
+    });
   const candidates = pages.get(scenario);
   const page = candidates?.get(engine);
   if (!candidates || !page) throw new Error(`Missing ${scenario} ${engine} page fixture.`);
@@ -97,19 +102,23 @@ beforeAll(async () => {
   if (!endpoint || typeof endpoint === 'string')
     throw new Error('Missing companion fixture endpoint.');
   address = `http://127.0.0.1:${String(endpoint.port)}`;
-  const launches = await Promise.allSettled(
+  // A browser that cannot launch fails only its own variants when they claim a page.
+  await Promise.all(
     engines.map(async (engine) => {
-      browsers.set(engine, await launchHeadlessBrowser(engine === 'chromium' ? chromium : firefox));
+      try {
+        browsers.set(
+          engine,
+          await launchHeadlessBrowser(engine === 'chromium' ? chromium : firefox),
+        );
+      } catch (cause) {
+        launchFailures.set(engine, cause);
+      }
     }),
   );
-  const failure = launches.find((result) => result.status === 'rejected');
-  if (failure?.status === 'rejected') throw failure.reason;
   for (const scenario of scenarios) {
     const candidates = new Map<Engine, Page>();
     pages.set(scenario, candidates);
-    for (const engine of engines) {
-      const browser = browsers.get(engine);
-      if (!browser) throw new Error(`Missing ${engine} browser fixture.`);
+    for (const [engine, browser] of browsers) {
       const page = await browser.newPage();
       candidates.set(engine, page);
       await configurePage(page, scenario === 'native-document', scenario === 'panel-admission');
