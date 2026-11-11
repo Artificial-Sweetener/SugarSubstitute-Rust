@@ -22,6 +22,7 @@ import { chromium, firefox, type Browser, type Page } from '@playwright/test';
 import {
   closeBrowserFixture,
   launchHeadlessBrowser,
+  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
 } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import { companionAssets } from '../../../scripts/gimp/build.js';
 
@@ -124,7 +125,7 @@ beforeAll(async () => {
       await configurePage(page, scenario === 'native-document', scenario === 'panel-admission');
     }
   }
-}, 60_000);
+}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
 
 afterAll(async () => {
   await closeBrowserFixture({ close: closeBrowsers }, server);

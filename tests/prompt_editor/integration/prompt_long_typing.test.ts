@@ -25,6 +25,7 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
+import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 
@@ -41,7 +42,7 @@ const longPrompt = Array.from({ length: 400 }, (_, index) =>
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, 60_000);
+}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
 
 afterAll(async () => {
   await fixture.close();

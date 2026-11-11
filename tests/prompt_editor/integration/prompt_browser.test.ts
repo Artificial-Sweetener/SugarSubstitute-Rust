@@ -20,6 +20,7 @@
  */
 import type { Browser, Page } from '@playwright/test';
 import { startPromptBrowser, type PromptBrowserFixture } from '../support/PromptBrowserServer.js';
+import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 let browser: Browser;
@@ -30,7 +31,7 @@ beforeAll(async () => {
   fixture = await startPromptBrowser();
   browser = fixture.browser;
   address = fixture.address;
-}, 60_000);
+}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
 
 afterAll(async () => {
   await fixture.close();

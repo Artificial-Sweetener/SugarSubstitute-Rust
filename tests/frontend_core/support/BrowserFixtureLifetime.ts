@@ -17,6 +17,13 @@
 import type { Server } from 'node:http';
 import type { Browser, LaunchOptions } from '@playwright/test';
 
+/**
+ * Bound every browser suite's fixture setup hook: browser launch, page bundle builds and page
+ * creation. Native browser start-up stretches with machine-wide CPU load in a way the tests'
+ * observations do not, so setup shares this budget while test bodies keep their own limits.
+ */
+export const BROWSER_FIXTURE_SETUP_TIMEOUT_MS = 60_000;
+
 interface HeadlessBrowserEngine<Result> {
   name(): string;
   launch(options: LaunchOptions): Promise<Result>;

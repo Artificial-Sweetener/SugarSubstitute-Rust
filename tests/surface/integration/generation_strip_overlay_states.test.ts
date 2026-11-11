@@ -23,7 +23,10 @@ import { readFileSync } from 'node:fs';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import UPNG from 'upng-js';
-import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import {
+  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
+  launchHeadlessBrowser,
+} from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 type Mode = 'light' | 'dark';
 type Rgb = readonly [number, number, number];
@@ -103,7 +106,7 @@ describe('Chromium generation action overlays', () => {
     </body></html>`);
     await page.addScriptTag({ content: output.outputFiles[0]!.text, type: 'module' });
     await page.waitForFunction(() => Reflect.get(globalThis, 'accentInstalled') === true);
-  }, 30_000);
+  }, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
 
   afterAll(async () => {
     await page?.close();

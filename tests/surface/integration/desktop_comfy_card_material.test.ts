@@ -18,7 +18,10 @@
 import { chromium, type Browser } from '@playwright/test';
 import { build } from 'esbuild';
 import UPNG from 'upng-js';
-import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import {
+  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
+  launchHeadlessBrowser,
+} from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 describe('Chromium desktop masonry card in Comfy style', () => {
   let browser: Browser;
@@ -50,7 +53,7 @@ describe('Chromium desktop masonry card in Comfy style', () => {
       format: 'esm',
     });
     install = output.outputFiles[0]!.text;
-  }, 30_000);
+  }, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
 
   afterAll(async () => {
     await browser?.close();

@@ -27,6 +27,7 @@ import {
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
 import { drawnCaret } from '../support/DrawnCaret.js';
+import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 
@@ -36,7 +37,7 @@ const editorWidth = 320;
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, 60_000);
+}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
 
 afterAll(async () => {
   await fixture.close();

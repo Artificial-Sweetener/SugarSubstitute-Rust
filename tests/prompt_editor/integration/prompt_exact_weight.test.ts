@@ -25,13 +25,14 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
+import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 const source = 'a cat, (bright eyes:1.2), tail and more words here';
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, 60_000);
+}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
 
 afterAll(async () => {
   await fixture.close();
