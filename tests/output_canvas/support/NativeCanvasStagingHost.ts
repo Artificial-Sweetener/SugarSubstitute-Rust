@@ -37,7 +37,9 @@ interface Ticket {
  * back an abandoned staged attachment on its own. Operation types in `withheld` stay unanswered,
  * as a host still acquiring or presenting them would leave them, until the page cancels them.
  */
-export function nativeCanvasStagingHost(options: { readonly overview?: boolean } = {}) {
+export function nativeCanvasStagingHost(
+  options: { readonly overview?: boolean; readonly preview?: boolean } = {},
+) {
   const calls: CanvasSurfaceCommand[] = [];
   const withheld = new Set<CommandType>();
   const waiting: Ticket[] = [];
@@ -102,7 +104,7 @@ export function nativeCanvasStagingHost(options: { readonly overview?: boolean }
     capabilities: {
       schema: 2,
       imageFormats: ['png'],
-      previewFormats: [],
+      previewFormats: options.preview ? ['jpeg'] : [],
       viewportCommands: ['fit', 'native', 'zoom', 'pan'],
       viewportState: true,
       comparison: false,
@@ -111,7 +113,10 @@ export function nativeCanvasStagingHost(options: { readonly overview?: boolean }
     },
     presentation: {
       subscribe: () => ({
-        ready: new Promise<CanvasObservationStatus>(() => {}),
+        // A host with live previews accepts observation; another never answers it.
+        ready: options.preview
+          ? Promise.resolve<CanvasObservationStatus>('observing')
+          : new Promise<CanvasObservationStatus>(() => {}),
         stop: () => {},
       }),
     },
