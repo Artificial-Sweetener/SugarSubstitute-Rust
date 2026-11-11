@@ -67,9 +67,14 @@ def source_paths(root: Path, policy: ArchitecturePolicy) -> tuple[str, ...]:
 
 
 def visible_repository_paths(root: Path) -> frozenset[str] | None:
-    """Return tracked and unignored paths, or no filter outside a Git worktree."""
+    """Return tracked and unignored project paths, or no filter outside a Git checkout.
 
-    if not (root / ".git").exists():
+    The project is a Git checkout when it is a repository root or a tracked folder of a larger
+    repository. An untracked folder, such as an exported index snapshot that happens to sit
+    inside another repository, is scanned without a filter. Paths are project-relative.
+    """
+
+    if not (root / ".git").exists() and not _tracked_project(root):
         return None
     completed = subprocess.run(  # noqa: S603
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -85,6 +90,18 @@ def visible_repository_paths(root: Path) -> frozenset[str] | None:
         for value in completed.stdout.split(b"\0")
         if value
     )
+
+
+def _tracked_project(root: Path) -> bool:
+    """Return whether Git tracks files in a folder that is not itself a repository root."""
+
+    completed = subprocess.run(  # noqa: S603
+        ["git", "ls-files", "--cached", "-z"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+    )
+    return completed.returncode == 0 and bool(completed.stdout)
 
 
 def _excluded(path: str, prefixes: tuple[str, ...]) -> bool:

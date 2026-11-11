@@ -215,11 +215,18 @@ def _authored_path(path: str) -> str:
 
 
 def changed_paths(root: Path, *, staged: bool) -> tuple[str, ...]:
-    """Return normalized staged or complete worktree changes from Git."""
+    """Return staged or complete worktree changes from Git, relative to the project root.
+
+    The project may be one folder of a larger repository; only its own changes are reported.
+    """
 
     if staged:
-        return _git_paths(root, "diff", "--cached", "--no-renames", "--name-only", "-z")
-    tracked = _git_paths(root, "diff", "HEAD", "--no-renames", "--name-only", "-z")
+        return _git_paths(
+            root, "diff", "--cached", "--relative", "--no-renames", "--name-only", "-z"
+        )
+    tracked = _git_paths(
+        root, "diff", "HEAD", "--relative", "--no-renames", "--name-only", "-z"
+    )
     untracked = _git_paths(root, "ls-files", "--others", "--exclude-standard", "-z")
     return tuple(sorted(set(tracked) | set(untracked)))
 

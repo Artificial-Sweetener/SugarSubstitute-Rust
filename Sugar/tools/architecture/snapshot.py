@@ -21,7 +21,7 @@ import os
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 
 
@@ -33,7 +33,12 @@ class SnapshotError(RuntimeError):
 def repository_snapshot(
     project_root: Path, *, staged: bool, package_name: str | None = None
 ) -> Iterator[Path]:
-    """Yield the worktree or an isolated copy of the exact Git index."""
+    """Yield the worktree or an isolated copy of the project's exact Git index.
+
+    The project may be the repository root or a tracked folder inside a larger repository.
+    Only the project's own indexed files are materialized, and the snapshot root holds them
+    exactly as the project root holds them in the worktree.
+    """
 
     root = project_root.resolve()
     if not staged:
@@ -44,28 +49,43 @@ def repository_snapshot(
             raise SnapshotError(
                 "Execution snapshots require a valid Python package directory name."
             )
-        snapshot_root = (
-            Path(temp).resolve() / package_name
-            if package_name
-            else Path(temp).resolve()
+        temporary = Path(temp).resolve()
+        export_root = temporary / "index"
+        export_root.mkdir()
+        project_prefix = (
+            _git(root, "rev-parse", "--show-prefix").decode("utf-8").strip()
         )
-        snapshot_root.mkdir(exist_ok=True)
-        prefix = f"{snapshot_root}{os.sep}"
-        completed = subprocess.run(  # noqa: S603
-            ["git", "checkout-index", "--all", f"--prefix={prefix}"],
-            cwd=root,
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+        indexed = _git(root, "ls-files", "--cached", "-z")
+        # Git writes each exported entry at its repository-relative path below the prefix.
+        _git(
+            root,
+            "checkout-index",
+            "--stdin",
+            "-z",
+            f"--prefix={export_root}{os.sep}",
+            stdin=indexed,
         )
-        if completed.returncode != 0:
-            raise SnapshotError(
-                "cannot materialize staged repository snapshot: "
-                f"{completed.stderr.strip()}"
-            )
+        exported = export_root.joinpath(*PurePosixPath(project_prefix).parts)
+        exported.mkdir(parents=True, exist_ok=True)
+        snapshot_root = temporary / (package_name or "snapshot")
+        exported.rename(snapshot_root)
         yield snapshot_root
+
+
+def _git(root: Path, *args: str, stdin: bytes | None = None) -> bytes:
+    """Run one Git index query or export and fail with its diagnostic."""
+
+    completed = subprocess.run(  # noqa: S603
+        ["git", *args],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        input=stdin,
+    )
+    if completed.returncode != 0:
+        message = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise SnapshotError(f"cannot materialize staged repository snapshot: {message}")
+    return completed.stdout
 
 
 __all__ = ["SnapshotError", "repository_snapshot"]
