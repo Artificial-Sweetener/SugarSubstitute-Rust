@@ -94,3 +94,26 @@ fn a_held_candidate_its_page_withdraws_is_answered_cancelled_and_never_prepared(
         idle(host)
     })
 }
+
+#[test]
+fn a_released_candidate_frees_the_next_prepare_and_is_never_rolled_back_for_it()
+-> Result<(), Box<dyn Error>> {
+    hosted(Host::new(0)?, |host| {
+        stage(host)?;
+        host.send_to(HELD, 6, "surface.prepare", json!({}))?;
+        wait_long(host)?;
+        // The staged candidate still owns the surface: a newer prepare never rolls it back.
+        host.send_to(STAGED, 7, "surface.geometry", geometry(80, 40, false))?;
+        host.expect(7, "applied")?;
+        // Its page releases it explicitly, which frees native mutation for the held candidate.
+        host.send_to(STAGED, 8, "surface.release", json!({}))?;
+        host.expect(8, "applied")?;
+        answers(&host.expect(6, "ready")?, HELD, 6);
+        host.quiesce()?;
+        assert_eq!(host.shown(), Some(Shade::Red));
+        host.send_to(HELD, 9, "surface.release", json!({}))?;
+        host.expect(9, "applied")?;
+        host.quiesce()?;
+        idle(host)
+    })
+}
