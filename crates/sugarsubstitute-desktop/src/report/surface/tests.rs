@@ -8,16 +8,16 @@ use std::{
     cell::RefCell,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use sugarsubstitute_application::instance_conflict::Phase;
 use sugarsubstitute_contracts::{
-    execution::ExecutionError,
-    instance_conflict::{ConflictAction, ConflictController, ConflictView},
+    execution::{ExecutionError, Moment},
+    instance_conflict::{ConflictAction, ConflictController, ConflictPhase, ConflictView},
     localization::messages,
     presentation::FrameShape,
 };
-use sugarsubstitute_ui::form::Input;
+use sugarsubstitute_ui::{form::Input, report::ReportKind};
 
 type TestResult = std::result::Result<(), Box<dyn Error>>;
 type Log = Rc<RefCell<Vec<ReportCommand>>>;
@@ -284,7 +284,7 @@ fn update_export_outcome_becomes_the_footer_status() -> TestResult {
 /// The real conflict phase on an injected clock, as the application controller drives it.
 struct Conflict {
     phase: Phase,
-    now: Rc<RefCell<Instant>>,
+    now: Rc<RefCell<Moment>>,
     chosen: Vec<ConflictAction>,
 }
 impl ConflictController for Conflict {
@@ -292,13 +292,7 @@ impl ConflictController for Conflict {
         self.phase = Phase::Ready;
     }
     fn poll(&mut self) -> ConflictView {
-        let force = self.phase.can_force(*self.now.borrow());
-        ConflictView {
-            text: "Internal controller text that the report never shows".into(),
-            close_enabled: self.phase == Phase::Ready,
-            force_enabled: force,
-            done: matches!(self.phase, Phase::Done(_)),
-        }
+        self.phase.view(*self.now.borrow())
     }
     fn choose(&mut self, action: ConflictAction) {
         self.chosen.push(action);
@@ -311,7 +305,7 @@ impl ConflictController for Conflict {
 
 fn unresponsive(
     controller: &mut Conflict,
-    script: impl FnOnce(&mut ReportLifetime<'_>, &Rc<RefCell<Instant>>) -> TestResult,
+    script: impl FnOnce(&mut ReportLifetime<'_>, &Rc<RefCell<Moment>>) -> TestResult,
 ) -> TestResult {
     let now = controller.now.clone();
     let copy = messages("en");
@@ -328,7 +322,7 @@ fn unresponsive(
 #[test]
 fn unresponsive_window_question_offers_close_it_and_start_and_cancel_in_plain_words() -> TestResult
 {
-    let origin = Instant::now();
+    let origin = Moment::from_nanos(0);
     let mut controller =
         Conflict { phase: Phase::Checking, now: Rc::new(RefCell::new(origin)), chosen: Vec::new() };
     unresponsive(&mut controller, |lifetime, now| {
@@ -342,7 +336,7 @@ fn unresponsive_window_question_offers_close_it_and_start_and_cancel_in_plain_wo
             .ok_or("close")?;
         assert_eq!(close.label, words.close, "Close it and start");
         invoke(lifetime, ReportAction::Close)?;
-        *now.borrow_mut() = origin + Duration::from_secs(1);
+        *now.borrow_mut() = origin.checked_add(Duration::from_secs(1))?;
         next_frame(lifetime, Duration::ZERO)?;
         assert!(
             lifetime
@@ -351,7 +345,7 @@ fn unresponsive_window_question_offers_close_it_and_start_and_cancel_in_plain_wo
                 .is_some_and(|c| !c.availability.enabled),
             "while the previous window closes there is nothing to press but Cancel"
         );
-        *now.borrow_mut() = origin + Duration::from_secs(15);
+        *now.borrow_mut() = origin.checked_add(Duration::from_secs(16))?;
         next_frame(lifetime, Duration::ZERO)?;
         invoke(lifetime, ReportAction::Close)?;
         Ok(())
@@ -368,7 +362,7 @@ fn unresponsive_window_question_offers_close_it_and_start_and_cancel_in_plain_wo
 fn unresponsive_window_caption_close_and_escape_mean_cancel() -> TestResult {
     let mut controller = Conflict {
         phase: Phase::Checking,
-        now: Rc::new(RefCell::new(Instant::now())),
+        now: Rc::new(RefCell::new(Moment::from_nanos(0))),
         chosen: Vec::new(),
     };
     unresponsive(&mut controller, |lifetime, _| {
@@ -381,7 +375,7 @@ fn unresponsive_window_caption_close_and_escape_mean_cancel() -> TestResult {
     assert_eq!(controller.chosen, vec![ConflictAction::Cancel]);
     let mut controller = Conflict {
         phase: Phase::Checking,
-        now: Rc::new(RefCell::new(Instant::now())),
+        now: Rc::new(RefCell::new(Moment::from_nanos(0))),
         chosen: Vec::new(),
     };
     unresponsive(&mut controller, |lifetime, _| {
@@ -390,6 +384,61 @@ fn unresponsive_window_caption_close_and_escape_mean_cancel() -> TestResult {
         Ok(())
     })?;
     assert_eq!(controller.chosen, vec![ConflictAction::Cancel], "Escape closes the window");
+    Ok(())
+}
+
+/// A controller that reports one fixed phase.
+struct Fixed(ConflictPhase);
+impl ConflictController for Fixed {
+    fn start(&mut self, _: Arc<dyn CompletionWake>) {}
+    fn poll(&mut self) -> ConflictView {
+        ConflictView { phase: self.0 }
+    }
+    fn choose(&mut self, _: ConflictAction) {}
+}
+
+/// Regression: the words come from the controller's typed phase in the surface's own locale,
+/// so a failure is shown as a failure in every language, not only when English text matches.
+#[test]
+fn every_conflict_phase_shows_its_own_words_in_the_surface_locale() -> TestResult {
+    for copy in sugarsubstitute_contracts::localization::LOCALES {
+        let (locale, words) = (copy.id, copy.conflict);
+        let cases = [
+            (ConflictPhase::Checking, words.prompt, Some(words.checking), true),
+            (ConflictPhase::AwaitingDecision, words.prompt, None, true),
+            (ConflictPhase::Closing, words.prompt, Some(words.waiting), true),
+            (ConflictPhase::ForceOffered, words.force_prompt, None, true),
+            (ConflictPhase::Forcing, words.prompt, Some(words.waiting), true),
+            (ConflictPhase::Failed, words.failed, None, true),
+            (ConflictPhase::Retiring { continuing: true }, words.prompt, Some(words.cleanup), true),
+            (ConflictPhase::Retiring { continuing: false }, words.prompt, None, true),
+            (ConflictPhase::Done, words.prompt, None, false),
+        ];
+        for (phase, message, progress, cancellable) in cases {
+            let mut controller = Fixed(phase);
+            let mut owner = ConflictReport::new(&mut controller, words);
+            let (mut text, mut state, mut closed, mut changed) =
+                (String::new(), ReportState::new(ReportKind::UnresponsiveCopy), false, false);
+            let mut control = ReportControl {
+                message: &mut text,
+                state: &mut state,
+                closed: &mut closed,
+                changed: &mut changed,
+            };
+            owner.poll(&mut control)?;
+            let view = ConflictView { phase };
+            assert_eq!(control.message.as_str(), message, "{locale} {phase:?}");
+            assert_eq!(
+                control.state.status,
+                progress.map(|text| ReportStatus { text: text.into(), error: false }),
+                "{locale} {phase:?}"
+            );
+            let close = control.state.command(ReportAction::Close);
+            assert_eq!(close, shown(view.close_enabled() || view.force_enabled()), "{phase:?}");
+            assert_eq!(control.state.command(ReportAction::Cancel), shown(cancellable));
+            assert_eq!(*control.closed, view.done(), "{phase:?}");
+        }
+    }
     Ok(())
 }
 

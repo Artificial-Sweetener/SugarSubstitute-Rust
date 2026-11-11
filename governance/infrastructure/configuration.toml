@@ -877,7 +877,7 @@ rationale = "Construct isolated malformed UI policy documents to verify unknown-
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:4fbfbfe63cd584f60783b7f74d289b86b9f9d9e11d7cf0ad82881bef903c45f1"
+source_sha256 = "sha256:84db8f2320ec860a2d9ef29a37de10682171dff000f65d6d260a74fc9dd53a5a"
 capabilities = ["environment"]
 rationale = "Read only the optional qualification evidence directory for report captures; tests write their own rendered frames there and read or write no product settings."
 

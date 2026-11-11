@@ -89,7 +89,7 @@ impl crate::pixel_capture::PixelCapture for Observer {
     }
 }
 use sugarsubstitute_contracts::{
-    instance_conflict::{ConflictAction, ConflictController, ConflictView},
+    instance_conflict::{ConflictAction, ConflictController, ConflictPhase, ConflictView},
     localization::messages,
 };
 
@@ -433,12 +433,12 @@ struct Unresponsive {
 impl ConflictController for Unresponsive {
     fn start(&mut self, _: Arc<dyn CompletionWake>) {}
     fn poll(&mut self) -> ConflictView {
-        ConflictView {
-            text: "Internal controller text that the report never shows".into(),
-            close_enabled: !self.closing,
-            force_enabled: false,
-            done: self.done,
-        }
+        let phase = match (self.done, self.closing) {
+            (true, _) => ConflictPhase::Done,
+            (false, true) => ConflictPhase::Closing,
+            (false, false) => ConflictPhase::AwaitingDecision,
+        };
+        ConflictView { phase }
     }
     fn choose(&mut self, action: ConflictAction) {
         match action {

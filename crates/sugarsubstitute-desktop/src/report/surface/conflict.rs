@@ -7,8 +7,8 @@ use super::{ReportCommand, ReportControl, ReportOwner, shown};
 use std::{error::Error, sync::Arc};
 use sugarsubstitute_contracts::{
     execution::CompletionWake,
-    instance_conflict::{ConflictAction, ConflictController},
-    localization::conflict::{self, ConflictMessages},
+    instance_conflict::{ConflictAction, ConflictController, ConflictPhase},
+    localization::conflict::ConflictMessages,
 };
 use sugarsubstitute_ui::report::{ReportAction, ReportStatus};
 
@@ -29,6 +29,20 @@ impl<'a> ConflictReport<'a> {
         words: &'static ConflictMessages,
     ) -> Self {
         Self { controller, words, forceable: false, done: false, cancelled: false }
+    }
+
+    /// The question and the progress line this surface shows for `phase`, in its own locale.
+    fn words_for(&self, phase: ConflictPhase) -> (&'static str, Option<&'static str>) {
+        let words = self.words;
+        match phase {
+            ConflictPhase::Checking => (words.prompt, Some(words.checking)),
+            ConflictPhase::AwaitingDecision | ConflictPhase::Done => (words.prompt, None),
+            ConflictPhase::Closing | ConflictPhase::Forcing => (words.prompt, Some(words.waiting)),
+            ConflictPhase::ForceOffered => (words.force_prompt, None),
+            ConflictPhase::Failed => (words.failed, None),
+            ConflictPhase::Retiring { continuing: true } => (words.prompt, Some(words.cleanup)),
+            ConflictPhase::Retiring { continuing: false } => (words.prompt, None),
+        }
     }
 }
 
@@ -54,23 +68,15 @@ impl ReportOwner for ConflictReport<'_> {
     }
     fn poll(&mut self, report: &mut ReportControl<'_>) -> Result<(), Box<dyn Error>> {
         let view = self.controller.poll();
-        self.forceable = view.force_enabled;
-        let actionable = (view.close_enabled || view.force_enabled) && !self.cancelled;
+        self.forceable = view.force_enabled();
+        let actionable = (view.close_enabled() || view.force_enabled()) && !self.cancelled;
         report.set_command(ReportAction::Close, shown(actionable));
-        report.set_command(ReportAction::Cancel, shown(!view.done && !self.cancelled));
-        // The controller's own text can name internals; only its outcome is shown here. Its
-        // view carries no phase, so failure is recognised by the catalog's failure sentence,
-        // which the controller currently writes in English.
-        let failed = !view.done
-            && !actionable
-            && [self.words.failed, conflict::EN.failed].iter().any(|f| view.text.starts_with(f));
-        report.set_message(if failed { self.words.failed } else { self.words.prompt });
-        let waiting = !view.done && !actionable && !failed;
-        report.set_status(
-            waiting.then(|| ReportStatus { text: self.words.waiting.into(), error: false }),
-        );
-        self.done = view.done;
-        if view.done {
+        report.set_command(ReportAction::Cancel, shown(!view.done() && !self.cancelled));
+        let (message, progress) = self.words_for(view.phase);
+        report.set_message(message);
+        report.set_status(progress.map(|text| ReportStatus { text: text.into(), error: false }));
+        self.done = view.done();
+        if self.done {
             report.close();
         }
         Ok(())
@@ -84,7 +90,7 @@ impl ReportOwner for ConflictReport<'_> {
     }
     fn settled(&mut self) -> Result<bool, Box<dyn Error>> {
         if !self.done {
-            self.done = self.controller.poll().done;
+            self.done = self.controller.poll().done();
         }
         Ok(self.done)
     }
