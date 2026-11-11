@@ -23,6 +23,9 @@ pub struct Observation {
     pub outcome: JobOutcome<(), Arc<Failure>>,
     /// Original repository/storage error, even if execution cancelled delivery of its result.
     pub failure: Option<Arc<Failure>>,
+    /// A download interval reached its job deadline after saving progress. The outcome is
+    /// `TimedOut`, yet the campaign continues: the next step resumes from the saved prefix.
+    pub continues: bool,
     /// Cleanup failure retained separately so it never replaces the preparation's original cause.
     pub retirement_failure: Option<Arc<Failure>>,
 }
@@ -200,7 +203,10 @@ impl Worker {
         let completion = self.job.as_mut()?.try_take_completion()?;
         self.job = None;
         let state = crate::registry::lock(&self.state);
-        let success = matches!(completion.outcome, JobOutcome::Success(()));
+        let continues = !self.closing
+            && matches!(completion.outcome, JobOutcome::TimedOut)
+            && state.continues_download();
+        let success = matches!(completion.outcome, JobOutcome::Success(())) || continues;
         self.halted = !success || state.progress == Progress::Failed;
         self.progress = if self.closing && state.progress != Progress::Closed {
             Progress::Retiring
@@ -214,6 +220,7 @@ impl Worker {
             outcome: completion.outcome,
             failure: state.failure.clone(),
             retirement_failure: state.retirement_failure.clone(),
+            continues,
         })
     }
 

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Implement fixed-record primitives with adopted Windows handles and bounded bytes.
+mod aside;
 mod read;
 mod stage;
 use super::*;
+pub(super) use aside::set_aside;
 use windows::{
     Win32::{Foundation::ERROR_FILE_NOT_FOUND, Security::Cryptography::*, Storage::FileSystem::*},
     core::PCWSTR,

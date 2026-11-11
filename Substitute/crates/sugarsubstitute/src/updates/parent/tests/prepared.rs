@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Prepared helper adoption preserves input on error and does not renew campaign authority.
+//! Prepared helper adoption takes unique input and bounds only probes by an outer cutoff.
 use super::*;
 use crate::updates::test_support::untrusted_input;
-use std::time::Duration;
 
-/// Keep scope admission live so the constructor itself must reject an expired campaign.
-fn scope(client: &ExecutionClient, until: Moment) -> Result<LaunchScope> {
+/// Keep scope admission live so the constructor alone decides the helper's cutoff.
+fn scope(client: &ExecutionClient) -> Result<LaunchScope> {
     Ok(LaunchScope {
         work: client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
         cleanup: client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
@@ -15,20 +14,18 @@ fn scope(client: &ExecutionClient, until: Moment) -> Result<LaunchScope> {
             namespace: NamespaceId::new([5; 32]),
             epoch: CoordinatorEpoch::new([8; 16])?,
         },
-        until,
     })
 }
 
 #[test]
-fn failed_adoption_at_original_cutoff_preserves_the_callers_unique_input() -> TestResult {
+fn adoption_without_input_is_rejected_before_any_helper_exists() -> TestResult {
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();
-    let mut input = Some(untrusted_input()?);
-    let scope = scope(&client, clock.now()).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut input = None;
+    let scope = scope(&client).map_err(|cause| cause as Box<dyn Error>)?;
     assert!(Parent::from_input(client.clone(), scope, &mut input).is_err());
-    assert!(input.is_some());
     owner.request_shutdown(ShutdownBudget::new(clock.now())?.settle_until);
     observe(&wake, || {
         client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
@@ -39,18 +36,18 @@ fn failed_adoption_at_original_cutoff_preserves_the_callers_unique_input() -> Te
 }
 
 #[test]
-fn adopted_input_uses_original_cutoff_and_returns_observed_completion_once() -> TestResult {
+fn adopted_preparation_input_has_no_outer_cutoff_and_returns_completion_once() -> TestResult {
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();
-    let until = clock.now().checked_add(Duration::from_secs(7))?;
-    let scope = scope(&client, until).map_err(|cause| cause as Box<dyn Error>)?;
+    let scope = scope(&client).map_err(|cause| cause as Box<dyn Error>)?;
     let mut input = Some(untrusted_input()?);
     let mut parent =
         Parent::from_input(client, scope, &mut input).map_err(|cause| cause as Box<dyn Error>)?;
     assert!(input.is_none());
-    assert_eq!(parent.until, until);
+    assert_eq!(parent.until, None);
+    assert_eq!(parent.next_deadline(), None);
     assert!(!parent.borrows_application());
     assert!(parent.take_completion().is_none());
     parent.close(None).map_err(|cause| cause as Box<dyn Error>)?;

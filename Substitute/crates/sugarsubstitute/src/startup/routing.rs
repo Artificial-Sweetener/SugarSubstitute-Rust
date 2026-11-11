@@ -411,6 +411,7 @@ impl<B: StartupBackend> StartupHost<B> {
             .into_iter()
             .chain(composition)
             .chain(workspace)
+            .chain(self.close_save_deadline())
             .min()
             .map(|at| self.clock.instant_for(at))
             .transpose()?;

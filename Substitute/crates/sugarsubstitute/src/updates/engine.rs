@@ -23,7 +23,7 @@ use sugarsubstitute_supervision::update_preparation::EngineUpdate;
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-/// Shares its session's executor and fixed cutoff; never owns the application's run exclusion.
+/// Shares its session's executor and step deadlines; never owns the application's run exclusion.
 pub(super) struct Engine {
     state: Arc<Mutex<State>>,
     job: Option<OwnedJob<(), Arc<io::Error>>>,
@@ -31,7 +31,6 @@ pub(super) struct Engine {
     client: ExecutionClient,
     work: Scope,
     cleanup: Scope,
-    until: Moment,
     closing: Option<ShutdownBudget>,
     next_scope: u64,
     succeeded: bool,
@@ -43,7 +42,6 @@ impl Engine {
         client: ExecutionClient,
         work: Scope,
         cleanup: Scope,
-        until: Moment,
     ) -> Self {
         let phase = match source {
             EngineUpdate::Prepared(prepared) => Phase::Prepared(Some(prepared)),
@@ -56,7 +54,6 @@ impl Engine {
             client,
             work,
             cleanup,
-            until,
             closing: None,
             next_scope: 5,
             succeeded: false,
@@ -99,7 +96,7 @@ impl Engine {
         Ok(())
     }
 
-    /// Native grace and settlement wakes supplement the session's fixed outer cutoff.
+    /// Native grace and settlement wakes of a delegated helper; ordinary steps need no wake.
     pub(super) fn next_deadline(&self) -> Option<Instant> {
         self.parent.as_ref().and_then(Parent::next_deadline)
     }
@@ -124,6 +121,10 @@ impl Engine {
     /// The shared state survives cancellation of result delivery; it retains original errors too.
     fn submit(&mut self, jobs: &JobSequence, bytes: u64) -> Result<()> {
         let closing = self.closing;
+        let deadline = match closing {
+            Some(budget) => budget.settle_until,
+            None => self.client.now()?.checked_add(super::STEP)?,
+        };
         let state = Arc::clone(&self.state);
         let key = process::key()?;
         self.job = Some(self.client.submit_blocking(
@@ -136,7 +137,7 @@ impl Engine {
                 } else {
                     JobClass::InfrastructureOrdinary
                 },
-                deadline: Some(closing.map_or(self.until, |budget| budget.settle_until)),
+                deadline: Some(deadline),
                 reservation_bytes: bytes,
                 replacement: None,
             },

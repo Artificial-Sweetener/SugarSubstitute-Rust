@@ -7,6 +7,7 @@
 //! scheduling primitive or installation activation is created here. Network calls never hold
 //! the trust writer. A failed check is an error, never evidence that the app is current.
 mod failure;
+mod interruption;
 use crate::{
     setup_storage::{
         AuthenticatedOffer, Download, OFFER_RESERVATION_BYTES, TrustStore, VerifiedDownload,
@@ -44,6 +45,17 @@ pub enum Preparation {
         received: u64,
         /// Authenticated full archive length in bytes.
         total: u64,
+    },
+    /// The response ended early after durably extending the package prefix: the connection
+    /// dropped, or a slow transfer reached its job deadline while still delivering bytes. Admit
+    /// another attempt to continue from `received`; this is progress, not a failed check.
+    Interrupted {
+        /// Durable package prefix in bytes after the interrupted response.
+        received: u64,
+        /// Authenticated full archive length in bytes.
+        total: u64,
+        /// Original transport or storage cause, retained for diagnostics.
+        cause: Box<Failure>,
     },
     /// Every archive byte has been verified and its exact file remains under native custody.
     Complete(Box<VerifiedDownload>),
@@ -127,10 +139,13 @@ impl Repository {
 
     /// Reauthorize preparation, open its owned prefix and perform at most one HTTP request.
     /// Complete cached bytes skip HTTP but are fully hashed again. This never activates them.
-    /// A deadline/disconnect preserves flushed bytes for a newly admitted retry; no retry loop
-    /// hides errors or imposes a global startup timeout. The caller owns retry/backoff policy.
+    /// A response that ends early after extending the durable prefix is `Interrupted`, so the
+    /// caller resumes within its attempt; the idle timeout is the only stall bound. A stall, a
+    /// cancellation, or an interruption that delivered no bytes is an error, and the caller's
+    /// retry/backoff policy decides when to try again. No retry loop runs here.
     /// # Errors
-    /// Rejects inadmissible/stale offers, changed trust, unsafe storage, framing and byte errors.
+    /// Rejects inadmissible/stale offers, changed trust, unsafe storage, framing and byte errors,
+    /// stalled transfers and interruptions that made no progress.
     pub fn prepare(
         &mut self,
         discovery: &AuthenticatedOffer,
@@ -153,14 +168,21 @@ impl Repository {
         let name = target.name().to_owned();
         let total = target.length();
         let mut download = Download::open(trust.runtime_cache(context)?, target, context)?;
-        if download.offset()? < total {
-            self.http.package(
+        let before = download.offset()?;
+        if before < total
+            && let Err(cause) = self.http.package(
                 &self.policy,
                 self.policy.asset(&name).map_err(update_http::Failure::from)?,
                 &mut download,
                 self.idle,
                 context,
-            )?;
+            )
+        {
+            let received = download.offset()?;
+            if !interruption::resumes(&cause, received > before, context) {
+                return Err(cause.into());
+            }
+            return Ok(Preparation::Interrupted { received, total, cause: Box::new(cause.into()) });
         }
         let received = download.offset()?;
         if received < total {

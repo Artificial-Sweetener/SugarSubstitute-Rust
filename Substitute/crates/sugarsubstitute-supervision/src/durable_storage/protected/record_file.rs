@@ -69,6 +69,35 @@ pub(crate) fn read_with_boundary<const N: usize>(
     }
     result
 }
+/// Operation reported when a protected record has a nonzero length other than its fixed size.
+pub(crate) const UNREADABLE_LENGTH: &str = "claim_record_length";
+/// Report whether a read failed only because the record's length cannot hold its fixed shape.
+/// Every other shape, security, identity or native failure stays a hard error for its caller.
+pub(crate) fn is_unreadable_length(cause: &ClaimError) -> bool {
+    cause.operation() == UNREADABLE_LENGTH
+}
+/// Move an unreadable record beside its target, preserving its bytes under a fresh name.
+///
+/// The caller must hold every exclusion that guards this record; `file` must be one of them.
+/// Returns the sibling path that now holds the preserved bytes.
+/// # Errors
+/// Rejects an unlocked exclusion, an expired context and an absent target, and preserves
+/// native open, validation and rename failures with the source handle in retained custody.
+pub(crate) fn set_aside<const N: usize>(
+    file: &HeldFile<N>,
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> Result<std::path::PathBuf, ClaimError> {
+    if !file.handle.budget().is_ordinary() {
+        return Err(file.handle.budget().rejection("fixed_record_ordinary_origin"));
+    }
+    if !file.is_locked() || !(16..=1024).contains(&N) {
+        return Err(ClaimError::invalid("record_aside_without_exclusion"));
+    }
+    context::live(context)?;
+    let operation = super::exclusion::operation::Operation::begin(file)?;
+    let result = native::set_aside(file, &mut || context::live(context).map(|_| ()), &operation);
+    ClaimError::finish(result, context::live(context).map(|_| ()))
+}
 /// Clear the observed activation only after actual cleanup succeeds.
 /// # Errors
 /// Preserve the original activation if the supplied checked cleanup fails.

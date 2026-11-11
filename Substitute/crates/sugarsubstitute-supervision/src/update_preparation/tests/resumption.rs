@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! A new campaign reauthenticates and resumes a failed worker's exact durable package prefix.
+//! A dropped connection resumes within the same campaign from its exact durable package prefix.
 use super::*;
 
 #[test]
-fn disconnected_worker_retires_and_a_new_worker_resumes_then_prepares_the_same_package()
--> TestResult {
+fn disconnected_download_continues_in_the_same_worker_and_prepares_the_same_package() -> TestResult
+{
     let mut pipeline = Pipeline::new()?;
     let (fixture, signed) = initialized(&mut pipeline)?;
     let name = format!("{:x}.ssupdate", Sha256::digest(&fixture.archive));
@@ -18,7 +18,6 @@ fn disconnected_worker_retires_and_a_new_worker_resumes_then_prepares_the_same_p
         &format!("Content-Length: {total}\r\n"),
         &fixture.archive[..7],
     ));
-    exchanges.extend(discovery(&signed)?);
     exchanges.push(exchange(
         &name,
         Some("bytes=7-"),
@@ -40,40 +39,21 @@ fn disconnected_worker_retires_and_a_new_worker_resumes_then_prepares_the_same_p
     let (server, policy) =
         pipeline.run(8 * 1024 * 1024, move |context| Running::start(exchanges, &context))?;
     let client = (|| {
-        let port = policy.asset("timestamp.json")?.port()?;
-        let mut failed = Worker::new(configuration(&fixture, policy))?;
-        step(&mut pipeline, &mut failed)?;
-        step(&mut pipeline, &mut failed)?;
-        step(&mut pipeline, &mut failed)?;
-        submit(&mut pipeline, &mut failed)?;
-        let observed = pipeline.observe(|| failed.poll())?;
-        if observed.progress != Progress::Failed
-            || !matches!(observed.outcome, JobOutcome::Failure(_))
-        {
-            return Err("Disconnected worker did not report its failed terminal outcome".into());
-        }
-        let cause = observed.failure.ok_or("Lost disconnect cause")?;
-        if !cause.to_string().contains("transport") {
-            return Err(format!("Disconnect lost its transport cause: {cause}").into());
-        }
-        if failed.take_candidate().is_ok() {
-            return Err("Disconnected worker exposed a preparation candidate".into());
-        }
-        retire(&mut pipeline, &mut failed)?;
-        assert_unlocked(&mut pipeline, &fixture)?;
-        let mut resumed = Worker::new(configuration(
-            &fixture,
-            sugarsubstitute_update::http::Policy::loopback(port)?,
-        ))?;
+        let mut resumed = Worker::new(configuration(&fixture, policy))?;
         step(&mut pipeline, &mut resumed)?;
         step(&mut pipeline, &mut resumed)?;
         step(&mut pipeline, &mut resumed)?;
-        let expected = Progress::Downloading { received: 11, total: total as u64 };
-        let actual = step(&mut pipeline, &mut resumed)?.progress;
-        if actual != expected {
-            return Err(
-                format!("Resumed download progress {actual:?}, expected {expected:?}").into()
-            );
+        // The dropped first response is progress, not a failed campaign: no rediscovery follows.
+        for received in [7, 11] {
+            let expected = Progress::Downloading { received, total: total as u64 };
+            let observed = step(&mut pipeline, &mut resumed)?;
+            if observed.progress != expected || observed.failure.is_some() {
+                return Err(format!(
+                    "Resumed download progress {:?}, expected {expected:?}",
+                    observed.progress
+                )
+                .into());
+            }
         }
         for expected in [Progress::Preparing, Progress::Ready] {
             let actual = step(&mut pipeline, &mut resumed)?.progress;

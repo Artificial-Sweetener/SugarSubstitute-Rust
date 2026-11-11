@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain durable workspace work in the application's existing execution and native lifetime.
 #[cfg(test)]
+mod close_save_tests;
+#[cfg(test)]
 mod closing_tests;
 mod integration;
 mod jobs;
@@ -18,7 +20,10 @@ use crate::workspace_session::{
     WorkspaceStore,
 };
 use std::{collections::VecDeque, path::PathBuf, sync::Mutex};
-use sugarsubstitute_application::workspace_session::CaptureTicket;
+use sugarsubstitute_application::workspace_session::{
+    CaptureTicket,
+    close_save::{CloseSaveOutcome, NotSavedLastTime, SaveVerdict},
+};
 use sugarsubstitute_contracts::{
     desktop_session::wire::*,
     execution::*,
@@ -43,6 +48,7 @@ struct Loaded {
     driver_memory: MemoryLease,
     delivery_memory: MemoryLease,
     input_plan: crate::input_documents::InputRestorePlan,
+    notice: Option<NotSavedLastTime>,
 }
 struct Published {
     captured: workspace_session::CapturedWorkspace,
@@ -102,6 +108,12 @@ pub(super) struct WorkspaceWork {
     closing: Option<Moment>,
     retirement_until: Option<Moment>,
     retired: bool,
+    /// The profile directory holding the close-save record, known once an open began.
+    record_directory: Option<PathBuf>,
+    /// What the previous close did not keep, until the window surface takes it.
+    notice: Option<NotSavedLastTime>,
+    /// The close-save record write, awaiting its observed terminal outcome.
+    record: Option<OwnedJob<(), StoreError>>,
 }
 impl WorkspaceWork {
     pub(super) fn new(user: PathBuf, spec: ScopeSpec, jobs: JobSequence) -> Self {
@@ -139,6 +151,9 @@ impl WorkspaceWork {
             closing: None,
             retirement_until: None,
             retired: false,
+            record_directory: None,
+            notice: None,
+            record: None,
         }
     }
     pub(super) fn scope_id(&self) -> ScopeId {
@@ -196,11 +211,20 @@ impl WorkspaceWork {
         let binding = context.backend;
         let origin = context.origin;
         let user = self.user.clone();
+        let record_directory = profile.directory().to_path_buf();
+        self.record_directory = Some(record_directory.clone());
         let preloader = self.media.preloader();
         let spec = self.job(LOAD_BYTES, None)?;
         let client = self.client.as_ref().ok_or("Workspace execution absent")?;
         let scope = self.scope.as_ref().ok_or("Workspace scope absent")?;
         self.load = Some(client.submit_blocking(scope,spec,move |job| {
+            let notice = match workspace_session::close_record::take_notice_worker(&record_directory, &job) {
+                Ok(notice) => notice,
+                Err(cause) => {
+                    tracing::warn!(operation="workspace_close_record",cause_chain=%crate::diagnostics::CauseChain(&cause),"The previous close-save record is unreadable; it is kept");
+                    None
+                }
+            };
             let profile = profile.open_worker(binding,&job)?;
             let mut restored = profile.workspace.load_worker(&job)?;
             restored.protected |= profile.protected();
@@ -222,7 +246,7 @@ impl WorkspaceWork {
             let driver_memory = job.memory().claim(DRIVER_BYTES).map_err(std::io::Error::other)?.into_lease();
             let delivery_memory = job.memory().claim(DELIVERY_BYTES).map_err(std::io::Error::other)?.into_lease();
             preloader.prepare(&profile.workspace, &restored, &delivery_memory, &job)?;
-            Ok(Loaded { profile,restored,bootstrap,driver_memory,delivery_memory,input_plan })
+            Ok(Loaded { profile,restored,bootstrap,driver_memory,delivery_memory,input_plan,notice })
         })?);
         self.context = Some(context);
         self.deferred = Some(effect);
@@ -320,6 +344,11 @@ impl WorkspaceWork {
     ) -> Result<(), Box<dyn Error>> {
         if let Some(original) = self.closing {
             self.closing = Some(original.min(cutoff));
+            if let Some(driver) = &mut self.driver
+                && driver.shutdown_cutoff().is_some()
+            {
+                driver.begin_close(now, cutoff)?;
+            }
             return Ok(());
         }
         self.closing = Some(cutoff);
@@ -341,8 +370,65 @@ impl WorkspaceWork {
         }
         Ok(())
     }
+    /// What the final workspace capture kept at `now`, once close may proceed; `None` while it
+    /// runs. A workspace that never loaded holds nothing authored in this run.
+    pub(super) fn close_verdict(&self, now: Moment) -> Option<SaveVerdict> {
+        let Some(driver) = &self.driver else { return Some(SaveVerdict::Saved) };
+        let expired = self.closing.is_some_and(|cutoff| now >= cutoff);
+        if !expired && self.close_sample.is_some() {
+            return None;
+        }
+        driver.close_verdict(now)
+    }
+
+    /// Take what the previous close did not keep, once, for the window's notice surface.
+    pub(super) fn take_notice(&mut self) -> Option<NotSavedLastTime> {
+        self.notice.take()
+    }
+
+    /// Durably record an outcome that did not keep everything, ending at `ended`, through one
+    /// execution job bounded by `until`. Without a profile directory nothing can be recorded,
+    /// which is logged with the outcome.
+    pub(super) fn submit_close_record(
+        &mut self,
+        outcome: CloseSaveOutcome,
+        ended: Moment,
+        until: Moment,
+    ) -> Result<(), Box<dyn Error>> {
+        let Some(directory) = self.record_directory.clone() else {
+            tracing::error!(operation="workspace_close_record",outcome=?outcome,"Work was not saved and no profile is open to record it");
+            return Ok(());
+        };
+        let spec = self.job(64 * 1024, Some(until))?;
+        let client = self.client.as_ref().ok_or("Workspace execution absent")?;
+        let scope = self.scope.as_ref().ok_or("Workspace scope absent")?;
+        self.record = Some(client.submit_blocking(scope, spec, move |context| {
+            workspace_session::close_record::write_worker(&directory, &outcome, ended, &context)
+        })?);
+        Ok(())
+    }
+
+    /// Whether the close-save record write has reached its observed terminal outcome. A
+    /// failed write is logged; the exit proceeds, since nothing else can keep the record.
+    pub(super) fn close_record_settled(&mut self) -> bool {
+        let Some(job) = &mut self.record else { return true };
+        let Some(completion) = job.try_take_completion() else { return false };
+        self.record = None;
+        match completion.outcome {
+            JobOutcome::Success(()) => {}
+            JobOutcome::Failure(cause) => {
+                tracing::error!(operation="workspace_close_record",cause_chain=%crate::diagnostics::CauseChain(&cause),"The record of unsaved work could not be written");
+            }
+            outcome => {
+                tracing::error!(operation="workspace_close_record",outcome=?outcome.kind(),"The record of unsaved work stopped before it was written");
+            }
+        }
+        true
+    }
+
     pub(super) fn settled(&self) -> bool {
-        self.pending_open.is_none()
+        self.record.is_none()
+            && self.pending_open.is_none()
             && self.load.is_none()
             && self.active.is_none()
             && self.pending.is_none()

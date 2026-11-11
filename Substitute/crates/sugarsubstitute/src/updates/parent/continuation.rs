@@ -12,10 +12,15 @@ pub(super) struct Window {
     retirement: ShutdownBudget,
 }
 impl Window {
-    /// Preserve the campaign deadline and cap continuation from the original application close.
-    fn plan(application: ShutdownBudget, campaign: Moment, now: Moment) -> Result<Option<Self>> {
+    /// Cap continuation from the original application close, never beyond an existing cutoff.
+    fn plan(
+        application: ShutdownBudget,
+        cutoff: Option<Moment>,
+        now: Moment,
+    ) -> Result<Option<Self>> {
         application.validate()?;
-        let finish_until = campaign.min(application.started.checked_add(FINISH_ALLOWANCE)?);
+        let allowance = application.started.checked_add(FINISH_ALLOWANCE)?;
+        let finish_until = cutoff.map_or(allowance, |cutoff| cutoff.min(allowance));
         if now >= finish_until {
             return Ok(None);
         }
@@ -63,9 +68,10 @@ impl Parent {
             return self.close(Some(application));
         };
         let remaining = window.finish_until.checked_duration_since(now)?;
-        self.until = window.finish_until;
-        self.wake_at =
-            Instant::now().checked_add(remaining).ok_or("Post-exit update deadline overflow")?;
+        self.until = Some(window.finish_until);
+        self.wake_at = Some(
+            Instant::now().checked_add(remaining).ok_or("Post-exit update deadline overflow")?,
+        );
         self.continuation = Some(window);
         Ok(())
     }
@@ -90,7 +96,7 @@ mod tests {
     #[test]
     fn continuation_caps_work_from_original_close_and_keeps_separate_cleanup() -> Result<()> {
         let app = ShutdownBudget::new(seconds(50))?;
-        let window = Window::plan(app, seconds(900), seconds(60))?.ok_or("Window absent")?;
+        let window = Window::plan(app, None, seconds(60))?.ok_or("Window absent")?;
         assert_eq!(window.finish_until, seconds(170));
         assert_eq!(window.retirement.settle_until, seconds(185));
         assert_eq!(app.settle_until, seconds(65));
@@ -98,13 +104,13 @@ mod tests {
     }
 
     #[test]
-    fn continuation_never_extends_the_existing_campaign() -> Result<()> {
+    fn continuation_never_extends_an_existing_cutoff() -> Result<()> {
         let app = ShutdownBudget::new(seconds(50))?;
-        let window = Window::plan(app, seconds(80), seconds(60))?.ok_or("Window absent")?;
+        let window = Window::plan(app, Some(seconds(80)), seconds(60))?.ok_or("Window absent")?;
         assert_eq!(window.finish_until, seconds(80));
         assert_eq!(window.retirement.settle_until, seconds(95));
-        assert!(Window::plan(app, seconds(80), seconds(80))?.is_none());
-        assert!(Window::plan(app, seconds(900), seconds(170))?.is_none());
+        assert!(Window::plan(app, Some(seconds(80)), seconds(80))?.is_none());
+        assert!(Window::plan(app, None, seconds(170))?.is_none());
         Ok(())
     }
 
@@ -112,7 +118,7 @@ mod tests {
     fn invalid_application_budget_does_not_create_a_continuation() -> Result<()> {
         let mut app = ShutdownBudget::new(seconds(50))?;
         app.settle_until = seconds(500);
-        assert!(Window::plan(app, seconds(900), seconds(60)).is_err());
+        assert!(Window::plan(app, None, seconds(60)).is_err());
         Ok(())
     }
 }
