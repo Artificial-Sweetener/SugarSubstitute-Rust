@@ -12,6 +12,10 @@ trait ElectionBoundary {
     fn acquire_coordinator(&mut self) -> Result<Option<[u8; 24]>, ClaimError>;
     /// Reread under both exclusions before permitting exact predecessor recovery.
     fn read_coordinator(&mut self) -> Result<RecordRead<128>, ClaimError>;
+    /// Rename the unreadable record beside itself while both exclusions stay held.
+    fn set_aside(&mut self) -> Result<std::path::PathBuf, ClaimError>;
+    /// Release the coordinator exclusion so fresh initialization can acquire it again.
+    fn release_coordinator(&mut self) -> Result<(), ClaimError>;
 }
 /// Borrow the actual native state and original job context throughout filesystem effects.
 struct NativeBoundary<'a> {
@@ -121,6 +125,26 @@ impl ElectionBoundary for NativeBoundary<'_> {
             self.context,
         )
     }
+    fn set_aside(&mut self) -> Result<std::path::PathBuf, ClaimError> {
+        record_file::set_aside(
+            self.state
+                .recovery_coordinator
+                .as_ref()
+                .ok_or_else(|| ClaimError::invalid("entry_recovered_coordinator_missing"))?,
+            self.context,
+        )
+    }
+    fn release_coordinator(&mut self) -> Result<(), ClaimError> {
+        let held = self
+            .state
+            .recovery_coordinator
+            .as_mut()
+            .ok_or_else(|| ClaimError::invalid("entry_recovered_coordinator_missing"))?;
+        check(self.context)?;
+        held.close()?;
+        self.state.recovery_coordinator = None;
+        Ok(())
+    }
 }
 /// Retain actual exclusions and original record facts for once-only claims initialization.
 /// # Errors
@@ -166,6 +190,8 @@ pub(super) fn elect(state: &mut NativeState, context: &JobContext) -> Result<Ele
     Ok(result)
 }
 /// Classify protected records, then require both exclusions and an unchanged reread for Held recovery.
+/// An unreadable record held under the entry exclusion is recovered only when the coordinator
+/// exclusion also proves that no live owner remains.
 /// # Errors
 /// Preserves filesystem failures and rejects changed predecessors without granting authority.
 fn decide(
@@ -176,12 +202,22 @@ fn decide(
     check(context)?;
     let inode = ClaimError::finish(boundary.acquire_entry(), check(context))?;
     check(context)?;
-    let read = ClaimError::finish(boundary.read_entry(), check(context))?;
+    let read = match (ClaimError::finish(boundary.read_entry(), check(context)), inode) {
+        (Err(cause), Some(inode)) if record_file::is_unreadable_length(&cause) => {
+            return recover_unreadable(boundary, None, inode, context);
+        }
+        (read, _) => read?,
+    };
     let original = match &read {
         RecordRead::Present(bytes) => Some(*bytes),
         _ => None,
     };
     let result = classify(read, namespace, inode)?;
+    if let (Elected::Degraded(EntryOwnerDegradation::RecordUnknown), Some(inode), Some(_)) =
+        (result, inode, original)
+    {
+        return recover_unreadable(boundary, original, inode, context);
+    }
     if !matches!(result, Elected::Candidate(_)) || inode.is_none() {
         return Ok(result);
     }
@@ -200,6 +236,45 @@ fn decide(
         inode: inode.ok_or_else(|| ClaimError::invalid("entry_recovery_inode_missing"))?,
         coordinator_inode,
     })
+}
+/// Move an undecodable, foreign or wrongly sized record aside once no owner can be alive.
+///
+/// `original` holds the full-length bytes first read, or `None` when the length itself was
+/// unreadable. A busy coordinator exclusion means a live owner, which stays fail-closed as
+/// `RecordUnknown`. Otherwise the reread must show the same unreadable record before its bytes
+/// are preserved under a sibling name and the election proceeds from a missing record.
+/// # Errors
+/// Preserves filesystem failures and rejects a record that changed between reads; both
+/// acquired exclusions then stay with the election owner.
+fn recover_unreadable(
+    boundary: &mut dyn ElectionBoundary,
+    original: Option<[u8; 128]>,
+    inode: [u8; 24],
+    context: &JobContext,
+) -> Result<Elected, ClaimError> {
+    check(context)?;
+    if ClaimError::finish(boundary.acquire_coordinator(), check(context))?.is_none() {
+        return Ok(Elected::Degraded(EntryOwnerDegradation::RecordUnknown));
+    }
+    check(context)?;
+    let unchanged = match (boundary.read_coordinator(), original) {
+        (Ok(RecordRead::Present(actual)), Some(original)) => actual == original,
+        (Err(cause), None) if record_file::is_unreadable_length(&cause) => true,
+        (Err(cause), _) if !record_file::is_unreadable_length(&cause) => return Err(cause),
+        _ => false,
+    };
+    check(context)?;
+    if !unchanged {
+        return Err(ClaimError::invalid("entry_changed_recovery_predecessor"));
+    }
+    let aside = ClaimError::finish(boundary.set_aside(), check(context))?;
+    tracing::warn!(
+        operation = "coordinator_entry_election",
+        preserved = %aside.file_name().unwrap_or_default().to_string_lossy(),
+        "Moved an unreadable coordinator record aside with no live owner and recovered the election"
+    );
+    ClaimError::finish(boundary.release_coordinator(), check(context))?;
+    Ok(Elected::Fresh { origin: FreshRecordOrigin::Missing, inode })
 }
 #[cfg(test)]
 mod tests;

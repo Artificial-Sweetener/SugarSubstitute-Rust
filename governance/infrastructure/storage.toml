@@ -1318,15 +1318,23 @@ rationale = "Durable filesystem owner: Exercise the actual combined producer and
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/record_file/native.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:e7e6a3da04275c760bec0542e6b257b0e6c93f071d09fc8382925fd0a32e3772"
+source_sha256 = "sha256:957385c3a942cb6a30e37cf26fc56581b3593d096ca27deb2b151d40c6434597"
 capabilities = ["FlushFileBuffers", "windows::Win32::Storage::FileSystem::*"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Implement fixed-record primitives with adopted Windows handles and bounded bytes. Native access and its adversarial qualification remain within this owner."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/record_file/native/aside.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:dbe9fdc7f4c9225d8416d05cc2076188b908ec95beb7ec1767fa4c44496446a0"
+capabilities = ["CreateFileW"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Rename an unreadable protected record beside its target without rewriting its bytes. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/record_file/native/read.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4f85ceec1fa1c888e01550753912862de649107e576f329736e668b84d708cf1"
+source_sha256 = "sha256:8b606a97c2292d3e1823eb86b5a988a790bd91800f25ca1f1437e7205153b2c8"
 capabilities = ["CreateFileW", "GetFileSizeEx", "ReadFile", "SetFilePointerEx"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Read protected fixed bytes through retained actual source custody. Native access and its adversarial qualification remain within this owner."
@@ -1362,6 +1370,14 @@ source_sha256 = "sha256:c0b7ea815ecbd588b7e74deec22a8e52eaf312b8d3abd3466263045c
 capabilities = ["DeleteFile", "SetFileInformationByHandle", "windows::Win32::Storage::FileSystem::*"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Settle exact activation and by-handle disposition under retained exclusion. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/record_file/tests/aside.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:6919b46ce471cc76ff5e7d4d38a8ebae50dafeae9ae134761b17e7abfd047da5"
+capabilities = ["method set_len", "std::fs::OpenOptions::new", "std::fs::read", "tempfile::tempdir"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Preserve unreadable fixed records beside their target through real protected files. Native access and its adversarial qualification remain within this owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protection.rs"
