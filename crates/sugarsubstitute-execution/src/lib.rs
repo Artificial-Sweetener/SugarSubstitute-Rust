@@ -116,6 +116,9 @@ mod worker_exit;
 #[allow(unsafe_code)]
 mod windows_fixture_forwarding;
 
+/// Bounded, cancellable whole-file byte-range lock waits for blocking storage jobs.
+#[cfg(windows)]
+pub mod file_lock;
 #[cfg(windows)]
 pub mod windows;
 #[cfg(windows)]

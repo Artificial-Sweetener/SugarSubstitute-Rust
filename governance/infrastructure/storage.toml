@@ -511,6 +511,32 @@ rationale = "Execution clock, admitted memory or retained task metadata for: Sea
 consumer = "execution_metadata"
 
 [[records]]
+path = "crates/sugarsubstitute-execution/src/file_lock.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:dfbaceb0002571d83effefbb3fb2170cacffd7467b46d4a7cb70f54551227315"
+capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle"]
+disposition = "boundary"
+rationale = "Execution-owned native file lock wait: Wait for whole-file byte-range locks on a blocking job, bounded and cancellable. Native request custody and the job's clock, cancellation and deadline remain with the execution owner."
+boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/file_lock_native.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:031188e29c47026fe243500bae508fe1d2762fc59eacee6443b69d8d236d338e"
+capabilities = ["NtQueryInformationFile", "windows::Wdk::Storage::FileSystem", "windows::Wdk::Storage::FileSystem::NtQueryInformationFile", "windows::Win32::Storage::FileSystem"]
+disposition = "boundary"
+rationale = "Execution-owned native file lock wait: Issue one overlapped LockFileEx and retire it before returning. Native request custody and the job's clock, cancellation and deadline remain with the execution owner."
+boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/file_lock_tests.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:4bfdcd4e80e0120725b07060ec348c07b04baf6ca6e33ce50ccbbcb274a2987a"
+capabilities = ["std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "std::fs::create_dir", "std::fs::remove_dir_all"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Prove real kernel lock waits wake on release, time out and cancel on the job's own clock. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-execution/src/lifecycle_pipe/backend_custody/recovery_retirement_tests.rs"
 owner = "sugarsubstitute-execution"
 source_sha256 = "sha256:51233308e46e7431d4c0d87f4624cb48d593e09bad3d3671b9bc8819141cda62"
