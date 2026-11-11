@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the workflow-owned browser canvas without extending Comfy's execution or rendering authorities. */
 import { resolveComfyRendererMode } from '../../core/ComfyRendererMode.js';
-import { isSubstituteHost } from '../../core/embedded/NativePanelTransport.js';
+import { HOST_CAPABILITIES } from '../../core/embedded/PanelRuntime.js';
 import { OutputPresenterSelection, canvasRequiresBrowserMedia, } from '../application/OutputPresenterSelection.js';
 import { canvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
 import { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
@@ -122,7 +122,12 @@ export class ComfyCanvasHost {
         };
         this.#workspace = new ComfyCanvasWorkspaceHost(app, document, options.defaultEditorWidth, frames, changed, report, options.presentation);
         const presenter = new OutputPresenterSelection({
-            requiresNative: () => isSubstituteHost(window),
+            owner: () => {
+                const host = options.host.read();
+                if (!host)
+                    return 'pending';
+                return host.declares(HOST_CAPABILITIES.hostOutputSurface) ? 'host' : 'page';
+            },
             surface: () => execution.canvases.surfaceHost('embedded-document'),
             discovered: () => execution.canvasSurfaceDiscovered,
             browserMedia: () => {
@@ -248,6 +253,7 @@ export class ComfyCanvasHost {
             this.#imageActions.setup();
             this.#saving?.setup();
             this.#stops.push(this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
+            this.#stops.push(this.options.host.subscribe(() => this.#primary.reconcile()));
             if (this.options.route)
                 this.#stops.push(this.options.route.subscribe(() => this.#primary.reconcile()));
             this.options.document.addEventListener('sugarcubes-canvas-discovered', this.#canvasDiscovered);

@@ -37,6 +37,8 @@ import {
   type EmbeddedPresentationSource,
 } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPresentation.js';
 import { HostAccent } from '../../../frontend/comfyui/ui/core/embedded/HostAccent.js';
+import { HostDescriptionState } from '../../../frontend/comfyui/ui/core/embedded/HostDescriptionState.js';
+import { DeclaredHost } from '../../../frontend/comfyui/ui/core/embedded/PanelRuntime.js';
 
 const hosts: AccentThemeHost[] = [];
 afterEach(() => {
@@ -46,18 +48,18 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-sc-photopro-palette');
   document.head.replaceChildren();
   document.body.replaceChildren();
-  Reflect.deleteProperty(window, 'sugarcubesPanelHost');
 });
 
-/** Match the presentation identity supplied by Substitute before frontend setup. */
-function substituteBridge(): void {
-  Reflect.set(window, 'sugarcubesPanelHost', {
-    host: 'ai.artificialsweetener.sugarsubstitute',
-    session: 'accent-fixture-session-0001',
-    preferencePolicy: 'saved',
-    send: jest.fn(),
-    subscribe: () => () => undefined,
+/** Settle a host that declares its accent is the system accent. */
+function systemAccentHost(): HostDescriptionState {
+  const declared = DeclaredHost.read({
+    protocols: [{ name: 'sugarcubes.panel', version: 3 }],
+    capabilities: [{ name: 'presentation.system-accent' }],
   });
+  if (!declared) throw new Error('The fixture description was refused.');
+  const state = new HostDescriptionState();
+  state.settle(declared);
+  return state;
 }
 
 /** Bind a real observer and stylesheet to a narrow Comfy settings boundary. */
@@ -66,11 +68,10 @@ function createHost(
   embedded?: EmbeddedPresentationSource,
   hostAccent?: HostAccent,
   source: unknown = 'system',
-  substitute = !!hostAccent,
+  description: HostDescriptionState | undefined = hostAccent ? systemAccentHost() : undefined,
 ) {
   let setting: ColorSetting | undefined;
   let sourceSetting: ColorSetting | undefined;
-  if (substitute) substituteBridge();
   const setDirty = jest.fn();
   const report = jest.fn();
   const setSettingValue = jest.fn<(id: string, value: string) => void>((_id, value) =>
@@ -94,10 +95,20 @@ function createHost(
     report,
     embedded,
     hostAccent,
+    description,
   );
   hosts.push(host);
   host.setup();
-  return { host, setting: setting!, sourceSetting, setDirty, report, setSettingValue };
+  return {
+    host,
+    setting: setting!,
+    get sourceSetting() {
+      return sourceSetting;
+    },
+    setDirty,
+    report,
+    setSettingValue,
+  };
 }
 
 /** Allow native mutation delivery and the owner's coalesced palette task to settle. */
@@ -287,7 +298,6 @@ test('keeps the connected host accent while preserving the saved browser choice'
 test('the host accent outranks a persisted default or custom browser accent without rewriting either', () => {
   const hostAccent = new HostAccent();
   hostAccent.set('#0078d4');
-  substituteBridge();
   let setting: ColorSetting | undefined;
   const host = new AccentThemeHost(
     document,
@@ -307,6 +317,7 @@ test('the host accent outranks a persisted default or custom browser accent with
     jest.fn(),
     undefined,
     hostAccent,
+    systemAccentHost(),
   );
   hosts.push(host);
   host.setup();
@@ -327,7 +338,7 @@ test('the host accent outranks a persisted default or custom browser accent with
   expect(persistedDefault.setSettingValue).not.toHaveBeenCalled();
 });
 
-test('Substitute defaults to Windows and switches live between System and Custom without losing either', () => {
+test('a system-accent host defaults to it and switches live between System and Custom without losing either', () => {
   const accent = new HostAccent();
   accent.set('#c30052');
   const f = createHost('#479ef5', undefined, accent);
@@ -352,7 +363,7 @@ test('Substitute defaults to Windows and switches live between System and Custom
   expect(f.setSettingValue).not.toHaveBeenCalled();
 });
 
-test('restores a persisted Custom source in Substitute and ignores invalid source changes', () => {
+test('restores a persisted Custom source under a system-accent host and ignores invalid source changes', () => {
   const accent = new HostAccent();
   accent.set('#c30052');
   const f = createHost('#b58cff', undefined, accent, 'custom');
@@ -362,11 +373,11 @@ test('restores a persisted Custom source in Substitute and ignores invalid sourc
   expect(f.report).toHaveBeenCalledTimes(1);
 });
 
-test('outside Substitute the Windows source setting is absent and the saved or default color applies', () => {
+test('without a declared system accent the source setting is absent and the saved or default color applies', () => {
   const accent = new HostAccent();
   accent.set('#c30052');
-  const saved = createHost('#b58cff', undefined, accent, 'system', false);
-  const defaults = createHost(null, undefined, accent, 'system', false);
+  const saved = createHost('#b58cff', undefined, accent, 'system', new HostDescriptionState());
+  const defaults = createHost(null, undefined, accent, 'system', new HostDescriptionState());
   expect(saved.sourceSetting).toBeUndefined();
   expect(defaults.sourceSetting).toBeUndefined();
   expect(saved.host.theme.color).toBe('#b58cff');
@@ -390,4 +401,23 @@ test('recomputes all variant roles when the mode changes without changing the ba
   expect(style.textContent).toContain('--sc-accent-pressed:#4ea0df');
   expect(style.textContent).toContain('--sc-accent-toggle-pressed:#3896df');
   expect(setSettingValue).not.toHaveBeenCalled();
+});
+
+test('offers the system accent source when the declaration settles after setup', () => {
+  const accent = new HostAccent();
+  accent.set('#c30052');
+  const pending = new HostDescriptionState();
+  const f = createHost('#479ef5', undefined, accent, 'system', pending);
+  expect(f.sourceSetting).toBeUndefined();
+  expect(f.host.theme.color).toBe('#479ef5');
+  const declared = DeclaredHost.read({
+    protocols: [{ name: 'sugarcubes.panel', version: 3 }],
+    capabilities: [{ name: 'presentation.system-accent' }],
+  });
+  if (!declared) throw new Error('The fixture description was refused.');
+  pending.settle(declared);
+  expect(f.sourceSetting?.id).toBe(ACCENT_SOURCE_SETTING);
+  expect(f.host.theme.color).toBe('#c30052');
+  expect(f.setSettingValue).not.toHaveBeenCalled();
+  expect(f.report).not.toHaveBeenCalled();
 });

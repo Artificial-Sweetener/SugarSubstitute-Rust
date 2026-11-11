@@ -17,13 +17,6 @@
 import { isRecord } from '../../types/common.js';
 import { panelNavigation } from './BrowserPanelTransport.js';
 import { NativePanelSendQueue } from './NativePanelSendQueue.js';
-/** Identify Substitute presentation from its validated native panel identity. */
-export function isSubstituteHost(windowRef) {
-    const bridge = Reflect.get(windowRef, 'sugarcubesPanelHost');
-    return (isRecord(bridge) &&
-        bridge.host === 'ai.artificialsweetener.sugarsubstitute' &&
-        createNativePanelTransport(windowRef) !== null);
-}
 /** Validate the injected identity; the native host independently authorizes every operation. */
 export function createNativePanelTransport(windowRef) {
     const bridge = Reflect.get(windowRef, 'sugarcubesPanelHost');
