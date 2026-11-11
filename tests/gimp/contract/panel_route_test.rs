@@ -60,6 +60,10 @@ fn transport_refuses_private_native_operations_and_excessive_bytes() -> Result<(
         .len();
     assert!(route.accepts_message(&message, size));
     assert!(!route.accepts_message(&message, size - 1));
+    assert!(route.accepts_message(
+        &json!({"protocol":"sugarcubes.host", "session":route.session(), "type":"description", "version":1}),
+        4096
+    ));
     assert!(!route.accepts_message(
         &json!({"protocol":"native", "session":route.session(), "type":"snapshot.begin"}),
         4096

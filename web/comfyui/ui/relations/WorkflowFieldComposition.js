@@ -22,6 +22,8 @@ import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
 import { HostAccent } from '../core/embedded/HostAccent.js';
+import { HostDescriptionState } from '../core/embedded/HostDescriptionState.js';
+import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
@@ -29,6 +31,7 @@ import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
 export function createWorkflowFieldHost(options) {
     const embedded = new EmbeddedPresentation();
     const hostAccent = new HostAccent();
+    const host = new HostDescriptionState();
     const canvas = new EmbeddedCanvasConnection();
     const relations = new RelationHostLifecycle({
         ...options,
@@ -82,6 +85,7 @@ export function createWorkflowFieldHost(options) {
         if (windowRef)
             startEmbeddedPanel({
                 window: windowRef,
+                host,
                 presentation: embedded,
                 hostAccent,
                 canvas,
@@ -93,12 +97,15 @@ export function createWorkflowFieldHost(options) {
                 subscribeConnection: options.subscribeConnection,
                 report: options.reportPresentationError,
             });
+        else
+            host.settle(DeclaredHost.standalone);
     }
     return {
         appearance,
         relations,
         frame,
         canvas,
+        host,
         settingsRoute: settingsWorkspace.sessionRoute,
         setupPresentation,
     };

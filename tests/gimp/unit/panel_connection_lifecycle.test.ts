@@ -21,6 +21,8 @@ import type { ConnectionState } from '../../../integrations/gimp/src/application
 import { GimpPanelConnection } from '../../../integrations/gimp/src/infrastructure/GimpPanelConnection.js';
 import type { PanelMessage } from '../../../integrations/contracts/PanelProtocol.generated.js';
 import { isPanelMessage } from '../../../integrations/shared/PanelValidation.generated.js';
+import { isHostDescriptionMessage } from '../../../integrations/shared/HostValidation.generated.js';
+import type { HostDescriptionMessage } from '../../../integrations/contracts/HostDescription.js';
 
 /** Carry an external Tauri channel callback without reproducing transport behavior. */
 class Channel {
@@ -31,6 +33,7 @@ class Channel {
 function fixture() {
   const channels: { session: string; channel: Channel }[] = [];
   const visible: boolean[] = [];
+  const descriptions: HostDescriptionMessage[] = [];
   const open = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const probe = jest.fn<() => Promise<ConnectionState>>().mockResolvedValue({
     phase: 'connecting',
@@ -68,6 +71,10 @@ function fixture() {
     if (command === 'panel_visible') {
       if (typeof args.visible !== 'boolean') throw new Error('Invalid fixture visibility.');
       visible.push(args.visible);
+      return;
+    }
+    if (command === 'panel_send' && isHostDescriptionMessage(args.message)) {
+      descriptions.push(args.message);
       return;
     }
     if (command === 'panel_send' && isPanelMessage(args.message)) {
@@ -118,6 +125,7 @@ function fixture() {
     report,
     channels,
     visible,
+    descriptions,
     receive,
     handshake,
     close,
@@ -269,4 +277,30 @@ test('closing during admission prevents a late setup from probing or reviving th
   } finally {
     f.close();
   }
+});
+
+test('describes the companion as serving the panel, canvas and masks with GIMP styles', async () => {
+  const f = fixture();
+  try {
+    await f.owner.connect(f.present);
+    await f.handshake();
+    expect(f.descriptions).toEqual([
+      {
+        protocol: 'sugarcubes.host',
+        version: 1,
+        session: f.channels[0]?.session,
+        type: 'description',
+        protocols: [
+          { name: 'sugarcubes.panel', version: 3 },
+          { name: 'sugarcubes.canvas', version: 3 },
+          { name: 'sugarcubes.canvas.masks', version: 2 },
+        ],
+        capabilities: [{ name: 'presentation.host-styles' }],
+      },
+    ]);
+    expect(f.report).not.toHaveBeenCalled();
+  } finally {
+    f.close();
+  }
+  expect(jest.getTimerCount()).toBe(0);
 });

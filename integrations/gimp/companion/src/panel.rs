@@ -86,7 +86,12 @@ impl PanelRoute {
         if message.get("session").and_then(Value::as_str) != Some(&self.session)
             || !matches!(
                 message.get("protocol").and_then(Value::as_str),
-                Some("sugarcubes.panel" | "sugarcubes.canvas" | "sugarcubes.canvas.masks")
+                Some(
+                    "sugarcubes.panel"
+                        | "sugarcubes.host"
+                        | "sugarcubes.canvas"
+                        | "sugarcubes.canvas.masks"
+                )
             )
         {
             return false;

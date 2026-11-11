@@ -284,7 +284,7 @@ describe('output presenter at native startup', () => {
           nativeBackdrop: 'unavailable',
         });
         expect(f.published()).not.toMatch(/unavailable/i);
-        f.connection.connect(f.transport, window, (error) => f.errors.push(error));
+        f.connection.connect(f.transport, window, (error) => f.errors.push(error), { masks: true });
         await f.settle();
         expect(f.connection.surfaceDiscovered).toBe(true);
         expect(f.connection.surface).toBeNull();
@@ -309,7 +309,7 @@ describe('output presenter at native startup', () => {
     try {
       f.primary.setup();
       expect(f.presenter.current()).toBe('pending');
-      f.connection.connect(f.transport, window, (error) => f.errors.push(error));
+      f.connection.connect(f.transport, window, (error) => f.errors.push(error), { masks: true });
       await f.settle();
       expect(f.connection.surface).not.toBeNull();
       expect(f.presenter.current()).toBe('native');
@@ -334,7 +334,7 @@ describe('output presenter at native startup', () => {
     const f = fixture('available');
     try {
       f.primary.setup();
-      f.connection.connect(f.transport, window, (error) => f.errors.push(error));
+      f.connection.connect(f.transport, window, (error) => f.errors.push(error), { masks: true });
       await f.settle();
       const surface = f.connection.surface;
       const mounted = f.mounted.native;

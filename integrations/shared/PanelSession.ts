@@ -17,6 +17,11 @@
 import type { PanelMessage, PanelPresentation } from '../contracts/PanelProtocol.generated.js';
 import { isPanelMessage } from './PanelValidation.generated.js';
 import { freezePanelPresentation, samePanelPresentation } from './PanelPresentation.js';
+import type {
+  HostDescriptionContent,
+  HostDescriptionMessage,
+} from '../contracts/HostDescription.js';
+import { hostDescriptionMessage } from './HostDescription.js';
 
 /** Describe the visible connection lifetime independently of an application's UI. */
 export type PanelState = 'loading' | 'connected' | 'disconnected' | 'failed';
@@ -25,7 +30,7 @@ const replyTimeoutMs = 15000;
 
 /** Supply native transport, presentation policy, and diagnostics explicitly. */
 export interface PanelHostPort {
-  send(message: PanelMessage): void;
+  send(message: PanelMessage | HostDescriptionMessage): void;
   present(state: PanelState): void;
 }
 
@@ -37,13 +42,22 @@ export class PanelHostSession {
   #lastPing = -Infinity;
   #state: PanelState = 'loading';
 
-  /** Begin a bounded handshake after the native adapter chooses a new session identity. */
+  readonly #description: HostDescriptionMessage;
+
+  /**
+   * Begin a bounded handshake after the native adapter chooses a new session identity.
+   *
+   * The description names what this host serves and declares; it is fixed for the session and
+   * precedes every configure so the page settles it before applying presentation.
+   */
   constructor(
     readonly session: string,
+    description: HostDescriptionContent,
     private presentation: PanelPresentation,
     private readonly port: PanelHostPort,
     now: number,
   ) {
+    this.#description = hostDescriptionMessage(session, description);
     this.presentation = freezePanelPresentation(presentation);
     this.#lastReply = now;
     port.present('loading');
@@ -62,6 +76,7 @@ export class PanelHostSession {
       return false;
     if (value.type === 'ready') {
       this.#configured = true;
+      this.port.send(this.#description);
       this.#send({ type: 'configure', presentation: this.presentation });
     } else if (value.type === 'applied' && this.#configured) {
       this.#applied = true;

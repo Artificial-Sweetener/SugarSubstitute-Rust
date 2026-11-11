@@ -195,7 +195,22 @@ test('packaged entrypoint filters messages, acknowledges presentation, preserves
     nativeWindow.emit('message', event);
   expect(webview?.sent).toEqual([]);
   nativeWindow.emit('message', { origin: url.href, source: webview, data: ready });
-  expect(webview?.sent[0]).toMatchObject({
+  expect(webview?.sent[0]).toEqual({
+    origin: url.origin,
+    message: {
+      protocol: 'sugarcubes.host',
+      version: 1,
+      session,
+      type: 'description',
+      protocols: [
+        { name: 'sugarcubes.panel', version: 3 },
+        { name: 'sugarcubes.canvas', version: 3 },
+        { name: 'sugarcubes.canvas.masks', version: 2 },
+      ],
+      capabilities: [{ name: 'presentation.host-styles' }],
+    },
+  });
+  expect(webview?.sent[1]).toMatchObject({
     origin: url.origin,
     message: {
       type: 'configure',

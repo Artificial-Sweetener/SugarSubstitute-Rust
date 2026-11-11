@@ -19,13 +19,17 @@ import type {
   PanelMessage,
   PanelPresentation,
 } from '../../../contracts/PanelProtocol.generated.js';
+import type {
+  HostDescriptionContent,
+  HostDescriptionMessage,
+} from '../../../contracts/HostDescription.js';
 
 /** Provide the selected native host without leaking its APIs into panel sequencing. */
 export interface NativePanelPort {
   newSession(): string;
   now(): number;
   open(session: string): void;
-  send(message: PanelMessage): void;
+  send(message: PanelMessage | HostDescriptionMessage): void;
   present(state: PanelState): void;
   schedule(tick: () => void): () => void;
   report(error: unknown): void;
@@ -40,6 +44,7 @@ export class PanelController {
   /** Bind explicit host capabilities and this application's presentation choice. */
   constructor(
     private readonly port: NativePanelPort,
+    private readonly description: HostDescriptionContent,
     private presentation: PanelPresentation,
   ) {}
 
@@ -70,6 +75,7 @@ export class PanelController {
     try {
       this.#session = new PanelHostSession(
         this.port.newSession(),
+        this.description,
         this.presentation,
         {
           send: (message) => {
