@@ -26,6 +26,7 @@ import { gimpIconCss } from '../../../frontend/comfyui/ui/surface/appearance/Gim
 import {
   closeBrowserFixture,
   launchHeadlessBrowser,
+  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
 } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let source: string;
@@ -258,7 +259,7 @@ beforeAll(async () => {
   for (const engine of [chromium, firefox]) {
     browsers.push(await launchHeadlessBrowser(engine, { timeout: 20_000 }));
   }
-}, 30_000);
+}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
 
 // Release both engines after every isolated page context has retired.
 afterAll(async () => {
@@ -300,7 +301,7 @@ function testInBrowsers(name: string, run: (page: Page) => Promise<void>): void 
         page = await lifetime.openPage(browser);
         page.setDefaultTimeout(10_000);
         await page.goto(address);
-      }, 45_000);
+      }, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
       afterEach(async () => {
         const diagnostics = lifetime.diagnostics();
         if (failed || diagnostics.phase !== 'ready' || diagnostics.pending.length) {
