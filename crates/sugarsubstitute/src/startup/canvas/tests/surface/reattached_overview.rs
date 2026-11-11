@@ -357,3 +357,102 @@ fn a_reattached_overview_is_applied_in_every_worker_completion_order() -> Result
     }
     Ok(())
 }
+
+/// Turn the canvas until the held overview acquisition is running inside its job.
+fn until_entered(fixture: &mut Fixture, latch: &Latch) -> Result<(), Box<dyn Error>> {
+    loop {
+        let observed = fixture.wake.revision();
+        fixture.pump()?;
+        if latch.entered.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        while let Some(command) = fixture.canvas.take_command() {
+            if let DesktopStartupCommand::SendSurface(reply) = command {
+                let reply = String::from_utf8_lossy(reply.payload()).into_owned();
+                return Err(format!("Replied before the overview acquisition ran: {reply}").into());
+            }
+        }
+        fixture.progress(observed, "the overview acquisition entering its job")?;
+    }
+}
+
+#[test]
+fn a_geometry_after_a_cancelled_overview_acquisition_is_answered() -> Result<(), Box<dyn Error>> {
+    use super::preview::{JPEG, drain, transfer, wait_change, wait_frame, watch};
+    // p13b launch1: the empty committed attachment shows the run's live preview, the page asks for
+    // the overview of its outputs and cancels it while the output acquisition runs, then moves the
+    // panel. The withdrawn preview can never present again, so that geometry must still be answered.
+    let mut fixture = Fixture::empty()?;
+    fixture.send(3, "surface.commit", json!({}))?;
+    let identity = fixture.identity;
+    fixture.canvas.hidden(identity)?;
+    fixture.take(3, "applied")?;
+    watch(&mut fixture, 100, true)?;
+    transfer(&mut fixture, 200, "preview:1", JPEG)?;
+    let target = wait_frame(&mut fixture)?;
+    fixture.canvas.presented(target)?;
+    wait_change(&mut fixture, "presented")?;
+    drain(&mut fixture)?;
+    let held = Arc::new(Latch::announcing(fixture.wake.clone()));
+    fixture.canvas.surface.acquire_overviews_with(acquisition::held(held.clone()));
+    fixture.send(
+        300,
+        "surface.overview",
+        json!({"cells":[{"itemId":"result:tall.png",
+            "file":{"filename":"tall.png","subfolder":"","type":"output"},
+            "rect":{"x":0.0,"y":0.0,"width":40.0,"height":40.0}}]}),
+    )?;
+    until_entered(&mut fixture, &held)?;
+    fixture.cancel(300)?;
+    let mut cancelled = false;
+    while let Some(command) = fixture.canvas.take_command() {
+        if let DesktopStartupCommand::SendSurface(reply) = command {
+            let value: Value = serde_json::from_slice(reply.payload())?;
+            assert_eq!(
+                (value["requestId"].as_u64(), value["status"].as_str()),
+                (Some(300), Some("cancelled"))
+            );
+            cancelled = true;
+        }
+    }
+    assert!(cancelled, "The cancelled overview was not answered");
+    held.open();
+    fixture.geometry(301, 60, 40)?;
+    // A frame, or a hide the host observed, may answer it; nothing may leave it waiting.
+    let (mut presented, mut hidden) = (0, 0);
+    loop {
+        if presented + hidden > 64 {
+            return Err(format!(
+                "Geometry unanswered after {presented} presented frames and {hidden} hides"
+            )
+            .into());
+        }
+        let observed = fixture.wake.revision();
+        fixture.advance(100);
+        fixture.pump()?;
+        let mut answered = None;
+        while let Some(command) = fixture.canvas.take_command() {
+            if let DesktopStartupCommand::SendSurface(reply) = command {
+                answered = Some(serde_json::from_slice::<Value>(reply.payload())?);
+            }
+        }
+        if let Some(value) = answered {
+            assert_eq!(value["requestId"], 301);
+            assert_eq!(value["status"], "applied");
+            break;
+        }
+        if let Some(target) = prepared_frame(&fixture.canvas)
+            .filter(|frame| frame.content.pending())
+            .map(|frame| frame.content.target())
+        {
+            fixture.canvas.presented(target)?;
+            presented += 1;
+        } else if matches!(fixture.canvas.presentation(), MainCanvasPresentation::Hide) {
+            fixture.canvas.hidden(identity)?;
+            hidden += 1;
+        } else {
+            fixture.progress(observed, "the geometry after the cancelled overview")?;
+        }
+    }
+    fixture.finish()
+}

@@ -297,6 +297,17 @@ impl NativeSurface {
         }
         self.preview_hidden(session)?;
         let Some(pending) = self.pending.as_ref() else { return Ok(()) };
+        // A hidden peer presents no frame, so geometry held to move one is applied as hidden: a
+        // withdrawn preview over an empty attachment would otherwise owe a frame that never comes.
+        if pending.identity == identity && matches!(pending.kind, PendingKind::Geometry) {
+            let pending = self.pending.take().ok_or("Held canvas geometry disappeared")?;
+            return self.reply(
+                pending.identity,
+                &pending.request,
+                CanvasSurfaceReplyStatus::Applied,
+                pending.claim,
+            );
+        }
         if pending.identity == identity && matches!(pending.kind, PendingKind::EmptyCommit) {
             let binding = self.binding.as_mut().ok_or("Empty canvas binding disappeared")?;
             if let Some(token) = binding.document {
