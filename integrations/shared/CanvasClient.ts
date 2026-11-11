@@ -49,7 +49,11 @@ import type {
   CanvasSurfacePresentationChange,
 } from '../contracts/CanvasSurface.js';
 import { canvasSurfaceOverviewMessageFits } from './CanvasSurfaceOverview.js';
-import { snapshotCanvasSurfaceCapabilities } from './CanvasSurfaceDiscovery.js';
+import {
+  CanvasSurfaceDiscoveryFailure,
+  snapshotCanvasSurfaceCapabilities,
+} from './CanvasSurfaceDiscovery.js';
+import { isRecord } from './ContractRecord.js';
 import { NEWEST_CANVAS_SURFACE_SCHEMA } from './CanvasSurfaceSchemas.js';
 import type {
   CanvasEditRequest,
@@ -258,7 +262,12 @@ export class CanvasClient implements CanvasLayerHost {
   }
   /** Accept only the expected reply kind from this session and retire its deadline before callbacks run. */
   receive(value: unknown): boolean {
-    if (this.#disposed || !isCanvasMessage(value) || value.session !== this.session) return false;
+    if (this.#disposed) return false;
+    if (!isCanvasMessage(value)) {
+      this.#refuseDiscoveryReply(value);
+      return false;
+    }
+    if (value.session !== this.session) return false;
     if (value.type === 'source.changed') {
       for (const listener of this.#sourceListeners) listener(value.change);
       return true;
@@ -314,6 +323,34 @@ export class CanvasClient implements CanvasLayerHost {
       });
     else pending.accept(value);
     return true;
+  }
+  /**
+   * End an outstanding discovery at once when its correlated reply fails validation.
+   *
+   * An unreadable answer, such as one in a schema newer than this page requested, will not be
+   * repaired by waiting, so the discovery fails now instead of at its deadline. Only a reply that
+   * names this session and an outstanding discovery request is considered; anything else stays
+   * an ignored message.
+   */
+  #refuseDiscoveryReply(value: unknown): void {
+    if (
+      !isRecord(value) ||
+      value.protocol !== 'sugarcubes.canvas' ||
+      value.session !== this.session ||
+      value.type !== 'surface.capabilities.reply' ||
+      typeof value.requestId !== 'number'
+    )
+      return;
+    const pending = this.#pending.get(value.requestId);
+    if (pending?.type !== 'surface.capabilities.reply') return;
+    this.#pending.delete(value.requestId);
+    pending.stop();
+    pending.reject(
+      new CanvasSurfaceDiscoveryFailure(
+        'invalid-reply',
+        'The canvas host answered surface discovery with a reply this page cannot read.',
+      ),
+    );
   }
   /** Refuse all late responses and cancel outstanding host work when the session leaves. */
   dispose(): void {
@@ -382,11 +419,12 @@ export class CanvasClient implements CanvasLayerHost {
           stop();
           if (request.type !== 'source.request') cancel();
           reject(
-            new Error(
-              request.type === 'surface.capabilities.request'
-                ? 'Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together.'
-                : 'Canvas request timed out; it was not retried.',
-            ),
+            request.type === 'surface.capabilities.request'
+              ? new CanvasSurfaceDiscoveryFailure(
+                  'timed-out',
+                  'Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together.',
+                )
+              : new Error('Canvas request timed out; it was not retried.'),
           );
         });
       stopCancellation =

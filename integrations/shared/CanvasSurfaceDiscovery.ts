@@ -48,6 +48,25 @@ import {
 export const SURFACE_SCHEMA_REQUIRED =
   'Native surface schema 2 is required. Update SugarCubes and its native host together.';
 
+/** Name why a discovery ended without a surface, so callers never parse failure text. */
+export type CanvasSurfaceDiscoveryFailureReason =
+  | 'invalid-reply'
+  | 'newer-schema'
+  | 'declared-while-unavailable'
+  | 'timed-out';
+
+/** End one surface discovery with a typed reason; the page then keeps the surface absent. */
+export class CanvasSurfaceDiscoveryFailure extends Error {
+  /** Bind the reason to the failure that carries it. */
+  constructor(
+    readonly reason: CanvasSurfaceDiscoveryFailureReason,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'CanvasSurfaceDiscoveryFailure';
+  }
+}
+
 /** Represent an explicit refusal without suggesting any executable operation. */
 export const EMPTY_CANVAS_SURFACE_CAPABILITIES: CanvasSurfaceCapabilities = Object.freeze({
   schema: 2,
@@ -192,12 +211,21 @@ export async function discoverCanvasSurface(port: {
     const reply = await port.read();
     if (!port.current()) return null;
     if (reply.type !== 'surface.capabilities.reply')
-      throw new Error('Invalid canvas surface capability reply.');
+      throw new CanvasSurfaceDiscoveryFailure(
+        'invalid-reply',
+        'Invalid canvas surface capability reply.',
+      );
     if (reply.capabilities.schema > NEWEST_CANVAS_SURFACE_SCHEMA)
-      throw new Error('Canvas surface discovery answered a newer schema than requested.');
+      throw new CanvasSurfaceDiscoveryFailure(
+        'newer-schema',
+        'Canvas surface discovery answered a newer schema than requested.',
+      );
     if (reply.status !== 'available') {
       if (!emptyCanvasSurfaceCapabilities(reply.capabilities))
-        throw new Error('Unavailable canvas surface declared capabilities.');
+        throw new CanvasSurfaceDiscoveryFailure(
+          'declared-while-unavailable',
+          'Unavailable canvas surface declared capabilities.',
+        );
       if (reply.status === 'error')
         port.report(new Error(reply.message || 'Canvas surface discovery failed.'));
       return null;
