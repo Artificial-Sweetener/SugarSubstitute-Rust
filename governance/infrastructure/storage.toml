@@ -4035,7 +4035,7 @@ rationale = "Repository tooling access.rs: Classify supported filesystem constru
 [[records]]
 path = "tools/xtask/src/infrastructure/access/native.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:b63032e7b6ccab9ce5c4fbd295e7e75349c5d424aed8acb3e799e58fac0bbb21"
+source_sha256 = "sha256:c34c2772c6ad8120a4c972fb592c92351da1e76e5beecb796f254d1000e3364a"
 capabilities = ["literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling native.rs: Recognize native filesystem and dynamic-entry-point identities. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
