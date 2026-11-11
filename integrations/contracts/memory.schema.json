@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/memory/v1",
+  "title": "SugarCubes memory budget protocol version 1",
+  "$defs": {
+    "MemoryLevel": {
+      "enum": ["normal", "elevated", "high", "critical"]
+    },
+    "MemoryPreference": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "share"
+            },
+            "percent": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 75
+            }
+          },
+          "required": ["mode", "percent"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "const": "fixed"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["mode", "bytes"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "MemoryConsumer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["id", "bytes"],
+      "additionalProperties": false
+    },
+    "MemoryUsageMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.memory"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "usage"
+        },
+        "usedBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "demandBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "consumers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemoryConsumer"
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "type",
+        "usedBytes",
+        "demandBytes",
+        "consumers"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryPreferenceMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.memory"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "preference"
+        },
+        "preference": {
+          "$ref": "#/$defs/MemoryPreference"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "preference"],
+      "additionalProperties": false
+    },
+    "MemoryAllowanceMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.memory"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "allowance"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "level": {
+          "$ref": "#/$defs/MemoryLevel"
+        },
+        "allowanceBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "ceilingBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "preference": {
+          "$ref": "#/$defs/MemoryPreference"
+        }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "type",
+        "generation",
+        "level",
+        "allowanceBytes",
+        "ceilingBytes",
+        "totalBytes",
+        "preference"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryClientMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MemoryUsageMessage"
+        },
+        {
+          "$ref": "#/$defs/MemoryPreferenceMessage"
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/MemoryUsageMessage"
+    },
+    {
+      "$ref": "#/$defs/MemoryPreferenceMessage"
+    },
+    {
+      "$ref": "#/$defs/MemoryAllowanceMessage"
+    }
+  ]
+}

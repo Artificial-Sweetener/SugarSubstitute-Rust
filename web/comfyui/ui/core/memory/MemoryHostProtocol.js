@@ -13,33 +13,42 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Encode and validate the SugarCubes memory budget protocol, version one. */
-import { isRecord } from '../../types/common.js';
-import { DEFAULT_MEMORY_ALLOWANCE_BYTES, } from './MemoryBudgetRegistry.js';
+/**
+ * Encode and admit the SugarCubes memory budget protocol, version one.
+ *
+ * `integrations/contracts/memory.schema.json` owns the wire shapes and bounds; this module only
+ * derives page reports from the cache registry and admits host allowances through the generated
+ * guard, bundled for the browser by `MemoryRuntime`, so the page and every host decode one schema.
+ */
+import { isMemoryAllowanceMessage, } from '../embedded/MemoryRuntime.js';
+import { DEFAULT_MEMORY_ALLOWANCE_BYTES } from './MemoryBudgetRegistry.js';
 /** Protocol identifier shared with desktop hosts. */
 export const MEMORY_PROTOCOL = 'sugarcubes.memory';
 /** Protocol version; it advances independently of the panel transport. */
 export const MEMORY_PROTOCOL_VERSION = 1;
 const MAX_CONSUMERS = 16;
 const CONSUMER_ID = /^[a-z0-9.-]{1,48}$/;
-const LEVELS = ['normal', 'elevated', 'high', 'critical'];
+/** Round a measured byte count onto the schema's exact, non-negative integer range. */
+function byteCount(value) {
+    return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.round(value)));
+}
 /**
  * Report usage with room to grow: half again what the caches hold, and never less room than the
  * standalone allowance, so joining a host never shrinks a page's caches below it.
  */
 export function usageMessage(session, usage) {
-    const used = Math.max(0, Math.round(usage.usedBytes));
+    const used = byteCount(usage.usedBytes);
     const consumers = usage.consumers
         .filter((consumer) => CONSUMER_ID.test(consumer.id))
         .slice(0, MAX_CONSUMERS)
-        .map((consumer) => ({ id: consumer.id, bytes: Math.max(0, Math.round(consumer.bytes)) }));
+        .map((consumer) => ({ id: consumer.id, bytes: byteCount(consumer.bytes) }));
     return {
         protocol: MEMORY_PROTOCOL,
         version: MEMORY_PROTOCOL_VERSION,
         session,
         type: 'usage',
         usedBytes: used,
-        demandBytes: used + Math.max(DEFAULT_MEMORY_ALLOWANCE_BYTES, Math.round(used / 2)),
+        demandBytes: byteCount(used + Math.max(DEFAULT_MEMORY_ALLOWANCE_BYTES, Math.round(used / 2))),
         consumers,
     };
 }
@@ -53,37 +62,16 @@ export function preferenceMessage(session, preference) {
         preference,
     };
 }
-/** Accept only a well-formed allowance addressed to `session`. */
+/** Accept only a schema-valid allowance addressed to `session`. */
 export function readAllowance(value, session) {
-    if (!isRecord(value) ||
-        value.protocol !== MEMORY_PROTOCOL ||
-        value.version !== MEMORY_PROTOCOL_VERSION ||
-        value.session !== session ||
-        value.type !== 'allowance')
-        return null;
-    const level = LEVELS.find((candidate) => candidate === value.level);
-    const preference = readPreference(value.preference);
-    const counts = [value.generation, value.allowanceBytes, value.ceilingBytes, value.totalBytes];
-    if (!level || !preference || !counts.every(isByteCount))
+    if (!isMemoryAllowanceMessage(value) || value.session !== session)
         return null;
     return {
         generation: value.generation,
-        level,
+        level: value.level,
         allowanceBytes: value.allowanceBytes,
         ceilingBytes: value.ceilingBytes,
         totalBytes: value.totalBytes,
-        preference,
+        preference: value.preference,
     };
-}
-function readPreference(value) {
-    if (!isRecord(value))
-        return null;
-    if (value.mode === 'share' && Number.isInteger(value.percent))
-        return { mode: 'share', percent: value.percent };
-    if (value.mode === 'fixed' && isByteCount(value.bytes))
-        return { mode: 'fixed', bytes: value.bytes };
-    return null;
-}
-function isByteCount(value) {
-    return Number.isSafeInteger(value) && value >= 0;
 }

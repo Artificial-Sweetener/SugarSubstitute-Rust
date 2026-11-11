@@ -36,6 +36,20 @@ function isColor(node: Schema): boolean {
   );
 }
 
+/** Recognize a stable lowercase token such as a cache consumer id: `a-z`, `0-9`, `.` and `-`. */
+function lowercaseTokenBound(node: Schema): number | undefined {
+  const bound = node.maxLength;
+  return node.type === 'string' &&
+    typeof bound === 'number' &&
+    Number.isSafeInteger(bound) &&
+    bound >= 1 &&
+    bound <= 256 &&
+    node.pattern === `^[a-z0-9.-]{1,${bound}}$` &&
+    node['x-length-unit'] === undefined
+    ? bound
+    : undefined;
+}
+
 /** Recognize UTF-16 bounded text without a pattern, the form TypeScript checks by `length`. */
 function plainBound(node: Schema): number | undefined {
   return node.type === 'string' &&
@@ -108,6 +122,16 @@ export function rustTextProperty(node: Schema, access: string): RustProperty {
       helper: `pub(super) fn valid_panel_session(value: &str) -> bool {
     (16..=80).contains(&value.len())
         && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}`,
+    };
+  const token = lowercaseTokenBound(node);
+  if (token !== undefined)
+    return {
+      type: 'String',
+      valid: [`valid_lowercase_token(&${access}, ${token})`],
+      helper: `fn valid_lowercase_token(value: &str, maximum: usize) -> bool {
+    (1..=maximum).contains(&value.len())
+        && value.bytes().all(|byte| matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'.' | b'-'))
 }`,
     };
   if (isColor(node))
