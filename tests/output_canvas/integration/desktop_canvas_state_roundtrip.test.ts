@@ -23,9 +23,24 @@ import type {
   SessionSelection,
 } from '../../../integrations/contracts/SessionProtocol.generated.js';
 
+/**
+ * Comfy reopens a checkpoint's tabs from its own persistence before startup commits; desktop
+ * restore then binds each entry to the tab Comfy reopened rather than opening tabs itself.
+ */
+async function reopenCheckpointTabs(
+  f: Awaited<ReturnType<typeof desktopRuntimeFixture>>,
+  entries: readonly SessionEntry[],
+  active: number,
+): Promise<void> {
+  await f.host.reopen(
+    entries.map((entry) => entry.document),
+    active,
+  );
+  f.host.committed();
+}
+
 test('roundtrips scene/source/batch navigation and linked shared inspection without replacing independent cameras', async () => {
   const f = await desktopRuntimeFixture();
-  f.host.committed();
   const base = f.checkpoint.entries[0];
   const original = base?.outputs[0];
   const source = base?.sources[0];
@@ -142,6 +157,7 @@ test('roundtrips scene/source/batch navigation and linked shared inspection with
     },
   };
   const checkpoint = { ...f.checkpoint, entries: [entry], activeEntry: entry.id };
+  await reopenCheckpointTabs(f, [entry], 0);
   await f.runtime.materialize(checkpoint, new DesktopSessionCancellation());
   const actual = await f.runtime.capture(f.nextId(), 99, new DesktopSessionCancellation());
   const captured = actual.entries[0];
@@ -184,7 +200,6 @@ test.each(['scene', 'batch'] as const)(
   'roundtrips the %s overview independently from follow and source-preview intent',
   async (level) => {
     const f = await desktopRuntimeFixture();
-    f.host.committed();
     const base = f.checkpoint.entries[0];
     if (!base) throw new Error('Missing entry.');
     const accepted = base.submissions[0];
@@ -212,6 +227,7 @@ test.each(['scene', 'batch'] as const)(
         },
       },
     };
+    await reopenCheckpointTabs(f, [entry], 0);
     await f.runtime.materialize(
       { ...f.checkpoint, entries: [entry], activeEntry: entry.id },
       new DesktopSessionCancellation(),
@@ -229,7 +245,6 @@ test.each(['scene', 'batch'] as const)(
 
 test('an inactive restored auto view keeps its current image intent when Comfy later activates that occurrence', async () => {
   const f = await desktopRuntimeFixture();
-  f.host.committed();
   const base = f.checkpoint.entries[0];
   if (!base) throw new Error('Missing inactive workflow fixture.');
   const a: SessionEntry = {
@@ -288,6 +303,7 @@ test('an inactive restored auto view keeps its current image intent when Comfy l
       },
     },
   };
+  await reopenCheckpointTabs(f, [a, b], 1);
   await f.runtime.materialize(
     { ...f.checkpoint, entries: [a, b], activeEntry: b.id },
     new DesktopSessionCancellation(),
@@ -300,10 +316,10 @@ test('an inactive restored auto view keeps its current image intent when Comfy l
     (workflow) => workflow.filename === 'Inactive A',
   );
   const view = context ? f.coordinator.primary(context.sessionId) : null;
-  if (!target?.changeTracker || !context || !view)
-    throw new Error('Inactive restored occurrence was not bound.');
+  if (!target || !context || !view) throw new Error('Inactive restored occurrence was not bound.');
   expect(f.views.read(view).mode).toBe('image');
-  await f.host.app.loadGraphData(target.changeTracker.activeState, true, true, target);
+  // Comfy reads an inactive reopened tab's file only when the user activates it.
+  await f.host.open(target.path);
   expect(f.views.read(view).mode).toBe('image');
   expect(f.views.read(view).follow).toBe('auto');
   expect(f.views.read(view).selection?.batchIndex).toBe(1);

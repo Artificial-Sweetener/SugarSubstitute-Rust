@@ -252,6 +252,30 @@ test('captures inactive tracker and unloaded content instead of assigning active
   host.dispose();
 });
 
+test('a matched tab keeps its checkpoint source identity before and after Comfy reads its file', async () => {
+  const host = fixture();
+  const renamed = (name: string): SessionDocument => ({
+    ...document(name, false),
+    sourceIdentity: `workflows/${name} before rename.json`,
+  });
+  const a = entry('00000000-0000-4000-8000-000000000001', renamed('A'));
+  const b = entry('00000000-0000-4000-8000-000000000002', renamed('B'));
+  const [, inactive] = await reopen(host, [a.document, b.document], 0);
+  const contexts = host.documents.match([a, b], () => true);
+  expect(host.documents.capture(contexts.get(a.id)!, 3).sourceIdentity).toBe(
+    a.document.sourceIdentity,
+  );
+  expect(inactive!.changeTracker).toBeNull();
+  expect(host.documents.capture(contexts.get(b.id)!, 3).sourceIdentity).toBe(
+    b.document.sourceIdentity,
+  );
+  await inactive!.load();
+  expect(host.documents.capture(contexts.get(b.id)!, 3).sourceIdentity).toBe(
+    b.document.sourceIdentity,
+  );
+  host.dispose();
+});
+
 test('captures Comfy optional serialized fields using its normal JSON representation without mutating host state', async () => {
   const host = fixture();
   const a = entry('00000000-0000-4000-8000-000000000001', document('A', true));
