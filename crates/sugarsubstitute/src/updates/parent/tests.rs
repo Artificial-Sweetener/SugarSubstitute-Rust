@@ -13,7 +13,7 @@ mod prepared;
 type TestResult = std::result::Result<(), Box<dyn Error>>;
 
 /// Model the point before an image is supplied; all subsequent registry and execution work is real.
-fn partial(client: ExecutionClient, clock: &Manual) -> Result<Parent> {
+fn partial(client: ExecutionClient) -> Result<Parent> {
     Ok(Parent {
         work: client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
         cleanup: client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
@@ -29,8 +29,8 @@ fn partial(client: ExecutionClient, clock: &Manual) -> Result<Parent> {
         retiring: None,
         retiring_application: false,
         process: None,
-        until: clock.now().checked_add(super::super::CAMPAIGN)?,
-        wake_at: Instant::now() + super::super::CAMPAIGN,
+        until: None,
+        wake_at: None,
         shutdown: None,
         continuation: None,
         grace_wake: None,
@@ -74,7 +74,7 @@ fn close_before_admission_runs_no_registry_or_process_and_joins() -> TestResult 
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
-    let mut parent = partial(owner.client(), &clock).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
     parent.close(None).map_err(|cause| cause as Box<dyn Error>)?;
     assert!(parent.constructing.is_none());
     finish(&mut parent, &mut owner, &wake, &JobSequence::new())
@@ -85,7 +85,7 @@ fn normal_application_close_before_admission_never_starts_a_helper() -> TestResu
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
-    let mut parent = partial(owner.client(), &clock).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
     let budget = ShutdownBudget::new(clock.now())?;
     parent.application_closing(Some(budget), true).map_err(|cause| cause as Box<dyn Error>)?;
     assert_eq!(parent.shutdown, Some(budget));
@@ -100,7 +100,7 @@ fn normal_application_close_during_partial_admission_keeps_original_cleanup() ->
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
-    let mut parent = partial(owner.client(), &clock).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
     let jobs = JobSequence::new();
     parent.launch(&jobs).map_err(|cause| cause as Box<dyn Error>)?;
     let budget = ShutdownBudget::new(clock.now())?;
@@ -117,7 +117,7 @@ fn partially_admitted_registry_is_observed_and_released_before_join() -> TestRes
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
-    let mut parent = partial(owner.client(), &clock).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
     let jobs = JobSequence::new();
     parent.launch(&jobs).map_err(|cause| cause as Box<dyn Error>)?;
     assert!(parent.constructing.is_some());
@@ -127,14 +127,46 @@ fn partially_admitted_registry_is_observed_and_released_before_join() -> TestRes
 }
 
 #[test]
+fn a_running_preparation_helper_has_no_overall_cutoff_or_campaign_wake() -> TestResult {
+    let clock = Arc::new(Manual::default());
+    let wake = Arc::new(Wake::default());
+    let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
+    let jobs = JobSequence::new();
+    assert_eq!(parent.next_deadline(), None);
+    // Hours beyond the former fixed campaign, an open helper is still not closed by time.
+    clock.0.store(3 * 60 * 60 * 1_000_000_000, Ordering::SeqCst);
+    let batch = parent.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+    parent.advance(&batch, &jobs).map_err(|cause| cause as Box<dyn Error>)?;
+    assert!(parent.shutdown.is_none());
+    assert!(parent.failure.is_none());
+    assert_eq!(parent.next_deadline(), None);
+    let deadline = parent
+        .constructing
+        .as_ref()
+        .ok_or("Registry construction was not admitted")?
+        .spec()
+        .deadline
+        .ok_or("Launch step has no deadline")?;
+    assert_eq!(deadline, clock.now().checked_add(super::super::STEP)?);
+    parent.close(None).map_err(|cause| cause as Box<dyn Error>)?;
+    finish(&mut parent, &mut owner, &wake, &jobs)
+}
+
+#[test]
 fn image_failure_closes_only_preparation_and_retains_the_original_cause() -> TestResult {
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
-    let mut parent = partial(owner.client(), &clock).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
     let jobs = JobSequence::new();
     let spec = parent
-        .spec(&jobs, JobClass::InfrastructureLifecycle, 4096, Some(parent.until))
+        .spec(
+            &jobs,
+            JobClass::InfrastructureLifecycle,
+            4096,
+            Some(parent.step_deadline().map_err(|cause| cause as Box<dyn Error>)?),
+        )
         .map_err(|cause| cause as Box<dyn Error>)?;
     parent.preparing = Some(parent.client.submit_blocking(&parent.work, spec, |_| {
         Err(io::Error::other("verified image unavailable"))
@@ -149,11 +181,11 @@ fn image_failure_closes_only_preparation_and_retains_the_original_cause() -> Tes
 }
 
 #[test]
-fn repeated_close_preserves_the_application_budget_and_campaign_cutoff() -> TestResult {
+fn repeated_close_preserves_the_application_budget_and_outer_cutoff() -> TestResult {
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
-    let mut parent = partial(owner.client(), &clock).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
     let campaign = parent.until;
     let budget = ShutdownBudget::new(clock.now())?;
     parent.close(Some(budget)).map_err(|cause| cause as Box<dyn Error>)?;
@@ -176,7 +208,7 @@ fn expired_cleanup_preserves_unsettled_custody_without_admission_or_deadline_ren
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();
-    let mut parent = partial(client.clone(), &clock).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut parent = partial(client.clone()).map_err(|cause| cause as Box<dyn Error>)?;
     parent.close(None).map_err(|cause| cause as Box<dyn Error>)?;
     let original = parent.shutdown;
     clock.0.store(16_000_000_000, Ordering::SeqCst);

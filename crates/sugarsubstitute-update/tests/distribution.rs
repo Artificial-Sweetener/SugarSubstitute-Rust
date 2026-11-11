@@ -1,14 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the built library's producing-feed decoder, including production feature gating.
-use sugarsubstitute_update::distribution::{Distribution, MAX_BYTES};
+use sugarsubstitute_update::distribution::{Distribution, MAX_BYTES, UpdatePolicy};
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 fn configuration() -> serde_json::Value {
-    serde_json::json!({"schema_version":1, "repository":vec![92;32], "feed": {
+    serde_json::json!({"schema_version":2, "update_policy":"beta_eager", "repository":vec![92;32], "feed": {
         "transport":"https", "base":"https://updates.example.test/releases/",
         "redirects":["https://assets.example.test/"]
     }})
+}
+
+#[test]
+fn compiled_update_policy_is_decoded_with_the_feed() -> Result {
+    let beta = Distribution::decode(&serde_json::to_vec(&configuration())?)?;
+    assert_eq!(beta.update_policy(), UpdatePolicy::BetaEager);
+    let mut value = configuration();
+    value["update_policy"] = "standard".into();
+    let standard = Distribution::decode(&serde_json::to_vec(&value)?)?;
+    assert_eq!(standard.update_policy(), UpdatePolicy::Standard);
+    Ok(())
 }
 
 #[test]
@@ -27,10 +38,26 @@ fn compiled_feed_keeps_repository_identity_and_exact_redirect_origins() -> Resul
 
 #[test]
 fn malformed_schema_fields_and_empty_identity_never_disable_or_reset_updates() -> Result {
-    for field in ["schema", "repository", "unknown", "feed_unknown", "missing_channel_override"] {
+    for field in [
+        "schema",
+        "previous_schema",
+        "repository",
+        "unknown",
+        "feed_unknown",
+        "missing_channel_override",
+        "missing_policy",
+        "unknown_policy",
+    ] {
         let mut value = configuration();
         match field {
-            "schema" => value["schema_version"] = 2.into(),
+            "schema" => value["schema_version"] = 3.into(),
+            "previous_schema" => value["schema_version"] = 1.into(),
+            "missing_policy" => {
+                if let Some(fields) = value.as_object_mut() {
+                    fields.remove("update_policy");
+                }
+            }
+            "unknown_policy" => value["update_policy"] = "remote".into(),
             "repository" => value["repository"] = serde_json::json!(vec![0; 32]),
             "unknown" => value["installed_sequence"] = 900.into(),
             "feed_unknown" => value["feed"]["trusted_root"] = "remote".into(),

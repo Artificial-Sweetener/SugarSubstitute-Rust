@@ -2895,7 +2895,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: New
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_repository.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b8c108b1b5b01fff2c6caafa53e12d02a0863cbd15de47cf041cceffc9c7b9ac"
+source_sha256 = "sha256:4e1b28a32422afaf52bcbfacbbd986d047fbc2046ddfa640d3319d4d3ef8d03a"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Fetch bounded repository metadata through its owned HTTP transport; this method does not inspect files."
@@ -2904,10 +2904,18 @@ consumer = "protocol_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_repository/tests/delivery.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b123934f64e53967ccab2bd75b96174f7e06a3c1d1c74f742e22f89af23cd812"
+source_sha256 = "sha256:736fc883d664d2335507e7c99b2147015bdd9e5c59e521635803290d2e07fb70"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Composed download retries preserve owned prefixes and reauthenticate before cache use. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/update_repository/tests/resumption.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:ae6c71b2b7614b5f6ed1347a8d22e8e261c396e7e7eeff98046ef37ae61936d9"
+capabilities = ["std::fs::metadata"]
+disposition = "fixture"
+rationale = "Native fixture observation for: A dropped or slow transfer resumes within its attempt; only a stall or no progress ends it. The listed capability observes the saved package prefix length, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-update/src/delivery/tests.rs"

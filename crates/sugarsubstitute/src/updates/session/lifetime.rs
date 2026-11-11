@@ -7,18 +7,14 @@ impl HeadlessLifetime for Session {
         if self.owner.is_some() || self.closing || self.finished {
             return Err("Update session cannot start twice or after close".into());
         }
-        let until = self.clock.now().checked_add(CAMPAIGN)?;
-        self.until = Some(until);
-        self.wake_at =
-            Some(Instant::now().checked_add(CAMPAIGN).ok_or("Update deadline overflow")?);
+        let until = self.clock.now().checked_add(STEP)?;
         self.owner = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
         let client = self.owner.as_ref().ok_or("Update execution absent")?.client();
         self.client = Some(client.clone());
         self.cleanup =
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
-        self.work = Some(
-            client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: Some(until) }, None)?,
-        );
+        self.work =
+            Some(client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?);
         let factory = self.factory.take().ok_or("Update factory consumed")?;
         self.initializing = Some(client.submit_blocking(
             self.work.as_ref().ok_or("Update work scope absent")?,

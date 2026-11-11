@@ -43,8 +43,10 @@ pub(crate) struct Parent {
     retiring: Option<OwnedJob<(), io::Error>>,
     retiring_application: bool,
     process: Option<ProcessKey>,
-    until: Moment,
-    wake_at: Instant,
+    /// Outer cutoff for a finite helper (an engine probe, or a continuation after close).
+    /// A preparation helper has none: its own step deadlines and stall timeout bound its work.
+    until: Option<Moment>,
+    wake_at: Option<Instant>,
     shutdown: Option<ShutdownBudget>,
     continuation: Option<continuation::Window>,
     grace_wake: Option<Instant>,
@@ -67,14 +69,11 @@ impl Parent {
         key: CoordinatorKey,
         source: Arc<RunningApplication>,
     ) -> Result<Self> {
-        let until = client.now()?.checked_add(super::CAMPAIGN)?;
-        let wake_at =
-            Instant::now().checked_add(super::CAMPAIGN).ok_or("Update campaign overflow")?;
         Ok(Self::owned(
             client,
-            LaunchScope { work, cleanup, native, key, until },
+            LaunchScope { work, cleanup, native, key },
             Retained { source: Some(source), input: None, registry: None },
-            wake_at,
+            None,
         ))
     }
 
@@ -95,7 +94,7 @@ impl Parent {
             self.record(cause);
         }
         if self.shutdown.is_none() {
-            if self.failure.is_some() || now >= self.until {
+            if self.failure.is_some() || self.until.is_some_and(|until| now >= until) {
                 self.close(None)?;
             } else if let Err(cause) = self.launch(jobs) {
                 self.record(cause);
@@ -132,13 +131,14 @@ impl Parent {
         }
     }
 
-    /// One fixed campaign wake, followed by existing native graceful and final cleanup cutoffs.
+    /// The outer cutoff wake of a finite helper, then native graceful and final cleanup cutoffs.
+    /// A running preparation helper needs no wake: its completions arrive as execution events.
     pub(crate) fn next_deadline(&self) -> Option<Instant> {
         if self.retired {
             return None;
         }
         if self.shutdown.is_none() {
-            return Some(self.wake_at);
+            return self.wake_at;
         }
         let now = Instant::now();
         self.grace_wake
@@ -151,11 +151,28 @@ impl Parent {
         self.retired && self.probe_custody.is_none()
     }
 
+    /// Conclude a settled application-derived helper as one check outcome, exactly once.
+    /// Failures were already logged when recorded; a probe never reaches this owner.
+    pub(crate) fn take_check_outcome(&mut self) -> Option<super::schedule::CheckOutcome> {
+        let completion = self.take_completion()?;
+        Some(if completion.succeeded && completion.probe.is_none() {
+            super::schedule::CheckOutcome::Completed
+        } else {
+            super::schedule::CheckOutcome::Failed
+        })
+    }
+
     /// File verification may borrow a run guard; the running helper itself retains only image files.
     pub(crate) fn borrows_application(&self) -> bool {
         self.preparing.is_some()
             || self.retiring_application
             || self.retained.as_ref().is_some_and(|held| held.source.is_some())
+    }
+
+    /// One finite launch step, never beyond this helper's outer cutoff when it has one.
+    fn step_deadline(&self) -> Result<Moment> {
+        let step = self.client.now()?.checked_add(super::STEP)?;
+        Ok(self.until.map_or(step, |until| until.min(step)))
     }
 
     /// Use the parent's shared monotone job sequence; rejected admission never reuses identities.

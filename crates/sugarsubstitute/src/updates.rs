@@ -5,25 +5,48 @@ mod activation;
 pub(crate) mod admission;
 mod engine;
 mod entry;
+pub mod launch;
 mod options;
 mod probe;
 pub use entry::entry;
 pub(crate) mod parent;
+pub(crate) mod schedule;
 mod session;
 #[cfg(test)]
 pub(crate) mod test_support;
 use std::{io, path::PathBuf, time::Duration};
+pub use sugarsubstitute_supervision::update_preparation::UpdatePolicy;
 use sugarsubstitute_supervision::update_preparation::{
     CachedConfiguration, Configuration, Distribution, Worker,
 };
 
 const EMBEDDED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/update-distribution.json"));
-const CAMPAIGN: Duration = Duration::from_secs(15 * 60);
+/// Deadline of one admitted updater step. Campaigns have no overall cap: a download step that
+/// reaches this deadline after saving bytes continues in the next step from the saved prefix,
+/// and only the transport's idle timeout ends a stalled transfer.
+const STEP: Duration = Duration::from_secs(15 * 60);
+/// Outer bound of an engine probe process, which performs only finite verification.
+const PROBE: Duration = Duration::from_secs(15 * 60);
 
 /// Absent producing-build configuration disables automatic admission without reading paths.
 /// Nonempty invalid configuration remains an error in the actual preparation worker.
 pub(crate) fn configured() -> bool {
     !EMBEDDED.is_empty()
+}
+
+/// This build's compiled update policy; `None` when the build has no update configuration.
+/// The policy is part of the embedded distribution, so nothing at runtime can change it.
+/// # Errors
+/// Rejects malformed configured bytes; a malformed build never falls back to a default policy.
+pub fn policy() -> io::Result<Option<UpdatePolicy>> {
+    compiled_policy(EMBEDDED)
+}
+
+fn compiled_policy(bytes: &[u8]) -> io::Result<Option<UpdatePolicy>> {
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(Distribution::decode(bytes)?.update_policy()))
 }
 
 /// Construct an inert worker on an admitted preparation job. Empty producing-build configuration
@@ -103,7 +126,7 @@ mod tests {
     #[test]
     fn compiled_policy_uses_the_actual_preparation_owner_without_reading_paths() -> Result {
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":1, "repository":vec![92;32], "feed":{
+            "schema_version":2, "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;
@@ -132,6 +155,19 @@ mod tests {
             worker.progress(),
             sugarsubstitute_supervision::update_preparation::Progress::Opening
         );
+        Ok(())
+    }
+
+    #[test]
+    fn compiled_policy_comes_only_from_the_embedded_distribution() -> Result {
+        assert_eq!(compiled_policy(b"")?, None);
+        let bytes = serde_json::to_vec(&serde_json::json!({
+            "schema_version":2, "update_policy":"standard", "repository":vec![92;32], "feed":{
+                "transport":"https", "base":"https://updates.example.test/", "redirects":[]
+            }
+        }))?;
+        assert_eq!(compiled_policy(&bytes)?, Some(UpdatePolicy::Standard));
+        assert!(compiled_policy(b"{}").is_err());
         Ok(())
     }
 
