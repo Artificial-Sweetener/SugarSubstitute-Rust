@@ -114,7 +114,7 @@ implementation plans, or workstation configuration.
 - `rust-toolchain.toml` owns the Rust toolchain pin.
   Edition 2024, MSRV, shared dependency versions, profiles, and lints live in the
   workspace `Cargo.toml`. Every member inherits workspace metadata and lints.
-- Run commands from the repository root. Check `rustup show active-toolchain`
+- Run commands from the workspace root, `Substitute/`. Check `rustup show active-toolchain`
   when ambient overrides could bypass the pin. Do not use global stable/nightly
   overrides, upgrade the toolchain, or change build configurations incidentally.
 - Commit `Cargo.lock`. Use `--locked` for checks and builds after deliberate lockfile

@@ -1,12 +1,16 @@
-name: SugarSubstitute verification
+name: Substitute verification
 
 on:
   push:
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - 'Substitute/**'
+      - '.github/workflows/substitute-verify.yml'
+      - '!**/*.md'
   pull_request:
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - 'Substitute/**'
+      - '.github/workflows/substitute-verify.yml'
+      - '!**/*.md'
   workflow_dispatch:
 
 permissions:
@@ -15,6 +19,10 @@ permissions:
 concurrency:
   group: verify-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: Substitute
 
 jobs:
   verify:

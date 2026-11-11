@@ -1,13 +1,23 @@
-name: quality
+name: Sugar quality
 
 on:
   pull_request:
+    paths:
+      - 'Sugar/**'
+      - '.github/workflows/sugar-quality.yml'
   push:
     branches-ignore:
       - main
+    paths:
+      - 'Sugar/**'
+      - '.github/workflows/sugar-quality.yml'
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    working-directory: Sugar
 
 jobs:
   repository-gate:
@@ -27,6 +37,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: Sugar/package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v6
