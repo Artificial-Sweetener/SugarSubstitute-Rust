@@ -17,6 +17,8 @@ struct Files {
     entry_held: bool,
     coordinator_held: bool,
     denied: bool,
+    truncated: bool,
+    set_aside: bool,
 }
 impl Files {
     fn new() -> Result<Self, ClaimError> {
@@ -35,6 +37,8 @@ impl Files {
             entry_held: false,
             coordinator_held: false,
             denied: false,
+            truncated: false,
+            set_aside: false,
         })
     }
 }
@@ -46,6 +50,9 @@ impl ElectionBoundary for Files {
     }
     fn read_entry(&mut self) -> Result<RecordRead<128>, ClaimError> {
         self.calls.push("read");
+        if self.truncated {
+            return Err(ClaimError::invalid(record_file::UNREADABLE_LENGTH));
+        }
         Ok(RecordRead::Present(self.original))
     }
     fn acquire_coordinator(&mut self) -> Result<Option<[u8; 24]>, ClaimError> {
@@ -63,7 +70,22 @@ impl ElectionBoundary for Files {
     fn read_coordinator(&mut self) -> Result<RecordRead<128>, ClaimError> {
         self.calls.push("reread");
         assert!(self.entry_held && self.coordinator_held);
+        if self.truncated {
+            return Err(ClaimError::invalid(record_file::UNREADABLE_LENGTH));
+        }
         Ok(RecordRead::Present(self.current))
+    }
+    fn set_aside(&mut self) -> Result<std::path::PathBuf, ClaimError> {
+        self.calls.push("aside");
+        assert!(self.entry_held && self.coordinator_held);
+        self.set_aside = true;
+        Ok(std::path::PathBuf::from("record.0.unreadable"))
+    }
+    fn release_coordinator(&mut self) -> Result<(), ClaimError> {
+        self.calls.push("release");
+        assert!(self.set_aside);
+        self.coordinator_held = false;
+        Ok(())
     }
 }
 fn run(body: impl FnOnce(&JobContext) -> Result<(), ClaimError> + Send + 'static) -> TestResult {
@@ -108,28 +130,88 @@ fn busy_entry_or_coordinator_keeps_live_candidate_without_recovery() -> TestResu
         Ok(())
     })
 }
+/// Garbage, foreign-namespace and wrongly sized records, each in its own fake filesystem.
+fn unreadable_records() -> Result<Vec<(&'static str, Files)>, ClaimError> {
+    let mut garbage = Files::new()?;
+    garbage.original = [0x5a; 128];
+    garbage.current = garbage.original;
+    let mut foreign = Files::new()?;
+    foreign.original = Record::coordinator(CoordinatorKey {
+        namespace: NamespaceId::new([7; 32]),
+        epoch: CoordinatorEpoch::new([2; 16])
+            .map_err(|cause| ClaimError::new("test_epoch", cause))?,
+    })
+    .encode();
+    foreign.current = foreign.original;
+    let mut truncated = Files::new()?;
+    truncated.truncated = true;
+    Ok(vec![("garbage", garbage), ("wrong namespace", foreign), ("truncated", truncated)])
+}
 #[test]
-fn malformed_or_foreign_held_bytes_never_attempt_coordinator_recovery() -> TestResult {
+fn unreadable_record_without_live_owner_is_set_aside_and_elected_fresh() -> TestResult {
     run(|context| {
-        for malformed in [true, false] {
-            let mut files = Files::new()?;
-            if malformed {
-                files.original[0] = 0;
-            } else {
-                files.original = Record::coordinator(CoordinatorKey {
-                    namespace: NamespaceId::new([7; 32]),
-                    epoch: CoordinatorEpoch::new([2; 16])
-                        .map_err(|cause| ClaimError::new("test_epoch", cause))?,
-                })
-                .encode();
-            }
-            assert!(matches!(
-                decide(&mut files, NamespaceId::new([1; 32]), context)?,
-                Elected::Degraded(_)
-            ));
-            assert_eq!(files.calls, ["entry", "read"]);
-            assert!(!files.coordinator_held);
+        for (name, mut files) in unreadable_records()? {
+            let result = decide(&mut files, NamespaceId::new([1; 32]), context)?;
+            assert!(
+                matches!(result, Elected::Fresh { origin: FreshRecordOrigin::Missing, inode } if inode == [9; 24]),
+                "{name}"
+            );
+            assert!(files.set_aside, "{name}");
+            assert!(files.entry_held && !files.coordinator_held, "{name}");
+            assert_eq!(
+                files.calls,
+                ["entry", "read", "coordinator", "reread", "aside", "release"],
+                "{name}"
+            );
         }
+        Ok(())
+    })
+}
+#[test]
+fn unreadable_record_with_live_owner_stays_fail_closed_and_untouched() -> TestResult {
+    run(|context| {
+        for (name, mut files) in unreadable_records()? {
+            files.coordinator = None;
+            assert!(
+                matches!(
+                    decide(&mut files, NamespaceId::new([1; 32]), context)?,
+                    Elected::Degraded(EntryOwnerDegradation::RecordUnknown)
+                ),
+                "{name}"
+            );
+            assert!(!files.set_aside && !files.coordinator_held, "{name}");
+            assert_eq!(files.calls, ["entry", "read", "coordinator"], "{name}");
+        }
+        Ok(())
+    })
+}
+#[test]
+fn unreadable_record_without_entry_exclusion_never_attempts_recovery() -> TestResult {
+    run(|context| {
+        for (name, mut files) in unreadable_records()? {
+            files.entry = None;
+            let outcome = decide(&mut files, NamespaceId::new([1; 32]), context);
+            if files.truncated {
+                assert!(outcome.is_err(), "{name}");
+            } else {
+                assert!(matches!(outcome?, Elected::Degraded(_)), "{name}");
+            }
+            assert_eq!(files.calls, ["entry", "read"], "{name}");
+            assert!(!files.set_aside, "{name}");
+        }
+        Ok(())
+    })
+}
+#[test]
+fn unreadable_record_that_changes_before_the_reread_is_never_set_aside() -> TestResult {
+    run(|context| {
+        let mut files = Files::new()?;
+        files.original = [0x5a; 128];
+        files.current = [0x5b; 128];
+        assert!(decide(&mut files, NamespaceId::new([1; 32]), context).is_err());
+        assert!(!files.set_aside);
+        assert!(files.entry_held && files.coordinator_held);
+        assert_eq!(files.calls, ["entry", "read", "coordinator", "reread"]);
         Ok(())
     })
 }

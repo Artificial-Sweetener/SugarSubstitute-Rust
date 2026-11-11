@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise sole record algorithms through actual election, claims and job admission.
+mod aside;
 mod backend_release;
 pub(crate) mod boundary;
 mod clock_failure;

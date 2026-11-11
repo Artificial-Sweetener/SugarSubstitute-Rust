@@ -7,6 +7,7 @@ use crate::startup::platform_tests::{Platform, Prepared};
 use sha2::{Digest, Sha256};
 use std::num::NonZeroUsize;
 use sugarsubstitute_application::startup::StartupSession;
+use sugarsubstitute_application::workspace_session::close_save::NotSavedLastTime;
 use sugarsubstitute_contracts::{
     configuration::*,
     lifecycle::ShutdownBudget,
@@ -21,8 +22,8 @@ impl MemoryRelease for Release {
 }
 pub(super) struct Fixture {
     pub(super) host: StartupHost<Platform>,
-    checkpoint: SessionCheckpoint,
-    _directory: tempfile::TempDir,
+    pub(super) checkpoint: SessionCheckpoint,
+    pub(super) directory: tempfile::TempDir,
     pub(super) wake: Arc<Wake>,
     store: WorkspaceStore,
 }
@@ -152,23 +153,24 @@ impl Fixture {
         };
         assert!(driver.receive(ready, host.clock.now())?.is_none());
         workspace.driver = Some(driver);
+        workspace.record_directory = Some(directory.path().join("sessions").join("closing-test"));
         workspace.context = Some(context);
         workspace.bootstrap = Some(bootstrap);
         workspace.delivery = Some(MemoryLease::new(DELIVERY_BYTES, Box::new(Release)));
-        Ok(Self { host, checkpoint, _directory: directory, wake, store })
+        Ok(Self { host, checkpoint, directory, wake, store })
     }
-    fn poll(&mut self) -> TestResult {
+    pub(super) fn poll(&mut self) -> TestResult {
         assert!(self.host.poll_frame(NonZeroUsize::MIN.saturating_add(31))?.is_none());
         Ok(())
     }
-    fn pending(&mut self) -> TestResult {
+    pub(super) fn pending(&mut self) -> TestResult {
         self.poll()?;
         assert!(self.host.child.shutdown_requests.is_empty());
         assert_eq!(self.host.child.shutdown_starts, 0);
         assert!(!matches!(self.host.take_command()?, Some(DesktopStartupCommand::Close)));
         Ok(())
     }
-    fn sample(&mut self) -> TestResult {
+    pub(super) fn sample(&mut self) -> TestResult {
         let Some(DesktopStartupCommand::CaptureMainPlacement { identity, capture_id }) =
             self.host.take_command()?
         else {
@@ -184,7 +186,10 @@ impl Fixture {
         ))?;
         Ok(())
     }
-    fn save(&self, checkpoint: SessionCheckpoint) -> TestResult<workspace_session::SaveReceipt> {
+    pub(super) fn save(
+        &self,
+        checkpoint: SessionCheckpoint,
+    ) -> TestResult<workspace_session::SaveReceipt> {
         let workspace = self.host.workspace.as_ref().ok_or("Workspace")?;
         let client = workspace.client.as_ref().ok_or("Client")?;
         let job = self.store.submit_save(
@@ -205,7 +210,50 @@ impl Fixture {
             other => Err(format!("Save stopped: {:?}", other.kind()).into()),
         }
     }
-    fn finish(mut self, budget: ShutdownBudget, starts: usize) -> TestResult {
+    /// Poll until the exit intent is admitted; it waits only on the close save's own work.
+    pub(super) fn exit_intent(&mut self) -> TestResult<ShutdownBudget> {
+        let host = &mut self.host;
+        self.wake.until(|| {
+            match host.poll_frame(NonZeroUsize::MIN.saturating_add(31)) {
+                Err(cause) => return Some(Err(cause)),
+                Ok(frame) if frame.is_some() => return Some(Err("Unexpected frame".into())),
+                Ok(_) => {}
+            }
+            host.child.shutdown_requests.first().copied().map(Ok)
+        })
+    }
+    /// The notice the next start's workspace load produces from this profile's record.
+    pub(super) fn next_start_notice(&self) -> TestResult<Option<NotSavedLastTime>> {
+        let workspace = self.host.workspace.as_ref().ok_or("Workspace")?;
+        let client = workspace.client.as_ref().ok_or("Client")?;
+        let directory = workspace.record_directory.clone().ok_or("Record directory")?;
+        let job = client.submit_blocking(
+            workspace.scope.as_ref().ok_or("Scope")?,
+            JobSpec {
+                id: workspace.jobs.allocate()?,
+                operation: Operation::Infrastructure,
+                class: JobClass::InfrastructureOrdinary,
+                deadline: Some(self.host.clock.now().checked_add(Duration::from_secs(30))?),
+                reservation_bytes: 64 * 1024,
+                replacement: None,
+            },
+            move |context| {
+                workspace_session::close_record::take_notice_worker(&directory, &context)
+            },
+        )?;
+        match terminal(client, &self.wake, job)? {
+            JobOutcome::Success(notice) => Ok(notice),
+            JobOutcome::Failure(cause) => Err(cause.into()),
+            other => Err(format!("Notice stopped: {:?}", other.kind()).into()),
+        }
+    }
+    /// Settle native retirement after an exit intent the test already observed.
+    pub(super) fn retire(mut self) -> TestResult {
+        assert!(matches!(self.host.take_command()?, Some(DesktopStartupCommand::Close)));
+        crate::startup::platform_tests::consume::finish(&mut self.host, &self.wake)?;
+        Ok(())
+    }
+    pub(super) fn finish(mut self, budget: ShutdownBudget, starts: usize) -> TestResult {
         self.poll()?;
         assert_eq!(self.host.child.shutdown_requests, vec![budget]);
         assert_eq!(self.host.child.shutdown_starts, starts);

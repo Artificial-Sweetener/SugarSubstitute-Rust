@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Real execution and rejected native admission verify campaign/cleanup ownership without child creation.
+//! Real execution and rejected native admission verify step/cleanup ownership without child creation.
 use super::*;
 use crate::updates::test_support::{Manual, Wake, observe, untrusted_input};
-use std::{num::NonZeroUsize, sync::atomic::Ordering, time::Duration};
+use std::{num::NonZeroUsize, sync::atomic::Ordering};
 use sugarsubstitute_execution::ExecutionOwner;
 
 /// One actual executor and invalid input, isolated from every application or installation lease.
@@ -21,10 +21,8 @@ impl Harness {
         let wake = Arc::new(Wake::default());
         let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
         let client = owner.client();
-        let until = clock.now().checked_add(Duration::from_secs(30))?;
         let engine = Engine {
-            work: client
-                .create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: Some(until) }, None)?,
+            work: client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
             cleanup: client
                 .create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
             state: Arc::new(Mutex::new(State {
@@ -32,7 +30,6 @@ impl Harness {
                 failure: None,
             })),
             client,
-            until,
             job: None,
             parent: None,
             closing: None,
@@ -90,14 +87,14 @@ fn close_before_input_admission_retires_on_live_cleanup_without_creating_a_proce
 }
 
 #[test]
-fn expired_campaign_preserves_input_and_does_not_renew_the_next_helper_deadline() -> Result<()> {
+fn delegated_preparation_helper_is_not_closed_by_elapsed_time() -> Result<()> {
     let mut h = Harness::new()?;
-    let until = h.engine.until;
-    h.clock.0.store(31_000_000_000, Ordering::SeqCst);
-    assert!(h.engine.launch().is_err());
-    assert_eq!(h.engine.until, until);
-    assert!(h.engine.parent.is_none());
-    assert!(matches!(h.engine.state()?.phase, Phase::Input(Some(_))));
+    // Long after the former fixed campaign, the delegated helper is still admitted.
+    h.clock.0.store(3 * 60 * 60 * 1_000_000_000, Ordering::SeqCst);
+    h.engine.launch()?;
+    let parent = h.engine.parent.as_ref().ok_or("Delegated helper absent")?;
+    assert_eq!(parent.next_deadline(), None);
+    assert!(matches!(h.engine.state()?.phase, Phase::Empty));
     h.finish()
 }
 
@@ -129,10 +126,11 @@ fn rejected_preparation_role_reports_failure_then_retires_without_application_ow
 #[test]
 fn storage_failure_is_observed_before_retained_input_is_cleaned_up() -> Result<()> {
     let mut h = Harness::new()?;
+    h.clock.0.store(5_000_000_000, Ordering::SeqCst);
     h.engine.submit(&h.jobs, 4096)?;
     assert_eq!(
         h.engine.job.as_ref().ok_or("Storage job absent")?.spec().deadline,
-        Some(h.engine.until)
+        Some(h.clock.now().checked_add(crate::updates::STEP)?)
     );
     let wake = h.wake.clone();
     observe(&wake, || {
@@ -171,7 +169,7 @@ fn storage_panic_keeps_its_diagnostic_and_poisoning_does_not_prevent_cleanup() -
             id: h.jobs.allocate()?,
             operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
-            deadline: Some(h.engine.until),
+            deadline: Some(h.clock.now().checked_add(crate::updates::STEP)?),
             reservation_bytes: 4096,
             replacement: None,
         },

@@ -227,6 +227,16 @@ impl State {
                 Preparation::Pending { received, total } => {
                     (Phase::Download(trust, offer), Progress::Downloading { received, total })
                 }
+                Preparation::Interrupted { received, total, cause } => {
+                    tracing::warn!(
+                        operation = "update_download_resumed",
+                        received,
+                        total,
+                        cause = %cause,
+                        "Package transfer ended early after progress; continuing from the saved prefix"
+                    );
+                    (Phase::Download(trust, offer), Progress::Downloading { received, total })
+                }
                 Preparation::Complete(download) => {
                     if offer.authorization(&trust).request.component == Component::Updater {
                         (Phase::ImportEngine(trust, offer, download), Progress::PreparingEngine)
@@ -285,6 +295,14 @@ impl State {
         self.phase = next;
         self.progress = progress;
         Ok(())
+    }
+
+    /// A completed download interval retains its offer and continues in the next admitted step,
+    /// even when that interval ran to its job deadline while bytes were still arriving.
+    pub(super) fn continues_download(&self) -> bool {
+        self.failure.is_none()
+            && matches!(self.phase, Phase::Download(..))
+            && matches!(self.progress, Progress::Downloading { .. })
     }
 
     /// Close HTTP custody before dropping storage owners on this admitted cleanup worker.

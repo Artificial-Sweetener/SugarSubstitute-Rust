@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Compose sequential probe/preparation families with separate scopes and the original cutoff.
+//! Compose sequential probe/preparation families with separate scopes; only probes are time-bounded.
 use super::*;
 use sugarsubstitute_contracts::lifecycle::{CoordinatorEpoch, NamespaceId};
 
@@ -18,7 +18,7 @@ impl Engine {
         let first = self.next_scope;
         self.next_scope = first.checked_add(3).ok_or("Updater scope identities exhausted")?;
         let work = self.client.create_scope(
-            ScopeSpec { id: ScopeId::new(first)?, deadline: Some(self.until) },
+            ScopeSpec { id: ScopeId::new(first)?, deadline: None },
             Some(&self.work),
         )?;
         let cleanup = match self.client.create_scope(
@@ -36,7 +36,6 @@ impl Engine {
             cleanup,
             native: ScopeSpec { id: ScopeId::new(first + 2)?, deadline: None },
             key: key()?,
-            until: self.until,
         };
         let mut state = self.state()?;
         let Phase::Input(input) = &mut state.phase else {

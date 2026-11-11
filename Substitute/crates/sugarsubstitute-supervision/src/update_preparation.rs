@@ -10,7 +10,7 @@ mod worker;
 use crate::setup_storage::{self, PreparationImage, PreparedUpdater, SignedCandidate};
 use std::{path::PathBuf, time::Duration};
 use sugarsubstitute_contracts::update::{Admission, subscription::Subscription};
-pub use sugarsubstitute_update::distribution::Distribution;
+pub use sugarsubstitute_update::distribution::{Distribution, UpdatePolicy};
 use sugarsubstitute_update::http::Policy;
 pub use worker::{Observation, Worker};
 
