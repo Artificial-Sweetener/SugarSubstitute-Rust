@@ -72,6 +72,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     reportError: options.reportPresentationError,
     embedded,
     hostAccent,
+    host,
   });
   const ownedAppearance = new OwnedSurfaceAppearance(options.document, appearance.state);
   const frame = new SubstituteFrameHost({

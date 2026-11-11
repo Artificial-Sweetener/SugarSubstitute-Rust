@@ -20,10 +20,7 @@ import { EmbeddedPresentation } from '../../../frontend/comfyui/ui/core/embedded
 import { HostAccent } from '../../../frontend/comfyui/ui/core/embedded/HostAccent.js';
 import { HostDescriptionState } from '../../../frontend/comfyui/ui/core/embedded/HostDescriptionState.js';
 import { panelNavigation } from '../../../frontend/comfyui/ui/core/embedded/BrowserPanelTransport.js';
-import {
-  createNativePanelTransport,
-  isSubstituteHost,
-} from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
+import { createNativePanelTransport } from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
 import {
   registerVisualStylePreference,
   VISUAL_STYLE_SETTING,
@@ -47,26 +44,6 @@ function description(capabilities: readonly string[]) {
     capabilities: capabilities.map((name) => ({ name })),
   };
 }
-
-test('only a validated Substitute native identity enables Windows accent settings', () => {
-  expect(isSubstituteHost(window)).toBe(false);
-  Reflect.set(window, 'sugarcubesPanelHost', { host: 'ai.artificialsweetener.sugarsubstitute' });
-  expect(isSubstituteHost(window)).toBe(false);
-  Reflect.set(window, 'sugarcubesPanelHost', {
-    host: hostId,
-    session,
-    send: jest.fn(),
-    subscribe: () => () => undefined,
-  });
-  expect(isSubstituteHost(window)).toBe(false);
-  Reflect.set(window, 'sugarcubesPanelHost', {
-    host: 'ai.artificialsweetener.sugarsubstitute',
-    session,
-    send: jest.fn(),
-    subscribe: () => () => undefined,
-  });
-  expect(isSubstituteHost(window)).toBe(true);
-});
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');

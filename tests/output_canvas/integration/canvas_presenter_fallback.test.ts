@@ -17,10 +17,7 @@
 
 import { jest } from '@jest/globals';
 import { EmbeddedCanvasConnection } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedCanvasConnection.js';
-import {
-  createNativePanelTransport,
-  isSubstituteHost,
-} from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
+import { createNativePanelTransport } from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
 import { OutputPresenterSelection } from '../../../frontend/comfyui/ui/output_canvas/application/OutputPresenterSelection.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
 import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
@@ -168,7 +165,7 @@ function fixture(discovery: Discovery) {
   if (!transport) throw new Error('Native transport fixture was not admitted.');
   const connection = new EmbeddedCanvasConnection();
   const presenter = new OutputPresenterSelection({
-    requiresNative: () => isSubstituteHost(window),
+    owner: () => 'host',
     surface: () => connection.surface,
     discovered: () => connection.surfaceDiscovered,
   });

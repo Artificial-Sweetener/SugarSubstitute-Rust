@@ -18,19 +18,20 @@
 import {
   OutputPresenterSelection,
   canvasRequiresBrowserMedia,
+  type OutputPresentationOwner,
 } from '../../../frontend/comfyui/ui/output_canvas/application/OutputPresenterSelection.js';
 import { mixedMediaFixture } from '../support/CanvasMixedMediaFixture.js';
 
 /** Mutable host facts read through the selection's narrow port. */
-function facts(requiresNative: boolean) {
+function facts(native: boolean) {
   const state = {
-    requiresNative,
+    owner: (native ? 'host' : 'page') as OutputPresentationOwner,
     surface: null as object | null,
     discovered: false,
     browserMedia: false,
   };
   const port = {
-    requiresNative: () => state.requiresNative,
+    owner: () => state.owner,
     surface: () => state.surface,
     discovered: () => state.discovered,
     browserMedia: () => state.browserMedia,
@@ -108,4 +109,18 @@ test('restored still images retain native ownership for every encoded format', (
   state.discovered = true;
   state.browserMedia = canvasRequiresBrowserMedia(restoredWebp);
   expect(selection.current()).toBe('native');
+});
+
+test('waits while the host has not described itself, then follows its declaration', () => {
+  const browser = facts(false);
+  browser.state.owner = 'pending';
+  expect(browser.selection.current()).toBe('pending');
+  browser.state.owner = 'page';
+  expect(browser.selection.current()).toBe('browser');
+  const native = facts(true);
+  native.state.owner = 'pending';
+  expect(native.selection.current()).toBe('pending');
+  native.state.owner = 'host';
+  native.state.discovered = true;
+  expect(native.selection.current()).toBe('native');
 });

@@ -20,10 +20,16 @@ import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.j
 /** The presenter for output pixels; `pending` waits for a host's first native discovery. */
 export type OutputPresenter = 'native' | 'browser' | 'pending';
 
+/**
+ * Who presents output images: the host itself, the page, or not yet known while the host has not
+ * described itself.
+ */
+export type OutputPresentationOwner = 'host' | 'page' | 'pending';
+
 /** Read-only facts the selection consumes; none of them grants canvas or transport authority. */
 export interface OutputPresenterPort {
-  /** The identified desktop host owns image presentation, including unavailable states. */
-  requiresNative(): boolean;
+  /** Whether the host declared that it presents output images, including unavailable states. */
+  owner(): OutputPresentationOwner;
   /** The currently negotiated native output surface, if any. */
   surface(): object | null;
   /** The current native context and surface discovery has settled. */
@@ -35,9 +41,10 @@ export interface OutputPresenterPort {
 /**
  * Keep desktop image presentation native throughout startup and connection changes.
  *
- * A desktop page waits for discovery, then presents native pixels or native diagnostics. Its
- * identity is available before discovery and never permits browser image fallback. Other hosts
- * retain browser presentation until a native surface is negotiated.
+ * A page whose host presents output waits for discovery, then presents native pixels or native
+ * diagnostics, and never falls back to browser images. Until the host describes itself the page
+ * waits rather than showing browser images it may have to withdraw. Other hosts retain browser
+ * presentation until a native surface is negotiated.
  */
 export class OutputPresenterSelection {
   #native = false;
@@ -48,8 +55,9 @@ export class OutputPresenterSelection {
   current(): OutputPresenter {
     const available = this.port.surface() !== null;
     if (available) this.#native = true;
-    this.#native ||= this.port.requiresNative();
-    if (!this.#native) return 'browser';
+    const owner = this.port.owner();
+    this.#native ||= owner === 'host';
+    if (!this.#native) return owner === 'pending' ? 'pending' : 'browser';
     if (!available && !this.port.discovered()) return 'pending';
     return this.port.browserMedia?.() ? 'browser' : 'native';
   }
