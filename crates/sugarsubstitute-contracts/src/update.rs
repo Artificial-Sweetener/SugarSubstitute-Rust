@@ -3,6 +3,8 @@
 //! Native update offer routing and package admission, independent of discovery and signatures.
 use crate::installation::PreparationIntent;
 use serde::{Deserialize, Serialize};
+pub mod attempt;
+pub mod status;
 pub mod subscription;
 
 /// Maximum byte size of the small authenticated channel descriptor.
