@@ -1,0 +1,54 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Decode submitted execution paths and display metadata without consulting the current graph. */
+import { isRecord } from '../../types/common.js';
+import { outputSourceId } from '../domain/ExecutionIdentity.js';
+import { decodeComfyWorkflowSources } from './ComfyWorkflowSourceDecoder.js';
+import { ComfyCubeStageRoutes } from './ComfyCubeStageRoutes.js';
+/** Read source identities from a compiled prompt; results determine which paths produce visible media. */
+export function decodeComfyPromptSources(payload, capturedSources = []) {
+    if (!isRecord(payload) || !isRecord(payload.output) || Array.isArray(payload.output))
+        return Object.freeze([]);
+    const sources = [];
+    const routes = new ComfyCubeStageRoutes(payload.output);
+    const authored = new Map([...capturedSources, ...decodeComfyWorkflowSources(payload.workflow)].map((source) => [
+        source.executionPath,
+        source,
+    ]));
+    const positions = new Map(Object.keys(payload.output).map((path, index) => [path, index]));
+    for (const [executionPath, node] of Object.entries(payload.output)) {
+        if (!executionPath || executionPath.length > 4096 || !isRecord(node) || Array.isArray(node))
+            continue;
+        const meta = isRecord(node._meta) ? node._meta : null;
+        const title = text(meta?.title) || text(node.class_type) || `Node ${executionPath}`;
+        const route = routes.resolve(executionPath);
+        const semanticPath = route?.outputPath ?? executionPath;
+        const source = authored.get(semanticPath);
+        sources.push(Object.freeze({
+            id: outputSourceId(semanticPath),
+            executionPath,
+            label: source?.label ?? title,
+            breadcrumb: source?.breadcrumb ?? Object.freeze([]),
+            order: source?.order ?? authored.size + (positions.get(semanticPath) ?? sources.length),
+            ...(route && route.boundPath !== executionPath ? { transientOnly: true } : {}),
+        }));
+    }
+    return Object.freeze(sources);
+}
+/** Bound external labels while preserving literal user-authored text. */
+function text(value) {
+    return typeof value === 'string' ? value.trim().slice(0, 4096) : '';
+}

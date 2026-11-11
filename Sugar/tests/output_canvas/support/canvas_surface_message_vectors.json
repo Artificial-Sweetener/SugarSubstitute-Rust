@@ -1,0 +1,111 @@
+{
+  "base": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "canvas-surface-session",
+    "requestId": 1,
+    "type": "surface.select",
+    "address": {
+      "sessionId": "canvas:workflow",
+      "viewId": "view:one",
+      "windowId": "window:one",
+      "attachmentId": "attachment:one",
+      "generation": 1
+    },
+    "revision": 1,
+    "itemId": "result:one",
+    "file": { "filename": "résumé🌈.png", "subfolder": "batch/one", "type": "output" }
+  },
+  "cases": [
+    { "name": "valid attributed output", "valid": true },
+    { "name": "foreign protocol", "path": "protocol", "value": "other", "valid": false },
+    { "name": "foreign version", "path": "version", "value": 4, "valid": false },
+    { "name": "short session", "path": "session", "value": "short", "valid": false },
+    { "name": "zero request", "path": "requestId", "value": 0, "valid": false },
+    { "name": "oversized request", "path": "requestId", "value": 2147483648, "valid": false },
+    { "name": "zero revision", "path": "revision", "value": 0, "valid": false },
+    { "name": "unsafe revision", "path": "revision", "value": 9007199254740992, "valid": false },
+    { "name": "missing result identity", "path": "itemId", "remove": true, "valid": false },
+    { "name": "empty result identity", "path": "itemId", "value": "result:", "valid": false },
+    { "name": "foreign result identity", "path": "itemId", "value": "image:one", "valid": false },
+    {
+      "name": "foreign view identity",
+      "path": "address.viewId",
+      "value": "window:one",
+      "valid": false
+    },
+    { "name": "zero generation", "path": "address.generation", "value": 0, "valid": false },
+    { "name": "unknown storage", "path": "file.type", "value": "other", "valid": false },
+    { "name": "missing filename", "path": "file.filename", "remove": true, "valid": false },
+    {
+      "name": "extra authority",
+      "path": "origin",
+      "value": "http://example.invalid",
+      "valid": false
+    },
+    {
+      "name": "valid comparison pair",
+      "path": "comparison",
+      "value": {
+        "itemId": "result:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "output" }
+      },
+      "valid": true
+    },
+    {
+      "name": "null comparison",
+      "path": "comparison",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "comparison missing file",
+      "path": "comparison",
+      "value": { "itemId": "result:two" },
+      "valid": false
+    },
+    {
+      "name": "comparison missing result identity",
+      "path": "comparison",
+      "value": { "file": { "filename": "b.png", "subfolder": "", "type": "output" } },
+      "valid": false
+    },
+    {
+      "name": "comparison foreign result identity",
+      "path": "comparison",
+      "value": {
+        "itemId": "image:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "output" }
+      },
+      "valid": false
+    },
+    {
+      "name": "comparison unknown storage",
+      "path": "comparison",
+      "value": {
+        "itemId": "result:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "other" }
+      },
+      "valid": false
+    },
+    {
+      "name": "comparison extra authority",
+      "path": "comparison",
+      "value": {
+        "itemId": "result:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "output" },
+        "origin": "http://example.invalid"
+      },
+      "valid": false
+    },
+    {
+      "name": "comparison extra file authority",
+      "path": "comparison",
+      "value": {
+        "itemId": "result:two",
+        "file": { "filename": "b.png", "subfolder": "", "type": "output", "path": "C:/b.png" }
+      },
+      "valid": false
+    }
+  ]
+}

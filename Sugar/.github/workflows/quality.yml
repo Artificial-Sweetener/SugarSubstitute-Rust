@@ -1,0 +1,54 @@
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  repository-gate:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Setup pinned Rust checks
+        run: rustup toolchain install 1.93.1 --profile minimal --component clippy,rustfmt
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Install headless browser runtimes
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Verify repository gate
+        env:
+          SUGARCUBES_VS_PRODUCT: Microsoft.VisualStudio.Product.Enterprise
+        run: npm run check
+
+      - name: Verify gate did not mutate tracked files
+        run: git diff --exit-code

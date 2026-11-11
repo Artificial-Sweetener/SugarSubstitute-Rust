@@ -1,0 +1,184 @@
+import {
+  CanvasOverlay
+} from "../../../chunk-H6EEMNR6.js";
+import "../../../chunk-WIEFPHCO.js";
+import {
+  canvasNavigationSnapshot
+} from "../../../chunk-R73MK26O.js";
+import {
+  ensureCanvasOverlayStyles
+} from "../../../chunk-CDSEPZUO.js";
+import "../../../chunk-M6SR67MM.js";
+import {
+  canvasContextActions,
+  canvasMediaFile
+} from "../../../chunk-DTOOVRMT.js";
+import "../../../chunk-Z66IIUOP.js";
+import "../../../chunk-JAFCE4SG.js";
+import "../../../chunk-6MZ5BAVS.js";
+import "../../../chunk-HFZ5NECD.js";
+import "../../../chunk-P7TVKFNT.js";
+import "../../../chunk-KKVBN3OP.js";
+import "../../../chunk-KQOAPFCP.js";
+import "../../../chunk-QXRZ6IZZ.js";
+import "../../../chunk-J2E7XMH3.js";
+import {
+  createApp,
+  h,
+  shallowRef
+} from "../../../chunk-6PAJ5Y37.js";
+
+// frontend/comfyui/ui/output_canvas/presentation/CanvasMediaLabel.ts
+function canvasMediaLabel(kind) {
+  switch (kind) {
+    case "model":
+      return "3D model";
+    case "video":
+      return "video";
+    case "animated":
+      return "animation";
+    case "image":
+      return "image";
+    case "unsupported":
+      return "output";
+  }
+}
+
+// frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
+import { ContextMenu } from "../../../menus/ContextMenu.js";
+
+// frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.ts
+function sameCanvasAttachment(left, right) {
+  return left.sessionId === right.sessionId && left.viewId === right.viewId && left.windowId === right.windowId && left.attachmentId === right.attachmentId && left.generation === right.generation;
+}
+
+// frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
+function mountCanvasOverlay(element, port, reportFailure, interactionSurface = element, contextTarget = () => "primary", route = null) {
+  ensureCanvasOverlayStyles(element.ownerDocument);
+  const initial = port.read();
+  const state = shallowRef(initial);
+  const routeState = shallowRef(route?.read() ?? null);
+  const stopRoute = route?.subscribe(() => {
+    if (active) routeState.value = route.read();
+  });
+  const announcement = shallowRef("");
+  let active = true;
+  let sequence = 0;
+  async function send(command) {
+    if (!active || !port.capabilities.commands.includes(command.type)) return;
+    const invocation = ++sequence;
+    let request = null;
+    try {
+      request = port.createRequest(command, state.value.revision);
+      const outcome = await port.dispatch(request);
+      if (!active || invocation !== sequence) return;
+      if (outcome.status === "error") reportFailure(outcome, request);
+      announcement.value = outcome.status === "error" ? outcome.message : outcome.status === "stale" ? "View updated; try again." : "";
+    } catch (error) {
+      reportFailure(error, request);
+      if (active && invocation === sequence) {
+        announcement.value = error instanceof Error ? error.message : "The canvas command failed.";
+      }
+    }
+  }
+  const menu = new ContextMenu(element.ownerDocument);
+  let menuTarget = "primary";
+  function openMenu(event) {
+    if (event instanceof KeyboardEvent && event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10"))
+      return;
+    const target = event.target;
+    if (target instanceof Element && target.closest("input,select,textarea")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = interactionSurface.getBoundingClientRect();
+    const addressed = contextTarget(target);
+    const entries = canvasContextActions(state.value, port.capabilities, send, addressed);
+    if (!entries.length) return;
+    menuTarget = addressed;
+    menu.open({
+      label: "Output actions",
+      anchor: {
+        kind: "pointer",
+        x: event instanceof MouseEvent ? event.clientX : bounds.left + 12,
+        y: event instanceof MouseEvent ? event.clientY : bounds.bottom - 48
+      },
+      trigger: target instanceof HTMLElement ? target : interactionSurface,
+      entries
+    });
+  }
+  interactionSurface.addEventListener("contextmenu", openMenu);
+  interactionSurface.addEventListener("keydown", openMenu);
+  function closeInteraction() {
+    menu.close();
+    interactionSurface.removeEventListener("contextmenu", openMenu);
+    interactionSurface.removeEventListener("keydown", openMenu);
+  }
+  const unsubscribe = port.subscribe((snapshot) => {
+    if (!active || !sameCanvasAttachment(initial.address, snapshot.address) || snapshot.revision <= state.value.revision)
+      return;
+    if (menu.isOpen()) {
+      if (snapshot.selected?.id !== state.value.selected?.id || snapshot.secondary?.id !== state.value.secondary?.id || snapshot.preview !== state.value.preview || snapshot.view.mode !== state.value.view.mode || typeof menuTarget === "object" && !canvasMediaFile(snapshot, menuTarget))
+        menu.close();
+      else if (canvasNavigationSnapshot(snapshot, state.value) !== state.value || snapshot.mediaActions !== state.value.mediaActions || snapshot.itemActions !== state.value.itemActions || snapshot.photoshopAllAvailable !== state.value.photoshopAllAvailable)
+        menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
+    }
+    const spoken = canvasAnnouncement(state.value, snapshot);
+    if (spoken !== null) announcement.value = spoken;
+    state.value = snapshot;
+  });
+  const app = createApp({
+    render: () => h(CanvasOverlay, {
+      snapshot: state.value,
+      capabilities: port.capabilities,
+      send,
+      announcement: announcement.value,
+      route: routeState.value,
+      chooseRoute: (value) => {
+        if (active) route?.choose(value);
+      }
+    })
+  });
+  try {
+    app.mount(element);
+  } catch (error) {
+    active = false;
+    closeInteraction();
+    unsubscribe();
+    stopRoute?.();
+    reportFailure(error, null);
+    throw error;
+  }
+  return {
+    navigationBounds() {
+      return Array.from(
+        element.querySelectorAll(".sc-output-tabstrip"),
+        (bar) => bar.getBoundingClientRect()
+      );
+    },
+    /** Make root teardown idempotent while invalidating pending command feedback. */
+    dispose() {
+      if (!active) return;
+      active = false;
+      closeInteraction();
+      unsubscribe();
+      stopRoute?.();
+      app.unmount();
+    }
+  };
+}
+function canvasAnnouncement(previous, current) {
+  const source = current.sources.find((entry) => entry.id === current.view.selection?.sourceId);
+  if (source && previous.view.selection?.sourceId !== current.view.selection?.sourceId)
+    return source.label;
+  if (current.resource.state === "error" && (previous.resource.state !== "error" || previous.resource.message !== current.resource.message))
+    return current.resource.message;
+  if (!current.preview && current.resource.state === "ready" && current.selected && (previous.selected?.id !== current.selected.id || previous.resource.state !== "ready" || previous.preview))
+    return `${source?.label ?? "Output"}: ${canvasMediaLabel(current.selected.mediaKind)} ${current.selected.batchIndex + 1} ready.`;
+  if (previous.connected && !current.connected) return "Disconnected.";
+  if (current.secondaryResource?.state === "error" && previous.secondaryResource?.state !== "error")
+    return `B: ${current.secondaryResource.message}`;
+  return null;
+}
+export {
+  mountCanvasOverlay
+};

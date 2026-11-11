@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "paths": {},
+    "skipLibCheck": false,
+    "jsx": "preserve"
+  },
+  "include": ["integrations/contracts/**/*", "integrations/shared/**/*"],
+  "exclude": []
+}
