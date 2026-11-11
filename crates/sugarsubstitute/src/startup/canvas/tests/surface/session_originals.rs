@@ -81,7 +81,7 @@ fn workflow_reply(fixture: &mut Fixture, id: u64) -> Result<Value, Box<dyn Error
         if let Some(command) = fixture.canvas.take_command() {
             break command;
         }
-        fixture.wake.wait_after(observed);
+        fixture.progress(observed, &format!("the workflow.reply of request {id}"))?;
     };
     let DesktopStartupCommand::SendCanvasNative(reply) = command else {
         return Err("Missing workflow reply".into());
@@ -123,9 +123,9 @@ fn other_attachment() -> Value {
 /// stages a new one at a different address, which has offered no output yet.
 fn switch_attachment(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
     fixture.send(110, "surface.release", json!({}))?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 110, "applied")?;
+    fixture.wait_reply(110, "applied")?;
     fixture.send(111, "surface.prepare", json!({"address":other_attachment()}))?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 111, "ready")
+    fixture.wait_reply(111, "ready")
 }
 
 /// Revalidate a held route the way the workspace does when the original is intact.
@@ -272,7 +272,7 @@ fn output_route_replays_the_selection_its_own_attachment_offered() -> Result<(),
             "physicalPixelsPerCssPixel":1, "visible":false, "focused":false
         }}),
     )?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 112, "applied")?;
+    fixture.wait_reply(112, "applied")?;
     fixture.canvas.set_session_source(Some(retained(&fixture, &memory)?));
     fixture.advance(1_000);
     fixture.send(
@@ -282,7 +282,7 @@ fn output_route_replays_the_selection_its_own_attachment_offered() -> Result<(),
             "file":{"filename":"wide.png","subfolder":"","type":"output"}}),
     )?;
     fixture.canvas.set_session_source(None);
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 113, "applied")?;
+    fixture.wait_reply(113, "applied")?;
     activate(&mut fixture, 100)?;
     assert!(fixture.canvas.output_replay().is_some(), "Output route skipped its own selection");
     revalidate_intact(&mut fixture, &memory)?;

@@ -4,10 +4,11 @@
 //! The host loop advances the injected clock only for deadlines the canvas actually reports.
 
 use super::*;
+use boundary::Execution;
 use gate::Gate;
 use sugarsubstitute_canvas::FrameStamp;
 use sugarsubstitute_desktop::canvas::acknowledgement::{Acknowledgement, FrameEffect, HideEffect};
-use viewport::fixture::{Execution, Fixture};
+use viewport::fixture::Fixture;
 
 /// Dominant colour of the fixture image a committed native frame shows at its centre.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -251,23 +252,15 @@ impl Host {
             if self.fixture.canvas.take_command().is_some() {
                 return Err(format!("Replied before {stage}").into());
             }
-            if self.fixture.wake.revision() != observed {
-                continue;
-            }
             // A completion held back for presentation cadence waits on the reported deadline.
-            if self.fixture.execution()? != Execution::Running
-                && self.fixture.canvas.next_deadline().is_some()
-            {
-                self.fixture.advance(100);
-                continue;
-            }
-            self.fixture.wake.wait_after(observed);
+            self.fixture.progress(observed, stage)?;
         }
         Err(format!("{stage} kept progressing without arriving").into())
     }
 
     /// Run one UI turn: drain completions, poll, then let native composition acknowledge.
-    /// Returns a correlated reply, or whether this turn made observable progress.
+    /// Returns a correlated reply, or whether this turn made observable progress; a request
+    /// `id` the quiescent canvas can no longer answer fails at once, naming the request.
     pub(super) fn turn(&mut self, id: u64) -> Result<Result<Value, bool>, Box<dyn Error>> {
         let observed = self.fixture.wake.revision();
         self.fixture.pump()?;
@@ -278,26 +271,20 @@ impl Host {
         if progressed || self.fixture.wake.revision() != observed {
             return Ok(Err(true));
         }
-        let execution = self.fixture.execution()?;
-        if execution == Execution::Running {
-            self.fixture.wake.wait_after(observed);
-            return Ok(Err(true));
+        // Quiescence settles an uncorrelated turn, but deadlocks a request still owed a reply.
+        if id == 0
+            && self.fixture.execution()? == Execution::Idle
+            && self.fixture.canvas.next_deadline().is_none()
+        {
+            return Ok(Err(false));
         }
-        if self.fixture.canvas.next_deadline().is_some() {
-            self.fixture.advance(100);
-            return Ok(Err(true));
-        }
-        if execution == Execution::Delivering {
-            self.fixture.wake.wait_after(observed);
-            return Ok(Err(true));
-        }
-        // A correlated request is still owed a reply: worker-side releases can arm a capacity
-        // wake after every job settled, and that wake is the only event that can still arrive.
-        if id != 0 {
-            self.fixture.wake.wait_after(observed);
-            return Ok(Err(true));
-        }
-        Ok(Err(false))
+        let awaiting = if id == 0 {
+            "the canvas to quiesce".to_owned()
+        } else {
+            self.fixture.requests.describe(id)
+        };
+        self.fixture.progress(observed, &awaiting)?;
+        Ok(Err(true))
     }
 
     /// Settle a request; an idle owner with no deadline and no reply is a stall.

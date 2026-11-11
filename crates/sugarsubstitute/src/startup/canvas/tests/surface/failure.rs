@@ -4,9 +4,10 @@
 //! real application canvas, its execution owner and the desktop acknowledgement rules.
 
 use super::*;
+use boundary::Execution;
 use gate::Gate;
 use host::{Address, Host, Shade, geometry, select};
-use viewport::fixture::{Execution, Fixture};
+use viewport::fixture::Fixture;
 
 mod deferral;
 mod ingress;

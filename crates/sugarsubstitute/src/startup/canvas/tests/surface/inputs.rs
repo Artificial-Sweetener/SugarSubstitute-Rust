@@ -3,7 +3,7 @@
 //! Provision, show and capture workflow input documents through the native protocol, with real
 //! execution and qualification fixture files standing in for ComfyUI input files.
 
-use super::viewport::fixture::{Execution, classify};
+use super::boundary::{Boundary, Execution, classify};
 use super::*;
 
 mod identities;
@@ -49,13 +49,8 @@ impl Inputs {
             "en",
             crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu,
         )?;
-        while !canvas.reported_ready {
-            let observed = wake.revision();
-            pump(&mut canvas, &client)?;
-            if !canvas.reported_ready {
-                wake.wait_after(observed);
-            }
-        }
+        Boundary { client: &client, owner: &owner, wake: &wake, clock: &clock }
+            .wait_ready(&mut canvas)?;
         let identity = identity()?;
         Ok(Self {
             canvas,
@@ -217,14 +212,8 @@ impl Inputs {
     fn close(mut self) -> Result<(), Box<dyn Error>> {
         let cutoff = Moment::from_nanos(self.clock.0.load(Ordering::SeqCst) + 10_000_000_000);
         self.canvas.close_until(cutoff)?;
-        loop {
-            let observed = self.wake.revision();
-            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-            if self.canvas.settled()? {
-                break;
-            }
-            self.wake.wait_after(observed);
-        }
+        Boundary { client: &self.client, owner: &self.owner, wake: &self.wake, clock: &self.clock }
+            .settle_closed(&mut self.canvas)?;
         self.canvas.finish()?;
         self.wake.finish_shutdown(&mut self.owner, &self.client, cutoff)?;
         Ok(())

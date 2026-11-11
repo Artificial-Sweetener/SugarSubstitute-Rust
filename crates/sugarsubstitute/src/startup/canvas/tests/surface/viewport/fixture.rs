@@ -15,31 +15,10 @@ const PROGRESSIVE_JPEG: &[u8] = include_bytes!(concat!(
     "/../sugarsubstitute-image-io/src/tests/jpeg/fixtures/progressive.jpg"
 ));
 
-/// Execution progress observed between host-loop turns.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::startup::canvas::tests::surface) enum Execution {
-    /// Admitted work is queued or running; its completion supplies a wake.
-    Running,
-    /// A terminal completion has not been taken by its owner; its wake may still be in flight.
-    Delivering,
-    /// No admitted work remains, so only host input or a reported deadline can make progress.
-    Idle,
-}
-
-/// Classify the admitted work of `owner` that can still publish a completion wake.
-pub(in crate::startup::canvas::tests::surface) fn classify(
-    owner: &ExecutionOwner,
-) -> Result<Execution, Box<dyn Error>> {
-    let progress = owner.poll_shutdown()?;
-    if progress.running + progress.queued > 0 {
-        return Ok(Execution::Running);
-    }
-    let delivering = progress.unresolved_jobs.iter().any(|job| {
-        !job.acknowledged
-            && matches!(job.phase, sugarsubstitute_contracts::execution::JobPhase::Terminal(_))
-    });
-    Ok(if delivering { Execution::Delivering } else { Execution::Idle })
-}
+use super::super::{
+    boundary::{Execution, classify},
+    requests::RequestLog,
+};
 
 pub(in crate::startup::canvas::tests::surface) struct Fixture {
     pub(in crate::startup::canvas::tests::surface) canvas: EmbeddedCanvas,
@@ -52,6 +31,8 @@ pub(in crate::startup::canvas::tests::surface) struct Fixture {
     owner: ExecutionOwner,
     allocation: WebViewAllocation,
     directory: tempfile::TempDir,
+    /// Requests sent, naming what a deadlocked wait was owed.
+    pub(in crate::startup::canvas::tests::surface) requests: RequestLog,
 }
 
 /// Admitted work of one execution scope, independent of other scopes sharing the owner.
@@ -125,13 +106,8 @@ impl Fixture {
             "en",
             crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu,
         )?;
-        while !canvas.reported_ready {
-            let observed = wake.revision();
-            pump(&mut canvas, &client)?;
-            if !canvas.reported_ready {
-                wake.wait_after(observed);
-            }
-        }
+        Boundary { client: &client, owner: &owner, wake: &wake, clock: &clock }
+            .wait_ready(&mut canvas)?;
         let identity = identity()?;
         canvas.backend(backend)?;
         let mut fixture = Self {
@@ -148,14 +124,15 @@ impl Fixture {
                 physical_pixels_per_css_pixel: density,
             },
             directory,
+            requests: RequestLog::default(),
         };
         fixture.send(1, "surface.prepare", json!({}))?;
-        wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 1, "ready")?;
+        fixture.wait_reply(1, "ready")?;
         fixture.geometry(2, 80, 40)?;
         fixture.take(2, "applied")?;
         if select {
             fixture.select(3, "wide.png")?;
-            wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+            fixture.wait_reply(3, "applied")?;
         }
         Ok(fixture)
     }
@@ -167,6 +144,7 @@ impl Fixture {
         kind: &str,
         extra: Value,
     ) -> Result<(), Box<dyn Error>> {
+        self.requests.record(id, kind, &extra);
         self.canvas.surface(
             self.identity,
             request(&self.panel, id, kind, extra)?,
@@ -245,6 +223,37 @@ impl Fixture {
         &mut self,
     ) -> Result<(), Box<dyn Error>> {
         pump(&mut self.canvas, &self.client)
+    }
+
+    /// The execution owner, wake and injected clock this fixture's canvas runs on.
+    pub(in crate::startup::canvas::tests::surface) fn boundary(&self) -> Boundary<'_> {
+        Boundary { client: &self.client, owner: &self.owner, wake: &self.wake, clock: &self.clock }
+    }
+
+    /// Make boundary progress after a turn that snapshotted wake `observed` and found nothing,
+    /// failing at once when the quiescent canvas can no longer deliver `awaiting`.
+    pub(in crate::startup::canvas::tests::surface) fn progress(
+        &self,
+        observed: u64,
+        awaiting: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        self.boundary().progress(&self.canvas, observed, awaiting)
+    }
+
+    /// Turn the canvas until it answers `id`, requiring `status`.
+    pub(in crate::startup::canvas::tests::surface) fn wait_reply(
+        &mut self,
+        id: u64,
+        status: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let awaiting = self.requests.describe(id);
+        let boundary = Boundary {
+            client: &self.client,
+            owner: &self.owner,
+            wake: &self.wake,
+            clock: &self.clock,
+        };
+        boundary.wait_reply(&mut self.canvas, id, status, &awaiting)
     }
 
     /// Wait for real worker progress, and advance injected presentation cadence only while no
@@ -422,7 +431,7 @@ impl Fixture {
             {
                 return Ok(frame.content.target());
             }
-            self.wake.wait_after(observed);
+            self.progress(observed, "a pending native frame")?;
         }
     }
 
@@ -485,7 +494,7 @@ impl Fixture {
             {
                 self.canvas.presented(target)?;
             } else {
-                self.wake.wait_after(observed);
+                self.progress(observed, &self.requests.describe(id))?;
             }
         }
     }
@@ -536,7 +545,7 @@ impl Fixture {
                 }
                 break;
             }
-            self.wake.wait_after(observed);
+            self.progress(observed, "the closed canvas to settle its jobs")?;
         }
         let canvas_result = self.canvas.finish();
         self.wake.finish_shutdown(&mut self.owner, &self.client, cutoff)?;

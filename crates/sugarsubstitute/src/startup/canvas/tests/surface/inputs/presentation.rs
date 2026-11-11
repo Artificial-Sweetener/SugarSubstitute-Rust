@@ -4,7 +4,8 @@
 //! routes canvas input on an attachment that has never shown an output, as it does after an
 //! output selection, and the Output route hides it again.
 
-use super::super::viewport::fixture::{Execution, Fixture};
+use super::super::boundary::Execution;
+use super::super::viewport::fixture::Fixture;
 use super::*;
 use crate::startup::canvas::RoutedInput;
 use sugarsubstitute_desktop::canvas::{MainCanvasGesture, MainCanvasInput};

@@ -207,7 +207,7 @@ fn routed_input_during_a_shown_preview_is_refused() -> Result<(), Box<dyn Error>
 fn routed_input_during_an_overview_is_refused() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;
     overview::present_grid(&mut fixture, 3)?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     fixture.commit(4)?;
     fixture.settle_pixels(overview::grid_pixels)?;
     refused(&mut fixture)?;
@@ -235,7 +235,7 @@ fn copied(fixture: &mut Fixture) -> Result<MainCanvasDragOut, Box<dyn Error>> {
         if let Some(drag) = fixture.canvas.take_drag_out() {
             return Ok(drag);
         }
-        fixture.wake.wait_after(revision);
+        fixture.progress(revision, "the routed drag-out's copied original")?;
     }
 }
 

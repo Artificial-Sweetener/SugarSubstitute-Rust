@@ -48,7 +48,7 @@ fn an_overview_fits_every_cell_inside_its_rect_and_locks_the_camera() -> Result<
 {
     let mut fixture = Fixture::empty()?;
     present_grid(&mut fixture, 3)?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     fixture.commit(4)?;
     fixture.settle_pixels(grid_pixels)?;
     fixture.viewport(5, json!({"type":"zoom","factor":2}))?;
@@ -61,7 +61,7 @@ fn selecting_one_result_leaves_the_overview_and_restores_navigation() -> Result<
 {
     let mut fixture = Fixture::empty()?;
     present_grid(&mut fixture, 3)?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     fixture.commit(4)?;
     fixture.settle_pixels(grid_pixels)?;
     fixture.select(5, "tall.png")?;
@@ -83,7 +83,7 @@ fn an_overview_records_each_lifecycle_step_once_through_its_reply() -> Result<()
     let lines = DiagnosticLines::default();
     let capture = lines.observe();
     present_grid(&mut fixture, 3)?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     drop(capture);
     let records = lines.requests(3)?;
     assert!(
@@ -127,7 +127,7 @@ fn a_partly_scrolled_cell_keeps_its_full_fit_and_is_clipped_by_the_viewport()
         "surface.overview",
         json!({"cells":[cell("wide.png", [-20.0, 0.0, 40.0, 40.0])]}),
     )?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     fixture.commit(4)?;
     // The 40x20 fit spans x -20..20; only its right half is inside the viewport.
     fixture.settle_pixels(|pixels, width| {
@@ -154,7 +154,7 @@ fn an_overview_requested_while_the_candidate_is_hidden_presents_once_shown()
     )?;
     fixture.take(3, "applied")?;
     present_grid(&mut fixture, 4)?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 4, "applied")?;
+    fixture.wait_reply(4, "applied")?;
     fixture.geometry(5, 80, 40)?;
     fixture.take(5, "applied")?;
     fixture.commit(6)?;

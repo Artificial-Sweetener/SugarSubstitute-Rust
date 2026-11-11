@@ -4352,7 +4352,7 @@ rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e6e4d375e109376516263308eb14b2d28b29b47156bbdcdfbf7525f3f80be695"
+source_sha256 = "sha256:29e64f2bacb1ae863db33473c42b3bb0a08ba184cdf7c0574a5c970544ff4d5d"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while workflow surfaces sync, capture and restore through the native protocol."
@@ -4376,7 +4376,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2b4a6b857d4abc7c1a562d1be6f86350cddc3301a3a647e2fe29a9d6049c04e7"
+source_sha256 = "sha256:161c47a6797117cf28cbb04116b50346b6ece9c47ee3ee039c16b100a7e3d742"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."
@@ -4384,7 +4384,7 @@ rationale = "Owned temporary PNG fixtures exercise current output selection and 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/rebuild.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:a413451904c0e4b813671a37db69e351c2210e9370968fd7368ae4b363d66849"
+source_sha256 = "sha256:22fcc8f75c21c31d6a541da5cd2d46b206d02f5222cd2938ec584f877e54b6a0"
 capabilities = ["std::fs::read", "std::fs::read_dir", "std::fs::write"]
 disposition = "fixture"
 rationale = "Corrupts unpinned reconstructed source archives inside the fixture's owned temporary cache to exercise the canvas cache-integrity rebuild without accessing user storage."
@@ -4392,7 +4392,7 @@ rationale = "Corrupts unpinned reconstructed source archives inside the fixture'
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/input.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:a0fff2d1f423f465d853bd2f171179bceb3df666771822a78d8ecf0fb4be629b"
+source_sha256 = "sha256:09ab1f8bf493ae27808c4487363ddca3c41abe2c05f4e325aab1d3d3cd5ea6c7"
 capabilities = ["std::fs::read"]
 disposition = "fixture"
 rationale = "Reads the staged drag-out copies inside the fixture's owned temporary cache to verify their exact bytes, name and bounded retention."
@@ -4400,7 +4400,7 @@ rationale = "Reads the staged drag-out copies inside the fixture's owned tempora
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/backend.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:a9212ba2ee1102afd64f903944d243b7fc9563342b0663667c967595321a42d2"
+source_sha256 = "sha256:6a996c62b4640546209d7f21dc0fcfdd6b9c3121670f6a891380ddd1e7d7bc97"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor exercises backend revocation while the canvas session retains its worker lifetime."
@@ -4408,7 +4408,7 @@ rationale = "An owned temporary cache anchor exercises backend revocation while 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/viewport/fixture.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:4db4c0fc41a803e998413d3407801787056b5e6363f359d71afdd7d3577bfcfd"
+source_sha256 = "sha256:2cbe639fa0c4ed7a311dc23a3fc7f1bb1796bfa0e8cdc4e34e2523c23f71796a"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG and JPEG fixtures exercise shared viewport commands through real canvas execution and native presentation acknowledgement without accessing user storage."
@@ -4869,7 +4869,7 @@ rationale = "Owned temporary native archives qualify exact graph metadata associ
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/session_originals.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:73f607167117b4517e0c8845e61a17570fd0fcb59be0969d5a0225b22fabacb3"
+source_sha256 = "sha256:8567e645b4b33036033fa3622aa1f3b1306605d12bfdece1567dbd6d4b0d156b"
 capabilities = ["std::fs::read"]
 disposition = "fixture"
 rationale = "Owned execution fixtures inspect exact retained originals while exercising current surface selection and revocable session bindings."

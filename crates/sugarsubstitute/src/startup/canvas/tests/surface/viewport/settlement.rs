@@ -5,7 +5,7 @@
 //! presented waits however long that takes and applies once it can, a newer destination answers it
 //! `stale`, and the attachment's release answers it `unavailable`. No elapsed time answers it.
 
-use super::fixture::Execution;
+use super::super::boundary::Execution;
 use super::*;
 use crate::canvas_surface_diagnostic::{Stage, Status, Wait};
 use crate::startup::canvas::tests::surface::capture::DiagnosticLines;

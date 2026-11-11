@@ -4,7 +4,8 @@
 
 use super::*;
 use crate::canvas_surface_diagnostic::Stage;
-use viewport::fixture::{Execution, Fixture};
+use boundary::Execution;
+use viewport::fixture::Fixture;
 
 /// Reconstructed source archives begin with this format identity.
 const ARCHIVE_MAGIC: &[u8; 8] = b"SSRAST01";

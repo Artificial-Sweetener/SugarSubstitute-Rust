@@ -3,8 +3,9 @@
 //! Selecting an already shown output again presents its retained frame without acquiring it.
 
 use super::*;
+use boundary::Execution;
 use gate::Gate;
-use viewport::fixture::{Execution, Fixture};
+use viewport::fixture::Fixture;
 
 #[test]
 fn selecting_a_shown_output_again_presents_it_once_without_acquiring_it()

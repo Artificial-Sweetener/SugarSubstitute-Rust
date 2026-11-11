@@ -4,7 +4,8 @@
 //! page or host ends that wait answers it exactly once.
 
 use super::*;
-use viewport::fixture::{Execution, Fixture};
+use boundary::Execution;
+use viewport::fixture::Fixture;
 
 fn hidden_geometry() -> Value {
     json!({"geometry":{

@@ -3,9 +3,10 @@
 //! Restore image-relative cameras on selection and on the shown image, reporting their centers.
 
 use super::*;
+use boundary::Execution;
 use sugarsubstitute_canvas::{PointerSample, ToolModifiers};
 use sugarsubstitute_desktop::canvas::{MainCanvasButton, MainCanvasGesture, MainCanvasInput};
-use viewport::fixture::{Execution, Fixture};
+use viewport::fixture::Fixture;
 
 mod restore;
 
@@ -42,7 +43,7 @@ fn a_selection_carrying_an_inspection_presents_its_first_frame_at_that_camera()
             "inspection":inspection([0.25, 0.5], 2.0)
         }),
     )?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     let first = fixture.commit(4)?;
     assert!((first.viewport.zoom() - 2.0).abs() < 1e-9);
     let center = first.viewport.document_at([40.0, 20.0])?;

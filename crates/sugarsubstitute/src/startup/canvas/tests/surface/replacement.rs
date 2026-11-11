@@ -8,9 +8,7 @@ use sugarsubstitute_canvas::FrameStamp;
 /// Borrow the real shared-execution fixture at its already acknowledged current frame.
 pub(super) struct Replacement<'a> {
     pub(super) canvas: &'a mut EmbeddedCanvas,
-    pub(super) client: &'a ExecutionClient,
-    pub(super) wake: &'a Wake,
-    pub(super) clock: &'a ClockValue,
+    pub(super) boundary: Boundary<'a>,
     pub(super) panel: &'a PanelSession,
     pub(super) memory: &'a MemoryLease,
     pub(super) identity: MainIdentity,
@@ -37,14 +35,14 @@ impl Replacement<'_> {
         self.canvas.presented(cancelled)?;
         self.retained(blue)?;
         self.send(400, 402, "surface.prepare", json!({}))?;
-        wait_reply(self.canvas, self.client, self.wake, 402, "ready")?;
+        self.boundary.wait_reply(self.canvas, 402, "ready", "request 402 surface.prepare")?;
         self.retained(blue)?;
         Ok(())
     }
 
     /// Select through the committed address instead of a staged candidate.
     fn select_current(&mut self, id: u64, filename: &str) -> Result<(), Box<dyn Error>> {
-        self.clock.0.fetch_add(1_000_000_000, Ordering::SeqCst);
+        self.boundary.clock.0.fetch_add(1_000_000_000, Ordering::SeqCst);
         self.canvas.surface(
             self.identity,
             request(
@@ -63,20 +61,18 @@ impl Replacement<'_> {
 
     /// Hold the real current CPU frame without supplying its native acknowledgement.
     fn prepared_selection(&mut self) -> Result<FrameStamp, Box<dyn Error>> {
-        loop {
-            let observed = self.wake.revision();
-            pump(self.canvas, self.client)?;
-            if let Some(frame) = prepared_frame(self.canvas) {
+        self.boundary.until(self.canvas, "the prepared frame of the current selection", |canvas| {
+            if let Some(frame) = prepared_frame(canvas) {
                 assert!(frame.content.pending());
                 let target = frame.content.target();
-                assert!(self.canvas.take_command().is_none());
-                return Ok(target);
+                assert!(canvas.take_command().is_none());
+                return Ok(Some(target));
             }
-            if self.canvas.take_command().is_some() {
+            if canvas.take_command().is_some() {
                 return Err("Selection completed before its native frame was acknowledged".into());
             }
-            self.wake.wait_after(observed);
-        }
+            Ok(None)
+        })
     }
 
     /// Prepare both actual pixels and a failing original, then restore the same committed image.
@@ -84,7 +80,12 @@ impl Replacement<'_> {
         for (base, filename, status) in [(100, "red.png", "applied"), (200, "missing.png", "error")]
         {
             self.send(base, base, "surface.prepare", json!({}))?;
-            wait_reply(self.canvas, self.client, self.wake, base, "ready")?;
+            self.boundary.wait_reply(
+                self.canvas,
+                base,
+                "ready",
+                &format!("request {base} surface.prepare to attachment:{base}"),
+            )?;
             self.retained(current)?;
             self.send(
                 base,
@@ -97,15 +98,25 @@ impl Replacement<'_> {
                 }}),
             )?;
             reply(self.canvas, base + 1, "applied")?;
-            self.clock.0.fetch_add(1_000_000_000, Ordering::SeqCst);
+            self.boundary.clock.0.fetch_add(1_000_000_000, Ordering::SeqCst);
             self.send(base, base + 2, "surface.select", json!({
                 "itemId":"result:candidate", "file":{"filename":filename,"subfolder":"","type":"output"}
             }))?;
-            wait_reply(self.canvas, self.client, self.wake, base + 2, status)?;
+            self.boundary.wait_reply(
+                self.canvas,
+                base + 2,
+                status,
+                &format!("request {} surface.select of {filename} to attachment:{base}", base + 2),
+            )?;
             self.retained(current)?;
             self.canvas.presented(current)?;
             self.send(base, base + 3, "surface.release", json!({}))?;
-            wait_reply(self.canvas, self.client, self.wake, base + 3, "applied")?;
+            self.boundary.wait_reply(
+                self.canvas,
+                base + 3,
+                "applied",
+                &format!("request {} surface.release of attachment:{base}", base + 3),
+            )?;
             let frame = prepared_frame(self.canvas).ok_or("Restored native frame is absent")?;
             assert_eq!(frame.content.target(), current);
             assert!(!frame.content.pending());

@@ -43,7 +43,7 @@ fn settle_pixels(
 fn a_selected_pair_reports_both_extents_and_wipes_in_native_pixels() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;
     select_pair(&mut fixture, 3, "tall.png")?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     fixture.commit(4)?;
     fixture.viewport(5, json!({"type":"read"}))?;
     let read = fixture.complete(5)?;

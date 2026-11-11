@@ -26,6 +26,7 @@ use sugarsubstitute_desktop::{
 
 mod backdrops;
 mod backend;
+mod boundary;
 mod cancellation;
 mod capture;
 mod comparison;
@@ -42,15 +43,18 @@ mod live_preview_route;
 mod native;
 mod overview;
 mod preview;
+mod quiescence;
 mod reattached_overview;
 mod reattachment;
 mod rebuild;
 mod replacement;
+mod requests;
 mod reselection;
 mod session_originals;
 mod temporary;
 mod viewport;
 
+use boundary::Boundary;
 use capture::DiagnosticLines;
 
 /// Consecutive pumps that may find the canvas idle before a missing answer counts as lost. The
@@ -149,24 +153,6 @@ fn pump(canvas: &mut EmbeddedCanvas, client: &ExecutionClient) -> Result<(), Box
     canvas.poll()
 }
 
-/// Observe actual preparation completion rather than assuming immediate empty-scene admission.
-fn wait_reply(
-    canvas: &mut EmbeddedCanvas,
-    client: &ExecutionClient,
-    wake: &Wake,
-    id: u64,
-    status: &str,
-) -> Result<(), Box<dyn Error>> {
-    loop {
-        let revision = wake.revision();
-        pump(canvas, client)?;
-        if let Some(command) = canvas.take_command() {
-            return check_reply(command, id, status);
-        }
-        wake.wait_after(revision);
-    }
-}
-
 fn image(path: &std::path::Path, color: [u8; 3]) -> Result<(), Box<dyn Error>> {
     let file = std::fs::File::create(path)?;
     let mut encoder = png::Encoder::new(file, 1, 1);
@@ -197,13 +183,8 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         funding()?,
     );
     canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;
-    while !canvas.reported_ready {
-        let revision = wake.revision();
-        pump(&mut canvas, &client)?;
-        if !canvas.reported_ready {
-            wake.wait_after(revision);
-        }
-    }
+    let boundary = Boundary { client: &client, owner: &owner, wake: &wake, clock: &clock };
+    boundary.wait_ready(&mut canvas)?;
     let identity = identity()?;
     let panel = PanelSession::for_main(identity)?;
     let memory = MemoryLease::new(2 * 1024 * 1024, Box::new(Release));
@@ -260,7 +241,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         None,
         memory.claim(64 * 1024)?,
     )?;
-    wait_reply(&mut canvas, &client, &wake, 1, "ready")?;
+    boundary.wait_reply(&mut canvas, 1, "ready", "request 1 surface.prepare")?;
     let geometry = json!({"geometry":{
         "coordinateSpace":"client", "units":"css-pixels", "origin":{"x":10,"y":20},
         "viewport":{"width":8,"height":8}, "clip":{"x":10,"y":20,"width":8,"height":8},
@@ -280,15 +261,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     canvas.surface(identity, request(&panel, 3, "surface.select", json!({
         "itemId":"result:red", "file":{"filename":"red.png", "subfolder":"", "type":"output"}
     }))?, None, memory.claim(64 * 1024)?)?;
-    let selected = loop {
-        let revision = wake.revision();
-        pump(&mut canvas, &client)?;
-        if let Some(command) = canvas.take_command() {
-            break command;
-        }
-        wake.wait_after(revision);
-    };
-    check_reply(selected, 3, "applied")?;
+    boundary.wait_reply(&mut canvas, 3, "applied", "request 3 surface.select of red.png")?;
     canvas.surface(
         identity,
         request(&panel, 4, "surface.commit", json!({}))?,
@@ -316,14 +289,9 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     assert_eq!(retained.allocation, allocation);
     canvas.presented(first_stamp)?;
     assert!(canvas.take_command().is_none());
-    loop {
-        let revision = wake.revision();
-        pump(&mut canvas, &client)?;
-        if prepared_frame(&canvas).is_some() {
-            break;
-        }
-        wake.wait_after(revision);
-    }
+    boundary.until(&mut canvas, "the prepared blue frame of request 5", |canvas| {
+        Ok(prepared_frame(canvas).map(drop))
+    })?;
     assert!(canvas.take_command().is_none());
     let second = prepared_frame(&canvas).ok_or("Prepared blue frame is missing")?;
     let blue = second.content.cpu_pixels()[36];
@@ -335,9 +303,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
 
     replacement::Replacement {
         canvas: &mut canvas,
-        client: &client,
-        wake: &wake,
-        clock: &clock,
+        boundary,
         panel: &panel,
         memory: &memory,
         identity,
@@ -379,14 +345,10 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         memory.claim(64 * 1024)?,
     )?;
     assert!(canvas.take_command().is_none());
-    let restored_stamp = loop {
-        let revision = wake.revision();
-        pump(&mut canvas, &client)?;
-        if let Some(frame) = prepared_frame(&canvas) {
-            break frame.content.target();
-        }
-        wake.wait_after(revision);
-    };
+    let restored_stamp =
+        boundary.until(&mut canvas, "the restored frame of request 7", |canvas| {
+            Ok(prepared_frame(canvas).map(|frame| frame.content.target()))
+        })?;
     assert!(canvas.take_command().is_none());
     canvas.presented(restored_stamp)?;
     reply(&mut canvas, 7, "applied")?;
@@ -428,18 +390,15 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         memory.claim(64 * 1024)?,
     )?;
     assert!(canvas.take_command().is_none());
-    let resized_stamp = loop {
-        let revision = wake.revision();
-        pump(&mut canvas, &client)?;
-        if let Some(frame) = prepared_frame(&canvas) {
+    let resized_stamp =
+        boundary.until(&mut canvas, "the resized frame of request 9", |canvas| {
+            let Some(frame) = prepared_frame(canvas) else { return Ok(None) };
             let extent = frame.content.validate()?;
             assert_eq!((extent.width(), extent.height()), (12, 12));
             assert_eq!(frame.placement.viewport.width, 12);
             assert_eq!(frame.placement.viewport.x, 12);
-            break frame.content.target();
-        }
-        wake.wait_after(revision);
-    };
+            Ok(Some(frame.content.target()))
+        })?;
     assert_ne!(resized_stamp, restored_stamp);
     canvas.presented(resized_stamp)?;
     reply(&mut canvas, 9, "applied")?;
@@ -447,15 +406,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     canvas.surface(identity, request(&panel, 10, "surface.select", json!({
         "itemId":"result:missing", "file":{"filename":"missing.png", "subfolder":"", "type":"output"}
     }))?, None, memory.claim(64 * 1024)?)?;
-    loop {
-        let revision = wake.revision();
-        pump(&mut canvas, &client)?;
-        if let Some(command) = canvas.take_command() {
-            check_reply(command, 10, "error")?;
-            break;
-        }
-        wake.wait_after(revision);
-    }
+    boundary.wait_reply(&mut canvas, 10, "error", "request 10 surface.select of missing.png")?;
     let MainCanvasPresentation::Retain(retained) = canvas.presentation() else {
         return Err("Failed source replacement withdrew the acknowledged native image".into());
     };
@@ -476,9 +427,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     assert_eq!(retained.target, resized_stamp);
     replacement::Replacement {
         canvas: &mut canvas,
-        client: &client,
-        wake: &wake,
-        clock: &clock,
+        boundary,
         panel: &panel,
         memory: &memory,
         identity,
@@ -487,14 +436,7 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
     .cancel_prepared_selection()?;
     canvas.close_until(Moment::from_nanos(10_000_000_000))?;
     assert!(matches!(canvas.presentation(), MainCanvasPresentation::Hide));
-    loop {
-        let revision = wake.revision();
-        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if canvas.settled()? {
-            break;
-        }
-        wake.wait_after(revision);
-    }
+    boundary.settle_closed(&mut canvas)?;
     canvas.finish()?;
     wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(10_000_000_000))?;
     Ok(())

@@ -283,7 +283,7 @@ fn reattached_overview(order: [Stage; 3], variant: Variant) -> Result<(), Box<dy
     fixture.send(id, "surface.prepare", json!({}))?;
     match &mut gates {
         Some(gates) => await_reply(&mut fixture, gates, id, "ready", variant.clock_step)?,
-        None => wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, id, "ready")?,
+        None => fixture.wait_reply(id, "ready")?,
     }
     id += 1;
     fixture.send(id, "surface.geometry", geometry(candidate.0, candidate.1, density, false))?;

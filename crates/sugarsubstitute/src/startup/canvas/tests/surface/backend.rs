@@ -76,20 +76,15 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
     let mut canvas = EmbeddedCanvas::new(
         directory.path().to_path_buf(),
         DiagnosticHealth::fixture(),
-        clock,
+        clock.clone(),
         JobSequence::new(),
         ScopeSpec { id: ScopeId::new(1)?, deadline: None },
         funding()?,
     );
     canvas.surface = crate::startup::canvas::surface::NativeSurface::new();
     canvas.start(client.clone(), "en", crate::native_canvas::gpu_policy::EmbeddedGpuPolicy::Cpu)?;
-    while !canvas.reported_ready {
-        let revision = wake.revision();
-        pump(&mut canvas, &client)?;
-        if !canvas.reported_ready {
-            wake.wait_after(revision);
-        }
-    }
+    let boundary = Boundary { client: &client, owner: &owner, wake: &wake, clock: &clock };
+    boundary.wait_ready(&mut canvas)?;
     let identity = identity()?;
     let backend = crate::startup::CanvasBackend {
         identity,
@@ -115,7 +110,7 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
         None,
         memory.claim(64 * 1024)?,
     )?;
-    wait_reply(&mut canvas, &client, &wake, 1, "ready")?;
+    boundary.wait_reply(&mut canvas, 1, "ready", "request 1 surface.prepare")?;
     assert!(canvas.matches_backend(backend));
     discovery(&mut canvas, &panel, &memory, 92, "available")?;
     assert!(canvas.matches_backend(backend));
@@ -140,7 +135,7 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
         None,
         memory.claim(64 * 1024)?,
     )?;
-    wait_reply(&mut canvas, &client, &wake, 94, "ready")?;
+    boundary.wait_reply(&mut canvas, 94, "ready", "request 94 surface.prepare")?;
     assert!(canvas.matches_backend(backend));
     let terminal_credit = MemoryLease::new(64 * 1024, Box::new(Release));
     canvas.surface(
@@ -167,14 +162,7 @@ fn backend_revocation_cancels_the_pending_selection_and_fences_presentation()
     drop(terminal_credit.claim(64 * 1024)?);
 
     canvas.close_until(Moment::from_nanos(10_000_000_000))?;
-    loop {
-        let revision = wake.revision();
-        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
-        if canvas.settled()? {
-            break;
-        }
-        wake.wait_after(revision);
-    }
+    boundary.settle_closed(&mut canvas)?;
     canvas.finish()?;
     wake.finish_shutdown(&mut owner, &client, Moment::from_nanos(10_000_000_000))?;
     Ok(())

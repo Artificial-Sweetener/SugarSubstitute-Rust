@@ -51,7 +51,7 @@ fn off_image_selection_presents_and_reports_its_exact_camera_before_and_after_re
             "inspection":inspection(center, 2.0)
         }),
     )?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     let first = fixture.commit(4)?;
     assert_eq!(first.viewport.zoom(), 2.0);
     let point = first.viewport.document_at([40.0, 20.0])?;

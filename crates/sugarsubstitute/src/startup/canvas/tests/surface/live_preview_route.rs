@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Switch to the Output route while a live preview is being received over an Input document.
+use super::boundary::Execution;
 use super::preview::{JPEG, drain, transfer, watch};
-use super::viewport::fixture::{Execution, Fixture, image};
+use super::viewport::fixture::{Fixture, image};
 use super::*;
 
 const WORKFLOW: &str = "workflow-live-preview";

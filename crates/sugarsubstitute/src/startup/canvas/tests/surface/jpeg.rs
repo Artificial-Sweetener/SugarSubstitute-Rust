@@ -19,7 +19,7 @@ fn output(filename: &str, storage: &str) -> Value {
 fn a_jpeg_final_presents_its_decoded_pixels() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;
     fixture.select(3, "flat.jpg")?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     fixture.commit(4)?;
     fixture.viewport(5, json!({"type":"read"}))?;
     let read = fixture.complete(5)?;
@@ -42,7 +42,7 @@ fn a_jpeg_comparison_pairs_with_a_png_primary() -> Result<(), Box<dyn Error>> {
             "comparison":{"itemId":"result:flat.jpg", "file":output("flat.jpg", "output")}
         }),
     )?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "applied")?;
+    fixture.wait_reply(3, "applied")?;
     fixture.commit(4)?;
     fixture.viewport(5, json!({"type":"read"}))?;
     let read = fixture.complete(5)?;
@@ -56,10 +56,10 @@ fn a_jpeg_comparison_pairs_with_a_png_primary() -> Result<(), Box<dyn Error>> {
 fn an_unsupported_progressive_jpeg_final_replies_error() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::empty()?;
     fixture.select(3, "progressive.jpg")?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 3, "error")?;
+    fixture.wait_reply(3, "error")?;
     assert!(fixture.canvas.session.as_ref().is_some_and(Session::source_failed));
     fixture.select(4, "flat.jpg")?;
-    wait_reply(&mut fixture.canvas, &fixture.client, &fixture.wake, 4, "applied")?;
+    fixture.wait_reply(4, "applied")?;
     assert!(!fixture.canvas.session.as_ref().is_some_and(Session::source_failed));
     fixture.finish()
 }

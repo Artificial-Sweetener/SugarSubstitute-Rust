@@ -7,8 +7,8 @@ use super::*;
 #[test]
 fn empty_commit_waits_for_cancelled_acquisition_retirement_after_native_hide()
 -> Result<(), Box<dyn Error>> {
+    use boundary::Execution;
     use host::{Host, geometry, select};
-    use viewport::fixture::Execution;
 
     let mut host = Host::empty()?;
     let gate = host.gate("wide.png", false);
