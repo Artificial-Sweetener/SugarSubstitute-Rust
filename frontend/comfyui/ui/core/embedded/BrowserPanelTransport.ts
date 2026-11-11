@@ -21,12 +21,6 @@ import type { MemoryClientMessage } from '../memory/MemoryHostProtocol.js';
 /** Keep editor transport mechanics outside the embedded application lifecycle. */
 export interface BrowserPanelTransport {
   readonly session: string;
-  /** Choose whether host presentation temporarily overrides Comfy's saved preferences. */
-  readonly preferencePolicy?: 'host' | 'saved';
-  /** Prefer an embedded host surface before capability negotiation; grants no native authority. */
-  readonly outputSurfacePreference?: 'host';
-  /** Whether the host joins this page to its application memory budget. */
-  readonly memoryBudget?: true;
   send(message: PanelMessage | CanvasMessage | CanvasMaskMessage | MemoryClientMessage): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }

@@ -18,6 +18,7 @@ import { PanelHostSession, type PanelState } from '../../../integrations/shared/
 import { CanvasMaskServer } from '../../../integrations/shared/CanvasMaskServer.js';
 import { GimpCanvasBridge } from '../../../integrations/gimp/src/infrastructure/GimpCanvasBridge.js';
 import { GimpCanvasMasks } from '../../../integrations/gimp/src/infrastructure/GimpCanvasMasks.js';
+import { GIMP_HOST_DESCRIPTION } from '../../../integrations/gimp/src/infrastructure/GimpPanelConnection.js';
 import { openNativeGimp } from '../../../integrations/gimp/src/infrastructure/TauriNativeGimp.js';
 import { CanvasClient } from '../../../integrations/shared/CanvasClient.js';
 import type { CanvasEncodedImage } from '../../../integrations/contracts/CanvasProtocol.generated.js';
@@ -53,6 +54,7 @@ export async function connectNativeBrowserProof(
   let state: PanelState = 'loading';
   const panel = new PanelHostSession(
     session,
+    GIMP_HOST_DESCRIPTION,
     {
       pluginMode: true,
       visualStyle: 'gimp',

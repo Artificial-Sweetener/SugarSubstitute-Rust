@@ -17,10 +17,7 @@
 
 import { EmbeddedCanvasConnection } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedCanvasConnection.js';
 import { nativeCanvasRendererKey } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasCapabilities.js';
-import {
-  createNativePanelTransport,
-  prefersNativeOutputSurface,
-} from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
+import { createNativePanelTransport } from '../../../frontend/comfyui/ui/core/embedded/NativePanelTransport.js';
 import type { CanvasMessage } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 import { selectedPngCapabilities } from '../../editor_integrations/support/canvas_surface.js';
 import { jest } from '@jest/globals';
@@ -184,7 +181,6 @@ describe('composed browser canvas attachment', () => {
     const bridge = {
       host: 'ai.artificialsweetener.sugarsubstitute',
       session: 'delayed-native-session',
-      outputSurfacePreference: 'host',
       send: (message: CanvasMessage) => {
         messages.push(message);
         if (message.type === 'context.request')
@@ -262,13 +258,9 @@ describe('composed browser canvas attachment', () => {
         subscribe: () => () => {},
       } as unknown as CanvasSessionCoordinator,
       element: () => f.root,
-      renderer: () =>
-        prefersNativeOutputSurface(window)
-          ? nativeCanvasRendererKey(connection.surface)
-          : 'browser',
+      renderer: () => nativeCanvasRendererKey(connection.surface),
       report: f.options.report,
       mount: (element, address, _catalog, accepts, acceptsPreparation) => {
-        expect(prefersNativeOutputSurface(window)).toBe(true);
         const attachment = new NativeCanvasAttachment(element, {
           ...f.options,
           address,
@@ -283,7 +275,7 @@ describe('composed browser canvas attachment', () => {
     });
     document.addEventListener('sugarcubes-canvas-ready', primary.reconcile);
     try {
-      connection.connect(transport, window, f.options.report);
+      connection.connect(transport, window, f.options.report, { masks: true });
       primary.setup();
       for (let turn = 0; turn < 16; turn++) await Promise.resolve();
       const request = messages.find((message) => message.type === 'surface.capabilities.request');
@@ -293,7 +285,6 @@ describe('composed browser canvas attachment', () => {
       expect(primary.diagnostics().address).toEqual(mounted[0]?.port.read().address);
       expect(mounted[0]?.port.read().resource.state).toBe('loading');
       expect(f.errors).toEqual([]);
-      expect(prefersNativeOutputSurface(window)).toBe(true);
       expect(f.loader.requests).toHaveLength(0);
       expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
       for (const receive of listeners)

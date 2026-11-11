@@ -20,6 +20,7 @@ import { selectedPngCapabilities } from '../../editor_integrations/support/canva
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { EmbeddedPresentation } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPresentation.js';
 import { EmbeddedPanelLayout } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPanelLayout.js';
+import { HostDescriptionState } from '../../../frontend/comfyui/ui/core/embedded/HostDescriptionState.js';
 
 test('publishes native resize clearance once per change and restores the exact local value', () => {
   const style = document.documentElement.style;
@@ -58,6 +59,25 @@ import type { CanvasMessage } from '../../../frontend/comfyui/ui/core/embedded/C
 const session = '00000000-0000-4000-8000-000000000001';
 const hostId = 'fixture.editor.panel';
 
+/** Describe a fixture host that serves the canvas and whose presentation replaces saved styles. */
+function hostDescription(
+  capabilities: readonly string[] = ['presentation.host-styles'],
+  protocols: readonly { name: string; version: number }[] = [
+    { name: 'sugarcubes.panel', version: 3 },
+    { name: 'sugarcubes.canvas', version: 3 },
+    { name: 'sugarcubes.canvas.masks', version: 2 },
+  ],
+) {
+  return {
+    protocol: 'sugarcubes.host',
+    version: 1,
+    session,
+    type: 'description',
+    protocols,
+    capabilities: capabilities.map((name) => ({ name })),
+  };
+}
+
 afterEach(() => {
   window.history.replaceState(null, '', '/');
   Reflect.deleteProperty(window, 'uxpHost');
@@ -70,6 +90,7 @@ test('query parameters alone never apply embedded presentation in an ordinary br
   const presentation = new EmbeddedPresentation();
   const host = startEmbeddedPanel({
     window,
+    host: new HostDescriptionState(),
     presentation,
     connected: () => true,
     report: jest.fn(),
@@ -86,6 +107,7 @@ test('negotiates after a delayed or replaced UXP bridge while preserving source 
   const presentation = new EmbeddedPresentation();
   const host = startEmbeddedPanel({
     window,
+    host: new HostDescriptionState(),
     presentation,
     connected: () => true,
     report: jest.fn(),
@@ -98,6 +120,11 @@ test('negotiates after a delayed or replaced UXP bridge while preserving source 
   Object.defineProperty(window, 'uxpHost', { value: current, configurable: true });
   jest.advanceTimersByTime(1000);
   expect(current.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready' }));
+  const post = (source: unknown, data: unknown): void => {
+    const event = new MessageEvent('message', { origin: hostId, data });
+    Object.defineProperty(event, 'source', { value: source });
+    window.dispatchEvent(event);
+  };
   const configure = (source: unknown): void => {
     const event = new MessageEvent('message', {
       origin: hostId,
@@ -118,6 +145,7 @@ test('negotiates after a delayed or replaced UXP bridge while preserving source 
     Object.defineProperty(event, 'source', { value: source });
     window.dispatchEvent(event);
   };
+  post(current, hostDescription());
   configure(stale);
   expect(presentation.read()).toBeNull();
   configure(current);
@@ -160,7 +188,13 @@ test('retries readiness, acknowledges applied presentation, reports connectivity
   let receive: ((value: unknown) => void) | null = null;
   const stop = jest.fn();
   const host = new EmbeddedPanelHost(
-    { window, presentation, connected: () => false, report: jest.fn() },
+    {
+      window,
+      host: new HostDescriptionState(),
+      presentation,
+      connected: () => false,
+      report: jest.fn(),
+    },
     {
       session,
       send: (value) => {
@@ -195,6 +229,7 @@ test('retries readiness, acknowledges applied presentation, reports connectivity
     },
   });
   expect(presentation.read()).toBeNull();
+  dispatch(hostDescription());
   dispatch({
     protocol: 'sugarcubes.panel',
     version: 3,
@@ -260,15 +295,25 @@ test('discovers a native canvas after configuration and releases correlated requ
     },
   };
   expect(canvas.readCanvas()).toBeNull();
-  canvas.connect(transport, window, (error) => {
-    throw error;
-  });
+  canvas.connect(
+    transport,
+    window,
+    (error) => {
+      throw error;
+    },
+    { masks: true },
+  );
   await Promise.resolve();
   await Promise.resolve();
   expect(canvas.readCanvas()?.label).toBe('Fixture editor');
-  canvas.connect(transport, window, (error) => {
-    throw error;
-  });
+  canvas.connect(
+    transport,
+    window,
+    (error) => {
+      throw error;
+    },
+    { masks: true },
+  );
   expect(sent.filter((message) => message.type === 'context.request')).toHaveLength(1);
   canvas.dispose();
   expect(listeners.size).toBe(0);
@@ -322,6 +367,7 @@ test('publishes canvas readiness only after delayed surface discovery completes'
       (error) => {
         throw error;
       },
+      { masks: true },
     );
     await Promise.resolve();
     await Promise.resolve();
@@ -410,7 +456,7 @@ function discoveryFixture() {
 test('a new discovery withdraws the previous completion until its own capabilities arrive', async () => {
   const f = discoveryFixture();
   try {
-    f.canvas.connect(f.transport, window, f.report);
+    f.canvas.connect(f.transport, window, f.report, { masks: true });
     f.context(0);
     await Promise.resolve();
     f.capabilities(1, true);
@@ -436,7 +482,7 @@ test('a new discovery withdraws the previous completion until its own capabiliti
 test('backend disconnect revokes an accepted surface and a pending refresh cannot restore it', async () => {
   const f = discoveryFixture();
   try {
-    f.canvas.connect(f.transport, window, f.report);
+    f.canvas.connect(f.transport, window, f.report, { masks: true });
     f.context(0);
     await Promise.resolve();
     f.capabilities(1, true);
@@ -465,7 +511,7 @@ test('overlapping context reads cannot announce readiness before the current dis
   const ready = jest.fn();
   document.addEventListener('sugarcubes-canvas-ready', ready);
   try {
-    f.canvas.connect(f.transport, window, f.report);
+    f.canvas.connect(f.transport, window, f.report, { masks: true });
     const second = f.canvas.readContext();
     f.context(0);
     for (let turn = 0; turn < 8; turn++) await Promise.resolve();
@@ -494,6 +540,7 @@ test('renegotiates once after reconnect during an unavailable discovery and rele
   const host = new EmbeddedPanelHost(
     {
       window,
+      host: new HostDescriptionState(),
       presentation: new EmbeddedPresentation(),
       canvas: f.canvas,
       connected: () => true,
@@ -506,6 +553,7 @@ test('renegotiates once after reconnect during an unavailable discovery and rele
     f.transport,
   );
   host.setup();
+  f.receive(hostDescription([]));
   f.receive({
     protocol: 'sugarcubes.panel',
     version: 3,
@@ -557,7 +605,7 @@ test('renegotiates once after reconnect during an unavailable discovery and rele
 /** A live navigation retains its only request sequence across capability refreshes. */
 test('refreshes reuse the connected client and keep request identities increasing', async () => {
   const f = discoveryFixture();
-  f.canvas.connect(f.transport, window, f.report);
+  f.canvas.connect(f.transport, window, f.report, { masks: true });
   for (const start of [0, 2, 4]) {
     if (start > 0) f.canvas.refresh();
     f.context(start);
@@ -566,7 +614,7 @@ test('refreshes reuse the connected client and keep request identities increasin
     for (let turn = 0; turn < 8; turn++) await Promise.resolve();
     expect(f.canvas.surface?.capabilities.imageFormats).toEqual(['png']);
   }
-  f.canvas.connect(f.transport, window, f.report);
+  f.canvas.connect(f.transport, window, f.report, { masks: true });
   expect(f.messages.map(({ requestId }) => requestId)).toEqual([1, 2, 3, 4, 5, 6]);
   expect(f.listeners.size).toBe(1);
   expect(f.report).not.toHaveBeenCalled();
@@ -576,10 +624,12 @@ test('refreshes reuse the connected client and keep request identities increasin
 /** Page teardown must not create a second client under the same public panel session. */
 test('a disposed embedded canvas refuses reconnection and cannot restart request identities', async () => {
   const f = discoveryFixture();
-  f.canvas.connect(f.transport, window, f.report);
+  f.canvas.connect(f.transport, window, f.report, { masks: true });
   f.canvas.dispose();
   f.canvas.dispose();
-  expect(() => f.canvas.connect(f.transport, window, f.report)).toThrow('connection is closed');
+  expect(() => f.canvas.connect(f.transport, window, f.report, { masks: true })).toThrow(
+    'connection is closed',
+  );
   f.canvas.refresh();
   await expect(f.canvas.readContext()).rejects.toThrow('unavailable');
   expect(f.messages.map(({ type, requestId }) => ({ type, requestId }))).toEqual([
@@ -632,6 +682,7 @@ test('waits for a slow host to describe its surface instead of failing discovery
       },
       window,
       (error) => errors.push(error),
+      { masks: true },
     );
     await Promise.resolve();
     await Promise.resolve();

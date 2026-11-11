@@ -19,13 +19,15 @@ import {
   type NativePanelPort,
 } from '../../../integrations/photoshop/src/application/PanelController.js';
 import type { PanelMessage } from '../../../integrations/contracts/PanelProtocol.generated.js';
+import type { HostDescriptionMessage } from '../../../integrations/contracts/HostDescription.js';
+import { PHOTOSHOP_HOST_DESCRIPTION } from '../../../integrations/photoshop/src/application/PhotoshopHostDescription.js';
 import type { PanelState } from '../../../integrations/shared/PanelSession.js';
 import { panelFeedback } from '../../../integrations/photoshop/src/presentation/PanelFeedback.js';
 
 test('preserves hide/show and rotates an uninitialized navigation on retry', () => {
   const opened: string[] = [];
   const states: PanelState[] = [];
-  const sent: PanelMessage[] = [];
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
   const errors: unknown[] = [];
   const timers = new Set<() => void>();
   let identity = 0;
@@ -43,7 +45,7 @@ test('preserves hide/show and rotates an uninitialized navigation on retry', () 
       };
     },
   };
-  const controller = new PanelController(port, {
+  const controller = new PanelController(port, PHOTOSHOP_HOST_DESCRIPTION, {
     pluginMode: true,
     visualStyle: 'photopro',
     photoProPalette: 'medium-gray',
@@ -121,7 +123,7 @@ test.each([
   { name: 'failed page', now: 10000, failed: true, navigations: 2 },
 ])('retries a $name with $navigations navigation(s)', ({ now: retryTime, failed, navigations }) => {
   const opened: string[] = [];
-  const sent: PanelMessage[] = [];
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
   const states: PanelState[] = [];
   const timers = new Set<() => void>();
   let identity = 0;
@@ -141,6 +143,7 @@ test.each([
         };
       },
     },
+    PHOTOSHOP_HOST_DESCRIPTION,
     {
       pluginMode: true,
       visualStyle: 'photopro',

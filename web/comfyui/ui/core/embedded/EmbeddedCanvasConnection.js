@@ -55,8 +55,12 @@ export class EmbeddedCanvasConnection {
     get surfaceDiscovered() {
         return this.#surfaceDiscovered;
     }
-    /** Read context and optional surface capabilities before publishing panel readiness. */
-    connect(transport, window, report) {
+    /**
+     * Read context and optional surface capabilities before publishing panel readiness.
+     *
+     * Mask requests are sent only to a host that serves the mask protocol.
+     */
+    connect(transport, window, report, served) {
         if (this.#disposed)
             throw new Error('The native canvas connection is closed.');
         if (this.#client)
@@ -75,14 +79,16 @@ export class EmbeddedCanvasConnection {
         this.#client = client;
         this.#window = window;
         this.#report = report;
-        this.#masks = new CanvasMaskClient(transport.session, {
-            send: (message) => transport.send(message),
-            report,
-            later: (ms, callback) => {
-                const timer = window.setTimeout(callback, ms);
-                return () => window.clearTimeout(timer);
-            },
-        }, () => client.readCanvas()?.id ?? '');
+        this.#masks = served.masks
+            ? new CanvasMaskClient(transport.session, {
+                send: (message) => transport.send(message),
+                report,
+                later: (ms, callback) => {
+                    const timer = window.setTimeout(callback, ms);
+                    return () => window.clearTimeout(timer);
+                },
+            }, () => client.readCanvas()?.id ?? '')
+            : null;
         this.#stop = transport.subscribe((value) => {
             client.receive(value);
             this.#masks?.receive(value);
