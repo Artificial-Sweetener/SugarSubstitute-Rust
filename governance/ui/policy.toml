@@ -149,7 +149,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:b3c87229387cc46bfb5f09ca509e4737bc321fcf1d52b8e58ce4536adf95aa67"
+source_sha256 = "sha256:a570c2d99b3323c96aaa48bd3b808fb1f89ee436d7e571ce502a6a990d64517f"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
@@ -190,12 +190,10 @@ source_sha256 = "sha256:5428f611abbb8281c87b0cdfc505c68528eb5ebaaea3bb645d586ce9
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
-concern = "Native modal operations: queued UI-STA shell selection from the pre-dispatch owner, reporter save selection from its retained modal loan, and startup dialogs before or after application callbacks"
+concern = "Native modal operations: queued UI-STA shell selection from the pre-dispatch owner, reporter save selection from its retained modal loan"
 capabilities = ["modal"]
 sources = [
     "crates/sugarsubstitute-desktop/src/file_dialog.rs",
     "crates/sugarsubstitute-desktop/src/report/windows/save_dialog/selection.rs",
-    "crates/sugarsubstitute-desktop/src/startup_conflict.rs",
-    "crates/sugarsubstitute-desktop/src/startup_error_dialog.rs",
 ]
-source_sha256 = "sha256:5ee192ba43cbd91a51be4ac1889895a81a1824b5af78826afb3c16b843c83278"
+source_sha256 = "sha256:9ed283fdb46ead46d6024d34d149ac4e3a39f9115f843a7e0200e8b3236d58f1"

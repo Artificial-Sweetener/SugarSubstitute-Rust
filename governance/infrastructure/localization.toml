@@ -60,7 +60,7 @@ rationale = "Host composition of localized native startup/profile-conflict feedb
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/profile_conflict.rs"
-source_sha256 = "sha256:0bd3c9f9bcea7718f8361f7a1377f7183bc4b481e362bba116efaf65b6c8e2af"
+source_sha256 = "sha256:feaa3a2858fa700f45d3cccbd170c260d96c06e9c62c9f24c52c569f0fd82aac"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Compose the Windows conflict surface and native backend with the shared controller."
 
@@ -72,13 +72,13 @@ rationale = "Host composition of localized native startup/profile-conflict feedb
 
 [[records]]
 path = "crates/sugarsubstitute/src/setup.rs"
-source_sha256 = "sha256:5fb663595bafee906bf4154b116346ffaa84632fa6a165ee4272ce2526a23a42"
+source_sha256 = "sha256:bb99065368dc81803c6bcc78317425df6c2dab3c4cca65bac5ffcd3e0b644f04"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Compose the branded installer with isolated upstream provisioning and native ownership."
 
 [[records]]
 path = "crates/sugarsubstitute/src/stable_launcher.rs"
-source_sha256 = "sha256:957f537326ac15d967ee3b12d0870c7135167fc0d2ccb85e1373fe8879a1d4f9"
+source_sha256 = "sha256:0101292975519e39263ecb99a641f57f2b155f28b046f37450d6fc67b374fc7a"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Stable installed entry point; the selected application owns the only visible startup window."
 
@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:0088fd724b6e04b0e1aad63cef2fe01ff4b8d8566fd9ecc6e184a3a60a1f1791"
+source_sha256 = "sha256:859abc029fec6b52656db5e73fd8a82c4dc5e2b614a8e7444ba1d53ddd73a69f"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -174,7 +174,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/report/windows/controls.rs"
-source_sha256 = "sha256:9b037b32bcb700d4c1274c28b6af2abea026a7da85723693929a78637af8f391"
+source_sha256 = "sha256:824d653192eb1535b598ff08b987fac3ebbc995a4a443351e35be0359763f530"
 kind = "native"
 rationale = "Native boundary: Own OS text, buttons, consent and every subclass borrow until checked teardown.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -192,7 +192,7 @@ rationale = "Native boundary: Retain one modal HWND timer and one deferred updat
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/report/windows.rs"
-source_sha256 = "sha256:574ef672d73c58339d670ae7986fba244f538ed4937e9851e223e2acadbcca5c"
+source_sha256 = "sha256:48f0fbdcfbb1d86a5ae0d5570e529bdd75a167e91e5581c439e42494af92d6ac"
 kind = "native"
 rationale = "Native boundary: Own the browser-independent Windows report loop and checked teardown.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -203,14 +203,20 @@ kind = "native"
 rationale = "Native boundary: Pump native callbacks while preparation and owned shutdown progress without UI waits.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/file_dialog.rs"
+source_sha256 = "sha256:2e7d0ddd66eb82aae81020beaae6780f80301c497010ce03cb7b234a8c3bdcc0"
+kind = "native"
+rationale = "Native boundary: Queue shell selection between application callbacks on the desktop's existing UI STA. The save dialog's title, suggested file name and file type label arrive from the typed catalog; the *.txt pattern and txt extension are technical identities."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_conflict.rs"
-source_sha256 = "sha256:1093c91b42d371e9208d8d831e57f62ad7f7c2cc6f5d34df422ed392c6b53a40"
+source_sha256 = "sha256:d5793aaac5ea5a5dcb74614e903767929eefc18a3a63e5375edb293b5de02a6b"
 kind = "native"
 rationale = "Native boundary: Keep conflict decisions responsive while the application owns asynchronous native work.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_error_dialog.rs"
-source_sha256 = "sha256:07975e7e7466ead51bdd340655b4b5be3efc66e701a444ad2f29a4a618b5c163"
+source_sha256 = "sha256:b97806469ea88bec2aa0539f44272f0082337d96a4c70878249d5985278d52b1"
 kind = "native"
 rationale = "Native boundary: Present bounded final Root failure details after its native lifetime has retired.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -564,13 +570,13 @@ rationale = "Foreground-launch rejection tests fake native window creation and a
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/scroll_tests.rs"
-source_sha256 = "sha256:ea9ebdff35ebed6e244856d6699e1cfebe08bb309884cacfb324e500e4e97fd6"
+source_sha256 = "sha256:bf7a7a77b270390464e53eb0d955befc57cd80e329fb2d3e3ffddc1be5b76662"
 kind = "fixture"
 rationale = "Isolated native interaction or rendering qualification uses deliberate labels to exercise focus, selection, private desktop lifetimes and checked teardown; product copy remains catalog-owned."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/windows.rs"
-source_sha256 = "sha256:e06af85da6351536239d90516bb14285b1959881a3ded5a07d69f9fda0dc6e69"
+source_sha256 = "sha256:aef64f11725dc637bc6717cdad243c9d89b0e68b50925e1c0065294279bb907b"
 kind = "native"
 rationale = "Affine native text, control or window adapter consumes original bounded labels and shared widget specifications; the presenting owner supplies catalog copy, and external native references retain their checked lifetime."
 

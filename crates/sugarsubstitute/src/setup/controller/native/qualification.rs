@@ -20,11 +20,11 @@ pub(in crate::setup) fn run(
     let mut fixture = Fixture::new(bundle, workspace, distribution)?;
     fixture.watchdog = Some(WATCHDOG);
     window::run(
-        window::Window {
-            visible: false,
-            title: "SugarSubstitute installer qualification".into(),
-            close: Action::Close.id(),
-        },
+        window::Window::installer(
+            "SugarSubstitute installer qualification".into(),
+            false,
+            Action::Close.id(),
+        ),
         &mut fixture,
     )?;
     if !fixture.passed || !fixture.native_console || fixture.lines != 60 {
@@ -222,11 +222,11 @@ mod tests {
         let mut fixture = Fixture::new(PathBuf::new(), PathBuf::from("qualification"), &[])?;
         fixture.start = super::super::tests::start;
         window::run(
-            window::Window {
-                visible: true,
-                title: "Native installer all-page qualification".into(),
-                close: Action::Close.id(),
-            },
+            window::Window::installer(
+                "Native installer all-page qualification".into(),
+                true,
+                Action::Close.id(),
+            ),
             &mut fixture,
         )?;
         assert!(fixture.passed && fixture.native_console);

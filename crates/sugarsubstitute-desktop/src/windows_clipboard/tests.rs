@@ -24,43 +24,43 @@ struct Fake {
     transferred: bool,
 }
 impl Fake {
-    fn call(&mut self, name: &'static str) -> Result<(), ReportSurfaceError> {
+    fn call(&mut self, name: &'static str) -> Result<(), DesktopError> {
         self.calls.push(name);
         if self.fail == Some(name) {
-            Err(ReportSurfaceError::new(name, std::io::Error::other(name)))
+            Err(DesktopError::new(name, std::io::Error::other(name)))
         } else {
             Ok(())
         }
     }
 }
 impl Boundary for Fake {
-    fn allocate(&mut self, _: usize) -> Result<HGLOBAL, ReportSurfaceError> {
+    fn allocate(&mut self, _: usize) -> Result<HGLOBAL, DesktopError> {
         self.call("allocate")?;
         Ok(HGLOBAL(std::ptr::dangling_mut::<u8>().cast()))
     }
-    fn write(&mut self, _: HGLOBAL, text: &[u16]) -> Result<(), ReportSurfaceError> {
+    fn write(&mut self, _: HGLOBAL, text: &[u16]) -> Result<(), DesktopError> {
         self.call("write")?;
         self.text.extend_from_slice(text);
         Ok(())
     }
-    fn unlock(&mut self, _: HGLOBAL) -> Result<(), ReportSurfaceError> {
+    fn unlock(&mut self, _: HGLOBAL) -> Result<(), DesktopError> {
         self.call("unlock")
     }
-    fn open(&mut self) -> Result<(), ReportSurfaceError> {
+    fn open(&mut self) -> Result<(), DesktopError> {
         self.call("open")
     }
-    fn empty(&mut self) -> Result<(), ReportSurfaceError> {
+    fn empty(&mut self) -> Result<(), DesktopError> {
         self.call("empty")
     }
-    fn transfer(&mut self, global: HGLOBAL) -> Result<HGLOBAL, ReportSurfaceError> {
+    fn transfer(&mut self, global: HGLOBAL) -> Result<HGLOBAL, DesktopError> {
         self.call("transfer")?;
         self.transferred = true;
         Ok(global)
     }
-    fn close(&mut self) -> Result<(), ReportSurfaceError> {
+    fn close(&mut self) -> Result<(), DesktopError> {
         self.call("close")
     }
-    fn free(&mut self, _: HGLOBAL) -> Result<(), ReportSurfaceError> {
+    fn free(&mut self, _: HGLOBAL) -> Result<(), DesktopError> {
         self.call("free")
     }
 }
@@ -91,7 +91,7 @@ fn every_pretransfer_failure_retains_exact_block_and_cleanup_obligations()
     for failure in ["write", "unlock", "open", "empty", "transfer"] {
         let (mut owner, lease) = owner(Some(failure));
         let error = owner.copy(&[65, 66, 67, 0], &lease).err().ok_or("fault not observed")?;
-        assert_eq!(error.operation(), failure);
+        assert!(error.to_string().starts_with(&format!("{failure}:")));
         assert!(error.source().is_some());
         assert!(owner.global.is_some());
         assert!(lease.claim(1).is_err());

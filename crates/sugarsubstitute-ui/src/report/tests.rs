@@ -29,7 +29,6 @@ const LABELS: ReportLabels = ReportLabels {
     export: "Export report",
     close: "Close",
     restart: "Close and request restart",
-    force: "Force quit other copy",
     cancel: "Cancel this launch",
     include_dump: "Include native memory dump",
     dump_warning: "Native memory dumps can contain passwords and private information.",
@@ -107,10 +106,10 @@ fn each_kind_offers_exactly_its_commands() {
     use ReportAction::*;
     assert_eq!(ReportKind::Crash.commands(), &[Copy, Export, Close, Restart]);
     assert_eq!(ReportKind::StartupFailure.commands(), &[Copy, Close]);
-    assert_eq!(ReportKind::InstanceConflict.commands(), &[Cancel, Force, Close]);
+    assert_eq!(ReportKind::UnresponsiveCopy.commands(), &[Cancel, Close]);
     assert_eq!(ReportKind::UpdateFailure.commands(), &[Copy, Export, Close]);
     assert!(!ReportKind::UpdateFailure.commands().contains(&Restart));
-    assert_eq!(ReportKind::InstanceConflict.dismissal(), Cancel);
+    assert_eq!(ReportKind::UnresponsiveCopy.dismissal(), Cancel);
     assert_eq!(ReportKind::UpdateFailure.dismissal(), Close);
     assert!(ReportKind::Crash.offers_dump());
     assert!(!ReportKind::UpdateFailure.offers_dump());
@@ -129,16 +128,16 @@ fn identities_are_stable_unique_and_skip_the_console_peer() {
 }
 
 #[test]
-fn restart_and_force_appear_only_when_offered_and_restart_becomes_primary() {
+fn restart_appears_only_when_offered_and_becomes_primary() {
     let mut crash = ReportState::new(ReportKind::Crash);
     assert!(!crash.command(ReportAction::Restart).visible);
     assert_eq!(crash.primary(), ReportAction::Close);
     crash.set(ReportAction::Restart, CommandState { visible: true, enabled: true });
     assert_eq!(crash.primary(), ReportAction::Restart);
-    let conflict = ReportState::new(ReportKind::InstanceConflict);
-    assert!(!conflict.command(ReportAction::Force).visible);
-    assert!(conflict.command(ReportAction::Cancel).visible);
-    assert_eq!(conflict.primary(), ReportAction::Close);
+    let unresponsive = ReportState::new(ReportKind::UnresponsiveCopy);
+    assert!(unresponsive.command(ReportAction::Cancel).visible);
+    assert!(unresponsive.command(ReportAction::Close).visible);
+    assert_eq!(unresponsive.primary(), ReportAction::Close, "Close it and start is primary");
 }
 
 #[test]
@@ -146,7 +145,7 @@ fn inventory_is_valid_and_lists_only_the_kinds_peers() -> Result {
     for kind in [
         ReportKind::Crash,
         ReportKind::StartupFailure,
-        ReportKind::InstanceConflict,
+        ReportKind::UnresponsiveCopy,
         ReportKind::UpdateFailure,
     ] {
         let inventory = ReportLayout::inventory(kind, &LABELS);
@@ -209,7 +208,7 @@ fn detailsmax() -> usize {
 }
 
 #[test]
-fn footer_shows_each_kinds_commands_and_force_once_offered() -> Result {
+fn footer_shows_each_kinds_commands() -> Result {
     let mut resources = SceneResources::new("en")?;
     for (kind, expected) in [
         (ReportKind::StartupFailure, vec![ReportAction::Copy, ReportAction::Close]),
@@ -218,7 +217,7 @@ fn footer_shows_each_kinds_commands_and_force_once_offered() -> Result {
             vec![ReportAction::Copy, ReportAction::Export, ReportAction::Close],
         ),
         (ReportKind::Crash, vec![ReportAction::Copy, ReportAction::Export, ReportAction::Close]),
-        (ReportKind::InstanceConflict, vec![ReportAction::Cancel, ReportAction::Close]),
+        (ReportKind::UnresponsiveCopy, vec![ReportAction::Cancel, ReportAction::Close]),
     ] {
         let state = ReportState::new(kind);
         let measured = layout(kind, &state, &mut resources)?;
@@ -237,17 +236,6 @@ fn footer_shows_each_kinds_commands_and_force_once_offered() -> Result {
         assert!(visible(&frame).contains(&ReportAction::Dismiss));
         assert_eq!(visible(&frame).contains(&ReportAction::IncludeDump), kind.offers_dump());
     }
-    let mut state = ReportState::new(ReportKind::InstanceConflict);
-    state.set(ReportAction::Force, CommandState { visible: true, enabled: true });
-    let measured = layout(ReportKind::InstanceConflict, &state, &mut resources)?;
-    let frame = measured.compose(
-        &content(ReportKind::InstanceConflict),
-        &LABELS,
-        &state,
-        surface(measured.height(0.0), Theme::Dark),
-        None,
-    )?;
-    assert!(visible(&frame).contains(&ReportAction::Force));
     Ok(())
 }
 
@@ -341,14 +329,115 @@ fn light_theme_paints_the_light_footer_and_a_dark_close_glyph() -> Result {
     Ok(())
 }
 
+/// A 1366x768 laptop at 150% is 512 logical pixels tall; with a taskbar its work area is about
+/// 480, and the report keeps 48 of that free.
+const SMALL_SCREEN: f32 = 432.0;
+
+fn long_message(kind: ReportKind) -> ReportContent {
+    ReportContent {
+        message: "The backend stopped while SugarSubstitute was starting, and every retry failed \
+            with the same answer from the connection. "
+            .repeat(30),
+        ..content(kind)
+    }
+}
+
+fn body_peer(frame: &ReportFrame, action: ReportAction) -> Option<&crate::form::Control> {
+    frame.page_controls.iter().find(|control| control.id == action.id())
+}
+
 #[test]
-fn compose_rejects_a_surface_shorter_than_the_report() -> Result {
+fn a_short_window_keeps_the_title_bar_and_footer_and_scrolls_the_body() -> Result {
+    let mut resources = SceneResources::new("en")?;
+    let kind = ReportKind::Crash;
+    let mut state = ReportState::new(kind);
+    state.set(ReportAction::Restart, CommandState { visible: true, enabled: true });
+    let measured = ReportLayout::measure(
+        &long_message(kind),
+        &LABELS,
+        &state,
+        surface(900.0, Theme::Dark),
+        &mut resources,
+        None,
+        SMALL_SCREEN,
+    )?;
+    assert!(measured.height(0.0) > SMALL_SCREEN, "the long message does not fit");
+    let spec = surface(SMALL_SCREEN, Theme::Dark);
+    let frame = measured.compose(&long_message(kind), &LABELS, &state, spec, None)?;
+    assert_eq!(frame.viewport.y, 32.0, "the body starts under the title bar");
+    assert!((frame.viewport.y + frame.viewport.height - (SMALL_SCREEN - 68.0)).abs() < 0.01);
+    assert!(frame.content_height > frame.viewport.height, "the body scrolls");
+    let footer: Vec<_> = frame
+        .controls
+        .iter()
+        .filter(|c| c.availability.visible && c.bounds.y > SMALL_SCREEN - 68.0)
+        .filter_map(|c| ReportAction::from_id(c.id))
+        .collect();
+    for action in
+        [ReportAction::Copy, ReportAction::Export, ReportAction::Close, ReportAction::Restart]
+    {
+        assert!(footer.contains(&action), "{action:?} stays in the footer");
+    }
+    assert!(frame.controls.iter().any(|c| c.id == ReportAction::Dismiss.id()));
+    let toggle = body_peer(&frame, ReportAction::ToggleDetails).ok_or("toggle")?;
+    assert!(!toggle.availability.visible, "the toggle is below the first screen of message");
+
+    state.scroll = 1.0e6;
+    let end = measured.compose(&long_message(kind), &LABELS, &state, spec, None)?;
+    assert!((end.scroll - (end.content_height - end.viewport.height)).abs() < 0.01);
+    let toggle = body_peer(&end, ReportAction::ToggleDetails).ok_or("toggle")?;
+    assert!(toggle.availability.visible, "scrolling reaches the toggle");
+    assert!(
+        toggle.bounds.y >= 0.0 && toggle.bounds.y + toggle.bounds.height <= end.viewport.height
+    );
+    assert!(body_peer(&end, ReportAction::IncludeDump).is_some_and(|c| c.availability.visible));
+    let pixels = paint(end, spec, &mut resources)?;
+    assert_eq!(pixels.shape().height(), SMALL_SCREEN as u32);
+    Ok(())
+}
+
+#[test]
+fn small_screen_details_scroll_with_the_body_and_paint_only_visible_lines() -> Result {
+    let mut resources = SceneResources::new("en")?;
+    let kind = ReportKind::StartupFailure;
+    let mut state = ReportState::new(kind);
+    let measured = ReportLayout::measure(
+        &long_message(kind),
+        &LABELS,
+        &state,
+        surface(900.0, Theme::Dark),
+        &mut resources,
+        None,
+        SMALL_SCREEN,
+    )?;
+    let spec = surface(SMALL_SCREEN, Theme::Dark);
+    let mut details = DetailsText::new(&report_text(2000))?;
+    while !details.measure(ReportLayout::details_text_width(), spec, &mut resources, None, 256)? {}
+    state.expanded = true;
+    state.expansion = 1.0;
+    state.scroll = 20_000.0;
+    let frame = measured.compose(&long_message(kind), &LABELS, &state, spec, Some(&details))?;
+    assert!(frame.content_height > 2000.0 * DetailsText::LINE_HEIGHT, "all text is reachable");
+    let lines: Vec<_> = frame
+        .page
+        .iter()
+        .filter_map(|e| match e {
+            Element::Label { text, .. } if text.starts_with("cause ") => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(!lines.is_empty() && lines.len() < 40, "{} lines painted", lines.len());
+    assert!(frame.page.len() <= 256);
+    let painted = paint(frame, spec, &mut resources)?;
+    assert_eq!(painted.shape().height(), SMALL_SCREEN as u32);
+    Ok(())
+}
+
+#[test]
+fn the_fully_expanded_report_uses_the_compact_panel_on_a_small_screen() -> Result {
     let mut resources = SceneResources::new("en")?;
     let kind = ReportKind::StartupFailure;
     let state = ReportState::new(kind);
-    let measured = layout(kind, &state, &mut resources)?;
-    let short = surface(measured.height(0.0) - 20.0, Theme::Dark);
-    assert!(measured.compose(&content(kind), &LABELS, &state, short, None).is_err());
     let compact = ReportLayout::measure(
         &content(kind),
         &LABELS,
@@ -358,9 +447,6 @@ fn compose_rejects_a_surface_shorter_than_the_report() -> Result {
         None,
         500.0,
     )?;
-    assert!(
-        (compact.height(1.0) - compact.height(0.0) - 172.0).abs() < 0.01,
-        "short screens get the compact details panel"
-    );
+    assert!((compact.height(1.0) - compact.height(0.0) - 172.0).abs() < 0.01);
     Ok(())
 }

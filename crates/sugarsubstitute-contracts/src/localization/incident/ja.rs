@@ -4,8 +4,8 @@
 use super::ReportMessages;
 /// Complete JA incident presentation copy.
 pub static JA: ReportMessages = ReportMessages {
-    title: "SugarSubstitute インシデント",
-    explanation: "SugarSubstitute がインシデントを記録しました。レポートはローカルに保存されています。",
+    title: "SugarSubstitute が予期せず終了しました",
+    explanation: "SugarSubstitute が予期せず終了しました。発生した内容のレポートはこのコンピューターに保存されています。",
     recovery_capture_degraded: "このコーディネーターと既存のウィンドウではクラッシュ情報を収集できません。再起動したウィンドウには新しいクラッシュハンドラーが割り当てられます。",
     copy: "レポートをコピー",
     export: "レポートをエクスポート",
@@ -53,6 +53,7 @@ pub static JA: ReportMessages = ReportMessages {
     update_message: "アップデートをインストールできませんでした。現在のバージョンは引き続き使用でき、このレポートをコピーまたはエクスポートできます。",
     version: "バージョン",
     update_phase: "ステップ",
+    export_file_name: "SugarSubstitute アップデートレポート.txt",
     startup_failure: [
         "接続準備失敗",
         "接続利用不可",

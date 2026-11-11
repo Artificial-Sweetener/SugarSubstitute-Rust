@@ -4,8 +4,8 @@
 use super::ReportMessages;
 /// Complete ZH_HANS incident presentation copy.
 pub static ZH_HANS: ReportMessages = ReportMessages {
-    title: "SugarSubstitute 事件",
-    explanation: "SugarSubstitute 已记录事件。报告仍保存在本地。",
+    title: "SugarSubstitute 意外关闭",
+    explanation: "SugarSubstitute 意外关闭。有关此情况的报告已保存在此计算机上。",
     recovery_capture_degraded: "此协调器及其现有窗口的崩溃捕获不可用。重新启动的窗口将使用新的崩溃处理程序。",
     copy: "复制报告",
     export: "导出报告",
@@ -53,6 +53,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     update_message: "无法安装更新。您当前的版本仍可继续使用，您可以复制或导出此报告。",
     version: "版本",
     update_phase: "步骤",
+    export_file_name: "SugarSubstitute 更新报告.txt",
     startup_failure: [
         "连接准备失败",
         "连接不可用",

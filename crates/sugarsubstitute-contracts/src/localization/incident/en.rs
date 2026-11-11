@@ -4,8 +4,8 @@
 use super::ReportMessages;
 /// Complete EN incident presentation copy.
 pub static EN: ReportMessages = ReportMessages {
-    title: "SugarSubstitute incident",
-    explanation: "SugarSubstitute recorded an incident. Your report remains stored locally.",
+    title: "SugarSubstitute closed unexpectedly",
+    explanation: "SugarSubstitute closed unexpectedly. A report about what happened is saved on this computer.",
     recovery_capture_degraded: "Crash capture for this coordinator and its existing windows is unavailable. Restarted windows receive a fresh crash handler.",
     copy: "Copy report",
     export: "Export report",
@@ -53,6 +53,7 @@ pub static EN: ReportMessages = ReportMessages {
     update_message: "The update could not be installed. The version you have keeps working, and you can copy or export this report.",
     version: "Version",
     update_phase: "Step",
+    export_file_name: "SugarSubstitute update report.txt",
     startup_failure: [
         "Connection preparation failed",
         "Connection unavailable",

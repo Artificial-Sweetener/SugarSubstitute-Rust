@@ -19,6 +19,25 @@ pub struct Window {
     pub visible: bool,
     /// Stable close button in the application's retained native inventory.
     pub close: ControlId,
+    /// Initial logical client size; a lifetime with a preferred size replaces it before reveal.
+    pub size: [f64; 2],
+    /// Smallest logical client size the user may resize to.
+    pub min_size: Option<[f64; 2]>,
+    /// Whether the user may resize the window.
+    pub resizable: bool,
+}
+impl Window {
+    /// The installer's window: 1180 by 760, resizable down to 720 by 560.
+    pub fn installer(title: String, visible: bool, close: ControlId) -> Self {
+        Self {
+            title,
+            visible,
+            close,
+            size: [1180.0, 760.0],
+            min_size: Some([720.0, 560.0]),
+            resizable: true,
+        }
+    }
 }
 /// One immutable prepared page, including the original native text revisions.
 pub struct Page<'a> {
@@ -101,6 +120,26 @@ pub trait Lifetime {
     /// # Errors
     /// Preserves acknowledgement failures without granting process/storage authority.
     fn presented(&mut self) -> Result<(), Box<dyn Error>>;
+    /// Receive the logical height of the work area the window opened on, before start.
+    fn work_area(&mut self, height: f64) {
+        let _ = height;
+    }
+    /// Physical client size the window should adopt. The adapter applies a change before
+    /// presenting the next page, so a page prepared at this size appears at once.
+    fn preferred_size(&self) -> Option<[u32; 2]> {
+        None
+    }
+    /// Take text the user asked to copy; the adapter owns the clipboard transfer.
+    fn clipboard(&mut self) -> Option<String> {
+        None
+    }
+    /// Observe the outcome of the last clipboard transfer.
+    /// # Errors
+    /// Preserves application failures; a failed transfer itself is a value, not an error.
+    fn copied(&mut self, result: Result<(), String>) -> Result<(), Box<dyn Error>> {
+        let _ = result;
+        Ok(())
+    }
     /// Lend an optional offscreen observer after actual native presentation has completed.
     #[cfg(any(test, feature = "boundary-fixtures"))]
     fn pixel_capture(&mut self) -> Option<&mut dyn crate::pixel_capture::PixelCapture> {

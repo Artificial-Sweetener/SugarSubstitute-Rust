@@ -220,11 +220,11 @@ impl Lifetime for Fixture {
 fn qualify() -> TestResult {
     let mut fixture = Fixture::new(false)?;
     run(
-        super::super::Window {
-            title: "Native installer loop qualification".into(),
-            visible: true,
-            close: ControlId::new(1)?,
-        },
+        super::super::Window::installer(
+            "Native installer loop qualification".into(),
+            true,
+            ControlId::new(1)?,
+        ),
         &mut fixture,
     )?;
     assert!(fixture.finished);
@@ -235,11 +235,11 @@ fn qualify() -> TestResult {
 fn qualify_failure() -> TestResult {
     let mut fixture = Fixture::new(true)?;
     let result = run(
-        super::super::Window {
-            title: "Native installer loop qualification".into(),
-            visible: true,
-            close: ControlId::new(1)?,
-        },
+        super::super::Window::installer(
+            "Native installer loop qualification".into(),
+            true,
+            ControlId::new(1)?,
+        ),
         &mut fixture,
     );
     assert!(fixture.finished);
@@ -322,11 +322,11 @@ fn qualify_invalid() -> TestResult {
     let mut fixture = Fixture::new(false)?;
     fixture.fields[0].id = ControlId::new(99)?;
     let result = run(
-        super::super::Window {
-            title: "Native installer loop qualification".into(),
-            visible: true,
-            close: ControlId::new(1)?,
-        },
+        super::super::Window::installer(
+            "Native installer loop qualification".into(),
+            true,
+            ControlId::new(1)?,
+        ),
         &mut fixture,
     );
     assert!(fixture.finished);

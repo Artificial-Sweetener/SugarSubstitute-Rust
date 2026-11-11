@@ -5,9 +5,11 @@ use super::super::{NativeReportView, ReportSurfaceError};
 use super::{
     buffer::Text,
     callback::{Callback, Event, procedure},
-    clipboard::Clipboard,
 };
-use crate::windows_subclass::{Registration, install, remove};
+use crate::{
+    windows_clipboard::Clipboard,
+    windows_subclass::{Registration, install, remove},
+};
 use std::{ffi::c_void, rc::Rc};
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
@@ -267,7 +269,9 @@ impl Controls {
     }
     pub(super) fn retire(&mut self) -> Result<(), ReportSurfaceError> {
         self.callback.enabled.set(false);
-        self.clipboard.retire()?;
+        self.clipboard
+            .retire()
+            .map_err(|cause| ReportSurfaceError::new("report_clipboard_retire", cause))?;
         for slot in &mut self.peers {
             if let Some(peer) = slot {
                 let was_installed = peer.registration.installed();

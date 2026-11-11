@@ -46,18 +46,19 @@ pub(super) fn run(
     let mut events = builder.build();
     let proxy = events.create_proxy();
     let wake_lifetime = WakeLifetime::new();
-    let window = Rc::new(
-        WindowBuilder::new()
-            .with_title(options.title)
-            .with_inner_size(LogicalSize::new(1180, 760))
-            .with_min_inner_size(LogicalSize::new(720, 560))
-            .with_max_inner_size(tao::dpi::PhysicalSize::new(4096, 4096))
-            .with_decorations(false)
-            .with_transparent(true)
-            .with_theme(None)
-            .with_visible(false)
-            .build(&events)?,
-    );
+    let mut builder = WindowBuilder::new()
+        .with_title(options.title)
+        .with_inner_size(LogicalSize::new(options.size[0], options.size[1]))
+        .with_resizable(options.resizable)
+        .with_max_inner_size(tao::dpi::PhysicalSize::new(4096, 4096))
+        .with_decorations(false)
+        .with_transparent(true)
+        .with_theme(None)
+        .with_visible(false);
+    if let Some([width, height]) = options.min_size {
+        builder = builder.with_min_inner_size(LogicalSize::new(width, height));
+    }
+    let window = Rc::new(builder.build(&events)?);
     let (mut presenter, mut failure): (_, Option<Box<dyn Error>>) =
         match Presenter::new_main(window.clone(), window.theme() == Theme::Dark) {
             Ok(owner) => (Some(owner), None),
@@ -76,6 +77,16 @@ pub(super) fn run(
         failure = Some(Box::new(cause));
     }
     let mut picker_request = None;
+    let mut applied_size = None;
+    match presenter.as_ref().map(Presenter::work_area_height).transpose() {
+        Ok(Some(height)) => lifetime.work_area(height),
+        Ok(None) => {}
+        Err(cause) => {
+            if failure.is_none() {
+                failure = Some(Box::new(cause));
+            }
+        }
+    }
     let scroll = ScrollViewport::new(window.clone());
     if let Err(cause) = scroll.initialize()
         && failure.is_none()
@@ -220,6 +231,25 @@ pub(super) fn run(
                         lifetime.input(Event::Scroll(position))?;
                     }
                     lifetime.advance(started.elapsed())?;
+                    if !closing && let Some(text) = lifetime.clipboard() {
+                        let copied = crate::windows_clipboard::copy_text(::windows::Win32::Foundation::HWND(window.hwnd() as *mut _), &text);
+                        lifetime.copied(copied.map_err(|cause| cause.to_string()))?;
+                    }
+                    if !closing && let Some(size) = lifetime.preferred_size() {
+                        if Some(size) != applied_size {
+                            apply_client_size(&window, size);
+                            applied_size = Some(size);
+                            if !revealed { presenter.as_ref().ok_or("Native installer presenter absent")?.recenter()?; }
+                        }
+                        // Acknowledge every turn with the size the window really has, so a
+                        // lifetime waiting on its request prepares for this window, not the request.
+                        let current = window.inner_size();
+                        if current.width > 0 && current.height > 0 {
+                            let next = FrameShape::new(current.width, current.height, window.scale_factor())?;
+                            shape = Some(next);
+                            lifetime.resize(next)?;
+                        }
+                    }
                     if !closing {
                         if let Some(page) = lifetime.page()
                             && Some(page.frame.shape()) == shape
@@ -330,6 +360,26 @@ pub(super) fn run(
         }
         (Some(cause), _) => Err(cause),
         (None, result) => result,
+    }
+}
+
+/// Give the window `size` physical client pixels. Tao enlarges a request for an undecorated
+/// window with a shadow by its hidden frame, and not on every call, so each observed difference
+/// is fed back into the next request. A window that still differs keeps its real size; the
+/// lifetime is told that size and prepares for it.
+fn apply_client_size(window: &tao::window::Window, size: [u32; 2]) {
+    let mut request = size;
+    for _ in 0..3 {
+        window.set_inner_size(tao::dpi::PhysicalSize::new(request[0], request[1]));
+        let actual = window.inner_size();
+        if [actual.width, actual.height] == size {
+            return;
+        }
+        let adjust = |request: u32, wanted: u32, got: u32| {
+            (i64::from(request) + i64::from(wanted) - i64::from(got)).clamp(1, 4096) as u32
+        };
+        request =
+            [adjust(request[0], size[0], actual.width), adjust(request[1], size[1], actual.height)];
     }
 }
 

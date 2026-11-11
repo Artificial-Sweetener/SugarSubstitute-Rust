@@ -9,6 +9,8 @@ mod error;
 #[cfg(target_os = "windows")]
 mod preparation;
 mod state;
+/// One Fluent report window for startup failure, another copy running and update failure.
+pub mod surface;
 mod view;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]

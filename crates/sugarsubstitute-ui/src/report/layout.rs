@@ -43,7 +43,7 @@ pub struct ReportLayout {
 
 impl ReportLayout {
     /// The stable peer inventory of a report kind. Commands a kind never offers are absent;
-    /// commands offered later (Restart, Force) start hidden.
+    /// commands offered later (Restart) start hidden.
     pub fn inventory(kind: ReportKind, labels: &ReportLabels) -> Vec<Control> {
         let state = ReportState::new(kind);
         let parked = Bounds { x: 0.0, y: 0.0, width: 1.0, height: 1.0 };
@@ -130,13 +130,7 @@ impl ReportLayout {
 
     /// Natural window height at a details expansion between 0 and 1.
     pub fn height(&self, expansion: f32) -> f32 {
-        self.body_end(expansion) + BOTTOM + FOOTER
-    }
-
-    /// Logical details panel inside the window at an expansion.
-    pub fn details_panel(&self, expansion: f32) -> Bounds {
-        let top = self.toggle_top() + BUTTON + SPACING;
-        Bounds { x: MARGIN, y: top, width: WIDTH - 2.0 * MARGIN, height: self.reveal(expansion) }
+        self.body_end(self.details, expansion) + BOTTOM + FOOTER
     }
 
     /// Width available to details text lines.
@@ -144,9 +138,20 @@ impl ReportLayout {
         WIDTH - 2.0 * MARGIN - 2.0 * DETAILS_PADDING - SCROLL_GUTTER
     }
 
+    /// Height of the details panel when the window fits the report.
+    pub(super) fn details_height(&self) -> f32 {
+        self.details
+    }
+
+    /// Space the details panel of height `panel` and its spacing take at an expansion.
+    pub(super) fn opening(&self, panel: f32, expansion: f32) -> f32 {
+        (SPACING + panel) * expansion.clamp(0.0, 1.0)
+    }
+
     pub(super) fn header(&self) -> f32 {
         self.title + if self.message > 0.0 { 4.0 + self.message } else { 0.0 }
     }
+
     pub(super) fn summary_height(&self) -> f32 {
         if self.summary.is_empty() {
             return 0.0;
@@ -154,23 +159,15 @@ impl ReportLayout {
         let rows: f32 = self.summary.iter().map(|(l, v)| l.max(*v)).sum();
         20.0 + rows + 6.0 * (self.summary.len() - 1) as f32
     }
-    fn toggle_top(&self) -> f32 {
-        let mut y = TITLE_BAR + TOP + self.header();
-        if !self.summary.is_empty() {
-            y += SPACING + self.summary_height();
-        }
-        y + SPACING
-    }
-    fn reveal(&self, expansion: f32) -> f32 {
-        ((SPACING + self.details) * expansion.clamp(0.0, 1.0) - SPACING).max(0.0)
-    }
-    pub(super) fn body_end(&self, expansion: f32) -> f32 {
+
+    /// Bottom of the body when the details panel is `panel` high.
+    pub(super) fn body_end(&self, panel: f32, expansion: f32) -> f32 {
         let mut y = TITLE_BAR + TOP + self.header();
         if !self.summary.is_empty() {
             y += SPACING + self.summary_height();
         }
         if self.details > 0.0 {
-            y += SPACING + BUTTON + (SPACING + self.details) * expansion.clamp(0.0, 1.0);
+            y += SPACING + BUTTON + self.opening(panel, expansion);
         }
         if let Some((label, warning)) = self.consent {
             y += SPACING + label + 4.0 + warning;

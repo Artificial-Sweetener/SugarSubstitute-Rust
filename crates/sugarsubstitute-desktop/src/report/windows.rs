@@ -3,7 +3,6 @@
 //! Own the browser-independent Windows report loop and checked teardown.
 mod buffer;
 mod callback;
-mod clipboard;
 mod controls;
 mod copy;
 mod dispatch;

@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:26fcc30b1f4508d844ea7740c09c56981933733b494a75bc0d10bee9c1f8cf52"
+source_sha256 = "sha256:3ad21e0cf3c9214a7b8f9fa23d52fc307588e1bec1d6e3d82a12a02e8ba7f28a"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -2264,6 +2264,14 @@ source_sha256 = "sha256:72c73ac705b2d0fa1b996a497a1efd65da35d0a105de85fb92466000
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise abandoned-selection recovery through real exclusion and atomic protected storage. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:4fbfbfe63cd584f60783b7f74d289b86b9f9d9e11d7cf0ad82881bef903c45f1"
+capabilities = ["std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture observation for: Show each report kind in the real form window on a private desktop. Writes only its own rendered captures to the optional qualification evidence directory, not runtime storage."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/settlement/tests.rs"

@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! One report surface for every native failure presentation: crash, startup failure, another
-//! copy running, and update failure. The model is plain data; composition produces shared scene
+//! One report surface for every native failure presentation: crash, startup failure, an
+//! unresponsive previous window, and update failure. The model is plain data; composition produces shared scene
 //! commands and an accessible peer inventory. Native windows, clipboard and files stay with the
 //! desktop adapter, which hosts this view without interpreting its layout.
 
 use crate::form::ControlId;
 use std::num::NonZeroU16;
 
+mod body;
 mod compose;
 mod details;
 mod layout;
@@ -49,8 +50,8 @@ pub enum ReportKind {
     Crash,
     /// This launch could not start.
     StartupFailure,
-    /// Another copy holds the profile; the user may close it, later force it, or cancel.
-    InstanceConflict,
+    /// The previous window stopped responding; the user may close it and start, or cancel.
+    UnresponsiveCopy,
     /// An update attempt failed. Copy and Export only; nothing restarts or uploads.
     UpdateFailure,
 }
@@ -66,9 +67,7 @@ impl ReportKind {
                 ReportAction::Restart,
             ],
             Self::StartupFailure => &[ReportAction::Copy, ReportAction::Close],
-            Self::InstanceConflict => {
-                &[ReportAction::Cancel, ReportAction::Force, ReportAction::Close]
-            }
+            Self::UnresponsiveCopy => &[ReportAction::Cancel, ReportAction::Close],
             Self::UpdateFailure => &[ReportAction::Copy, ReportAction::Export, ReportAction::Close],
         }
     }
@@ -76,7 +75,7 @@ impl ReportKind {
     /// The command the window's close button and Escape stand for.
     pub const fn dismissal(self) -> ReportAction {
         match self {
-            Self::InstanceConflict => ReportAction::Cancel,
+            Self::UnresponsiveCopy => ReportAction::Cancel,
             _ => ReportAction::Close,
         }
     }
@@ -100,19 +99,17 @@ pub enum ReportAction {
     Copy,
     /// Save the report to a file the user selects.
     Export,
-    /// Close the report (for a conflict: close the other copy and continue).
+    /// Close the report (for an unresponsive previous window: close it and start).
     Close,
     /// Close and request a fresh start.
     Restart,
-    /// Terminate the other copy after ordinary close stalled.
-    Force,
-    /// Leave the other copy alone and cancel this launch.
+    /// Leave the previous window alone and cancel this start.
     Cancel,
 }
 
 impl ReportAction {
     /// Every action in inventory order.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 8] = [
         Self::Dismiss,
         Self::ToggleDetails,
         Self::IncludeDump,
@@ -120,7 +117,6 @@ impl ReportAction {
         Self::Export,
         Self::Close,
         Self::Restart,
-        Self::Force,
         Self::Cancel,
     ];
 
@@ -134,7 +130,6 @@ impl ReportAction {
             Self::Export => 6,
             Self::Close => 7,
             Self::Restart => 8,
-            Self::Force => 9,
             Self::Cancel => 10,
         };
         // Every literal above is nonzero, so the fallback arm is never taken.
@@ -163,12 +158,10 @@ pub struct ReportLabels {
     pub copy: &'static str,
     /// Export command.
     pub export: &'static str,
-    /// Close command; for a conflict, "close the other copy and continue".
+    /// Close command; for an unresponsive previous window, "close it and start".
     pub close: &'static str,
     /// Restart command.
     pub restart: &'static str,
-    /// Force command.
-    pub force: &'static str,
     /// Cancel command.
     pub cancel: &'static str,
     /// Dump consent label.
@@ -189,7 +182,6 @@ impl ReportLabels {
             ReportAction::Export => self.export,
             ReportAction::Close => self.close,
             ReportAction::Restart => self.restart,
-            ReportAction::Force => self.force,
             ReportAction::Cancel => self.cancel,
         }
     }
@@ -255,7 +247,7 @@ pub struct Interaction {
 /// Mutable presentation state owned by the hosting surface.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReportState {
-    commands: [CommandState; 9],
+    commands: [CommandState; 8],
     /// Dump consent; reset whenever the report text is replaced.
     pub include_dump: bool,
     /// Current details expansion, 0 collapsed through 1 expanded.
@@ -271,11 +263,11 @@ pub struct ReportState {
 }
 
 impl ReportState {
-    /// Every footer command of `kind` is visible and enabled, except Restart and Force, which
-    /// appear only when their owner offers them.
+    /// Every footer command of `kind` is visible and enabled, except Restart, which appears
+    /// only when its owner offers it.
     pub fn new(kind: ReportKind) -> Self {
         let mut state = Self {
-            commands: [CommandState::default(); 9],
+            commands: [CommandState::default(); 8],
             include_dump: false,
             expansion: 0.0,
             expanded: false,
@@ -291,7 +283,7 @@ impl ReportState {
             CommandState { visible: kind.offers_dump(), enabled: true },
         );
         for action in kind.commands() {
-            let offered = !matches!(action, ReportAction::Restart | ReportAction::Force);
+            let offered = *action != ReportAction::Restart;
             state.set(*action, CommandState { visible: offered, enabled: offered });
         }
         state

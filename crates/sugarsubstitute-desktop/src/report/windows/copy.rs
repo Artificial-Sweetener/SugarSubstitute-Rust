@@ -52,7 +52,10 @@ impl CopyBoundary for NativeCopy<'_> {
             .text
             .as_ref()
             .ok_or_else(|| ReportSurfaceError::rejected("report_copy_text_missing"))?;
-        self.controls.clipboard.copy(&text.units, &self.controls.lease)
+        self.controls
+            .clipboard
+            .copy(&text.units, &self.controls.lease)
+            .map_err(|cause| ReportSurfaceError::new("report_clipboard_transfer", cause))
     }
     fn status(&mut self, success: bool) -> Result<(), ReportSurfaceError> {
         self.controls.status(if success { self.labels.copied } else { self.labels.copy_failed })

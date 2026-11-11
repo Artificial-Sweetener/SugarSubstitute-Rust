@@ -17,11 +17,11 @@ fn qualify_scroll() -> TestResult {
     let mut fixture = Fixture::new(false)?;
     fixture.exercise_scroll = true;
     run(
-        super::super::Window {
-            title: "Native installer loop qualification".into(),
-            visible: true,
-            close: ControlId::new(1)?,
-        },
+        super::super::Window::installer(
+            "Native installer loop qualification".into(),
+            true,
+            ControlId::new(1)?,
+        ),
         &mut fixture,
     )?;
     assert_eq!(fixture.count, 3);

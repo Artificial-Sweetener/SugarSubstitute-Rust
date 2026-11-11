@@ -118,13 +118,15 @@ pub struct ReportMessages {
     pub version: &'static str,
     /// Update step summary label.
     pub update_phase: &'static str,
+    /// Suggested file name when exporting an update report.
+    pub export_file_name: &'static str,
     /// Accepted startup failure categories in the explicit StartupFailureCode order.
     pub startup_failure: [&'static str; 5],
 }
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 70] {
+    pub fn labels(&self) -> [&'static str; 71] {
         [
             self.title,
             self.explanation,
@@ -191,6 +193,7 @@ impl ReportMessages {
             self.update_message,
             self.version,
             self.update_phase,
+            self.export_file_name,
             self.startup_failure[0],
             self.startup_failure[1],
             self.startup_failure[2],

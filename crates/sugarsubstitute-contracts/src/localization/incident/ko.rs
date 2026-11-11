@@ -4,8 +4,8 @@
 use super::ReportMessages;
 /// Complete KO incident presentation copy.
 pub static KO: ReportMessages = ReportMessages {
-    title: "SugarSubstitute 사고",
-    explanation: "SugarSubstitute가 사고를 기록했습니다. 보고서는 로컬에 저장되어 있습니다.",
+    title: "SugarSubstitute가 예기치 않게 종료되었습니다",
+    explanation: "SugarSubstitute가 예기치 않게 종료되었습니다. 발생한 내용에 대한 보고서가 이 컴퓨터에 저장되어 있습니다.",
     recovery_capture_degraded: "이 코디네이터와 기존 창에서는 충돌 정보를 수집할 수 없습니다. 다시 시작한 창에는 새 충돌 처리기가 할당됩니다.",
     copy: "보고서 복사",
     export: "보고서 내보내기",
@@ -53,6 +53,7 @@ pub static KO: ReportMessages = ReportMessages {
     update_message: "업데이트를 설치할 수 없습니다. 현재 버전은 계속 작동하며 이 보고서를 복사하거나 내보낼 수 있습니다.",
     version: "버전",
     update_phase: "단계",
+    export_file_name: "SugarSubstitute 업데이트 보고서.txt",
     startup_failure: [
         "연결 준비 실패",
         "연결 사용 불가",
