@@ -16,6 +16,8 @@ integrations/**/*.css text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 *.cube text eol=lf
+# Generated contract bindings are compiled byte-for-byte by the Substitute workspace.
+*.rs text eol=lf
 LICENSE text eol=lf
 
 # Preserve registered artwork hashes across Windows checkouts and browser deployment.
