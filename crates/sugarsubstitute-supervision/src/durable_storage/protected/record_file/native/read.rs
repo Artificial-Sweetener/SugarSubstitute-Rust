@@ -92,7 +92,7 @@ pub(super) fn shape<const N: usize>(
             return Ok(RecordRead::Empty);
         }
         if length != N as i64 {
-            return Err(ClaimError::invalid("claim_file_shape"));
+            return Err(ClaimError::invalid(super::super::UNREADABLE_LENGTH));
         }
         let mut bytes = [0; N];
         let mut count = 0;
