@@ -124,8 +124,16 @@ export class ComfyDesktopDocuments {
     const baselineGraphJson = baseline === null ? null : encodeGraph(baseline);
     const temporary = workflow.isTemporary === true;
     const identityOwner = tracker ?? workflow;
+    // A tab restored before Comfy built its tracker keeps the identity its checkpoint named.
     if (!this.#sourceIdentities.has(identityOwner))
-      this.#sourceIdentities.set(identityOwner, temporary ? null : text(workflow.path));
+      this.#sourceIdentities.set(
+        identityOwner,
+        this.#sourceIdentities.has(workflow)
+          ? (this.#sourceIdentities.get(workflow) ?? null)
+          : temporary
+            ? null
+            : text(workflow.path),
+      );
     const ds = active ? (isRecord(this.#app.canvas) ? this.#app.canvas.ds : null) : tracker?.ds;
     const document: SessionDocument = {
       graphJson,
@@ -145,7 +153,8 @@ export class ComfyDesktopDocuments {
   /**
    * Name the tab Comfy restored for each checkpoint entry: a saved entry by its path, a
    * temporary one by its name among Comfy's temporary tabs. An entry Comfy did not reopen has
-   * no tab and is left out; a tab no entry describes keeps only what Comfy restored.
+   * no tab and is left out; a tab no entry describes keeps only what Comfy restored. A matched
+   * tab keeps the source identity its checkpoint entry recorded.
    */
   match(
     entries: readonly SessionEntry[],
@@ -172,7 +181,10 @@ export class ComfyDesktopDocuments {
       const [workflow] = unclaimed.splice(index, 1);
       const id = workflow ? this.options.adapter.identifyHostWorkflow(workflow) : null;
       const context = id ? committed.find((item) => item.sessionId === id) : undefined;
-      if (context) contexts.set(entry.id, context);
+      if (!workflow || !context) continue;
+      const tracker = isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
+      this.#sourceIdentities.set(tracker ?? workflow, document.sourceIdentity);
+      contexts.set(entry.id, context);
     }
     return contexts;
   }
