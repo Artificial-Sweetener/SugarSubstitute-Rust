@@ -11,6 +11,7 @@ impl FailureObservation {
             AdmissionError::ShuttingDown => "admission_shutting_down",
             AdmissionError::QueueSaturated { .. } => "admission_queue_saturated",
             AdmissionError::CompletionSaturated => "admission_completion_saturated",
+            AdmissionError::ExceedsCapacity { .. } => "admission_exceeds_capacity",
             AdmissionError::MemorySaturated { .. } => "admission_memory_saturated",
             AdmissionError::Memory(_) => "admission_memory",
             AdmissionError::DeadlineRequired => "admission_deadline_required",

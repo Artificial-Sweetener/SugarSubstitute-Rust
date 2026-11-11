@@ -4344,7 +4344,7 @@ rationale = "An owned temporary PNG fixture exercises acquisition cancellation a
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/source_io/retained/inputs.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:bcf4c5f376c7feff1d50c6078a15d01300df652229fdaef26a66ee36f40502db"
+source_sha256 = "sha256:0424418b4adbfd5966c44635d0bfadbdebd314b116384675866dd6433db8d15a"
 capabilities = ["std::fs::File::create"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while input documents load, re-base and retire through the canvas worker."

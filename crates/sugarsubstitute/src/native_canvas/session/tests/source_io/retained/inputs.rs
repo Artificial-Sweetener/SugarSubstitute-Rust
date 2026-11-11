@@ -18,6 +18,7 @@ use std::{
 };
 use sugarsubstitute_canvas::{DocumentSnapshot, LayerContent, LayerId, MaskAppearance};
 
+mod admission;
 mod editing;
 mod edits;
 mod masks;
