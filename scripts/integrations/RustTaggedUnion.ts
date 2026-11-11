@@ -25,15 +25,38 @@ interface Field {
 }
 const SCALARS = ['f64', 'u64', 'i64', 'bool', '()'];
 
-/** Read the shared discriminator: commands and messages use `type`, results use `kind`. */
-function discriminator(value: Schema): 'type' | 'kind' {
-  const first = Array.isArray(value.oneOf) ? (value.oneOf[0] as unknown) : undefined;
-  const properties =
-    first && typeof first === 'object' && !Array.isArray(first)
-      ? (first as Schema).properties
-      : undefined;
-  const key = properties && typeof properties === 'object' ? Object.keys(properties)[0] : undefined;
-  return key === 'kind' ? 'kind' : 'type';
+/**
+ * Read the wire tag: the first member of the first branch when every branch fixes it to a string.
+ *
+ * Commands and messages use `type`, results use `kind` and choices such as the memory preference
+ * use `mode`. Unions without a common leading constant keep `type`, which branch validation then
+ * requires of every branch.
+ */
+function discriminator(value: Schema): string {
+  const branches = Array.isArray(value.oneOf) ? (value.oneOf as unknown[]) : [];
+  const leading = (branch: unknown): string | undefined => {
+    const properties =
+      branch && typeof branch === 'object' && !Array.isArray(branch)
+        ? (branch as Schema).properties
+        : undefined;
+    return properties && typeof properties === 'object' ? Object.keys(properties)[0] : undefined;
+  };
+  const key = leading(branches[0]);
+  const fixed = (branch: unknown): boolean => {
+    const properties = (branch as Schema).properties as Schema;
+    const member = key === undefined ? undefined : properties[key];
+    return (
+      !!member &&
+      typeof member === 'object' &&
+      !Array.isArray(member) &&
+      typeof (member as Schema).const === 'string'
+    );
+  };
+  return key &&
+    /^[a-z]+$/.test(key) &&
+    branches.every((branch) => leading(branch) === key && fixed(branch))
+    ? key
+    : 'type';
 }
 
 /** Reject ambiguous tags and unsupported branch shapes before emitting any Rust. */

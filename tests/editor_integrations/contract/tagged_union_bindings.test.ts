@@ -153,3 +153,33 @@ test.each([
 ])('rejects unsupported or ambiguous tagged schema %#', (node) => {
   expect(() => compile(node)).toThrow();
 });
+
+/** Build a closed branch whose leading member is an arbitrary wire tag. */
+function tagged(key: string, tag: string, fields: Schema = {}): Schema {
+  const properties = { [key]: { const: tag }, ...fields };
+  return {
+    type: 'object',
+    properties,
+    required: Object.keys(properties),
+    additionalProperties: false,
+  };
+}
+
+test('tags a choice by its common leading constant, such as a mode', () => {
+  const source = compile({
+    oneOf: [
+      tagged('mode', 'share', { percent: { type: 'integer', minimum: 10, maximum: 75 } }),
+      tagged('mode', 'fixed', { bytes: { type: 'integer', minimum: 1, maximum: 64 } }),
+    ],
+  });
+  expect(source).toContain('tag = "mode", deny_unknown_fields, rename_all_fields = "camelCase"');
+  expect(source).toContain('Share { percent: u64 }');
+  expect(source).toContain('Self::Fixed { bytes } => (1..=64).contains(bytes)');
+});
+
+test.each([
+  { oneOf: [tagged('mode', 'share'), tagged('kind', 'fixed')] },
+  { oneOf: [tagged('Mode', 'share'), tagged('Mode', 'fixed')] },
+])('refuses a tag that is not one leading constant of every branch %#', (node) => {
+  expect(() => compile(node)).toThrow();
+});

@@ -14,7 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove the page joins a desktop host's memory budget and stores its limit in Comfy settings. */
+import { readFileSync } from 'node:fs';
 import { expect, jest, test } from '@jest/globals';
+import { isMemoryClientMessage } from '../../../integrations/shared/MemoryValidation.generated.js';
 import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
 import { BudgetedMemoryCache } from '../../../frontend/comfyui/ui/core/memory/BudgetedMemoryCache.js';
 import {
@@ -25,6 +27,7 @@ import { MemoryBudgetSettings } from '../../../frontend/comfyui/ui/settings/Memo
 import {
   type MemoryClientMessage,
   type MemoryPreference,
+  preferenceMessage,
   readAllowance,
   usageMessage,
 } from '../../../frontend/comfyui/ui/core/memory/MemoryHostProtocol.js';
@@ -175,4 +178,41 @@ test('memory settings register in Comfy and select a clamped share or fixed limi
   definitions[0]?.onChange('Fixed size');
   expect(changes.at(-1)).toEqual({ mode: 'fixed', bytes: 12 * 1024 * MIB });
   expect(() => new MemoryBudgetSettings({})).toThrow();
+});
+
+/** The shared vectors are the same documents the Rust host vendors. */
+test('admits exactly the schema-valid allowances of the shared memory vectors', () => {
+  const vectors = JSON.parse(
+    readFileSync('tests/editor_integrations/support/memory_wire_vectors.json', 'utf8'),
+  ) as { label: string; valid: boolean; value: unknown }[];
+  const vectorSession = 'panel-0123456789abcdef';
+  const allowances = vectors.filter(
+    ({ value }) => (value as { type?: unknown } | null)?.type === 'allowance',
+  );
+  expect(allowances.length).toBeGreaterThan(2);
+  for (const { label, valid, value } of allowances)
+    expect([label, readAllowance(value, vectorSession) !== null]).toEqual([label, valid]);
+  const accepted = allowances.find(({ valid }) => valid)?.value;
+  expect(readAllowance(accepted, 'panel-ffffffffffffffff')).toBeNull();
+});
+
+test('every page report satisfies the generated memory schema, even from unbounded measurements', () => {
+  const reports: MemoryClientMessage[] = [
+    usageMessage(session, { usedBytes: 0, consumers: [] }),
+    usageMessage(session, {
+      usedBytes: Number.MAX_SAFE_INTEGER * 4,
+      consumers: [
+        { id: 'canvas.images', bytes: -5 },
+        { id: 'huge', bytes: Number.MAX_SAFE_INTEGER * 2 },
+      ],
+    }),
+    preferenceMessage(session, { mode: 'share', percent: 10 }),
+    preferenceMessage(session, { mode: 'share', percent: 75 }),
+    preferenceMessage(session, { mode: 'fixed', bytes: 1024 * 1024 * MIB }),
+  ];
+  for (const report of reports) expect(isMemoryClientMessage(report)).toBe(true);
+  const settings = new MemoryBudgetSettings({
+    ui: { settings: { addSetting: () => undefined, getSettingValue: () => undefined } },
+  });
+  expect(isMemoryClientMessage(preferenceMessage(session, settings.read()))).toBe(true);
 });
