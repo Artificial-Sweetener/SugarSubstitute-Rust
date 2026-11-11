@@ -80,7 +80,7 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
             history = history.accept(attempt)?;
         }
         trust.protected(context, |protection| {
-            let _writer = trust.writer(protection)?;
+            let _writer = trust.writer(protection, context)?;
             trust.write_updater(&history, protection, context)
         })?;
         let mut trial = seed.stage(|| NOW, context)?.reserve_trial(context)?;

@@ -46,6 +46,7 @@ mod packed;
 mod publication;
 pub use packed::{MATERIALIZATION_RESERVATION_BYTES, materialize};
 mod selection;
+mod short_lock;
 pub(crate) use selection::UnstartedTrial;
 mod transaction;
 mod trust;

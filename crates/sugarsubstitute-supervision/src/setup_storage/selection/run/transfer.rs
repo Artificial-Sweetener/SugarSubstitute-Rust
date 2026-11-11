@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transfer an admitted trial's live ownership and protected snapshot across native process entry.
 mod custody;
-mod snapshot;
 mod witness;
 use super::*;
 use crate::{

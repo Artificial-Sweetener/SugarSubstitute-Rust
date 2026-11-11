@@ -42,7 +42,7 @@ impl UpdateAuthorization<'_> {
         self.trust.verify_installation(installation, context)?;
         Self::require_native_request(self.request, component)?;
         self.trust.protected(context, |protection| {
-            let _writer = self.trust.writer(protection)?;
+            let _writer = self.trust.writer(protection, context)?;
             self.trust.require_subscription(self.request, protection, context)?;
             let history = self.trust.read_releases(protection)?;
             let mut trust = self.trust.read(protection)?;
@@ -166,7 +166,7 @@ impl UpdateAuthorization<'_> {
         }
         Self::require_native_request(self.request, self.request.component)?;
         self.trust.protected(context, |protection| {
-            let _writer = self.trust.writer(protection)?;
+            let _writer = self.trust.writer(protection, context)?;
             self.trust.require_subscription(self.request, protection, context)?;
             let history = self.trust.read_releases(protection)?;
             let mut trust = self.trust.read(protection)?;

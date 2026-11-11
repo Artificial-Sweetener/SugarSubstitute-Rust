@@ -21,11 +21,10 @@ pub enum ReservedLaunch {
 /// Short-lived selection and executable custody for the stable launcher's startup transfer.
 /// This is not application-run ownership, health evidence or process-settlement authority.
 /// The elected coordinator can acquire its run lock while this reservation exists.
-/// Accepted-selection writes are excluded until its record handle releases. Trial forwarding
-/// retains immutable snapshot bytes while permitting the original owner to publish health.
-/// Retain custody through native transfer. A forwarding snapshot never grants primary admission;
-/// its native identity differs from the current-selection record. Do not retain either form
-/// for the running application's lifetime.
+/// The selection travels as an immutable snapshot of the record value, so it never blocks a
+/// concurrent replacement; the receiver compares it with the current record at its point of
+/// use. A forwarding snapshot never grants primary admission. Retain custody through native
+/// transfer; do not retain it for the running application's lifetime.
 pub struct ReservedApplication {
     pub(super) application: VerifiedApplication,
     pub(super) _selection: File,
@@ -60,7 +59,12 @@ impl SelectionStore {
         self.reserve_inherited(None, context)
     }
 
-    /// Match any inherited pin before verifying and reserving the current accepted payload.
+    /// Match any inherited launch snapshot before verifying and reserving the current payload.
+    ///
+    /// A replacement that landed after the launcher's reservation re-resolves here when it left
+    /// the startup selection unchanged (only candidate or preparation progress moved). When the
+    /// accepted generation itself changed, this executable is no longer the selected application
+    /// and the result is `Superseded`.
     pub(super) fn reserve_inherited(
         self: &Arc<Self>,
         inherited: Option<super::InheritedSelection>,
@@ -69,15 +73,35 @@ impl SelectionStore {
         check(context)?;
         let transferred = inherited.is_some();
         let (snapshot, selection) = self.protected(context, |protection| {
-            let _writer = writer(&self.root, protection, context)?;
-            let current = self.read_pinned(protection)?.ok_or(SelectionFailure::Missing)?;
+            let _reader = reader(&self.root, protection, context)?;
+            let current = self.read(protection)?.ok_or(SelectionFailure::Missing)?;
             if let Some(inherited) = &inherited {
-                protection.verify_file(&inherited.file)?;
-                if files::file_identity(&inherited.file)? != files::file_identity(&current.1)? {
+                let reserved =
+                    snapshot::read(self, &inherited.file, snapshot::Purpose::Launch, protection, context)?;
+                if reserved.installation() != current.installation() {
                     return Err(SelectionFailure::Changed);
                 }
+                if reserved != current {
+                    if reserved.startup_selection() != current.startup_selection() {
+                        return Err(SelectionFailure::Superseded);
+                    }
+                    tracing::info!(
+                        operation = "installation_launch_reresolved",
+                        installation = current.installation().as_str(),
+                        reserved_revision = reserved.revision(),
+                        current_revision = current.revision(),
+                        "Launch reservation re-resolved against a newer record with the same startup selection"
+                    );
+                }
             }
-            Ok(current)
+            let selection = snapshot::create(
+                self,
+                protection,
+                &current,
+                snapshot::Purpose::Launch,
+                context,
+            )?;
+            Ok((current, selection))
         })?;
         let generation = match snapshot.startup_selection() {
             StartupSelection::NeedsInstallation => return Ok(ReservedLaunch::NeedsInstallation),
