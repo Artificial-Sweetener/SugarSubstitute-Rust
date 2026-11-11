@@ -17,10 +17,16 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 
 def extension_root() -> Path:
-    """Return the directory ComfyUI installed as the SugarCubes extension."""
+    """Return the directory ComfyUI installed as the SugarCubes extension.
 
-    return Path(__file__).resolve().parent.parent
+    The path is made absolute without resolving links. A development install may link
+    `custom_nodes/SugarCubes` to a source checkout; the extension's data and its sibling
+    custom nodes belong to the location ComfyUI loaded, not to the link's target.
+    """
+
+    return Path(os.path.abspath(__file__)).parent.parent
