@@ -830,6 +830,14 @@ function canvasSurfaceCapabilitiesInSchema(value, schema) {
 
 // integrations/shared/CanvasSurfaceDiscovery.ts
 var SURFACE_SCHEMA_REQUIRED = "Native surface schema 2 is required. Update SugarCubes and its native host together.";
+var CanvasSurfaceDiscoveryFailure = class extends Error {
+  /** Bind the reason to the failure that carries it. */
+  constructor(reason, message) {
+    super(message);
+    this.reason = reason;
+    this.name = "CanvasSurfaceDiscoveryFailure";
+  }
+};
 var EMPTY_CANVAS_SURFACE_CAPABILITIES = Object.freeze({
   schema: 2,
   imageFormats: Object.freeze([]),
@@ -857,12 +865,21 @@ async function discoverCanvasSurface(port) {
     const reply = await port.read();
     if (!port.current()) return null;
     if (reply.type !== "surface.capabilities.reply")
-      throw new Error("Invalid canvas surface capability reply.");
+      throw new CanvasSurfaceDiscoveryFailure(
+        "invalid-reply",
+        "Invalid canvas surface capability reply."
+      );
     if (reply.capabilities.schema > NEWEST_CANVAS_SURFACE_SCHEMA)
-      throw new Error("Canvas surface discovery answered a newer schema than requested.");
+      throw new CanvasSurfaceDiscoveryFailure(
+        "newer-schema",
+        "Canvas surface discovery answered a newer schema than requested."
+      );
     if (reply.status !== "available") {
       if (!emptyCanvasSurfaceCapabilities(reply.capabilities))
-        throw new Error("Unavailable canvas surface declared capabilities.");
+        throw new CanvasSurfaceDiscoveryFailure(
+          "declared-while-unavailable",
+          "Unavailable canvas surface declared capabilities."
+        );
       if (reply.status === "error")
         port.report(new Error(reply.message || "Canvas surface discovery failed."));
       return null;
@@ -1298,7 +1315,12 @@ var CanvasClient = class {
   }
   /** Accept only the expected reply kind from this session and retire its deadline before callbacks run. */
   receive(value) {
-    if (this.#disposed || !isCanvasMessage(value) || value.session !== this.session) return false;
+    if (this.#disposed) return false;
+    if (!isCanvasMessage(value)) {
+      this.#refuseDiscoveryReply(value);
+      return false;
+    }
+    if (value.session !== this.session) return false;
     if (value.type === "source.changed") {
       for (const listener of this.#sourceListeners) listener(value.change);
       return true;
@@ -1343,6 +1365,28 @@ var CanvasClient = class {
       });
     else pending.accept(value);
     return true;
+  }
+  /**
+   * End an outstanding discovery at once when its correlated reply fails validation.
+   *
+   * An unreadable answer, such as one in a schema newer than this page requested, will not be
+   * repaired by waiting, so the discovery fails now instead of at its deadline. Only a reply that
+   * names this session and an outstanding discovery request is considered; anything else stays
+   * an ignored message.
+   */
+  #refuseDiscoveryReply(value) {
+    if (!isRecord(value) || value.protocol !== "sugarcubes.canvas" || value.session !== this.session || value.type !== "surface.capabilities.reply" || typeof value.requestId !== "number")
+      return;
+    const pending = this.#pending.get(value.requestId);
+    if (pending?.type !== "surface.capabilities.reply") return;
+    this.#pending.delete(value.requestId);
+    pending.stop();
+    pending.reject(
+      new CanvasSurfaceDiscoveryFailure(
+        "invalid-reply",
+        "The canvas host answered surface discovery with a reply this page cannot read."
+      )
+    );
   }
   /** Refuse all late responses and cancel outstanding host work when the session leaves. */
   dispose() {
@@ -1406,9 +1450,10 @@ var CanvasClient = class {
           stop();
           if (request.type !== "source.request") cancel();
           reject(
-            new Error(
-              request.type === "surface.capabilities.request" ? "Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together." : "Canvas request timed out; it was not retried."
-            )
+            request.type === "surface.capabilities.request" ? new CanvasSurfaceDiscoveryFailure(
+              "timed-out",
+              "Native surface schema 2 is unsupported or unavailable. Update SugarCubes and its native host together."
+            ) : new Error("Canvas request timed out; it was not retried.")
           );
         });
       stopCancellation = cancellation?.subscribe(() => {
