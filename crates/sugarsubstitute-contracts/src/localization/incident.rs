@@ -102,13 +102,29 @@ pub struct ReportMessages {
     pub capture_absence: [&'static str; 8],
     /// Resolution failure in the explicit SymbolFailure declaration order.
     pub symbol_failure: [&'static str; 8],
+    /// Accessible name of the report window close control.
+    pub close_window: &'static str,
+    /// Reveal the complete report text.
+    pub show_report: &'static str,
+    /// Collapse the complete report text.
+    pub hide_report: &'static str,
+    /// Explain a startup failure report.
+    pub startup_message: &'static str,
+    /// Heading of an update failure report.
+    pub update_title: &'static str,
+    /// Explain that an update failed while the installed version remains usable.
+    pub update_message: &'static str,
+    /// Version summary label.
+    pub version: &'static str,
+    /// Update step summary label.
+    pub update_phase: &'static str,
     /// Accepted startup failure categories in the explicit StartupFailureCode order.
     pub startup_failure: [&'static str; 5],
 }
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 62] {
+    pub fn labels(&self) -> [&'static str; 70] {
         [
             self.title,
             self.explanation,
@@ -167,6 +183,14 @@ impl ReportMessages {
             self.symbol_failure[5],
             self.symbol_failure[6],
             self.symbol_failure[7],
+            self.close_window,
+            self.show_report,
+            self.hide_report,
+            self.startup_message,
+            self.update_title,
+            self.update_message,
+            self.version,
+            self.update_phase,
             self.startup_failure[0],
             self.startup_failure[1],
             self.startup_failure[2],
