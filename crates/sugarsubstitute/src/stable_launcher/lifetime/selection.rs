@@ -40,9 +40,6 @@ impl Launcher {
 
     /// Creation is admitted only after exact selection or trial transfer was observed successful.
     pub(super) fn select_next(&mut self) -> Result<()> {
-        if !self.selection_due() {
-            return Ok(());
-        }
         if matches!(self.choice, Choice::ObserveEngine | Choice::StopEngine | Choice::ObserveOffer)
             && !self.activation_due()
         {
@@ -170,16 +167,6 @@ impl Launcher {
     pub(super) fn failed(&mut self, task: Task, cause: Box<dyn Error>) -> Result<()> {
         if self.closing {
             return Err(cause);
-        }
-        if matches!(task, Task::Installation | Task::Select)
-            && contention::writer_busy(cause.as_ref())
-        {
-            self.selection_wait = Some(contention::Wait::new(
-                self.clock.now(),
-                self.until.ok_or("Launcher startup cutoff absent")?,
-                cause,
-            )?);
-            return Ok(());
         }
         if self.source.is_some() && matches!(task, Task::Create { .. } | Task::ObserveOffer) {
             return Err(cause);

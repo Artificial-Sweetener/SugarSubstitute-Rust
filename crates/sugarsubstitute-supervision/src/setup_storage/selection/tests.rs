@@ -7,6 +7,7 @@ use std::error::Error;
 use sugarsubstitute_contracts::installation::{
     Generation, GenerationId, InstallationId, PackageDigest, PreparationIntent, Rejection,
 };
+mod locks;
 pub(super) type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
 
 pub(super) fn root() -> Result<tempfile::TempDir, Box<dyn Error + Send + Sync>> {
@@ -94,22 +95,16 @@ fn failed_replacement_keeps_original_selection_and_can_be_retried() -> TestResul
     })
 }
 
+/// The lock file persists between owners; only a live holder ever makes a waiter wait.
 #[test]
-fn writer_exclusion_is_os_backed_and_a_leftover_lock_file_is_not_a_lockout() -> TestResult {
+fn a_leftover_lock_file_is_not_a_lockout() -> TestResult {
     worker::run(|context, _| {
         let root = root()?;
         let first = SelectionStore::initialize(root.path(), &initial()?, context)?;
-        let second = SelectionStore::open(root.path(), context)?;
-        let held = first.protected(context, |p| writer(&first.root, p, context))?;
-        assert!(matches!(
-            second.protected(context, |p| writer(&second.root, p, context)),
-            Err(SelectionFailure::WriterBusy)
-        ));
-        assert!(matches!(second.load(context), Err(SelectionFailure::WriterBusy)));
-        drop(held);
-        assert_eq!(second.load(context)?, Some(initial()?));
+        drop(first);
         assert!(root.path().join("state").join(DIRECTORY).join(LOCK).exists());
-        assert_eq!(first.load(context)?, Some(initial()?));
+        let second = SelectionStore::open(root.path(), context)?;
+        assert_eq!(second.load(context)?, Some(initial()?));
         Ok(())
     })
 }
@@ -248,6 +243,92 @@ fn inherited_permissions_do_not_replace_explicit_record_protection() -> TestResu
         assert!(store.load(context).is_err());
         assert!(SelectionStore::initialize(root.path(), &initial()?, context).is_err());
         assert_eq!(std::fs::read(&record)?, initial()?.encode()?);
+        Ok(())
+    })
+}
+
+/// Publish each record in order through the real replacement path, returning the last one.
+fn advance(
+    store: &SelectionStore,
+    from: &InstallationRecord,
+    steps: impl IntoIterator<Item = InstallationRecord>,
+    context: &JobContext,
+) -> Result<InstallationRecord, Box<dyn Error + Send + Sync>> {
+    let mut current = from.clone();
+    for next in steps {
+        store.replace(&current, &next, context)?;
+        current = next;
+    }
+    Ok(current)
+}
+
+/// Prepare, start and accept `generation` on top of `from`.
+fn accept(
+    store: &SelectionStore,
+    from: &InstallationRecord,
+    generation: &Generation,
+    context: &JobContext,
+) -> Result<InstallationRecord, Box<dyn Error + Send + Sync>> {
+    let staged = from.prepare(generation.clone(), PreparationIntent::Automatic)?;
+    let prepared = staged.prepared(generation)?;
+    let trial = prepared.begin_trial()?;
+    let Some(sugarsubstitute_contracts::installation::Candidate::Trial { attempt }) =
+        trial.candidate()
+    else {
+        return Err("Trial absent".into());
+    };
+    let accepted = trial.accept(attempt)?;
+    advance(store, from, [staged, prepared, trial, accepted], context)
+}
+
+/// A launch snapshot is a value: a candidate-only replacement after the reservation still
+/// selects the same application, a changed accepted generation supersedes it, and a forwarding
+/// snapshot never stands in for a launch reservation.
+#[test]
+fn a_replacement_between_reservation_and_use_is_detected_by_record_value() -> TestResult {
+    worker::run(|context, _| {
+        let root = root()?;
+        let initial = initial()?;
+        let store =
+            std::sync::Arc::new(SelectionStore::initialize(root.path(), &initial, context)?);
+        let reserved = accept(&store, &initial, &generation(1)?, context)?;
+        let snapshot_for = |purpose| {
+            store.protected(context, |protection| {
+                Ok(snapshot::create(&store, protection, &reserved, purpose, context)?)
+            })
+        };
+        let launch = snapshot_for(snapshot::Purpose::Launch)?;
+        let forward = snapshot_for(snapshot::Purpose::Forward)?;
+        let inherited = |file: &File| -> Result<InheritedSelection, io::Error> {
+            Ok(InheritedSelection { file: file.try_clone()? })
+        };
+        let candidate = advance(
+            &store,
+            &reserved,
+            [reserved.prepare(generation(2)?, PreparationIntent::Automatic)?],
+            context,
+        )?;
+        // Same startup selection: the reservation re-resolves and proceeds to verify the
+        // accepted payload, which this record-only fixture does not have.
+        let resolved = store.reserve_inherited(Some(inherited(&launch)?), context);
+        assert!(matches!(resolved, Err(SelectionFailure::Storage(_))), "{:?}", resolved.err());
+        assert!(matches!(
+            store.reserve_inherited(Some(inherited(&forward)?), context),
+            Err(SelectionFailure::Changed)
+        ));
+        let cleared = advance(&store, &candidate, [candidate.prepared(&generation(2)?)?], context)?;
+        let trial = cleared.begin_trial()?;
+        let Some(sugarsubstitute_contracts::installation::Candidate::Trial { attempt }) =
+            trial.candidate()
+        else {
+            return Err("Trial absent".into());
+        };
+        let accepted = trial.accept(attempt)?;
+        advance(&store, &cleared, [trial.clone(), accepted], context)?;
+        assert!(matches!(
+            store.reserve_inherited(Some(inherited(&launch)?), context),
+            Err(SelectionFailure::Superseded)
+        ));
         Ok(())
     })
 }

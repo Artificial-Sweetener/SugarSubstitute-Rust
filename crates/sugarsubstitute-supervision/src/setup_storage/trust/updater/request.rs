@@ -18,7 +18,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<Request, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let selection = self.updater_locked(protection, SelectionRead::Initialize, context)?;
             let mut request = UpdateAuthorization::local_request(channel)?;
             request.component = Component::Updater;
@@ -48,7 +48,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<Option<PreparationImage>, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let selection = self.updater_locked(protection, SelectionRead::Initialize, context)?;
             let Some(generation) = selection.accepted() else { return Ok(None) };
             let receipt = self.updater_receipt(generation, protection)?;

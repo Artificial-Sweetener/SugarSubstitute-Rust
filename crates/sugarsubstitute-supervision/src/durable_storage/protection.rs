@@ -171,7 +171,7 @@ impl Protection {
             path,
             CREATE_NEW,
             FILE_SHARE_READ | FILE_SHARE_DELETE,
-            true,
+            FILE_FLAG_DELETE_ON_CLOSE,
             context,
         )
     }
@@ -180,6 +180,26 @@ impl Protection {
     /// The caller pins the parent. Existence is never evidence that an owner is running.
     pub(crate) fn rendezvous(&self, path: &Path, context: &JobContext) -> io::Result<File> {
         self.open_rendezvous(path, FILE_SHARE_READ | FILE_SHARE_WRITE, context)
+    }
+
+    /// Open the same shared rendezvous for overlapped I/O so the execution owner can wait for
+    /// its byte-range lock with a deadline. The handle is used only for locking.
+    pub(crate) fn waitable_rendezvous(
+        &self,
+        path: &Path,
+        context: &JobContext,
+    ) -> io::Result<File> {
+        let file = self.open_file_with_lifetime(
+            path,
+            OPEN_ALWAYS,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            FILE_FLAG_OVERLAPPED,
+            context,
+        )?;
+        if file.metadata()?.len() != 0 {
+            return Err(super::invalid("Lock rendezvous contains unrecognized data"));
+        }
+        Ok(file)
     }
 
     /// Acquire exclusion attached to the native file object until its last handle closes.
@@ -215,18 +235,20 @@ impl Protection {
         sharing: FILE_SHARE_MODE,
         context: &JobContext,
     ) -> io::Result<File> {
-        self.open_file_with_lifetime(path, creation, sharing, false, context)
+        self.open_file_with_lifetime(path, creation, sharing, FILE_FLAGS_AND_ATTRIBUTES(0), context)
     }
 
-    /// Keep native deletion lifetime explicit while sharing one descriptor and verification path.
+    /// Keep native deletion lifetime and I/O mode explicit while sharing one descriptor and
+    /// verification path.
     fn open_file_with_lifetime(
         &self,
         path: &Path,
         creation: FILE_CREATION_DISPOSITION,
         sharing: FILE_SHARE_MODE,
-        delete_on_close: bool,
+        flags: FILE_FLAGS_AND_ATTRIBUTES,
         context: &JobContext,
     ) -> io::Result<File> {
+        let delete_on_close = flags.0 & FILE_FLAG_DELETE_ON_CLOSE.0 != 0;
         check(context)?;
         let _file =
             tracing::trace_span!(target: "sugarsubstitute::storage", "protection_file_open")
@@ -246,12 +268,7 @@ impl Protection {
                 sharing,
                 Some(&attributes),
                 creation,
-                FILE_FLAG_OPEN_REPARSE_POINT
-                    | if delete_on_close {
-                        FILE_FLAG_DELETE_ON_CLOSE
-                    } else {
-                        FILE_FLAGS_AND_ATTRIBUTES(0)
-                    },
+                FILE_FLAG_OPEN_REPARSE_POINT | flags,
                 None,
             )
         }

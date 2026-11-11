@@ -11,7 +11,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<InstallationRecord, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let state = self.updater_locked(protection, SelectionRead::Existing, context)?;
             if !matches!(state.candidate(), Some(Candidate::Prepared { generation: selected }) if selected == generation) {
                 return Err(invalid("Exact updater preparation is required for a trial").into());
@@ -60,7 +60,7 @@ impl TrustStore {
         };
         let restored = trial.cancel_unstarted_trial(attempt).map_err(io::Error::other)?;
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let state = self.updater_locked(protection, SelectionRead::Existing, context)?;
             if &state == prepared || state == restored {
                 return Ok(());
@@ -94,7 +94,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<(), TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             self.commit_updater_outcome(trial, next, protection, context)
         })
     }
