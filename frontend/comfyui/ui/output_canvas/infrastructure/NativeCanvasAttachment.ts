@@ -423,6 +423,14 @@ export class NativeCanvasAttachment {
       this.#native.receive(preview, blob);
   }
 
+  /**
+   * Whether the host presents this attachment. Until the host commits it, it shows no native
+   * pixels and holds the host's one staging slot, where it would hold back a replacement.
+   */
+  presented(): boolean {
+    return this.#native.committed;
+  }
+
   /** Report zero browser image allocations for this attachment. */
   diagnostics() {
     return {

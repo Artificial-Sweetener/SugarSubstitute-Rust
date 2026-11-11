@@ -40,6 +40,12 @@ export interface PrimaryCanvasAttachment {
   /** Read counters only on explicit diagnostic request, with no telemetry timer. */
   diagnostics(): CanvasImageDiagnostics & { readonly renderFrames: number };
   refresh(): void;
+  /**
+   * Whether the presenter shows this attachment. One it does not show protects nothing through a
+   * replacement; a native one the host has not committed also holds the host's single staging
+   * slot, so the replacement could never prepare behind it. Absent means the attachment shows.
+   */
+  presented?(): boolean;
   reveal?(target: CanvasRevealTarget): Promise<boolean>;
   wants(
     session: WorkflowPreview['sessionId'],
@@ -136,7 +142,10 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
     this.reconcile();
   }
 
-  /** Keep a same-view surface until its replacement is ready; never show a different workflow. */
+  /**
+   * Keep a shown same-view surface until its replacement is ready; never show a different
+   * workflow. A surface that is not shown is released before its replacement is staged.
+   */
   readonly reconcile = (): void => {
     if (this.#disposed) return;
     const { coordinator, views } = this.options;
@@ -177,6 +186,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       (this.#current.view !== view ||
         this.#current.generation !== catalog.generation ||
         this.#current.element !== element ||
+        this.#current.attachment.presented?.() === false ||
         (this.#current.renderer !== renderer &&
           this.options.retireBeforeMount?.(this.#current.renderer, renderer)))
     )

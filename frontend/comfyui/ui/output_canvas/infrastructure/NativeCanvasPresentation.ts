@@ -229,6 +229,11 @@ export class NativeCanvasPresentation {
     return nativeCanvasDiagnostics(this.#preview, this.#binding, this.#desired, this.#visible);
   }
 
+  /** Whether the host committed this presentation; before that it holds the host's staging slot. */
+  get committed(): boolean {
+    return this.#binding?.committed === true;
+  }
+
   /** Report implemented live preview support independently of whether pixels have arrived. */
   get previewAvailable(): boolean {
     return this.#preview?.observing ?? false;

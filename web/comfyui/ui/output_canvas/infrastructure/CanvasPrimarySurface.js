@@ -65,7 +65,10 @@ export class CanvasPrimarySurface {
         this.options.document.addEventListener('visibilitychange', this.reconcile);
         this.reconcile();
     }
-    /** Keep a same-view surface until its replacement is ready; never show a different workflow. */
+    /**
+     * Keep a shown same-view surface until its replacement is ready; never show a different
+     * workflow. A surface that is not shown is released before its replacement is staged.
+     */
     reconcile = () => {
         if (this.#disposed)
             return;
@@ -104,6 +107,7 @@ export class CanvasPrimarySurface {
             (this.#current.view !== view ||
                 this.#current.generation !== catalog.generation ||
                 this.#current.element !== element ||
+                this.#current.attachment.presented?.() === false ||
                 (this.#current.renderer !== renderer &&
                     this.options.retireBeforeMount?.(this.#current.renderer, renderer))))
             this.#release();
