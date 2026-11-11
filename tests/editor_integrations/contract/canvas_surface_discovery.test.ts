@@ -223,7 +223,15 @@ test('uses existing replay protection for a limited host discovery without layer
   server.receive(request);
   expect(replies).toHaveLength(2);
   expect(insert).not.toHaveBeenCalled();
-  expect(server.receive({ ...request, schema: 4 })).toBe(false);
+  expect(server.receive({ ...request, requestId: 2, schema: 4 })).toBe(true);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(replies[2]).toMatchObject({
+    type: 'surface.capabilities.reply',
+    status: 'unsupported',
+    capabilities: { ...EMPTY_CANVAS_SURFACE_CAPABILITIES, schema: 3 },
+  });
+  expect(server.receive({ ...request, requestId: 3, schema: 0 })).toBe(false);
   server.dispose();
 });
 
@@ -295,6 +303,7 @@ test('accepts shared valid discovery vectors and rejects each malformed variant'
     readFileSync('tests/editor_integrations/support/canvas_surface_discovery_vectors.json', 'utf8'),
   ) as {
     request: unknown;
+    futureRequest: unknown;
     available: unknown;
     unsupported: unknown;
     comparison: unknown;
@@ -304,6 +313,7 @@ test('accepts shared valid discovery vectors and rejects each malformed variant'
   };
   for (const message of [
     vectors.request,
+    vectors.futureRequest,
     vectors.available,
     vectors.unsupported,
     vectors.comparison,

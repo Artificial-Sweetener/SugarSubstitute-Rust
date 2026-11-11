@@ -7,6 +7,14 @@
     "type": "surface.capabilities.request",
     "schema": 2
   },
+  "futureRequest": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.request",
+    "schema": 4
+  },
   "available": {
     "protocol": "sugarcubes.canvas",
     "version": 3,
@@ -52,7 +60,7 @@
       "session": "surface-discovery-session",
       "requestId": 7,
       "type": "surface.capabilities.request",
-      "schema": 4
+      "schema": 0
     },
     {
       "protocol": "sugarcubes.canvas",

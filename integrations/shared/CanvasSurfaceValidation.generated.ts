@@ -119,7 +119,7 @@ export function isCanvasSurfaceCapabilitiesRequest(
     typeof value['schema'] === 'number' &&
     Number.isSafeInteger(value['schema']) &&
     value['schema'] >= 1 &&
-    value['schema'] <= 3
+    value['schema'] <= 2147483647
   );
 }
 /** Validate a bounded CanvasSurfaceCapabilitiesReply payload before dispatch. */
