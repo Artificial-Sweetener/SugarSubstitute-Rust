@@ -17,6 +17,7 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { CanvasPrimarySurface } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasPrimarySurface.js';
 import { NativeCanvasAttachment } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasAttachment.js';
+import { nativeCanvasRendererKey } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasCapabilities.js';
 import { CanvasSurfaceGeometryObserver } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasSurfaceGeometryObserver.js';
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
 import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
@@ -31,6 +32,7 @@ import {
 } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 import type { WorkflowOutputItem } from '../../../frontend/comfyui/ui/execution/domain/WorkflowOutput.js';
 import type { WorkflowResultSession } from '../../../frontend/comfyui/ui/execution/domain/WorkflowResultSession.js';
+import type { CanvasSurfaceHost } from '../../../integrations/contracts/CanvasSurface.js';
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { canvasSources } from '../support/CanvasCatalogFixture.js';
@@ -80,8 +82,12 @@ function batchCatalog(generation: number, count = 4): CanvasCatalogSnapshot {
   return canvasOutputCatalog(result, [source]);
 }
 
-/** Compose the real primary surface over a one-slot host that paints overviews and previews. */
-function fixture() {
+/**
+ * Compose the real primary surface over a one-slot host that paints overviews and previews.
+ * `undiscovered` mounts the first canvas while the desktop's native discovery is still pending,
+ * keyed as the Comfy host keys a native renderer, so concluding discovery changes the renderer.
+ */
+function fixture(options: { readonly undiscovered?: boolean } = {}) {
   jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     x: 0,
     y: 0,
@@ -109,6 +115,8 @@ function fixture() {
   const selection = new CanvasSelectionController(views, { latestOrder: () => 1 });
   selection.reconcile(view, catalog);
   let renderer = 'native';
+  const native = nativeCanvasStagingHost({ overview: true, preview: true });
+  let surface: CanvasSurfaceHost | null = options.undiscovered ? null : native.host;
   const coordinator = {
     active: () => view,
     catalog: () => catalog,
@@ -116,7 +124,6 @@ function fixture() {
   } as unknown as CanvasSessionCoordinator;
   const element = document.createElement('div');
   document.body.append(element);
-  const native = nativeCanvasStagingHost({ overview: true, preview: true });
   const errors: unknown[] = [];
   const attachments: NativeCanvasAttachment[] = [];
   const clock = new WorkflowTestClock();
@@ -126,7 +133,12 @@ function fixture() {
     views,
     coordinator,
     element: () => element,
-    renderer: () => renderer,
+    renderer: () =>
+      options.undiscovered
+        ? `litegraph:${nativeCanvasRendererKey(surface)}:${surface ? 'native' : 'pending'}`
+        : renderer,
+    retireBeforeMount: (previous, next) =>
+      previous.endsWith(':browser') !== next.endsWith(':browser'),
     report: (error) => errors.push(error),
     mount: (root, address, _catalog, accepts, acceptsPreparation) => {
       const attachment = new NativeCanvasAttachment(root, {
@@ -139,7 +151,8 @@ function fixture() {
         catalog: () => catalog,
         accepts,
         acceptsPreparation,
-        nativeSurface: () => native.host,
+        nativeSurface: () => surface,
+        surfacePending: () => surface === null,
         connected: () => true,
         report: (error) => errors.push(error),
       });
@@ -163,6 +176,10 @@ function fixture() {
         selection.reconcile(view, catalog);
       }
       primary.reconcile();
+    },
+    /** Conclude native discovery with the overview-painting surface, without reconciling. */
+    discover(): void {
+      surface = native.host;
     },
     /** Deliver the restored generation's outputs, as result restoration does after the graph. */
     deliver(): void {
@@ -230,6 +247,69 @@ test.each<['renderer' | 'restore', 'acquiring' | 'shown']>([
       expect.arrayContaining(['surface.prepare', 'surface.overview', 'surface.commit']),
     );
     expect(f.committed()).toBe(address.attachmentId);
+    expect(fresh.port.read().view.mode).toBe('overview');
+    expect(fresh.viewport.classList.contains('sc-output-native')).toBe(true);
+    expect(f.errors).toEqual([]);
+  },
+);
+
+/**
+ * A restored overview view mounts its canvas while native discovery is pending, so that canvas
+ * has no overview painter and could only commit an empty image. Concluding discovery changes the
+ * renderer and stages a replacement that paints the overview. A first canvas the host never
+ * committed is released before the replacement stages; one already shown is kept until the
+ * replacement has presented the overview.
+ */
+test.each<['unbound' | 'preparing' | 'committed']>([['unbound'], ['preparing'], ['committed']])(
+  'a restored overview canvas mounted before native discovery is replaced by one that presents the overview when it was %s',
+  async (first) => {
+    const f = fixture({ undiscovered: true });
+    f.primary.setup();
+    await f.settle();
+    const early = f.attachments[0]!;
+    const earlyId = early.port.read().address.attachmentId;
+    // Without an overview painter the first canvas can present only image detail.
+    expect(early.port.read().view.mode).toBe('image');
+    expect(f.calls).toEqual([]);
+    // As in the relaunch, the replacement's overview is still being acquired while the first
+    // canvas is refreshed again.
+    f.withheld.add('surface.overview');
+    f.discover();
+    if (first !== 'unbound') early.refresh();
+    if (first === 'committed') {
+      await f.settle();
+      expect(f.committed()).toBe(earlyId);
+      expect(f.of(earlyId)).not.toContain('surface.overview');
+    }
+    f.primary.reconcile();
+    await f.settle();
+    // A later catalog or view notification refreshes whatever the surface still holds.
+    f.primary.reconcile();
+    await f.settle();
+    f.finish('surface.overview');
+    await f.settle();
+    expect(f.attachments).toHaveLength(2);
+    const fresh = f.attachments[1]!;
+    const address = fresh.port.read().address;
+    expect(f.primary.diagnostics().address).toEqual(address);
+    expect(f.committed()).toBe(address.attachmentId);
+    expect(f.staged()).toBeNull();
+    expect(f.held()).toEqual([]);
+    expect(f.of(address.attachmentId)).toEqual(
+      expect.arrayContaining(['surface.prepare', 'surface.overview', 'surface.commit']),
+    );
+    expect(f.of(address.attachmentId)).not.toContain('surface.release');
+    const step = (type: string, id: string): number =>
+      f.calls.findIndex((call) => call.type === type && call.address.attachmentId === id);
+    if (first === 'unbound') expect(f.of(earlyId)).toEqual([]);
+    else if (first === 'preparing')
+      expect(step('surface.release', earlyId)).toBeLessThan(
+        step('surface.prepare', address.attachmentId),
+      );
+    else
+      expect(step('surface.release', earlyId)).toBeGreaterThan(
+        step('surface.overview', address.attachmentId),
+      );
     expect(fresh.port.read().view.mode).toBe('overview');
     expect(fresh.viewport.classList.contains('sc-output-native')).toBe(true);
     expect(f.errors).toEqual([]);
