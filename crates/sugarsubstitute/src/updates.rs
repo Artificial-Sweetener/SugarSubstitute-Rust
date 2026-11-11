@@ -9,6 +9,7 @@ mod options;
 mod probe;
 pub use entry::entry;
 pub(crate) mod parent;
+pub(crate) mod schedule;
 mod session;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -18,7 +19,12 @@ use sugarsubstitute_supervision::update_preparation::{
 };
 
 const EMBEDDED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/update-distribution.json"));
-const CAMPAIGN: Duration = Duration::from_secs(15 * 60);
+/// Deadline of one admitted updater step. Campaigns have no overall cap: a download step that
+/// reaches this deadline after saving bytes continues in the next step from the saved prefix,
+/// and only the transport's idle timeout ends a stalled transfer.
+const STEP: Duration = Duration::from_secs(15 * 60);
+/// Outer bound of an engine probe process, which performs only finite verification.
+const PROBE: Duration = Duration::from_secs(15 * 60);
 
 /// Absent producing-build configuration disables automatic admission without reading paths.
 /// Nonempty invalid configuration remains an error in the actual preparation worker.

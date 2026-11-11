@@ -54,9 +54,10 @@ fn disconnected_download_reopens_resumes_yields_and_verifies_the_real_archive() 
                 || NOW,
                 context,
             )?)?;
-            assert!(
-                repository.prepare(&offer, &trust, installation.path(), || NOW, context).is_err()
-            );
+            assert!(matches!(
+                repository.prepare(&offer, &trust, installation.path(), || NOW, context)?,
+                Preparation::Interrupted { received: 7, .. }
+            ));
             assert!(repository.settled());
         }
         let trust = TrustStore::open(installation.path(), [99; 32], context)?;

@@ -4,13 +4,12 @@
 use super::*;
 use sugarsubstitute_supervision::SettledUpdaterProbe;
 
-/// Separate finite scopes and the original campaign cutoff for one contained helper.
+/// Separate scopes and coordinator identity for one contained helper.
 pub(in crate::updates) struct LaunchScope {
     pub work: Scope,
     pub cleanup: Scope,
     pub native: ScopeSpec,
     pub key: CoordinatorKey,
-    pub until: Moment,
 }
 
 /// Mandatory durable retirement retained independently of the completed native process table.
@@ -28,24 +27,30 @@ pub(in crate::updates) struct Completion {
 
 impl Parent {
     /// Adopt a prepared input only after inert construction succeeds. Errors preserve the caller's
-    /// option, including an already published probe. The inherited campaign cutoff is never renewed.
+    /// option, including an already published probe. A probe performs only finite verification
+    /// and is closed at its outer cutoff; a delegated preparation helper has no overall cutoff.
     pub(in crate::updates) fn from_input(
         client: ExecutionClient,
         scope: LaunchScope,
         input: &mut Option<WindowsLaunchInput>,
     ) -> Result<Self> {
-        input.as_ref().ok_or("Prepared helper input absent")?;
-        let remaining = scope.until.checked_duration_since(client.now()?)?;
-        if remaining.is_zero() {
-            return Err(io::Error::new(io::ErrorKind::TimedOut, "Helper campaign expired").into());
-        }
-        let wake_at = Instant::now().checked_add(remaining).ok_or("Helper cutoff overflow")?;
-        Ok(Self::owned(
+        let probe = input.as_ref().ok_or("Prepared helper input absent")?.is_updater_probe();
+        let cutoff = if probe {
+            let until = client.now()?.checked_add(super::super::PROBE)?;
+            let wake_at =
+                Instant::now().checked_add(super::super::PROBE).ok_or("Probe cutoff overflow")?;
+            Some((until, wake_at))
+        } else {
+            None
+        };
+        let mut parent = Self::owned(
             client,
             scope,
             Retained { source: None, input: input.take(), registry: None },
-            wake_at,
-        ))
+            cutoff.map(|(_, wake_at)| wake_at),
+        );
+        parent.until = cutoff.map(|(until, _)| until);
+        Ok(parent)
     }
 
     /// One initial state for application-derived and independently pinned helper images.
@@ -53,7 +58,7 @@ impl Parent {
         client: ExecutionClient,
         scope: LaunchScope,
         held: Retained,
-        wake_at: Instant,
+        wake_at: Option<Instant>,
     ) -> Self {
         let probe = held.input.as_ref().is_some_and(WindowsLaunchInput::is_updater_probe);
         Self {
@@ -68,7 +73,7 @@ impl Parent {
             retiring: None,
             retiring_application: false,
             process: None,
-            until: scope.until,
+            until: None,
             wake_at,
             shutdown: None,
             continuation: None,
