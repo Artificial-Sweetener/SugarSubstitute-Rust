@@ -45,6 +45,7 @@ use sugarsubstitute_contracts::execution::{
     Moment, Operation, ScopeId, ScopeSpec, WaitFuture,
 };
 use sugarsubstitute_execution::ExecutionOwner;
+pub(crate) mod driven;
 pub(crate) mod observation;
 pub(crate) mod pipeline;
 pub(super) mod trace;

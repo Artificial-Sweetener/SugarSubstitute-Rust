@@ -15,6 +15,7 @@ use sugarsubstitute_execution::http_fixture::Exchange;
 use sugarsubstitute_update::{Error as Verification, fixture::*};
 mod delivery;
 mod hostile;
+mod resumption;
 /// A healthy loopback exchange is never idle for long, so the product's longest supported idle
 /// timeout bounds only a dead peer; the server answers at the pace of its events, not a timer.
 const IDLE: Duration = Duration::from_secs(120);

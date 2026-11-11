@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! One update process's executor, fixed campaign cutoff and observed resource retirement.
+//! One update process's executor, per-step deadlines and observed resource retirement.
 mod lifetime;
 #[cfg(test)]
 mod tests;
@@ -18,7 +18,7 @@ use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock}
 use sugarsubstitute_supervision::update_preparation::{Progress, Worker};
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 type Factory = Box<dyn FnOnce(&JobContext) -> io::Result<Option<Worker>> + Send>;
-use super::CAMPAIGN;
+use super::STEP;
 const CLEANUP: Duration = Duration::from_secs(15);
 
 /// Own preparation or one-shot verification; never retain application run, profile or ComfyUI custody.
@@ -37,7 +37,6 @@ pub(super) struct Session {
     worker: Option<Worker>,
     engine: Option<super::engine::Engine>,
     receipt: Option<Receipt>,
-    until: Option<Moment>,
     cleanup_until: Option<Moment>,
     wake_at: Option<Instant>,
     closing: bool,
@@ -63,7 +62,6 @@ impl Session {
             worker: None,
             engine: None,
             receipt: None,
-            until: None,
             cleanup_until: None,
             wake_at: None,
             closing: false,
@@ -119,6 +117,7 @@ impl Session {
             }
             match observed.outcome {
                 JobOutcome::Success(()) => {}
+                JobOutcome::TimedOut if observed.continues => {}
                 JobOutcome::Cancelled if self.closing => {}
                 JobOutcome::Failure(cause) => return Err(Box::new(io::Error::other(cause))),
                 other => {
@@ -127,22 +126,16 @@ impl Session {
             }
             if !self.closing && observed.progress == Progress::EngineReady {
                 let client = self.client.as_ref().ok_or("Update execution absent")?.clone();
-                let until = self.until.ok_or("Update campaign cutoff absent")?;
                 let work = client.create_scope(
-                    ScopeSpec { id: ScopeId::new(3)?, deadline: Some(until) },
+                    ScopeSpec { id: ScopeId::new(3)?, deadline: None },
                     Some(self.work.as_ref().ok_or("Update scope absent")?),
                 )?;
                 let cleanup = client.create_scope(
                     ScopeSpec { id: ScopeId::new(4)?, deadline: None },
                     Some(self.cleanup.as_ref().ok_or("Update cleanup scope absent")?),
                 )?;
-                self.engine = Some(super::engine::Engine::new(
-                    worker.take_engine()?,
-                    client,
-                    work,
-                    cleanup,
-                    until,
-                ));
+                self.engine =
+                    Some(super::engine::Engine::new(worker.take_engine()?, client, work, cleanup));
             } else if !self.closing
                 && matches!(
                     observed.progress,
@@ -165,13 +158,6 @@ impl Session {
         if self.closing || self.result.is_some() || (self.initialized && self.worker.is_none()) {
             return Ok(HeadlessStep::Shutdown);
         }
-        if self.until.is_some_and(|until| self.clock.now() >= until) {
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "Update preparation campaign expired",
-            )
-            .into());
-        }
         if self.engine.is_none() && self.worker.as_ref().is_some_and(|worker| !worker.pending()) {
             self.submit(false)?;
         }
@@ -187,14 +173,18 @@ impl Session {
         Ok(())
     }
 
-    /// All phase jobs retain the original campaign deadline; cleanup gets one separate cutoff.
+    /// Each phase job gets its own finite step deadline, so the campaign as a whole has no time
+    /// cap: a progressing download continues step after step. Cleanup keeps one fixed cutoff.
     fn submit(&mut self, cleanup: bool) -> Result<()> {
         let client = self.client.as_ref().ok_or("Update execution absent")?;
         let scope = if cleanup { &self.cleanup } else { &self.work }
             .as_ref()
             .ok_or("Update scope absent")?;
-        let until = if cleanup { self.cleanup_until } else { self.until }
-            .ok_or("Update deadline absent")?;
+        let until = if cleanup {
+            self.cleanup_until.ok_or("Update cleanup deadline absent")?
+        } else {
+            self.clock.now().checked_add(STEP)?
+        };
         self.receipt = super::admission::submit(
             self.worker.as_mut().ok_or("Update worker absent")?,
             client,

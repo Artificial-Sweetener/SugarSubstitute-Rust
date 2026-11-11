@@ -40,13 +40,14 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         } else {
             None
         };
-        let child = match (
+        let child = [
             self.child.next_deadline(),
             self.updater.as_ref().and_then(crate::updates::parent::Parent::next_deadline),
-        ) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
+            (!self.closing).then_some(self.update_wake).flatten(),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
         match (own, child) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),

@@ -16,7 +16,7 @@ impl TrustStore {
     /// Preserves corrupt/foreign data, rejects missing established preferences and live writers.
     pub fn subscription(&self, context: &JobContext) -> Result<Subscription, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             self.subscription_locked(protection, context)
         })
     }
@@ -34,7 +34,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<Subscription, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let current = self.subscription_locked(protection, context)?;
             if current != expected {
                 return Err(

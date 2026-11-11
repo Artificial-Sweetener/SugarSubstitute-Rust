@@ -33,6 +33,7 @@ use windows::core::HSTRING;
 const REPARSE_POINT: u32 = 0x400;
 const OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 const BACKUP_SEMANTICS: u32 = 0x0200_0000;
+const OVERLAPPED: u32 = 0x4000_0000;
 
 /// Encode rooted DOS drive paths with extended Win32 syntax, preserving original UTF-16 units.
 /// Callers retain and validate the original parent/name under their own storage policy.
@@ -150,13 +151,23 @@ impl Directory {
 
     /// Retain a regular read-only child. Nested inputs require separately pinned child directories.
     pub(crate) fn read(&self, leaf: &str) -> io::Result<File> {
+        self.open_read(leaf, 0)
+    }
+
+    /// Retain a regular read-only child for overlapped I/O, used only as a byte-range lock
+    /// that the execution owner waits for with a deadline.
+    pub(crate) fn read_lockable(&self, leaf: &str) -> io::Result<File> {
+        self.open_read(leaf, OVERLAPPED)
+    }
+
+    fn open_read(&self, leaf: &str, flags: u32) -> io::Result<File> {
         let _operation =
             tracing::trace_span!(target: "sugarsubstitute::storage", "file_open_read").entered();
         flat_leaf(leaf)?;
         let file = OpenOptions::new()
             .read(true)
             .share_mode(1)
-            .custom_flags(OPEN_REPARSE_POINT)
+            .custom_flags(OPEN_REPARSE_POINT | flags)
             .open(self.path.join(leaf))?;
         let metadata = file.metadata()?;
         if !metadata.is_file() || metadata.file_attributes() & REPARSE_POINT != 0 {

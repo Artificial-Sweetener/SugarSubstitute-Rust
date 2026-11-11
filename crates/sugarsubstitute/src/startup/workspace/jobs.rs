@@ -39,6 +39,7 @@ impl WorkspaceWork {
                     self.delivery = Some(loaded.delivery_memory);
                     self.input_plan = loaded.input_plan;
                     self.input_association = None;
+                    self.notice = loaded.notice;
                     self.bootstrap = Some(loaded.bootstrap);
                     self.ready = true;
                 }

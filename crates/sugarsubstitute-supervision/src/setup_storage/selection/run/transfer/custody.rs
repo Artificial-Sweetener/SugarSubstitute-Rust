@@ -3,6 +3,7 @@
 //! One native transfer boundary binds live run exclusion to the protected original trial.
 use super::*;
 use crate::setup_storage::disk_inheritance::duplicate_inheritable;
+use crate::setup_storage::selection::snapshot;
 
 /// Keep original custody alongside the exact two independently owned transfer handles.
 pub(super) struct Transfer {
@@ -16,12 +17,12 @@ impl Transfer {
         check(context)?;
         let store = &trial.custody.store;
         let snapshot = store.protected(context, |protection| {
-            let _writer = super::super::super::writer(&store.root, protection, context)?;
-            let (record, file) = store.read_pinned(protection)?.ok_or(SelectionFailure::Missing)?;
+            let _reader = super::super::super::reader(&store.root, protection, context)?;
+            let record = store.read(protection)?.ok_or(SelectionFailure::Missing)?;
             if record != trial.snapshot {
                 return Err(SelectionFailure::Changed);
             }
-            Ok(snapshot::create(&store.root, protection, &file, &record, context)?)
+            Ok(snapshot::create(store, protection, &record, snapshot::Purpose::Trial, context)?)
         })?;
         let run = duplicate_inheritable(&trial.custody._lock)?;
         check(context)?;
@@ -48,10 +49,16 @@ pub(super) fn receive(
             &store.root.path().join(LOCK),
             context,
         )?;
-        protection.verify_file(&inherited.snapshot)?;
-        let _writer = super::super::super::writer(&store.root, protection, context)?;
-        let (record, file) = store.read_pinned(protection)?.ok_or(SelectionFailure::Missing)?;
-        if !snapshot::matches(&inherited.snapshot, &file, &record, context)? {
+        let transferred = snapshot::read(
+            &store,
+            &inherited.snapshot,
+            snapshot::Purpose::Trial,
+            protection,
+            context,
+        )?;
+        let _reader = super::super::super::reader(&store.root, protection, context)?;
+        let record = store.read(protection)?.ok_or(SelectionFailure::Missing)?;
+        if transferred != record {
             return Err(SelectionFailure::Changed);
         }
         Ok(record)

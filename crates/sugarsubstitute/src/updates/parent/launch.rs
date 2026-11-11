@@ -11,7 +11,7 @@ impl Parent {
                 jobs,
                 JobClass::InfrastructureLifecycle,
                 WindowsProcessRegistry::required_reservation_bytes(),
-                Some(self.until),
+                Some(self.step_deadline()?),
             )?;
             self.constructing =
                 Some(WindowsProcessRegistry::submit_new(&self.client, &self.work, spec, self.key)?);
@@ -24,7 +24,7 @@ impl Parent {
                 jobs,
                 JobClass::InfrastructureLifecycle,
                 setup_storage::LAUNCH_RESERVATION_BYTES,
-                Some(self.until),
+                Some(self.step_deadline()?),
             )?;
             let source = &mut self.retained.as_mut().ok_or("Update custody absent")?.source;
             self.preparing = Some(self.client.submit_blocking_owned_input(
@@ -50,7 +50,7 @@ impl Parent {
                 jobs,
                 JobClass::InfrastructureLifecycle,
                 input.required_reservation_bytes(),
-                Some(self.until),
+                Some(self.step_deadline()?),
             )?;
             let held = self.retained.as_mut().ok_or("Update custody absent")?;
             let ticket =

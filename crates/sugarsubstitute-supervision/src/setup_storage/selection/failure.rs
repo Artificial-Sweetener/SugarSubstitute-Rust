@@ -8,8 +8,14 @@ use sugarsubstitute_contracts::installation::Rejection;
 /// Preserve storage and domain causes while distinguishing stale writers from corruption.
 #[derive(Debug)]
 pub enum SelectionFailure {
-    /// A short selection writer owns the OS lock; retry selection within the caller's budget.
-    WriterBusy,
+    /// Another holder kept the selection lock past the bounded wait or the job deadline.
+    LockTimeout,
+    /// The job was cancelled while waiting for the selection lock.
+    LockCancelled,
+    /// The accepted generation changed after this launch was reserved. The reserved executable
+    /// is no longer the selected application; the launcher must reserve again and start the
+    /// newly accepted generation instead.
+    Superseded,
     /// Another native owner holds installation-run exclusion; this grants no trial authority.
     RunBusy(io::Error),
     /// Native storage, cancellation, or exclusion failure.
@@ -35,7 +41,9 @@ pub enum SelectionFailure {
 impl fmt::Display for SelectionFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::WriterBusy => "Installation selection is being updated",
+            Self::LockTimeout => "Installation selection stayed locked by another process",
+            Self::LockCancelled => "Installation selection wait was cancelled",
+            Self::Superseded => "Installation selection accepted a different application",
             Self::RunBusy(_) => "Another application invocation owns this installation",
             Self::Storage(_) => "Installation selection storage failed",
             Self::Record(_) => "Installation selection record rejected",
@@ -52,7 +60,9 @@ impl Error for SelectionFailure {
         match self {
             Self::Storage(cause) | Self::RunBusy(cause) => Some(cause),
             Self::Record(cause) => Some(cause),
-            Self::WriterBusy
+            Self::LockTimeout
+            | Self::LockCancelled
+            | Self::Superseded
             | Self::Changed
             | Self::Missing
             | Self::Revision
@@ -64,6 +74,16 @@ impl Error for SelectionFailure {
 impl From<io::Error> for SelectionFailure {
     fn from(cause: io::Error) -> Self {
         Self::Storage(cause)
+    }
+}
+impl From<crate::setup_storage::short_lock::Refused> for SelectionFailure {
+    fn from(refused: crate::setup_storage::short_lock::Refused) -> Self {
+        use crate::setup_storage::short_lock::Refused;
+        match refused {
+            Refused::Timeout => Self::LockTimeout,
+            Refused::Cancelled => Self::LockCancelled,
+            Refused::Storage(cause) => Self::Storage(cause),
+        }
     }
 }
 impl From<Rejection> for SelectionFailure {

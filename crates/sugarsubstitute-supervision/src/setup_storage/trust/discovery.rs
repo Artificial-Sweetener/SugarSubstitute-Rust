@@ -60,7 +60,7 @@ impl TrustStore {
     /// Rejects unavailable, damaged or foreign trust; never resets the root version.
     pub fn next_root_version(&self, context: &JobContext) -> Result<u32, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _reader = self.reader(protection, context)?;
             Ok(self.read(protection)?.next_root_version()?)
         })
     }

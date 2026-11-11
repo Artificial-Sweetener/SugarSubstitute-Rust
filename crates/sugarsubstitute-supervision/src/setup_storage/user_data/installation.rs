@@ -6,7 +6,6 @@ use crate::{
     durable_storage::{files::Directory, invalid, protected::directories::Mode, protection},
     setup_storage::{self, SelectionStore, backend_data::BackendDataAuthority},
 };
-use std::fs::File;
 use sugarsubstitute_contracts::{
     installation::{Candidate, Generation, InstallationRecord},
     lifecycle::NamespaceId,
@@ -18,7 +17,6 @@ pub(super) struct InstallationData {
     pub(super) identity: Generation,
     pub(super) snapshot: InstallationRecord,
     pub(super) backend: BackendDataAuthority,
-    _selection: File,
     _store: SelectionStore,
 }
 impl InstallationData {
@@ -39,7 +37,10 @@ impl InstallationData {
         else {
             return Ok(None);
         };
-        let (snapshot, selection) = store.pinned_snapshot(context).map_err(io::Error::other)?;
+        let snapshot = store
+            .load(context)
+            .map_err(io::Error::other)?
+            .ok_or_else(|| invalid("Installation selection is missing"))?;
         let name = image.file_name().and_then(|name| name.to_str()).ok_or_else(|| {
             crate::durable_storage::invalid("Running generation name is not Unicode")
         })?;
@@ -58,15 +59,7 @@ impl InstallationData {
         })?;
         let backend = BackendDataAuthority::read(&root, &generation, &identity, context)?;
         check(context)?;
-        Ok(Some(Self {
-            root,
-            generation,
-            identity,
-            snapshot,
-            backend,
-            _selection: selection,
-            _store: store,
-        }))
+        Ok(Some(Self { root, generation, identity, snapshot, backend, _store: store }))
     }
 
     /// Keep each complete selected generation and Ready record pinned through namespace admission.
@@ -76,9 +69,10 @@ impl InstallationData {
         context: &JobContext,
         operation: impl FnOnce(&[NamespaceId]) -> io::Result<T>,
     ) -> io::Result<T> {
+        self.require_unchanged_generations(context)?;
         let mut pins = Vec::new();
         let mut namespaces = Vec::new();
-        protection::with(context, |owner| {
+        let result = protection::with(context, |owner| {
             for generation in generations(&self.snapshot) {
                 let path = self.root.path().join("releases").join(generation.id.as_str());
                 owner.directory(&path, Mode::Existing, context)?;
@@ -93,7 +87,23 @@ impl InstallationData {
                 pins.push((directory, record));
             }
             operation(&namespaces)
-        })
+        })?;
+        self.require_unchanged_generations(context)?;
+        Ok(result)
+    }
+
+    /// Settlement correlates the generations read at open; the record is not held open, so a
+    /// publication that changed that generation set since then fails this settlement closed.
+    fn require_unchanged_generations(&self, context: &JobContext) -> io::Result<()> {
+        let current = self
+            ._store
+            .load(context)
+            .map_err(io::Error::other)?
+            .ok_or_else(|| invalid("Installation selection is missing"))?;
+        if generations(&current).ne(generations(&self.snapshot)) {
+            return Err(invalid("Installation generations changed during data settlement"));
+        }
+        Ok(())
     }
 }
 
