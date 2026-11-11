@@ -72,7 +72,11 @@ test.each([
         expect.objectContaining({
           type: 'surface.capabilities.reply',
           status: 'unsupported',
-          capabilities: { ...selectedPngCapabilities, schema: requestSchema, imageFormats: [] },
+          capabilities: {
+            ...selectedPngCapabilities,
+            schema: Math.min(requestSchema, hostSchema),
+            imageFormats: [],
+          },
           message: expect.stringContaining('Update SugarCubes and its native host together'),
         }),
       ]);

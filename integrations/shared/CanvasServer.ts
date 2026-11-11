@@ -35,7 +35,11 @@ import {
   snapshotCanvasSurfacePresentation,
   validCanvasSurfacePresentation,
 } from './CanvasSurfacePreview.js';
-import { dispatchCanvasSurfaceDiscovery } from './CanvasSurfaceDiscovery.js';
+import {
+  dispatchCanvasSurfaceDiscovery,
+  SURFACE_SCHEMA_REQUIRED,
+} from './CanvasSurfaceDiscovery.js';
+import { answeredCanvasSurfaceSchema, expressesCanvasSurface } from './CanvasSurfaceSchemas.js';
 import type {
   CanvasGeometryRequest,
   CanvasGeometryResult,
@@ -211,10 +215,10 @@ export class CanvasServer {
     this.#entries.set(value.requestId, entry);
     if (value.type === 'context.request') void this.#context(value.requestId, entry);
     else if (value.type === 'surface.capabilities.request') {
+      const declared = this.port.surface?.capabilities.schema;
       this.#surfaceSchemaRejected =
-        (value.schema !== 2 && value.schema !== 3) ||
-        (this.port.surface?.capabilities.schema !== 2 &&
-          this.port.surface?.capabilities.schema !== 3);
+        declared === undefined ||
+        !expressesCanvasSurface(answeredCanvasSurfaceSchema(value.schema, declared));
       void dispatchCanvasSurfaceDiscovery(value, entry.cancellation, this.port).then((reply) => {
         this.#reply(entry, reply);
       });
@@ -238,8 +242,7 @@ export class CanvasServer {
         address: request.address,
         revision: request.revision,
         status: 'unavailable',
-        message:
-          'Native surface schema 2 is required. Update SugarCubes and its native host together.',
+        message: SURFACE_SCHEMA_REQUIRED,
       });
       return;
     }

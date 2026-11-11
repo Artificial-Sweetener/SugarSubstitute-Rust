@@ -50,6 +50,7 @@ import type {
 } from '../contracts/CanvasSurface.js';
 import { canvasSurfaceOverviewMessageFits } from './CanvasSurfaceOverview.js';
 import { snapshotCanvasSurfaceCapabilities } from './CanvasSurfaceDiscovery.js';
+import { NEWEST_CANVAS_SURFACE_SCHEMA } from './CanvasSurfaceSchemas.js';
 import type {
   CanvasEditRequest,
   CanvasGeometryRequest,
@@ -105,7 +106,7 @@ type Request =
   | Pick<CanvasGeometryRequest, 'type' | 'command'>
   | Pick<CanvasEditRequest, 'type' | 'command'>
   | Pick<CanvasWorkflowRequest, 'type' | 'command'>
-  | { readonly type: 'surface.capabilities.request'; readonly schema: 2 | 3 }
+  | { readonly type: 'surface.capabilities.request'; readonly schema: number }
   | { readonly type: 'surface.presentation.request'; readonly schema: 1; readonly enabled: boolean }
   | CanvasSurfaceCommand;
 /** Retain one correlated client for a validated host session; never replay mutations after reconnect. */
@@ -132,7 +133,7 @@ export class CanvasClient implements CanvasLayerHost {
     this.#surfaces = new CanvasSurfaceConnection({
       read: () =>
         this.#request(
-          { type: 'surface.capabilities.request', schema: 3 },
+          { type: 'surface.capabilities.request', schema: NEWEST_CANVAS_SURFACE_SCHEMA },
           'surface.capabilities.reply',
         ),
       execute: (command, cancellation) =>

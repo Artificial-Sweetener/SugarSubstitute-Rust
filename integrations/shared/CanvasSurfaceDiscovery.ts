@@ -37,6 +37,16 @@ import type {
   CanvasSurfacePresentationChange,
 } from '../contracts/CanvasSurface.js';
 import { isCanvasPreviewCommand, supportsCanvasSurfacePreview } from './CanvasSurfacePreview.js';
+import {
+  answeredCanvasSurfaceSchema,
+  canvasSurfaceCapabilitiesInSchema,
+  expressesCanvasSurface,
+  NEWEST_CANVAS_SURFACE_SCHEMA,
+} from './CanvasSurfaceSchemas.js';
+
+/** Explain a refusal from a side whose schema cannot express the native surface. */
+export const SURFACE_SCHEMA_REQUIRED =
+  'Native surface schema 2 is required. Update SugarCubes and its native host together.';
 
 /** Represent an explicit refusal without suggesting any executable operation. */
 export const EMPTY_CANVAS_SURFACE_CAPABILITIES: CanvasSurfaceCapabilities = Object.freeze({
@@ -77,7 +87,13 @@ export function snapshotCanvasSurfaceCapabilities(
   });
 }
 
-/** Refuse incompatible feature schemas before native reads and expose implemented current support. */
+/**
+ * Answer discovery in the newest schema both the request and the host declaration allow.
+ *
+ * A request for a schema this release does not know is answered in the newest schema it knows,
+ * so a newer page steps down instead of losing the surface. Declarations the answered schema
+ * cannot express are omitted, which the page reads as unsupported.
+ */
 export async function dispatchCanvasSurfaceDiscovery(
   request: CanvasSurfaceCapabilitiesRequest,
   cancellation: CanvasCancellationSource,
@@ -94,47 +110,50 @@ export async function dispatchCanvasSurfaceDiscovery(
     requestId: request.requestId,
     type: 'surface.capabilities.reply',
   } as const;
-  const empty = { ...EMPTY_CANVAS_SURFACE_CAPABILITIES, schema: request.schema };
-  if (request.schema !== 2 && request.schema !== 3)
+  const requested = answeredCanvasSurfaceSchema(request.schema, NEWEST_CANVAS_SURFACE_SCHEMA);
+  const empty = (schema: number): CanvasSurfaceCapabilities => ({
+    ...EMPTY_CANVAS_SURFACE_CAPABILITIES,
+    schema,
+  });
+  if (!expressesCanvasSurface(requested))
     return {
       ...envelope,
       status: 'unsupported',
-      capabilities: { ...empty, schema: 1 },
-      message:
-        'Native surface schema 2 is required. Update SugarCubes and its native host together.',
+      capabilities: empty(requested),
+      message: SURFACE_SCHEMA_REQUIRED,
     };
   try {
     if (!port.surface)
       return {
         ...envelope,
         status: 'unsupported',
-        capabilities: empty,
+        capabilities: empty(requested),
         message: 'This canvas does not provide an output surface.',
       };
     const capabilities = port.surface.capabilities;
     if (!isCanvasSurfaceCapabilities(capabilities))
       throw new Error('Canvas surface declared invalid capabilities.');
-    if (capabilities.schema !== 2 && capabilities.schema !== 3)
+    const schema = answeredCanvasSurfaceSchema(request.schema, capabilities.schema);
+    if (!expressesCanvasSurface(schema))
       return {
         ...envelope,
         status: 'unsupported',
-        capabilities: empty,
-        message:
-          'Native surface schema 2 is required. Update SugarCubes and its native host together.',
+        capabilities: empty(schema),
+        message: SURFACE_SCHEMA_REQUIRED,
       };
     const context = await port.context();
     if (cancellation.cancelled() || !context.canvas.capabilities.displayOutput)
       return {
         ...envelope,
         status: 'unavailable',
-        capabilities: empty,
+        capabilities: empty(schema),
         message: 'The canvas surface is unavailable.',
       };
     return {
       ...envelope,
       status: 'available',
       capabilities: snapshotCanvasSurfaceCapabilities(
-        request.schema === 2 ? legacyCapabilities(capabilities) : capabilities,
+        canvasSurfaceCapabilitiesInSchema(capabilities, schema),
       ),
       message: '',
     };
@@ -143,13 +162,19 @@ export async function dispatchCanvasSurfaceDiscovery(
     return {
       ...envelope,
       status: 'error',
-      capabilities: empty,
+      capabilities: empty(requested),
       message: 'Canvas surface discovery failed.',
     };
   }
 }
 
-/** Negotiate support while leaving context identity and the executable proxy with the session owner. */
+/**
+ * Negotiate support while leaving context identity and the executable proxy with the session owner.
+ *
+ * The page requests the newest schema it knows. An older host answers in an older schema; the page
+ * keeps only what that schema expresses and treats everything else as unsupported. A schema that
+ * expresses no surface leaves the surface absent.
+ */
 export async function discoverCanvasSurface(port: {
   read(): Promise<CanvasMessage>;
   current(): boolean;
@@ -168,10 +193,8 @@ export async function discoverCanvasSurface(port: {
     if (!port.current()) return null;
     if (reply.type !== 'surface.capabilities.reply')
       throw new Error('Invalid canvas surface capability reply.');
-    if (reply.capabilities.schema !== 2 && reply.capabilities.schema !== 3)
-      throw new Error(
-        'Native surface schema 2 is required. Update SugarCubes and its native host together.',
-      );
+    if (reply.capabilities.schema > NEWEST_CANVAS_SURFACE_SCHEMA)
+      throw new Error('Canvas surface discovery answered a newer schema than requested.');
     if (reply.status !== 'available') {
       if (!emptyCanvasSurfaceCapabilities(reply.capabilities))
         throw new Error('Unavailable canvas surface declared capabilities.');
@@ -179,12 +202,20 @@ export async function discoverCanvasSurface(port: {
         port.report(new Error(reply.message || 'Canvas surface discovery failed.'));
       return null;
     }
+    // Pre-surface hosts answer unsupported, so an available answer here is a host inconsistency.
+    if (!expressesCanvasSurface(reply.capabilities.schema)) {
+      port.report(new Error(SURFACE_SCHEMA_REQUIRED));
+      return null;
+    }
+    const capabilities = snapshotCanvasSurfaceCapabilities(
+      canvasSurfaceCapabilitiesInSchema(reply.capabilities, reply.capabilities.schema),
+    );
     const host: CanvasSurfaceHost = Object.freeze<CanvasSurfaceHost>({
-      capabilities: snapshotCanvasSurfaceCapabilities(reply.capabilities),
-      ...(port.presentation && reply.capabilities.previewFormats.length
+      capabilities,
+      ...(port.presentation && capabilities.previewFormats.length
         ? { presentation: port.presentation }
         : {}),
-      ...(port.camera && negotiatesCanvasSurfaceInspection(reply.capabilities)
+      ...(port.camera && negotiatesCanvasSurfaceInspection(capabilities)
         ? { camera: port.camera }
         : {}),
       execute: (command, cancellation) =>
@@ -212,18 +243,4 @@ export async function discoverCanvasSurface(port: {
     if (port.current()) port.report(error);
     return null;
   }
-}
-
-/** Keep the schema-two public contract free of later presentation fields. */
-function legacyCapabilities(value: CanvasSurfaceCapabilities): CanvasSurfaceCapabilities {
-  return {
-    schema: 2,
-    imageFormats: value.imageFormats,
-    viewportCommands: value.viewportCommands,
-    viewportState: value.viewportState,
-    previewFormats: value.previewFormats,
-    comparison: value.comparison,
-    overview: value.overview,
-    input: value.input,
-  };
 }

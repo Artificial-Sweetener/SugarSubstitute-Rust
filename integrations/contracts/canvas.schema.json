@@ -85,7 +85,7 @@
         "schema": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 3
+          "maximum": 2147483647
         }
       },
       "required": ["protocol", "version", "session", "requestId", "type", "schema"],
