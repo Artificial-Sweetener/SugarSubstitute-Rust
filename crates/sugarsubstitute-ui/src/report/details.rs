@@ -37,7 +37,7 @@ impl DetailsText {
 
     /// Split the text into display lines. Carriage returns are dropped; NUL is replaced.
     /// # Errors
-    /// Rejects text larger than [`MAX_BYTES`].
+    /// Rejects text larger than 256 KiB, the incident text attachment bound.
     pub fn new(text: &str) -> io::Result<Self> {
         if text.len() > MAX_BYTES {
             return Err(io::Error::new(
