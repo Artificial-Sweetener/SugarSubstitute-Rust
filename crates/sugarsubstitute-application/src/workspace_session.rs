@@ -7,6 +7,7 @@
 //! A publication acknowledgement establishes durable state; capture alone never does.
 mod bindings;
 mod capture;
+pub mod close_save;
 mod schedule;
 #[cfg(test)]
 mod tests;
@@ -77,6 +78,8 @@ pub struct WorkspaceSession {
     publishing: bool,
     closing: Option<Moment>,
     close_failed: bool,
+    /// Oldest change carried by the running capture, until its publication is durable.
+    unsaved_since: Option<Moment>,
 }
 impl WorkspaceSession {
     /// Bind independently trusted scope/origin and the host-granted fresh webview UUID.
@@ -127,6 +130,7 @@ impl WorkspaceSession {
             publishing: false,
             closing: None,
             close_failed: false,
+            unsaved_since: None,
         })
     }
 
@@ -266,11 +270,41 @@ impl WorkspaceSession {
         })
     }
 
+    /// What the close kept, once close is ready at `now`; `None` while the final save runs.
+    /// Nothing is unsaved when the page never reached a live committed persistence-enabled
+    /// boundary, because the durable checkpoint on disk is then the latest authored state. A
+    /// failed final publication is a storage failure; unsaved work at the cutoff is stale, or
+    /// protected when unsupported originals forbid any publication.
+    pub fn close_verdict(&self, now: Moment) -> Option<close_save::SaveVerdict> {
+        use close_save::{SaveFailure, SaveVerdict};
+        let cutoff = self.closing?;
+        if !self.close_ready(now) {
+            return None;
+        }
+        if self.close_failed {
+            return Some(SaveVerdict::Failed(SaveFailure::Storage));
+        }
+        let unsaved = self.schedule.dirty() || self.active.is_some();
+        if !unsaved || !self.live() || !self.committed() {
+            return Some(SaveVerdict::Saved);
+        }
+        if self.protected {
+            return Some(SaveVerdict::Failed(SaveFailure::Protected));
+        }
+        let since = self.unsaved_since.or(self.schedule.since()).unwrap_or(cutoff);
+        Some(SaveVerdict::Stale { since: since.min(now) })
+    }
+
     /// Freeze the final committed state while the original frontend/native peer still exists.
     /// Repeated calls tighten, never renew, the same original shutdown budget.
     /// # Errors
     /// Refuses an already-expired cutoff; no capture or publication is manufactured.
     pub fn begin_close(&mut self, now: Moment, cutoff: Moment) -> Result<(), WorkspaceError> {
+        if let Some(original) = self.closing {
+            // A later budget only tightens the original cutoff, even when it already passed.
+            self.closing = Some(original.min(cutoff));
+            return Ok(());
+        }
         if cutoff <= now {
             return Err(SessionError::Stale.into());
         }

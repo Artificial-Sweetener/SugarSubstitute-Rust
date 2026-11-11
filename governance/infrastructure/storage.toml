@@ -4360,10 +4360,10 @@ rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs/persistence.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e3ee7a41a94a65f4b00d538d72cb0090d80c0049db84b01260e31c0bfa8ae3e7"
-capabilities = ["std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::write"]
+source_sha256 = "sha256:fb3b635a83c2d5ae863c8146c2deaa9d6d51cde3f173302eda35ab3760e9c268"
+capabilities = ["std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
-rationale = "An owned temporary session directory is inspected for saved archives and seeded with a corrupt one to qualify restore and rebuild."
+rationale = "An owned temporary session directory is inspected for saved archives, seeded with a corrupt one to qualify restore and rebuild, and has its archive leaf replaced by a directory to inject a failed final close-save write."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests.rs"
@@ -4885,10 +4885,26 @@ rationale = "Owned temporary media qualify one verified immutable reader, range 
 [[records]]
 path = "crates/sugarsubstitute/src/workspace_session/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:98c3d335daa3c1a994a70f560409297c765e66cdbe7935918cb8fc3acd0bb025"
+source_sha256 = "sha256:4a605c2002c674beea607a2e337477e1219a22b118e9a3dc4fc99417501bb5b5"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary profile and workspace roots qualify the actual session store through real admitted execution jobs."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/workspace/close_save_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:2462dade4755e48784f2a7024c9c6707ff7dc2bee16590c602a123c8a4eb6667"
+capabilities = ["std::fs::remove_dir_all", "std::fs::write"]
+disposition = "fixture"
+rationale = "The owned temporary workspace's checkpoint folder is replaced by a file to inject a failed final publication, which the close save must record before the exit intent."
+
+[[records]]
+path = "crates/sugarsubstitute/src/workspace_session/tests/close_records.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:f677fc4294c916d8e8dce860522a00d77be3487a1f7c4dd62c52ffe606c4708c"
+capabilities = ["std::fs::read", "std::fs::write"]
+disposition = "fixture"
+rationale = "An owned temporary profile directory holds the close-save record: written and reported once through real admitted jobs, and seeded with an unsupported record that must stay untouched."
 
 [[records]]
 path = "crates/sugarsubstitute/src/workspace_session/tests/profiles.rs"
@@ -4909,7 +4925,7 @@ rationale = "Owned temporary checkpoint files qualify atomic publication, exact 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:209068092beea7711a155b1afedae7c99f358eec02cfef9ca5955527779b95b5"
+source_sha256 = "sha256:b6d9ed7fb63378528d2c05bd6d0ff281fc2d2ba859fd84b31feca4da4a3fe3e6"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."

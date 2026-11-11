@@ -1772,3 +1772,17 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 source_sha256 = "sha256:e23df21e8b1d9eccb71acb6352115303f3755a2b92e7d322f314846cf45d4dc3"
+
+# What the last close did not keep: written under user\sessions\<profile> before the exit
+# intent when a close save is not fully saved, reported once by the next start and kept.
+[[formats]]
+id = "close-save-record-v1"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/workspace_session/close_record.rs"]
+source_sha256 = "sha256:270b9733198fa2f2d837b77195a1ddaf800e976346cbda95f95d9853208e12ed"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
