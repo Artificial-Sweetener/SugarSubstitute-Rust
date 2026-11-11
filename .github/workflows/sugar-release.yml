@@ -1,9 +1,6 @@
-name: release
+name: Sugar release
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       dry_run:
@@ -17,6 +14,10 @@ on:
 
 permissions:
   contents: write
+
+defaults:
+  run:
+    working-directory: Sugar
 
 jobs:
   release:
@@ -32,6 +33,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: Sugar/package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v6

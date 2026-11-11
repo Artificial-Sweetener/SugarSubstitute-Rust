@@ -1,0 +1,22 @@
+repos:
+  - repo: local
+    hooks:
+      - id: whitespace-integrity
+        name: Check staged whitespace integrity
+        entry: git diff --cached --check
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: substitute-check
+        name: Check Substitute governance, formatting and lints
+        entry: python -c "import subprocess, sys; sys.exit(subprocess.call(['cargo', 'xtask', 'check'], cwd='Substitute'))"
+        language: system
+        pass_filenames: false
+        files: ^Substitute/
+        exclude: '\.md$'
+      - id: sugar-check
+        name: Check the staged SugarCubes snapshot
+        entry: npm --prefix Sugar run check:staged
+        language: system
+        pass_filenames: false
+        files: ^Sugar/
