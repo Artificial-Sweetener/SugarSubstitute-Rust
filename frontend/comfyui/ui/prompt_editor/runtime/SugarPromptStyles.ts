@@ -28,6 +28,7 @@ export function installSugarPromptStyles(document: Document): void {
   min-height: 0;
   position: relative;
   box-sizing: border-box;
+  --sugarprompt-selection-background: var(--sc-accent-selection, Highlight);
 }
 .sugarprompt-editor .cm-scroller { overflow-x: hidden; }
 .sugarprompt-editor .cm-editor.cm-focused { outline: none; }

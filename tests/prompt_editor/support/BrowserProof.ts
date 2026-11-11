@@ -52,6 +52,13 @@ export interface PromptBrowserProof {
   wrapBoundaries(): readonly number[];
   /** Select a collapsed caret at `position` on the given side of a soft wrap, as a pointer or arrow key does. */
   placeCaret(position: number, side: -1 | 1): void;
+  /** Painted vertical extent of the character starting at position, or null when none is drawn there. */
+  characterRow(position: number): { readonly top: number; readonly bottom: number } | null;
+  /** CodeMirror's caret rectangle for position on the given side, which the drawn caret must cover. */
+  caretRect(
+    position: number,
+    side: -1 | 1,
+  ): { readonly left: number; readonly top: number; readonly bottom: number } | null;
   read(): {
     source: unknown;
     callbacks: number;
@@ -336,6 +343,14 @@ window.promptBrowserProof = {
       selection: EditorSelection.create([EditorSelection.cursor(position, side)]),
       scrollIntoView: false,
     });
+  },
+  characterRow(position) {
+    const rect = promptView().coordsForChar(position);
+    return rect ? { top: rect.top, bottom: rect.bottom } : null;
+  },
+  caretRect(position, side) {
+    const rect = promptView().coordsAtPos(position, side);
+    return rect ? { left: rect.left, top: rect.top, bottom: rect.bottom } : null;
   },
   /** Observe the mounted editor's public main selection in logical source offsets. */
   selection() {

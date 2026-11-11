@@ -118,7 +118,7 @@ import {
 } from "./chunk-QTBJ64DI.js";
 import {
   installSugarPromptStyles
-} from "./chunk-46CU34E6.js";
+} from "./chunk-4OATFCQX.js";
 import {
   SugarPromptTooltip
 } from "./chunk-5N7RXSME.js";
@@ -6737,7 +6737,7 @@ var DocView = class {
     if (cursor.head == lineStart || cursor.head == lineStart + line.length)
       return;
     let before = this.coordsAt(cursor.head, -1), after = this.coordsAt(cursor.head, 1);
-    if (!before || !after || before.bottom > after.top + (after.bottom - after.top) / 2)
+    if (!before || !after || before.bottom > after.top)
       return;
     let dom = this.domAtPos(cursor.head + cursor.assoc, cursor.assoc);
     sel.collapse(dom.node, dom.offset);
@@ -12512,6 +12512,84 @@ function layer(config) {
     layerOrder.of(config)
   ];
 }
+var selectionConfig = /* @__PURE__ */ Facet.define({
+  combine(configs) {
+    return combineConfig(configs, {
+      cursorBlinkRate: 1200,
+      drawRangeCursor: true,
+      iosSelectionHandles: true
+    }, {
+      cursorBlinkRate: (a, b) => Math.min(a, b),
+      drawRangeCursor: (a, b) => a || b
+    });
+  }
+});
+function drawSelection(config = {}) {
+  return [
+    selectionConfig.of(config),
+    cursorLayer,
+    selectionLayer,
+    hideNativeSelection,
+    nativeSelectionHidden.of(true)
+  ];
+}
+function configChanged(update) {
+  return update.startState.facet(selectionConfig) != update.state.facet(selectionConfig);
+}
+var cursorLayer = /* @__PURE__ */ layer({
+  above: true,
+  markers(view) {
+    let { state } = view, conf = state.facet(selectionConfig);
+    let cursors = [];
+    for (let r of state.selection.ranges) {
+      let prim = r == state.selection.main;
+      if (r.empty || conf.drawRangeCursor && !(prim && browser.ios && conf.iosSelectionHandles)) {
+        let className = prim ? "cm-cursor cm-cursor-primary" : "cm-cursor cm-cursor-secondary";
+        let cursor = r.empty ? r : EditorSelection.cursor(r.head, r.assoc);
+        for (let piece of RectangleMarker.forRange(view, className, cursor))
+          cursors.push(piece);
+      }
+    }
+    return cursors;
+  },
+  update(update, dom) {
+    if (update.transactions.some((tr) => tr.selection))
+      dom.style.animationName = dom.style.animationName == "cm-blink" ? "cm-blink2" : "cm-blink";
+    let confChange = configChanged(update);
+    if (confChange)
+      setBlinkRate(update.state, dom);
+    return update.docChanged || update.selectionSet || confChange;
+  },
+  mount(dom, view) {
+    setBlinkRate(view.state, dom);
+  },
+  class: "cm-cursorLayer"
+});
+function setBlinkRate(state, dom) {
+  dom.style.animationDuration = state.facet(selectionConfig).cursorBlinkRate + "ms";
+}
+var selectionLayer = /* @__PURE__ */ layer({
+  above: false,
+  markers(view) {
+    let markers = [], { main, ranges } = view.state.selection;
+    for (let r of ranges)
+      if (!r.empty) {
+        for (let marker of RectangleMarker.forRange(view, "cm-selectionBackground", r))
+          markers.push(marker);
+      }
+    if (browser.ios && !main.empty && view.state.facet(selectionConfig).iosSelectionHandles) {
+      for (let piece of RectangleMarker.forRange(view, "cm-selectionHandle cm-selectionHandle-start", EditorSelection.cursor(main.from, 1)))
+        markers.push(piece);
+      for (let piece of RectangleMarker.forRange(view, "cm-selectionHandle cm-selectionHandle-end", EditorSelection.cursor(main.to, 1)))
+        markers.push(piece);
+    }
+    return markers;
+  },
+  update(update, dom) {
+    return update.docChanged || update.selectionSet || update.viewportChanged || configChanged(update);
+  },
+  class: "cm-selectionLayer"
+});
 var selectionBg = browser.gecko && browser.gecko_version == 153 ? "#ffffff01" : "transparent";
 var hideNativeSelection = /* @__PURE__ */ Prec.highest(/* @__PURE__ */ EditorView.theme({
   ".cm-line": {
@@ -29234,10 +29312,8 @@ var reorderPreviewExtension = [
     };
   }),
   EditorView.theme({
-    '&[data-reorder-preview="true"] .cm-content, &[data-reorder-preview="true"] .cm-content *': {
-      caretColor: "transparent"
-    },
-    '&[data-reorder-preview="true"] .cm-content::selection, &[data-reorder-preview="true"] .cm-content ::selection': { backgroundColor: "transparent", color: "inherit" },
+    '&[data-reorder-preview="true"] .cm-cursorLayer': { visibility: "hidden" },
+    '&[data-reorder-preview="true"] .cm-content .cm-line ::selection, &[data-reorder-preview="true"] .cm-content .cm-line::selection': { backgroundColor: "transparent !important", color: "inherit" },
     ".sp-reorder-preview": { whiteSpace: "inherit", userSelect: "none" },
     ".sp-reorder-chip": {
       display: "inline",
@@ -31214,46 +31290,53 @@ var promptMouseSelection = (() => {
   ];
 })();
 
-// frontend/sugarprompt/editor/src/native-caret-side.ts
-var NativeCaretSide = class {
+// frontend/sugarprompt/editor/src/drawn-selection.ts
+var caretBlinkCycle = 1060;
+var CaretWidth = class {
   view;
-  /** Bind one mounted native view. */
+  width = 0;
+  /** Publish the width for the view's current scale. */
   constructor(view) {
     this.view = view;
+    this.publish();
   }
-  /** Re-check the painted row only when a collapsed caret changed side without moving. */
+  /** Re-publish when CodeMirror measured a new scale or device pixel ratio. */
   update(update) {
-    const main = update.state.selection.main, previous = update.startState.selection.main;
-    if (!update.selectionSet || !main.empty || !main.assoc || !previous.empty || previous.head !== main.head || previous.assoc === main.assoc)
-      return;
-    this.view.requestMeasure({
-      key: this,
-      read: () => this.misplaced(),
-      write: (boundary3) => {
-        if (!boundary3) return;
-        const selection = this.view.contentDOM.ownerDocument.getSelection();
-        if (selection?.isCollapsed) selection.collapse(boundary3.node, boundary3.offset);
-      }
-    });
+    if (update.geometryChanged) this.publish();
   }
-  /** Return the side-correct DOM boundary when the browser paints the caret on another visual row. */
-  misplaced() {
-    const view = this.view, main = view.state.selection.main;
-    if (!main.empty || !main.assoc || !view.hasFocus || view.composing || view.compositionStarted)
-      return null;
-    const selection = view.contentDOM.ownerDocument.getSelection();
-    const focus = selection?.focusNode;
-    if (!selection?.isCollapsed || !focus || !view.contentDOM.contains(focus)) return null;
-    if (view.posAtDOM(focus, selection.focusOffset) !== main.head) return null;
-    const painted = selection.getRangeAt(0).getBoundingClientRect(), intended = view.coordsAtPos(main.head, main.assoc);
-    if (!intended || painted.height <= 0) return null;
-    const row = Math.min(painted.height, intended.bottom - intended.top) / 2;
-    if (Math.abs(painted.top - intended.top) < row) return null;
-    const target = view.domAtPos(main.head, main.assoc);
-    return target.node === focus && target.offset === selection.focusOffset ? null : target;
+  /** Write the width only when it changed; reading the measured scale costs no layout. */
+  publish() {
+    const devicePixelRatio = this.view.dom.ownerDocument.defaultView?.devicePixelRatio ?? 1;
+    const width = Math.max(1, 1 / (this.view.scaleX * devicePixelRatio));
+    if (width === this.width) return;
+    this.width = width;
+    this.view.dom.style.setProperty("--sugarprompt-caret-width", `${String(width)}px`);
   }
 };
-var nativeCaretSide = ViewPlugin.fromClass(NativeCaretSide);
+var caretAppearance = EditorView.theme({
+  // A filled box rather than a border: Chromium rounds border widths to whole device pixels, while the
+  // native caret is antialiased at its scaled width.
+  ".cm-cursorLayer .cm-cursor": {
+    borderLeft: "none",
+    width: "var(--sugarprompt-caret-width, 1px)",
+    marginLeft: "calc(var(--sugarprompt-caret-width, 1px) / -2)",
+    backgroundColor: "currentColor"
+  }
+});
+var nativeHighlight = Prec.highest(
+  EditorView.theme({
+    "& .cm-selectionLayer": { display: "none" },
+    "& .cm-content .cm-line ::selection, & .cm-content .cm-line::selection": {
+      backgroundColor: "var(--sugarprompt-selection-background, Highlight) !important"
+    }
+  })
+);
+var drawnSelection = [
+  drawSelection({ cursorBlinkRate: caretBlinkCycle, drawRangeCursor: false }),
+  ViewPlugin.fromClass(CaretWidth),
+  caretAppearance,
+  nativeHighlight
+];
 
 // frontend/sugarprompt/editor/src/weight-preview-value.ts
 function weightPreviewText(state, session) {
@@ -36291,18 +36374,13 @@ var editorTheme = EditorView.theme({
     padding: "6px 7px 6px 12px",
     paddingLeft: "calc(12px + var(--sugarprompt-content-inset, 0px))",
     lineHeight: "19px",
-    color: "inherit",
-    caretColor: "currentColor"
+    color: "inherit"
   },
   ".cm-line": { padding: "0" },
   // CodeMirror's zero-width widget buffer is a bare `img` that places the caret beside a widget and
   // gives empty lines their measurable box. Host pages and user stylesheets restyle bare images
   // (`height: auto`, `display: none`, `max-height: 0`), which collapses that box and makes vertical
   // motion skip every empty line, so the metrics CodeMirror depends on are pinned against them.
-  // Firefox anchors the painted caret to the buffer's box when the selection sits before it, which is
-  // every empty line and every line that begins with a widget. CodeMirror's default `text-top`
-  // alignment makes Firefox paint that caret about one row above the line, so the buffer sits on the
-  // baseline instead and the painted caret lands on the row CodeMirror's selection names.
   ".cm-widgetBuffer": {
     display: "inline !important",
     position: "static !important",
@@ -36316,7 +36394,7 @@ var editorTheme = EditorView.theme({
     margin: "0 !important",
     padding: "0 !important",
     border: "0 !important",
-    verticalAlign: "baseline !important"
+    verticalAlign: "text-top !important"
   },
   ".cm-content::selection, .cm-content ::selection": {
     backgroundColor: "Highlight",
@@ -46831,7 +46909,7 @@ function createNativeState(source, options) {
       loraMediaPreparation,
       ...options.onLoraMediaError ? [loraMediaErrors.of(options.onLoraMediaError)] : [],
       promptMouseSelection,
-      nativeCaretSide,
+      drawnSelection,
       reorderInteractions,
       weightPreview,
       keyboardWeightInteractions,

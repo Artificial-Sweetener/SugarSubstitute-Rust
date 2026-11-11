@@ -27,7 +27,7 @@ export interface SupersededCodeMirrorPatch {
   readonly afterSha256: readonly [string, string];
 }
 
-/** Reviewed, finite patch identity for CodeMirror's selection synchronization, cursor side and wrapped viewport. */
+/** Reviewed, finite patch identity for CodeMirror's selection synchronization and wrapped viewport. */
 export interface CodeMirrorPatchManifest {
   /** Exact package identity, with unchanged upstream MIT license bytes. */
   readonly package: {
@@ -139,13 +139,11 @@ const anchorBefore =
 const anchorAfter = 'scrollAnchorHeight = this.viewState.heightMap.height;';
 
 /**
- * Cursor side is enforced for rows whose rectangles merely touch.
+ * Superseded generation's cursor-side replacement, kept only to recover upstream bytes from installs of it.
  *
- * `enforceCursorAssoc` skips a caret whose upstream and downstream rectangles overlap, which is how it
- * recognizes one visual row. Beneath a fractional canvas scale Firefox reports the touching rectangles of
- * two adjacent rows overlapping by floating point noise, so the guard returned early, nothing placed the
- * browser caret on the row the selection names, and the painted caret stayed at the start of the next row.
- * Rows now count as one only when the rectangles overlap by more than half a row.
+ * It widened `enforceCursorAssoc`'s one-row overlap test so the browser caret was moved to the row a soft
+ * wrap's side names. The editor now draws its own caret, and CodeMirror never enforces the native caret's
+ * side while the native selection is hidden.
  */
 const enforceAssocBefore = `        if (!before || !after || before.bottom > after.top)
             return;`;
@@ -169,7 +167,6 @@ export const codeMirrorPatchManifest: CodeMirrorPatchManifest = {
     { before: gapBoundariesBefore, after: gapBoundariesAfter },
     { before: displaySizeBefore, after: displaySizeAfter },
     { before: anchorBefore, after: anchorAfter },
-    { before: enforceAssocBefore, after: enforceAssocAfter },
   ],
   superseded: [
     {
@@ -193,10 +190,11 @@ export const codeMirrorPatchManifest: CodeMirrorPatchManifest = {
         { before: gapBoundariesBefore, after: gapBoundariesAfter },
         { before: displaySizeBefore, after: displaySizeAfter },
         { before: anchorBefore, after: anchorAfter },
+        { before: enforceAssocBefore, after: enforceAssocAfter },
       ],
       afterSha256: [
-        'b7429658da4c4b981ffc2127cfea34da8b51e1e895e70da6bc0ed5e7b4ec3257',
-        'c8940e3b6b1f35af2f24811a9eaeeaf6d8343a0f0531ff8b9e966d5d1a68e343',
+        'd5d14844e66b97040fee75eab4e9b48e3cd46f97f13ed9ba2d907a283225df1a',
+        '034987a2e1ee927e67d7d689a58a626a0d6869fb961c0b3faa3db98934d1ef04',
       ],
     },
   ],
@@ -204,12 +202,12 @@ export const codeMirrorPatchManifest: CodeMirrorPatchManifest = {
     {
       path: 'dist/index.js',
       beforeSha256: '5626b4f31cdf55fd6a92be66d28cd40e9446d2caeb10a5b3f3e6c1c02be42950',
-      afterSha256: 'd5d14844e66b97040fee75eab4e9b48e3cd46f97f13ed9ba2d907a283225df1a',
+      afterSha256: 'b7429658da4c4b981ffc2127cfea34da8b51e1e895e70da6bc0ed5e7b4ec3257',
     },
     {
       path: 'dist/index.cjs',
       beforeSha256: '0ea6fbfd8e5b42ee2926058a929185ac1afffc913a4998e485269f203f7ca17c',
-      afterSha256: '034987a2e1ee927e67d7d689a58a626a0d6869fb961c0b3faa3db98934d1ef04',
+      afterSha256: 'c8940e3b6b1f35af2f24811a9eaeeaf6d8343a0f0531ff8b9e966d5d1a68e343',
     },
   ],
 };

@@ -50,17 +50,12 @@ export const editorTheme = EditorView.theme({
     paddingLeft: 'calc(12px + var(--sugarprompt-content-inset, 0px))',
     lineHeight: '19px',
     color: 'inherit',
-    caretColor: 'currentColor',
   },
   '.cm-line': { padding: '0' },
   // CodeMirror's zero-width widget buffer is a bare `img` that places the caret beside a widget and
   // gives empty lines their measurable box. Host pages and user stylesheets restyle bare images
   // (`height: auto`, `display: none`, `max-height: 0`), which collapses that box and makes vertical
   // motion skip every empty line, so the metrics CodeMirror depends on are pinned against them.
-  // Firefox anchors the painted caret to the buffer's box when the selection sits before it, which is
-  // every empty line and every line that begins with a widget. CodeMirror's default `text-top`
-  // alignment makes Firefox paint that caret about one row above the line, so the buffer sits on the
-  // baseline instead and the painted caret lands on the row CodeMirror's selection names.
   '.cm-widgetBuffer': {
     display: 'inline !important',
     position: 'static !important',
@@ -74,7 +69,7 @@ export const editorTheme = EditorView.theme({
     margin: '0 !important',
     padding: '0 !important',
     border: '0 !important',
-    verticalAlign: 'baseline !important',
+    verticalAlign: 'text-top !important',
   },
   '.cm-content::selection, .cm-content ::selection': {
     backgroundColor: 'Highlight',

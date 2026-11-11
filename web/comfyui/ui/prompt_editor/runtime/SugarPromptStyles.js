@@ -1,6 +1,6 @@
 import {
   installSugarPromptStyles
-} from "./chunk-46CU34E6.js";
+} from "./chunk-4OATFCQX.js";
 export {
   installSugarPromptStyles
 };
