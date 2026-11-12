@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:3ad21e0cf3c9214a7b8f9fa23d52fc307588e1bec1d6e3d82a12a02e8ba7f28a"
+source_sha256 = "sha256:474c018b96b5e65047e4192138a0d7590d5cfe68935fa8762d49a9515f8b2ff4"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -4975,7 +4975,7 @@ rationale = "An owned temporary workspace is seeded with a previous run's checkp
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/close_save_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2462dade4755e48784f2a7024c9c6707ff7dc2bee16590c602a123c8a4eb6667"
+source_sha256 = "sha256:ddb6e99e345b463d34f1c600dbffe39bdc1cea087511f4b546c3899125d7143f"
 capabilities = ["std::fs::remove_dir_all", "std::fs::write"]
 disposition = "fixture"
 rationale = "The owned temporary workspace's checkpoint folder is replaced by a file to inject a failed final publication, which the close save must record before the exit intent."

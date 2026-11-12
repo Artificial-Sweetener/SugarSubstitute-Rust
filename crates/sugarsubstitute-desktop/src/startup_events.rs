@@ -107,6 +107,19 @@ pub(super) fn dispatch(
         Event::UserEvent(NativeAction::Close) if !session.closing => {
             session.observe(content, DesktopStartupObservation::CloseRequested)?;
         }
+        Event::UserEvent(NativeAction::SessionEnding) => {
+            use crate::windows_session_end::SessionEndSignal;
+            match session.session_end.as_ref().and_then(|watch| watch.take_signal()) {
+                Some(SessionEndSignal::Ending { critical }) if !session.closing => content
+                    .request_session_close(critical)
+                    .map_err(|cause| DesktopError::boxed("session_end_close", cause))?,
+                Some(SessionEndSignal::Cancelled) => tracing::info!(
+                    operation = "session_end",
+                    "Windows cancelled the session end; a close already under way continues"
+                ),
+                _ => {}
+            }
+        }
         Event::UserEvent(NativeAction::Activate(id))
             if !session.closing && !session.splash.retiring =>
         {

@@ -119,6 +119,8 @@ pub struct StartupHost<B: StartupBackend> {
     /// The close save, once the shutdown budget was measured.
     close_save: Option<sugarsubstitute_application::workspace_session::close_save::CloseSave>,
     close_record_submitted: bool,
+    /// The short graceful cutoff of a critical session end, which waits for nothing.
+    critical_until: Option<sugarsubstitute_contracts::execution::Moment>,
     #[cfg(all(test, windows, feature = "native-composition"))]
     input_probe: Option<close_save::InputSaveProbe>,
 }
@@ -197,6 +199,7 @@ impl<B: StartupBackend> StartupHost<B> {
                 sugarsubstitute_application::workspace_session::close_save::CloseReason::Close,
             close_save: None,
             close_record_submitted: false,
+            critical_until: None,
             #[cfg(all(test, windows, feature = "native-composition"))]
             input_probe: None,
         })
@@ -359,6 +362,25 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
 
     fn main_canvas_animating(&self) -> bool {
         self.canvas.as_ref().is_some_and(|canvas| canvas.animating())
+    }
+
+    fn request_session_close(&mut self, critical: bool) -> Result<(), Box<dyn Error>> {
+        self.request_close(
+            sugarsubstitute_application::workspace_session::close_save::CloseReason::SessionEnding {
+                critical,
+            },
+        )
+    }
+
+    fn close_save_settled(&self) -> bool {
+        self.close_save_outcome().is_some()
+    }
+
+    fn session_end_reason(&self) -> &'static str {
+        let locale = self.startup.as_ref().map_or("en", |startup| {
+            startup.session().configuration().presentation().locale().as_str()
+        });
+        sugarsubstitute_contracts::localization::messages(locale).closing.saving
     }
 
     #[cfg(all(windows, feature = "native-composition"))]
