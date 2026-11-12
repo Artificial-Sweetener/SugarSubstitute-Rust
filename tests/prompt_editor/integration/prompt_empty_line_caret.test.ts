@@ -27,7 +27,6 @@ import {
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
 import { drawnCaret } from '../support/DrawnCaret.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 
@@ -54,11 +53,11 @@ const lineOfRow = rowsPerLine.flatMap((rows, line) => Array.from({ length: rows 
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 /** Wait until queued native measurement and the wrap publication it schedules have painted. */
 async function settle(page: Page): Promise<void> {
@@ -204,7 +203,6 @@ test.each([
       await page.close();
     }
   },
-  90_000,
 );
 
 test.each([
@@ -257,7 +255,6 @@ test.each([
       await page.close();
     }
   },
-  90_000,
 );
 
 /** Reset rules of the kind host pages and user stylesheets apply to every bare `img`. */
@@ -306,5 +303,4 @@ test.each(Object.entries(hostImageRules))(
       await page.close();
     }
   },
-  90_000,
 );

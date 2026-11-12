@@ -29,13 +29,14 @@ import type { PanelPresentation } from '../../contracts/PanelProtocol.generated.
 import type { CanvasSurfaceCapabilitiesReply } from '../../contracts/CanvasSurfaceProtocol.generated.js';
 import type { UpdatesStateMessage } from '../../contracts/UpdatesProtocol.generated.js';
 import type { MemoryAllowanceMessage } from '../../contracts/MemoryProtocol.generated.js';
+import type { CanvasMaskReply } from '../../contracts/CanvasMasksProtocol.generated.js';
 import type { CanvasCancellationSource } from '../../contracts/CanvasHost.js';
 import { DeclaredHost } from '../HostDescription.js';
 import { isHostDescriptionMessage } from '../HostValidation.generated.js';
 import { isPanelConfigure, isPanelPing } from '../PanelValidation.generated.js';
 import { isCanvasMessage } from '../CanvasValidation.generated.js';
 import { isCanvasSurfaceCapabilitiesReply } from '../CanvasSurfaceValidation.generated.js';
-import { isCanvasMaskMessage } from '../CanvasMasksValidation.generated.js';
+import { isCanvasMaskMessage, isCanvasMaskReply } from '../CanvasMasksValidation.generated.js';
 import { isMemoryAllowanceMessage } from '../MemoryValidation.generated.js';
 import { isUpdatesHostMessage } from '../UpdatesValidation.generated.js';
 import { emptyCanvasSurfaceCapabilities } from '../CanvasSurfaceDiscovery.js';
@@ -97,6 +98,7 @@ export const CONFORMANCE_CHECKS = Object.freeze([
   'panel-presentation',
   'canvas-discovery',
   'canvas-step-down',
+  'canvas-masks',
   'memory',
   'updates',
   'capability.presentation.host-styles',
@@ -202,6 +204,12 @@ async function conform(probe: HostProbe, session: string): Promise<HostConforman
     skip('canvas-step-down');
   }
 
+  if (declared.serves(HOST_PROTOCOLS.canvasMasks)) {
+    probe.check = 'canvas-masks';
+    await masks(probe, session);
+    pass('canvas-masks');
+  } else skip('canvas-masks');
+
   if (declared.serves(HOST_PROTOCOLS.memory)) {
     probe.check = 'memory';
     const memory = envelope(HOST_PROTOCOLS.memory, session);
@@ -301,6 +309,33 @@ async function discover(
       reply,
     );
   return reply;
+}
+
+/**
+ * Read the mask context, then reuse its request identity for another command.
+ *
+ * The context may say no document is open; a reused identity must be refused as stale rather
+ * than run, so a page retry can never apply a different command twice.
+ */
+async function masks(probe: HostProbe, session: string): Promise<void> {
+  const request = { ...envelope(HOST_PROTOCOLS.canvasMasks, session), requestId: 1 };
+  const reply = (expected: string): Promise<CanvasMaskReply> =>
+    probe.next(
+      expected,
+      (value): value is CanvasMaskReply => isCanvasMaskReply(value) && value.requestId === 1,
+    );
+  probe.send({ ...request, command: { type: 'context' } });
+  const context = await reply('a mask reply for the context request');
+  if (context.result.kind !== 'context' && context.result.kind !== 'failure')
+    throw new HostConformanceFailure(probe.check, 'answered context with another result', context);
+  probe.send({ ...request, command: { type: 'watch', enabled: false } });
+  const reused = await reply('a mask reply for the reused request identity');
+  if (reused.result.kind !== 'failure' || reused.result.status !== 'stale')
+    throw new HostConformanceFailure(
+      probe.check,
+      'a reused request identity with a different command must be refused as stale',
+      reused,
+    );
 }
 
 /** Collect host messages in order and fail the current check at the first invalid one. */

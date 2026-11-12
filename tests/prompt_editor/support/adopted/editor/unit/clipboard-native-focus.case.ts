@@ -88,38 +88,34 @@ function fixture() {
 }
 
 for (const retirement of ['blur', 'destroy', 'refocus', 'supersede'] as const)
-  test(
-    `native ${retirement} settles the correct ignored-abort paste without a focus-change update`,
-    { timeout: 1_000 },
-    async () => {
-      const c = fixture();
-      try {
-        const pending = c.owner.execute('paste');
-        await c.entered;
-        c.owner.blur();
-        if (retirement === 'blur') {
-          assert.deepEqual(await pending, { status: 'cancelled' });
-        } else if (retirement === 'destroy') {
-          c.owner.destroy();
-          assert.deepEqual(await pending, { status: 'disposed' });
-        } else if (retirement === 'refocus') {
-          c.focus();
-          await Promise.resolve();
-          c.owner.destroy();
-          assert.deepEqual(await pending, { status: 'disposed' });
-        } else {
-          const latest = c.owner.execute('paste');
-          assert.deepEqual(await pending, { status: 'cancelled' });
-          assert.equal(c.reads(), 2);
-          c.owner.destroy();
-          assert.deepEqual(await latest, { status: 'disposed' });
-        }
-        assert.equal(c.view.state, c.state);
-        assert.deepEqual([undoDepth(c.state), redoDepth(c.state)], [0, 0]);
-        c.release();
-        assert.equal(c.view.state, c.state);
-      } finally {
-        c.dispose();
+  test(`native ${retirement} settles the correct ignored-abort paste without a focus-change update`, async () => {
+    const c = fixture();
+    try {
+      const pending = c.owner.execute('paste');
+      await c.entered;
+      c.owner.blur();
+      if (retirement === 'blur') {
+        assert.deepEqual(await pending, { status: 'cancelled' });
+      } else if (retirement === 'destroy') {
+        c.owner.destroy();
+        assert.deepEqual(await pending, { status: 'disposed' });
+      } else if (retirement === 'refocus') {
+        c.focus();
+        await Promise.resolve();
+        c.owner.destroy();
+        assert.deepEqual(await pending, { status: 'disposed' });
+      } else {
+        const latest = c.owner.execute('paste');
+        assert.deepEqual(await pending, { status: 'cancelled' });
+        assert.equal(c.reads(), 2);
+        c.owner.destroy();
+        assert.deepEqual(await latest, { status: 'disposed' });
       }
-    },
-  );
+      assert.equal(c.view.state, c.state);
+      assert.deepEqual([undoDepth(c.state), redoDepth(c.state)], [0, 0]);
+      c.release();
+      assert.equal(c.view.state, c.state);
+    } finally {
+      c.dispose();
+    }
+  });

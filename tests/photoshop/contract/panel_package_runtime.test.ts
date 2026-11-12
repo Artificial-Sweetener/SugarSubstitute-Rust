@@ -21,6 +21,7 @@ import { runInNewContext } from 'node:vm';
 import { buildPhotoshop } from '../../../scripts/photoshop/build.js';
 import { jest } from '@jest/globals';
 import { reportPhotoshopError } from '../../../integrations/photoshop/src/infrastructure/PhotoshopDiagnostics.js';
+import { HANG_GUARD_MS } from '../../frontend_core/support/HangGuard.js';
 import type { PanelMessage } from '../../../integrations/contracts/PanelProtocol.generated.js';
 
 type Listener = (event: unknown) => void;
@@ -53,12 +54,18 @@ async function packageSource(): Promise<string> {
       'LICENSE',
     ])
       copyFileSync(path.join(repository, name), path.join(fixture, name));
-    expect(await buildPhotoshop(fixture, false)).toBe(true);
+    if (!(await buildPhotoshop(fixture, false)))
+      throw new Error('The authored Photoshop package produced no runtime.');
     return readFileSync(path.join(fixture, 'build/photoshop/main.js'), 'utf8');
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
 }
+
+let source = '';
+beforeAll(async () => {
+  source = await packageSource();
+});
 
 /** Model only native element behavior used by the package boundary. */
 class NativeElement {
@@ -91,8 +98,7 @@ class NativeElement {
   }
 }
 
-test('packaged entrypoint filters messages, acknowledges presentation, preserves hide/show, and cleans up', async () => {
-  const source = await packageSource();
+test('packaged entrypoint filters messages, acknowledges presentation, preserves hide/show, and cleans up', () => {
   const nodes = new Map(
     ['comfyui', 'connection', 'connection-title', 'connection-message', 'retry'].map((id) => [
       id,
@@ -167,7 +173,8 @@ test('packaged entrypoint filters messages, acknowledges presentation, preserves
       encodeURIComponent,
       URL,
     },
-    { timeout: 1000 },
+    // A synchronous script cannot be interrupted by Jest, so it carries the hang guard itself.
+    { timeout: HANG_GUARD_MS },
   );
   const lifecycle = lifecycles[0];
   expect(lifecycle).toBeDefined();

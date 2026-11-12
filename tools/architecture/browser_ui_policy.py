@@ -17,13 +17,12 @@
 
 from __future__ import annotations
 
-import json
 import shutil
-import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
 from .model import Diagnostic, MenuPolicy, Severity
+from .node_audit import NodeAuditFailure, run_node_audit
 
 
 def scan_browser_ui(
@@ -48,67 +47,56 @@ def scan_browser_ui(
     if node is None or not runtime.is_file() or not audit.is_file():
         return (_failure("TypeScript browser UI audit runtime is unavailable."),)
     try:
-        result = subprocess.run(  # noqa: S603
-            [node, str(runtime), str(audit), str(root)],
-            input=json.dumps(
-                {
-                    "files": files,
-                    "owners": owners,
-                    "documentOwners": document_owners,
-                    "menus": asdict(menus),
-                }
-            ),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=60,
-            check=False,
+        payload = run_node_audit(
+            node,
+            runtime,
+            audit,
+            root,
+            {
+                "files": files,
+                "owners": owners,
+                "documentOwners": document_owners,
+                "menus": asdict(menus),
+            },
         )
-        if result.returncode:
+    except NodeAuditFailure as failure:
+        return (_failure(f"TypeScript browser UI audit {failure}"),)
+    if not isinstance(payload, list):
+        return (
+            _failure("TypeScript browser UI audit returned malformed diagnostics."),
+        )
+    diagnostics: list[Diagnostic] = []
+    for item in payload:
+        if not isinstance(item, dict):
             return (
                 _failure(
-                    f"TypeScript browser UI audit failed: {result.stderr.strip()}"
+                    "TypeScript browser UI audit returned a malformed diagnostic."
                 ),
             )
-        payload: object = json.loads(result.stdout)
-        if not isinstance(payload, list):
+        path, line, rule, message = (
+            item.get(key) for key in ("path", "line", "rule", "message")
+        )
+        if (
+            not isinstance(path, str)
+            or not isinstance(line, int)
+            or not isinstance(rule, str)
+            or not isinstance(message, str)
+        ):
             return (
-                _failure("TypeScript browser UI audit returned malformed diagnostics."),
+                _failure(
+                    "TypeScript browser UI audit returned invalid diagnostic fields."
+                ),
             )
-        diagnostics: list[Diagnostic] = []
-        for item in payload:
-            if not isinstance(item, dict):
-                return (
-                    _failure(
-                        "TypeScript browser UI audit returned a malformed diagnostic."
-                    ),
-                )
-            path, line, rule, message = (
-                item.get(key) for key in ("path", "line", "rule", "message")
+        diagnostics.append(
+            Diagnostic(
+                path=path,
+                line=line,
+                rule=rule,
+                message=message,
+                severity=Severity.ERROR,
             )
-            if (
-                not isinstance(path, str)
-                or not isinstance(line, int)
-                or not isinstance(rule, str)
-                or not isinstance(message, str)
-            ):
-                return (
-                    _failure(
-                        "TypeScript browser UI audit returned invalid diagnostic fields."
-                    ),
-                )
-            diagnostics.append(
-                Diagnostic(
-                    path=path,
-                    line=line,
-                    rule=rule,
-                    message=message,
-                    severity=Severity.ERROR,
-                )
-            )
-        return tuple(diagnostics)
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
-        return (_failure(f"TypeScript browser UI audit could not complete: {error}"),)
+        )
+    return tuple(diagnostics)
 
 
 def _failure(message: str) -> Diagnostic:

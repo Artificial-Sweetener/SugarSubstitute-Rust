@@ -31,6 +31,7 @@ import {
 import {
   canvasWithoutSurface,
   conformanceSession as session,
+  masksWithoutDocument,
   memoryHost,
   updatesHost,
 } from '../support/ConformanceHosts.js';
@@ -55,6 +56,7 @@ test('a host serving every protocol passes every check it declares', async () =>
         protocols: [
           HOST_PROTOCOLS.panel,
           HOST_PROTOCOLS.canvas,
+          HOST_PROTOCOLS.canvasMasks,
           HOST_PROTOCOLS.memory,
           HOST_PROTOCOLS.updates,
         ],
@@ -64,7 +66,12 @@ test('a host serving every protocol passes every check it declares', async () =>
         ],
       },
       presentation,
-      handlers: (send) => [canvasWithoutSurface(send), memoryHost(send), updatesHost(send)],
+      handlers: (send) => [
+        canvasWithoutSurface(send),
+        masksWithoutDocument(send),
+        memoryHost(send),
+        updatesHost(send),
+      ],
     }),
     { session },
   );
@@ -74,6 +81,7 @@ test('a host serving every protocol passes every check it declares', async () =>
     'panel-presentation': 'passed',
     'canvas-discovery': 'passed',
     'canvas-step-down': 'passed',
+    'canvas-masks': 'passed',
     memory: 'passed',
     updates: 'passed',
     'capability.presentation.host-styles': 'passed',
@@ -100,6 +108,7 @@ test('a host serving only the panel passes, with everything else not offered', a
     'panel-presentation': 'passed',
     'canvas-discovery': 'not-offered',
     'canvas-step-down': 'not-offered',
+    'canvas-masks': 'not-offered',
     memory: 'not-offered',
     updates: 'not-offered',
   });
@@ -178,6 +187,42 @@ test('a host that cannot step down from an unknown schema fails the step-down ch
     { session },
   );
   await expect(run).rejects.toMatchObject({ check: 'canvas-step-down' });
+});
+
+test('a mask host that runs a reused request identity fails the masks check', async () => {
+  let replies = 0;
+  const run = runHostConformance(
+    inMemoryHostChannel({
+      session,
+      description: {
+        protocols: [HOST_PROTOCOLS.panel, HOST_PROTOCOLS.canvasMasks],
+        capabilities: [],
+      },
+      presentation,
+      handlers: (send) => [
+        {
+          receive: (value) => {
+            const request = value as { protocol?: string; requestId?: number };
+            if (request.protocol !== 'sugarcubes.canvas.masks') return false;
+            replies += 1;
+            send({
+              protocol: 'sugarcubes.canvas.masks',
+              version: 2,
+              session,
+              requestId: request.requestId,
+              result:
+                replies === 1
+                  ? { kind: 'context', supported: false, document: null, observesChanges: false }
+                  : { kind: 'watching', supported: false },
+            });
+            return true;
+          },
+        },
+      ],
+    }),
+    { session },
+  );
+  await expect(run).rejects.toMatchObject({ check: 'canvas-masks' });
 });
 
 test('declaring host-presented output without surface discovery fails that capability', async () => {

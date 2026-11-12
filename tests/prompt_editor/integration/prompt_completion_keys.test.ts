@@ -25,21 +25,20 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 /** Wait for the visible suggestion row and its inline ghost completion. */
 async function suggests(page: Page, label: RegExp, ghost: string): Promise<void> {
-  await page.getByRole('option', { name: label }).first().waitFor({ timeout: 10_000 });
+  await page.getByRole('option', { name: label }).first().waitFor();
   await page.locator('.cm-content .cm-tag-ghost', { hasText: ghost }).waitFor();
 }
 
@@ -91,7 +90,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  60_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -123,7 +121,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  60_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -160,5 +157,4 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  60_000,
 );

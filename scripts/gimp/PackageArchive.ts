@@ -57,7 +57,7 @@ export function writePackageArchive(
     execFileSync(
       path.join(root, '.venv/Scripts/python.exe'),
       ['-m', 'zipfile', '-c', archive, directory],
-      { cwd: staging, windowsHide: true, timeout: 120_000 },
+      { cwd: staging, windowsHide: true },
     );
     renameSync(archive, target);
   } catch (error: unknown) {

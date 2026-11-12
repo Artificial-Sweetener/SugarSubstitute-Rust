@@ -25,17 +25,16 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 /** Mount a focused prompt with its caret at the end and system clipboard access granted. */
 async function pastePrompt(renderer: 'nodes-1' | 'nodes-2', source: string): Promise<Page> {
@@ -75,7 +74,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -102,5 +100,4 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );

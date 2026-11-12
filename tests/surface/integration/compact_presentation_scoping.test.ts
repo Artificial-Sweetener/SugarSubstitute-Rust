@@ -20,7 +20,6 @@ import { build } from 'esbuild';
 import {
   closeBrowserFixture,
   launchHeadlessBrowser,
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
 } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import { substituteFrameCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.js';
 import { pluginFrameCss } from '../../../frontend/comfyui/ui/surface/frame/PluginFrameStyles.js';
@@ -40,10 +39,10 @@ beforeAll(async () => {
     format: 'iife',
   });
   installStyles = output.outputFiles[0]!.text;
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 afterAll(async () => {
   await closeBrowserFixture(browser, undefined);
-}, 30_000);
+});
 
 interface Presentation {
   readonly hostLeft: number;

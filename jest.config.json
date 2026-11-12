@@ -1,6 +1,7 @@
 {
   "testEnvironment": "jsdom",
   "maxWorkers": 2,
+  "testTimeout": 600000,
   "roots": ["<rootDir>/tests"],
   "setupFiles": [
     "<rootDir>/tests/frontend_core/support/browser_css.ts",

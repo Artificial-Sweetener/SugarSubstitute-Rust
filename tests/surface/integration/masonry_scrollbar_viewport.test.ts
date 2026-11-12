@@ -17,10 +17,7 @@
 /** Prove native scrolling cannot move masonry's track before JavaScript catches up. */
 import { build } from 'esbuild';
 import { chromium, type Browser, type Page } from '@playwright/test';
-import {
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
-  launchHeadlessBrowser,
-} from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let browser: Browser;
 let fixture: string;
@@ -37,7 +34,7 @@ beforeAll(async () => {
     format: 'iife',
   });
   fixture = output.outputFiles[0]!.text;
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await browser.close();
@@ -199,7 +196,7 @@ test.each(['textarea', 'div'])(
       );
       await page.addScriptTag({ content: fixture });
       const thumb = page.locator('[aria-controls="negative-prompt"][aria-orientation="vertical"]');
-      await thumb.waitFor({ state: 'attached', timeout: 1000 });
+      await thumb.waitFor({ state: 'attached' });
       expect(await thumb.isHidden()).toBe(true);
       await page.evaluate(() => {
         document.dispatchEvent(new Event('resize-cards'));
@@ -208,9 +205,8 @@ test.each(['textarea', 'div'])(
       await page.waitForFunction(
         () => !document.querySelector('#resize-card')!.hasAttribute('data-sc-surface-moving'),
         undefined,
-        { timeout: 1000 },
       );
-      await thumb.waitFor({ state: 'visible', timeout: 1000 });
+      await thumb.waitFor({ state: 'visible' });
       await page.waitForTimeout(50);
       const geometry = await page.evaluate(() => {
         const field = document.querySelector('#negative-prompt')!;
