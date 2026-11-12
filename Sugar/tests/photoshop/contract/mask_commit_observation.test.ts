@@ -18,6 +18,7 @@
 import { jest } from '@jest/globals';
 import { build } from 'esbuild';
 import { runInNewContext } from 'node:vm';
+import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 interface Observer {
   start(): void;
   acceptCurrent(): void;
@@ -25,7 +26,8 @@ interface Observer {
   dispose(): void;
 }
 
-test('reads metadata at a bounded cadence and captures once only when committed identity changes', async () => {
+let code = '';
+beforeAll(async () => {
   const bundle = await build({
     entryPoints: ['integrations/photoshop/src/infrastructure/PhotoshopCommittedChanges.ts'],
     bundle: true,
@@ -34,8 +36,12 @@ test('reads metadata at a bounded cadence and captures once only when committed 
     platform: 'neutral',
     target: 'es2022',
   });
-  const code = bundle.outputFiles[0]?.text;
-  if (!code) throw new Error('Missing observer bundle.');
+  const file = bundle.outputFiles[0];
+  if (!file) throw new Error('Missing observer bundle.');
+  code = file.text;
+}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
+
+test('reads metadata at a bounded cadence and captures once only when committed identity changes', async () => {
   let tick: () => void = () => {},
     state: string | null = 'doc:history-1',
     busy = false;

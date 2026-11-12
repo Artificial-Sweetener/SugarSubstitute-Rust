@@ -20,6 +20,7 @@ import { build } from 'esbuild';
 import { runInNewContext } from 'node:vm';
 import { decodeMaskPixels } from '../../../integrations/shared/CanvasMaskPixels.js';
 import type { CanvasMaskPixels } from '../../../integrations/contracts/CanvasMasksProtocol.generated.js';
+import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
 interface Bounds {
   readonly left: number;
@@ -45,7 +46,7 @@ beforeAll(async () => {
   const file = bundle.outputFiles[0];
   if (!file) throw new Error('Missing native selection capture bundle.');
   code = file.text;
-});
+}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
 
 /** Model Photoshop's observed crop-then-resize behavior at its native API boundary. */
 function fixture(width: number, height: number, bounds: Bounds | null) {
