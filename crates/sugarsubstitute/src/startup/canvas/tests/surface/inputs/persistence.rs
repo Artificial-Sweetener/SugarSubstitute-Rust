@@ -302,6 +302,100 @@ fn a_hard_kill_loses_at_most_one_autosave_window_of_strokes() -> Result<(), Box<
     first.close()
 }
 
+/// A surface whose base is a ComfyUI temporary file, which ComfyUI deletes when it starts.
+fn temporary_surfaces() -> Value {
+    surfaces_on("temp")
+}
+
+/// A surface whose base is `preview.png` in ComfyUI's `storage`, with one loaded mask.
+fn surfaces_on(storage: &str) -> Value {
+    json!([
+        {"key":"image", "label":"Preview",
+         "base":{"kind":"file", "file":{"filename":"preview.png", "subfolder":"", "type":storage}},
+         "masks":[
+            {"key":"painted", "label":"Painted", "color":"#ff0000", "opacity":0.5,
+             "initial":input_file("mask.png"), "channel":"red"}]}
+    ])
+}
+
+#[test]
+fn a_temporary_base_and_its_masks_restore_after_comfyui_cleared_its_temporary_files()
+-> Result<(), Box<dyn Error>> {
+    restores_after_its_file_is_gone("temp")
+}
+
+#[test]
+fn an_output_base_and_its_masks_restore_after_the_output_was_deleted() -> Result<(), Box<dyn Error>>
+{
+    restores_after_its_file_is_gone("output")
+}
+
+/// Author masks over a base in `storage`, restart without its file, and restore everything.
+fn restores_after_its_file_is_gone(storage: &str) -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let output = directory.path().join("canvas-qualification-output");
+    rgba(&output.join("preview.png"), 8, 6, |x, y| [200, x as u8 * 20, y as u8 * 30, 255])?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let sync = json!({"type":"sync", "workflow":WORKFLOW, "surfaces":surfaces_on(storage)});
+    let mut first = Inputs::start(directory.path())?;
+    let result = first.workflow(sync.clone())?;
+    let image = synced(&result, "image")?.clone();
+    first.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    first.context_until(|document| document["id"] == image["document"]["id"])?;
+    let targets = json!([{"kind":"composition"}, {"kind":"layer", "layerId":"layer-2"}]);
+    let authored =
+        first.ask("source.request", Some(capture_command(&image["document"], &targets)))?;
+    first.save_until(|| archive.is_file())?;
+    first.close()?;
+    std::fs::remove_file(output.join("preview.png"))?;
+
+    let mut second = Inputs::start(directory.path())?;
+    let result = second.workflow(sync)?;
+    assert_eq!(synced(&result, "image")?, &image, "{result}");
+    second.context_until(|document| document["id"] == image["document"]["id"])?;
+    let restored =
+        second.ask("source.request", Some(capture_command(&image["document"], &targets)))?;
+    // Pixels and every other field match; a document revision counts edits within one run.
+    let without_revision = |value: &Value| -> Value {
+        let mut value = value.clone();
+        if let Some(snapshots) = value.as_array_mut() {
+            snapshots.iter_mut().filter_map(Value::as_object_mut).for_each(|snapshot| {
+                snapshot.remove("revision");
+            });
+        }
+        value
+    };
+    assert_eq!(
+        without_revision(&restored["result"]["snapshots"]),
+        without_revision(&authored["result"]["snapshots"])
+    );
+    second.close()
+}
+
+#[test]
+fn without_a_retained_original_a_temporary_base_cannot_restore_after_comfyui_cleared_it()
+-> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let output = directory.path().join("canvas-qualification-output");
+    rgba(&output.join("preview.png"), 8, 6, |_, _| [200, 10, 10, 255])?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let sync = json!({"type":"sync", "workflow":WORKFLOW, "surfaces":temporary_surfaces()});
+    let mut first = Inputs::start(directory.path())?;
+    first.canvas.surface.retained_bases = None;
+    let image = synced(&first.workflow(sync.clone())?, "image")?.clone();
+    first.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    first.context_until(|document| document["id"] == image["document"]["id"])?;
+    first.save_until(|| archive.is_file())?;
+    first.close()?;
+    std::fs::remove_file(output.join("preview.png"))?;
+
+    let mut second = Inputs::start(directory.path())?;
+    let result = second.workflow(sync)?;
+    let restored = synced(&result, "image").ok().filter(|surface| !surface["document"].is_null());
+    assert!(restored.is_none(), "the archived masks lost their base: {result}");
+    second.close()
+}
+
 fn capture_command(document: &Value, targets: &Value) -> Value {
     json!({"type":"capture", "document":document, "targets":targets, "maximumSize":0})
 }
