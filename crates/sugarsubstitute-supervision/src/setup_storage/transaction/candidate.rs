@@ -107,11 +107,14 @@ impl PreparedInstallation {
     /// Preserves accepted selection and restores any established launcher ownership.
     /// A persisted staging record precedes configuration; a prepared record follows the
     /// final authority check. Launcher restoration requires no application run lease.
+    /// Payload copy, verification and configuration run without the trust writer; the prepared
+    /// record is published only after trust and release history are verified again in one hold.
     /// `now` supplies Unix UTC seconds from the execution adapter's clock boundary.
     /// Reserve `SIGNED_PREPARATION_RESERVATION_BYTES` alongside retained package/trust custody.
     /// # Errors
     /// Preserves prior selection and partial files on expiry, conflict, cancellation or I/O
     /// failure. Interrupted staging remains explicit and must be reconciled before another offer.
+    /// Returns `AuthorityChanged` when signing authority or the subscription changed meanwhile.
     pub fn prepare_update(
         &self,
         runtime: &RuntimePaths,
@@ -119,17 +122,45 @@ impl PreparedInstallation {
         now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<Arc<PreparedCandidate>, super::super::TrustFailure> {
+        self.prepare_staged(authorization, now, context, || self.stage_verified(runtime, context))
+    }
+
+    /// Copy, verify and configure this generation; holds no trust lock of its own.
+    pub(in crate::setup_storage) fn stage_verified(
+        &self,
+        runtime: &RuntimePaths,
+        context: &JobContext,
+    ) -> io::Result<super::super::bundle::VerifiedRuntime> {
+        self.stage(context)?;
+        let payload = super::super::bundle::VerifiedRuntime::verify_copy(
+            &self.bundle.payload.inventory,
+            &self.generation,
+            context,
+        )?;
+        self.complete(runtime, context)?;
+        Ok(payload)
+    }
+
+    /// [`Self::prepare_update`] with its staging step supplied by the caller, which runs between
+    /// the authenticating hold and the committing hold with no trust writer held.
+    pub(in crate::setup_storage) fn prepare_staged(
+        &self,
+        authorization: &super::super::UpdateAuthorization<'_>,
+        mut now: impl FnMut() -> i64,
+        context: &JobContext,
+        stage: impl FnOnce() -> io::Result<super::super::bundle::VerifiedRuntime>,
+    ) -> Result<Arc<PreparedCandidate>, super::super::TrustFailure> {
         self.bundle.require_installed_launch()?;
         let bytes = self
             .bundle
             .download_identity()
             .ok_or_else(|| invalid("Update archive custody is absent"))?;
-        authorization.publish(
+        let (staged, (store, staging, generation)) = authorization.authenticate(
             &self.session.admission.root,
             bytes,
-            now,
+            &mut now,
             context,
-            |offer, recheck| {
+            |offer, _| {
                 let store = Arc::new(
                     super::super::SelectionStore::open(self.session.admission.root.path(), context)
                         .map_err(io::Error::other)?,
@@ -138,19 +169,7 @@ impl PreparedInstallation {
                     .require_launcher(&self.bundle.payload.compatibility, context)
                     .map_err(io::Error::other)?;
                 let original = store.load_recovered(context).map_err(io::Error::other)?;
-                let generation = Generation {
-                    id: GenerationId::new(
-                        self.generation
-                            .file_name()
-                            .and_then(|value| value.to_str())
-                            .ok_or_else(|| invalid("Generation directory identity is absent"))?
-                            .to_owned(),
-                    )
-                    .map_err(io::Error::other)?,
-                    package: PackageDigest::new(self.bundle.digest().to_owned())
-                        .map_err(io::Error::other)?,
-                    release: crate::setup_storage::signed_release(offer)?,
-                };
+                let generation = self.signed_generation(offer)?;
                 let staging = match original.candidate() {
                     None => {
                         let now = super::super::selection::unix_now().map_err(io::Error::other)?;
@@ -172,44 +191,59 @@ impl PreparedInstallation {
                         ));
                     }
                 };
-                self.stage(context)?;
-                let payload = super::super::bundle::VerifiedRuntime::verify_copy(
-                    &self.bundle.payload.inventory,
-                    &self.generation,
-                    context,
-                )?;
-                self.complete(runtime, context)?;
-                let directory = Directory::open(&self.generation, false)?;
-                let installation = Directory::open(self.session.admission.root.path(), false)?;
-                recheck()?;
-                authorization.record_generation(offer, &generation, &directory, context)?;
-                recheck()?;
-                let prepared = if matches!(staging.candidate(), Some(Candidate::Staging { .. })) {
-                    let prepared = staging.prepared(&generation).map_err(io::Error::other)?;
-                    store
-                        .compare_exchange(&staging, &prepared, context)
-                        .map_err(io::Error::other)?;
-                    prepared
-                } else {
-                    if store.load(context).map_err(io::Error::other)?.as_ref() != Some(&staging) {
-                        return Err(io::Error::other(super::super::SelectionFailure::Changed));
-                    }
-                    staging
-                };
-                let candidate = Arc::new(PreparedCandidate {
-                    generation,
-                    directory,
-                    installation,
-                    snapshot: std::sync::Mutex::new(prepared),
-                    _payload: payload,
-                    evidence: Evidence::Archive(Arc::clone(&self.bundle)),
-                });
-                store
-                    .prepare_launcher(&self.session.admission, &candidate, context)
-                    .map_err(io::Error::other)?;
-                recheck()?;
-                Ok(candidate)
+                Ok((store, staging, generation))
             },
-        )
+        )?;
+        // Setup and preparation exclusion keep this generation private; trust stays readable.
+        let payload = stage()?;
+        let directory = Directory::open(&self.generation, false)?;
+        let installation = Directory::open(self.session.admission.root.path(), false)?;
+        staged.commit(now, context, |offer, recheck| {
+            authorization.record_generation(offer, &generation, &directory, context)?;
+            recheck()?;
+            let prepared = if matches!(staging.candidate(), Some(Candidate::Staging { .. })) {
+                let prepared = staging.prepared(&generation).map_err(io::Error::other)?;
+                store.compare_exchange(&staging, &prepared, context).map_err(io::Error::other)?;
+                prepared
+            } else {
+                if store.load(context).map_err(io::Error::other)?.as_ref() != Some(&staging) {
+                    return Err(io::Error::other(super::super::SelectionFailure::Changed));
+                }
+                staging
+            };
+            let candidate = Arc::new(PreparedCandidate {
+                generation,
+                directory,
+                installation,
+                snapshot: std::sync::Mutex::new(prepared),
+                _payload: payload,
+                evidence: Evidence::Archive(Arc::clone(&self.bundle)),
+            });
+            store
+                .prepare_launcher(&self.session.admission, &candidate, context)
+                .map_err(io::Error::other)?;
+            recheck()?;
+            Ok(candidate)
+        })
+    }
+
+    /// Exact generation identity for this pinned directory, package and authenticated release.
+    fn signed_generation(
+        &self,
+        offer: &sugarsubstitute_update::VerifiedOffer,
+    ) -> io::Result<Generation> {
+        Ok(Generation {
+            id: GenerationId::new(
+                self.generation
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .ok_or_else(|| invalid("Generation directory identity is absent"))?
+                    .to_owned(),
+            )
+            .map_err(io::Error::other)?,
+            package: PackageDigest::new(self.bundle.digest().to_owned())
+                .map_err(io::Error::other)?,
+            release: crate::setup_storage::signed_release(offer)?,
+        })
     }
 }
