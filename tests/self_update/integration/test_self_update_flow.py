@@ -109,7 +109,7 @@ def test_registry_update_is_staged_chosen_installed_and_confirmed(
     outcome = run_startup_update(pack)
     assert outcome is not None and outcome.kind is StartupOutcomeKind.INSTALLED
     restarted = _service(pack, web, version="1.1.0")
-    restarted.confirm_started()
+    restarted.accept_backend_start(nodes_registered=True)
     wire = snapshot_to_wire(restarted.snapshot())
     assert wire["currentVersion"] == "1.1.0"
     notice = wire["notice"]
@@ -449,7 +449,9 @@ def test_pack_installed_by_the_updater_needs_no_network_to_find_edits(
     service.request_check(force=True)
     service.schedule_install("1.1.0")
     run_startup_update(pack)
-    _service(pack, web, version="1.1.0").confirm_started()
+    started = _service(pack, web, version="1.1.0")
+    started.accept_backend_start(nodes_registered=True)
+    started.report_page_load(loaded=True)
     newer = FakeReleaseWeb()
     newer.publish_registry("1.2.0", pack_files("1.2.0"))
     newer.publish_empty_github()

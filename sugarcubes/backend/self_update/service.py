@@ -40,8 +40,9 @@ from ..pack_install.ownership import NotOwnedPack
 from ..pack_install.staging import StagedStore
 from ..pack_install.startup import (
     clear_outcome,
-    confirm_started,
+    accept_backend_start,
     read_outcome,
+    report_page_load,
     updates_root,
 )
 from .release_stager import NotManaged, ReleaseStager, Staged, StageFailed, StageResult
@@ -134,18 +135,38 @@ class SelfUpdateService:
         with self._guard:
             return self._snapshot
 
-    def confirm_started(self) -> None:
-        """Accept a just-installed update now that this version's backend is up."""
+    def accept_backend_start(self, *, nodes_registered: bool) -> None:
+        """Accept a just-installed version once ComfyUI finished a full start.
 
+        Called when ComfyUI's server is listening. `nodes_registered` says
+        whether ComfyUI registered every SugarCubes node class, which proves
+        the pack's whole import completed; without it nothing is accepted and
+        the next start restores the previous version.
+        """
+
+        if not nodes_registered:
+            _logger.warning(
+                "SugarCubes update event=start_incomplete version=%s",
+                self._running_version,
+            )
+            return
         try:
-            outcome = confirm_started(self._pack_folder, self._running_version)
+            outcome = accept_backend_start(self._pack_folder, self._running_version)
         except (OSError, PackInstallError) as exc:
-            _logger.warning("SugarCubes update event=confirm_failed cause=%s", exc)
+            _logger.warning("SugarCubes update event=accept_failed cause=%s", exc)
             return
         if outcome is not None:
             with self._guard:
                 self._commit(replace(self._snapshot, notice=outcome))
             self._notify()
+
+    def report_page_load(self, *, loaded: bool) -> None:
+        """Settle a started version by its first page load."""
+
+        try:
+            report_page_load(self._pack_folder, self._running_version, loaded=loaded)
+        except (OSError, PackInstallError) as exc:
+            _logger.warning("SugarCubes update event=page_report_failed cause=%s", exc)
 
     def request_check(self, *, force: bool) -> UpdateSnapshot:
         """Start a background check unless one runs or a recent one is fresh."""

@@ -201,7 +201,7 @@ function reportOf(state: BackendState): UpdatesReport | null {
   }
   return {
     version: notice.version,
-    phase: notice.kind === 'restored' && notice.reason === 'did-not-start' ? 'start' : 'install',
+    phase: notice.kind === 'restored' && notice.reason !== 'interrupted' ? 'start' : 'install',
     causes: [{ message: notice.message }],
   };
 }

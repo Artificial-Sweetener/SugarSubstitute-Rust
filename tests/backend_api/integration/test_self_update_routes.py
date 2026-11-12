@@ -18,12 +18,17 @@
 from __future__ import annotations
 
 import asyncio
+import sys
+import types
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from sugarcubes.backend.pack_install.startup import run_startup_update
+from sugarcubes.nodes import NODE_CLASS_MAPPINGS
 from sugarcubes.backend.routes import build_route_handlers, register_routes
 from sugarcubes.backend.self_update import build_self_update_service
 from sugarcubes.backend.self_update_routes import SELF_UPDATE_EVENT
@@ -45,6 +50,7 @@ class RecordingServer:
 
         self.registered: list[tuple[str, str]] = []
         self.messages: list[tuple[str, object]] = []
+        self.started = False
         self.routes = self
 
     def _record(self, method: str, path: str) -> Callable[[Any], Any]:
@@ -75,6 +81,16 @@ class RecordingServer:
         """Record one websocket message."""
 
         self.messages.append((event, payload))
+
+    async def start_multi_address(
+        self,
+        addresses: list[tuple[str, int]],
+        call_on_start: object = None,
+        verbose: bool = True,
+    ) -> None:
+        """Stand in for ComfyUI starting its listeners."""
+
+        self.started = True
 
 
 def _services_with_pack(
@@ -133,26 +149,98 @@ def test_routes_check_choose_and_withdraw_an_update(
     assert withdrawn["revision"] > ready["revision"]
 
 
-def test_registration_publishes_changes_and_confirms_a_fresh_install(
-    tmp_path: Path, backend_services_factory: BackendServicesFactory
-) -> None:
-    """Every change reaches open pages, and starting the new version settles it."""
+def _installed_and_restarted(
+    tmp_path: Path, factory: BackendServicesFactory
+) -> tuple[Any, Path, RecordingServer]:
+    """Install 1.1.0 at a start, then register the new version's routes."""
 
-    services, pack = _services_with_pack(tmp_path, backend_services_factory)
+    services, pack = _services_with_pack(tmp_path, factory)
     services.self_update.request_check(force=True)
     services.self_update.schedule_install("1.1.0")
     run_startup_update(pack)
-    restarted, _pack = _services_with_pack(
-        tmp_path, backend_services_factory, running="1.1.0"
-    )
+    restarted, _pack = _services_with_pack(tmp_path, factory, running="1.1.0")
     server = RecordingServer()
     register_routes(server, restarted)
-    assert ("GET", "/sugarcubes/self-update") in server.registered
-    assert ("POST", "/sugarcubes/self-update/install") in server.registered
+    return restarted, pack, server
+
+
+def _comfy_nodes(monkeypatch: pytest.MonkeyPatch, *, registered: bool) -> None:
+    """Stand in for ComfyUI's node registry after custom nodes imported."""
+
+    module = types.ModuleType("nodes")
+    module.__dict__["NODE_CLASS_MAPPINGS"] = (
+        dict(NODE_CLASS_MAPPINGS) if registered else {}
+    )
+    monkeypatch.setitem(sys.modules, "nodes", module)
+
+
+def test_full_start_and_page_load_accept_a_fresh_install(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The new version is accepted at listening, settled by its first page."""
+
+    restarted, pack, server = _installed_and_restarted(
+        tmp_path, backend_services_factory
+    )
+    transaction = pack / ".sugarcubes" / "updates" / "transaction"
+    assert ("POST", "/sugarcubes/self-update/page-load") in server.registered
+    assert transaction.exists() and not server.messages
+    _comfy_nodes(monkeypatch, registered=True)
+    asyncio.run(server.start_multi_address([("127.0.0.1", 8188)]))
+    assert server.started
     events = [
         payload for event, payload in server.messages if event == SELF_UPDATE_EVENT
     ]
     assert events and isinstance(events[-1], dict)
     notice = events[-1]["notice"]
     assert isinstance(notice, dict) and notice["kind"] == "installed"
-    assert not (pack / ".sugarcubes" / "updates" / "transaction").exists()
+    handlers = build_route_handlers(restarted)
+    asyncio.run(
+        handlers.report_self_update_page_load(FakeRequest(body={"loaded": True}))
+    )
+    assert not transaction.exists()
+    assert run_startup_update(pack) is None
+
+
+def test_version_that_fails_after_its_routes_register_rolls_back(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Routes alone prove nothing: unregistered nodes leave the update unaccepted."""
+
+    _restarted, pack, server = _installed_and_restarted(
+        tmp_path, backend_services_factory
+    )
+    _comfy_nodes(monkeypatch, registered=False)
+    asyncio.run(server.start_multi_address([("127.0.0.1", 8188)]))
+    outcome = run_startup_update(pack)
+    assert outcome is not None
+    assert (outcome.kind.value, outcome.reason) == ("restored", "did-not-start")
+    assert (pack / "__init__.py").read_text(encoding="utf-8") == "VERSION = '1.0.0'\n"
+
+
+def test_page_reported_load_failure_rolls_back_at_the_next_start(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A page that could not load SugarCubes counts as a failed start."""
+
+    restarted, pack, server = _installed_and_restarted(
+        tmp_path, backend_services_factory
+    )
+    _comfy_nodes(monkeypatch, registered=True)
+    asyncio.run(server.start_multi_address([("127.0.0.1", 8188)]))
+    handlers = build_route_handlers(restarted)
+    bad = asyncio.run(handlers.report_self_update_page_load(FakeRequest(body={})))
+    assert bad.status == 400
+    asyncio.run(
+        handlers.report_self_update_page_load(FakeRequest(body={"loaded": False}))
+    )
+    outcome = run_startup_update(pack)
+    assert outcome is not None
+    assert (outcome.kind.value, outcome.reason) == ("restored", "page-did-not-load")
+    assert (pack / "__init__.py").read_text(encoding="utf-8") == "VERSION = '1.0.0'\n"
