@@ -20,6 +20,10 @@ import {
   type WorkflowFieldHostOptions,
 } from './WorkflowFieldComposition.js';
 import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputComposition.js';
+import {
+  attachSelfUpdateWhenUnhosted,
+  comfySelfUpdateTransport,
+} from '../core/updates/SelfUpdateSource.js';
 import type { DimensionFieldTarget } from '../editor_actions/application/CanvasDimensionFields.js';
 import type { ContextMenuEntry } from '../menus/ContextMenu.js';
 import { ComfyWorkflowWorkspace } from '../surface/ComfyWorkflowWorkspace.js';
@@ -73,6 +77,15 @@ export function createWorkflowCanvasComposition(
     connected: () => workflowExecution.connected,
     subscribeConnection: (listener) => workflowExecution.subscribeConnection(listener),
   });
+  const selfUpdate = comfySelfUpdateTransport(options.api);
+  // SugarCubes updates itself only on a page whose host does not; the page lives as long as this.
+  if (selfUpdate)
+    attachSelfUpdateWhenUnhosted({
+      host: workflowFields.host,
+      updates: workflowFields.updates,
+      transport: selfUpdate,
+      report: (error) => options.logger.warn('SugarCubes update request failed', { error }),
+    });
   const window = options.document.defaultView;
   if (window)
     workflowExecution.bindCanvas(workflowFields.canvas, window, (message) =>
