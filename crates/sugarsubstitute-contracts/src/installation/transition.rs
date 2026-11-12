@@ -93,11 +93,13 @@ impl InstallationRecord {
         next.retained = next.accepted.replace(attempt.generation.clone());
         next.candidate = None;
         next.rejected.retain(|digest| digest != &attempt.generation.package);
+        next.rollback = None;
         next.validate()?;
         Ok(next)
     }
     /// Reject an exact failed trial only after native custody confirms it has settled.
     /// Merely loading a trial record never establishes that its owner crashed or exited.
+    /// The rejected generation becomes `rollback`; the accepted generation keeps running.
     /// # Errors
     /// Rejects stale or unbound failure reports and revision exhaustion.
     pub fn reject(&self, attempt: &Trial) -> Result<Self, Rejection> {
@@ -109,6 +111,7 @@ impl InstallationRecord {
         if next.rejected.len() > MAX_REJECTED_PACKAGES {
             next.rejected.remove(0);
         }
+        next.rollback = Some(attempt.generation.clone());
         next.validate()?;
         Ok(next)
     }

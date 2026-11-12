@@ -11,6 +11,7 @@ fn attempt() -> Result<Trial, crate::installation::Rejection> {
         generation: Generation {
             id: GenerationId::new("2".repeat(32))?,
             package: PackageDigest::new("3".repeat(64))?,
+            release: crate::installation::SignedRelease::new("1.0.0".to_owned(), 1)?,
         },
         revision: 7,
     })

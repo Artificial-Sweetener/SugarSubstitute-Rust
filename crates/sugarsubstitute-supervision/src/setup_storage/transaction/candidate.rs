@@ -149,6 +149,7 @@ impl PreparedInstallation {
                     .map_err(io::Error::other)?,
                     package: PackageDigest::new(self.bundle.digest().to_owned())
                         .map_err(io::Error::other)?,
+                    release: crate::setup_storage::signed_release(offer)?,
                 };
                 let staging = match original.candidate() {
                     None => {

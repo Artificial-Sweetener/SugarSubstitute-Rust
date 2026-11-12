@@ -17,6 +17,10 @@ mod launcher;
 pub(in crate::setup_storage) use completion::InstallationAuthorization;
 pub use inheritance::{InheritedSelection, LaunchInheritance, capture_launch_selection};
 mod namespace;
+mod presentation;
+pub use presentation::{
+    InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,
+};
 pub(super) mod publication;
 mod reservation;
 mod snapshot;

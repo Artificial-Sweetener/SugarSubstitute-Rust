@@ -5,10 +5,11 @@ use super::Rejection;
 use crate::installation::Trial;
 
 /// Native probe verifies the exact pending attempt and exits after its execution owner retires.
-pub const PROBE_PROTOCOL: u32 = 2;
+/// Version 3 carries a trial whose generation names its signed release; version 2 did not.
+pub const PROBE_PROTOCOL: u32 = 3;
 /// Follow with an installation path, encoded `ProbeRequest` and inherited exclusive disk handle.
 /// The child captures the handle once at initial entry and verifies its native identity before use.
-pub const PROBE_ARGUMENT: &str = "--internal-updater-probe-v2";
+pub const PROBE_ARGUMENT: &str = "--internal-updater-probe-v3";
 /// Encoded correlation bound in UTF-8 bytes, checked before decoding untrusted JSON.
 pub const MAX_PROBE_BYTES: usize = 1024;
 

@@ -9,6 +9,11 @@ fn replacement(root: &Directory, context: &JobContext) -> io::Result<record::Rec
         let generation = Generation {
             id: GenerationId::new("c".repeat(32)).map_err(io::Error::other)?,
             package: PackageDigest::new("c".repeat(64)).map_err(io::Error::other)?,
+            release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                "1.0.0".to_owned(),
+                1,
+            )
+            .map_err(io::Error::other)?,
         };
         let source =
             Directory::open(&root.path().join("releases").join(generation.id.as_str()), true)?;
@@ -141,7 +146,7 @@ fn rescue_rejects_incompatible_replacement_without_discarding_old_intent() -> Te
         let original = std::fs::read(state.path().join(JOURNAL))?;
         let mut replacement = replacement(&root, context)?;
         replacement.contract =
-            r#"{"schema_version":1,"installation_schemas":[1],"installed_launch_protocol":2}"#
+            r#"{"schema_version":1,"installation_schemas":[2],"installed_launch_protocol":2}"#
                 .into();
         protection::with(context, |protection| {
             assert!(supersede(&root, &state, replacement, protection, context).is_err());

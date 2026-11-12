@@ -216,6 +216,10 @@ fn progressed_or_unknown_installations_cannot_start_new_trust_history() -> TestR
             Generation {
                 id: GenerationId::new("1".repeat(32))?,
                 package: PackageDigest::new("2".repeat(64))?,
+                release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                    "1.0.0".to_owned(),
+                    1,
+                )?,
             },
             PreparationIntent::Automatic,
         )?;
