@@ -46,7 +46,7 @@ fn queued_exit_can_be_prepared_after_capture_grace_without_renewing_either_deadl
 fn notification_queue_contention_does_not_restart_its_original_interval() -> Result<()> {
     let mut state = ChildShutdown::new();
     state.intent = Some(CompletionIntent::Normal);
-    for revision in 1..=4 {
+    for revision in 1..=5 {
         state.queue(Control::Activity {
             revision: NonZeroU64::new(revision).ok_or("Revision absent")?,
             activity: UiWatchdogActivity::VisibleActive,

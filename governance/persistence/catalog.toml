@@ -130,10 +130,22 @@ compatibility = "reject"
 migrations = []
 
 [[formats]]
+id = "desktop-update-status-v1"
+owner = "sugarsubstitute-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/update/status.rs", "crates/sugarsubstitute-contracts/src/update/attempt.rs"]
+source_sha256 = "sha256:9a2d64692a3d59802a1295bbc4b30cd163699dc4b603f205e06bc4c972cd64bb"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
 id = "native-update-attempt-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/update/attempt.rs", "crates/sugarsubstitute-contracts/src/update/attempt/codec.rs"]
-source_sha256 = "sha256:a91aee63e6c857b6ce1d27ea42470beee5f6854f95a43e7d3cbaae430a685f24"
+source_sha256 = "sha256:3cf6d42d45666830f76481abff970dd77d53cbc002a789f303b5ba6e07be6914"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -276,11 +288,11 @@ migrations = []
 id = "windows-lifecycle-control"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/lifecycle_protocol.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/binary.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/decode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/encode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/errors.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/frame.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/payload.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/target.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/utf16.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_fields.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_types.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/output.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/raw_windows.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply_codec.rs"]
-source_sha256 = "sha256:e71e153b2115ee4294e9a6691fa84603fe12a403dd9764efa9ae9c6ed1b07b51"
+source_sha256 = "sha256:ef1f3efc7a67015730976e90ca5675830fbe0106edbfa3382efe096c80bd3385"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 13
-accepted_versions = [13]
+current_version = 14
+accepted_versions = [14]
 compatibility = "reject"
 migrations = []
 

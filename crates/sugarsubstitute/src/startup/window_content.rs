@@ -74,6 +74,18 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
+    fn update_status(&self) -> Option<sugarsubstitute_contracts::update::status::UpdateStatus> {
+        self.child.update_status().cloned()
+    }
+
+    fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
+        if self.child.workflow_running() {
+            sugarsubstitute_desktop::WorkflowActivity::Running
+        } else {
+            sugarsubstitute_desktop::WorkflowActivity::Idle
+        }
+    }
+
     fn close_save_settled(&self) -> bool {
         self.close_save_outcome().is_some()
     }

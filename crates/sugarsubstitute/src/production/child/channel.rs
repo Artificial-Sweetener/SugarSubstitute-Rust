@@ -49,6 +49,9 @@ pub(super) mod preparation;
 mod retirement;
 #[path = "channel/ui.rs"]
 mod ui;
+#[path = "channel/update_status.rs"]
+mod update_status;
+pub(in crate::production) use update_status::CoordinatorUpdates;
 #[path = "channel/wire.rs"]
 mod wire;
 use admission::ChannelAdmission;
@@ -94,6 +97,7 @@ pub(super) struct ChildChannel {
     admission: ChannelAdmission,
     terminal: Option<Terminal>,
     capture_input: preparation::CaptureInput,
+    updates: CoordinatorUpdates,
 }
 impl ChildChannel {
     /// Retain the lexical inherited token without any native operation.
@@ -125,7 +129,13 @@ impl ChildChannel {
             admission: ChannelAdmission::new(),
             terminal: None,
             capture_input: preparation::CaptureInput::Unchecked,
+            updates: CoordinatorUpdates::default(),
         }
+    }
+
+    /// The coordinator's newest update status, as this channel last received it.
+    pub(in crate::production) fn updates(&self) -> &CoordinatorUpdates {
+        &self.updates
     }
 
     /// Admit through the composing owner's scope before transferring the inherited input.

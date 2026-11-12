@@ -11,7 +11,7 @@ pub struct WireHeader {
     pub run: RunKey,
     /// Absent only in Hello; otherwise a positive claimed channel identity.
     pub connection: Option<ConnectionId>,
-    /// Absent in Hello, Welcome and server UiChallenge; positive otherwise.
+    /// Absent in Hello, Welcome and the server's UiChallenge and UpdateStatus; positive otherwise.
     pub request: Option<RequestId>,
     /// Positive absolute Windows QPC admission deadline, unchanged on retransmission/reply.
     /// Managed Acquire/Retry may await the actual producer beyond admission; each
@@ -27,8 +27,8 @@ impl WireHeader {
         }
         let valid = match kind {
             1 => self.connection.is_none() && self.request.is_none(),
-            2 | 9 => self.connection.is_some() && self.request.is_none(),
-            3..=8 | 10..=21 => self.connection.is_some() && self.request.is_some(),
+            2 | 9 | 22 => self.connection.is_some() && self.request.is_none(),
+            3..=8 | 10..=21 | 23 => self.connection.is_some() && self.request.is_some(),
             _ => return Err(ProtocolError::UnsupportedTag),
         };
         if valid { Ok(()) } else { Err(ProtocolError::Identity) }

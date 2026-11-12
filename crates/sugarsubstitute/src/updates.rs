@@ -13,6 +13,7 @@ pub use entry::entry;
 pub(crate) mod parent;
 pub(crate) mod schedule;
 mod session;
+pub(crate) mod status;
 #[cfg(test)]
 pub(crate) mod test_support;
 use std::{io, path::PathBuf, time::Duration};

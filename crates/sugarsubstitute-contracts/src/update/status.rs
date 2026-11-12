@@ -6,7 +6,13 @@
 //! Attempts report what happened; the selection record decides what is prepared. `reconcile`
 //! adopts the record's state, so a status survives helper crashes, repeated attempts and
 //! restarts without trusting an attempt's claim alone.
-use super::attempt::{AttemptOutcome, AttemptPhase, AttemptProgress, UpdateReport};
+use super::attempt::{
+    AttemptOutcome, AttemptPhase, AttemptProgress, MAX_VERSION_BYTES, UpdateReport, codec,
+};
+use serde::{Deserialize, Serialize};
+
+/// Largest encoded status: twelve bounded causes even when every byte needs escaping.
+pub const MAX_STATUS_BYTES: usize = 32 * 1024;
 
 /// Whether an attempt is running now.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -18,7 +24,8 @@ pub enum UpdateActivity {
 }
 
 /// Prepared and running versions as the selection record states them.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RecordedUpdates {
     /// Version of a prepared candidate that activates at the next launch.
     pub prepared: Option<String>,
@@ -26,8 +33,10 @@ pub struct RecordedUpdates {
     pub previous_version_running: bool,
 }
 
-/// One host's update status for its update surfaces.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// One host's update status for its update surfaces. The coordinator owns it; the desktop child
+/// receives copies through [`UpdateStatus::encode`] and [`UpdateStatus::decode`].
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateStatus {
     activity: Option<AttemptProgress>,
     last_successful_check_utc: Option<i64>,
@@ -97,7 +106,63 @@ impl UpdateStatus {
     pub fn reconcile(&mut self, recorded: RecordedUpdates) {
         self.recorded = recorded;
     }
+
+    /// Encode for another process after checking the bounds `decode` enforces.
+    /// # Errors
+    /// Rejects out-of-bounds versions, reports and progress, and encodings over
+    /// [`MAX_STATUS_BYTES`].
+    pub fn encode(&self) -> Result<Vec<u8>, StatusCodecError> {
+        if !self.valid() {
+            return Err(StatusCodecError::Bounds);
+        }
+        let bytes = serde_json::to_vec(self).map_err(|_| StatusCodecError::Malformed)?;
+        if bytes.len() > MAX_STATUS_BYTES {
+            return Err(StatusCodecError::Oversized);
+        }
+        Ok(bytes)
+    }
+
+    /// Decode a status from another process; nothing it claims is trusted beyond display.
+    /// # Errors
+    /// Rejects oversized or malformed bytes, unknown fields and out-of-bounds content.
+    pub fn decode(bytes: &[u8]) -> Result<Self, StatusCodecError> {
+        if bytes.len() > MAX_STATUS_BYTES {
+            return Err(StatusCodecError::Oversized);
+        }
+        let status: Self =
+            serde_json::from_slice(bytes).map_err(|_| StatusCodecError::Malformed)?;
+        if status.valid() { Ok(status) } else { Err(StatusCodecError::Bounds) }
+    }
+
+    fn valid(&self) -> bool {
+        let version = |version: &String| !version.is_empty() && version.len() <= MAX_VERSION_BYTES;
+        self.activity
+            .is_none_or(|progress| progress.bytes.is_none_or(|(received, total)| received <= total))
+            && self.recorded.prepared.as_ref().is_none_or(version)
+            && self.failure.as_ref().is_none_or(codec::valid_report)
+    }
 }
+
+/// An encoded status was oversized, malformed or out of bounds.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StatusCodecError {
+    /// The encoding exceeds [`MAX_STATUS_BYTES`].
+    Oversized,
+    /// The bytes are not an encoded status.
+    Malformed,
+    /// A field exceeds its bound or contradicts another field.
+    Bounds,
+}
+impl std::fmt::Display for StatusCodecError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Oversized => "Update status is oversized",
+            Self::Malformed => "Update status is malformed",
+            Self::Bounds => "Update status exceeds its bounds",
+        })
+    }
+}
+impl std::error::Error for StatusCodecError {}
 
 #[cfg(test)]
 mod tests {
@@ -158,5 +223,34 @@ mod tests {
         assert_eq!(status.failure(), Some(&report));
         assert_eq!(status.last_successful_check_utc(), Some(7));
         assert!(status.needs_installer());
+    }
+
+    #[test]
+    fn a_status_crosses_processes_only_within_its_bounds() -> Result<(), StatusCodecError> {
+        let mut status = UpdateStatus::default();
+        status.begin();
+        status.finish(
+            Some(AttemptOutcome::Failed(UpdateReport {
+                version: Some("2.0.0".into()),
+                phase: AttemptPhase::Downloading,
+                causes: vec!["The download stopped".into()],
+            })),
+            9,
+        );
+        status.reconcile(RecordedUpdates {
+            prepared: Some("1.9.0".into()),
+            previous_version_running: true,
+        });
+        assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
+        status.recorded.prepared = Some("v".repeat(MAX_VERSION_BYTES + 1));
+        assert_eq!(status.encode(), Err(StatusCodecError::Bounds));
+        assert_eq!(UpdateStatus::decode(b"{\"unknown\":1}"), Err(StatusCodecError::Malformed));
+        assert_eq!(
+            UpdateStatus::decode(&vec![b' '; MAX_STATUS_BYTES + 1]),
+            Err(StatusCodecError::Oversized)
+        );
+        let forged = br#"{"activity":{"phase":"downloading","bytes":[5,1]},"last_successful_check_utc":null,"recorded":{"prepared":null,"previous_version_running":false},"needs_installer":false,"failure":null}"#;
+        assert_eq!(UpdateStatus::decode(forged), Err(StatusCodecError::Bounds));
+        Ok(())
     }
 }

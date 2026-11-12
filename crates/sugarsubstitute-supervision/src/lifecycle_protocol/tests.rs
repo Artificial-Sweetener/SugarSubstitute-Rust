@@ -21,7 +21,7 @@ fn header(kind: u16) -> Result<WireHeader, Box<dyn Error>> {
             generation: RunGeneration::new(9)?,
         },
         connection: if kind == 1 { None } else { Some(ConnectionId::new(11)?) },
-        request: if matches!(kind, 1 | 2 | 9) { None } else { Some(RequestId::new(13)?) },
+        request: if matches!(kind, 1 | 2 | 9 | 22) { None } else { Some(RequestId::new(13)?) },
         deadline_qpc: 9_007_199_254_740_993,
     })
 }
@@ -56,6 +56,7 @@ mod framing;
 mod payloads;
 mod splash;
 mod targets;
+mod update_status;
 
 fn main() -> Result<MainIdentity, Box<dyn Error>> {
     Ok(MainIdentity {

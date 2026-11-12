@@ -35,6 +35,7 @@ impl ParentLifecycle {
             DecodedPayload::Release(_) => Some("Release"),
             DecodedPayload::ExitIntent { .. } => Some("ExitIntent"),
             DecodedPayload::ExitCompleted(_) => Some("ExitCompleted"),
+            DecodedPayload::RestartToApply => Some("RestartToApply"),
             _ => None,
         };
         if let Some(startup_operation) = startup_operation {
@@ -273,6 +274,10 @@ impl ParentLifecycle {
             }
             DecodedPayload::UiResponse(id) => {
                 self.ui_response(header, id, resources)?;
+                self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+            }
+            DecodedPayload::RestartToApply => {
+                self.updates.restart_to_apply();
                 self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
             }
             DecodedPayload::ExitIntent { shutdown, intent, expected_code } => {

@@ -73,16 +73,16 @@ fn earlier_native_budget_keeps_complete_start_grace_and_total() -> Result<()> {
     Ok(())
 }
 #[test]
-fn four_control_slots_reject_overload_without_erasing_original_fifo() -> Result<()> {
+fn five_control_slots_reject_overload_without_erasing_original_fifo() -> Result<()> {
     let mut state = ChildShutdown::new();
-    for value in 1..=4 {
+    for value in 1..=5 {
         state.queue(Control::Activity {
             revision: NonZeroU64::new(value).ok_or("Revision missing")?,
             activity: UiWatchdogActivity::VisibleActive,
         })?;
     }
     assert!(state.queue(Control::ExitCompleted).is_err());
-    for value in 1..=4 {
+    for value in 1..=5 {
         assert!(
             matches!(take_first(&mut state.queued),Some(Control::Activity{revision,..}) if revision.get()==value)
         );
@@ -228,7 +228,7 @@ fn bounded_early_intent_rejection_keeps_queue_and_unassigned_identity_for_actual
 -> Result<()> {
     let mut state = ChildShutdown::new();
     state.intent = Some(CompletionIntent::Normal);
-    for value in 1..=4 {
+    for value in 1..=5 {
         state.queue(Control::Activity {
             revision: NonZeroU64::new(value).ok_or("Revision absent")?,
             activity: UiWatchdogActivity::VisibleActive,
@@ -240,7 +240,7 @@ fn bounded_early_intent_rejection_keeps_queue_and_unassigned_identity_for_actual
         matches!(take_first(&mut state.queued),Some(Control::Activity{revision,..}) if revision.get()==1)
     );
     state.request_exit_intent(true, || Ok(Moment::from_nanos(0)))?;
-    for value in 2..=4 {
+    for value in 2..=5 {
         assert!(
             matches!(take_first(&mut state.queued),Some(Control::Activity{revision,..}) if revision.get()==value)
         );
@@ -362,7 +362,7 @@ fn first_whole_close_intent_survives_phase_failure_registration_and_queue_delay_
         child.begin_shutdown()?;
         assert_eq!(child.shutdown.intent, Some(expected));
         // These copied boundary facts exercise the real bounded queue, without a native peer.
-        for value in 1..=4 {
+        for value in 1..=5 {
             child.shutdown.queue(Control::Activity {
                 revision: NonZeroU64::new(value).ok_or("Revision absent")?,
                 activity: UiWatchdogActivity::VisibleActive,

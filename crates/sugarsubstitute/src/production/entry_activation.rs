@@ -367,6 +367,30 @@ impl EntryActivation for ProductionActivation {
     fn normal_close_requested(&self) -> bool {
         self.normal_close_budget().is_some()
     }
+    fn publish_update_status(
+        &mut self,
+        revision: u64,
+        status: &sugarsubstitute_contracts::update::status::UpdateStatus,
+        workflow_running: bool,
+    ) -> Result<()> {
+        for retained in self.records.iter_mut().flatten() {
+            if retained.record.retired.is_none()
+                && let Some(parent) = retained.record.parent.as_deref_mut()
+            {
+                parent.publish_update_status(revision, status, workflow_running).map_err(outer)?;
+            }
+        }
+        Ok(())
+    }
+    fn restart_to_apply_requested(&self) -> bool {
+        self.records.iter().flatten().any(|retained| {
+            retained
+                .record
+                .completed_normal
+                .as_ref()
+                .is_some_and(normal_retirement::CompletedNormal::restart_to_apply)
+        })
+    }
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         self.records
             .iter()

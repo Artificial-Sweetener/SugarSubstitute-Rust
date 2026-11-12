@@ -122,7 +122,9 @@ impl ParentLifecycle {
                             resources.execution.client.now()?,
                         )?;
                     }
-                    WritePurpose::Welcome | WritePurpose::AcquisitionProgress(_) => {}
+                    WritePurpose::Welcome
+                    | WritePurpose::AcquisitionProgress(_)
+                    | WritePurpose::UpdateStatus => {}
                 }
             }
             LifecyclePipeObservation::Written { operation, bytes } => {
@@ -163,6 +165,7 @@ impl ParentLifecycle {
                             .progress_finished(header, true)?;
                     }
                     WritePurpose::Challenge(_) => {}
+                    WritePurpose::UpdateStatus => self.updates.written(),
                 }
                 self.write = None;
                 self.resume_acquisition_receive(resources)?;
@@ -177,6 +180,12 @@ impl ParentLifecycle {
                     self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose
                 {
                     self.challenge_revoked(challenge, operation.get())?;
+                }
+                if matches!(
+                    self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose,
+                    WritePurpose::UpdateStatus
+                ) {
+                    self.updates.revoked();
                 }
                 if let WritePurpose::AcquisitionProgress(header) =
                     self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose

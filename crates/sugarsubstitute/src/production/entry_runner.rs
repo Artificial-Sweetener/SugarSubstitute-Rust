@@ -13,6 +13,8 @@ mod normal_idle;
 mod post_exit;
 #[path = "entry_runner/presentation.rs"]
 pub(super) mod presentation;
+#[path = "entry_runner/relaunch.rs"]
+mod relaunch;
 #[path = "entry_runner/routing.rs"]
 mod routing;
 #[cfg(test)]
@@ -91,6 +93,19 @@ pub(crate) trait EntryActivation {
     /// Borrow actual deliberate close intent only when current role and diagnostic custody permit it.
     /// This samples no clock and proves neither intake quiescence nor native settlement.
     fn normal_close_requested(&self) -> bool;
+    /// Send the coordinator's update status at `revision` to every live desktop child.
+    /// Older or repeated revisions are ignored.
+    /// # Errors
+    /// Returns the status's encoding failure.
+    fn publish_update_status(
+        &mut self,
+        revision: u64,
+        status: &sugarsubstitute_contracts::update::status::UpdateStatus,
+        workflow_running: bool,
+    ) -> Result<(), Box<dyn Error>>;
+    /// Whether a desktop child that asked to restart so an update applies has since completed
+    /// a normal close. A crashed or failed child never counts.
+    fn restart_to_apply_requested(&self) -> bool;
     /// Borrow its original retained fatal failure without separating its custody.
     /// An exposed source closes runner admission even when the last turn returned Active.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;
@@ -313,7 +328,15 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     update_schedule: Option<crate::updates::schedule::CheckSchedule>,
     /// Native wake for the next due update check; the check itself runs on the executor.
     update_wake: Option<Instant>,
+    /// What the update control shows, from attempt results and the selection record.
+    update_status: crate::updates::status::StatusSource,
+    /// Scope of the selection-record reads behind `update_status`.
+    update_status_scope: Option<Scope>,
     post_exit: Option<post_exit::Deadline>,
+    /// The one restart-to-apply relaunch, after a normal close the child asked for.
+    relaunch: relaunch::Relaunch,
+    /// Revision of the update status last sent to the desktop children.
+    update_status_sent: u64,
     command: Option<ProductionCommand>,
     executable: PathBuf,
     installation: PathBuf,
@@ -370,7 +393,11 @@ impl<C: EntryActivation> EntryRunner<C> {
             updater: None,
             update_schedule: None,
             update_wake: None,
+            update_status: crate::updates::status::StatusSource::new(),
+            update_status_scope: None,
             post_exit: None,
+            relaunch: relaunch::Relaunch::Idle,
+            update_status_sent: 0,
             command: Some(command),
             executable,
             installation,

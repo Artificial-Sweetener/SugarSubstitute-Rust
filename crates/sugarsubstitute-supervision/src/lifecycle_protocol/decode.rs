@@ -127,6 +127,20 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
             identity: main_fields::read_identity(&mut input, run)?,
             failed: lease(&mut input)?,
         },
+        22 => {
+            let revision = main_fields::read_positive(&mut input)?;
+            let workflow_running = match input.u8()? {
+                1 => false,
+                2 => true,
+                _ => return Err(ProtocolError::UnsupportedTag),
+            };
+            let length = usize::try_from(input.u32()?).map_err(|_| ProtocolError::Length)?;
+            if length > super::MAX_UPDATE_STATUS_BYTES {
+                return Err(ProtocolError::Length);
+            }
+            DecodedPayload::UpdateStatus { revision, workflow_running, status: input.take(length)? }
+        }
+        23 => DecodedPayload::RestartToApply,
         _ => return Err(ProtocolError::UnsupportedTag),
     };
     input.finish()?;

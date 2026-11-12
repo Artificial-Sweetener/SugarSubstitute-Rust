@@ -60,6 +60,17 @@ impl EntryActivation for RetainedChild {
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         self.budget
     }
+    fn publish_update_status(
+        &mut self,
+        _: u64,
+        _: &sugarsubstitute_contracts::update::status::UpdateStatus,
+        _: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    fn restart_to_apply_requested(&self) -> bool {
+        false
+    }
     fn normal_close_requested(&self) -> bool {
         false
     }

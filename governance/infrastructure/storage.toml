@@ -3068,7 +3068,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Own
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3af2a2700ed8d895c5f6284140c5fca5c7017f288d60a8e4308cee86b8b678fd"
+source_sha256 = "sha256:8ee9076425534a32836606ce97f1433d18bca944c75d5130c32566be75ab11c8"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Fail configuration before any environment capture and observe real runner joins. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -4499,7 +4499,7 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:131b4f0bf9fa9e730d63c70c38f6fe6a66415047b308a5cb70b5a4834a9f6212"
+source_sha256 = "sha256:de657e69291f40f46f823278df1fa426c8dc851c5644e5312b1370e712547b45"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."
@@ -4975,7 +4975,7 @@ rationale = "An owned temporary workspace is seeded with a previous run's checkp
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/close_save_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:ff774bc0e6210bf8931603cef496650e6f7170d9624e4eba9652ee1b2cad8f16"
+source_sha256 = "sha256:ff3fc3eeaa8e2d1856f415ff19ed01ec33ae898b987eb7e7c028cdfe6e3bd9c6"
 capabilities = ["std::fs::remove_dir_all", "std::fs::write"]
 disposition = "fixture"
 rationale = "The owned temporary workspace's checkpoint folder is replaced by a file to inject a failed final publication, which the close save must record before the exit intent."

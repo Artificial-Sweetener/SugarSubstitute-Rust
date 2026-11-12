@@ -302,6 +302,19 @@ impl EntryActivation for ProfileComponent {
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         self.shutdown
     }
+    /// The qualification child has no update surfaces.
+    fn publish_update_status(
+        &mut self,
+        _: u64,
+        _: &sugarsubstitute_contracts::update::status::UpdateStatus,
+        _: bool,
+    ) -> Result<()> {
+        Ok(())
+    }
+    /// The qualification child never restarts to apply an update.
+    fn restart_to_apply_requested(&self) -> bool {
+        false
+    }
     fn normal_close_requested(&self) -> bool {
         self.complete && self.failure.is_none() && self.profile_retirement_ready()
     }

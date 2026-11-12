@@ -29,6 +29,8 @@ pub(super) enum IncomingKind {
     Reply,
     /// Native UI dispatch and deadline provenance remain with the watchdog owner.
     Challenge,
+    /// The coordinator's update status; the newest revision replaces older ones.
+    UpdateStatus,
 }
 
 /// Validate a client application message before encoding into actual transport storage.
@@ -53,6 +55,7 @@ pub(super) fn outbound(
             | WirePayload::Register
             | WirePayload::Reply(_)
             | WirePayload::UiChallenge(_)
+            | WirePayload::UpdateStatus { .. }
     ) {
         return Err(ApplicationWireError::Payload);
     }
@@ -73,6 +76,9 @@ pub(super) fn incoming(
     match frame.payload {
         DecodedPayload::Reply(_) => Ok(IncomingKind::Reply),
         DecodedPayload::UiChallenge(_) => Ok(IncomingKind::Challenge),
+        DecodedPayload::UpdateStatus { .. } if frame.header.request.is_none() => {
+            Ok(IncomingKind::UpdateStatus)
+        }
         _ => Err(ApplicationWireError::Payload),
     }
 }

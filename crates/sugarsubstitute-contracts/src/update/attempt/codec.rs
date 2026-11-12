@@ -208,7 +208,7 @@ fn validate(message: &AttemptMessage) -> Result<(), AttemptCodecError> {
 
 /// A report is accepted only in the form `UpdateReport::from_error` produces: bounded and
 /// already sanitized, so a misbehaving helper cannot smuggle paths or addresses into it.
-fn valid_report(report: &UpdateReport) -> bool {
+pub(in crate::update) fn valid_report(report: &UpdateReport) -> bool {
     report.version.as_ref().is_none_or(|version| version.len() <= MAX_VERSION_BYTES)
         && report.causes.len() <= MAX_CAUSES
         && report

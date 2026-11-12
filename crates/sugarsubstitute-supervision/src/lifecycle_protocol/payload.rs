@@ -135,6 +135,17 @@ pub enum WirePayload<'a> {
         /// Original unavailable lease, never a new target or process privilege.
         failed: LeaseReference,
     },
+    /// Tag22: the coordinator's update status snapshot; the child keeps the newest revision.
+    UpdateStatus {
+        /// Positive revision of the coordinator's last status change.
+        revision: NonZeroU64,
+        /// Whether the backend's queue holds a running or queued workflow.
+        workflow_running: bool,
+        /// The status as encoded by its contract owner, at most `MAX_UPDATE_STATUS_BYTES`.
+        status: &'a [u8],
+    },
+    /// Tag23: the child's close save finished and it is exiting so the update applies.
+    RestartToApply,
 }
 impl WirePayload<'_> {
     pub(super) const fn kind(&self) -> u16 {
@@ -160,6 +171,8 @@ impl WirePayload<'_> {
             Self::SettleAttempt { .. } => 19,
             Self::RetryBackend { .. } => 20,
             Self::MainRevealed(_) => 21,
+            Self::UpdateStatus { .. } => 22,
+            Self::RestartToApply => 23,
         }
     }
 }
@@ -254,4 +267,15 @@ pub enum DecodedPayload<'a> {
         /// Original unavailable lease, never a new target or process privilege.
         failed: LeaseReference,
     },
+    /// Tag22: the coordinator's update status snapshot; the child keeps the newest revision.
+    UpdateStatus {
+        /// Positive revision of the coordinator's last status change.
+        revision: NonZeroU64,
+        /// Whether the backend's queue holds a running or queued workflow.
+        workflow_running: bool,
+        /// The status as claimed; decode it through its contract owner, at most `MAX_UPDATE_STATUS_BYTES`.
+        status: &'a [u8],
+    },
+    /// Tag23: the child's close save finished and it is exiting so the update applies.
+    RestartToApply,
 }

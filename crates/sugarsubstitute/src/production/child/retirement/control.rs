@@ -12,6 +12,7 @@ impl Control {
             Self::MainRetired(_) => Some(CloseControl::MainRetired),
             Self::Release(_) => Some(CloseControl::Release),
             Self::ExitIntent => Some(CloseControl::ExitIntent),
+            Self::RestartToApply => Some(CloseControl::RestartToApply),
             Self::ExitCompleted => Some(CloseControl::ExitCompleted),
             Self::Activity { .. } => None,
         }
@@ -113,6 +114,7 @@ impl ProductionChild {
                 Control::MainRetired(identity) => WirePayload::MainRetired(identity),
                 Control::Release(lease) => WirePayload::Release(lease),
                 Control::ExitIntent => self.shutdown.exit_intent_payload()?,
+                Control::RestartToApply => WirePayload::RestartToApply,
                 Control::ExitCompleted => WirePayload::ExitCompleted(
                     self.shutdown.shutdown.ok_or("Actual shutdown identity absent")?,
                 ),

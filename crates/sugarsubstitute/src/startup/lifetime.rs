@@ -144,6 +144,13 @@ impl<B: StartupBackend> StartupHost<B> {
             if !self.advance_close_save(budget, now)? {
                 return self.refresh_deadline();
             }
+            if self.close_reason
+                == sugarsubstitute_application::workspace_session::close_save::CloseReason::RestartToApply
+                && self.close_save_outcome().is_some()
+            {
+                let requested = self.child.request_restart_to_apply();
+                retain(&mut failure, self.observed_close(StartupCloseStage::ExitIntent, requested));
+            }
             let requested = self.child.request_shutdown(budget);
             retain(&mut failure, self.observed_close(StartupCloseStage::ExitIntent, requested));
             self.commands.close();

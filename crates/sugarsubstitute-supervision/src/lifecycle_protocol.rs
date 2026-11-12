@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 13 uses little-endian integers and a fixed 104-byte header. Kind21
+//! Wire version 14 uses little-endian integers and a fixed 104-byte header. Kind21
 //! reports the policy-accepted native main reveal after frontend readiness. The parent
 //! rechecks its retained profile/browser authorization before accepting that observation.
 //! Registration reply tag17 carries explicit parent-derived backend execution policy before
@@ -89,7 +89,13 @@
 //! a stale original lease gains no release or reload authority. Web reload remains with
 //! the frontend owner. These copied wire facts grant no retry, current readiness,
 //! native adoption or teardown proof.
-//! Only schema13 is accepted; parent and captured child deploy together.
+//! Kind22 UpdateStatus, sent by the coordinator without a request, carries a positive u64
+//! revision, u8 workflow activity (1 idle, 2 running) and a u32-counted encoded status of at
+//! most `MAX_UPDATE_STATUS_BYTES`, whose content its contract owner decodes and bounds. Kind23
+//! RestartToApply is an empty child request, sent after the close save finished and before
+//! ExitIntent; it grants no process authority, and the coordinator relaunches only when the
+//! child then exits normally.
+//! Only schema14 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
 mod decode;
@@ -121,11 +127,13 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 13;
+pub const WIRE_VERSION: u16 = 14;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.
 pub const MAX_FRAME_BYTES: usize = 65_536;
+/// Largest encoded update status a Kind22 frame carries.
+pub const MAX_UPDATE_STATUS_BYTES: usize = 32_768;
 
 #[cfg(test)]
 mod tests;

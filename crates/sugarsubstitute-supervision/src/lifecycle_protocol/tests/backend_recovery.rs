@@ -36,7 +36,7 @@ fn retry_backend_kind20_has_exact40_byte_payload_and_preserves_large_ids() -> Te
     let failed = replacement()?;
     let source = encoded(WirePayload::RetryBackend { identity, failed })?;
     assert_eq!(source.len(), HEADER_BYTES + 40);
-    assert_eq!(&source[4..6], &13u16.to_le_bytes());
+    assert_eq!(&source[4..6], &14u16.to_le_bytes());
     assert_eq!(&source[12..14], &20u16.to_le_bytes());
     let mut golden = Vec::new();
     for value in [u64::MAX, u64::MAX, 17, u64::MAX, u64::MAX] {
@@ -101,14 +101,14 @@ fn backend_replaced_tag16_has_exact65_byte_payload_and_both_bindings() -> TestRe
 #[test]
 fn recovery_frames_reject_prior_future_schema_and_unknown_operation_or_reply_tag() -> TestResult {
     for source in frames()? {
-        for version in [0u16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, u16::MAX] {
+        for version in [0u16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, u16::MAX] {
             let mut invalid = source.clone();
             invalid[4..6].copy_from_slice(&version.to_le_bytes());
             assert!(matches!(FrameCodec::decode(&invalid), Err(ProtocolError::Schema)));
         }
     }
     let [mut request, mut unavailable, mut replaced] = frames()?;
-    request[12..14].copy_from_slice(&22u16.to_le_bytes());
+    request[12..14].copy_from_slice(&24u16.to_le_bytes());
     assert!(matches!(FrameCodec::decode(&request), Err(ProtocolError::UnsupportedTag)));
     for source in [&mut unavailable, &mut replaced] {
         source[104] = 18;

@@ -160,6 +160,15 @@ impl StartupBackend for ProductionChild {
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         ProductionChild::shutdown_budget(self)
     }
+    fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
+        self.bootstrap.coordinator_updates().status()
+    }
+    fn workflow_running(&self) -> bool {
+        self.bootstrap.coordinator_updates().workflow_running()
+    }
+    fn request_restart_to_apply(&mut self) -> BackendResult<()> {
+        ProductionChild::request_restart_to_apply(self)
+    }
     fn request_shutdown(&mut self, budget: ShutdownBudget) -> BackendResult<()> {
         ProductionChild::request_shutdown(self, budget)
     }

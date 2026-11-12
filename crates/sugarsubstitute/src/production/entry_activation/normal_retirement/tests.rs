@@ -54,6 +54,7 @@ fn boundary_receipt(record: &mut Record) -> Result<CompletedNormal> {
         },
         connection: record.connection,
         original,
+        restart_to_apply: false,
     })
 }
 

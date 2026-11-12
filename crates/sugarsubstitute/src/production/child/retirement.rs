@@ -21,6 +21,7 @@ enum Control {
     MainRetired(MainIdentity),
     Release(LeaseReference),
     ExitIntent,
+    RestartToApply,
     ExitCompleted,
 }
 #[derive(Clone, Copy)]
@@ -47,7 +48,8 @@ pub(super) struct ChildShutdown {
     intent: Option<CompletionIntent>,
     intent_deadline: Option<Moment>,
     pending: Option<Pending>,
-    queued: [Option<Control>; 4],
+    queued: [Option<Control>; 5],
+    restart_requested: bool,
 }
 impl ChildShutdown {
     /// Accept only a requested current native absence fact after actual application
@@ -88,7 +90,8 @@ impl ChildShutdown {
             intent: None,
             intent_deadline: None,
             pending: None,
-            queued: [None; 4],
+            queued: [None; 5],
+            restart_requested: false,
         }
     }
     pub(super) fn closing(&self) -> bool {
@@ -198,6 +201,19 @@ impl ProductionChild {
     /// Latch capture cleanup first; absent capture permits the composing content's original clock.
     /// # Errors
     /// Keeps clock/counter failures and actual partial capture/source custody unchanged.
+    /// Tell the coordinator, once, that this close is a restart to apply a prepared update.
+    /// Call only after the close save's outcome exists; the message goes out before
+    /// ExitCompleted, and the coordinator relaunches only if this close then completes normally.
+    /// # Errors
+    /// Returns a full control queue or channel failure.
+    pub(in crate::production) fn request_restart_to_apply(&mut self) -> Result<()> {
+        if self.shutdown.restart_requested || !self.bootstrap.channel_mut().registered() {
+            return Ok(());
+        }
+        self.shutdown.queue(Control::RestartToApply)?;
+        self.shutdown.restart_requested = true;
+        self.advance_control()
+    }
     pub(in crate::production) fn begin_workspace_close(&mut self) -> Result<ShutdownInitiation> {
         self.bootstrap.close_initialization();
         self.shutdown.observe_capture(self.bootstrap.capture_cleanup_snapshot())

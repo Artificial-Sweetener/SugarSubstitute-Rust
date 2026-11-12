@@ -197,6 +197,9 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         {
             return Ok(false);
         }
+        if !self.advance_relaunch(budget.settle_until)? {
+            return Ok(false);
+        }
         if self.updater.as_ref().is_some_and(|updater| !updater.settled()) {
             if self.enter_post_exit()? {
                 return self.poll_post_exit();

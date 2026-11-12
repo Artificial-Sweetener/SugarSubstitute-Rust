@@ -213,6 +213,13 @@ pub trait StartupBackend {
     fn begin_shutdown(&mut self) -> BackendResult<ShutdownInitiation>;
     /// Borrow the original shutdown transaction without sampling or renewing its cutoff.
     fn shutdown_budget(&self) -> Option<ShutdownBudget>;
+    /// The coordinator's newest update status, once it sent one. Presentation only.
+    fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus>;
+    /// Whether the backend's queue held a running or queued workflow at the newest status.
+    fn workflow_running(&self) -> bool;
+    /// Tell the coordinator this close restarts the application so a prepared update applies.
+    /// Called once, after the close save's outcome exists and before `request_shutdown`.
+    fn request_restart_to_apply(&mut self) -> BackendResult<()>;
     /// Close admission and retain the original budget while cleanup remains pollable.
     fn request_shutdown(&mut self, budget: ShutdownBudget) -> BackendResult<()>;
     /// Report settlement only after actual native owners retire.

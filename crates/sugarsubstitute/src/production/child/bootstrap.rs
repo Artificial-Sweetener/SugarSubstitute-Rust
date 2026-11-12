@@ -379,6 +379,10 @@ impl ChildBootstrap {
             _ => None,
         }
     }
+    /// The coordinator's newest update status as the lifecycle channel received it.
+    pub(super) fn coordinator_updates(&self) -> &super::channel::CoordinatorUpdates {
+        self.channel.updates()
+    }
     /// Borrow the actual channel for output, profile and native challenge transactions.
     pub(super) fn channel_mut(&mut self) -> &mut ChildChannel {
         &mut self.channel

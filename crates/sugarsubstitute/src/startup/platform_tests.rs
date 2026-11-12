@@ -26,6 +26,7 @@ impl PreparedStartup for Prepared {
 pub(super) struct Platform {
     pub(in crate::startup) budget: Option<ShutdownBudget>,
     pub(in crate::startup) shutdown_requests: Vec<ShutdownBudget>,
+    pub(in crate::startup) restart_requests: usize,
     pub(in crate::startup) shutdown_starts: usize,
     retired: bool,
     finished: bool,
@@ -151,6 +152,16 @@ impl StartupBackend for Platform {
     }
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         self.budget
+    }
+    fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
+        None
+    }
+    fn workflow_running(&self) -> bool {
+        false
+    }
+    fn request_restart_to_apply(&mut self) -> BackendResult<()> {
+        self.restart_requests += 1;
+        Ok(())
     }
     fn request_shutdown(&mut self, budget: ShutdownBudget) -> BackendResult<()> {
         if self.budget.is_some_and(|original| original != budget) {

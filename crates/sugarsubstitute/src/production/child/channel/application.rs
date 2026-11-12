@@ -162,6 +162,10 @@ impl ChildChannel {
                 self.receive_ui_challenge(&frame)?;
                 return Ok(false);
             }
+            wire::IncomingKind::UpdateStatus => {
+                self.updates.receive(&frame.payload)?;
+                return Ok(false);
+            }
         }
         Ok(true)
     }

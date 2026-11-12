@@ -110,6 +110,7 @@ pub(super) enum WritePurpose {
     Reply(usize),
     AcquisitionProgress(sugarsubstitute_supervision::lifecycle_protocol::WireHeader),
     Challenge(UiChallengeKey),
+    UpdateStatus,
 }
 pub(super) struct PendingWrite {
     pub(super) receipt: super::write_receipt::WriteReceipt,
