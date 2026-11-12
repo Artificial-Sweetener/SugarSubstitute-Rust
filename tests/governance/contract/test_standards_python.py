@@ -79,3 +79,62 @@ def test_execution_boundary_requires_diagnostics_and_typed_failure(
     )
     failures = audit.run_audit(tmp_path)
     assert (failures == []) is accepted
+
+
+@pytest.mark.parametrize(
+    ("source", "rejected"),
+    [
+        ("subprocess.run(['git'], timeout=10)", True),
+        ("process.communicate(timeout=5)", True),
+        ("event.wait(5)", True),
+        ("event.wait(timeout=0.5)", True),
+        ("thread.join(timeout=2)", True),
+        ("thread.join(2)", True),
+        ("future.result(timeout=5)", True),
+        ("asyncio.wait_for(task, 3)", True),
+        ("asyncio.wait_for(task, timeout=3)", True),
+        ("assert time.monotonic() - began < 1", True),
+        ("assert perf_counter() < deadline", True),
+        ("event.wait()", False),
+        ("updates.wait(0)", False),
+        ("fixture.result(1)", False),
+        ("', '.join(parts)", False),
+        ("wait_for_event(event)", False),
+        ("asyncio.wait_for(task, HANG_GUARD_SECONDS)", False),
+        ("TransportSession(response, expected_timeout=7200)", False),
+        ("run.assert_called_once_with(['x'], timeout=10)", False),
+        ("assert stamp == clock.now", False),
+    ],
+)
+def test_wall_clock_waits_are_rejected_in_tests_and_tooling(
+    tmp_path: Path, source: str, rejected: bool
+) -> None:
+    """No test or tool may pass or fail on elapsed seconds (decision M-3)."""
+
+    audit_module = _load_audit_module()
+    for root in audit_module.WALL_CLOCK_ROOTS:
+        (tmp_path / root).mkdir()
+    (tmp_path / "tests" / "test_case.py").write_text(source + "\n", encoding="utf-8")
+    failures = audit_module._audit_wall_clock_waits(tmp_path)
+    assert bool(failures) is rejected, failures
+
+
+def test_wall_clock_rule_covers_tools_and_scripts(tmp_path: Path) -> None:
+    """The rule reads every Python file under tests, tools and scripts."""
+
+    audit_module = _load_audit_module()
+    for root in audit_module.WALL_CLOCK_ROOTS:
+        (tmp_path / root / "nested").mkdir(parents=True)
+        (tmp_path / root / "nested" / "case.py").write_text(
+            "subprocess.run(['x'], timeout=60)\n", encoding="utf-8"
+        )
+    (tmp_path / "sugarcubes").mkdir()
+    (tmp_path / "sugarcubes" / "runtime.py").write_text(
+        "urlopen(request, timeout=20)\n", encoding="utf-8"
+    )
+    failures = audit_module._audit_wall_clock_waits(tmp_path)
+    assert sorted(failure.split(":")[0] for failure in failures) == [
+        "scripts/nested/case.py",
+        "tests/nested/case.py",
+        "tools/nested/case.py",
+    ]
