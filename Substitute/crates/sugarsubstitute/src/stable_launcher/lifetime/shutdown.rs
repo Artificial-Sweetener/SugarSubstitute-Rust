@@ -25,7 +25,6 @@ impl Launcher {
         self.wake_at =
             Instant::now().checked_add(until.checked_duration_since(now).unwrap_or_default());
         self.closing = true;
-        self.selection_wait = None;
         self.activation_after = None;
         self.activation_wake = None;
         if let Some(job) = &self.job {

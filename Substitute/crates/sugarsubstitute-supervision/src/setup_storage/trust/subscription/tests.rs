@@ -94,20 +94,50 @@ fn interrupted_initialization_preserves_completed_preference_and_unknown_staging
     })
 }
 
+/// A held trust writer makes a preference write wait in the kernel: it times out at the bound,
+/// and once the holder releases the same write succeeds. The application run stays available.
 #[test]
-fn preference_writes_share_trust_writer_but_leave_application_run_available() -> TestResult {
-    worker::run_reserved(TRUST_RESERVATION_BYTES, |context, _| {
-        let (installation, store) = fixture(context)?;
-        let initial = store.subscription(context)?;
-        let writer = store.root.read(LOCK)?;
-        writer.try_lock().map_err(io::Error::from)?;
-        assert!(store.select_subscription(initial, Channel::Canary, context).is_err());
-        drop(writer);
-        store.select_subscription(initial, Channel::Canary, context)?;
-        let selection = std::sync::Arc::new(SelectionStore::open(installation.path(), context)?);
-        let run = crate::setup_storage::InstallationRun::acquire(selection, context)?;
-        assert_eq!(store.subscription(context)?.channel(), Channel::Canary);
-        drop(run);
-        Ok(())
-    })
+fn preference_writes_wait_for_the_trust_writer_but_leave_application_run_available() -> TestResult {
+    use crate::setup_storage::{short_lock::WAIT, test_worker::driven::run_driven};
+    use std::os::windows::fs::OpenOptionsExt;
+    use sugarsubstitute_contracts::execution::Moment;
+    let lock = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let worker_lock = lock.clone();
+    run_driven(
+        TRUST_RESERVATION_BYTES,
+        move |context, handoff| {
+            let (installation, store) = fixture(context)?;
+            let initial = store.subscription(context)?;
+            *crate::registry::lock(&worker_lock) = Some(store.root.path().join(LOCK));
+            handoff.reach(1);
+            handoff.wait(2);
+            assert!(matches!(
+                store.select_subscription(initial, Channel::Canary, context),
+                Err(TrustFailure::LockTimeout)
+            ));
+            handoff.reach(3);
+            handoff.wait(4);
+            store.select_subscription(initial, Channel::Canary, context)?;
+            let selection =
+                std::sync::Arc::new(SelectionStore::open(installation.path(), context)?);
+            let run = crate::setup_storage::InstallationRun::acquire(selection, context)?;
+            assert_eq!(store.subscription(context)?.channel(), Channel::Canary);
+            drop(run);
+            Ok(())
+        },
+        |driver| {
+            driver.handoff.wait(1);
+            let path = crate::registry::lock(&lock).take().ok_or("Writer path absent")?;
+            let holder = std::fs::OpenOptions::new().read(true).share_mode(0x1).open(path)?;
+            holder.try_lock()?;
+            driver.handoff.reach(2);
+            let bound = Moment::from_nanos(0).checked_add(WAIT)?;
+            driver.clock.wait_for_sleeper(bound);
+            driver.clock.advance_to(bound)?;
+            driver.handoff.wait(3);
+            drop(holder);
+            driver.handoff.reach(4);
+            Ok(())
+        },
+    )
 }

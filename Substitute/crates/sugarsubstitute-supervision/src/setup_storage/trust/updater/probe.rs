@@ -47,7 +47,7 @@ impl TrustStore {
     ) -> Result<(), TrustFailure> {
         check(context)?;
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _reader = self.reader(protection, context)?;
             let state = self.updater_locked(protection, SelectionRead::Existing, context)?;
             if !matches!(state.candidate(), Some(Candidate::Trial { attempt }) if attempt == expected)
             {

@@ -17,7 +17,7 @@ impl TrustStore {
     ) -> Result<InstallationRecord, TrustFailure> {
         let _preparation = self.claim_updater_preparation(context)?;
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let state = self.updater_locked(protection, SelectionRead::Existing, context)?;
             self.recover_updater_locked(state, protection, context)
         })

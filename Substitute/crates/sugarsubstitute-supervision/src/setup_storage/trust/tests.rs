@@ -124,10 +124,7 @@ fn writer_exclusion_releases_without_stale_file_lockout_or_application_lease() -
             &root,
             context,
         )?;
-        let writer = store.root.read(LOCK)?;
-        writer.try_lock().map_err(io::Error::from)?;
         let current = Set::new(&key, [1; 3], b"current", EXPIRES)?;
-        assert!(store.refresh(current.metadata(), NOW, context).is_err());
         // A trust writer does not acquire installation activation or selection exclusion.
         let setup = std::fs::OpenOptions::new()
             .read(true)
@@ -136,7 +133,6 @@ fn writer_exclusion_releases_without_stale_file_lockout_or_application_lease() -
             .open(installation.path().join("state/setup-lock"))?;
         setup.try_lock().map_err(io::Error::from)?;
         assert!(SelectionStore::open(installation.path(), context)?.load(context)?.is_some());
-        drop(writer);
         store.refresh(current.metadata(), NOW, context)?;
         assert!(store.root.path().join(LOCK).exists());
         Ok(())

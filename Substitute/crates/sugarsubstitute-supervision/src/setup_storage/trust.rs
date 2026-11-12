@@ -31,6 +31,7 @@ use super::SelectionStore;
 use super::check;
 use super::invalid;
 use super::ownership;
+use super::short_lock::LockKind;
 use crate::durable_storage::{
     files::{self, Directory},
     protected::directories::Mode,
@@ -122,7 +123,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<VerifiedOffer, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let history = self.read_releases(protection)?;
             let mut trust = self.read(protection)?;
             self.apply(&mut trust, protection, context, |trust| {
@@ -141,7 +142,7 @@ impl TrustStore {
         operation: impl FnOnce(&mut RepositoryTrust) -> Result<T, sugarsubstitute_update::Error>,
     ) -> Result<T, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let mut trust = self.read(protection)?;
             self.apply(&mut trust, protection, context, operation)
         })
@@ -200,11 +201,28 @@ impl TrustStore {
         .map_err(TrustFailure::from)
     }
 
+    /// Hold the writer exclusively for one read-modify-publish of trust state.
     /// The writer file is only an OS lock rendezvous; its existence never means busy.
-    fn writer(&self, protection: &Protection) -> Result<File, TrustFailure> {
-        let file = self.root.read(LOCK)?;
+    /// # Errors
+    /// Waits for readers and other writers, then returns `LockTimeout` or `LockCancelled`.
+    fn writer(&self, protection: &Protection, context: &JobContext) -> Result<File, TrustFailure> {
+        self.locked(protection, LockKind::Exclusive, context)
+    }
+
+    /// Hold the writer shared for one consistent read of trust state; readers run together.
+    fn reader(&self, protection: &Protection, context: &JobContext) -> Result<File, TrustFailure> {
+        self.locked(protection, LockKind::Shared, context)
+    }
+
+    fn locked(
+        &self,
+        protection: &Protection,
+        kind: LockKind,
+        context: &JobContext,
+    ) -> Result<File, TrustFailure> {
+        let file = self.root.read_lockable(LOCK)?;
         protection.verify_file(&file)?;
-        file.try_lock().map_err(io::Error::from)?;
+        super::short_lock::acquire(&file, kind, context)?;
         Ok(file)
     }
 
