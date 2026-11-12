@@ -80,7 +80,7 @@ impl InstallationData {
                 let (_, record) = setup_storage::runtime_record::read(
                     &self.root,
                     &directory,
-                    Some(generation),
+                    Some(&generation.package),
                     context,
                 )?;
                 namespaces.push(owner.generation_namespace(&directory, context)?);

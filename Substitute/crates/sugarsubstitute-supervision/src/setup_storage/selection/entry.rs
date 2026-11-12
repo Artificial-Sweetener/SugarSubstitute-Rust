@@ -63,6 +63,18 @@ fn trial_handles(arguments: impl IntoIterator<Item = OsString>) -> io::Result<[u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A launcher from before selection schema 2 spells trial v2 and accepted v1. Neither is
+    /// captured as any entry, so no handle is adopted and the old snapshot is never decoded.
+    #[test]
+    fn entries_from_earlier_launch_protocols_are_refused_before_any_handle_is_adopted() {
+        for prefix in ["--installed-launch-v1", "--installed-launch-v2", "--installed-launch-v5"] {
+            let arguments = [prefix, "4", "8"].map(OsString::from);
+            // SAFETY: each spelling is refused while parsing, before any slot is adopted.
+            let captured = unsafe { capture_launch(arguments) };
+            assert!(captured.is_err(), "{prefix} was captured");
+        }
+    }
     #[test]
     fn trial_protocol_requires_two_distinct_canonical_handles() -> io::Result<()> {
         assert_eq!(trial_handles(["4", "8"].map(OsString::from))?, [4, 8]);

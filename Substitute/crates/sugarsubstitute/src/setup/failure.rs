@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Present terminal setup failures through the existing native failure dialog.
+//! Present terminal setup failures through the shared native report surface.
 use crate::failure_details::Details;
 use std::{error::Error, fmt};
 
@@ -9,7 +9,12 @@ pub(super) fn report<E: Error + 'static>(
     result: Result<(), Box<dyn Error>>,
     locale: &str,
     interactive: bool,
-    show: impl FnOnce(&str, &str, fmt::Arguments<'_>) -> Result<(), E>,
+    show: impl FnOnce(
+        &'static sugarsubstitute_contracts::localization::Messages,
+        &str,
+        &str,
+        fmt::Arguments<'_>,
+    ) -> Result<(), E>,
 ) -> Result<(), Box<dyn Error>> {
     let Err(cause) = result else {
         return Ok(());
@@ -17,9 +22,12 @@ pub(super) fn report<E: Error + 'static>(
     tracing::error!(operation="installer_failed", cause_chain=%crate::diagnostics::CauseChain(cause.as_ref()), "Setup could not finish");
     if interactive {
         let copy = sugarsubstitute_contracts::localization::installer::messages(locale);
-        if let Err(secondary) =
-            show(copy.title, copy.setup_failed, format_args!("{}", Details(cause.as_ref())))
-        {
+        if let Err(secondary) = show(
+            sugarsubstitute_contracts::localization::messages(locale),
+            copy.title,
+            copy.setup_failed,
+            format_args!("{}", Details(cause.as_ref())),
+        ) {
             tracing::error!(operation="installer_failure_presentation", cause=?secondary,
                 "Native setup failure presentation failed; retaining the original failure");
             return Err(crate::failure_details::retain_presentation(cause, secondary));
@@ -76,7 +84,7 @@ mod tests {
     fn early_failure_is_visible_once_and_preserves_its_original_cause() {
         let original = io::Error::new(io::ErrorKind::PermissionDenied, "package unreadable");
         let mut shown = 0;
-        let result = report(Err(Box::new(original)), "en", true, |title, summary, details| {
+        let result = report(Err(Box::new(original)), "en", true, |_, title, summary, details| {
             shown += 1;
             assert_eq!(title, "SugarSubstitute Setup");
             assert!(!summary.is_empty());
@@ -96,14 +104,14 @@ mod tests {
         let mut shown = 0;
         for result in [Ok(()), Err(Box::new(io::Error::other("fixture")) as Box<dyn Error>)] {
             let failed = result.is_err();
-            let outcome = report(result, "ja", false, |_, _, _| {
+            let outcome = report(result, "ja", false, |_, _, _, _| {
                 shown += 1;
                 Ok::<_, io::Error>(())
             });
             assert_eq!(outcome.is_err(), failed);
         }
         assert!(
-            report(Ok(()), "ko", true, |_, _, _| {
+            report(Ok(()), "ko", true, |_, _, _, _| {
                 shown += 1;
                 Ok::<_, io::Error>(())
             })
@@ -114,7 +122,7 @@ mod tests {
 
     #[test]
     fn dialog_failure_does_not_replace_the_installation_failure() {
-        let result = report(Err("original install failure".into()), "es", true, |_, _, _| {
+        let result = report(Err("original install failure".into()), "es", true, |_, _, _, _| {
             Err(io::Error::other("dialog unavailable"))
         });
         assert!(result.is_err_and(|cause| cause.to_string() == "original install failure"));
@@ -127,7 +135,7 @@ mod tests {
                 Err("Original setup diagnostic".into()),
                 locale.id,
                 true,
-                |title, summary, details| {
+                |_, title, summary, details| {
                     assert_eq!(title, locale.installer.title);
                     assert_eq!(summary, locale.installer.setup_failed);
                     assert_eq!(details.to_string(), "Original setup diagnostic");

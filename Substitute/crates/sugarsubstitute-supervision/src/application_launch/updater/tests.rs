@@ -75,7 +75,7 @@ fn historical_engine_capability_rejection_keeps_custody_until_explicit_retiremen
     run(|context| {
         let root = worker::installation(192, context)?;
         let workspace = tempfile::tempdir()?;
-        let (bytes, _) = archive(br#"{"schema_version":2,"preparation_protocols":[1],"installation_schemas":[1],"probe_protocols":[2]}"#)?;
+        let (bytes, _) = archive(br#"{"schema_version":2,"preparation_protocols":[1],"installation_schemas":[2],"probe_protocols":[3]}"#)?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         let prepared = UpdaterPackage::import(
             root.path(),

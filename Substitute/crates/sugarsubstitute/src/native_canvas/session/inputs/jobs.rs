@@ -329,6 +329,22 @@ impl Session {
                 Ok(None)
             }
             Err(cause) if activity::retryable(&cause) => Ok(Some(task)),
+            // Work no release can ever admit is answered, never retried and never left waiting.
+            Err(AdmissionError::ExceedsCapacity { requested_bytes, limit_bytes }) => {
+                tracing::warn!(
+                    operation = "canvas_input_work",
+                    document_id = identity.get(),
+                    requested_bytes,
+                    limit_bytes,
+                    "Input canvas work needs more memory than the canvas can ever admit"
+                );
+                for owner in acquirers {
+                    self.inputs.release(owner);
+                }
+                self.record_input_failure(identity, applies, InputFailure::message(TOO_LARGE));
+                self.settle_input_tickets();
+                Ok(None)
+            }
             Err(cause) => Err(cause.into()),
         }
     }
@@ -407,5 +423,7 @@ impl Session {
     }
 }
 
+/// The page's answer when input work needs more memory than the canvas can ever admit.
+const TOO_LARGE: &str = "This input document needs more memory than the canvas can provide";
 /// The page's answer when the canvas memory budget cannot hold an input document change.
 const MEMORY_REFUSED: &str = "The canvas memory budget cannot hold this input document";

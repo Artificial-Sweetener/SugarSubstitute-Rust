@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain durable workspace work in the application's existing execution and native lifetime.
 #[cfg(test)]
+mod admission_tests;
+#[cfg(test)]
 mod close_save_tests;
 #[cfg(test)]
 mod closing_tests;

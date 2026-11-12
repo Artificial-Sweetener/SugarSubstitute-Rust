@@ -10,10 +10,10 @@ mod identity;
 mod record;
 mod transition;
 pub use identity::{GenerationId, InstallationId, PackageDigest};
-pub use record::{Candidate, Generation, InstallationRecord, Trial};
+pub use record::{Candidate, Generation, InstallationRecord, SignedRelease, Trial};
 
 /// Selection schema read and written by this installation state owner.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Maximum encoded installation selection size in bytes, checked before parsing.
 pub const MAX_RECORD_BYTES: usize = 16 * 1024;

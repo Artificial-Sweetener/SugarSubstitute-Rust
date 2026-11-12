@@ -21,6 +21,12 @@ pub enum FluentIcon {
     Close,
     /// Expand a selection control.
     ChevronDown,
+    /// Error severity of a report, drawn in its authored colors.
+    SeverityError,
+    /// Warning severity of a report, drawn in its authored colors.
+    SeverityWarning,
+    /// Informational severity of a report, drawn in its authored colors.
+    SeverityInfo,
 }
 
 impl FluentIcon {
@@ -35,6 +41,9 @@ impl FluentIcon {
             Self::Accept => include_str!("../assets/fluent/Accept.svg"),
             Self::Close => include_str!("../assets/fluent/Close.svg"),
             Self::ChevronDown => include_str!("../assets/fluent/ChevronDown.svg"),
+            Self::SeverityError => include_str!("../assets/fluent/SeverityError.svg"),
+            Self::SeverityWarning => include_str!("../assets/fluent/SeverityWarning.svg"),
+            Self::SeverityInfo => include_str!("../assets/fluent/SeverityInfo.svg"),
         }
     }
 }
@@ -56,6 +65,9 @@ mod tests {
             FluentIcon::Accept,
             FluentIcon::Close,
             FluentIcon::ChevronDown,
+            FluentIcon::SeverityError,
+            FluentIcon::SeverityWarning,
+            FluentIcon::SeverityInfo,
         ] {
             let asset = VectorAsset::parse(icon.source())?;
             for size in [10, 12, 16, 22, 24, 30, 36, 44, 48] {

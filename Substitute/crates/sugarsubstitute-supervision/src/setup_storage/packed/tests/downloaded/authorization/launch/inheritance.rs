@@ -58,6 +58,10 @@ fn inherited_reservation_survives_parent_drop_and_a_candidate_replacement_before
             Generation {
                 id: GenerationId::new("2".repeat(32))?,
                 package: PackageDigest::new("c".repeat(64))?,
+                release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                    "1.0.0".to_owned(),
+                    1,
+                )?,
             },
             PreparationIntent::Automatic,
         )?;

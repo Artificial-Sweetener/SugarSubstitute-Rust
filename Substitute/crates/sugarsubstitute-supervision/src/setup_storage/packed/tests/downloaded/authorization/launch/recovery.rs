@@ -13,6 +13,10 @@ fn pending(
     let generation = Generation {
         id: GenerationId::new("2".repeat(32))?,
         package: PackageDigest::new("c".repeat(64))?,
+        release: sugarsubstitute_contracts::installation::SignedRelease::new(
+            "1.0.0".to_owned(),
+            1,
+        )?,
     };
     let staging = before.prepare(generation.clone(), PreparationIntent::Automatic)?;
     store.compare_exchange(&before, &staging, context)?;

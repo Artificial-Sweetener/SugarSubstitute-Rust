@@ -280,7 +280,7 @@ fn package_without_trial_entry_is_rejected_before_persisting_an_attempt() -> Tes
         1,
         false,
         test_package::distribution_with_contract(Some(
-            br#"{"schema_version":1,"installed_launch_protocols":[1]}"#,
+            br#"{"schema_version":1,"installed_launch_protocols":[3]}"#,
         ))?,
         |case| {
             let candidate = case.prepared.prepare_update(

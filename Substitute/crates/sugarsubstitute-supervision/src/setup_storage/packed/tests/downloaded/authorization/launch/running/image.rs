@@ -44,6 +44,10 @@ fn helper_image_pins_payloads_but_releases_run_and_allows_selection_and_setup() 
             Generation {
                 id: GenerationId::new("2".repeat(32))?,
                 package: PackageDigest::new("c".repeat(64))?,
+                release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                    "1.0.0".to_owned(),
+                    1,
+                )?,
             },
             PreparationIntent::Automatic,
         )?;

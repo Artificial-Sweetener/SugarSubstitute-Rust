@@ -9,12 +9,15 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_supervision::profile_conflict::{ConflictRequest, ConflictSession};
 
 /// Preserve custody through dialog failure and return only after execution has retired.
-pub(super) fn resolve(request: ConflictRequest, copy: &Messages) -> Result<bool, Box<dyn Error>> {
+pub(super) fn resolve(
+    request: ConflictRequest,
+    copy: &'static Messages,
+) -> Result<bool, Box<dyn Error>> {
     let mut service =
         sugarsubstitute::instance_conflict::Service::new(ConflictSession::new(request));
     let shown = sugarsubstitute_desktop::show_startup_conflict(
+        copy,
         sugarsubstitute::APPLICATION_NAME,
-        copy.conflict,
         &mut service,
     );
     if !service.finished() {

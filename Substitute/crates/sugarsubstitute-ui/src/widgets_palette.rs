@@ -126,6 +126,19 @@ impl Decoration {
                 uniform(18.0, neutral(if state == ControlState::Hover { 6 } else { 0 }), neutral(0))
             }
             Self::Summary => uniform(18.0, neutral(6), neutral(0)),
+            Self::Card => uniform(
+                8.0,
+                if dark { white(13) } else { white(179) },
+                [0, 0, 0, if dark { 25 } else { 15 }],
+            ),
+            Self::Footer => Palette {
+                radius: 0.0,
+                fill: if dark { [32, 32, 32, 255] } else { [243, 243, 243, 255] },
+                border: white(0),
+                top: [0, 0, 0, 25],
+                bottom: white(0),
+                insets: [0.0, 1.0, 0.0, 0.0],
+            },
             Self::Output => {
                 uniform(5.0, if dark { [16, 16, 16, 255] } else { white(255) }, neutral(37))
             }

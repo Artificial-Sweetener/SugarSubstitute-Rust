@@ -55,7 +55,7 @@ impl Entry {
                     .try_into()
                     .unwrap_or(u64::MAX),
             },
-            SaveVerdict::Failed(failure) => Self::Failed { failure: failure.as_str().into() },
+            SaveVerdict::Failed(failure) => Self::Failed { failure: failure_text(failure).into() },
         }
     }
 
@@ -66,10 +66,46 @@ impl Entry {
                 unsaved_for: std::time::Duration::from_millis(*unsaved_for_ms),
             }),
             Self::Failed { failure } => {
-                Some(UnsavedCause::Failed(SaveFailure::parse(failure).ok_or_else(invalid)?))
+                Some(UnsavedCause::Failed(parse_failure(failure).ok_or_else(invalid)?))
             }
         })
     }
+}
+
+/// The record's spelling of why the application closed.
+const fn reason_text(reason: CloseReason) -> &'static str {
+    match reason {
+        CloseReason::Close => "close",
+        CloseReason::RestartToApply => "restart-to-apply",
+        CloseReason::SessionEnding { critical: false } => "session-ending",
+        CloseReason::SessionEnding { critical: true } => "session-ending-critical",
+    }
+}
+
+fn parse_reason(text: &str) -> Option<CloseReason> {
+    [
+        CloseReason::Close,
+        CloseReason::RestartToApply,
+        CloseReason::SessionEnding { critical: false },
+        CloseReason::SessionEnding { critical: true },
+    ]
+    .into_iter()
+    .find(|reason| reason_text(*reason) == text)
+}
+
+/// The record's spelling of why a save failed.
+const fn failure_text(failure: SaveFailure) -> &'static str {
+    match failure {
+        SaveFailure::Storage => "storage",
+        SaveFailure::Capture => "capture",
+        SaveFailure::Protected => "protected",
+    }
+}
+
+fn parse_failure(text: &str) -> Option<SaveFailure> {
+    [SaveFailure::Storage, SaveFailure::Capture, SaveFailure::Protected]
+        .into_iter()
+        .find(|failure| failure_text(*failure) == text)
 }
 
 fn invalid() -> StoreError {
@@ -90,7 +126,7 @@ pub fn write_worker(
         format: FORMAT.into(),
         version: VERSION,
         notified: false,
-        reason: outcome.reason.as_str().into(),
+        reason: reason_text(outcome.reason).into(),
         workspace: Entry::new(outcome.workspace, ended),
         inputs: Entry::new(outcome.inputs, ended),
     };
@@ -122,7 +158,7 @@ pub fn take_notice_worker(
     if record.format != FORMAT || record.version != VERSION {
         return Err(invalid());
     }
-    let reason = CloseReason::parse(&record.reason).ok_or_else(invalid)?;
+    let reason = parse_reason(&record.reason).ok_or_else(invalid)?;
     let items: Vec<_> = [
         record.workspace.cause()?.map(UnsavedItem::Workspace),
         record.inputs.cause()?.map(UnsavedItem::InputCanvas),
@@ -149,4 +185,28 @@ fn publish(profile: &Path, record: &Record, context: &JobContext) -> Result<(), 
         |output| output.write_all(&bytes),
     )
     .map_err(files::artifact)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every recorded spelling is distinct and reads back as the value that wrote it.
+    #[test]
+    fn every_recorded_reason_and_failure_reads_back_as_written() {
+        let reasons = [
+            CloseReason::Close,
+            CloseReason::RestartToApply,
+            CloseReason::SessionEnding { critical: false },
+            CloseReason::SessionEnding { critical: true },
+        ];
+        for reason in reasons {
+            assert_eq!(parse_reason(reason_text(reason)), Some(reason));
+        }
+        for failure in [SaveFailure::Storage, SaveFailure::Capture, SaveFailure::Protected] {
+            assert_eq!(parse_failure(failure_text(failure)), Some(failure));
+        }
+        assert_eq!(parse_reason("closed"), None);
+        assert_eq!(parse_failure("disk"), None);
+    }
 }

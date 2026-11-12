@@ -28,6 +28,14 @@ impl Core {
         replaces_ready: bool,
         slots: usize,
     ) -> Result<(), AdmissionError> {
+        // An individually impossible request can never become admissible, so it is reported
+        // as permanent before any transient refusal and registers no capacity interest.
+        if spec.reservation_bytes > state.byte_limit {
+            return Err(AdmissionError::ExceedsCapacity {
+                requested_bytes: spec.reservation_bytes,
+                limit_bytes: state.byte_limit,
+            });
+        }
         let ordinary = ordinary(spec.class);
         let native = spec.class == JobClass::NativeObservation;
         let index = if native { 2 } else { usize::from(ordinary) };
@@ -70,13 +78,12 @@ impl Core {
         }
         let available_bytes = state.byte_limit - state.bytes;
         if spec.reservation_bytes > available_bytes {
-            // An individually impossible request can never become admissible.
-            if spec.reservation_bytes <= state.byte_limit {
-                state.capacity_wait.memory =
-                    Some(state.capacity_wait.memory.map_or(spec.reservation_bytes, |waiting| {
-                        waiting.min(spec.reservation_bytes)
-                    }));
-            }
+            state.capacity_wait.memory = Some(
+                state
+                    .capacity_wait
+                    .memory
+                    .map_or(spec.reservation_bytes, |waiting| waiting.min(spec.reservation_bytes)),
+            );
             return Err(AdmissionError::MemorySaturated {
                 requested_bytes: spec.reservation_bytes,
                 available_bytes,

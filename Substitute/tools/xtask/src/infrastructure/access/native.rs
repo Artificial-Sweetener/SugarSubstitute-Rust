@@ -1,8 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Recognize native filesystem and dynamic-entry-point identities.
+/// Shell file dialog configuration methods. They describe what the user may choose and never
+/// touch a file, although several share the `SetFile` prefix of filesystem functions.
+const SHELL_DIALOG_METHODS: [&str; 9] = [
+    "SetFileName",
+    "SetFileTypes",
+    "SetFileTypeIndex",
+    "SetFolder",
+    "SetDefaultFolder",
+    "SetDefaultExtension",
+    "SetFileNameLabel",
+    "SetOkButtonLabel",
+    "SetTitle",
+];
+
 /// Native file acquisition, inspection, mutation, dynamic native loading and publication identities.
 pub(super) fn known(name: &str) -> bool {
+    if SHELL_DIALOG_METHODS.contains(&name) {
+        return false;
+    }
     [
         "CreateFile",
         "GetFile",
@@ -122,4 +139,43 @@ pub(super) fn posix(name: &str) -> bool {
             | "realpath"
             | "access"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::known;
+
+    /// Filesystem functions sharing the dialog methods' prefix stay restricted.
+    #[test]
+    fn set_file_filesystem_functions_remain_restricted() {
+        for name in [
+            "SetFileInformationByHandle",
+            "SetFilePointerEx",
+            "SetFileAttributesW",
+            "SetFileTime",
+            "SetFileValidData",
+            "SetFileShortNameW",
+        ] {
+            assert!(known(name), "{name}");
+        }
+    }
+
+    /// Exactly the shell dialog configuration methods are accepted.
+    #[test]
+    fn shell_dialog_configuration_methods_are_not_filesystem_access() {
+        for name in [
+            "SetFileName",
+            "SetFileTypes",
+            "SetFileTypeIndex",
+            "SetFolder",
+            "SetDefaultFolder",
+            "SetDefaultExtension",
+            "SetFileNameLabel",
+            "SetOkButtonLabel",
+            "SetTitle",
+        ] {
+            assert!(!known(name), "{name}");
+        }
+        assert!(known("SetFileNames"), "only the exact method names are accepted");
+    }
 }
