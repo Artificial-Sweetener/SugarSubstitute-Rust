@@ -304,6 +304,23 @@ forbidden_python_imports = [
 ]
 
 [[dependency]]
+name = "PYTHON_PACK_INSTALL"
+# Prestartup loads this package by file location before SugarCubes imports, so it
+# may use only the standard library and its own modules.
+paths = ["sugarcubes/backend/pack_install/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.backend.self_update",
+  "sugarcubes.backend.services",
+  "sugarcubes.backend.composition",
+  "sugarcubes.instrumentation",
+  "sugarcubes.package_identity",
+  "aiohttp",
+  "urllib",
+  "pygit2",
+  "certifi",
+]
+
+[[dependency]]
 name = "PYTHON_DOMAIN"
 paths = ["sugarcubes/cube_model/**/*.py", "sugarcubes/cube_model/*.py"]
 forbidden_python_imports = [

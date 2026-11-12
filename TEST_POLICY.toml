@@ -224,6 +224,40 @@ sources = [
 proofs = ["contract", "integration", "unit"]
 
 [[area]]
+name = "pack_install"
+sources = ["sugarcubes/backend/pack_install/**"]
+proofs = ["contract", "integration"]
+
+[[boundary]]
+name = "pack_install_format"
+area = "pack_install"
+
+[[subscription]]
+boundary = "pack_install_format"
+groups = ["dependencies/unit", "dependencies/integration", "self_update/integration", "backend_api/integration"]
+
+[[area]]
+name = "self_update"
+sources = ["sugarcubes/backend/self_update/**"]
+proofs = ["unit", "integration"]
+
+[[boundary]]
+name = "self_update_service"
+area = "self_update"
+
+[[subscription]]
+boundary = "self_update_service"
+groups = ["backend_api/integration"]
+
+[[boundary]]
+name = "prestartup_entry"
+area = "model_library"
+
+[[subscription]]
+boundary = "prestartup_entry"
+groups = ["pack_install/integration"]
+
+[[area]]
 name = "dependencies"
 sources = [
   "sugarcubes/backend/services/dependency_acquisition.py",

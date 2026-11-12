@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "packId": "SugarCubes",
+  "registry": {
+    "apiRoot": "https://api.comfy.org",
+    "archiveHost": "cdn.comfy.org"
+  },
+  "githubRelease": {
+    "apiRoot": "https://api.github.com",
+    "repository": "Artificial-Sweetener/SugarCubes",
+    "tagPrefix": "sugarcubes-v",
+    "assetName": "SugarCubes-{version}.zip",
+    "downloadHosts": ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"]
+  }
+}
