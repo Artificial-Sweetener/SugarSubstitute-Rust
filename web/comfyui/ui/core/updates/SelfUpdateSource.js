@@ -67,11 +67,13 @@ export function decodeSelfUpdateState(value) {
     const currentVersion = versionOrNull(state.currentVersion);
     const availableVersion = versionOrNull(state.availableVersion);
     const notice = decodeNotice(state.notice);
+    const uncheckedSources = decodeUncheckedSources(state.uncheckedSources);
     const failure = state.failure;
     const lastCheckedAt = state.lastCheckedAt;
     if (typeof currentVersion !== 'string' ||
         availableVersion === undefined ||
         notice === undefined ||
+        uncheckedSources === null ||
         typeof state.state !== 'string' ||
         !(failure === null || failure === 'check' || failure === 'download' || failure === 'verify') ||
         !(state.notManaged === null || typeof state.notManaged === 'string') ||
@@ -89,6 +91,7 @@ export function decodeSelfUpdateState(value) {
         lastCheckedAt: typeof lastCheckedAt === 'number' ? lastCheckedAt : null,
         revision: Number(state.revision),
         notice,
+        uncheckedSources,
     };
 }
 function statusOf(state) {
@@ -115,9 +118,32 @@ function statusOf(state) {
             return null;
     }
 }
-function reportOf(notice) {
-    if (!notice || notice.kind === 'installed' || !VERSION.test(notice.version))
+function decodeUncheckedSources(value) {
+    if (!Array.isArray(value) || value.length > 2)
         return null;
+    const messages = [];
+    for (const item of value) {
+        const entry = record(item);
+        const message = entry?.message;
+        if (typeof entry?.source !== 'string' || typeof message !== 'string')
+            return null;
+        if (message.length === 0 || message.length > 1024)
+            return null;
+        messages.push(message);
+    }
+    return messages;
+}
+function reportOf(state) {
+    const notice = state.notice;
+    if (!notice || notice.kind === 'installed' || !VERSION.test(notice.version)) {
+        if (state.uncheckedSources.length === 0)
+            return null;
+        return {
+            version: state.currentVersion,
+            phase: 'check',
+            causes: state.uncheckedSources.map((message) => ({ message })),
+        };
+    }
     return {
         version: notice.version,
         phase: notice.kind === 'restored' && notice.reason === 'did-not-start' ? 'start' : 'install',
@@ -134,7 +160,7 @@ export function selfUpdateSnapshot(state) {
         channel: 'stable',
         lastSuccessfulCheck: state.lastCheckedAt,
         status,
-        report: reportOf(state.notice),
+        report: reportOf(state),
         previousVersionRunning: state.notice?.kind === 'restored',
         workflowRunning: false,
         restartAfterWorkflow: false,

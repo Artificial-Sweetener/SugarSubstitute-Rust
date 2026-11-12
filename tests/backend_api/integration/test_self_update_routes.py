@@ -84,7 +84,7 @@ def _services_with_pack(
     if not pack.exists():
         install_registry_pack(tmp_path, pack_files("1.0.0"))
     web = FakeReleaseWeb()
-    web.publish_registry("1.0.0", pack_files("1.0.0"), latest=False)
+    web.publish_registry("1.0.0", pack_files("1.0.0"))
     web.publish_registry("1.1.0", pack_files("1.1.0"))
     web.publish_empty_github()
     updater = build_self_update_service(

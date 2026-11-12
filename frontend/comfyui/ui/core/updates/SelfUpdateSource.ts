@@ -82,6 +82,8 @@ interface BackendState {
   readonly lastCheckedAt: number | null;
   readonly revision: number;
   readonly notice: BackendNotice | null;
+  /** Plain sentences naming each release source the last check could not reach. */
+  readonly uncheckedSources: readonly string[];
 }
 
 function record(value: unknown): UnknownRecord | null {
@@ -117,12 +119,14 @@ export function decodeSelfUpdateState(value: unknown): BackendState | null {
   const currentVersion = versionOrNull(state.currentVersion);
   const availableVersion = versionOrNull(state.availableVersion);
   const notice = decodeNotice(state.notice);
+  const uncheckedSources = decodeUncheckedSources(state.uncheckedSources);
   const failure = state.failure;
   const lastCheckedAt = state.lastCheckedAt;
   if (
     typeof currentVersion !== 'string' ||
     availableVersion === undefined ||
     notice === undefined ||
+    uncheckedSources === null ||
     typeof state.state !== 'string' ||
     !(failure === null || failure === 'check' || failure === 'download' || failure === 'verify') ||
     !(state.notManaged === null || typeof state.notManaged === 'string') ||
@@ -143,6 +147,7 @@ export function decodeSelfUpdateState(value: unknown): BackendState | null {
     lastCheckedAt: typeof lastCheckedAt === 'number' ? lastCheckedAt : null,
     revision: Number(state.revision),
     notice,
+    uncheckedSources,
   };
 }
 
@@ -171,8 +176,29 @@ function statusOf(state: BackendState): UpdateStatus | null {
   }
 }
 
-function reportOf(notice: BackendNotice | null): UpdatesReport | null {
-  if (!notice || notice.kind === 'installed' || !VERSION.test(notice.version)) return null;
+function decodeUncheckedSources(value: unknown): readonly string[] | null {
+  if (!Array.isArray(value) || value.length > 2) return null;
+  const messages: string[] = [];
+  for (const item of value) {
+    const entry = record(item);
+    const message = entry?.message;
+    if (typeof entry?.source !== 'string' || typeof message !== 'string') return null;
+    if (message.length === 0 || message.length > 1024) return null;
+    messages.push(message);
+  }
+  return messages;
+}
+
+function reportOf(state: BackendState): UpdatesReport | null {
+  const notice = state.notice;
+  if (!notice || notice.kind === 'installed' || !VERSION.test(notice.version)) {
+    if (state.uncheckedSources.length === 0) return null;
+    return {
+      version: state.currentVersion,
+      phase: 'check',
+      causes: state.uncheckedSources.map((message) => ({ message })),
+    };
+  }
   return {
     version: notice.version,
     phase: notice.kind === 'restored' && notice.reason === 'did-not-start' ? 'start' : 'install',
@@ -189,7 +215,7 @@ export function selfUpdateSnapshot(state: BackendState): UpdateSnapshot | null {
     channel: 'stable',
     lastSuccessfulCheck: state.lastCheckedAt,
     status,
-    report: reportOf(state.notice),
+    report: reportOf(state),
     previousVersionRunning: state.notice?.kind === 'restored',
     workflowRunning: false,
     restartAfterWorkflow: false,

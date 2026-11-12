@@ -43,7 +43,7 @@ from tests.pack_install.support.pack_fixture import (
 from tests.self_update.support.fake_release_web import (
     FLAGGED,
     GITHUB_API,
-    REGISTRY_API,
+    REGISTRY_VERSIONS,
     FakeReleaseWeb,
     InlineRunner,
 )
@@ -83,7 +83,7 @@ def _service(
 
 def _registry_web(*, new_status: str = "NodeVersionStatusActive") -> FakeReleaseWeb:
     web = FakeReleaseWeb()
-    web.publish_registry("1.0.0", OLD, latest=False)
+    web.publish_registry("1.0.0", OLD)
     web.publish_registry("1.1.0", NEW, status=new_status)
     web.publish_empty_github()
     return web
@@ -116,25 +116,78 @@ def test_registry_update_is_staged_chosen_installed_and_confirmed(
     assert snapshot_folder(pack)["sugarcubes/added.py"] == b"added\n"
 
 
-def test_flagged_registry_release_falls_back_to_the_github_asset(
-    tmp_path: Path,
+def _old_only_web() -> FakeReleaseWeb:
+    """Publish only the installed release on the Registry."""
+
+    web = FakeReleaseWeb()
+    web.publish_registry("1.0.0", OLD)
+    return web
+
+
+def _registry_archive(version: str) -> str:
+    return f"/SugarCubes/{version}/node.zip"
+
+
+@pytest.mark.parametrize(
+    ("status", "installable"),
+    [
+        ("NodeVersionStatusActive", True),
+        (FLAGGED, True),
+        ("NodeVersionStatusDeleted", False),
+        ("NodeVersionStatusBanned", False),
+        ("NodeVersionStatusPending", False),
+    ],
+)
+def test_registry_status_decides_only_whether_a_release_is_still_offered(
+    tmp_path: Path, status: str, installable: bool
 ) -> None:
-    """When the Registry lags, the CI-built registry-layout asset is used."""
+    """Flagged installs like Active; removed or unreviewed releases are skipped."""
 
     pack = install_registry_pack(tmp_path, OLD)
-    web = _registry_web(new_status=FLAGGED)
-    asset_url = web.publish_github("1.1.0", NEW)
+    web = _registry_web(new_status=status)
     service = _service(pack, web)
     service.request_check(force=True)
-    assert service.snapshot().phase is UpdatePhase.READY
+    snapshot = service.snapshot()
+    if installable:
+        assert (snapshot.phase, snapshot.available_version) == (
+            UpdatePhase.READY,
+            "1.1.0",
+        )
+        assert any(url.endswith(_registry_archive("1.1.0")) for url in web.requests)
+    else:
+        assert snapshot.phase is UpdatePhase.UP_TO_DATE
+        assert not any(url.endswith(_registry_archive("1.1.0")) for url in web.requests)
+
+
+def test_registry_behind_github_installs_the_github_asset(tmp_path: Path) -> None:
+    """The newest version across both sources wins, wherever it is published."""
+
+    pack = install_registry_pack(tmp_path, OLD)
+    web = _registry_web()
+    asset_url = web.publish_github("1.2.0", pack_files("1.2.0"))
+    service = _service(pack, web)
+    service.request_check(force=True)
+    assert service.snapshot().available_version == "1.2.0"
     assert asset_url in web.requests
-    assert not any(url.endswith("/1.1.0/node.zip") for url in web.requests)
+
+
+def test_registry_ahead_of_github_installs_from_the_registry(tmp_path: Path) -> None:
+    """A newer Registry release is used even when GitHub has an older one."""
+
+    pack = install_registry_pack(tmp_path, OLD)
+    web = _old_only_web()
+    web.publish_registry("1.2.0", pack_files("1.2.0"))
+    github_asset = web.publish_github("1.1.0", NEW)
+    service = _service(pack, web)
+    service.request_check(force=True)
+    assert service.snapshot().available_version == "1.2.0"
+    assert github_asset not in web.requests
 
 
 def test_registry_is_preferred_when_both_publish_the_same_version(
     tmp_path: Path,
 ) -> None:
-    """The Registry comes first; GitHub is only the fallback."""
+    """The same version in both places comes from the Registry."""
 
     pack = install_registry_pack(tmp_path, OLD)
     web = _registry_web()
@@ -143,11 +196,59 @@ def test_registry_is_preferred_when_both_publish_the_same_version(
     assert asset_url not in web.requests
 
 
+@pytest.mark.parametrize(
+    ("failing", "unchecked", "publish_on"),
+    [
+        (REGISTRY_VERSIONS, ("registry",), "github"),
+        (GITHUB_API, ("github-release",), "registry"),
+    ],
+)
+def test_one_unreachable_source_still_finds_the_update_and_says_so(
+    tmp_path: Path, failing: str, unchecked: tuple[str, ...], publish_on: str
+) -> None:
+    """A source that cannot be reached does not hide the other's update."""
+
+    pack = install_registry_pack(tmp_path, OLD)
+    web = _old_only_web()
+    if publish_on == "github":
+        web.publish_github("1.1.0", NEW)
+    else:
+        web.publish_registry("1.1.0", NEW)
+        web.publish_empty_github()
+    web.failures = {failing: HttpFailureKind.TIMED_OUT}
+    service = _service(pack, web)
+    service.request_check(force=True)
+    snapshot = service.snapshot()
+    assert (snapshot.phase, snapshot.available_version) == (UpdatePhase.READY, "1.1.0")
+    assert snapshot.unchecked_sources == unchecked
+    wire = snapshot_to_wire(snapshot)
+    notes = wire["uncheckedSources"]
+    assert isinstance(notes, list) and notes[0]["source"] == unchecked[0]
+
+
+def test_unreachable_source_with_nothing_newer_elsewhere_is_not_up_to_date(
+    tmp_path: Path,
+) -> None:
+    """Only a check both sources answered may call the pack up to date."""
+
+    pack = install_registry_pack(tmp_path, OLD)
+    web = _old_only_web()
+    web.failures = {GITHUB_API: HttpFailureKind.TIMED_OUT}
+    service = _service(pack, web)
+    service.request_check(force=True)
+    snapshot = service.snapshot()
+    assert (snapshot.phase, snapshot.failure) == (
+        UpdatePhase.FAILED,
+        FailureStage.CHECK,
+    )
+    assert snapshot.unchecked_sources == ("github-release",)
+
+
 def test_github_asset_with_the_wrong_digest_is_refused(tmp_path: Path) -> None:
     """A downloaded asset must match the SHA-256 GitHub records for it."""
 
     pack = install_registry_pack(tmp_path, OLD)
-    web = _registry_web(new_status=FLAGGED)
+    web = _old_only_web()
     web.publish_github("1.1.0", NEW, digest=lambda _content: "sha256:" + "0" * 64)
     service = _service(pack, web)
     service.request_check(force=True)
@@ -163,7 +264,7 @@ def test_github_asset_without_a_digest_is_refused(tmp_path: Path) -> None:
     """No digest means no way to prove the download; fail closed."""
 
     pack = install_registry_pack(tmp_path, OLD)
-    web = _registry_web(new_status=FLAGGED)
+    web = _old_only_web()
     web.publish_github("1.1.0", NEW, digest=lambda _content: "")
     service = _service(pack, web)
     service.request_check(force=True)
@@ -173,7 +274,7 @@ def test_github_asset_without_a_digest_is_refused(tmp_path: Path) -> None:
 def test_offline_check_fails_plainly_and_keeps_the_installed_pack(
     tmp_path: Path,
 ) -> None:
-    """No connection is a typed check failure; nothing changes."""
+    """No connection at all is a typed check failure naming both sources."""
 
     pack = install_registry_pack(tmp_path, OLD)
     web = _registry_web()
@@ -186,18 +287,8 @@ def test_offline_check_fails_plainly_and_keeps_the_installed_pack(
         UpdatePhase.FAILED,
         FailureStage.CHECK,
     )
+    assert snapshot.unchecked_sources == ("registry", "github-release")
     assert snapshot_folder(pack) == original
-
-
-def test_one_silent_source_never_reports_up_to_date(tmp_path: Path) -> None:
-    """Only a check every source answered may say the pack is current."""
-
-    pack = install_registry_pack(tmp_path, OLD)
-    web = _registry_web(new_status=FLAGGED)
-    web.failures = {GITHUB_API: HttpFailureKind.TIMED_OUT}
-    service = _service(pack, web)
-    service.request_check(force=True)
-    assert service.snapshot().phase is UpdatePhase.FAILED
 
 
 def test_local_edit_leaves_the_pack_alone_before_any_new_download(
@@ -304,18 +395,16 @@ def test_failed_install_at_start_runs_the_previous_version_with_a_report(
     assert "previous version" in str(notice["message"])
 
 
-def test_registry_descriptor_for_another_pack_is_rejected(tmp_path: Path) -> None:
-    """Metadata naming another pack is invalid and never used."""
+def test_registry_version_list_for_another_pack_is_rejected(tmp_path: Path) -> None:
+    """A version record naming another pack invalidates the Registry's answer."""
 
     pack = install_registry_pack(tmp_path, OLD)
     web = _registry_web()
-    web.json[REGISTRY_API] = {**_descriptor(web), "node_id": "OtherPack"}
+    listing = web.json[REGISTRY_VERSIONS]
+    assert isinstance(listing, list)
+    listing.append({**listing[0], "node_id": "OtherPack"})
     service = _service(pack, web)
     service.request_check(force=True)
-    assert service.snapshot().phase is UpdatePhase.FAILED
-
-
-def _descriptor(web: FakeReleaseWeb) -> dict[str, object]:
-    value = web.json[REGISTRY_API]
-    assert isinstance(value, dict)
-    return dict(value)
+    snapshot = service.snapshot()
+    assert snapshot.phase is UpdatePhase.FAILED
+    assert snapshot.unchecked_sources == ("registry",)

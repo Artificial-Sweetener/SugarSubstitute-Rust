@@ -57,6 +57,7 @@ class UpdateSnapshot:
     last_checked_at_ms: int | None = None
     notice: StartupOutcome | None = None
     revision: int = 1
+    unchecked_sources: tuple[str, ...] = ()
 
 
 __all__ = ["FailureStage", "UpdatePhase", "UpdateSnapshot"]
