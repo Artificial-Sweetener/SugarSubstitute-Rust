@@ -39,6 +39,7 @@ from sugarcubes.model_library.domain.thumbnail_sources import (
     ThumbnailOwnership,
     ThumbnailSourceOrigin,
 )
+from tests.support.no_progress import future_result, wait_for_event
 
 
 def test_retention_rolls_back_the_whole_batch_on_invalid_legacy_references(
@@ -222,8 +223,7 @@ def test_collection_waits_for_another_origins_publication(tmp_path: Path) -> Non
         def generate() -> tuple[ThumbnailReference, ...]:
             """Reuse tiny prepared files after the test allows ownership publication."""
             publishing.set()
-            if not finish_publication.wait(5):
-                raise RuntimeError("Fixture publication was not released.")
+            wait_for_event(finish_publication, "Fixture publication was not released.")
             return images
 
         return other_assets.prepare_source("user", "c" * 64, generate)
@@ -235,12 +235,12 @@ def test_collection_waits_for_another_origins_publication(tmp_path: Path) -> Non
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         publication = pool.submit(publish_user)
-        assert publishing.wait(5)
+        wait_for_event(publishing)
         collection = pool.submit(clear_provider)
-        assert clearing.wait(5)
+        wait_for_event(clearing)
         finish_publication.set()
-        assert publication.result(timeout=5) == images
-        collection.result(timeout=5)
+        assert future_result(publication) == images
+        future_result(collection)
     assert provider_assets.source_summary("civitai").source_count == 0
     assert other_assets.source_summary("user").source_count == 1
     assert all(other_assets.resolve(item.asset_id) is not None for item in images)

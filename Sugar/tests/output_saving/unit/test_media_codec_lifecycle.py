@@ -33,6 +33,7 @@ from sugarcubes.output_saving.domain.transfer import (
     TransferRepresentation,
 )
 from sugarcubes.output_saving.infrastructure.media_routes import _run
+from tests.support.no_progress import wait_for_event
 
 
 class BlockingCodec:
@@ -75,8 +76,7 @@ class BlockingCodec:
         self.calls += 1
         if self.calls == 1:
             self.started.set()
-            if not self.release.wait(10):
-                raise RuntimeError("The test encoder was not released.")
+            wait_for_event(self.release, "The test encoder was not released.")
         return ImageTransferPayload(b"jpeg", "image.jpg", "image/jpeg")
 
     def preview(
@@ -101,7 +101,7 @@ def test_cancellation_keeps_single_codec_lease_until_worker_finishes() -> None:
                 lambda: service.prepare(reference, ImageTransferFormat.JPEG),
             )
         )
-        assert await asyncio.to_thread(codec.started.wait, 5)
+        await asyncio.to_thread(wait_for_event, codec.started)
         first.cancel()
         await asyncio.sleep(0)
         assert semaphore.locked()

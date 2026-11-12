@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 
 from sugarcubes.model_library.infrastructure.jobs import ModelBackgroundJobs
+from tests.support.no_progress import await_outcome
 
 
 def test_committed_job_finishes_notification_after_late_cancel() -> None:
@@ -73,10 +74,10 @@ def test_active_jobs_coalesce_and_publish_completion() -> None:
         first = jobs.start("scan", operation)
         assert first.status == "queued"
         assert jobs.start("scan", operation) is first
-        await asyncio.wait_for(started.wait(), 2)
+        await await_outcome(started.wait())
         assert first.status == "running"
         release.set()
-        await asyncio.wait_for(finished.wait(), 2)
+        await await_outcome(finished.wait())
         assert first.status == "completed"
         assert first.result == {"revision": 2}
         assert calls == 1
@@ -100,8 +101,8 @@ def test_failures_are_observable_and_do_not_block_retry() -> None:
             raise ValueError("Provider rejected fixture")
 
         job = jobs.start("provider", failing)
-        await asyncio.wait_for(finished.wait(), 2)
-        await asyncio.wait_for(jobs.wait(job.job_id), 2)
+        await await_outcome(finished.wait())
+        await await_outcome(jobs.wait(job.job_id))
         assert job.status == "failed"
         assert job.error == "Provider rejected fixture"
         retry = jobs.start("provider", failing)

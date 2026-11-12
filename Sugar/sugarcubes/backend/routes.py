@@ -30,6 +30,11 @@ from .flavor_routes import build_flavor_route_handlers
 from .implementation_save_routes import build_implementation_save_route_handlers
 from .legacy_workflow_routes import build_legacy_workflow_route_handlers
 from .repository_routes import build_repository_route_handlers
+from .self_update_routes import (
+    accept_updates_on_full_start,
+    build_self_update_route_handlers,
+    publish_self_update_events,
+)
 from .route_types import RouteHandler
 from .sugarscript_routes import build_sugarscript_route_handlers
 from .workflow_library_routes import build_workflow_library_route_handlers
@@ -101,6 +106,12 @@ class RouteHandlers:
     remove_workflow_cube: RouteHandler
     replace_workflow_cube: RouteHandler
     apply_workflow_stack: RouteHandler
+    get_self_update: RouteHandler
+    check_self_update: RouteHandler
+    schedule_self_update: RouteHandler
+    cancel_self_update: RouteHandler
+    dismiss_self_update_notice: RouteHandler
+    report_self_update_page_load: RouteHandler
 
 
 def build_route_handlers(services: BackendServices) -> RouteHandlers:
@@ -123,6 +134,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
     workflow_create_cube = build_workflow_create_cube_handler(services)
     workflow_remove_cube = build_workflow_remove_cube_handler(services)
     workflow_replace_cube = build_workflow_replace_cube_handler(services)
+    self_update = build_self_update_route_handlers(services)
     return RouteHandlers(
         get_status=catalog.get_status,
         list_cubes=catalog.list_cubes,
@@ -177,6 +189,12 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         remove_workflow_cube=workflow_remove_cube,
         replace_workflow_cube=workflow_replace_cube,
         apply_workflow_stack=build_workflow_stack_handler(services),
+        get_self_update=self_update.get_self_update,
+        check_self_update=self_update.check_self_update,
+        schedule_self_update=self_update.schedule_self_update,
+        cancel_self_update=self_update.cancel_self_update,
+        dismiss_self_update_notice=self_update.dismiss_self_update_notice,
+        report_self_update_page_load=self_update.report_self_update_page_load,
     )
 
 
@@ -184,7 +202,8 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     """Register SugarCubes routes on a PromptServer instance."""
 
     handlers = build_route_handlers(services)
-    routes = getattr(prompt_server, "instance", prompt_server).routes
+    server = getattr(prompt_server, "instance", prompt_server)
+    routes = server.routes
     routes.get("/sugarcubes/status")(handlers.get_status)
     routes.get("/sugarcubes/list")(handlers.list_cubes)
     routes.get("/sugarcubes/picker_catalog")(handlers.list_picker_catalog)
@@ -248,4 +267,14 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/v2/workflows/cubes/replace")(
         handlers.replace_workflow_cube
     )
+    routes.get("/sugarcubes/self-update")(handlers.get_self_update)
+    routes.post("/sugarcubes/self-update/check")(handlers.check_self_update)
+    routes.post("/sugarcubes/self-update/install")(handlers.schedule_self_update)
+    routes.delete("/sugarcubes/self-update/install")(handlers.cancel_self_update)
+    routes.delete("/sugarcubes/self-update/notice")(handlers.dismiss_self_update_notice)
+    routes.post("/sugarcubes/self-update/page-load")(
+        handlers.report_self_update_page_load
+    )
+    publish_self_update_events(server, services)
+    accept_updates_on_full_start(server, services)
     return handlers

@@ -50,6 +50,7 @@ from tests.model_library.support.model_roots import FixtureFileRoots
 from tests.model_library.support.model_releases import release
 from tests.model_library.support.model_updates import NoDownloads
 from tests.model_library.support.thumbnail_freshness import PreparedFixturePreviews
+from tests.support.no_progress import await_outcome
 
 
 class PreviewFamilyProvider:
@@ -177,13 +178,13 @@ def test_cancelling_one_family_consumer_keeps_shared_preparation(
         previews, identity, _provider, _service = fixture(tmp_path, images)
         try:
             first = asyncio.create_task(previews.get(identity, "20"))
-            await asyncio.wait_for(images.entered.wait(), timeout=2)
+            await await_outcome(images.entered.wait())
             second = asyncio.create_task(previews.get(identity, "20"))
             first.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await first
             images.proceed.set()
-            assert images.available(await asyncio.wait_for(second, timeout=2))
+            assert images.available(await await_outcome(second))
             assert len(images.urls) == 1
             assert images.available(await previews.get(identity, "20"))
             assert len(images.urls) == 1

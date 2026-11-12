@@ -28,6 +28,7 @@ from sugarcubes.execution.spatial_measurement_node import SpatialProbeMeasuremen
 from sugarcubes.execution.spatial_probe_graph import MEASUREMENT_CLASS, MEASUREMENT_NODE
 from sugarcubes.execution.spatial_probe_registry import SpatialProbeRegistry
 from sugarcubes.execution.spatial_probe_values import SpatialProbeExecution
+from tests.support.no_progress import await_outcome
 
 
 class NativeQueue:
@@ -163,7 +164,7 @@ def test_cancelled_observation_finishes_owned_cleanup_without_interrupting_comfy
             await task
         assert queue.jobs == [(1, "probe")]
         queue.finish()
-        await asyncio.wait_for(queue.cleaned.wait(), timeout=1)
+        await await_outcome(queue.cleaned.wait())
         assert set(queue.history) == {"user-job"}
 
     asyncio.run(run())

@@ -22,7 +22,6 @@ import asyncio
 import dataclasses
 import json
 import threading
-import time
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +37,7 @@ from sugarcubes.library.captured_repository import CapturedCubeRepository
 from tests.backend_api.support.backend_fixtures import FakeRequest
 from tests.backend_api.support.typing_support import BackendServicesFactory
 from tests.workflow.support.workflow_fixtures import cube_workflow
+from tests.support.no_progress import wait_for_event
 
 CUBE_ID = "Artificial-Sweetener/Base-Cubes/demo.cube"
 
@@ -187,7 +187,7 @@ def test_classification_runs_off_the_event_loop(
 
     def slow_catalog() -> tuple[CatalogCubeArtifact, ...]:
         started.set()
-        release.wait(5)
+        wait_for_event(release)
         return ()
 
     service = CubeLibraryClassService(
@@ -209,12 +209,9 @@ def test_classification_runs_off_the_event_loop(
             classify = asyncio.create_task(
                 client.post("/classify", json={"workflow": cube_workflow()})
             )
-            while not started.is_set():
-                await asyncio.sleep(0.01)
-            began = time.monotonic()
+            await asyncio.to_thread(wait_for_event, started)
             response = await client.get("/ping")
             assert await response.text() == "pong"
-            assert time.monotonic() - began < 1
             assert not classify.done()
             release.set()
             classified = await classify

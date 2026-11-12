@@ -37,6 +37,7 @@ from sugarcubes.model_library.infrastructure.thumbnail_preparer import (
 )
 from tests.model_library.support.enrichment import ObservedProvider
 from tests.model_library.support.model_roots import FixtureFileRoots
+from tests.support.no_progress import await_outcome
 
 
 class PreparedFixturePreview:
@@ -93,7 +94,7 @@ def test_startup_prepares_thumbnails_without_an_explicit_refresh(
         )
         initial = runtime.start_initial_scan()
         await runtime.jobs.wait(initial.job_id)
-        await asyncio.wait_for(previews.prepared.wait(), timeout=3)
+        await await_outcome(previews.prepared.wait())
         identity = runtime.repository.list_entries()[0].evidence.location_id
         active = runtime.jobs.active(f"metadata-refresh:{identity}")
         if active is not None:

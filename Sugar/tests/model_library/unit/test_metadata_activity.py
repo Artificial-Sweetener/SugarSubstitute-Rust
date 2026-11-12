@@ -21,6 +21,7 @@ import asyncio
 import pytest
 
 from sugarcubes.model_library.application.metadata_activity import ModelMetadataActivity
+from tests.support.no_progress import await_outcome
 
 
 def test_queued_maintenance_waits_for_nested_work_and_precedes_late_readers() -> None:
@@ -61,7 +62,7 @@ def test_queued_maintenance_waits_for_nested_work_and_precedes_late_readers() ->
         await asyncio.sleep(0)
         assert not entered.is_set() and not last.done()
         release.set()
-        await asyncio.wait_for(entered.wait(), 1)
+        await await_outcome(entered.wait())
         assert events == ["nested", "published", "maintenance"]
         assert not last.done()
         finish.set()
@@ -102,7 +103,7 @@ def test_cancelled_waiting_maintenance_releases_priority_without_interrupting_re
         writer.cancel()
         with pytest.raises(asyncio.CancelledError):
             await writer
-        await asyncio.wait_for(last_entered.wait(), 1)
+        await await_outcome(last_entered.wait())
         assert not first.done()
         release.set()
         await asyncio.gather(first, last)
